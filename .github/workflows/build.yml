@@ -2,7 +2,7 @@ name: Build HyperBounce Release
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master", "main" ]
   workflow_dispatch:
 
 permissions:
@@ -28,7 +28,7 @@ jobs:
 
       - name: Build Release APK
         env:
-          RELEASE_STORE_FILE: ${{ github.workspace }}/../keystore/HyperBounce.jks
+          RELEASE_STORE_FILE: /home/runner/keystore/HyperBounce.jks
           RELEASE_KEY_ALIAS: hyperbounce
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
