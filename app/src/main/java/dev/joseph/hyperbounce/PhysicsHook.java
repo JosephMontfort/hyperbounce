@@ -1,7 +1,11 @@
 package dev.joseph.hyperbounce;
 
 import android.view.View;
+import android.view.MotionEvent;
 import android.view.animation.OvershootInterpolator;
+import android.animation.ValueAnimator;
+
+import java.util.WeakHashMap;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -10,6 +14,10 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 public class PhysicsHook implements IXposedHookLoadPackage {
+    
+    // Safe memory mapping for debouncing touches without breaking system tags
+    private static final WeakHashMap<View, Long> debounceMap = new WeakHashMap<>();
+
     @Override
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
 
@@ -18,58 +26,47 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         // ==========================================
         if (lpparam.packageName.equals("miui.systemui.plugin") || lpparam.packageName.equals("com.android.systemui")) {
             
-            // --- A. DYNAMIC ISLAND 3D FLIP (HIJACKING FOLME ANIMATION ENGINE) ---
+            // --- A. DYNAMIC ISLAND DIRECT TOUCH INTERCEPT ---
             try {
-                // Hooking into Miui's core Folme state engine execution
-                Class<?> animStateClass = XposedHelpers.findClassIfExists("miuix.animation.controller.StateFolme", lpparam.classLoader);
-                
-                if (animStateClass != null) {
-                    XposedHelpers.findAndHookMethod(animStateClass, "to", Object[].class, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            // The Folme object holds a reference to the View being animated
-                            Object targetObject = XposedHelpers.callMethod(param.thisObject, "getTarget");
+                XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent", MotionEvent.class, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        MotionEvent event = (MotionEvent) param.args[0];
+                        
+                        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                            final View view = (View) param.thisObject;
+                            // Using string comparison to completely bypass Plugin ClassLoader mismatches
+                            String className = view.getClass().getName();
                             
-                            if (targetObject != null) {
-                                Object viewObj = XposedHelpers.callMethod(targetObject, "getTargetObject");
+                            if (className.contains("DynamicIslandContentView") || className.contains("PlayerIslandConstraintLayout")) {
                                 
-                                if (viewObj instanceof View) {
-                                    final View view = (View) viewObj;
-                                    String viewName = view.getClass().getSimpleName();
-
-                                    // If Folme is animating the Dynamic Island
-                                    if (viewName.contains("DynamicIslandContentView") || viewName.contains("PlayerIslandConstraintLayout")) {
-                                        
-                                        // Debounce check to prevent multiple rapid flips
-                                        long now = System.currentTimeMillis();
-                                        Object tag = view.getTag(android.R.id.accessibilityActionScrollDown);
-                                        long lastFlip = tag != null ? (long) tag : 0;
-                                        
-                                        if (now - lastFlip > 600) {
-                                            view.setTag(android.R.id.accessibilityActionScrollDown, now);
-                                            
-                                            // Run our 3D math on top of Folme's transition
-                                            view.setCameraDistance(10000 * view.getResources().getDisplayMetrics().density);
-                                            view.animate()
-                                                .rotationXBy(360f)
-                                                .scaleX(1.03f).scaleY(1.03f)
-                                                .setDuration(400)
-                                                .setInterpolator(new OvershootInterpolator(1.2f))
-                                                .withEndAction(new Runnable() {
-                                                    @Override
-                                                    public void run() {
-                                                        view.animate().scaleX(1f).scaleY(1f).setDuration(150).start();
-                                                    }
-                                                }).start();
+                                long now = System.currentTimeMillis();
+                                long lastFlip = debounceMap.containsKey(view) ? debounceMap.get(view) : 0;
+                                
+                                if (now - lastFlip > 600) {
+                                    debounceMap.put(view, now);
+                                    
+                                    // Set 3D camera depth
+                                    view.setCameraDistance(10000 * view.getResources().getDisplayMetrics().density);
+                                    
+                                    // Force the 3D rotation frame-by-frame to bypass Folme's physics loop
+                                    ValueAnimator flipAnim = ValueAnimator.ofFloat(0f, 360f);
+                                    flipAnim.setDuration(450);
+                                    flipAnim.setInterpolator(new OvershootInterpolator(1.2f));
+                                    flipAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                                        @Override
+                                        public void onAnimationUpdate(ValueAnimator animation) {
+                                            view.setRotationX((float) animation.getAnimatedValue());
                                         }
-                                    }
+                                    });
+                                    flipAnim.start();
                                 }
                             }
                         }
-                    });
-                }
+                    }
+                });
             } catch (Throwable t) {
-                XposedBridge.log("HyperBounce Folme Island Hook Error: " + t.getMessage());
+                XposedBridge.log("HyperBounce Touch Hook Error: " + t.getMessage());
             }
 
             // --- B. QS TILE FLIP ON LONG PRESS ---
