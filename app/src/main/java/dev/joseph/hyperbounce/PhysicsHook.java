@@ -1,6 +1,7 @@
 package dev.joseph.hyperbounce;
 
 import android.view.View;
+import android.view.MotionEvent;
 import android.view.animation.OvershootInterpolator;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -18,44 +19,61 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         // ==========================================
         if (lpparam.packageName.equals("miui.systemui.plugin") || lpparam.packageName.equals("com.android.systemui")) {
             
-            // --- A. DYNAMIC ISLAND FLIP ON CLICK ---
+            // Cache the exact Island classes we found in static analysis for zero-lag pointer comparison
+            final Class<?> clsIslandContent = XposedHelpers.findClassIfExists("miui.systemui.dynamicisland.window.content.DynamicIslandContentView", lpparam.classLoader);
+            final Class<?> clsPlayerIsland = XposedHelpers.findClassIfExists("com.android.systemui.statusbar.notification.mediaisland.PlayerIslandConstraintLayout", lpparam.classLoader);
+
+            // --- A. DYNAMIC ISLAND DIRECT TOUCH INTERCEPT ---
             try {
-                XposedHelpers.findAndHookMethod(View.class, "performClick", new XC_MethodHook() {
+                XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent", MotionEvent.class, new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        final View view = (View) param.thisObject;
-                        String viewName = view.getClass().getSimpleName();
-
-                        // Target ALL Dynamic Island views + Media Player
-                        if (viewName.contains("DynamicIslandContentView") || viewName.contains("PlayerIslandConstraintLayout")) {
+                        MotionEvent event = (MotionEvent) param.args[0];
+                        
+                        // ONLY process on the exact moment the finger hits the glass (Action Down)
+                        // This prevents string-checking 120 times a second while scrolling.
+                        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                            final View view = (View) param.thisObject;
+                            Class<?> viewClass = view.getClass();
                             
-                            view.animate().cancel();
-                            // Force massive camera distance so the 3D flip doesn't clip the edges of the screen
-                            view.setCameraDistance(10000 * view.getResources().getDisplayMetrics().density);
-
-                            // The 3D Barrel Roll + Expand
-                            view.animate()
-                                .rotationXBy(360f) // Forward flip
-                                .scaleX(1.03f)     // Slight expansion pop during the flip
-                                .scaleY(1.03f)
-                                .setDuration(400)
-                                .setInterpolator(new OvershootInterpolator(1.2f))
-                                .withEndAction(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        // Seamlessly settle back to default scale
-                                        view.animate().scaleX(1f).scaleY(1f).setDuration(150).start();
-                                    }
-                                })
-                                .start();
+                            // Check if the touched view is the Dynamic Island or Media Player
+                            if (viewClass == clsIslandContent || viewClass == clsPlayerIsland) {
+                                
+                                // Prevent seizure-flips if you double-tap really fast (600ms debounce)
+                                long now = System.currentTimeMillis();
+                                Object tag = view.getTag(android.R.id.accessibilityActionScrollDown); // Random unused ID tag
+                                long lastFlip = tag != null ? (long) tag : 0;
+                                
+                                if (now - lastFlip > 600) {
+                                    view.setTag(android.R.id.accessibilityActionScrollDown, now);
+                                    
+                                    // Execute the 3D Barrel Roll + Expand
+                                    view.animate().cancel();
+                                    view.setCameraDistance(10000 * view.getResources().getDisplayMetrics().density);
+                                    view.animate()
+                                        .rotationXBy(360f)
+                                        .scaleX(1.05f)
+                                        .scaleY(1.05f)
+                                        .setDuration(400)
+                                        .setInterpolator(new OvershootInterpolator(1.2f))
+                                        .withEndAction(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                view.animate().scaleX(1f).scaleY(1f).setDuration(150).start();
+                                            }
+                                        })
+                                        .start();
+                                }
+                            }
                         }
                     }
                 });
             } catch (Throwable t) {
-                XposedBridge.log("HyperBounce Island Hook Error: " + t.getMessage());
+                XposedBridge.log("HyperBounce Touch Hook Error: " + t.getMessage());
             }
 
             // --- B. QS TILE FLIP ON LONG PRESS ---
+            // QS Tiles typically allow performLongClick to fire, so we keep this one intact.
             try {
                 XposedHelpers.findAndHookMethod(View.class, "performLongClick", new XC_MethodHook() {
                     @Override
@@ -66,21 +84,14 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         if (viewName.contains("TileView") || viewName.contains("QS") || viewName.contains("ToggleSlider")) {
                             view.animate().cancel();
                             view.setCameraDistance(10000 * view.getResources().getDisplayMetrics().density);
-
-                            // Phase 1: Squish down and flip halfway
                             view.animate()
-                                .scaleX(0.85f)
-                                .scaleY(0.85f)
-                                .rotationYBy(90f) 
+                                .scaleX(0.85f).scaleY(0.85f).rotationYBy(90f)
                                 .setDuration(120)
                                 .withEndAction(new Runnable() {
                                     @Override
                                     public void run() {
-                                        // Phase 2: Overshoot expand and finish the flip
                                         view.animate()
-                                            .scaleX(1.05f)
-                                            .scaleY(1.05f)
-                                            .rotationYBy(90f) 
+                                            .scaleX(1.05f).scaleY(1.05f).rotationYBy(90f)
                                             .setDuration(350)
                                             .setInterpolator(new OvershootInterpolator(1.6f))
                                             .withEndAction(new Runnable() {
@@ -88,11 +99,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                                 public void run() {
                                                     view.animate().scaleX(1f).scaleY(1f).setDuration(150).start();
                                                 }
-                                            })
-                                            .start();
+                                            }).start();
                                     }
-                                })
-                                .start();
+                                }).start();
                         }
                     }
                 });
@@ -107,7 +116,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         if (lpparam.packageName.equals("com.miui.home")) {
             try {
                 Class<?> rectFSpringAnimClass = XposedHelpers.findClassIfExists("com.miui.home.recents.util.RectFSpringAnim", lpparam.classLoader);
-                
                 if (rectFSpringAnimClass != null) {
                     XposedHelpers.findAndHookMethod(rectFSpringAnimClass, "setDamping", float.class, new XC_MethodHook() {
                         @Override
@@ -115,7 +123,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                             param.args[0] = 0.45f; 
                         }
                     });
-
                     XposedHelpers.findAndHookMethod(rectFSpringAnimClass, "setStiffness", float.class, new XC_MethodHook() {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
