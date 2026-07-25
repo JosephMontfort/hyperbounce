@@ -14,9 +14,48 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
 
         // ==========================================
-        // 1. CONTROL CENTER TILE FLIP & EXPAND
+        // 1. SYSTEMUI & PLUGIN HOOKS (ISLAND & QS)
         // ==========================================
         if (lpparam.packageName.equals("miui.systemui.plugin") || lpparam.packageName.equals("com.android.systemui")) {
+            
+            // --- A. DYNAMIC ISLAND FLIP ON CLICK ---
+            try {
+                XposedHelpers.findAndHookMethod(View.class, "performClick", new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        final View view = (View) param.thisObject;
+                        String viewName = view.getClass().getSimpleName();
+
+                        // Target ALL Dynamic Island views + Media Player
+                        if (viewName.contains("DynamicIslandContentView") || viewName.contains("PlayerIslandConstraintLayout")) {
+                            
+                            view.animate().cancel();
+                            // Force massive camera distance so the 3D flip doesn't clip the edges of the screen
+                            view.setCameraDistance(10000 * view.getResources().getDisplayMetrics().density);
+
+                            // The 3D Barrel Roll + Expand
+                            view.animate()
+                                .rotationXBy(360f) // Forward flip
+                                .scaleX(1.03f)     // Slight expansion pop during the flip
+                                .scaleY(1.03f)
+                                .setDuration(400)
+                                .setInterpolator(new OvershootInterpolator(1.2f))
+                                .withEndAction(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        // Seamlessly settle back to default scale
+                                        view.animate().scaleX(1f).scaleY(1f).setDuration(150).start();
+                                    }
+                                })
+                                .start();
+                        }
+                    }
+                });
+            } catch (Throwable t) {
+                XposedBridge.log("HyperBounce Island Hook Error: " + t.getMessage());
+            }
+
+            // --- B. QS TILE FLIP ON LONG PRESS ---
             try {
                 XposedHelpers.findAndHookMethod(View.class, "performLongClick", new XC_MethodHook() {
                     @Override
@@ -24,33 +63,29 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         final View view = (View) param.thisObject;
                         String viewName = view.getClass().getSimpleName();
 
-                        // Target only Control Center / QS Tiles
                         if (viewName.contains("TileView") || viewName.contains("QS") || viewName.contains("ToggleSlider")) {
-                            
-                            // Cancel stock Folme animations instantly
                             view.animate().cancel();
-                            view.setCameraDistance(10000 * view.getResources().getDisplayMetrics().density); // Add 3D depth
+                            view.setCameraDistance(10000 * view.getResources().getDisplayMetrics().density);
 
-                            // Phase 1: Deep squish and start of the 3D flip (Velocity catch)
+                            // Phase 1: Squish down and flip halfway
                             view.animate()
                                 .scaleX(0.85f)
                                 .scaleY(0.85f)
-                                .rotationYBy(90f) // Flip halfway
+                                .rotationYBy(90f) 
                                 .setDuration(120)
                                 .withEndAction(new Runnable() {
                                     @Override
                                     public void run() {
-                                        // Phase 2: iOS-style hyper-fluid expand and finish flip
+                                        // Phase 2: Overshoot expand and finish the flip
                                         view.animate()
                                             .scaleX(1.05f)
                                             .scaleY(1.05f)
-                                            .rotationYBy(90f) // Complete the flip
+                                            .rotationYBy(90f) 
                                             .setDuration(350)
                                             .setInterpolator(new OvershootInterpolator(1.6f))
                                             .withEndAction(new Runnable() {
                                                 @Override
                                                 public void run() {
-                                                    // Settle back to normal size seamlessly
                                                     view.animate().scaleX(1f).scaleY(1f).setDuration(150).start();
                                                 }
                                             })
@@ -62,7 +97,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     }
                 });
             } catch (Throwable t) {
-                XposedBridge.log("HyperBounce QS Tile Hook Error: " + t.getMessage());
+                XposedBridge.log("HyperBounce QS Hook Error: " + t.getMessage());
             }
         }
 
@@ -71,15 +106,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         // ==========================================
         if (lpparam.packageName.equals("com.miui.home")) {
             try {
-                // Hook the exact RectFSpringAnim class found in our static analysis
                 Class<?> rectFSpringAnimClass = XposedHelpers.findClassIfExists("com.miui.home.recents.util.RectFSpringAnim", lpparam.classLoader);
                 
                 if (rectFSpringAnimClass != null) {
-                    // Force all app closing animations to use underdamped iOS spring curves
                     XposedHelpers.findAndHookMethod(rectFSpringAnimClass, "setDamping", float.class, new XC_MethodHook() {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            // 0.45f creates that beautiful liquid overshoot when an app hits its icon bounds
                             param.args[0] = 0.45f; 
                         }
                     });
@@ -87,7 +119,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     XposedHelpers.findAndHookMethod(rectFSpringAnimClass, "setStiffness", float.class, new XC_MethodHook() {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            // Keep the velocity high so there is zero lag during gesture interruption
                             float currentStiffness = (float) param.args[0];
                             if (currentStiffness < 300.0f) {
                                 param.args[0] = 350.0f;
