@@ -1,7 +1,6 @@
 package dev.joseph.hyperbounce;
 
 import android.view.View;
-import android.view.MotionEvent;
 import android.view.animation.OvershootInterpolator;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -15,65 +14,65 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
 
         // ==========================================
-        // 1. SYSTEMUI & PLUGIN HOOKS (ISLAND & QS)
+        // 1. SYSTEMUI & PLUGIN HOOKS
         // ==========================================
         if (lpparam.packageName.equals("miui.systemui.plugin") || lpparam.packageName.equals("com.android.systemui")) {
             
-            // Cache the exact Island classes we found in static analysis for zero-lag pointer comparison
-            final Class<?> clsIslandContent = XposedHelpers.findClassIfExists("miui.systemui.dynamicisland.window.content.DynamicIslandContentView", lpparam.classLoader);
-            final Class<?> clsPlayerIsland = XposedHelpers.findClassIfExists("com.android.systemui.statusbar.notification.mediaisland.PlayerIslandConstraintLayout", lpparam.classLoader);
-
-            // --- A. DYNAMIC ISLAND DIRECT TOUCH INTERCEPT ---
+            // --- A. DYNAMIC ISLAND 3D FLIP (HIJACKING FOLME ANIMATION ENGINE) ---
             try {
-                XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent", MotionEvent.class, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        MotionEvent event = (MotionEvent) param.args[0];
-                        
-                        // ONLY process on the exact moment the finger hits the glass (Action Down)
-                        // This prevents string-checking 120 times a second while scrolling.
-                        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                            final View view = (View) param.thisObject;
-                            Class<?> viewClass = view.getClass();
+                // Hooking into Miui's core Folme state engine execution
+                Class<?> animStateClass = XposedHelpers.findClassIfExists("miuix.animation.controller.StateFolme", lpparam.classLoader);
+                
+                if (animStateClass != null) {
+                    XposedHelpers.findAndHookMethod(animStateClass, "to", Object[].class, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            // The Folme object holds a reference to the View being animated
+                            Object targetObject = XposedHelpers.callMethod(param.thisObject, "getTarget");
                             
-                            // Check if the touched view is the Dynamic Island or Media Player
-                            if (viewClass == clsIslandContent || viewClass == clsPlayerIsland) {
+                            if (targetObject != null) {
+                                Object viewObj = XposedHelpers.callMethod(targetObject, "getTargetObject");
                                 
-                                // Prevent seizure-flips if you double-tap really fast (600ms debounce)
-                                long now = System.currentTimeMillis();
-                                Object tag = view.getTag(android.R.id.accessibilityActionScrollDown); // Random unused ID tag
-                                long lastFlip = tag != null ? (long) tag : 0;
-                                
-                                if (now - lastFlip > 600) {
-                                    view.setTag(android.R.id.accessibilityActionScrollDown, now);
-                                    
-                                    // Execute the 3D Barrel Roll + Expand
-                                    view.animate().cancel();
-                                    view.setCameraDistance(10000 * view.getResources().getDisplayMetrics().density);
-                                    view.animate()
-                                        .rotationXBy(360f)
-                                        .scaleX(1.05f)
-                                        .scaleY(1.05f)
-                                        .setDuration(400)
-                                        .setInterpolator(new OvershootInterpolator(1.2f))
-                                        .withEndAction(new Runnable() {
-                                            @Override
-                                            public void run() {
-                                                view.animate().scaleX(1f).scaleY(1f).setDuration(150).start();
-                                            }
-                                        })
-                                        .start();
+                                if (viewObj instanceof View) {
+                                    final View view = (View) viewObj;
+                                    String viewName = view.getClass().getSimpleName();
+
+                                    // If Folme is animating the Dynamic Island
+                                    if (viewName.contains("DynamicIslandContentView") || viewName.contains("PlayerIslandConstraintLayout")) {
+                                        
+                                        // Debounce check to prevent multiple rapid flips
+                                        long now = System.currentTimeMillis();
+                                        Object tag = view.getTag(android.R.id.accessibilityActionScrollDown);
+                                        long lastFlip = tag != null ? (long) tag : 0;
+                                        
+                                        if (now - lastFlip > 600) {
+                                            view.setTag(android.R.id.accessibilityActionScrollDown, now);
+                                            
+                                            // Run our 3D math on top of Folme's transition
+                                            view.setCameraDistance(10000 * view.getResources().getDisplayMetrics().density);
+                                            view.animate()
+                                                .rotationXBy(360f)
+                                                .scaleX(1.03f).scaleY(1.03f)
+                                                .setDuration(400)
+                                                .setInterpolator(new OvershootInterpolator(1.2f))
+                                                .withEndAction(new Runnable() {
+                                                    @Override
+                                                    public void run() {
+                                                        view.animate().scaleX(1f).scaleY(1f).setDuration(150).start();
+                                                    }
+                                                }).start();
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
-                });
+                    });
+                }
             } catch (Throwable t) {
-                XposedBridge.log("HyperBounce Touch Hook Error: " + t.getMessage());
+                XposedBridge.log("HyperBounce Folme Island Hook Error: " + t.getMessage());
             }
 
             // --- B. QS TILE FLIP ON LONG PRESS ---
-            // QS Tiles typically allow performLongClick to fire, so we keep this one intact.
             try {
                 XposedHelpers.findAndHookMethod(View.class, "performLongClick", new XC_MethodHook() {
                     @Override
