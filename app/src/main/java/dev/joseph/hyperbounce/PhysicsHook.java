@@ -1,11 +1,6 @@
 package dev.joseph.hyperbounce;
 
 import android.view.View;
-import android.view.MotionEvent;
-import android.view.animation.OvershootInterpolator;
-import android.animation.ValueAnimator;
-
-import java.util.WeakHashMap;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -14,95 +9,58 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 public class PhysicsHook implements IXposedHookLoadPackage {
-    
-    // Safe memory mapping for debouncing touches without breaking system tags
-    private static final WeakHashMap<View, Long> debounceMap = new WeakHashMap<>();
 
     @Override
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
 
         // ==========================================
-        // 1. SYSTEMUI & PLUGIN HOOKS
+        // 1. DYNAMIC ISLAND FLUIDITY REWRITE
+        // Target both the Plugin and SystemUI ClassLoaders
         // ==========================================
         if (lpparam.packageName.equals("miui.systemui.plugin") || lpparam.packageName.equals("com.android.systemui")) {
             
-            // --- A. DYNAMIC ISLAND DIRECT TOUCH INTERCEPT ---
+            // --- A. INJECT APPLE SPRING PHYSICS ---
             try {
-                XposedHelpers.findAndHookMethod(View.class, "dispatchTouchEvent", MotionEvent.class, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        MotionEvent event = (MotionEvent) param.args[0];
-                        
-                        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                            final View view = (View) param.thisObject;
-                            // Using string comparison to completely bypass Plugin ClassLoader mismatches
-                            String className = view.getClass().getName();
+                Class<?> folmeEaseClass = XposedHelpers.findClassIfExists("miuix.animation.FolmeEase", lpparam.classLoader);
+                if (folmeEaseClass != null) {
+                    XposedHelpers.findAndHookMethod(folmeEaseClass, "spring", float.class, float.class, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            // Override Xiaomi's stiff physics with iOS underdamped fluid dynamics.
+                            // This globally affects Swipes, Clicks, and Multi-Island splits.
+                            param.args[0] = 0.65f; // Damping (Lower = more bounciness, iOS is ~0.65)
+                            param.args[1] = 0.35f; // Response Time (Lower = faster expansion)
+                        }
+                    });
+                }
+            } catch (Throwable t) {
+                XposedBridge.log("HyperBounce Physics Override Error: " + t.getMessage());
+            }
+
+            // --- B. FIX THE TRANSPARENT BOX GLITCH ---
+            try {
+                Class<?> bgViewClass = XposedHelpers.findClassIfExists("miui.systemui.dynamicisland.DynamicIslandBackgroundView", lpparam.classLoader);
+                if (bgViewClass != null) {
+                    XposedHelpers.findAndHookMethod(bgViewClass, "setAlpha", float.class, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            View view = (View) param.thisObject;
+                            float targetAlpha = (float) param.args[0];
                             
-                            if (className.contains("DynamicIslandContentView") || className.contains("PlayerIslandConstraintLayout")) {
-                                
-                                long now = System.currentTimeMillis();
-                                long lastFlip = debounceMap.containsKey(view) ? debounceMap.get(view) : 0;
-                                
-                                if (now - lastFlip > 600) {
-                                    debounceMap.put(view, now);
-                                    
-                                    // Set 3D camera depth
-                                    view.setCameraDistance(10000 * view.getResources().getDisplayMetrics().density);
-                                    
-                                    // Force the 3D rotation frame-by-frame to bypass Folme's physics loop
-                                    ValueAnimator flipAnim = ValueAnimator.ofFloat(0f, 360f);
-                                    flipAnim.setDuration(450);
-                                    flipAnim.setInterpolator(new OvershootInterpolator(1.2f));
-                                    flipAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-                                        @Override
-                                        public void onAnimationUpdate(ValueAnimator animation) {
-                                            view.setRotationX((float) animation.getAnimatedValue());
-                                        }
-                                    });
-                                    flipAnim.start();
+                            // If the system tries to make the box visible (Alpha > 0)
+                            // BUT the height is 0 (uninflated) or massive (rendering glitch)
+                            // We force the alpha to stay 0 until the layout bounds stabilize.
+                            if (targetAlpha > 0.1f) {
+                                int height = view.getHeight();
+                                if (height == 0 || height > 500) {
+                                    param.args[0] = 0f; // Suppress the glitch frame
                                 }
                             }
                         }
-                    }
-                });
+                    });
+                }
             } catch (Throwable t) {
-                XposedBridge.log("HyperBounce Touch Hook Error: " + t.getMessage());
-            }
-
-            // --- B. QS TILE FLIP ON LONG PRESS ---
-            try {
-                XposedHelpers.findAndHookMethod(View.class, "performLongClick", new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        final View view = (View) param.thisObject;
-                        String viewName = view.getClass().getSimpleName();
-
-                        if (viewName.contains("TileView") || viewName.contains("QS") || viewName.contains("ToggleSlider")) {
-                            view.animate().cancel();
-                            view.setCameraDistance(10000 * view.getResources().getDisplayMetrics().density);
-                            view.animate()
-                                .scaleX(0.85f).scaleY(0.85f).rotationYBy(90f)
-                                .setDuration(120)
-                                .withEndAction(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        view.animate()
-                                            .scaleX(1.05f).scaleY(1.05f).rotationYBy(90f)
-                                            .setDuration(350)
-                                            .setInterpolator(new OvershootInterpolator(1.6f))
-                                            .withEndAction(new Runnable() {
-                                                @Override
-                                                public void run() {
-                                                    view.animate().scaleX(1f).scaleY(1f).setDuration(150).start();
-                                                }
-                                            }).start();
-                                    }
-                                }).start();
-                        }
-                    }
-                });
-            } catch (Throwable t) {
-                XposedBridge.log("HyperBounce QS Hook Error: " + t.getMessage());
+                XposedBridge.log("HyperBounce Alpha Glitch Fix Error: " + t.getMessage());
             }
         }
 
