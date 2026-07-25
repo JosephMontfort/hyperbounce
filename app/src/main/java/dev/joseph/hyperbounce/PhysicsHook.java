@@ -1,6 +1,7 @@
 package dev.joseph.hyperbounce;
 
 import android.view.View;
+import java.lang.reflect.Field;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -14,22 +15,42 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
 
         // ==========================================
-        // 1. DYNAMIC ISLAND FLUIDITY REWRITE
-        // Target both the Plugin and SystemUI ClassLoaders
+        // 1. DYNAMIC ISLAND (PLUGIN & SYSTEMUI)
         // ==========================================
         if (lpparam.packageName.equals("miui.systemui.plugin") || lpparam.packageName.equals("com.android.systemui")) {
             
-            // --- A. INJECT APPLE SPRING PHYSICS ---
+            // --- A. INJECT APPLE SPRING PHYSICS VIA REFLECTION ---
             try {
-                Class<?> folmeEaseClass = XposedHelpers.findClassIfExists("miuix.animation.FolmeEase", lpparam.classLoader);
-                if (folmeEaseClass != null) {
-                    XposedHelpers.findAndHookMethod(folmeEaseClass, "spring", float.class, float.class, new XC_MethodHook() {
+                Class<?> delegateClass = XposedHelpers.findClassIfExists("miui.systemui.dynamicisland.anim.DynamicIslandAnimationDelegate", lpparam.classLoader);
+                if (delegateClass != null) {
+                    XposedBridge.hookAllConstructors(delegateClass, new XC_MethodHook() {
                         @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            // Override Xiaomi's stiff physics with iOS underdamped fluid dynamics.
-                            // This globally affects Swipes, Clicks, and Multi-Island splits.
-                            param.args[0] = 0.65f; // Damping (Lower = more bounciness, iOS is ~0.65)
-                            param.args[1] = 0.35f; // Response Time (Lower = faster expansion)
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            // The system just built the Island and cached its stiff physics.
+                            // We are going to rip them out and replace them.
+                            Class<?> folmeEaseClass = XposedHelpers.findClass("miuix.animation.FolmeEase", lpparam.classLoader);
+                            
+                            // Create the iOS Spring (0.65 = Bounciness/Damping, 0.35 = Speed)
+                            Object iosSpring = XposedHelpers.callStaticMethod(folmeEaseClass, "spring", 0.65f, 0.35f);
+                            // A slightly faster spring for closing the island
+                            Object fastSpring = XposedHelpers.callStaticMethod(folmeEaseClass, "spring", 0.70f, 0.25f);
+
+                            // Loop through every single variable in the Animation Delegate
+                            for (Field field : delegateClass.getDeclaredFields()) {
+                                field.setAccessible(true);
+                                
+                                // If the variable is an EaseStyle (Xiaomi's physics object)
+                                if (field.getType().getName().contains("EaseStyle")) {
+                                    String name = field.getName();
+                                    
+                                    // Overwrite the variable with our custom Apple physics
+                                    if (name.contains("HIDDEN") || name.contains("APPEAR")) {
+                                        field.set(param.thisObject, fastSpring);
+                                    } else {
+                                        field.set(param.thisObject, iosSpring); 
+                                    }
+                                }
+                            }
                         }
                     });
                 }
@@ -37,30 +58,39 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 XposedBridge.log("HyperBounce Physics Override Error: " + t.getMessage());
             }
 
-            // --- B. FIX THE TRANSPARENT BOX GLITCH ---
+            // --- B. FIX THE BOTTOM SCREEN GLITCH (B: 1800) ---
             try {
                 Class<?> bgViewClass = XposedHelpers.findClassIfExists("miui.systemui.dynamicisland.DynamicIslandBackgroundView", lpparam.classLoader);
                 if (bgViewClass != null) {
+                    XposedHelpers.findAndHookMethod(bgViewClass, "layout", int.class, int.class, int.class, int.class, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            int top = (int) param.args[1];
+                            int bottom = (int) param.args[3];
+                            
+                            // If the system panics and tries to stretch the island to the bottom of the screen
+                            // We violently clamp the max height to 600px to kill the flash frame.
+                            if ((bottom - top) > 600) {
+                                param.args[3] = top + 600;
+                            }
+                        }
+                    });
+
+                    // --- C. FIX THE TRANSPARENT BOX GLITCH ---
                     XposedHelpers.findAndHookMethod(bgViewClass, "setAlpha", float.class, new XC_MethodHook() {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            View view = (View) param.thisObject;
                             float targetAlpha = (float) param.args[0];
-                            
-                            // If the system tries to make the box visible (Alpha > 0)
-                            // BUT the height is 0 (uninflated) or massive (rendering glitch)
-                            // We force the alpha to stay 0 until the layout bounds stabilize.
-                            if (targetAlpha > 0.1f) {
-                                int height = view.getHeight();
-                                if (height == 0 || height > 500) {
-                                    param.args[0] = 0f; // Suppress the glitch frame
-                                }
+                            // iOS island is a solid black pill. It never fades in transparently.
+                            // If it's trying to be semi-transparent, we snap it to solid black instantly.
+                            if (targetAlpha > 0.05f && targetAlpha < 1.0f) {
+                                param.args[0] = 1.0f;
                             }
                         }
                     });
                 }
             } catch (Throwable t) {
-                XposedBridge.log("HyperBounce Alpha Glitch Fix Error: " + t.getMessage());
+                XposedBridge.log("HyperBounce Layout Glitch Fix Error: " + t.getMessage());
             }
         }
 
