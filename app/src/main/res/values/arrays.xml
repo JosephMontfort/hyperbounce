@@ -3,6 +3,7 @@
     <string-array name="xposed_scope">
         <item>android</item>
         <item>com.android.settings</item>
+        <item>com.miui.securitycenter</item>
         <item>miui.systemui.plugin</item>
         <item>com.miui.home</item>
         <item>com.android.systemui</item>

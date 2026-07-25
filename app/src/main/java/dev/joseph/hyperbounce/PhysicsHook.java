@@ -17,12 +17,11 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 public class PhysicsHook implements IXposedHookLoadPackage {
 
-    // Toggle Constants
     private static final int TRACK_OFF = Color.parseColor("#3A3A3C");
     private static final int TRACK_ON = Color.parseColor("#30D158");
     private static final int THUMB_WHITE = Color.parseColor("#FFFFFF");
     private static final int SHADOW = Color.parseColor("#25000000");
-    private static final int RIM_COLOR = Color.parseColor("#12000000");
+    private static final int RIM_COLOR = Color.parseColor("#15000000");
 
     private static final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private static final Paint thumbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -50,9 +49,36 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         // 1. SYSTEM-WIDE iOS TOGGLES (HOOKS EVERYTHING)
         // ==========================================
         try {
+            // A. Kill the stock Android CheckBox background bleeding through on disabled states
+            Class<?> slidingBtnClass = XposedHelpers.findClassIfExists("miuix.slidingwidget.widget.SlidingButton", lpparam.classLoader);
+            if (slidingBtnClass != null) {
+                XposedHelpers.findAndHookMethod(slidingBtnClass, "onDraw", Canvas.class, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        android.widget.CompoundButton view = (android.widget.CompoundButton) param.thisObject;
+                        view.setButtonDrawable((android.graphics.drawable.Drawable) null);
+                        view.setBackground(null);
+                        view.setAlpha(view.isEnabled() ? 1.0f : 0.4f); // iOS disabled state opacity
+                    }
+                });
+            }
+
+            Class<?> slidingSwitchClass = XposedHelpers.findClassIfExists("miuix.slidingwidget.widget.SlidingSwitchCompat", lpparam.classLoader);
+            if (slidingSwitchClass != null) {
+                XposedHelpers.findAndHookMethod(slidingSwitchClass, "onDraw", Canvas.class, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        android.widget.CompoundButton view = (android.widget.CompoundButton) param.thisObject;
+                        view.setButtonDrawable((android.graphics.drawable.Drawable) null);
+                        view.setBackground(null);
+                        view.setAlpha(view.isEnabled() ? 1.0f : 0.4f);
+                    }
+                });
+            }
+
+            // B. Replace the rendering engine
             Class<?> helperClass = XposedHelpers.findClassIfExists("miuix.slidingwidget.widget.SlidingButtonHelper", lpparam.classLoader);
             if (helperClass != null) {
-                
                 XposedHelpers.findAndHookMethod(helperClass, "initAnim", new XC_MethodHook() {
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -73,6 +99,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         Object obj = param.thisObject;
                         Canvas canvas = (Canvas) param.args[0];
 
+                        // Completely nuke ALL Xiaomi default assets
+                        XposedHelpers.setObjectField(obj, "mSlideBar", null); // <--- Added: This was causing stock background bleed!
                         XposedHelpers.setObjectField(obj, "mBarOn", null);
                         XposedHelpers.setObjectField(obj, "mSliderOn", null);
                         XposedHelpers.setObjectField(obj, "mSliderOff", null);
