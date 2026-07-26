@@ -17,16 +17,22 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 public class PhysicsHook implements IXposedHookLoadPackage {
 
-    private static final int TRACK_OFF = Color.parseColor("#3A3A3C");
-    private static final int TRACK_ON = Color.parseColor("#30D158");
+    // Active iOS Colors
+    private static final int TRACK_OFF   = Color.parseColor("#3A3A3C");
+    private static final int TRACK_ON    = Color.parseColor("#30D158");
     private static final int THUMB_WHITE = Color.parseColor("#FFFFFF");
-    private static final int SHADOW = Color.parseColor("#25000000");
-    private static final int RIM_COLOR = Color.parseColor("#12000000");
+    private static final int SHADOW      = Color.parseColor("#25000000");
+    private static final int RIM_COLOR   = Color.parseColor("#12000000");
 
-    private static final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private static final Paint thumbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    // Disabled iOS Colors (Muted / Unclickable)
+    private static final int TRACK_OFF_DISABLED = Color.parseColor("#2C2C2E");
+    private static final int TRACK_ON_DISABLED  = Color.parseColor("#1C4D25");
+    private static final int THUMB_DISABLED     = Color.parseColor("#787880");
+
+    private static final Paint bgPaint     = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private static final Paint thumbPaint  = new Paint(Paint.ANTI_ALIAS_FLAG);
     private static final Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private static final Paint rimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private static final Paint rimPaint    = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     static {
         shadowPaint.setStyle(Paint.Style.FILL);
@@ -36,6 +42,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     }
 
     private static class ToggleState {
+        float progress = 0.0f;
         float bloom = 0.0f;
         float squish = 0.0f;
         boolean springPatched = false;
@@ -43,7 +50,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     }
     private static final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
 
-    // UNIVERSAL TOGGLE HOOK
     private void hookUniversalToggle(String className, ClassLoader classLoader) {
         Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
         if (clazz == null) return;
@@ -59,12 +65,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     int height = view.getHeight();
                     if (width <= 0 || height <= 0) return null;
 
-                    // Dynamically locate the state variables (Handles both new and old MIUI architectures)
                     Object helper = null;
                     try { helper = XposedHelpers.getObjectField(view, "mHelper"); } catch (Throwable t) {}
                     Object dataSrc = (helper != null) ? helper : view;
 
-                    // Nullify Xiaomi Default Assets to prevent background bleed
+                    // Clear default Xiaomi assets
                     try { XposedHelpers.setObjectField(dataSrc, "mSlideBar", null); } catch(Throwable t){}
                     try { XposedHelpers.setObjectField(dataSrc, "mBarOn", null); } catch(Throwable t){}
                     try { XposedHelpers.setObjectField(dataSrc, "mSliderOn", null); } catch(Throwable t){}
@@ -77,23 +82,18 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     int posStart = 0;
                     int posEnd = 0;
 
-                    // Safely extract physics states
                     try { offset = XposedHelpers.getIntField(dataSrc, "mSliderOffset"); } catch(Throwable t){}
                     try { tracking = XposedHelpers.getBooleanField(dataSrc, "mTracking"); } catch(Throwable t){}
                     try { posStart = XposedHelpers.getIntField(dataSrc, "mSliderPositionStart"); } catch(Throwable t){}
                     try { posEnd = XposedHelpers.getIntField(dataSrc, "mSliderPositionEnd"); } catch(Throwable t){}
 
-                    if (posEnd <= posStart) {
-                        posEnd = width - height; // Fallback if uninitialized
-                    }
-
                     float maxTravel = (posEnd - posStart) > 0 ? (posEnd - posStart) : (width - height);
                     float rawProgress = maxTravel > 0 ? (float) (offset - posStart) / maxTravel : 0f;
-                    float progress = Math.max(0f, Math.min(1f, rawProgress));
 
                     ToggleState s = stateMap.get(view);
                     if (s == null) {
                         s = new ToggleState();
+                        s.progress = view.isChecked() ? 1.0f : 0.0f;
                         stateMap.put(view, s);
                     }
 
@@ -116,6 +116,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float dt = Math.min((now - s.last) / 1000.0f, 0.05f);
                     s.last = now;
 
+                    // FIX UNTOGGLEABLE BUG: If tracking (dragging), follow finger.
+                    // If tapped / idle, drive progress strictly from view.isChecked()!
+                    boolean isChecked = view.isChecked();
+                    float targetProgress = tracking ? Math.max(0f, Math.min(1f, rawProgress)) : (isChecked ? 1.0f : 0.0f);
+                    s.progress = Math.max(0f, Math.min(1f, s.progress + (targetProgress - s.progress) * dt * 22.0f));
+
                     float bloomTarget = tracking ? 1.0f : 0.0f;
                     s.bloom = Math.max(0f, Math.min(1f, s.bloom + (bloomTarget - s.bloom) * dt * 14.0f));
 
@@ -123,16 +129,13 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float squishTarget = isOverDragging ? 1.0f : 0.0f;
                     s.squish = Math.max(0f, Math.min(1f, s.squish + (squishTarget - s.squish) * dt * 6.0f));
 
-                    if ((Math.abs(s.bloom - bloomTarget) > 0.005f || Math.abs(s.squish - squishTarget) > 0.005f)) {
+                    if (Math.abs(s.progress - targetProgress) > 0.002f || 
+                        Math.abs(s.bloom - bloomTarget) > 0.005f || 
+                        Math.abs(s.squish - squishTarget) > 0.005f) {
                         view.postInvalidateOnAnimation();
                     }
 
-                    // Authentic iOS Disabled State Opacity (40%)
-                    int alpha = view.isEnabled() ? 255 : 102; 
-                    bgPaint.setAlpha(alpha);
-                    thumbPaint.setAlpha(alpha);
-                    rimPaint.setAlpha(alpha);
-                    shadowPaint.setAlpha(alpha);
+                    boolean isEnabled = view.isEnabled();
 
                     // --- DRAW TRACK ---
                     float trackHeight = height * 0.65f;
@@ -140,7 +143,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float trackBottom = trackTop + trackHeight;
                     float trackRadius = trackHeight / 2.0f;
 
-                    bgPaint.setColor((progress > 0.5f || tracking) ? TRACK_ON : TRACK_OFF);
+                    if (!isEnabled) {
+                        bgPaint.setColor(isChecked ? TRACK_ON_DISABLED : TRACK_OFF_DISABLED);
+                    } else {
+                        bgPaint.setColor((s.progress > 0.5f || tracking) ? TRACK_ON : TRACK_OFF);
+                    }
                     canvas.drawRoundRect(new RectF(0, trackTop, width, trackBottom), trackRadius, trackRadius, bgPaint);
 
                     // --- DRAW THUMB ---
@@ -161,8 +168,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float currentPaddingX = padding - (padding * 0.7f * s.bloom);
                     float minX = currentPaddingX + (currentThumbWidth / 2.0f);
                     float maxX = width - currentPaddingX - (currentThumbWidth / 2.0f);
-
-                    float cx = minX + progress * (maxX - minX);
+                    
+                    float cx = minX + s.progress * (maxX - minX);
                     float cy = height / 2.0f;
 
                     float thumbLeft = cx - (currentThumbWidth / 2.0f);
@@ -172,14 +179,22 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     RectF thumbRect = new RectF(thumbLeft, thumbTop, thumbRight, thumbBottom);
 
-                    float shadowOffset = 2.0f + (2.0f * s.bloom);
-                    canvas.drawRoundRect(new RectF(thumbLeft, thumbTop + shadowOffset, thumbRight, thumbBottom + shadowOffset), thumbRadius, thumbRadius, shadowPaint);
+                    // Shadow (hidden when disabled)
+                    if (isEnabled) {
+                        shadowPaint.setColor(SHADOW);
+                        float shadowOffset = 2.0f + (2.0f * s.bloom);
+                        canvas.drawRoundRect(new RectF(thumbLeft, thumbTop + shadowOffset, thumbRight, thumbBottom + shadowOffset), thumbRadius, thumbRadius, shadowPaint);
+                    }
 
-                    thumbPaint.setColor(THUMB_WHITE);
+                    // Thumb Body (Dimmed matte gray when disabled)
+                    thumbPaint.setColor(isEnabled ? THUMB_WHITE : THUMB_DISABLED);
                     canvas.drawRoundRect(thumbRect, thumbRadius, thumbRadius, thumbPaint);
-                    canvas.drawRoundRect(thumbRect, thumbRadius, thumbRadius, rimPaint);
+                    
+                    if (isEnabled) {
+                        canvas.drawRoundRect(thumbRect, thumbRadius, thumbRadius, rimPaint);
+                    }
 
-                    return null; // Bypass default rendering entirely
+                    return null;
                 }
             });
         } catch (Throwable t) {
