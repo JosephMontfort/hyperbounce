@@ -98,7 +98,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // C. Track Touch & Press
+        // C. Track Touch & Press (Handles text area holds)
         try {
             XposedHelpers.findAndHookMethod(clazz, "setPressed", boolean.class, new XC_MethodHook() {
                 @Override
@@ -114,42 +114,29 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // D. DISPATCH HIJACKER (From Live Frida Test - Steals gesture from greedy rows)
-        try {
-            XposedHelpers.findAndHookMethod(clazz, "dispatchTouchEvent", MotionEvent.class, new XC_MethodReplacement() {
-                @Override
-                protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-                    View view = (View) param.thisObject;
-                    if (!view.isEnabled()) {
-                        return XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args);
-                    }
-
-                    MotionEvent event = (MotionEvent) param.args[0];
-                    int action = event.getActionMasked();
-                    
-                    if (action == MotionEvent.ACTION_DOWN) {
-                        android.view.ViewParent parent = view.getParent();
-                        if (parent != null) {
-                            parent.requestDisallowInterceptTouchEvent(true); // Tell parent to back off
-                        }
-                    }
-                    
-                    // Forcefully feed the touch coordinates into our physics engine
-                    XposedHelpers.callMethod(view, "onTouchEvent", event);
-                    
-                    // Return TRUE to aggressively consume and steal the gesture
-                    return true;
-                }
-            });
-        } catch (Throwable t) {}
-
-        // E. State Tracking (Fed by Dispatch Hijacker)
+        // D. TOUCH STEALER & PHYSICS TRACKING
         try {
             XposedHelpers.findAndHookMethod(clazz, "onTouchEvent", MotionEvent.class, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    View view = (View) param.thisObject;
+                    if (!view.isEnabled()) return;
+                    
+                    MotionEvent event = (MotionEvent) param.args[0];
+                    if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                        android.view.ViewParent parent = view.getParent();
+                        if (parent != null) {
+                            // Tell the greedy Preference row to back off immediately!
+                            parent.requestDisallowInterceptTouchEvent(true);
+                        }
+                    }
+                }
+
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     View view = (View) param.thisObject;
                     if (!view.isEnabled()) return;
+                    
                     MotionEvent event = (MotionEvent) param.args[0];
                     ToggleState s = stateMap.get(view);
                     if (s == null) {
@@ -157,6 +144,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         s.progress = ((android.widget.CompoundButton) view).isChecked() ? 1.0f : 0.0f;
                         stateMap.put(view, s);
                     }
+                    
                     int action = event.getActionMasked();
                     if (action == MotionEvent.ACTION_DOWN) {
                         s.isTouching = true;
@@ -173,11 +161,14 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         s.isDragging = false;
                         view.postInvalidateOnAnimation();
                     }
+                    
+                    // FORCE TRUE: Aggressively steal the gesture back from the Preference row!
+                    param.setResult(true);
                 }
             });
         } catch (Throwable t) {}
 
-        // F. Unified Render Engine
+        // E. Unified Render Engine
         try {
             XposedHelpers.findAndHookMethod(clazz, "onDraw", Canvas.class, new XC_MethodReplacement() {
                 @Override
