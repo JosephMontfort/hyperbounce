@@ -40,11 +40,17 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         rimPaint.setColor(RIM_COLOR);
     }
 
+    // 100% Independent State Tracker
     private static class ToggleState {
         float progress = 0.0f;
         float bloom = 0.0f;
         float squish = 0.0f;
-        float touchX = -1.0f;
+        
+        boolean isTouching = false;
+        boolean isDragging = false;
+        float startX = 0f;
+        float currentX = 0f;
+        
         boolean springPatched = false;
         long last = System.currentTimeMillis();
     }
@@ -54,6 +60,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
         if (clazz == null) return;
 
+        // 1. RAW TOUCH INTERCEPTION (Bypasses Xiaomi's broken tracking)
         try {
             XposedHelpers.findAndHookMethod(clazz, "onTouchEvent", MotionEvent.class, new XC_MethodHook() {
                 @Override
@@ -61,13 +68,25 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     View view = (View) param.thisObject;
                     MotionEvent event = (MotionEvent) param.args[0];
                     ToggleState s = stateMap.get(view);
-                    if (s != null) {
+                    
+                    if (s != null && view.isEnabled()) {
                         int action = event.getActionMasked();
-                        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
-                            s.touchX = event.getX();
+                        if (action == MotionEvent.ACTION_DOWN) {
+                            s.isTouching = true;
+                            s.isDragging = false;
+                            s.startX = event.getX();
+                            s.currentX = event.getX();
+                            view.postInvalidateOnAnimation();
+                        } else if (action == MotionEvent.ACTION_MOVE) {
+                            s.currentX = event.getX();
+                            // 8px slop to differentiate a tap from a drag
+                            if (Math.abs(s.currentX - s.startX) > 8.0f) {
+                                s.isDragging = true;
+                            }
                             view.postInvalidateOnAnimation();
                         } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-                            s.touchX = -1.0f;
+                            s.isTouching = false;
+                            s.isDragging = false;
                             view.postInvalidateOnAnimation();
                         }
                     }
@@ -75,6 +94,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
+        // 2. UNIVERSAL RENDER ENGINE
         try {
             XposedHelpers.findAndHookMethod(clazz, "onDraw", Canvas.class, new XC_MethodReplacement() {
                 @Override
@@ -86,19 +106,16 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     int height = view.getHeight();
                     if (width <= 0 || height <= 0) return null;
 
+                    // Nullify all default MIUI assets aggressively
                     Object helper = null;
                     try { helper = XposedHelpers.getObjectField(view, "mHelper"); } catch (Throwable t) {}
                     Object dataSrc = (helper != null) ? helper : view;
-
                     try { XposedHelpers.setObjectField(dataSrc, "mSlideBar", null); } catch(Throwable t){}
                     try { XposedHelpers.setObjectField(dataSrc, "mBarOn", null); } catch(Throwable t){}
                     try { XposedHelpers.setObjectField(dataSrc, "mSliderOn", null); } catch(Throwable t){}
                     try { XposedHelpers.setObjectField(dataSrc, "mSliderOff", null); } catch(Throwable t){}
                     try { XposedHelpers.setObjectField(dataSrc, "mMaskCheckedSlideBar", null); } catch(Throwable t){}
                     try { XposedHelpers.setObjectField(dataSrc, "mMaskUnCheckedSlideBar", null); } catch(Throwable t){}
-
-                    boolean tracking = false;
-                    try { tracking = XposedHelpers.getBooleanField(dataSrc, "mTracking"); } catch(Throwable t){}
 
                     ToggleState s = stateMap.get(view);
                     if (s == null) {
@@ -107,36 +124,24 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         stateMap.put(view, s);
                     }
 
-                    if (!s.springPatched) {
-                        try {
-                            Object moveAnim = XposedHelpers.getObjectField(dataSrc, "mSliderMoveAnim");
-                            if (moveAnim != null) {
-                                Object spring = XposedHelpers.callMethod(moveAnim, "getSpring");
-                                if (spring != null) {
-                                    XposedHelpers.callMethod(spring, "setStiffness", 450.0f);
-                                    XposedHelpers.callMethod(spring, "setDampingRatio", 0.88f);
-                                    s.springPatched = true;
-                                }
-                            }
-                        } catch (Throwable t) {}
-                    }
-
                     long now = System.currentTimeMillis();
                     float dt = Math.min((now - s.last) / 1000.0f, 0.05f);
                     s.last = now;
 
                     boolean isChecked = view.isChecked();
                     boolean isPressed = view.isPressed();
+                    
                     float trackHeight = height * 0.65f;
                     float padding = trackHeight * 0.07f;
                     float restThumbHeight = trackHeight - (padding * 2.0f);
                     float restThumbWidth = restThumbHeight * 1.35f;
 
+                    // COMPLETELY DECOUPLED PHYSICS
                     float targetProgress;
-                    if (tracking && s.touchX != -1.0f) {
+                    if (s.isDragging) {
                         float minCenter = padding + (restThumbWidth / 2.0f);
                         float maxCenter = width - padding - (restThumbWidth / 2.0f);
-                        float rawDrag = (s.touchX - minCenter) / (maxCenter - minCenter);
+                        float rawDrag = (s.currentX - minCenter) / (maxCenter - minCenter);
                         targetProgress = Math.max(0f, Math.min(1f, rawDrag));
                     } else {
                         targetProgress = isChecked ? 1.0f : 0.0f;
@@ -144,10 +149,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     s.progress = Math.max(0f, Math.min(1f, s.progress + (targetProgress - s.progress) * dt * 25.0f));
 
-                    float bloomTarget = (tracking || isPressed) ? 1.0f : 0.0f;
+                    // Bloom on pure touch or native press
+                    float bloomTarget = (s.isTouching || isPressed) ? 1.0f : 0.0f;
                     s.bloom = Math.max(0f, Math.min(1f, s.bloom + (bloomTarget - s.bloom) * dt * 14.0f));
 
-                    boolean isOverDragging = tracking && s.touchX != -1.0f && (s.touchX < 0 || s.touchX > width);
+                    // Edge squish dynamically calculated from our raw X
+                    boolean isOverDragging = s.isDragging && (s.currentX < 0 || s.currentX > width);
                     float squishTarget = isOverDragging ? 1.0f : 0.0f;
                     s.squish = Math.max(0f, Math.min(1f, s.squish + (squishTarget - s.squish) * dt * 6.0f));
 
@@ -165,7 +172,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     if (!isEnabled) {
                         bgPaint.setColor(isChecked ? TRACK_ON_DISABLED : TRACK_OFF_DISABLED);
                     } else {
-                        bgPaint.setColor((s.progress > 0.5f || tracking) ? TRACK_ON : TRACK_OFF);
+                        bgPaint.setColor((s.progress > 0.5f || s.isDragging) ? TRACK_ON : TRACK_OFF);
                     }
                     canvas.drawRoundRect(new RectF(0, trackTop, width, trackBottom), trackRadius, trackRadius, bgPaint);
 
@@ -214,8 +221,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
+        // ONE ARCHITECTURE TO RULE THEM ALL
         hookUniversalToggle("miuix.slidingwidget.widget.SlidingButton", lpparam.classLoader);
         hookUniversalToggle("miuix.slidingwidget.widget.SlidingSwitchCompat", lpparam.classLoader);
         hookUniversalToggle("miuix.slidingwidget.widget.SlidingSwitch", lpparam.classLoader);
+        
+        // (SystemUI layout fixes remain unchanged below...)
     }
 }
