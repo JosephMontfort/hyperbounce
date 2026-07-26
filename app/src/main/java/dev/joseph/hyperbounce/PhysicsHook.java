@@ -8,6 +8,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import java.lang.reflect.Field;
 import java.util.WeakHashMap;
+import java.util.HashSet;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -45,50 +46,57 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "miuix.slidingwidget.widget.SlidingSwitchCompat",
         "miuix.slidingwidget.widget.SlidingSwitch",
         "miui.slidingwidget.widget.SlidingButton",
-        "miui.widget.SlidingButton",
-        "com.miui.systemui.widget.SlidingButton",
-        "miui.systemui.widget.SlidingButton",
-        "miui.systemui.controlcenter.widget.SlidingButton"
+        "miui.widget.SlidingButton"
     };
+
+    private static final HashSet<String> hookedDynamicClasses = new HashSet<>();
 
     private static class ToggleState {
         float progress = 0.0f;
         float bloom = 0.0f;
         float squish = 0.0f;
-
         boolean isTouching = false;
         boolean isDragging = false;
         float startX = 0f;
         float currentX = 0f;
-
         long lastTime = System.currentTimeMillis();
     }
     private static final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
 
     private void applyUnifiedToggleEngine(String className, ClassLoader classLoader) {
+        if (hookedDynamicClasses.contains(className)) return;
+        
         Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
         if (clazz == null) return;
+        
+        hookedDynamicClasses.add(className);
 
-        // A. Hook setChecked (Gives bloom impulse on Preference Row clicks)
+        // A. Prevent Dialer/Preference Snapping
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "jumpDrawablesToCurrentState", new XC_MethodReplacement() {
+                @Override
+                protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
+                    return null; // Kill native snap to allow smooth animation
+                }
+            });
+        } catch (Throwable t) {}
+
+        // B. Programmatic Tap Trigger
         try {
             XposedHelpers.findAndHookMethod(clazz, "setChecked", boolean.class, new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     View view = (View) param.thisObject;
                     ToggleState s = stateMap.get(view);
-                    if (s == null) {
-                        s = new ToggleState();
-                        s.progress = ((android.widget.CompoundButton) view).isChecked() ? 1.0f : 0.0f;
-                        stateMap.put(view, s);
+                    if (s != null) {
+                        s.bloom = 1.0f; // Impulse for row tap
+                        view.postInvalidateOnAnimation();
                     }
-                    // Trigger bloom impulse on programmatic click/toggle
-                    s.bloom = 1.0f;
-                    view.postInvalidateOnAnimation();
                 }
             });
         } catch (Throwable t) {}
 
-        // B. Hook setPressed
+        // C. Track Touch & Press
         try {
             XposedHelpers.findAndHookMethod(clazz, "setPressed", boolean.class, new XC_MethodHook() {
                 @Override
@@ -104,14 +112,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // C. Hook Raw Touch
         try {
             XposedHelpers.findAndHookMethod(clazz, "onTouchEvent", MotionEvent.class, new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     View view = (View) param.thisObject;
                     if (!view.isEnabled()) return;
-
                     MotionEvent event = (MotionEvent) param.args[0];
                     ToggleState s = stateMap.get(view);
                     if (s == null) {
@@ -119,7 +125,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         s.progress = ((android.widget.CompoundButton) view).isChecked() ? 1.0f : 0.0f;
                         stateMap.put(view, s);
                     }
-
                     int action = event.getActionMasked();
                     if (action == MotionEvent.ACTION_DOWN) {
                         s.isTouching = true;
@@ -129,9 +134,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         view.postInvalidateOnAnimation();
                     } else if (action == MotionEvent.ACTION_MOVE) {
                         s.currentX = event.getX();
-                        if (Math.abs(s.currentX - s.startX) > 4.0f) {
-                            s.isDragging = true;
-                        }
+                        if (Math.abs(s.currentX - s.startX) > 4.0f) s.isDragging = true;
                         view.postInvalidateOnAnimation();
                     } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                         s.isTouching = false;
@@ -142,7 +145,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // D. Unified Render Pipeline
+        // D. Unified Render Engine
         try {
             XposedHelpers.findAndHookMethod(clazz, "onDraw", Canvas.class, new XC_MethodReplacement() {
                 @Override
@@ -150,10 +153,18 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     android.widget.CompoundButton view = (android.widget.CompoundButton) param.thisObject;
                     Canvas canvas = (Canvas) param.args[0];
 
-                    int width = view.getWidth();
-                    int height = view.getHeight();
+                    float width = view.getWidth();
+                    float height = view.getHeight();
                     if (width <= 0 || height <= 0) return null;
 
+                    // Erase native Android mButtonDrawable (Kills blue stock toggle)
+                    try {
+                        if (view.getButtonDrawable() != null) {
+                            view.setButtonDrawable(null);
+                        }
+                    } catch (Throwable t) {}
+
+                    // Erase MIUI custom slide assets
                     Object helper = null;
                     try { helper = XposedHelpers.getObjectField(view, "mHelper"); } catch (Throwable t) {}
                     Object dataSrc = (helper != null) ? helper : view;
@@ -177,15 +188,28 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     boolean isPressed = view.isPressed();
                     boolean isEnabled = view.isEnabled();
 
-                    float trackHeight = height * 0.65f;
+                    // --- SMART BOUNDS LOGIC (Handles Full Row Detail Panels) ---
+                    float drawW = width;
+                    float drawH = height;
+                    float offsetX = 0f;
+                    float offsetY = 0f;
+
+                    if (width > height * 2.5f && width > 200f) {
+                        drawH = Math.min(height * 0.55f, 110f);
+                        drawW = drawH * 1.75f;
+                        offsetX = width - drawW - (height * 0.15f); // Anchor right
+                        offsetY = (height - drawH) / 2.0f;
+                    }
+
+                    float trackHeight = drawH * 0.65f;
                     float padding = trackHeight * 0.07f;
                     float restThumbHeight = trackHeight - (padding * 2.0f);
                     float restThumbWidth = restThumbHeight * 1.35f;
 
                     float targetProgress;
                     if (s.isDragging) {
-                        float minCenter = padding + (restThumbWidth / 2.0f);
-                        float maxCenter = width - padding - (restThumbWidth / 2.0f);
+                        float minCenter = offsetX + padding + (restThumbWidth / 2.0f);
+                        float maxCenter = offsetX + drawW - padding - (restThumbWidth / 2.0f);
                         float rawDrag = (s.currentX - minCenter) / (maxCenter - minCenter);
                         targetProgress = Math.max(0f, Math.min(1f, rawDrag));
                     } else {
@@ -195,9 +219,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     s.progress += (targetProgress - s.progress) * dt * 25.0f;
                     s.progress = Math.max(0f, Math.min(1f, s.progress));
 
-                    // Bloom decays back to 0 naturally if touch/press stops
                     float bloomTarget = (s.isTouching || isPressed) ? 1.0f : 0.0f;
-                    s.bloom += (bloomTarget - s.bloom) * dt * 12.0f;
+                    s.bloom += (bloomTarget - s.bloom) * dt * 16.0f;
                     s.bloom = Math.max(0f, Math.min(1f, s.bloom));
 
                     boolean isOverDragging = s.isDragging && (s.currentX < 0 || s.currentX > width);
@@ -211,8 +234,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         view.postInvalidateOnAnimation();
                     }
 
-                    // --- RENDER GEOMETRY ---
-                    float trackTop = (height - trackHeight) / 2.0f;
+                    float trackTop = offsetY + (drawH - trackHeight) / 2.0f;
                     float trackBottom = trackTop + trackHeight;
                     float trackRadius = trackHeight / 2.0f;
 
@@ -221,9 +243,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     } else {
                         bgPaint.setColor((s.progress > 0.5f || s.isDragging) ? TRACK_ON : TRACK_OFF);
                     }
-                    canvas.drawRoundRect(new RectF(0, trackTop, width, trackBottom), trackRadius, trackRadius, bgPaint);
+                    canvas.drawRoundRect(new RectF(offsetX, trackTop, offsetX + drawW, trackBottom), trackRadius, trackRadius, bgPaint);
 
-                    float baseMaxThumbHeight = height * 0.82f;
+                    float baseMaxThumbHeight = drawH * 0.82f;
                     float currentMaxThumbHeight = baseMaxThumbHeight - ((baseMaxThumbHeight - trackHeight) * s.squish);
                     float scaleRatio = currentMaxThumbHeight / restThumbHeight;
                     float currentMaxThumbWidth = restThumbWidth * scaleRatio;
@@ -234,11 +256,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float thumbRadius = currentThumbHeight / 2.0f;
 
                     float currentPaddingX = padding - (padding * 0.7f * s.bloom);
-                    float minX = currentPaddingX + (currentThumbWidth / 2.0f);
-                    float maxX = width - currentPaddingX - (currentThumbWidth / 2.0f);
+                    float minX = offsetX + currentPaddingX + (currentThumbWidth / 2.0f);
+                    float maxX = offsetX + drawW - currentPaddingX - (currentThumbWidth / 2.0f);
 
                     float cx = minX + s.progress * (maxX - minX);
-                    float cy = height / 2.0f;
+                    float cy = offsetY + (drawH / 2.0f);
 
                     float thumbLeft = cx - (currentThumbWidth / 2.0f);
                     float thumbRight = cx + (currentThumbWidth / 2.0f);
@@ -270,6 +292,54 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
         for (String className : TARGET_TOGGLE_CLASSES) {
             applyUnifiedToggleEngine(className, lpparam.classLoader);
+        }
+
+        // ==========================================
+        // DYNAMIC CLASSLOADER CATCHER (SystemUI Plugins)
+        // ==========================================
+        if (lpparam.packageName.equals("com.android.systemui") || lpparam.packageName.equals("miui.systemui.plugin")) {
+            XposedHelpers.findAndHookMethod(ClassLoader.class, "loadClass", String.class, boolean.class, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (param.hasThrowable()) return;
+                    Class<?> clazz = (Class<?>) param.getResult();
+                    if (clazz != null) {
+                        String name = clazz.getName();
+                        if (name.equals("miui.systemui.controlcenter.widget.SlidingButton") ||
+                            name.equals("com.miui.systemui.widget.SlidingButton")) {
+                            applyUnifiedToggleEngine(name, clazz.getClassLoader());
+                        }
+                    }
+                }
+            });
+        }
+
+        // Dynamic Island animations...
+        if (lpparam.packageName.equals("miui.systemui.plugin") || lpparam.packageName.equals("com.android.systemui")) {
+            try {
+                Class<?> delegateClass = XposedHelpers.findClassIfExists("miui.systemui.dynamicisland.anim.DynamicIslandAnimationDelegate", lpparam.classLoader);
+                if (delegateClass != null) {
+                    XposedBridge.hookAllConstructors(delegateClass, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            Class<?> folmeEaseClass = XposedHelpers.findClass("miuix.animation.FolmeEase", lpparam.classLoader);
+                            Object iosSpring = XposedHelpers.callStaticMethod(folmeEaseClass, "spring", 0.65f, 0.35f);
+                            Object fastSpring = XposedHelpers.callStaticMethod(folmeEaseClass, "spring", 0.70f, 0.25f);
+                            for (Field field : delegateClass.getDeclaredFields()) {
+                                field.setAccessible(true);
+                                if (field.getType().getName().contains("EaseStyle")) {
+                                    String name = field.getName();
+                                    if (name.contains("HIDDEN") || name.contains("APPEAR")) {
+                                        field.set(param.thisObject, fastSpring);
+                                    } else {
+                                        field.set(param.thisObject, iosSpring); 
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (Throwable t) {}
         }
     }
 }
