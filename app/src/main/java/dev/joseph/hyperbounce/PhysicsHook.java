@@ -4,6 +4,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.view.MotionEvent;
 import android.view.View;
 import java.lang.reflect.Field;
 import java.util.WeakHashMap;
@@ -17,14 +18,12 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 public class PhysicsHook implements IXposedHookLoadPackage {
 
-    // Active iOS Colors
     private static final int TRACK_OFF   = Color.parseColor("#3A3A3C");
     private static final int TRACK_ON    = Color.parseColor("#30D158");
     private static final int THUMB_WHITE = Color.parseColor("#FFFFFF");
     private static final int SHADOW      = Color.parseColor("#25000000");
     private static final int RIM_COLOR   = Color.parseColor("#12000000");
 
-    // Disabled iOS Colors
     private static final int TRACK_OFF_DISABLED = Color.parseColor("#2C2C2E");
     private static final int TRACK_ON_DISABLED  = Color.parseColor("#1C4D25");
     private static final int THUMB_DISABLED     = Color.parseColor("#787880");
@@ -45,6 +44,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         float progress = 0.0f;
         float bloom = 0.0f;
         float squish = 0.0f;
+        float touchX = -1.0f;
         boolean springPatched = false;
         long last = System.currentTimeMillis();
     }
@@ -54,6 +54,29 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
         if (clazz == null) return;
 
+        // 1. Hook Touch Events to manually track finger X-coordinates
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "onTouchEvent", MotionEvent.class, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    View view = (View) param.thisObject;
+                    MotionEvent event = (MotionEvent) param.args[0];
+                    ToggleState s = stateMap.get(view);
+                    if (s != null) {
+                        int action = event.getActionMasked();
+                        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
+                            s.touchX = event.getX();
+                            view.postInvalidateOnAnimation();
+                        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                            s.touchX = -1.0f;
+                            view.postInvalidateOnAnimation();
+                        }
+                    }
+                }
+            });
+        } catch (Throwable t) {}
+
+        // 2. Hook Draw
         try {
             XposedHelpers.findAndHookMethod(clazz, "onDraw", Canvas.class, new XC_MethodReplacement() {
                 @Override
@@ -69,7 +92,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     try { helper = XposedHelpers.getObjectField(view, "mHelper"); } catch (Throwable t) {}
                     Object dataSrc = (helper != null) ? helper : view;
 
-                    // Clear default Xiaomi assets
                     try { XposedHelpers.setObjectField(dataSrc, "mSlideBar", null); } catch(Throwable t){}
                     try { XposedHelpers.setObjectField(dataSrc, "mBarOn", null); } catch(Throwable t){}
                     try { XposedHelpers.setObjectField(dataSrc, "mSliderOn", null); } catch(Throwable t){}
@@ -77,18 +99,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     try { XposedHelpers.setObjectField(dataSrc, "mMaskCheckedSlideBar", null); } catch(Throwable t){}
                     try { XposedHelpers.setObjectField(dataSrc, "mMaskUnCheckedSlideBar", null); } catch(Throwable t){}
 
-                    int offset = 0;
                     boolean tracking = false;
-                    int posStart = 0;
-                    int posEnd = 0;
-
-                    try { offset = XposedHelpers.getIntField(dataSrc, "mSliderOffset"); } catch(Throwable t){}
                     try { tracking = XposedHelpers.getBooleanField(dataSrc, "mTracking"); } catch(Throwable t){}
-                    try { posStart = XposedHelpers.getIntField(dataSrc, "mSliderPositionStart"); } catch(Throwable t){}
-                    try { posEnd = XposedHelpers.getIntField(dataSrc, "mSliderPositionEnd"); } catch(Throwable t){}
-
-                    float maxTravel = (posEnd - posStart) > 0 ? (posEnd - posStart) : (width - height);
-                    float rawProgress = maxTravel > 0 ? (float) (offset - posStart) / maxTravel : 0f;
 
                     ToggleState s = stateMap.get(view);
                     if (s == null) {
@@ -97,7 +109,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         stateMap.put(view, s);
                     }
 
-                    // On-the-fly Spring Physics Injection
                     if (!s.springPatched) {
                         try {
                             Object moveAnim = XposedHelpers.getObjectField(dataSrc, "mSliderMoveAnim");
@@ -117,15 +128,29 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     s.last = now;
 
                     boolean isChecked = view.isChecked();
-                    float targetProgress = tracking ? Math.max(0f, Math.min(1f, rawProgress)) : (isChecked ? 1.0f : 0.0f);
-                    s.progress = Math.max(0f, Math.min(1f, s.progress + (targetProgress - s.progress) * dt * 22.0f));
-
-                    // FIX FOR LONG PRESS BLOOM: Check view.isPressed() alongside tracking!
                     boolean isPressed = view.isPressed();
+                    float trackHeight = height * 0.65f;
+                    float padding = trackHeight * 0.07f;
+                    float restThumbHeight = trackHeight - (padding * 2.0f);
+                    float restThumbWidth = restThumbHeight * 1.35f;
+
+                    // DYNAMIC DRAG CALCULATION (Bypasses Xiaomi Engine)
+                    float targetProgress;
+                    if (tracking && s.touchX != -1.0f) {
+                        float minCenter = padding + (restThumbWidth / 2.0f);
+                        float maxCenter = width - padding - (restThumbWidth / 2.0f);
+                        float rawDrag = (s.touchX - minCenter) / (maxCenter - minCenter);
+                        targetProgress = Math.max(0f, Math.min(1f, rawDrag));
+                    } else {
+                        targetProgress = isChecked ? 1.0f : 0.0f;
+                    }
+
+                    s.progress = Math.max(0f, Math.min(1f, s.progress + (targetProgress - s.progress) * dt * 25.0f));
+
                     float bloomTarget = (tracking || isPressed) ? 1.0f : 0.0f;
                     s.bloom = Math.max(0f, Math.min(1f, s.bloom + (bloomTarget - s.bloom) * dt * 14.0f));
 
-                    boolean isOverDragging = tracking && (rawProgress < -0.02f || rawProgress > 1.02f);
+                    boolean isOverDragging = tracking && s.touchX != -1.0f && (s.touchX < 0 || s.touchX > width);
                     float squishTarget = isOverDragging ? 1.0f : 0.0f;
                     s.squish = Math.max(0f, Math.min(1f, s.squish + (squishTarget - s.squish) * dt * 6.0f));
 
@@ -136,9 +161,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     }
 
                     boolean isEnabled = view.isEnabled();
-
-                    // --- DRAW TRACK ---
-                    float trackHeight = height * 0.65f;
                     float trackTop = (height - trackHeight) / 2.0f;
                     float trackBottom = trackTop + trackHeight;
                     float trackRadius = trackHeight / 2.0f;
@@ -149,11 +171,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         bgPaint.setColor((s.progress > 0.5f || tracking) ? TRACK_ON : TRACK_OFF);
                     }
                     canvas.drawRoundRect(new RectF(0, trackTop, width, trackBottom), trackRadius, trackRadius, bgPaint);
-
-                    // --- DRAW THUMB ---
-                    float padding = trackHeight * 0.07f;
-                    float restThumbHeight = trackHeight - (padding * 2.0f);
-                    float restThumbWidth = restThumbHeight * 1.35f;
 
                     float baseMaxThumbHeight = height * 0.82f;
                     float currentMaxThumbHeight = baseMaxThumbHeight - ((baseMaxThumbHeight - trackHeight) * s.squish);
@@ -179,14 +196,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     RectF thumbRect = new RectF(thumbLeft, thumbTop, thumbRight, thumbBottom);
 
-                    // Shadow (hidden when disabled)
                     if (isEnabled) {
                         shadowPaint.setColor(SHADOW);
                         float shadowOffset = 2.0f + (2.0f * s.bloom);
                         canvas.drawRoundRect(new RectF(thumbLeft, thumbTop + shadowOffset, thumbRight, thumbBottom + shadowOffset), thumbRadius, thumbRadius, shadowPaint);
                     }
 
-                    // Thumb Body
                     thumbPaint.setColor(isEnabled ? THUMB_WHITE : THUMB_DISABLED);
                     canvas.drawRoundRect(thumbRect, thumbRadius, thumbRadius, thumbPaint);
                     
@@ -197,102 +212,13 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     return null;
                 }
             });
-        } catch (Throwable t) {
-            XposedBridge.log("Failed to hook " + className + ": " + t.getMessage());
-        }
+        } catch (Throwable t) {}
     }
 
     @Override
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
-        
-        // ==========================================
-        // 1. SYSTEM-WIDE iOS TOGGLES
-        // ==========================================
         hookUniversalToggle("miuix.slidingwidget.widget.SlidingButton", lpparam.classLoader);
         hookUniversalToggle("miuix.slidingwidget.widget.SlidingSwitchCompat", lpparam.classLoader);
         hookUniversalToggle("miuix.slidingwidget.widget.SlidingSwitch", lpparam.classLoader);
-
-        // ==========================================
-        // 2. DYNAMIC ISLAND (PLUGIN & SYSTEMUI)
-        // ==========================================
-        if (lpparam.packageName.equals("miui.systemui.plugin") || lpparam.packageName.equals("com.android.systemui")) {
-            try {
-                Class<?> delegateClass = XposedHelpers.findClassIfExists("miui.systemui.dynamicisland.anim.DynamicIslandAnimationDelegate", lpparam.classLoader);
-                if (delegateClass != null) {
-                    XposedBridge.hookAllConstructors(delegateClass, new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                            Class<?> folmeEaseClass = XposedHelpers.findClass("miuix.animation.FolmeEase", lpparam.classLoader);
-                            Object iosSpring = XposedHelpers.callStaticMethod(folmeEaseClass, "spring", 0.65f, 0.35f);
-                            Object fastSpring = XposedHelpers.callStaticMethod(folmeEaseClass, "spring", 0.70f, 0.25f);
-
-                            for (Field field : delegateClass.getDeclaredFields()) {
-                                field.setAccessible(true);
-                                if (field.getType().getName().contains("EaseStyle")) {
-                                    String name = field.getName();
-                                    if (name.contains("HIDDEN") || name.contains("APPEAR")) {
-                                        field.set(param.thisObject, fastSpring);
-                                    } else {
-                                        field.set(param.thisObject, iosSpring); 
-                                    }
-                                }
-                            }
-                        }
-                    });
-                }
-            } catch (Throwable t) {}
-
-            try {
-                Class<?> bgViewClass = XposedHelpers.findClassIfExists("miui.systemui.dynamicisland.DynamicIslandBackgroundView", lpparam.classLoader);
-                if (bgViewClass != null) {
-                    XposedHelpers.findAndHookMethod(bgViewClass, "layout", int.class, int.class, int.class, int.class, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            int top = (int) param.args[1];
-                            int bottom = (int) param.args[3];
-                            if ((bottom - top) > 600) {
-                                param.args[3] = top + 600;
-                            }
-                        }
-                    });
-
-                    XposedHelpers.findAndHookMethod(bgViewClass, "setAlpha", float.class, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            float targetAlpha = (float) param.args[0];
-                            if (targetAlpha > 0.05f && targetAlpha < 1.0f) {
-                                param.args[0] = 1.0f;
-                            }
-                        }
-                    });
-                }
-            } catch (Throwable t) {}
-        }
-
-        // ==========================================
-        // 3. LAUNCHER FLUIDITY
-        // ==========================================
-        if (lpparam.packageName.equals("com.miui.home")) {
-            try {
-                Class<?> rectFSpringAnimClass = XposedHelpers.findClassIfExists("com.miui.home.recents.util.RectFSpringAnim", lpparam.classLoader);
-                if (rectFSpringAnimClass != null) {
-                    XposedHelpers.findAndHookMethod(rectFSpringAnimClass, "setDamping", float.class, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            param.args[0] = 0.45f; 
-                        }
-                    });
-                    XposedHelpers.findAndHookMethod(rectFSpringAnimClass, "setStiffness", float.class, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            float currentStiffness = (float) param.args[0];
-                            if (currentStiffness < 300.0f) {
-                                param.args[0] = 350.0f;
-                            }
-                        }
-                    });
-                }
-            } catch (Throwable t) {}
-        }
     }
 }
