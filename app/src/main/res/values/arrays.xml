@@ -18,6 +18,8 @@
         <item>com.miui.weather2</item>
         <item>com.miui.deskclock</item>
         <item>com.android.contacts</item>
+        <item>com.android.phone</item>
+        <item>com.android.server.telecom</item>
         <item>com.miui.securityadd</item>
         <item>com.miui.securitycore</item>
         <item>miui.systemui.plugin</item>
