@@ -24,7 +24,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private static final int SHADOW      = Color.parseColor("#25000000");
     private static final int RIM_COLOR   = Color.parseColor("#12000000");
 
-    // Disabled iOS Colors (Muted / Unclickable)
+    // Disabled iOS Colors
     private static final int TRACK_OFF_DISABLED = Color.parseColor("#2C2C2E");
     private static final int TRACK_ON_DISABLED  = Color.parseColor("#1C4D25");
     private static final int THUMB_DISABLED     = Color.parseColor("#787880");
@@ -116,13 +116,13 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float dt = Math.min((now - s.last) / 1000.0f, 0.05f);
                     s.last = now;
 
-                    // FIX UNTOGGLEABLE BUG: If tracking (dragging), follow finger.
-                    // If tapped / idle, drive progress strictly from view.isChecked()!
                     boolean isChecked = view.isChecked();
                     float targetProgress = tracking ? Math.max(0f, Math.min(1f, rawProgress)) : (isChecked ? 1.0f : 0.0f);
                     s.progress = Math.max(0f, Math.min(1f, s.progress + (targetProgress - s.progress) * dt * 22.0f));
 
-                    float bloomTarget = tracking ? 1.0f : 0.0f;
+                    // FIX FOR LONG PRESS BLOOM: Check view.isPressed() alongside tracking!
+                    boolean isPressed = view.isPressed();
+                    float bloomTarget = (tracking || isPressed) ? 1.0f : 0.0f;
                     s.bloom = Math.max(0f, Math.min(1f, s.bloom + (bloomTarget - s.bloom) * dt * 14.0f));
 
                     boolean isOverDragging = tracking && (rawProgress < -0.02f || rawProgress > 1.02f);
@@ -186,7 +186,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         canvas.drawRoundRect(new RectF(thumbLeft, thumbTop + shadowOffset, thumbRight, thumbBottom + shadowOffset), thumbRadius, thumbRadius, shadowPaint);
                     }
 
-                    // Thumb Body (Dimmed matte gray when disabled)
+                    // Thumb Body
                     thumbPaint.setColor(isEnabled ? THUMB_WHITE : THUMB_DISABLED);
                     canvas.drawRoundRect(thumbRect, thumbRadius, thumbRadius, thumbPaint);
                     
