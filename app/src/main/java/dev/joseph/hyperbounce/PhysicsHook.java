@@ -210,6 +210,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         // ==========================================
         hookUniversalToggle("miuix.slidingwidget.widget.SlidingButton", lpparam.classLoader);
         hookUniversalToggle("miuix.slidingwidget.widget.SlidingSwitchCompat", lpparam.classLoader);
+        hookUniversalToggle("miuix.slidingwidget.widget.SlidingSwitch", lpparam.classLoader);
 
         // ==========================================
         // 2. DYNAMIC ISLAND (PLUGIN & SYSTEMUI)
