@@ -46,7 +46,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "miuix.slidingwidget.widget.SlidingSwitchCompat",
         "miuix.slidingwidget.widget.SlidingSwitch",
         "miui.slidingwidget.widget.SlidingButton",
-        "miui.widget.SlidingButton"
+        "miui.widget.SlidingButton",
+        "com.miui.systemui.widget.SlidingButton",
+        "miui.systemui.widget.SlidingButton"
     };
 
     private static final HashSet<String> hookedDynamicClasses = new HashSet<>();
@@ -81,7 +83,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // B. Programmatic Tap Trigger
+        // B. Programmatic Tap Trigger (Handles text row clicks perfectly)
         try {
             XposedHelpers.findAndHookMethod(clazz, "setChecked", boolean.class, new XC_MethodHook() {
                 @Override
@@ -89,7 +91,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     View view = (View) param.thisObject;
                     ToggleState s = stateMap.get(view);
                     if (s != null) {
-                        s.bloom = 1.0f; // Impulse for row tap
+                        s.bloom = 1.0f; 
                         view.postInvalidateOnAnimation();
                     }
                 }
@@ -112,6 +114,36 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
+        // D. DISPATCH HIJACKER (From Live Frida Test - Steals gesture from greedy rows)
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "dispatchTouchEvent", MotionEvent.class, new XC_MethodReplacement() {
+                @Override
+                protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
+                    View view = (View) param.thisObject;
+                    if (!view.isEnabled()) {
+                        return XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args);
+                    }
+
+                    MotionEvent event = (MotionEvent) param.args[0];
+                    int action = event.getActionMasked();
+                    
+                    if (action == MotionEvent.ACTION_DOWN) {
+                        android.view.ViewParent parent = view.getParent();
+                        if (parent != null) {
+                            parent.requestDisallowInterceptTouchEvent(true); // Tell parent to back off
+                        }
+                    }
+                    
+                    // Forcefully feed the touch coordinates into our physics engine
+                    XposedHelpers.callMethod(view, "onTouchEvent", event);
+                    
+                    // Return TRUE to aggressively consume and steal the gesture
+                    return true;
+                }
+            });
+        } catch (Throwable t) {}
+
+        // E. State Tracking (Fed by Dispatch Hijacker)
         try {
             XposedHelpers.findAndHookMethod(clazz, "onTouchEvent", MotionEvent.class, new XC_MethodHook() {
                 @Override
@@ -145,7 +177,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // D. Unified Render Engine
+        // F. Unified Render Engine
         try {
             XposedHelpers.findAndHookMethod(clazz, "onDraw", Canvas.class, new XC_MethodReplacement() {
                 @Override
