@@ -54,7 +54,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
         if (clazz == null) return;
 
-        // 1. Hook Touch Events to manually track finger X-coordinates
         try {
             XposedHelpers.findAndHookMethod(clazz, "onTouchEvent", MotionEvent.class, new XC_MethodHook() {
                 @Override
@@ -76,7 +75,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // 2. Hook Draw
         try {
             XposedHelpers.findAndHookMethod(clazz, "onDraw", Canvas.class, new XC_MethodReplacement() {
                 @Override
@@ -134,7 +132,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float restThumbHeight = trackHeight - (padding * 2.0f);
                     float restThumbWidth = restThumbHeight * 1.35f;
 
-                    // DYNAMIC DRAG CALCULATION (Bypasses Xiaomi Engine)
                     float targetProgress;
                     if (tracking && s.touchX != -1.0f) {
                         float minCenter = padding + (restThumbWidth / 2.0f);
