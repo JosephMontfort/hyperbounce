@@ -114,24 +114,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // D. TOUCH STEALER & PHYSICS TRACKING
+        // D. PHYSICS STATE TRACKING
         try {
             XposedHelpers.findAndHookMethod(clazz, "onTouchEvent", MotionEvent.class, new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    View view = (View) param.thisObject;
-                    if (!view.isEnabled()) return;
-                    
-                    MotionEvent event = (MotionEvent) param.args[0];
-                    if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                        android.view.ViewParent parent = view.getParent();
-                        if (parent != null) {
-                            // Tell the greedy Preference row to back off immediately!
-                            parent.requestDisallowInterceptTouchEvent(true);
-                        }
-                    }
-                }
-
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     View view = (View) param.thisObject;
@@ -161,9 +146,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         s.isDragging = false;
                         view.postInvalidateOnAnimation();
                     }
-                    
-                    // FORCE TRUE: Aggressively steal the gesture back from the Preference row!
-                    param.setResult(true);
                 }
             });
         } catch (Throwable t) {}
@@ -313,6 +295,49 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
+        
+        // ==========================================
+        // GLOBAL VIEW DISPATCHER (Frida Live Test 4 Port)
+        // ==========================================
+        try {
+            Class<?> viewClass = XposedHelpers.findClassIfExists("android.view.View", lpparam.classLoader);
+            if (viewClass != null) {
+                XposedHelpers.findAndHookMethod(viewClass, "dispatchTouchEvent", MotionEvent.class, new XC_MethodReplacement() {
+                    @Override
+                    protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
+                        View view = (View) param.thisObject;
+                        String className = view.getClass().getName();
+                        
+                        boolean isTarget = false;
+                        for (String target : TARGET_TOGGLE_CLASSES) {
+                            if (className.equals(target)) {
+                                isTarget = true;
+                                break;
+                            }
+                        }
+
+                        if (isTarget) {
+                            MotionEvent event = (MotionEvent) param.args[0];
+                            int action = event.getActionMasked();
+                            
+                            if (action == MotionEvent.ACTION_DOWN) {
+                                android.view.ViewParent parent = view.getParent();
+                                if (parent != null) {
+                                    parent.requestDisallowInterceptTouchEvent(true);
+                                }
+                            }
+                            
+                            XposedHelpers.callMethod(view, "onTouchEvent", event);
+                            return true; // Aggressively steal the gesture!
+                        }
+
+                        return XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args);
+                    }
+                });
+            }
+        } catch (Throwable t) {}
+
+        // Apply visual engine
         for (String className : TARGET_TOGGLE_CLASSES) {
             applyUnifiedToggleEngine(className, lpparam.classLoader);
         }
