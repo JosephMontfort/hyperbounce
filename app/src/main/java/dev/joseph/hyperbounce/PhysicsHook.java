@@ -47,7 +47,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "miui.slidingwidget.widget.SlidingButton",
         "miui.widget.SlidingButton",
         "com.miui.systemui.widget.SlidingButton",
-        "miui.systemui.widget.SlidingButton"
+        "miui.systemui.widget.SlidingButton",
+        "miui.systemui.controlcenter.widget.SlidingButton"
     };
 
     private static class ToggleState {
