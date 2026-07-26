@@ -19,6 +19,9 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 public class PhysicsHook implements IXposedHookLoadPackage {
 
+    // ==========================================
+    // TOGGLE PAINTS & COLORS
+    // ==========================================
     private static final int TRACK_OFF   = Color.parseColor("#3A3A3C");
     private static final int TRACK_ON    = Color.parseColor("#30D158");
     private static final int THUMB_WHITE = Color.parseColor("#FFFFFF");
@@ -41,6 +44,27 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         rimPaint.setColor(RIM_COLOR);
     }
 
+    // ==========================================
+    // SLIDER PAINTS & COLORS
+    // ==========================================
+    private static final int SLIDER_TRACK_ON = Color.parseColor("#30D158");
+    private static final int SLIDER_TRACK_OFF_DARK = Color.parseColor("#39393D");
+    private static final int SLIDER_TRACK_OFF_LIGHT = Color.parseColor("#E9E9EA");
+    private static final int SLIDER_THUMB_WHITE = Color.parseColor("#FFFFFF");
+    private static final int SLIDER_SHADOW_COLOR = Color.parseColor("#25000000");
+
+    private static final Paint sliderBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private static final Paint sliderActivePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private static final Paint sliderThumbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private static final Paint sliderShadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    static {
+        sliderBgPaint.setStyle(Paint.Style.FILL);
+        sliderActivePaint.setStyle(Paint.Style.FILL);
+        sliderThumbPaint.setStyle(Paint.Style.FILL);
+        sliderShadowPaint.setStyle(Paint.Style.FILL);
+    }
+
     private static final String[] TARGET_TOGGLE_CLASSES = {
         "miuix.slidingwidget.widget.SlidingButton",
         "miuix.slidingwidget.widget.SlidingSwitchCompat",
@@ -51,8 +75,15 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "miui.systemui.widget.SlidingButton"
     };
 
+    private static final String[] TARGET_SLIDER_CLASSES = {
+        "miuix.androidbasewidget.widget.SeekBar"
+    };
+
     private static final HashSet<String> hookedDynamicClasses = new HashSet<>();
 
+    // ==========================================
+    // STATES
+    // ==========================================
     private static class ToggleState {
         float progress = 0.0f;
         float bloom = 0.0f;
@@ -65,6 +96,18 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     }
     private static final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
 
+    private static class SliderState {
+        float bloom = 0.0f;
+        float visualRatio = -1.0f;
+        float touchX = 0.0f;
+        boolean isTouching = false;
+        boolean isDragging = false;
+    }
+    private static final WeakHashMap<Object, SliderState> sliderStateMap = new WeakHashMap<>();
+
+    // ==========================================
+    // TOGGLE ENGINE
+    // ==========================================
     private void applyUnifiedToggleEngine(String className, ClassLoader classLoader) {
         if (hookedDynamicClasses.contains(className)) return;
         
@@ -73,17 +116,15 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         
         hookedDynamicClasses.add(className);
 
-        // A. Prevent Dialer/Preference Snapping
         try {
             XposedHelpers.findAndHookMethod(clazz, "jumpDrawablesToCurrentState", new XC_MethodReplacement() {
                 @Override
                 protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-                    return null; // Kill native snap to allow smooth animation
+                    return null;
                 }
             });
         } catch (Throwable t) {}
 
-        // B. Programmatic Tap Trigger (Handles text row clicks perfectly)
         try {
             XposedHelpers.findAndHookMethod(clazz, "setChecked", boolean.class, new XC_MethodHook() {
                 @Override
@@ -98,7 +139,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // C. Track Touch & Press (Handles text area holds)
         try {
             XposedHelpers.findAndHookMethod(clazz, "setPressed", boolean.class, new XC_MethodHook() {
                 @Override
@@ -114,7 +154,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // D. PHYSICS STATE TRACKING
         try {
             XposedHelpers.findAndHookMethod(clazz, "onTouchEvent", MotionEvent.class, new XC_MethodHook() {
                 @Override
@@ -150,7 +189,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // E. Unified Render Engine
         try {
             XposedHelpers.findAndHookMethod(clazz, "onDraw", Canvas.class, new XC_MethodReplacement() {
                 @Override
@@ -162,14 +200,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float height = view.getHeight();
                     if (width <= 0 || height <= 0) return null;
 
-                    // Erase native Android mButtonDrawable (Kills blue stock toggle)
                     try {
                         if (view.getButtonDrawable() != null) {
                             view.setButtonDrawable(null);
                         }
                     } catch (Throwable t) {}
 
-                    // Erase MIUI custom slide assets
                     Object helper = null;
                     try { helper = XposedHelpers.getObjectField(view, "mHelper"); } catch (Throwable t) {}
                     Object dataSrc = (helper != null) ? helper : view;
@@ -193,7 +229,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     boolean isPressed = view.isPressed();
                     boolean isEnabled = view.isEnabled();
 
-                    // --- SMART BOUNDS LOGIC (Handles Full Row Detail Panels) ---
                     float drawW = width;
                     float drawH = height;
                     float offsetX = 0f;
@@ -202,7 +237,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     if (width > height * 2.5f && width > 200f) {
                         drawH = Math.min(height * 0.55f, 110f);
                         drawW = drawH * 1.75f;
-                        offsetX = width - drawW - (height * 0.15f); // Anchor right
+                        offsetX = width - drawW - (height * 0.15f);
                         offsetY = (height - drawH) / 2.0f;
                     }
 
@@ -248,7 +283,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     } else {
                         bgPaint.setColor((s.progress > 0.5f || s.isDragging) ? TRACK_ON : TRACK_OFF);
                     }
-                    canvas.drawRoundRect(new RectF(offsetX, trackTop, offsetX + drawW, trackBottom), trackRadius, trackRadius, bgPaint);
+                    canvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
 
                     float baseMaxThumbHeight = drawH * 0.82f;
                     float currentMaxThumbHeight = baseMaxThumbHeight - ((baseMaxThumbHeight - trackHeight) * s.squish);
@@ -272,20 +307,187 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float thumbTop = cy - (currentThumbHeight / 2.0f);
                     float thumbBottom = cy + (currentThumbHeight / 2.0f);
 
-                    RectF thumbRect = new RectF(thumbLeft, thumbTop, thumbRight, thumbBottom);
-
                     if (isEnabled) {
                         shadowPaint.setColor(SHADOW);
                         float shadowOffset = 2.0f + (2.0f * s.bloom);
-                        canvas.drawRoundRect(new RectF(thumbLeft, thumbTop + shadowOffset, thumbRight, thumbBottom + shadowOffset), thumbRadius, thumbRadius, shadowPaint);
+                        canvas.drawRoundRect(thumbLeft, thumbTop + shadowOffset, thumbRight, thumbBottom + shadowOffset, thumbRadius, thumbRadius, shadowPaint);
                     }
 
                     thumbPaint.setColor(isEnabled ? THUMB_WHITE : THUMB_DISABLED);
-                    canvas.drawRoundRect(thumbRect, thumbRadius, thumbRadius, thumbPaint);
+                    canvas.drawRoundRect(thumbLeft, thumbTop, thumbRight, thumbBottom, thumbRadius, thumbRadius, thumbPaint);
 
                     if (isEnabled) {
-                        canvas.drawRoundRect(thumbRect, thumbRadius, thumbRadius, rimPaint);
+                        canvas.drawRoundRect(thumbLeft, thumbTop, thumbRight, thumbBottom, thumbRadius, thumbRadius, rimPaint);
                     }
+
+                    return null;
+                }
+            });
+        } catch (Throwable t) {}
+    }
+
+    // ==========================================
+    // SLIDER ENGINE (iOS 26 Style - V9)
+    // ==========================================
+    private void applyUnifiedSliderEngine(String className, ClassLoader classLoader) {
+        if (hookedDynamicClasses.contains(className)) return;
+        
+        Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
+        if (clazz == null) return;
+        
+        hookedDynamicClasses.add(className);
+
+        // Track touch events for slider kinematics
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "onTouchEvent", MotionEvent.class, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    View view = (View) param.thisObject;
+                    MotionEvent event = (MotionEvent) param.args[0];
+
+                    SliderState s = sliderStateMap.get(view);
+                    if (s == null) {
+                        s = new SliderState();
+                        sliderStateMap.put(view, s);
+                    }
+
+                    int action = event.getActionMasked();
+                    float x = event.getX();
+
+                    if (action == MotionEvent.ACTION_DOWN) {
+                        s.isTouching = true;
+                        s.isDragging = false;
+                        s.touchX = x;
+                        view.postInvalidateOnAnimation();
+                    } else if (action == MotionEvent.ACTION_MOVE) {
+                        s.touchX = x;
+                        s.isDragging = true;
+                        view.postInvalidateOnAnimation();
+                    } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                        s.isTouching = false;
+                        s.isDragging = false;
+                        view.postInvalidateOnAnimation();
+                    }
+                }
+            });
+        } catch (Throwable t) {}
+
+        // Custom iOS 26 Rendering
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "onDraw", Canvas.class, new XC_MethodReplacement() {
+                @Override
+                protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
+                    View view = (View) param.thisObject;
+                    Canvas canvas = (Canvas) param.args[0];
+
+                    float w = view.getWidth();
+                    float h = view.getHeight();
+                    if (w <= 0 || h <= 0) return null;
+
+                    // Erase stock assets natively
+                    try {
+                        Object thumb = XposedHelpers.callMethod(view, "getThumb");
+                        if (thumb != null) {
+                            XposedHelpers.callMethod(view, "setThumb", new Class[]{android.graphics.drawable.Drawable.class}, (Object) null);
+                        }
+                    } catch (Throwable e) {}
+
+                    SliderState s = sliderStateMap.get(view);
+                    if (s == null) {
+                        s = new SliderState();
+                        sliderStateMap.put(view, s);
+                    }
+
+                    // 1. PROGRESS KINEMATICS
+                    int max = 100;
+                    try { max = (int) XposedHelpers.callMethod(view, "getMax"); } catch (Throwable e) {}
+                    int min = 0;
+                    try { min = (int) XposedHelpers.callMethod(view, "getMin"); } catch (Throwable e) {}
+                    int progress = 0;
+                    try { progress = (int) XposedHelpers.callMethod(view, "getProgress"); } catch (Throwable e) {}
+
+                    float range = max - min;
+                    float discreteRatio = (range > 0) ? (float)(progress - min) / range : 0f;
+                    discreteRatio = Math.max(0f, Math.min(1f, discreteRatio));
+
+                    if (s.visualRatio < 0.0f) {
+                        s.visualRatio = discreteRatio;
+                    }
+
+                    boolean isDarkMode = (view.getContext().getResources().getConfiguration().uiMode & 0x30) == 0x20;
+
+                    // 2. BLOOM & MASSIVE PILL THUMB DIMENSIONS
+                    float bloomTarget = (s.isTouching || s.isDragging) ? 1.0f : 0.0f;
+                    s.bloom += (bloomTarget - s.bloom) * 0.22f;
+
+                    float restThumbH = 46.0f; 
+                    float restThumbW = 82.0f; 
+
+                    float currentThumbH = restThumbH + (8.0f * s.bloom);
+                    float currentThumbW = restThumbW + (40.0f * s.bloom); 
+                    float thumbRadius = currentThumbH / 2.0f;
+
+                    // 3. SYMMETRIC TRACK DIMENSIONS & BOTH-SIDE BOUNDARY CONSTRAINTS
+                    float baseLeft = 4.0f; 
+                    float shrinkAmount = s.bloom * 12.0f; 
+                    
+                    float trackLeft = baseLeft + shrinkAmount;
+                    float trackRight = (w - baseLeft) - shrinkAmount;
+                    float trackW = trackRight - trackLeft;
+
+                    float minCx = baseLeft + (currentThumbW / 2.0f);
+                    float maxCx = (w - baseLeft) - (currentThumbW / 2.0f);
+                    float travelW = maxCx - minCx;
+
+                    float targetRatio = discreteRatio;
+                    if (s.isDragging && travelW > 0) {
+                        float rawDragRatio = (s.touchX - minCx) / travelW;
+                        targetRatio = Math.max(0.0f, Math.min(1.0f, rawDragRatio));
+                    }
+
+                    s.visualRatio += (targetRatio - s.visualRatio) * 0.28f;
+
+                    if (Math.abs(s.bloom - bloomTarget) > 0.005f || Math.abs(s.visualRatio - targetRatio) > 0.001f) {
+                        view.postInvalidateOnAnimation();
+                    }
+
+                    float trackHeight = 22.0f; 
+                    float trackTop = (h - trackHeight) / 2.0f;
+                    float trackBottom = trackTop + trackHeight;
+                    float trackRadius = trackHeight / 2.0f;
+
+                    // Inactive Inner Track (Symmetrically shrunk)
+                    sliderBgPaint.setColor(isDarkMode ? SLIDER_TRACK_OFF_DARK : SLIDER_TRACK_OFF_LIGHT);
+                    canvas.drawRoundRect(trackLeft, trackTop, trackRight, trackBottom, trackRadius, trackRadius, sliderBgPaint);
+
+                    // Active Green Inner Track
+                    float activeW = trackW * s.visualRatio;
+                    if (activeW > 0) {
+                        sliderActivePaint.setColor(SLIDER_TRACK_ON);
+                        canvas.drawRoundRect(trackLeft, trackTop, trackLeft + activeW, trackBottom, trackRadius, trackRadius, sliderActivePaint);
+                    }
+
+                    // 4. POSITION & RENDER THUMB WITH 70% OPACITY GLASS
+                    float cx = minCx + travelW * s.visualRatio;
+                    float cy = h / 2.0f;
+
+                    float thumbL = cx - (currentThumbW / 2.0f);
+                    float thumbR = cx + (currentThumbW / 2.0f);
+                    float thumbT = cy - (currentThumbH / 2.0f);
+                    float thumbB = cy + (currentThumbH / 2.0f);
+
+                    // Shadow
+                    if (isDarkMode) {
+                        sliderShadowPaint.setColor(SLIDER_SHADOW_COLOR);
+                        canvas.drawRoundRect(thumbL, thumbT + 3.0f, thumbR, thumbB + 3.0f, thumbRadius, thumbRadius, sliderShadowPaint);
+                    }
+
+                    // Solid White transitioning to 70% Opacity Glass on touch/hold
+                    sliderThumbPaint.setColor(SLIDER_THUMB_WHITE);
+                    int targetAlpha = 255 - (int)(77 * s.bloom); // 255 down to 178 (70%)
+                    sliderThumbPaint.setAlpha(targetAlpha);
+
+                    canvas.drawRoundRect(thumbL, thumbT, thumbR, thumbB, thumbRadius, thumbRadius, sliderThumbPaint);
 
                     return null;
                 }
@@ -297,7 +499,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
         
         // ==========================================
-        // GLOBAL VIEW DISPATCHER (Frida Live Test 4 Port)
+        // GLOBAL VIEW DISPATCHER (Toggle Hijacking)
         // ==========================================
         try {
             Class<?> viewClass = XposedHelpers.findClassIfExists("android.view.View", lpparam.classLoader);
@@ -337,9 +539,14 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             }
         } catch (Throwable t) {}
 
-        // Apply visual engine
+        // Apply Toggle visual engine
         for (String className : TARGET_TOGGLE_CLASSES) {
             applyUnifiedToggleEngine(className, lpparam.classLoader);
+        }
+
+        // Apply Slider visual engine
+        for (String className : TARGET_SLIDER_CLASSES) {
+            applyUnifiedSliderEngine(className, lpparam.classLoader);
         }
 
         // ==========================================
