@@ -17,11 +17,13 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 public class PhysicsHook implements IXposedHookLoadPackage {
 
+    private static final String TAG = "[HyperBounce-Diag] ";
+
     private static final int TRACK_OFF = Color.parseColor("#3A3A3C");
     private static final int TRACK_ON = Color.parseColor("#30D158");
     private static final int THUMB_WHITE = Color.parseColor("#FFFFFF");
     private static final int SHADOW = Color.parseColor("#25000000");
-    private static final int RIM_COLOR = Color.parseColor("#15000000");
+    private static final int RIM_COLOR = Color.parseColor("#12000000");
 
     private static final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private static final Paint thumbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -44,28 +46,20 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
+        
+        // LOG EVERY PACKAGE LOAD
+        XposedBridge.log(TAG + "Loaded in package: " + lpparam.packageName);
 
         // ==========================================
-        // 1. SYSTEM-WIDE iOS TOGGLES (HOOKS EVERYTHING)
+        // 1. SYSTEM-WIDE iOS TOGGLES (DIAGNOSTIC HOOKS)
         // ==========================================
-        try {
-            // A. Kill the stock Android CheckBox background bleeding through on disabled states
-            Class<?> slidingBtnClass = XposedHelpers.findClassIfExists("miuix.slidingwidget.widget.SlidingButton", lpparam.classLoader);
-            if (slidingBtnClass != null) {
+        
+        // Check 1: SlidingButton
+        Class<?> slidingBtnClass = XposedHelpers.findClassIfExists("miuix.slidingwidget.widget.SlidingButton", lpparam.classLoader);
+        if (slidingBtnClass != null) {
+            XposedBridge.log(TAG + "--> FOUND SlidingButton in: " + lpparam.packageName);
+            try {
                 XposedHelpers.findAndHookMethod(slidingBtnClass, "onDraw", Canvas.class, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        android.widget.CompoundButton view = (android.widget.CompoundButton) param.thisObject;
-                        view.setButtonDrawable((android.graphics.drawable.Drawable) null);
-                        view.setBackground(null);
-                        view.setAlpha(view.isEnabled() ? 1.0f : 0.4f); // iOS disabled state opacity
-                    }
-                });
-            }
-
-            Class<?> slidingSwitchClass = XposedHelpers.findClassIfExists("miuix.slidingwidget.widget.SlidingSwitchCompat", lpparam.classLoader);
-            if (slidingSwitchClass != null) {
-                XposedHelpers.findAndHookMethod(slidingSwitchClass, "onDraw", Canvas.class, new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                         android.widget.CompoundButton view = (android.widget.CompoundButton) param.thisObject;
@@ -74,11 +68,25 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         view.setAlpha(view.isEnabled() ? 1.0f : 0.4f);
                     }
                 });
+            } catch (Throwable t) {
+                XposedBridge.log(TAG + "Failed SlidingButton hook in " + lpparam.packageName + ": " + t.getMessage());
             }
+        } else {
+            XposedBridge.log(TAG + "x-- SlidingButton NOT found in: " + lpparam.packageName);
+        }
 
-            // B. Replace the rendering engine
-            Class<?> helperClass = XposedHelpers.findClassIfExists("miuix.slidingwidget.widget.SlidingButtonHelper", lpparam.classLoader);
-            if (helperClass != null) {
+        // Check 2: SlidingSwitchCompat
+        Class<?> slidingSwitchClass = XposedHelpers.findClassIfExists("miuix.slidingwidget.widget.SlidingSwitchCompat", lpparam.classLoader);
+        if (slidingSwitchClass != null) {
+            XposedBridge.log(TAG + "--> FOUND SlidingSwitchCompat in: " + lpparam.packageName);
+        }
+
+        // Check 3: SlidingButtonHelper
+        Class<?> helperClass = XposedHelpers.findClassIfExists("miuix.slidingwidget.widget.SlidingButtonHelper", lpparam.classLoader);
+        if (helperClass != null) {
+            XposedBridge.log(TAG + "===> SUCCESS: FOUND SlidingButtonHelper in: " + lpparam.packageName);
+            
+            try {
                 XposedHelpers.findAndHookMethod(helperClass, "initAnim", new XC_MethodHook() {
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -99,8 +107,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         Object obj = param.thisObject;
                         Canvas canvas = (Canvas) param.args[0];
 
-                        // Completely nuke ALL Xiaomi default assets
-                        XposedHelpers.setObjectField(obj, "mSlideBar", null); // <--- Added: This was causing stock background bleed!
+                        XposedHelpers.setObjectField(obj, "mSlideBar", null);
                         XposedHelpers.setObjectField(obj, "mBarOn", null);
                         XposedHelpers.setObjectField(obj, "mSliderOn", null);
                         XposedHelpers.setObjectField(obj, "mSliderOff", null);
@@ -190,9 +197,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         return null; 
                     }
                 });
+            } catch (Throwable t) {
+                XposedBridge.log(TAG + "Error hooking SlidingButtonHelper in " + lpparam.packageName + ": " + t.getMessage());
             }
-        } catch (Throwable t) {
-            XposedBridge.log("HyperBounce Toggle Error: " + t.getMessage());
+        } else {
+            XposedBridge.log(TAG + "x-- SlidingButtonHelper NOT found in: " + lpparam.packageName);
         }
 
         // ==========================================
@@ -224,7 +233,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     });
                 }
             } catch (Throwable t) {
-                XposedBridge.log("HyperBounce Physics Override Error: " + t.getMessage());
+                XposedBridge.log(TAG + "Physics Override Error: " + t.getMessage());
             }
 
             try {
@@ -252,12 +261,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     });
                 }
             } catch (Throwable t) {
-                XposedBridge.log("HyperBounce Layout Glitch Fix Error: " + t.getMessage());
+                XposedBridge.log(TAG + "Layout Glitch Fix Error: " + t.getMessage());
             }
         }
 
         // ==========================================
-        // 3. LAUNCHER FLUIDITY (NO LAG INTERRUPTION)
+        // 3. LAUNCHER FLUIDITY
         // ==========================================
         if (lpparam.packageName.equals("com.miui.home")) {
             try {
@@ -280,7 +289,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     });
                 }
             } catch (Throwable t) {
-                XposedBridge.log("HyperBounce Launcher Hook Error: " + t.getMessage());
+                XposedBridge.log(TAG + "Launcher Hook Error: " + t.getMessage());
             }
         }
     }
