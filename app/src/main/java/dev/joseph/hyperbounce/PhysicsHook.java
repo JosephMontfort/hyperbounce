@@ -278,11 +278,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float trackBottom = trackTop + trackHeight;
                     float trackRadius = trackHeight / 2.0f;
 
+                    boolean isDarkMode = (view.getContext().getResources().getConfiguration().uiMode & 0x30) == 0x20;
                     if (!isEnabled) {
-                        bgPaint.setColor(isChecked ? TRACK_ON_DISABLED : TRACK_OFF_DISABLED);
+                        bgPaint.setColor(isChecked ? TRACK_ON_DISABLED : (isDarkMode ? TRACK_OFF_DISABLED : Color.parseColor("#c6c6c6")));
                     } else {
-                        boolean isDarkMode = (view.getContext().getResources().getConfiguration().uiMode & 0x30) == 0x20;
-                    bgPaint.setColor((s.progress > 0.5f || s.isDragging) ? TRACK_ON : (isDarkMode ? TRACK_OFF : Color.parseColor("#c6c6c6")));
+                        bgPaint.setColor((s.progress > 0.5f || s.isDragging) ? TRACK_ON : (isDarkMode ? TRACK_OFF : Color.parseColor("#c6c6c6")));
                     }
                     canvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
 
@@ -430,7 +430,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     // 3. SYMMETRIC TRACK DIMENSIONS & BOTH-SIDE BOUNDARY CONSTRAINTS
                     float baseLeft = 4.0f; 
-                    float shrinkAmount = s.bloom * 12.0f; 
+                    float shrinkAmount = s.bloom * 24.0f; 
                     
                     float trackLeft = baseLeft + shrinkAmount;
                     float trackRight = (w - baseLeft) - shrinkAmount;
