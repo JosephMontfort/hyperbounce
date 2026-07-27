@@ -281,7 +281,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     if (!isEnabled) {
                         bgPaint.setColor(isChecked ? TRACK_ON_DISABLED : TRACK_OFF_DISABLED);
                     } else {
-                        bgPaint.setColor((s.progress > 0.5f || s.isDragging) ? TRACK_ON : TRACK_OFF);
+                        boolean isDarkMode = (view.getContext().getResources().getConfiguration().uiMode & 0x30) == 0x20;
+                    bgPaint.setColor((s.progress > 0.5f || s.isDragging) ? TRACK_ON : (isDarkMode ? TRACK_OFF : Color.parseColor("#c6c6c6")));
                     }
                     canvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
 
@@ -476,10 +477,13 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float thumbT = cy - (currentThumbH / 2.0f);
                     float thumbB = cy + (currentThumbH / 2.0f);
 
-                    // Shadow
+                    // Shadow & Ambient Border
+                    sliderShadowPaint.setColor(SLIDER_SHADOW_COLOR);
                     if (isDarkMode) {
-                        sliderShadowPaint.setColor(SLIDER_SHADOW_COLOR);
                         canvas.drawRoundRect(thumbL, thumbT + 3.0f, thumbR, thumbB + 3.0f, thumbRadius, thumbRadius, sliderShadowPaint);
+                    } else {
+                        // Ambient all-sides shadow to make white thumb pop in light mode
+                        canvas.drawRoundRect(thumbL - 1.5f, thumbT - 1.5f, thumbR + 1.5f, thumbB + 2.5f, thumbRadius, thumbRadius, sliderShadowPaint);
                     }
 
                     // Solid White transitioning to 70% Opacity Glass on touch/hold
