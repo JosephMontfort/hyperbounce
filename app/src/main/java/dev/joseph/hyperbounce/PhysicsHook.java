@@ -54,11 +54,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         shadowPaint.setColor(Color.parseColor("#30000000")); 
 
         highlightPaint.setStyle(Paint.Style.FILL);
-        highlightPaint.setColor(Color.parseColor("#15FFFFFF")); 
+        highlightPaint.setColor(Color.parseColor("#20FFFFFF")); 
         
         strokePaint.setStyle(Paint.Style.STROKE);
-        strokePaint.setColor(Color.parseColor("#50FFFFFF")); 
-        strokePaint.setStrokeWidth(2.5f);
+        strokePaint.setColor(Color.parseColor("#60FFFFFF")); 
+        strokePaint.setStrokeWidth(3.0f);
         
         bmpPaint.setFilterBitmap(true);
     }
@@ -80,6 +80,18 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private static final HashSet<String> hookedDynamicClasses = new HashSet<>();
 
     // ==========================================
+    // COLOR BLENDER HELPER
+    // ==========================================
+    private static int blendColors(int color1, int color2, float ratio) {
+        float inverse = 1.0f - ratio;
+        float a = Color.alpha(color1) * inverse + Color.alpha(color2) * ratio;
+        float r = Color.red(color1) * inverse + Color.red(color2) * ratio;
+        float g = Color.green(color1) * inverse + Color.green(color2) * ratio;
+        float b = Color.blue(color1) * inverse + Color.blue(color2) * ratio;
+        return Color.argb((int) a, (int) r, (int) g, (int) b);
+    }
+
+    // ==========================================
     // STATES & HARDWARE PIPELINE
     // ==========================================
     private static class GlassState {
@@ -95,10 +107,13 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         float progress = 0.0f;
         float bloom = 0.0f;
         float squish = 0.0f;
+        float colorProgress = 0.0f;
+        float bubbleSquish = 0.0f;
         boolean isTouching = false;
         boolean isDragging = false;
         float startX = 0f;
         float currentX = 0f;
+        float lastX = 0f;
         long lastTime = System.currentTimeMillis();
     }
 
@@ -133,8 +148,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    float factor = smoothstep(0.0, refractionHeight, edgeDist);\n" +
         "    vec2 refractOffset = (0.5 - u) * (1.0 - factor) * refractionAmount;\n" +
         "    half4 color = content.eval(fragCoord + refractOffset);\n" +
-        "    color.rgb *= mix(0.75, 1.0, factor);\n" +
-        "    color.rgb += (1.0 - factor) * 0.25;\n" +
+        "    color.rgb = mix(color.rgb, vec3(1.0, 1.0, 1.0), 0.14);\n" +
+        "    color.rgb *= mix(0.70, 1.0, factor);\n" +
+        "    float rim = pow(1.0 - factor, 2.0);\n" +
+        "    color.rgb += rim * 0.40;\n" +
         "    return color;\n" +
         "}";
 
@@ -162,8 +179,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             s.shader.setFloatUniform("thumbT", thumbT);
             s.shader.setFloatUniform("thumbR", thumbR);
             s.shader.setFloatUniform("thumbB", thumbB);
-            s.shader.setFloatUniform("refractionAmount", 120.0f);
-            s.shader.setFloatUniform("refractionHeight", 32.0f);
+            s.shader.setFloatUniform("refractionAmount", 130.0f);
+            s.shader.setFloatUniform("refractionHeight", 34.0f);
         }
 
         s.blurNode.setPosition(0, 0, w, h);
@@ -243,11 +260,13 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     if (s == null) {
                         s = new ToggleState();
                         s.progress = ((android.widget.CompoundButton) view).isChecked() ? 1.0f : 0.0f;
+                        s.colorProgress = s.progress;
                         stateMap.put(view, s);
                     }
                     int action = event.getActionMasked();
                     if (action == MotionEvent.ACTION_DOWN) {
-                        s.isTouching = true; s.isDragging = false; s.startX = event.getX(); s.currentX = event.getX();
+                        s.isTouching = true; s.isDragging = false; 
+                        s.startX = event.getX(); s.currentX = event.getX(); s.lastX = event.getX();
                         view.postInvalidateOnAnimation();
                     } else if (action == MotionEvent.ACTION_MOVE) {
                         s.currentX = event.getX();
@@ -286,6 +305,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     if (s == null) {
                         s = new ToggleState();
                         s.progress = view.isChecked() ? 1.0f : 0.0f;
+                        s.colorProgress = s.progress;
                         stateMap.put(view, s);
                     }
 
@@ -305,7 +325,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         offsetY = (height - drawH) / 2.0f;
                     }
 
-                    float trackHeight = drawH * 0.65f, padding = trackHeight * 0.07f;
+                    // Height increased slightly to 0.72f
+                    float trackHeight = drawH * 0.72f, padding = trackHeight * 0.07f;
                     float restThumbHeight = trackHeight - (padding * 2.0f);
                     float restThumbWidth = restThumbHeight * 1.35f;
 
@@ -316,17 +337,32 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         float rawDrag = (s.currentX - minCenter) / (maxCenter - minCenter);
                         targetProgress = Math.max(0f, Math.min(1f, rawDrag));
                     }
-                    s.progress += (targetProgress - s.progress) * 0.15f; 
+                    s.progress += (targetProgress - s.progress) * dt * 18.0f; 
+
+                    // 50% Threshold Morphing logic
+                    float targetColorRatio = (s.progress >= 0.5f) ? 1.0f : 0.0f;
+                    s.colorProgress += (targetColorRatio - s.colorProgress) * dt * 16.0f;
+                    s.colorProgress = Math.max(0.0f, Math.min(1.0f, s.colorProgress));
+
+                    // Water-Bubble Velocity Deformation Kinematics
+                    float dx = s.currentX - s.lastX;
+                    s.lastX = s.currentX;
+                    float velocity = Math.abs(dx) / Math.max(dt, 0.001f);
+                    float targetBubble = s.isDragging ? Math.min(velocity / 1200.0f, 0.35f) : 0.0f;
+                    s.bubbleSquish += (targetBubble - s.bubbleSquish) * dt * 14.0f;
 
                     float bloomTarget = (s.isTouching || s.isDragging) ? 1.0f : 0.0f;
-                    s.bloom += (bloomTarget - s.bloom) * 0.12f;
+                    s.bloom += (bloomTarget - s.bloom) * dt * 12.0f;
 
                     boolean isOverDragging = s.isDragging && (s.currentX < 0 || s.currentX > width);
                     float squishTarget = isOverDragging ? 1.0f : 0.0f;
                     s.squish += (squishTarget - s.squish) * dt * 8.0f;
                     s.squish = Math.max(0f, Math.min(1f, s.squish));
 
-                    if (Math.abs(s.progress - targetProgress) > 0.005f || Math.abs(s.bloom - bloomTarget) > 0.005f || Math.abs(s.squish - squishTarget) > 0.005f) {
+                    if (Math.abs(s.progress - targetProgress) > 0.002f || 
+                        Math.abs(s.bloom - bloomTarget) > 0.005f || 
+                        Math.abs(s.colorProgress - targetColorRatio) > 0.005f || 
+                        s.bubbleSquish > 0.005f) {
                         view.postInvalidateOnAnimation();
                     }
 
@@ -342,6 +378,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     float currentThumbHeight = restThumbHeight + (currentMaxThumbHeight - restThumbHeight) * s.bloom;
                     float currentThumbWidth = restThumbWidth + (currentMaxThumbWidth - restThumbWidth) * s.bloom;
+
+                    // Apply water bubble stretch & squish based on speed
+                    currentThumbWidth *= (1.0f + (s.bubbleSquish * 0.30f));
+                    currentThumbHeight *= (1.0f - (s.bubbleSquish * 0.15f));
                     float thumbRadius = currentThumbHeight / 2.0f;
 
                     float currentPaddingX = padding - (padding * 0.7f * s.bloom);
@@ -363,11 +403,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     }
                     s.trackCanvas.drawColor(0, PorterDuff.Mode.CLEAR);
 
-                    if (!isEnabled) {
-                        bgPaint.setColor(isChecked ? TRACK_ON_DISABLED : (isDarkMode ? TRACK_OFF_DISABLED : TRACK_OFF_LIGHT));
-                    } else {
-                        bgPaint.setColor((s.progress > 0.5f || s.isDragging) ? TRACK_ON : (isDarkMode ? TRACK_OFF_DARK : TRACK_OFF_LIGHT));
-                    }
+                    int targetOffColor = !isEnabled ? TRACK_OFF_DISABLED : (isDarkMode ? TRACK_OFF_DARK : TRACK_OFF_LIGHT);
+                    int targetOnColor = !isEnabled ? TRACK_ON_DISABLED : TRACK_ON;
+                    bgPaint.setColor(blendColors(targetOffColor, targetOnColor, s.colorProgress));
+
                     s.trackCanvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
                     canvas.drawBitmap(s.trackBitmap, 0.0f, 0.0f, bmpPaint);
 
@@ -453,11 +492,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     boolean isDarkMode = (view.getContext().getResources().getConfiguration().uiMode & 0x30) == 0x20;
 
-                    // Buttery Smooth Kinematics & Refined Vertical Stretch
                     float bloomTarget = (s.isTouching || s.isDragging) ? 1.0f : 0.0f;
                     s.bloom += (bloomTarget - s.bloom) * 0.12f;
 
-                    float currentThumbH = 46.0f + (18.0f * s.bloom);
+                    // Reduced vertical bloom height slightly from 18.0f to 14.0f
+                    float currentThumbH = 46.0f + (14.0f * s.bloom);
                     float currentThumbW = 82.0f + (40.0f * s.bloom); 
                     float thumbRadius = currentThumbH / 2.0f;
 
