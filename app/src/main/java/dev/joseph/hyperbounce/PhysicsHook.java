@@ -13,6 +13,8 @@ import android.graphics.RuntimeShader;
 import android.graphics.Shader;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewParent;
 import java.lang.reflect.Field;
 import java.util.WeakHashMap;
 import java.util.HashSet;
@@ -57,7 +59,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         highlightPaint.setColor(Color.parseColor("#20FFFFFF")); 
         
         strokePaint.setStyle(Paint.Style.STROKE);
-        strokePaint.setColor(Color.parseColor("#60FFFFFF")); 
+        strokePaint.setColor(Color.parseColor("#70FFFFFF")); 
         strokePaint.setStrokeWidth(3.0f);
         
         bmpPaint.setFilterBitmap(true);
@@ -80,7 +82,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private static final HashSet<String> hookedDynamicClasses = new HashSet<>();
 
     // ==========================================
-    // COLOR BLENDER HELPER
+    // UTILS (COLOR BLENDER & CLIPPING BYPASS)
     // ==========================================
     private static int blendColors(int color1, int color2, float ratio) {
         float inverse = 1.0f - ratio;
@@ -89,6 +91,18 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         float g = Color.green(color1) * inverse + Color.green(color2) * ratio;
         float b = Color.blue(color1) * inverse + Color.blue(color2) * ratio;
         return Color.argb((int) a, (int) r, (int) g, (int) b);
+    }
+
+    private static void disableClipping(View view) {
+        if (view == null) return;
+        view.setClipToOutline(false);
+        ViewParent parent = view.getParent();
+        while (parent instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) parent;
+            vg.setClipChildren(false);
+            vg.setClipToPadding(false);
+            parent = vg.getParent();
+        }
     }
 
     // ==========================================
@@ -133,7 +147,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private static final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
     private static final WeakHashMap<Object, SliderState> sliderStateMap = new WeakHashMap<>();
 
-    // Toggle Shader WITH Aggressive Lens Magnification (Shrinks background)
+    // Toggle Shader: Manual Y-Axis Shrink (Pinch) & Edge Color Bleeding
     private static final String AGSL_SHADER_TOGGLE = 
         "uniform shader content;\n" +
         "uniform float thumbL;\n" +
@@ -154,23 +168,30 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    float edgeDist = min(distFromEdge.x, distFromEdge.y);\n" +
         "    float factor = smoothstep(0.0, refractionHeight, edgeDist);\n" +
         "    \n" +
-        "    // Aggressive Lens Magnification (1.45x pull)\n" +
-        "    float lensScale = mix(1.0, 1.45, factor);\n" +
-        "    vec2 lensWarp = center + (diff * lensScale);\n" +
+        "    // Aggressive Lens Pinch: Squeezes the Y axis significantly to shrink the container visually\n" +
+        "    float pinchY = mix(1.0, 1.55, factor);\n" +
+        "    float pinchX = mix(1.0, 1.15, factor);\n" +
+        "    vec2 lensWarp = center + vec2(diff.x * pinchX, diff.y * pinchY);\n" +
         "    \n" +
         "    float dist = length(diff);\n" +
         "    vec2 dir = dist > 0.0 ? diff / dist : vec2(0.0);\n" +
         "    vec2 refractOffset = dir * (1.0 - factor) * refractionAmount;\n" +
         "    \n" +
         "    half4 color = content.eval(lensWarp - refractOffset);\n" +
+        "    half4 basePixel = content.eval(fragCoord);\n" +
+        "    \n" +
         "    color.rgb = mix(color.rgb, vec3(1.0), 0.14);\n" +
-        "    color.rgb *= mix(0.70, 1.0, factor);\n" +
+        "    color.rgb *= mix(0.60, 1.0, factor);\n" +
+        "    \n" +
+        "    // Color Bleed: Tint the thick glass borders with the container's raw color\n" +
+        "    color.rgb += basePixel.rgb * (1.0 - factor) * 0.35;\n" +
+        "    \n" +
         "    float rim = pow(1.0 - factor, 2.0);\n" +
-        "    color.rgb += rim * 0.40;\n" +
+        "    color.rgb += rim * 0.45;\n" +
         "    return color;\n" +
         "}";
 
-    // Slider Shader WITHOUT Magnification (No shrinking, pure edge refraction)
+    // Slider Shader: Pure Refraction & Bouncing Bubble (No Shrink)
     private static final String AGSL_SHADER_SLIDER = 
         "uniform shader content;\n" +
         "uniform float thumbL;\n" +
@@ -196,14 +217,17 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    vec2 refractOffset = dir * (1.0 - factor) * refractionAmount;\n" +
         "    \n" +
         "    half4 color = content.eval(fragCoord - refractOffset);\n" +
+        "    half4 basePixel = content.eval(fragCoord);\n" +
+        "    \n" +
         "    color.rgb = mix(color.rgb, vec3(1.0), 0.14);\n" +
         "    color.rgb *= mix(0.70, 1.0, factor);\n" +
+        "    color.rgb += basePixel.rgb * (1.0 - factor) * 0.35;\n" +
         "    float rim = pow(1.0 - factor, 2.0);\n" +
         "    color.rgb += rim * 0.40;\n" +
         "    return color;\n" +
         "}";
 
-    private void renderLiquidGlassThumb(Canvas canvas, GlassState s, int w, int h, float thumbL, float thumbT, float thumbR, float thumbB, float thumbRadius, boolean enableMagnification) {
+    private void renderLiquidGlassThumb(Canvas canvas, GlassState s, int w, int h, float thumbL, float thumbT, float thumbR, float thumbB, float thumbRadius, boolean isToggle) {
         if (!canvas.isHardwareAccelerated()) return;
         RectF roundRectF = new RectF(thumbL, thumbT, thumbR, thumbB);
         
@@ -215,7 +239,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             s.blurNode.setRenderEffect(blurFx);
 
             try {
-                String shaderCode = enableMagnification ? AGSL_SHADER_TOGGLE : AGSL_SHADER_SLIDER;
+                String shaderCode = isToggle ? AGSL_SHADER_TOGGLE : AGSL_SHADER_SLIDER;
                 s.shader = new RuntimeShader(shaderCode);
                 RenderEffect shaderFx = RenderEffect.createRuntimeShaderEffect(s.shader, "content");
                 s.glassNode.setRenderEffect(shaderFx);
@@ -228,7 +252,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             s.shader.setFloatUniform("thumbT", thumbT);
             s.shader.setFloatUniform("thumbR", thumbR);
             s.shader.setFloatUniform("thumbB", thumbB);
-            s.shader.setFloatUniform("refractionAmount", 130.0f);
+            s.shader.setFloatUniform("refractionAmount", 60.0f);
             s.shader.setFloatUniform("refractionHeight", 34.0f);
         }
 
@@ -314,6 +338,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     }
                     int action = event.getActionMasked();
                     if (action == MotionEvent.ACTION_DOWN) {
+                        disableClipping(view); // Hierarchy un-clipping on touch!
                         s.isTouching = true; s.isDragging = false; 
                         s.startX = event.getX(); s.currentX = event.getX(); s.lastX = event.getX();
                         view.postInvalidateOnAnimation();
@@ -341,14 +366,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     if (width <= 0 || height <= 0) return null;
 
                     try { if (view.getButtonDrawable() != null) view.setButtonDrawable(null); } catch (Throwable t) {}
-
-                    Object helper = null;
-                    try { helper = XposedHelpers.getObjectField(view, "mHelper"); } catch (Throwable t) {}
-                    Object dataSrc = (helper != null) ? helper : view;
-                    try { XposedHelpers.setObjectField(dataSrc, "mSlideBar", null); } catch(Throwable t){}
-                    try { XposedHelpers.setObjectField(dataSrc, "mBarOn", null); } catch(Throwable t){}
-                    try { XposedHelpers.setObjectField(dataSrc, "mSliderOn", null); } catch(Throwable t){}
-                    try { XposedHelpers.setObjectField(dataSrc, "mSliderOff", null); } catch(Throwable t){}
 
                     ToggleState s = stateMap.get(view);
                     if (s == null) {
@@ -391,13 +408,13 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     s.colorProgress += (targetColorRatio - s.colorProgress) * dt * 16.0f;
                     s.colorProgress = Math.max(0.0f, Math.min(1.0f, s.colorProgress));
 
-                    // Damped Harmonic Oscillator for Water Bubble Velocity
+                    // Aggressive Damped Harmonic Oscillator (Bubble Wobble)
                     float dx = s.currentX - s.lastX;
                     s.lastX = s.currentX;
                     float velocity = Math.abs(dx) / Math.max(dt, 0.001f);
-                    float targetBubble = s.isDragging ? Math.min(velocity / 1500.0f, 0.4f) : 0.0f;
-                    float k = 120.0f;
-                    float damping = 12.0f;
+                    float targetBubble = s.isDragging ? Math.min(velocity / 800.0f, 0.55f) : 0.0f;
+                    float k = 180.0f;
+                    float damping = 8.0f; // Lower damping = more wobble
                     float springForce = (targetBubble - s.bubbleSquish) * k - (s.bubbleVelocity * damping);
                     s.bubbleVelocity += springForce * dt;
                     s.bubbleSquish += s.bubbleVelocity * dt;
@@ -428,12 +445,13 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float currentMaxThumbWidth = restThumbWidth * scaleRatio;
                     currentMaxThumbWidth += (restThumbWidth * 0.15f) * s.squish;
 
-                    // Increased vertical expansion modifier (1.15f multiplier) for long press
-                    float currentThumbHeight = restThumbHeight + ((currentMaxThumbHeight * 1.15f) - restThumbHeight) * s.bloom;
+                    // MASSIVE 1.35x Multiplier for Toggle vertical expansion on press
+                    float currentThumbHeight = restThumbHeight + ((currentMaxThumbHeight * 1.35f) - restThumbHeight) * s.bloom;
                     float currentThumbWidth = restThumbWidth + (currentMaxThumbWidth - restThumbWidth) * s.bloom;
 
-                    currentThumbWidth *= (1.0f + (s.bubbleSquish * 0.35f));
-                    currentThumbHeight *= (1.0f - (s.bubbleSquish * 0.15f));
+                    // Dynamic symmetric wobble based on velocity
+                    currentThumbWidth *= (1.0f + (s.bubbleSquish * 0.45f));
+                    currentThumbHeight *= (1.0f - (s.bubbleSquish * 0.25f));
                     float thumbRadius = currentThumbHeight / 2.0f;
 
                     float currentPaddingX = padding - (padding * 0.7f * s.bloom);
@@ -467,7 +485,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         canvas.drawRoundRect(thumbLeft - 1.0f, thumbTop + 2.0f, thumbRight + 1.0f, thumbBottom + 3.0f, thumbRadius, thumbRadius, shadowPaint);
                     }
 
-                    // True = Toggle Shader (With Convex Magnification Shrink)
                     renderLiquidGlassThumb(canvas, s, width, height, thumbLeft, thumbTop, thumbRight, thumbBottom, thumbRadius, true);
 
                     int whiteAlpha = (int)(255 * (1.0f - s.bloom));
@@ -506,6 +523,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     int action = event.getActionMasked();
                     float x = event.getX();
                     if (action == MotionEvent.ACTION_DOWN) {
+                        disableClipping(view); // Hierarchy un-clipping on touch!
                         s.isTouching = true; s.isDragging = false; s.touchX = x; s.lastX = x; view.postInvalidateOnAnimation();
                     } else if (action == MotionEvent.ACTION_MOVE) {
                         s.touchX = x; s.isDragging = true; view.postInvalidateOnAnimation();
@@ -556,24 +574,24 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float bloomTarget = (s.isTouching || s.isDragging) ? 1.0f : 0.0f;
                     s.bloom += (bloomTarget - s.bloom) * dt * 14.0f;
 
-                    // Slider Droplet Bounces via Damped Harmonic Oscillator
+                    // Slider Aggressive Oscillator (Wobble bounces)
                     float dx = s.touchX - s.lastX;
                     s.lastX = s.touchX;
                     float velocity = Math.abs(dx) / Math.max(dt, 0.001f);
-                    float targetBubble = s.isDragging ? Math.min(velocity / 1500.0f, 0.4f) : 0.0f;
-                    float k = 120.0f;
-                    float damping = 12.0f;
+                    float targetBubble = s.isDragging ? Math.min(velocity / 800.0f, 0.55f) : 0.0f;
+                    float k = 180.0f;
+                    float damping = 8.0f;
                     float springForce = (targetBubble - s.bubbleSquish) * k - (s.bubbleVelocity * damping);
                     s.bubbleVelocity += springForce * dt;
                     s.bubbleSquish += s.bubbleVelocity * dt;
 
-                    // Drastically reduced vertical expansion for the slider thumb (down to 4.0f)
-                    float currentThumbH = 46.0f + (4.0f * s.bloom);
-                    float currentThumbW = 82.0f + (40.0f * s.bloom); 
+                    // Severely reduced horizontal elongation and vertical bloom for sliders
+                    float currentThumbH = 46.0f + (2.0f * s.bloom);
+                    float currentThumbW = 82.0f + (24.0f * s.bloom); 
                     
-                    // Apply symmetric droplet morph
-                    currentThumbW *= (1.0f + (s.bubbleSquish * 0.35f));
-                    currentThumbH *= (1.0f - (s.bubbleSquish * 0.15f));
+                    // High-velocity symmetric wobble shape
+                    currentThumbW *= (1.0f + (s.bubbleSquish * 0.45f));
+                    currentThumbH *= (1.0f - (s.bubbleSquish * 0.25f));
                     float thumbRadius = currentThumbH / 2.0f;
 
                     float baseLeft = 4.0f, shrinkAmount = s.bloom * 24.0f; 
@@ -632,7 +650,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         else canvas.drawRoundRect(thumbL, thumbT + 4.0f, thumbR, thumbB + 4.0f, thumbRadius, thumbRadius, shadowPaint);
                     }
 
-                    // False = Slider Shader (No Convex Magnification Shrink)
                     renderLiquidGlassThumb(canvas, s, w, h, thumbL, thumbT, thumbR, thumbB, thumbRadius, false);
 
                     int whiteAlpha = (int)(255 * (1.0f - s.bloom));
