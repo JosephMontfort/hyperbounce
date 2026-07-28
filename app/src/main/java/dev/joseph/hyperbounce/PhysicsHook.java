@@ -162,7 +162,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    float edgeDist = min(distFromEdge.x, distFromEdge.y);\n" +
         "    float factor = smoothstep(0.0, refractionHeight, edgeDist);\n" +
         "    \n" +
-        "    // Concave Lens Shrink: Pulls distant pixels towards the center (Shrinking the green track)\n" +
         "    float pinchY = mix(1.0, 1.85, factor);\n" +
         "    float pinchX = mix(1.0, 1.25, factor);\n" +
         "    vec2 lensWarp = center + vec2(diff.x * pinchX, diff.y * pinchY);\n" +
@@ -247,7 +246,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             s.shader.setFloatUniform("refractionHeight", 34.0f);
         }
 
-        // Expand node buffer by 100px to prevent clipping when thumb physically bleeds outside container
         int exp = 100;
         s.blurNode.setPosition(0, 0, w + exp * 2, h + exp * 2);
         Canvas rcBlur = s.blurNode.beginRecording(w + exp * 2, h + exp * 2);
@@ -320,7 +318,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     View view = (View) param.thisObject;
                     if (!view.isEnabled()) return;
-                    disableClipping(view); // Hierarchy un-clip to allow massive out-of-bounds bleeding!
+                    disableClipping(view); 
                     
                     MotionEvent event = (MotionEvent) param.args[0];
                     ToggleState s = stateMap.get(view);
@@ -356,7 +354,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     int width = view.getWidth(), height = view.getHeight();
                     if (width <= 0 || height <= 0) return null;
 
-                    disableClipping(view); // Re-assert un-clip during draw cycle
+                    disableClipping(view);
                     try { if (view.getButtonDrawable() != null) view.setButtonDrawable(null); } catch (Throwable t) {}
 
                     ToggleState s = stateMap.get(view);
@@ -400,13 +398,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     s.colorProgress += (targetColorRatio - s.colorProgress) * dt * 16.0f;
                     s.colorProgress = Math.max(0.0f, Math.min(1.0f, s.colorProgress));
 
-                    // Damped Harmonic Oscillator for Bloom Expansion (Pop Out Spring)
                     float bloomTarget = (s.isTouching || s.isDragging) ? 1.0f : 0.0f;
                     float bloomForce = (bloomTarget - s.bloom) * 250.0f - (s.bloomVelocity * 16.0f);
                     s.bloomVelocity += bloomForce * dt;
                     s.bloom += s.bloomVelocity * dt;
 
-                    // Damped Harmonic Oscillator for Drag Bubble Wobble
                     float dx = s.currentX - s.lastX;
                     s.lastX = s.currentX;
                     float velocity = Math.abs(dx) / Math.max(dt, 0.001f);
@@ -415,7 +411,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     s.bubbleVelocity += springForce * dt;
                     s.bubbleSquish += s.bubbleVelocity * dt;
 
-                    // Inject Expansion Velocity into Bubble Squish (makes it wobble when you tap it!)
                     if (s.isTouching && !s.isDragging) s.bubbleVelocity += s.bloomVelocity * 0.15f;
 
                     if (Math.abs(s.progress - targetProgress) > 0.002f || 
@@ -429,17 +424,14 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float trackBottom = trackTop + trackHeight;
                     float trackRadius = trackHeight / 2.0f;
 
-                    // Toggle Expanded Dimensions
-                    float maxExpandedW = restThumbWidth * 1.15f; // Tamed horizontal expansion
-                    float currentThumbHeight = restThumbHeight + ((drawH * 0.88f) - restThumbHeight) * s.bloom; // Prevent vertical clip
+                    float maxExpandedW = restThumbWidth * 1.15f; 
+                    float currentThumbHeight = restThumbHeight + ((drawH * 0.88f) - restThumbHeight) * s.bloom; 
                     float currentThumbWidth = restThumbWidth + (maxExpandedW - restThumbWidth) * s.bloom;
 
-                    // Apply water bubble stretch
                     currentThumbWidth *= (1.0f + (s.bubbleSquish * 0.45f));
                     currentThumbHeight *= (1.0f - (s.bubbleSquish * 0.25f));
                     float thumbRadius = currentThumbHeight / 2.0f;
 
-                    // BLEED OUT OF BOUNDS: Shift minX and maxX OUTSIDE the container heavily on expansion
                     float overflowX = padding * 3.5f * s.bloom; 
                     float minX = offsetX + padding + (currentThumbWidth / 2.0f) - overflowX;
                     float maxX = offsetX + drawW - padding - (currentThumbWidth / 2.0f) + overflowX;
@@ -448,36 +440,37 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float cy = offsetY + (drawH / 2.0f);
 
                     float thumbL = cx - (currentThumbWidth / 2.0f);
-                    float thumbRight = cx + (currentThumbWidth / 2.0f);
-                    float thumbTop = cy - (currentThumbHeight / 2.0f);
-                    float thumbBottom = cy + (currentThumbHeight / 2.0f);
-
-                    if (s.trackBitmap == null || s.trackBitmap.getWidth() != width || s.trackBitmap.getHeight() != height) {
-                        s.trackBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-                        s.trackCanvas = new Canvas(s.trackBitmap);
-                    }
-                    s.trackCanvas.drawColor(0, PorterDuff.Mode.CLEAR);
+                    float thumbR = cx + (currentThumbWidth / 2.0f);
+                    float thumbT = cy - (currentThumbHeight / 2.0f);
+                    float thumbB = cy + (currentThumbHeight / 2.0f);
 
                     int targetOffColor = !isEnabled ? TRACK_OFF_DISABLED : (isDarkMode ? TRACK_OFF_DARK : TRACK_OFF_LIGHT);
                     int targetOnColor = !isEnabled ? TRACK_ON_DISABLED : TRACK_ON;
                     bgPaint.setColor(blendColors(targetOffColor, targetOnColor, s.colorProgress));
 
                     canvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
-                    s.trackCanvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
+
+                    if (s.trackBitmap == null || s.trackBitmap.getWidth() != width || s.trackBitmap.getHeight() != height) {
+                        s.trackBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                        s.trackCanvas = new Canvas(s.trackBitmap);
+                    }
+                    s.trackCanvas.drawColor(0, PorterDuff.Mode.CLEAR);
+                    
+                    float shrinkY = 6.0f * s.bloom;
+                    s.trackCanvas.drawRoundRect(offsetX, trackTop + shrinkY, offsetX + drawW, trackBottom - shrinkY, Math.max(0, trackRadius - shrinkY), Math.max(0, trackRadius - shrinkY), bgPaint);
 
                     int shadowAlpha = (int)(48 * (1.0f - Math.max(0f, Math.min(1f, s.bloom))));
                     if (shadowAlpha > 0 && isEnabled) {
                         shadowPaint.setAlpha(shadowAlpha);
-                        canvas.drawRoundRect(thumbL - 1.0f, thumbTop + 2.0f, thumbRight + 1.0f, thumbBottom + 3.0f, thumbRadius, thumbRadius, shadowPaint);
+                        canvas.drawRoundRect(thumbL - 1.0f, thumbT + 2.0f, thumbR + 1.0f, thumbB + 3.0f, thumbRadius, thumbRadius, shadowPaint);
                     }
 
-                    // True = Toggle Shader (With Convex Magnification Shrink)
-                    renderLiquidGlassThumb(canvas, s, width, height, thumbL, thumbT, thumbRight, thumbBottom, thumbRadius, true);
+                    renderLiquidGlassThumb(canvas, s, width, height, thumbL, thumbT, thumbR, thumbB, thumbRadius, true);
 
                     int whiteAlpha = (int)(255 * (1.0f - Math.max(0f, Math.min(1f, s.bloom))));
                     if (whiteAlpha > 0) {
                         baseThumbPaint.setAlpha(isEnabled ? whiteAlpha : (int)(whiteAlpha * 0.5f));
-                        canvas.drawRoundRect(new RectF(thumbL, thumbT, thumbRight, thumbBottom), thumbRadius, thumbRadius, baseThumbPaint);
+                        canvas.drawRoundRect(new RectF(thumbL, thumbT, thumbR, thumbB), thumbRadius, thumbRadius, baseThumbPaint);
                     }
 
                     return null;
@@ -559,13 +552,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float dt = Math.min((now - s.lastTime) / 1000.0f, 0.05f);
                     s.lastTime = now;
 
-                    // Slider Expansion Spring (Pop Out)
                     float bloomTarget = (s.isTouching || s.isDragging) ? 1.0f : 0.0f;
                     float bloomForce = (bloomTarget - s.bloom) * 250.0f - (s.bloomVelocity * 16.0f);
                     s.bloomVelocity += bloomForce * dt;
                     s.bloom += s.bloomVelocity * dt;
 
-                    // Slider Velocity Spring Wobble
                     float dx = s.touchX - s.lastX;
                     s.lastX = s.touchX;
                     float velocity = Math.abs(dx) / Math.max(dt, 0.001f);
@@ -574,16 +565,13 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     s.bubbleVelocity += springForce * dt;
                     s.bubbleSquish += s.bubbleVelocity * dt;
 
-                    // Drop Expansion impact into bubble for tap wobble
                     if (s.isTouching && !s.isDragging) s.bubbleVelocity += s.bloomVelocity * 0.20f;
 
-                    // Tamed horizontal width for Slider 
-                    float currentThumbH = 46.0f + (2.0f * s.bloom);
-                    float currentThumbW = 82.0f + (8.0f * s.bloom); // Drastically reduced from 16/24
+                    float currentThumbH = 46.0f + (1.0f * s.bloom);
+                    float currentThumbW = 82.0f + (8.0f * s.bloom); 
                     
-                    // High-velocity symmetric wobble shape
-                    currentThumbW *= (1.0f + (s.bubbleSquish * 0.50f));
-                    currentThumbH *= (1.0f - (s.bubbleSquish * 0.30f));
+                    currentThumbW *= (1.0f + (s.bubbleSquish * 0.35f));
+                    currentThumbH *= (1.0f - (s.bubbleSquish * 0.15f));
                     float thumbRadius = currentThumbH / 2.0f;
 
                     float baseLeft = 4.0f, shrinkAmount = s.bloom * 16.0f; 
@@ -611,22 +599,22 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float trackBottom = trackTop + trackHeight;
                     float trackRadius = trackHeight / 2.0f;
 
+                    bgPaint.setColor(isDarkMode ? TRACK_OFF_DARK : TRACK_OFF_LIGHT);
+                    canvas.drawRoundRect(trackLeft, trackTop, trackRight, trackBottom, trackRadius, trackRadius, bgPaint);
+
+                    float activeW = trackW * s.visualRatio;
+                    if (activeW > 0) {
+                        activePaint.setColor(TRACK_ON);
+                        canvas.drawRoundRect(trackLeft, trackTop, trackLeft + activeW, trackBottom, trackRadius, trackRadius, activePaint);
+                    }
+
                     if (s.trackBitmap == null || s.trackBitmap.getWidth() != w || s.trackBitmap.getHeight() != h) {
                         s.trackBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
                         s.trackCanvas = new Canvas(s.trackBitmap);
                     }
                     s.trackCanvas.drawColor(0, PorterDuff.Mode.CLEAR);
-
-                    bgPaint.setColor(isDarkMode ? TRACK_OFF_DARK : TRACK_OFF_LIGHT);
                     s.trackCanvas.drawRoundRect(trackLeft, trackTop, trackRight, trackBottom, trackRadius, trackRadius, bgPaint);
-
-                    float activeW = trackW * s.visualRatio;
-                    if (activeW > 0) {
-                        activePaint.setColor(TRACK_ON);
-                        s.trackCanvas.drawRoundRect(trackLeft, trackTop, trackLeft + activeW, trackBottom, trackRadius, trackRadius, activePaint);
-                    }
-                    
-                    canvas.drawBitmap(s.trackBitmap, 0.0f, 0.0f, bmpPaint);
+                    if (activeW > 0) s.trackCanvas.drawRoundRect(trackLeft, trackTop, trackLeft + activeW, trackBottom, trackRadius, trackRadius, activePaint);
 
                     float cx = minCx + travelW * s.visualRatio;
                     float cy = h / 2.0f;
