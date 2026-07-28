@@ -128,6 +128,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private static final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
     private static final WeakHashMap<Object, SliderState> sliderStateMap = new WeakHashMap<>();
 
+    // The iOS 26 Heavy Liquid Glass Shader
     private static final String AGSL_SHADER = 
         "uniform shader content;\n" +
         "uniform float thumbL;\n" +
@@ -142,16 +143,30 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    if (p.x < 0.0 || p.y < 0.0 || p.x > thumbSize.x || p.y > thumbSize.y) {\n" +
         "        return content.eval(fragCoord);\n" +
         "    }\n" +
-        "    vec2 u = p / thumbSize;\n" +
+        "    vec2 center = vec2(thumbL, thumbT) + thumbSize * 0.5;\n" +
+        "    vec2 diff = fragCoord - center;\n" +
         "    vec2 distFromEdge = min(p, thumbSize - p);\n" +
         "    float edgeDist = min(distFromEdge.x, distFromEdge.y);\n" +
         "    float factor = smoothstep(0.0, refractionHeight, edgeDist);\n" +
-        "    vec2 refractOffset = (0.5 - u) * (1.0 - factor) * refractionAmount;\n" +
-        "    half4 color = content.eval(fragCoord + refractOffset);\n" +
-        "    color.rgb = mix(color.rgb, vec3(1.0, 1.0, 1.0), 0.14);\n" +
-        "    color.rgb *= mix(0.70, 1.0, factor);\n" +
-        "    float rim = pow(1.0 - factor, 2.0);\n" +
-        "    color.rgb += rim * 0.40;\n" +
+        "    \n" +
+        "    // Lens Magnification: Convex center shrinks the track underneath\n" +
+        "    float lensScale = mix(1.0, 1.28, factor);\n" +
+        "    vec2 lensWarp = center + (diff * lensScale);\n" +
+        "    \n" +
+        "    // Total Internal Reflection: Pulls underlying colors hard into the bevel edges\n" +
+        "    float dist = length(diff);\n" +
+        "    vec2 dir = dist > 0.0 ? diff / dist : vec2(0.0);\n" +
+        "    vec2 refractOffset = dir * (1.0 - factor) * refractionAmount;\n" +
+        "    \n" +
+        "    // Sample the offscreen buffer using warped physical coordinates\n" +
+        "    half4 color = content.eval(lensWarp - refractOffset);\n" +
+        "    \n" +
+        "    // Thick Glass Shading Physics\n" +
+        "    color.rgb *= mix(0.45, 1.0, factor); // Heavy ambient light absorption at the bevel edges\n" +
+        "    float rim = pow(1.0 - factor, 3.5);\n" +
+        "    color.rgb += rim * 0.70; // Harsh, bright specular light catching the curve\n" +
+        "    color.rgb = mix(color.rgb, vec3(1.0), 0.04 * factor); // Subtle core clarity frost\n" +
+        "    \n" +
         "    return color;\n" +
         "}";
 
@@ -179,7 +194,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             s.shader.setFloatUniform("thumbT", thumbT);
             s.shader.setFloatUniform("thumbR", thumbR);
             s.shader.setFloatUniform("thumbB", thumbB);
-            s.shader.setFloatUniform("refractionAmount", 130.0f);
+            
+            // Adjusted coordinates for normalized physical edge pulling
+            s.shader.setFloatUniform("refractionAmount", 55.0f);
             s.shader.setFloatUniform("refractionHeight", 34.0f);
         }
 
@@ -325,7 +342,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         offsetY = (height - drawH) / 2.0f;
                     }
 
-                    // Height increased slightly to 0.72f
                     float trackHeight = drawH * 0.72f, padding = trackHeight * 0.07f;
                     float restThumbHeight = trackHeight - (padding * 2.0f);
                     float restThumbWidth = restThumbHeight * 1.35f;
@@ -339,12 +355,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     }
                     s.progress += (targetProgress - s.progress) * dt * 18.0f; 
 
-                    // 50% Threshold Morphing logic
                     float targetColorRatio = (s.progress >= 0.5f) ? 1.0f : 0.0f;
                     s.colorProgress += (targetColorRatio - s.colorProgress) * dt * 16.0f;
                     s.colorProgress = Math.max(0.0f, Math.min(1.0f, s.colorProgress));
 
-                    // Water-Bubble Velocity Deformation Kinematics
                     float dx = s.currentX - s.lastX;
                     s.lastX = s.currentX;
                     float velocity = Math.abs(dx) / Math.max(dt, 0.001f);
@@ -379,7 +393,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float currentThumbHeight = restThumbHeight + (currentMaxThumbHeight - restThumbHeight) * s.bloom;
                     float currentThumbWidth = restThumbWidth + (currentMaxThumbWidth - restThumbWidth) * s.bloom;
 
-                    // Apply water bubble stretch & squish based on speed
                     currentThumbWidth *= (1.0f + (s.bubbleSquish * 0.30f));
                     currentThumbHeight *= (1.0f - (s.bubbleSquish * 0.15f));
                     float thumbRadius = currentThumbHeight / 2.0f;
@@ -396,7 +409,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float thumbTop = cy - (currentThumbHeight / 2.0f);
                     float thumbBottom = cy + (currentThumbHeight / 2.0f);
 
-                    // Offscreen Track Buffering
                     if (s.trackBitmap == null || s.trackBitmap.getWidth() != width || s.trackBitmap.getHeight() != height) {
                         s.trackBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
                         s.trackCanvas = new Canvas(s.trackBitmap);
@@ -410,17 +422,14 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     s.trackCanvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
                     canvas.drawBitmap(s.trackBitmap, 0.0f, 0.0f, bmpPaint);
 
-                    // Shadow Culling
                     int shadowAlpha = (int)(48 * (1.0f - s.bloom));
                     if (shadowAlpha > 0 && isEnabled) {
                         shadowPaint.setAlpha(shadowAlpha);
                         canvas.drawRoundRect(thumbLeft - 1.0f, thumbTop + 2.0f, thumbRight + 1.0f, thumbBottom + 3.0f, thumbRadius, thumbRadius, shadowPaint);
                     }
 
-                    // Liquid Glass Rendering
                     renderLiquidGlassThumb(canvas, s, width, height, thumbLeft, thumbTop, thumbRight, thumbBottom, thumbRadius);
 
-                    // White Thumb Crossfade
                     int whiteAlpha = (int)(255 * (1.0f - s.bloom));
                     if (whiteAlpha > 0) {
                         baseThumbPaint.setAlpha(isEnabled ? whiteAlpha : (int)(whiteAlpha * 0.5f));
@@ -495,8 +504,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float bloomTarget = (s.isTouching || s.isDragging) ? 1.0f : 0.0f;
                     s.bloom += (bloomTarget - s.bloom) * 0.12f;
 
-                    // Reduced vertical bloom height slightly from 18.0f to 14.0f
-                    float currentThumbH = 46.0f + (14.0f * s.bloom);
+                    // Reduced Vertical Expansion for the slider thumb (down to 8.0f)
+                    float currentThumbH = 46.0f + (8.0f * s.bloom);
                     float currentThumbW = 82.0f + (40.0f * s.bloom); 
                     float thumbRadius = currentThumbH / 2.0f;
 
@@ -523,7 +532,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float trackBottom = trackTop + trackHeight;
                     float trackRadius = trackHeight / 2.0f;
 
-                    // Offscreen Track Buffering
                     if (s.trackBitmap == null || s.trackBitmap.getWidth() != w || s.trackBitmap.getHeight() != h) {
                         s.trackBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
                         s.trackCanvas = new Canvas(s.trackBitmap);
@@ -547,7 +555,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float thumbT = cy - (currentThumbH / 2.0f);
                     float thumbB = cy + (currentThumbH / 2.0f);
 
-                    // Shadow Culling
                     int shadowAlpha = (int)(48 * (1.0f - s.bloom));
                     if (shadowAlpha > 0) {
                         shadowPaint.setAlpha(shadowAlpha);
@@ -555,10 +562,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         else canvas.drawRoundRect(thumbL, thumbT + 4.0f, thumbR, thumbB + 4.0f, thumbRadius, thumbRadius, shadowPaint);
                     }
 
-                    // Liquid Glass Rendering
                     renderLiquidGlassThumb(canvas, s, w, h, thumbL, thumbT, thumbR, thumbB, thumbRadius);
 
-                    // White Thumb Crossfade
                     int whiteAlpha = (int)(255 * (1.0f - s.bloom));
                     if (whiteAlpha > 0) {
                         baseThumbPaint.setAlpha(whiteAlpha);
