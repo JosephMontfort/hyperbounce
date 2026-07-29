@@ -91,35 +91,16 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     }
 
     private static void disableClipping(View view) {
-    if (view == null) return;
-    view.setClipToOutline(false);
-    
-    // Check our physics engine state dynamically
-    boolean needsElevation = false;
-    ToggleState ts = stateMap.get(view);
-    if (ts != null && ts.bloom > 0.01f) needsElevation = true;
-    SliderState ss = sliderStateMap.get(view);
-    if (ss != null && ss.bloom > 0.01f) needsElevation = true;
-
-    // Apply a massive Z-boost if the thumb is expanded or dragging
-    float z = needsElevation ? 100f : 0f;
-    view.setTranslationZ(z);
-
-    ViewParent parent = view.getParent();
-    int depth = 0;
-    while (parent instanceof ViewGroup) {
-        ViewGroup vg = (ViewGroup) parent;
-        vg.setClipChildren(false);
-        vg.setClipToPadding(false);
-        
-        // Elevate the tree only up to the HyperCellLayout (depth < 3) to beat the RecyclerView
-        if (depth < 3) {
-            vg.setTranslationZ(z);
+        if (view == null) return;
+        view.setClipToOutline(false);
+        ViewParent parent = view.getParent();
+        while (parent instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) parent;
+            vg.setClipChildren(false);
+            vg.setClipToPadding(false);
+            parent = vg.getParent();
         }
-        parent = vg.getParent();
-        depth++;
     }
-}
 
     // ==========================================
     // STATES & HARDWARE PIPELINE
@@ -160,89 +141,47 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private static final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
     private static final WeakHashMap<Object, SliderState> sliderStateMap = new WeakHashMap<>();
 
-    // TOGGLE SHADER: Aggressive Concave Lens (Shrinks underlying content inside glass) + Edge Refraction
+    // TOGGLE SHADER: Figma Liquid Glass (Concave Shrink + Rim Bleed)
     private static final String AGSL_SHADER_TOGGLE = 
-        "uniform shader content;
-" +
-        "uniform float thumbL;
-" +
-        "uniform float thumbT;
-" +
-        "uniform float thumbR;
-" +
-        "uniform float thumbB;
-" +
-        "half4 main(float2 fragCoord) {
-" +
-        "    vec2 thumbSize = vec2(thumbR - thumbL, thumbB - thumbT);
-" +
-        "    vec2 p = fragCoord - vec2(thumbL, thumbT);
-" +
-        "    if (p.x < 0.0 || p.y < 0.0 || p.x > thumbSize.x || p.y > thumbSize.y) {
-" +
-        "        return content.eval(fragCoord);
-" +
-        "    }
-" +
-        "    vec2 center = vec2(thumbL, thumbT) + thumbSize * 0.5;
-" +
-        "    vec2 diff = fragCoord - center;
-" +
-        "    
-" +
-        "    // Extreme pinch to shrink the track under the glass
-" +
-        "    float pinchX = 1.45;
-" +
-        "    float pinchY = 1.70;
-" +
-        "    vec2 lensWarp = center + vec2(diff.x * pinchX, diff.y * pinchY);
-" +
-        "    
-" +
-        "    // Edge detection for glowing color-bleed rim
-" +
-        "    vec2 distFromEdge = min(p, thumbSize - p);
-" +
-        "    float edgeDist = min(distFromEdge.x, distFromEdge.y);
-" +
-        "    float rimFactor = smoothstep(18.0, 0.0, edgeDist);
-" +
-        "    
-" +
-        "    half4 color = content.eval(lensWarp);
-" +
-        "    half4 basePixel = content.eval(fragCoord);
-" +
-        "    
-" +
-        "    // Blend shrunken background with glassy base
-" +
-        "    color.rgb = mix(color.rgb, vec3(1.0), 0.15);
-" +
-        "    
-" +
-        "    // True Figma color bleed on the rim
-" +
-        "    vec3 glowColor = mix(vec3(1.0), basePixel.rgb, 0.70);
-" +
-        "    color.rgb = mix(color.rgb, glowColor, rimFactor * 0.95);
-" +
-        "    
-" +
-        "    // Sharp specular rim highlight
-" +
-        "    float specular = pow(rimFactor, 4.0);
-" +
-        "    color.rgb += specular * 0.5;
-" +
-        "    
-" +
-        "    return color;
-" +
+        "uniform shader content;\n" +
+        "uniform float thumbL;\n" +
+        "uniform float thumbT;\n" +
+        "uniform float thumbR;\n" +
+        "uniform float thumbB;\n" +
+        "uniform float refractionAmount;\n" +
+        "uniform float refractionHeight;\n" +
+        "half4 main(float2 fragCoord) {\n" +
+        "    vec2 thumbSize = vec2(thumbR - thumbL, thumbB - thumbT);\n" +
+        "    vec2 p = fragCoord - vec2(thumbL, thumbT);\n" +
+        "    if (p.x < 0.0 || p.y < 0.0 || p.x > thumbSize.x || p.y > thumbSize.y) {\n" +
+        "        return content.eval(fragCoord);\n" +
+        "    }\n" +
+        "    vec2 center = vec2(thumbL, thumbT) + thumbSize * 0.5;\n" +
+        "    vec2 diff = fragCoord - center;\n" +
+        "    \n" +
+        "    float pinchX = 1.45;\n" +
+        "    float pinchY = 1.70;\n" +
+        "    vec2 lensWarp = center + vec2(diff.x * pinchX, diff.y * pinchY);\n" +
+        "    \n" +
+        "    vec2 distFromEdge = min(p, thumbSize - p);\n" +
+        "    float edgeDist = min(distFromEdge.x, distFromEdge.y);\n" +
+        "    float rimFactor = smoothstep(18.0, 0.0, edgeDist);\n" +
+        "    \n" +
+        "    half4 color = content.eval(lensWarp);\n" +
+        "    half4 basePixel = content.eval(fragCoord);\n" +
+        "    \n" +
+        "    color.rgb = mix(color.rgb, vec3(1.0), 0.15);\n" +
+        "    \n" +
+        "    vec3 glowColor = mix(vec3(1.0), basePixel.rgb, 0.70);\n" +
+        "    color.rgb = mix(color.rgb, glowColor, rimFactor * 0.95);\n" +
+        "    \n" +
+        "    float specular = pow(rimFactor, 4.0);\n" +
+        "    color.rgb += specular * 0.5;\n" +
+        "    \n" +
+        "    return color;\n" +
         "}";
 
-    // SLIDER SHADER: Pure Water Droplet Refraction (No Shrinking)
+    // SLIDER SHADER: Pure Water Droplet Refraction
     private static final String AGSL_SHADER_SLIDER = 
         "uniform shader content;\n" +
         "uniform float thumbL;\n" +
@@ -329,12 +268,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         canvas.restore();
         
         canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, highlightPaint);
-        
-        // Figma Colored Stroke Rim
-        int glowStroke = blendColors(Color.parseColor("#75FFFFFF"), bgPaint.getColor(), 0.65f * Math.max(0.2f, s.bloom));
-        strokePaint.setColor(glowStroke);
-        canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, strokePaint);
-        strokePaint.setColor(Color.parseColor("#75FFFFFF")); // Reset
     }
 
     // ==========================================
@@ -490,15 +423,16 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float trackBottom = trackTop + trackHeight;
                     float trackRadius = trackHeight / 2.0f;
 
-                    float maxExpandedW = restThumbWidth * 1.40f; 
+                    float maxExpandedW = restThumbWidth * 1.35f; 
                     float currentThumbHeight = restThumbHeight + ((drawH * 0.88f) - restThumbHeight) * s.bloom; 
                     float currentThumbWidth = restThumbWidth + (maxExpandedW - restThumbWidth) * s.bloom;
 
-                    currentThumbWidth *= (1.0f + (s.bubbleSquish * 0.45f));
+                    // Reduced horizontal squish strictly for toggles
+                    currentThumbWidth *= (1.0f + (s.bubbleSquish * 0.12f)); 
                     currentThumbHeight *= (1.0f - (s.bubbleSquish * 0.25f));
                     float thumbRadius = currentThumbHeight / 2.0f;
 
-                    // Hard clamp horizontal movement strictly inside the view boundaries
+                    // Hard clamp horizontal bounds inside the window with 2px buffer
                     float minX = offsetX + (currentThumbWidth / 2.0f) + 2.0f;
                     float maxX = offsetX + drawW - (currentThumbWidth / 2.0f) - 2.0f;
 
@@ -533,10 +467,17 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     renderLiquidGlassThumb(canvas, s, width, height, thumbL, thumbT, thumbR, thumbB, thumbRadius, true);
 
+                    // Figma Colored Stroke Rim
+                    RectF roundRectF = new RectF(thumbL, thumbT, thumbR, thumbB);
+                    int glowStroke = blendColors(Color.parseColor("#75FFFFFF"), bgPaint.getColor(), 0.65f * Math.max(0.2f, s.bloom));
+                    strokePaint.setColor(glowStroke);
+                    canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, strokePaint);
+                    strokePaint.setColor(Color.parseColor("#75FFFFFF")); // Reset back
+
                     int whiteAlpha = (int)(255 * (1.0f - Math.max(0f, Math.min(1f, s.bloom))));
                     if (whiteAlpha > 0) {
                         baseThumbPaint.setAlpha(isEnabled ? whiteAlpha : (int)(whiteAlpha * 0.5f));
-                        canvas.drawRoundRect(new RectF(thumbL, thumbT, thumbR, thumbB), thumbRadius, thumbRadius, baseThumbPaint);
+                        canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, baseThumbPaint);
                     }
 
                     return null;
