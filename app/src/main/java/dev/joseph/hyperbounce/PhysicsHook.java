@@ -162,42 +162,84 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
     // TOGGLE SHADER: Aggressive Concave Lens (Shrinks underlying content inside glass) + Edge Refraction
     private static final String AGSL_SHADER_TOGGLE = 
-        "uniform shader content;\n" +
-        "uniform float thumbL;\n" +
-        "uniform float thumbT;\n" +
-        "uniform float thumbR;\n" +
-        "uniform float thumbB;\n" +
-        "uniform float refractionAmount;\n" +
-        "uniform float refractionHeight;\n" +
-        "half4 main(float2 fragCoord) {\n" +
-        "    vec2 thumbSize = vec2(thumbR - thumbL, thumbB - thumbT);\n" +
-        "    vec2 p = fragCoord - vec2(thumbL, thumbT);\n" +
-        "    if (p.x < 0.0 || p.y < 0.0 || p.x > thumbSize.x || p.y > thumbSize.y) {\n" +
-        "        return content.eval(fragCoord);\n" +
-        "    }\n" +
-        "    vec2 center = vec2(thumbL, thumbT) + thumbSize * 0.5;\n" +
-        "    vec2 diff = fragCoord - center;\n" +
-        "    vec2 distFromEdge = min(p, thumbSize - p);\n" +
-        "    float edgeDist = min(distFromEdge.x, distFromEdge.y);\n" +
-        "    float factor = smoothstep(0.0, refractionHeight, edgeDist);\n" +
-        "    \n" +
-        "    float pinchY = mix(1.0, 1.85, factor);\n" +
-        "    float pinchX = mix(1.0, 1.25, factor);\n" +
-        "    vec2 lensWarp = center + vec2(diff.x * pinchX, diff.y * pinchY);\n" +
-        "    \n" +
-        "    float dist = length(diff);\n" +
-        "    vec2 dir = dist > 0.0 ? diff / dist : vec2(0.0);\n" +
-        "    vec2 refractOffset = dir * (1.0 - factor) * refractionAmount;\n" +
-        "    \n" +
-        "    half4 color = content.eval(lensWarp - refractOffset);\n" +
-        "    half4 basePixel = content.eval(fragCoord);\n" +
-        "    \n" +
-        "    color.rgb = mix(color.rgb, vec3(1.0), 0.12);\n" +
-        "    color.rgb *= mix(0.70, 1.0, factor);\n" +
-        "    color.rgb += basePixel.rgb * (1.0 - factor) * 0.60;\n" +
-        "    float rim = pow(1.0 - factor, 2.5);\n" +
-        "    color.rgb += rim * 0.50;\n" +
-        "    return color;\n" +
+        "uniform shader content;
+" +
+        "uniform float thumbL;
+" +
+        "uniform float thumbT;
+" +
+        "uniform float thumbR;
+" +
+        "uniform float thumbB;
+" +
+        "half4 main(float2 fragCoord) {
+" +
+        "    vec2 thumbSize = vec2(thumbR - thumbL, thumbB - thumbT);
+" +
+        "    vec2 p = fragCoord - vec2(thumbL, thumbT);
+" +
+        "    if (p.x < 0.0 || p.y < 0.0 || p.x > thumbSize.x || p.y > thumbSize.y) {
+" +
+        "        return content.eval(fragCoord);
+" +
+        "    }
+" +
+        "    vec2 center = vec2(thumbL, thumbT) + thumbSize * 0.5;
+" +
+        "    vec2 diff = fragCoord - center;
+" +
+        "    
+" +
+        "    // Extreme pinch to shrink the track under the glass
+" +
+        "    float pinchX = 1.45;
+" +
+        "    float pinchY = 1.70;
+" +
+        "    vec2 lensWarp = center + vec2(diff.x * pinchX, diff.y * pinchY);
+" +
+        "    
+" +
+        "    // Edge detection for glowing color-bleed rim
+" +
+        "    vec2 distFromEdge = min(p, thumbSize - p);
+" +
+        "    float edgeDist = min(distFromEdge.x, distFromEdge.y);
+" +
+        "    float rimFactor = smoothstep(18.0, 0.0, edgeDist);
+" +
+        "    
+" +
+        "    half4 color = content.eval(lensWarp);
+" +
+        "    half4 basePixel = content.eval(fragCoord);
+" +
+        "    
+" +
+        "    // Blend shrunken background with glassy base
+" +
+        "    color.rgb = mix(color.rgb, vec3(1.0), 0.15);
+" +
+        "    
+" +
+        "    // True Figma color bleed on the rim
+" +
+        "    vec3 glowColor = mix(vec3(1.0), basePixel.rgb, 0.70);
+" +
+        "    color.rgb = mix(color.rgb, glowColor, rimFactor * 0.95);
+" +
+        "    
+" +
+        "    // Sharp specular rim highlight
+" +
+        "    float specular = pow(rimFactor, 4.0);
+" +
+        "    color.rgb += specular * 0.5;
+" +
+        "    
+" +
+        "    return color;
+" +
         "}";
 
     // SLIDER SHADER: Pure Water Droplet Refraction (No Shrinking)
@@ -287,7 +329,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         canvas.restore();
         
         canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, highlightPaint);
+        
+        // Figma Colored Stroke Rim
+        int glowStroke = blendColors(Color.parseColor("#75FFFFFF"), bgPaint.getColor(), 0.65f * Math.max(0.2f, s.bloom));
+        strokePaint.setColor(glowStroke);
         canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, strokePaint);
+        strokePaint.setColor(Color.parseColor("#75FFFFFF")); // Reset
     }
 
     // ==========================================
