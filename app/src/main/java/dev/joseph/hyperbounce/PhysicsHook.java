@@ -91,16 +91,35 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     }
 
     private static void disableClipping(View view) {
-        if (view == null) return;
-        view.setClipToOutline(false);
-        ViewParent parent = view.getParent();
-        while (parent instanceof ViewGroup) {
-            ViewGroup vg = (ViewGroup) parent;
-            vg.setClipChildren(false);
-            vg.setClipToPadding(false);
-            parent = vg.getParent();
+    if (view == null) return;
+    view.setClipToOutline(false);
+    
+    // Check our physics engine state dynamically
+    boolean needsElevation = false;
+    ToggleState ts = stateMap.get(view);
+    if (ts != null && ts.bloom > 0.01f) needsElevation = true;
+    SliderState ss = sliderStateMap.get(view);
+    if (ss != null && ss.bloom > 0.01f) needsElevation = true;
+
+    // Apply a massive Z-boost if the thumb is expanded or dragging
+    float z = needsElevation ? 100f : 0f;
+    view.setTranslationZ(z);
+
+    ViewParent parent = view.getParent();
+    int depth = 0;
+    while (parent instanceof ViewGroup) {
+        ViewGroup vg = (ViewGroup) parent;
+        vg.setClipChildren(false);
+        vg.setClipToPadding(false);
+        
+        // Elevate the tree only up to the HyperCellLayout (depth < 3) to beat the RecyclerView
+        if (depth < 3) {
+            vg.setTranslationZ(z);
         }
+        parent = vg.getParent();
+        depth++;
     }
+}
 
     // ==========================================
     // STATES & HARDWARE PIPELINE
