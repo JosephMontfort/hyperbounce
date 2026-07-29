@@ -155,6 +155,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "uniform float thumbT;\n" +
         "uniform float thumbR;\n" +
         "uniform float thumbB;\n" +
+        "uniform float refractionHeight;\n" + // Re-added to prevent RuntimeShader crash
         "half4 main(float2 fragCoord) {\n" +
         "    vec2 thumbSize = vec2(thumbR - thumbL, thumbB - thumbT);\n" +
         "    vec2 p = fragCoord - vec2(thumbL, thumbT);\n" +
@@ -251,7 +252,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             s.shader.setFloatUniform("thumbT", thumbT);
             s.shader.setFloatUniform("thumbR", thumbR);
             s.shader.setFloatUniform("thumbB", thumbB);
-            s.shader.setFloatUniform("refractionHeight", 34.0f);
+            s.shader.setFloatUniform("refractionHeight", 34.0f); // Uniform now exists in both shaders
         }
 
         int exp = 100;
