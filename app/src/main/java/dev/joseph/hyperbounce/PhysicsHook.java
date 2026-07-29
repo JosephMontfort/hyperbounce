@@ -28,9 +28,6 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 public class PhysicsHook implements IXposedHookLoadPackage {
 
-    // ==========================================
-    // SHARED PAINTS & COLORS
-    // ==========================================
     private static final int TRACK_ON             = Color.parseColor("#30D158");
     private static final int TRACK_OFF_DARK       = Color.parseColor("#39393D");
     private static final int TRACK_OFF_LIGHT      = Color.parseColor("#E9E9EA");
@@ -93,18 +90,28 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private static void disableClipping(View view) {
         if (view == null) return;
         view.setClipToOutline(false);
+        
+        boolean needsElevation = false;
+        ToggleState ts = stateMap.get(view);
+        if (ts != null && ts.bloom > 0.01f) needsElevation = true;
+        SliderState ss = sliderStateMap.get(view);
+        if (ss != null && ss.bloom > 0.01f) needsElevation = true;
+
+        float z = needsElevation ? 100f : 0f;
+        view.setTranslationZ(z);
+
         ViewParent parent = view.getParent();
+        int depth = 0;
         while (parent instanceof ViewGroup) {
             ViewGroup vg = (ViewGroup) parent;
             vg.setClipChildren(false);
             vg.setClipToPadding(false);
+            if (depth < 3) vg.setTranslationZ(z);
             parent = vg.getParent();
+            depth++;
         }
     }
 
-    // ==========================================
-    // STATES & HARDWARE PIPELINE
-    // ==========================================
     private static class GlassState {
         Bitmap trackBitmap;
         Canvas trackCanvas;
@@ -141,15 +148,13 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private static final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
     private static final WeakHashMap<Object, SliderState> sliderStateMap = new WeakHashMap<>();
 
-    // TOGGLE SHADER: Figma Liquid Glass (Concave Shrink + Rim Bleed)
+    // AGGRESSIVE FIGMA TOGGLE SHADER: Pinched math + intense rim color bleed
     private static final String AGSL_SHADER_TOGGLE = 
         "uniform shader content;\n" +
         "uniform float thumbL;\n" +
         "uniform float thumbT;\n" +
         "uniform float thumbR;\n" +
         "uniform float thumbB;\n" +
-        "uniform float refractionAmount;\n" +
-        "uniform float refractionHeight;\n" +
         "half4 main(float2 fragCoord) {\n" +
         "    vec2 thumbSize = vec2(thumbR - thumbL, thumbB - thumbT);\n" +
         "    vec2 p = fragCoord - vec2(thumbL, thumbT);\n" +
@@ -159,36 +164,34 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    vec2 center = vec2(thumbL, thumbT) + thumbSize * 0.5;\n" +
         "    vec2 diff = fragCoord - center;\n" +
         "    \n" +
-        "    float pinchX = 1.45;\n" +
+        "    float pinchX = 1.35;\n" +
         "    float pinchY = 1.70;\n" +
         "    vec2 lensWarp = center + vec2(diff.x * pinchX, diff.y * pinchY);\n" +
         "    \n" +
         "    vec2 distFromEdge = min(p, thumbSize - p);\n" +
         "    float edgeDist = min(distFromEdge.x, distFromEdge.y);\n" +
-        "    float rimFactor = smoothstep(18.0, 0.0, edgeDist);\n" +
+        "    float rimFactor = smoothstep(14.0, 0.0, edgeDist);\n" +
         "    \n" +
         "    half4 color = content.eval(lensWarp);\n" +
         "    half4 basePixel = content.eval(fragCoord);\n" +
         "    \n" +
         "    color.rgb = mix(color.rgb, vec3(1.0), 0.15);\n" +
+        "    vec3 glowColor = mix(vec3(1.0), basePixel.rgb, 0.85);\n" +
+        "    color.rgb = mix(color.rgb, glowColor, rimFactor * 0.90);\n" +
         "    \n" +
-        "    vec3 glowColor = mix(vec3(1.0), basePixel.rgb, 0.70);\n" +
-        "    color.rgb = mix(color.rgb, glowColor, rimFactor * 0.95);\n" +
-        "    \n" +
-        "    float specular = pow(rimFactor, 4.0);\n" +
-        "    color.rgb += specular * 0.5;\n" +
+        "    float specular = pow(rimFactor, 3.0);\n" +
+        "    color.rgb += specular * 0.45;\n" +
         "    \n" +
         "    return color;\n" +
         "}";
 
-    // SLIDER SHADER: Pure Water Droplet Refraction
+    // SLIDER SHADER: Added Edge Bleed without convex lens
     private static final String AGSL_SHADER_SLIDER = 
         "uniform shader content;\n" +
         "uniform float thumbL;\n" +
         "uniform float thumbT;\n" +
         "uniform float thumbR;\n" +
         "uniform float thumbB;\n" +
-        "uniform float refractionAmount;\n" +
         "uniform float refractionHeight;\n" +
         "half4 main(float2 fragCoord) {\n" +
         "    vec2 thumbSize = vec2(thumbR - thumbL, thumbB - thumbT);\n" +
@@ -204,14 +207,18 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    \n" +
         "    float dist = length(diff);\n" +
         "    vec2 dir = dist > 0.0 ? diff / dist : vec2(0.0);\n" +
-        "    vec2 refractOffset = dir * (1.0 - factor) * refractionAmount;\n" +
+        "    vec2 refractOffset = dir * (1.0 - factor) * 65.0;\n" +
         "    \n" +
         "    half4 color = content.eval(fragCoord - refractOffset);\n" +
         "    half4 basePixel = content.eval(fragCoord);\n" +
         "    \n" +
         "    color.rgb = mix(color.rgb, vec3(1.0), 0.12);\n" +
         "    color.rgb *= mix(0.70, 1.0, factor);\n" +
-        "    color.rgb += basePixel.rgb * (1.0 - factor) * 0.60;\n" +
+        "    \n" +
+        "    float rimFactor = smoothstep(12.0, 0.0, edgeDist);\n" +
+        "    vec3 glowColor = mix(vec3(1.0), basePixel.rgb, 0.85);\n" +
+        "    color.rgb = mix(color.rgb, glowColor, rimFactor * 0.90);\n" +
+        "    \n" +
         "    float rim = pow(1.0 - factor, 2.5);\n" +
         "    color.rgb += rim * 0.40;\n" +
         "    return color;\n" +
@@ -225,7 +232,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         if (s.glassNode == null) s.glassNode = new RenderNode("GlassNode");
 
         if (!s.shaderInitialized) {
-            RenderEffect blurFx = RenderEffect.createBlurEffect(55.0f, 55.0f, Shader.TileMode.CLAMP);
+            // REDUCED BLUR FOR TOGGLE to ensure sharp artificial refraction
+            float blurRadius = isToggle ? 8.0f : 55.0f;
+            RenderEffect blurFx = RenderEffect.createBlurEffect(blurRadius, blurRadius, Shader.TileMode.CLAMP);
             s.blurNode.setRenderEffect(blurFx);
 
             try {
@@ -242,7 +251,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             s.shader.setFloatUniform("thumbT", thumbT);
             s.shader.setFloatUniform("thumbR", thumbR);
             s.shader.setFloatUniform("thumbB", thumbB);
-            s.shader.setFloatUniform("refractionAmount", 65.0f);
             s.shader.setFloatUniform("refractionHeight", 34.0f);
         }
 
@@ -270,9 +278,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, highlightPaint);
     }
 
-    // ==========================================
-    // TOGGLE ENGINE
-    // ==========================================
     private void applyUnifiedToggleEngine(String className, ClassLoader classLoader) {
         if (hookedDynamicClasses.contains(className)) return;
         Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
@@ -427,12 +432,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float currentThumbHeight = restThumbHeight + ((drawH * 0.88f) - restThumbHeight) * s.bloom; 
                     float currentThumbWidth = restThumbWidth + (maxExpandedW - restThumbWidth) * s.bloom;
 
-                    // Reduced horizontal squish strictly for toggles
+                    // Reduced horizontal squish strictly for toggle thumb
                     currentThumbWidth *= (1.0f + (s.bubbleSquish * 0.12f)); 
                     currentThumbHeight *= (1.0f - (s.bubbleSquish * 0.25f));
                     float thumbRadius = currentThumbHeight / 2.0f;
 
-                    // Hard clamp horizontal bounds inside the window with 2px buffer
+                    // Hard clamp horizontal bounds to avoid physical window clipping
                     float minX = offsetX + (currentThumbWidth / 2.0f) + 2.0f;
                     float maxX = offsetX + drawW - (currentThumbWidth / 2.0f) - 2.0f;
 
@@ -454,10 +459,20 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         s.trackBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
                         s.trackCanvas = new Canvas(s.trackBitmap);
                     }
-                    s.trackCanvas.drawColor(0, PorterDuff.Mode.CLEAR);
                     
-                    float shrinkY = 6.0f * s.bloom;
-                    s.trackCanvas.drawRoundRect(offsetX, trackTop + shrinkY, offsetX + drawW, trackBottom - shrinkY, Math.max(0, trackRadius - shrinkY), Math.max(0, trackRadius - shrinkY), bgPaint);
+                    s.trackCanvas.drawColor(0, PorterDuff.Mode.CLEAR);
+                    s.trackCanvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
+
+                    // ARTIFICIAL CONCAVE CORE
+                    // Draws a darker, physically shrunken track strictly behind the glass
+                    s.trackCanvas.save();
+                    s.trackCanvas.clipRect(thumbL - 10f, trackTop, thumbR + 10f, trackBottom);
+                    float coreShrinkY = trackHeight * 0.22f; 
+                    RectF coreRect = new RectF(offsetX, trackTop + coreShrinkY, offsetX + drawW, trackBottom - coreShrinkY);
+                    Paint corePaint = new Paint(bgPaint);
+                    corePaint.setColor(blendColors(Color.BLACK, bgPaint.getColor(), 0.55f)); // Dense glass shadowing
+                    s.trackCanvas.drawRoundRect(coreRect, trackRadius - coreShrinkY, trackRadius - coreShrinkY, corePaint);
+                    s.trackCanvas.restore();
 
                     int shadowAlpha = (int)(48 * (1.0f - Math.max(0f, Math.min(1f, s.bloom))));
                     if (shadowAlpha > 0 && isEnabled) {
@@ -467,12 +482,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     renderLiquidGlassThumb(canvas, s, width, height, thumbL, thumbT, thumbR, thumbB, thumbRadius, true);
 
-                    // Figma Colored Stroke Rim
+                    // FIGMA Colored Rim Bleeding
                     RectF roundRectF = new RectF(thumbL, thumbT, thumbR, thumbB);
-                    int glowStroke = blendColors(Color.parseColor("#75FFFFFF"), bgPaint.getColor(), 0.65f * Math.max(0.2f, s.bloom));
+                    int glowStroke = blendColors(Color.parseColor("#75FFFFFF"), bgPaint.getColor(), 0.70f * Math.max(0.3f, s.bloom));
                     strokePaint.setColor(glowStroke);
                     canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, strokePaint);
-                    strokePaint.setColor(Color.parseColor("#75FFFFFF")); // Reset back
+                    strokePaint.setColor(Color.parseColor("#75FFFFFF"));
 
                     int whiteAlpha = (int)(255 * (1.0f - Math.max(0f, Math.min(1f, s.bloom))));
                     if (whiteAlpha > 0) {
@@ -486,9 +501,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {}
     }
 
-    // ==========================================
-    // SLIDER ENGINE
-    // ==========================================
     private void applyUnifiedSliderEngine(String className, ClassLoader classLoader) {
         if (hookedDynamicClasses.contains(className)) return;
         Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
@@ -639,10 +651,17 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     renderLiquidGlassThumb(canvas, s, w, h, thumbL, thumbT, thumbR, thumbB, thumbRadius, false);
 
+                    // FIGMA Colored Rim Bleeding for Slider
+                    RectF roundRectF = new RectF(thumbL, thumbT, thumbR, thumbB);
+                    int glowStroke = blendColors(Color.parseColor("#75FFFFFF"), activePaint.getColor(), 0.70f * Math.max(0.3f, s.bloom));
+                    strokePaint.setColor(glowStroke);
+                    canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, strokePaint);
+                    strokePaint.setColor(Color.parseColor("#75FFFFFF"));
+
                     int whiteAlpha = (int)(255 * (1.0f - Math.max(0f, Math.min(1f, s.bloom))));
                     if (whiteAlpha > 0) {
                         baseThumbPaint.setAlpha(whiteAlpha);
-                        canvas.drawRoundRect(new RectF(thumbL, thumbT, thumbR, thumbB), thumbRadius, thumbRadius, baseThumbPaint);
+                        canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, baseThumbPaint);
                     }
 
                     return null;
