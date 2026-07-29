@@ -148,14 +148,14 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private static final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
     private static final WeakHashMap<Object, SliderState> sliderStateMap = new WeakHashMap<>();
 
-    // AGGRESSIVE FIGMA TOGGLE SHADER: Pinched math + intense rim color bleed
+    // AGGRESSIVE FIGMA TOGGLE SHADER: Deep optical pinch without artificial black masking
     private static final String AGSL_SHADER_TOGGLE = 
         "uniform shader content;\n" +
         "uniform float thumbL;\n" +
         "uniform float thumbT;\n" +
         "uniform float thumbR;\n" +
         "uniform float thumbB;\n" +
-        "uniform float refractionHeight;\n" + // Re-added to prevent RuntimeShader crash
+        "uniform float refractionHeight;\n" +
         "half4 main(float2 fragCoord) {\n" +
         "    vec2 thumbSize = vec2(thumbR - thumbL, thumbB - thumbT);\n" +
         "    vec2 p = fragCoord - vec2(thumbL, thumbT);\n" +
@@ -165,8 +165,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    vec2 center = vec2(thumbL, thumbT) + thumbSize * 0.5;\n" +
         "    vec2 diff = fragCoord - center;\n" +
         "    \n" +
-        "    float pinchX = 1.35;\n" +
-        "    float pinchY = 1.70;\n" +
+        "    // Extreme pinch to organically pull transparent pixels inward, mimicking a physical shrink\n" +
+        "    float pinchX = 1.65;\n" +
+        "    float pinchY = 1.95;\n" +
         "    vec2 lensWarp = center + vec2(diff.x * pinchX, diff.y * pinchY);\n" +
         "    \n" +
         "    vec2 distFromEdge = min(p, thumbSize - p);\n" +
@@ -176,6 +177,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    half4 color = content.eval(lensWarp);\n" +
         "    half4 basePixel = content.eval(fragCoord);\n" +
         "    \n" +
+        "    // Smooth glassy overlay\n" +
         "    color.rgb = mix(color.rgb, vec3(1.0), 0.15);\n" +
         "    vec3 glowColor = mix(vec3(1.0), basePixel.rgb, 0.85);\n" +
         "    color.rgb = mix(color.rgb, glowColor, rimFactor * 0.90);\n" +
@@ -186,7 +188,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    return color;\n" +
         "}";
 
-    // SLIDER SHADER: Added Edge Bleed without convex lens
+    // SLIDER SHADER: Pure Water Droplet Refraction (No lens shrink)
     private static final String AGSL_SHADER_SLIDER = 
         "uniform shader content;\n" +
         "uniform float thumbL;\n" +
@@ -233,7 +235,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         if (s.glassNode == null) s.glassNode = new RenderNode("GlassNode");
 
         if (!s.shaderInitialized) {
-            // REDUCED BLUR FOR TOGGLE to ensure sharp artificial refraction
             float blurRadius = isToggle ? 8.0f : 55.0f;
             RenderEffect blurFx = RenderEffect.createBlurEffect(blurRadius, blurRadius, Shader.TileMode.CLAMP);
             s.blurNode.setRenderEffect(blurFx);
@@ -252,7 +253,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             s.shader.setFloatUniform("thumbT", thumbT);
             s.shader.setFloatUniform("thumbR", thumbR);
             s.shader.setFloatUniform("thumbB", thumbB);
-            s.shader.setFloatUniform("refractionHeight", 34.0f); // Uniform now exists in both shaders
+            s.shader.setFloatUniform("refractionHeight", 34.0f);
         }
 
         int exp = 100;
@@ -433,12 +434,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float currentThumbHeight = restThumbHeight + ((drawH * 0.88f) - restThumbHeight) * s.bloom; 
                     float currentThumbWidth = restThumbWidth + (maxExpandedW - restThumbWidth) * s.bloom;
 
-                    // Reduced horizontal squish strictly for toggle thumb
                     currentThumbWidth *= (1.0f + (s.bubbleSquish * 0.12f)); 
                     currentThumbHeight *= (1.0f - (s.bubbleSquish * 0.25f));
                     float thumbRadius = currentThumbHeight / 2.0f;
 
-                    // Hard clamp horizontal bounds to avoid physical window clipping
                     float minX = offsetX + (currentThumbWidth / 2.0f) + 2.0f;
                     float maxX = offsetX + drawW - (currentThumbWidth / 2.0f) - 2.0f;
 
@@ -464,16 +463,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     s.trackCanvas.drawColor(0, PorterDuff.Mode.CLEAR);
                     s.trackCanvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
 
-                    // ARTIFICIAL CONCAVE CORE
-                    // Draws a darker, physically shrunken track strictly behind the glass
-                    s.trackCanvas.save();
-                    s.trackCanvas.clipRect(thumbL - 10f, trackTop, thumbR + 10f, trackBottom);
-                    float coreShrinkY = trackHeight * 0.22f; 
-                    RectF coreRect = new RectF(offsetX, trackTop + coreShrinkY, offsetX + drawW, trackBottom - coreShrinkY);
-                    Paint corePaint = new Paint(bgPaint);
-                    corePaint.setColor(blendColors(Color.BLACK, bgPaint.getColor(), 0.55f)); // Dense glass shadowing
-                    s.trackCanvas.drawRoundRect(coreRect, trackRadius - coreShrinkY, trackRadius - coreShrinkY, corePaint);
-                    s.trackCanvas.restore();
+                    // Reverted: Removed artificial concave drawing logic completely.
 
                     int shadowAlpha = (int)(48 * (1.0f - Math.max(0f, Math.min(1f, s.bloom))));
                     if (shadowAlpha > 0 && isEnabled) {
@@ -483,7 +473,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     renderLiquidGlassThumb(canvas, s, width, height, thumbL, thumbT, thumbR, thumbB, thumbRadius, true);
 
-                    // FIGMA Colored Rim Bleeding
                     RectF roundRectF = new RectF(thumbL, thumbT, thumbR, thumbB);
                     int glowStroke = blendColors(Color.parseColor("#75FFFFFF"), bgPaint.getColor(), 0.70f * Math.max(0.3f, s.bloom));
                     strokePaint.setColor(glowStroke);
@@ -652,7 +641,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     renderLiquidGlassThumb(canvas, s, w, h, thumbL, thumbT, thumbR, thumbB, thumbRadius, false);
 
-                    // FIGMA Colored Rim Bleeding for Slider
                     RectF roundRectF = new RectF(thumbL, thumbT, thumbR, thumbB);
                     int glowStroke = blendColors(Color.parseColor("#75FFFFFF"), activePaint.getColor(), 0.70f * Math.max(0.3f, s.bloom));
                     strokePaint.setColor(glowStroke);
