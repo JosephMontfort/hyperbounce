@@ -739,7 +739,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         }
     }
     
-        // ==========================================
+      // ==========================================
     // WHATSAPP FLOATING LIQUID GLASS ENGINE
     // ==========================================
     
@@ -812,40 +812,62 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         Class<?> wdsBottomBarClass = XposedHelpers.findClassIfExists("com.whatsapp.ui.wds.components.bottombar.WDSBottomBar", classLoader);
         if (wdsBottomBarClass == null) return;
 
+        // 1. Prevent WhatsApp from re-applying solid backgrounds dynamically
+        XposedHelpers.findAndHookMethod(wdsBottomBarClass, "setBackgroundDrawable", android.graphics.drawable.Drawable.class, new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                param.setResult(null); // Block stock background setter
+            }
+        });
+
         XposedHelpers.findAndHookMethod(wdsBottomBarClass, "onAttachedToWindow", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 ViewGroup realBar = (ViewGroup) param.thisObject;
 
                 realBar.post(() -> {
-                    // Prevent duplicate injections if fragment reloads
                     if (realBar.findViewWithTag("HyperGlassOverlay") != null) return;
 
-                    // 1. Strip the opaque white backgrounds from the real bar & its internal containers
+                    // 2. Shrink WDSBottomBar ITSELF into a floating pill shape
+                    ViewGroup.LayoutParams barLp = realBar.getLayoutParams();
+                    if (barLp instanceof ViewGroup.MarginLayoutParams) {
+                        ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) barLp;
+                        mlp.setMargins(48, 0, 48, 40); // 48px side margins, 40px bottom float
+                        realBar.setLayoutParams(mlp);
+                    }
+
+                    // 3. Nuke backgrounds across WDSBottomBar, children, and parent containers
                     realBar.setBackground(null);
                     for (int i = 0; i < realBar.getChildCount(); i++) {
                         View child = realBar.getChildAt(i);
                         child.setBackground(null);
                         if (child instanceof ViewGroup) {
-                            ((ViewGroup) child).setClipChildren(false);
+                            ViewGroup childVg = (ViewGroup) child;
+                            childVg.setClipChildren(false);
+                            for (int j = 0; j < childVg.getChildCount(); j++) {
+                                childVg.getChildAt(j).setBackground(null);
+                            }
                         }
                     }
-                    realBar.setClipChildren(false);
-                    realBar.setClipToPadding(false);
 
-                    if (realBar.getParent() instanceof ViewGroup) {
-                        ((ViewGroup) realBar.getParent()).setClipChildren(false);
+                    // Unclip and clear parent background
+                    ViewParent parent = realBar.getParent();
+                    while (parent instanceof ViewGroup) {
+                        ViewGroup vg = (ViewGroup) parent;
+                        vg.setClipChildren(false);
+                        vg.setClipToPadding(false);
+                        vg.setBackground(null);
+                        parent = vg.getParent();
                     }
 
-                    // 2. Build the Floating Glass Overlay
+                    // 4. Create Glass Overlay matching the new pill dimensions
                     View glassOverlay = new View(realBar.getContext()) {
                         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
                         private final RuntimeShader glassShader = new RuntimeShader(AGSL_WHATSAPP_GLASS);
                         private final RenderEffect blurFx = RenderEffect.createBlurEffect(45.0f, 45.0f, Shader.TileMode.CLAMP);
 
                         {
-                            // Base tint so the refraction engine has pixels to warp
-                            paint.setColor(Color.parseColor("#40000000"));
+                            paint.setColor(Color.parseColor("#30000000"));
                         }
 
                         @Override
@@ -856,10 +878,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                             float halfW = w / 2.0f;
                             float halfH = h / 2.0f;
 
-                            // Re-bind shader parameters automatically on layout changes
                             glassShader.setFloatUniform("halfView", halfW, halfH);
                             glassShader.setFloatUniform("halfViewFloor", (float) Math.floor(halfW), (float) Math.floor(halfH));
-                            glassShader.setFloatUniform("cornerRadii", halfH, halfH, halfH, halfH); // Fully rounded pill ends
+                            glassShader.setFloatUniform("cornerRadii", halfH, halfH, halfH, halfH);
                             glassShader.setFloatUniform("innerBlurRadius", 28.0f);
                             glassShader.setFloatUniform("innerBlurRadiusSq", 28.0f * 28.0f);
                             glassShader.setFloatUniform("strokeWidth", 2.0f);
@@ -867,7 +888,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                             glassShader.setFloatUniform("highlightAlpha", 0.80f);
                             glassShader.setColorUniform("strokeColor", Color.parseColor("#60FFFFFF"));
                             
-                            // 3D Lighting setup
                             glassShader.setFloatUniform("lightDir1", -0.707f, -0.707f, 0.5f);
                             glassShader.setColorUniform("lightColor1", Color.WHITE);
                             glassShader.setFloatUniform("lightIntensity1", 1.1f);
@@ -888,25 +908,20 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         }
                     };
                     glassOverlay.setTag("HyperGlassOverlay");
-
-                    // CRITICAL: Prevent the overlay from eating touch events
                     glassOverlay.setClickable(false);
                     glassOverlay.setFocusable(false);
                     glassOverlay.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
 
-                    // 3. Shrink the view mathematically using layout margins so the shader maps 1:1 to the pill bounding box
                     android.widget.FrameLayout.LayoutParams flp = new android.widget.FrameLayout.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT, 
                             ViewGroup.LayoutParams.MATCH_PARENT
                     );
-                    // Margins: Left, Top, Right, Bottom -> Forces the pill into a floating state
-                    flp.setMargins(48, 10, 48, 40); 
 
-                    // 4. Inject at Index 0 (Rendered BEHIND the tab icons!)
                     realBar.addView(glassOverlay, 0, flp);
                 });
             }
         });
     }
+
 
 }
