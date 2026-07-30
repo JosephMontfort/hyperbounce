@@ -102,135 +102,143 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         }
         XposedBridge.log("[HyperBounce] WDSBottomBar class found successfully!");
 
+        // 1. Hook Constructors (Guaranteed to exist on all subclasses)
+        XposedBridge.hookAllConstructors(wdsBottomBarClass, new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                final ViewGroup realBar = (ViewGroup) param.thisObject;
+                XposedBridge.log("[HyperBounce] WDSBottomBar instantiated.");
+
+                // 2. Attach Standard Android OnAttachStateChangeListener (Immune to NoSuchMethodError)
+                realBar.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                    @Override
+                    public void onViewAttachedToWindow(View v) {
+                        XposedBridge.log("[HyperBounce] WDSBottomBar attached to window via listener.");
+                        realBar.post(() -> applyGlassOverlay(realBar));
+                    }
+
+                    @Override
+                    public void onViewDetachedFromWindow(View v) {}
+                });
+            }
+        });
+
+        // 3. Continuously strip background drawables during draw passes
         try {
-            XposedHelpers.findAndHookMethod(wdsBottomBarClass, "setBackgroundDrawable", android.graphics.drawable.Drawable.class, new XC_MethodHook() {
+            XposedBridge.hookAllMethods(wdsBottomBarClass, "dispatchDraw", new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    param.setResult(null); 
+                    ViewGroup realBar = (ViewGroup) param.thisObject;
+                    realBar.setBackground(null);
                 }
             });
+            XposedBridge.log("[HyperBounce] dispatchDraw hooked successfully.");
         } catch (Throwable t) {
-            XposedBridge.log("[HyperBounce] Error hooking setBackgroundDrawable: " + Log.getStackTraceString(t));
+            XposedBridge.log("[HyperBounce] Error hooking dispatchDraw: " + Log.getStackTraceString(t));
         }
+    }
 
+    private void applyGlassOverlay(ViewGroup realBar) {
         try {
-            XposedHelpers.findAndHookMethod(wdsBottomBarClass, "onAttachedToWindow", new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    XposedBridge.log("[HyperBounce] onAttachedToWindow triggered.");
-                    try {
-                        ViewGroup realBar = (ViewGroup) param.thisObject;
+            if (realBar.findViewWithTag("HyperGlassOverlay") != null) {
+                XposedBridge.log("[HyperBounce] Overlay already exists. Skipping.");
+                return;
+            }
 
-                        realBar.post(() -> {
-                            try {
-                                if (realBar.findViewWithTag("HyperGlassOverlay") != null) {
-                                    XposedBridge.log("[HyperBounce] Overlay already exists. Skipping.");
-                                    return;
-                                }
+            XposedBridge.log("[HyperBounce] Applying margins to WDSBottomBar...");
+            ViewGroup.LayoutParams barLp = realBar.getLayoutParams();
+            if (barLp instanceof ViewGroup.MarginLayoutParams) {
+                ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) barLp;
+                mlp.setMargins(48, 0, 48, 40); 
+                realBar.setLayoutParams(mlp);
+            }
 
-                                XposedBridge.log("[HyperBounce] Applying margins...");
-                                ViewGroup.LayoutParams barLp = realBar.getLayoutParams();
-                                if (barLp instanceof ViewGroup.MarginLayoutParams) {
-                                    ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) barLp;
-                                    mlp.setMargins(48, 0, 48, 40); 
-                                    realBar.setLayoutParams(mlp);
-                                }
-
-                                XposedBridge.log("[HyperBounce] Nuking backgrounds...");
-                                realBar.setBackground(null);
-                                for (int i = 0; i < realBar.getChildCount(); i++) {
-                                    View child = realBar.getChildAt(i);
-                                    child.setBackground(null);
-                                    if (child instanceof ViewGroup) {
-                                        ViewGroup childVg = (ViewGroup) child;
-                                        childVg.setClipChildren(false);
-                                        for (int j = 0; j < childVg.getChildCount(); j++) {
-                                            childVg.getChildAt(j).setBackground(null);
-                                        }
-                                    }
-                                }
-
-                                ViewParent parent = realBar.getParent();
-                                while (parent instanceof ViewGroup) {
-                                    ViewGroup vg = (ViewGroup) parent;
-                                    vg.setClipChildren(false);
-                                    vg.setClipToPadding(false);
-                                    vg.setBackground(null);
-                                    parent = vg.getParent();
-                                }
-
-                                XposedBridge.log("[HyperBounce] Creating Glass Overlay...");
-                                View glassOverlay = new View(realBar.getContext()) {
-                                    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                                    private final RuntimeShader glassShader = new RuntimeShader(AGSL_WHATSAPP_GLASS);
-                                    private final RenderEffect blurFx = RenderEffect.createBlurEffect(45.0f, 45.0f, Shader.TileMode.CLAMP);
-
-                                    {
-                                        paint.setColor(Color.parseColor("#30000000"));
-                                    }
-
-                                    @Override
-                                    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-                                        super.onSizeChanged(w, h, oldw, oldh);
-                                        if (w <= 0 || h <= 0) return;
-
-                                        float halfW = w / 2.0f;
-                                        float halfH = h / 2.0f;
-
-                                        glassShader.setFloatUniform("halfView", halfW, halfH);
-                                        glassShader.setFloatUniform("halfViewFloor", (float) Math.floor(halfW), (float) Math.floor(halfH));
-                                        glassShader.setFloatUniform("cornerRadii", halfH, halfH, halfH, halfH);
-                                        glassShader.setFloatUniform("innerBlurRadius", 28.0f);
-                                        glassShader.setFloatUniform("innerBlurRadiusSq", 28.0f * 28.0f);
-                                        glassShader.setFloatUniform("strokeWidth", 2.0f);
-                                        glassShader.setFloatUniform("strokeAlphaMul", 1.2f);
-                                        glassShader.setFloatUniform("highlightAlpha", 0.80f);
-                                        glassShader.setColorUniform("strokeColor", Color.parseColor("#60FFFFFF"));
-                                        
-                                        glassShader.setFloatUniform("lightDir1", -0.707f, -0.707f, 0.5f);
-                                        glassShader.setColorUniform("lightColor1", Color.WHITE);
-                                        glassShader.setFloatUniform("lightIntensity1", 1.1f);
-                                        glassShader.setFloatUniform("lightDir2", 0.707f, 0.707f, 0.2f);
-                                        glassShader.setColorUniform("lightColor2", Color.parseColor("#90FFFFFF"));
-                                        glassShader.setFloatUniform("lightIntensity2", 0.5f);
-
-                                        RenderEffect glassFx = RenderEffect.createRuntimeShaderEffect(glassShader, "child");
-                                        this.setRenderEffect(RenderEffect.createChainEffect(glassFx, blurFx));
-                                    }
-
-                                    @Override
-                                    protected void onDraw(Canvas canvas) {
-                                        super.onDraw(canvas);
-                                        RectF rect = new RectF(0, 0, getWidth(), getHeight());
-                                        float radius = rect.height() / 2.0f;
-                                        canvas.drawRoundRect(rect, radius, radius, paint);
-                                    }
-                                };
-                                glassOverlay.setTag("HyperGlassOverlay");
-                                glassOverlay.setClickable(false);
-                                glassOverlay.setFocusable(false);
-                                glassOverlay.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-
-                                android.widget.FrameLayout.LayoutParams flp = new android.widget.FrameLayout.LayoutParams(
-                                        ViewGroup.LayoutParams.MATCH_PARENT, 
-                                        ViewGroup.LayoutParams.MATCH_PARENT
-                                );
-
-                                XposedBridge.log("[HyperBounce] Injecting overlay...");
-                                realBar.addView(glassOverlay, 0, flp);
-                                XposedBridge.log("[HyperBounce] Injection complete!");
-
-                            } catch (Exception e) {
-                                XposedBridge.log("[HyperBounce] Runnable Error: " + Log.getStackTraceString(e));
-                            }
-                        });
-                    } catch (Exception e) {
-                        XposedBridge.log("[HyperBounce] onAttachedToWindow Error: " + Log.getStackTraceString(e));
+            XposedBridge.log("[HyperBounce] Stripping backgrounds...");
+            realBar.setBackground(null);
+            for (int i = 0; i < realBar.getChildCount(); i++) {
+                View child = realBar.getChildAt(i);
+                child.setBackground(null);
+                if (child instanceof ViewGroup) {
+                    ViewGroup childVg = (ViewGroup) child;
+                    childVg.setClipChildren(false);
+                    for (int j = 0; j < childVg.getChildCount(); j++) {
+                        childVg.getChildAt(j).setBackground(null);
                     }
                 }
-            });
-        } catch (Throwable t) {
-            XposedBridge.log("[HyperBounce] Hook Error: " + Log.getStackTraceString(t));
+            }
+
+            ViewParent parent = realBar.getParent();
+            while (parent instanceof ViewGroup) {
+                ViewGroup vg = (ViewGroup) parent;
+                vg.setClipChildren(false);
+                vg.setClipToPadding(false);
+                vg.setBackground(null);
+                parent = vg.getParent();
+            }
+
+            XposedBridge.log("[HyperBounce] Creating Glass Overlay View...");
+            View glassOverlay = new View(realBar.getContext()) {
+                private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                private final RuntimeShader glassShader = new RuntimeShader(AGSL_WHATSAPP_GLASS);
+                private final RenderEffect blurFx = RenderEffect.createBlurEffect(45.0f, 45.0f, Shader.TileMode.CLAMP);
+
+                {
+                    paint.setColor(Color.parseColor("#30000000"));
+                }
+
+                @Override
+                protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+                    super.onSizeChanged(w, h, oldw, oldh);
+                    if (w <= 0 || h <= 0) return;
+
+                    float halfW = w / 2.0f;
+                    float halfH = h / 2.0f;
+
+                    glassShader.setFloatUniform("halfView", halfW, halfH);
+                    glassShader.setFloatUniform("halfViewFloor", (float) Math.floor(halfW), (float) Math.floor(halfH));
+                    glassShader.setFloatUniform("cornerRadii", halfH, halfH, halfH, halfH);
+                    glassShader.setFloatUniform("innerBlurRadius", 28.0f);
+                    glassShader.setFloatUniform("innerBlurRadiusSq", 28.0f * 28.0f);
+                    glassShader.setFloatUniform("strokeWidth", 2.0f);
+                    glassShader.setFloatUniform("strokeAlphaMul", 1.2f);
+                    glassShader.setFloatUniform("highlightAlpha", 0.80f);
+                    glassShader.setColorUniform("strokeColor", Color.parseColor("#60FFFFFF"));
+                    
+                    glassShader.setFloatUniform("lightDir1", -0.707f, -0.707f, 0.5f);
+                    glassShader.setColorUniform("lightColor1", Color.WHITE);
+                    glassShader.setFloatUniform("lightIntensity1", 1.1f);
+                    glassShader.setFloatUniform("lightDir2", 0.707f, 0.707f, 0.2f);
+                    glassShader.setColorUniform("lightColor2", Color.parseColor("#90FFFFFF"));
+                    glassShader.setFloatUniform("lightIntensity2", 0.5f);
+
+                    RenderEffect glassFx = RenderEffect.createRuntimeShaderEffect(glassShader, "child");
+                    this.setRenderEffect(RenderEffect.createChainEffect(glassFx, blurFx));
+                }
+
+                @Override
+                protected void onDraw(Canvas canvas) {
+                    super.onDraw(canvas);
+                    RectF rect = new RectF(0, 0, getWidth(), getHeight());
+                    float radius = rect.height() / 2.0f;
+                    canvas.drawRoundRect(rect, radius, radius, paint);
+                }
+            };
+            glassOverlay.setTag("HyperGlassOverlay");
+            glassOverlay.setClickable(false);
+            glassOverlay.setFocusable(false);
+            glassOverlay.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+
+            android.widget.FrameLayout.LayoutParams flp = new android.widget.FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, 
+                    ViewGroup.LayoutParams.MATCH_PARENT
+            );
+
+            XposedBridge.log("[HyperBounce] Injecting overlay at index 0...");
+            realBar.addView(glassOverlay, 0, flp);
+            XposedBridge.log("[HyperBounce] Glass Overlay injection complete!");
+
+        } catch (Exception e) {
+            XposedBridge.log("[HyperBounce] Error applying glass overlay: " + Log.getStackTraceString(e));
         }
     }
 }
