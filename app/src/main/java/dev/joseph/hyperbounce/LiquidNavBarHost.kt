@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.ViewGroup
 import android.widget.ImageView
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.*
@@ -28,7 +27,6 @@ fun extractTabs(stockBar: ViewGroup): List<TabData> {
         val drawable = iconView?.drawable?.mutate()
         var bmp: Bitmap? = null
         if (drawable != null) {
-            // Strip the native tint so Miuix can dynamically color it
             drawable.setTintList(null)
             val w = drawable.intrinsicWidth.coerceAtLeast(1)
             val h = drawable.intrinsicHeight.coerceAtLeast(1)
@@ -62,17 +60,13 @@ fun clickStockTab(stockBar: ViewGroup, index: Int) {
 
 @Composable
 fun LiquidNavBarHost(stockBar: ViewGroup) {
-    // Initial sync
     var selectedIndex by remember { mutableStateOf(0) }
     val tabs = remember { extractTabs(stockBar) }
-
-    // Automatically apply Dark/Light Miuix Palette
+    
+    // CRITICAL FIX: Empty backdrop prevents the infinite recursive StackOverflow loop
+    val backdrop = rememberLayerBackdrop()
+    
     MiuixTheme {
-        val surfaceColor = MiuixTheme.colorScheme.surface
-        val backdrop = rememberLayerBackdrop {
-            drawRect(surfaceColor)
-            drawContent()
-        }
         Box(
             modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
             contentAlignment = Alignment.BottomCenter
@@ -98,7 +92,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
                             Image(
                                 bitmap = tabData.bitmap.asImageBitmap(),
                                 contentDescription = null,
-                                modifier = Modifier.size(26.dp), // Matched KernelSU icon size
+                                modifier = Modifier.size(26.dp),
                                 colorFilter = ColorFilter.tint(LocalContentColor.current)
                             )
                         }
