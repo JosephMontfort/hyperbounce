@@ -11,9 +11,7 @@ import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewParent;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -26,7 +24,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     @Override
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
         if (lpparam.packageName.equals("com.whatsapp")) {
-            XposedBridge.log("[HyperBounce] Executing isolated WhatsApp Liquid Glass Engine...");
+            XposedBridge.log("[HyperBounce] Executing Crash-Free WhatsApp Liquid Glass Engine...");
             hookWhatsApp(lpparam.classLoader);
         }
     }
@@ -100,7 +98,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         Class<?> wdsBottomBarClass = XposedHelpers.findClassIfExists("com.whatsapp.ui.wds.components.bottombar.WDSBottomBar", classLoader);
         if (wdsBottomBarClass == null) return;
 
-        // 1. Hook Constructors to execute Rip & Float safely once
+        // 1. Initial Injection via Constructor listener (Guaranteed no crashes)
         XposedBridge.hookAllConstructors(wdsBottomBarClass, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -109,7 +107,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 realBar.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
                     @Override
                     public void onViewAttachedToWindow(View v) {
-                        realBar.post(() -> executeRipAndFloat(realBar));
+                        realBar.post(() -> injectGlassOverlay(realBar));
                     }
                     @Override
                     public void onViewDetachedFromWindow(View v) {}
@@ -117,76 +115,56 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             }
         });
 
-        // 2. Safe Continuous Strip (No loops!)
+        // 2. Safe Continuous Stripping on every UI frame draw
         XposedBridge.hookAllMethods(wdsBottomBarClass, "dispatchDraw", new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 ViewGroup realBar = (ViewGroup) param.thisObject;
                 
-                // Aggressively kill Material 3 Green Blob Indicator on every draw
+                // Aggressively kill the Material 3 Green Blob
                 try {
                     XposedHelpers.callMethod(realBar, "setItemActiveIndicatorEnabled", false);
                 } catch (Throwable ignored) {}
 
-                // Strip the black box background
-                stripBackgroundsSafely(realBar);
+                // Strip the black rectangular background from the bar and its children
+                realBar.setBackground(null);
+                realBar.setClipChildren(false);
+
+                if (realBar.getChildCount() > 1) {
+                    View menu = realBar.getChildAt(1); // Standard index for the tab container
+                    if (menu != null) {
+                        menu.setBackground(null);
+                        if (menu instanceof ViewGroup) {
+                            ViewGroup vgMenu = (ViewGroup) menu;
+                            vgMenu.setClipChildren(false);
+                            for (int i = 0; i < vgMenu.getChildCount(); i++) {
+                                View tab = vgMenu.getChildAt(i);
+                                tab.setBackground(null);
+                            }
+                        }
+                    }
+                }
             }
         });
 
-        // 3. Touch Triggered Indicator Redraw (Safe state update)
+        // 3. Force custom pill indicator to redraw when screen is touched
         XposedBridge.hookAllMethods(wdsBottomBarClass, "dispatchTouchEvent", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 ViewGroup realBar = (ViewGroup) param.thisObject;
                 View overlay = realBar.findViewWithTag("HyperGlassOverlay");
                 if (overlay != null) {
-                    // Tell overlay to update the iOS pill location ONLY when touched
                     overlay.postInvalidate(); 
                 }
             }
         });
     }
 
-    private void stripBackgroundsSafely(View v) {
-        if (v == null || "HyperGlassOverlay".equals(v.getTag())) return;
-        if (v.getBackground() != null) v.setBackground(null);
-        
-        if (v instanceof ViewGroup) {
-            ViewGroup vg = (ViewGroup) v;
-            vg.setClipChildren(false);
-            vg.setClipToPadding(false);
-            for (int i = 0; i < vg.getChildCount(); i++) {
-                stripBackgroundsSafely(vg.getChildAt(i));
-            }
-        }
-    }
-
-    private void executeRipAndFloat(ViewGroup realBar) {
+    private void injectGlassOverlay(ViewGroup realBar) {
         try {
             if (realBar.findViewWithTag("HyperGlassOverlay") != null) return;
 
-            ViewGroup parent = (ViewGroup) realBar.getParent();
-            
-            if (parent != null && parent.getClass().getName().contains("LinearLayout")) {
-                int index = parent.indexOfChild(realBar);
-                parent.removeView(realBar);
-
-                // Invisible spacer
-                View spacer = new View(realBar.getContext());
-                spacer.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 220));
-                parent.addView(spacer, index);
-
-                // Re-attach to absolute root
-                ViewGroup root = (ViewGroup) realBar.getRootView();
-                FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, 170
-                );
-                flp.gravity = android.view.Gravity.BOTTOM;
-                flp.setMargins(48, 0, 48, 60); 
-                root.addView(realBar, flp);
-            }
-
-            // Build Glass Overlay & iOS Pill Indicator
+            // Build Glass Overlay
             View glassOverlay = new View(realBar.getContext()) {
                 private final Paint glassBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
                 private final Paint indicatorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -231,7 +209,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 protected void onDraw(Canvas canvas) {
                     super.onDraw(canvas);
                     
-                    // 1. Draw Glass Base
+                    // 1. Draw Glass Base Pill
                     RectF rect = new RectF(0, 0, getWidth(), getHeight());
                     float radius = rect.height() / 2.0f;
                     canvas.drawRoundRect(rect, radius, radius, glassBgPaint);
@@ -243,20 +221,29 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                             for (int i = 0; i < menuContainer.getChildCount(); i++) {
                                 View tab = menuContainer.getChildAt(i);
                                 
-                                if (tab.isSelected()) {
-                                    float left = tab.getLeft() + menuContainer.getLeft();
-                                    float right = tab.getRight() + menuContainer.getLeft();
-                                    float top = tab.getTop() + menuContainer.getTop();
-                                    float bottom = tab.getBottom() + menuContainer.getTop();
+                                // Check if this tab is the active one
+                                boolean isActive = tab.isSelected() || tab.isActivated();
+                                try {
+                                    if (!isActive) isActive = (boolean) XposedHelpers.callMethod(tab, "isChecked");
+                                } catch (Throwable ignored) {}
 
-                                    // Shape it into a perfect floating pill behind the icon
-                                    float pillHeight = (bottom - top) * 0.65f;
-                                    float pillWidth = (right - left) * 0.55f;
-                                    float cx = left + (right - left) / 2.0f;
-                                    float cy = top + (bottom - top) / 2.0f;
+                                if (isActive) {
+                                    // Math to map the tab's coordinate inside the padded glass overlay
+                                    float myLeft = this.getLeft();
+                                    float myTop = this.getTop();
                                     
-                                    RectF pillRect = new RectF(cx - pillWidth, cy - pillHeight, cx + pillWidth, cy + pillHeight);
-                                    canvas.drawRoundRect(pillRect, pillHeight, pillHeight, indicatorPaint);
+                                    float tabCx = menuContainer.getLeft() + tab.getLeft() + (tab.getWidth() / 2.0f);
+                                    float tabCy = menuContainer.getTop() + tab.getTop() + (tab.getHeight() / 2.0f);
+                                    
+                                    float localCx = tabCx - myLeft;
+                                    float localCy = tabCy - myTop;
+
+                                    // Size of the iOS indicator pill
+                                    float pillW = tab.getWidth() * 0.40f;
+                                    float pillH = tab.getHeight() * 0.35f;
+                                    
+                                    RectF pillRect = new RectF(localCx - pillW, localCy - pillH, localCx + pillW, localCy + pillH);
+                                    canvas.drawRoundRect(pillRect, pillH, pillH, indicatorPaint);
                                 }
                             }
                         }
@@ -270,10 +257,14 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             glassOverlay.setClickable(false);
             glassOverlay.setFocusable(false);
 
+            // Apply margins to the OVERLAY, not the real bar. This guarantees the floating visual without breaking WhatsApp layouts.
             FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, 
                     ViewGroup.LayoutParams.MATCH_PARENT
             );
+            flp.setMargins(48, 12, 48, 36); // Left, Top, Right, Bottom
+
+            // Inject at Index 0 (Rendered BEHIND the tab icons!)
             realBar.addView(glassOverlay, 0, flp);
 
         } catch (Exception e) {
