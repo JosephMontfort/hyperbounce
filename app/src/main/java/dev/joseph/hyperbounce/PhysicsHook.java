@@ -75,8 +75,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                 
                                 XposedBridge.log("[HyperBounce] PreDraw | Stock Vis: " + stockBar.getVisibility() + " | Parent Vis: " + parentVis + " | TransY: " + transY);
 
-                                ViewGroup rootView = (ViewGroup) stockBar.getRootView();
-                                View customBar = rootView.findViewWithTag("HyperFloatingBar");
+                                ViewGroup injectedRootView = (ViewGroup) stockBar.getRootView();
+                                View customBar = injectedRootView.findViewWithTag("HyperFloatingBar");
                                 
                                 if (customBar != null) {
                                     // WhatsApp sets stockBar or parent to GONE on search/camera screens
