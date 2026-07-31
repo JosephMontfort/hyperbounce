@@ -1,19 +1,19 @@
 package dev.joseph.hyperbounce;
 
-import android.graphics.Canvas;
+import android.content.Context;
 import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.RectF;
-import android.graphics.RenderEffect;
-import android.graphics.RuntimeShader;
-import android.graphics.Shader;
-import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
-import android.util.Log;
+import android.graphics.drawable.GradientDrawable;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewParent;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -23,265 +23,191 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 public class PhysicsHook implements IXposedHookLoadPackage {
 
+    private List<LinearLayout> customTabs = new ArrayList<>();
+    private int currentActiveIndex = 0; // Default to Chats
+
     @Override
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
-        if (lpparam.packageName.equals("com.whatsapp")) {
-            XposedBridge.log("[HyperBounce] Executing RAM Patch Glass Engine...");
-            hookWhatsApp(lpparam.classLoader);
-        }
-    }
+        if (!lpparam.packageName.equals("com.whatsapp")) return;
 
-    private static final String AGSL_WHATSAPP_GLASS = 
-        "uniform shader child;\n" +
-        "uniform float2 halfView;\n" +
-        "uniform float2 halfViewFloor;\n" +
-        "uniform float4 cornerRadii;\n" +
-        "uniform float strokeWidth;\n" +
-        "uniform float innerBlurRadius;\n" +
-        "uniform float innerBlurRadiusSq;\n" +
-        "uniform float highlightAlpha;\n" +
-        "layout(color) uniform half4 strokeColor;\n" +
-        "uniform float strokeAlphaMul;\n" +
-        "uniform float3 lightDir1;\n" +
-        "layout(color) uniform half4 lightColor1;\n" +
-        "uniform float lightIntensity1;\n" +
-        "uniform float3 lightDir2;\n" +
-        "layout(color) uniform half4 lightColor2;\n" +
-        "uniform float lightIntensity2;\n" +
-        "float pickRadius(float2 fragCoord, float4 radii) {\n" +
-        "    float2 up = fragCoord.y < halfView.y ? radii.xy : radii.zw;\n" +
-        "    return fragCoord.x < halfView.x ? up.x : up.y;\n" +
-        "}\n" +
-        "float roundedBoxSDF(float2 pos, float2 halfSize, float radius) {\n" +
-        "    radius = min(radius, min(halfSize.x, halfSize.y));\n" +
-        "    float2 d = pos - halfSize + radius;\n" +
-        "    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - radius;\n" +
-        "}\n" +
-        "float3 getNormal(float2 fragCoord, float sdf, float R) {\n" +
-        "    float2 xy = fragCoord - halfViewFloor;\n" +
-        "    float2 xy_a = abs(xy);\n" +
-        "    float t = smoothstep(-innerBlurRadius, 0.0, sdf);\n" +
-        "    float z = sqrt(max(innerBlurRadiusSq - t * t, 0.0));\n" +
-        "    float3 coord = float3(xy_a, -z);\n" +
-        "    float2 corner = halfView - R;\n" +
-        "    corner.x = min(corner.x, xy_a.x);\n" +
-        "    corner.y = min(corner.y, xy_a.y);\n" +
-        "    float2 dir = normalize(coord.xy - corner.xy);\n" +
-        "    corner += dir * (R - innerBlurRadius);\n" +
-        "    if (any(lessThan(xy_a, corner))) {\n" +
-        "        return float3(0.0, 0.0, -1.0);\n" +
-        "    }\n" +
-        "    float2 signal = sign(xy);\n" +
-        "    float3 n = normalize(coord - float3(corner, 0.0));\n" +
-        "    n.xy *= signal;\n" +
-        "    return n;\n" +
-        "}\n" +
-        "half4 main(float2 fragCoord) {\n" +
-        "    float2 xy = abs(fragCoord - halfView);\n" +
-        "    float originRadius = pickRadius(fragCoord, cornerRadii);\n" +
-        "    float R = max(originRadius, innerBlurRadius);\n" +
-        "    if (all(lessThan(xy, halfView - R))) {\n" +
-        "        return child.eval(fragCoord);\n" +
-        "    }\n" +
-        "    float sdf = roundedBoxSDF(xy, halfView, originRadius);\n" +
-        "    half outMask = half(smoothstep(0.0, -1.0, sdf));\n" +
-        "    float strokeAlpha = smoothstep(-strokeWidth, -strokeWidth + 1.0, sdf);\n" +
-        "    half3 rgb = strokeColor.rgb * half(strokeAlphaMul * strokeAlpha * strokeAlpha);\n" +
-        "    float3 n = getNormal(fragCoord, sdf, R);\n" +
-        "    float l1 = dot(n.xy, lightDir1.xy);\n" +
-        "    rgb += half(l1 * l1 * lightIntensity1) * lightColor1.rgb;\n" +
-        "    float l2 = dot(n.xy, lightDir2.xy);\n" +
-        "    rgb += half(l2 * l2 * lightIntensity2) * lightColor2.rgb;\n" +
-        "    half4 bg = child.eval(fragCoord);\n" +
-        "    return half4(bg.rgb + (rgb * half(highlightAlpha)), bg.a) * outMask;\n" +
-        "}";
-
-    private void hookWhatsApp(ClassLoader classLoader) {
-        Class<?> wdsBottomBarClass = XposedHelpers.findClassIfExists("com.whatsapp.ui.wds.components.bottombar.WDSBottomBar", classLoader);
+        Class<?> wdsBottomBarClass = XposedHelpers.findClassIfExists("com.whatsapp.ui.wds.components.bottombar.WDSBottomBar", lpparam.classLoader);
         if (wdsBottomBarClass == null) return;
 
-        // 1. Inject Glass Overlay once when the view attaches
         XposedBridge.hookAllConstructors(wdsBottomBarClass, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                final ViewGroup realBar = (ViewGroup) param.thisObject;
-                realBar.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                final ViewGroup stockBar = (ViewGroup) param.thisObject;
+                
+                stockBar.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
                     @Override
                     public void onViewAttachedToWindow(View v) {
-                        realBar.post(() -> injectGlassOverlay(realBar));
+                        stockBar.post(() -> executeUIHeist(stockBar));
                     }
                     @Override
                     public void onViewDetachedFromWindow(View v) {}
                 });
             }
         });
-
-        // 2. RAM Patching: Silently execute background drawables during draw phase (Crash-Free)
-        XposedBridge.hookAllMethods(wdsBottomBarClass, "dispatchDraw", new XC_MethodHook() {
-            @Override
-            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                ViewGroup realBar = (ViewGroup) param.thisObject;
-                
-                // --- TARGET 1: Kill the WDSBottomBar Background ---
-                realBar.setBackgroundColor(Color.TRANSPARENT);
-
-                // --- TARGET 2: Kill the Parent Black Containers (Based on Recon Log) ---
-                ViewParent parent = realBar.getParent();
-                int depth = 0;
-                while (parent instanceof View && depth < 7) {
-                    View pView = (View) parent;
-                    Drawable bg = pView.getBackground();
-                    if (bg instanceof ColorDrawable) {
-                        int color = ((ColorDrawable) bg).getColor();
-                        // If it's WhatsApp's #FF0A1014 dark theme color, nuke it
-                        if (color == Color.parseColor("#FF0A1014") || color == Color.parseColor("#0A1014")) {
-                            pView.setBackgroundColor(Color.TRANSPARENT);
-                        }
-                    }
-                    parent = parent.getParent();
-                    depth++;
-                }
-
-                // --- TARGET 3: Kill the Green Material Blob ---
-                if (realBar.getChildCount() > 1) {
-                    View menuView = realBar.getChildAt(1); // Index 1 is the tab menu
-                    if (menuView instanceof ViewGroup && !"HyperGlassOverlay".equals(menuView.getTag())) {
-                        ViewGroup menu = (ViewGroup) menuView;
-                        for (int i = 0; i < menu.getChildCount(); i++) {
-                            View tabView = menu.getChildAt(i);
-                            if (tabView instanceof ViewGroup) {
-                                ViewGroup tab = (ViewGroup) tabView;
-                                for (int j = 0; j < tab.getChildCount(); j++) {
-                                    View tabChild = tab.getChildAt(j);
-                                    if (tabChild instanceof FrameLayout) {
-                                        FrameLayout fl = (FrameLayout) tabChild;
-                                        for (int k = 0; k < fl.getChildCount(); k++) {
-                                            View flChild = fl.getChildAt(k);
-                                            // The blob is the only raw android.view.View in this layout
-                                            if (flChild.getClass() == View.class) {
-                                                flChild.setAlpha(0.0f); // GPU-level transparent (NO LAYOUT PASS TRIGGERED)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Update the iOS pill position
-                View overlay = realBar.findViewWithTag("HyperGlassOverlay");
-                if (overlay != null) overlay.postInvalidate();
-            }
-        });
     }
 
-    private void injectGlassOverlay(ViewGroup realBar) {
+    private void executeUIHeist(ViewGroup stockBar) {
         try {
-            if (realBar.findViewWithTag("HyperGlassOverlay") != null) return;
+            // 1. Space Reclamation (Nuke the stock wrapper)
+            ViewParent parent = stockBar.getParent();
+            if (parent instanceof View) {
+                ((View) parent).setVisibility(View.GONE);
+            }
 
-            View glassOverlay = new View(realBar.getContext()) {
-                private final Paint glassBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                private final Paint indicatorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                private final RuntimeShader glassShader = new RuntimeShader(AGSL_WHATSAPP_GLASS);
-                private final RenderEffect blurFx = RenderEffect.createBlurEffect(45.0f, 45.0f, Shader.TileMode.CLAMP);
+            ViewGroup rootView = (ViewGroup) stockBar.getRootView();
+            if (rootView.findViewWithTag("HyperFloatingBar") != null) return; // Prevent duplicates
 
-                {
-                    glassBgPaint.setColor(Color.parseColor("#30000000")); // Deep glass tint
-                    indicatorPaint.setColor(Color.parseColor("#35FFFFFF")); // iOS White Pill
-                }
+            Context context = stockBar.getContext();
+            customTabs.clear(); // Reset on rebuild
 
-                @Override
-                protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-                    super.onSizeChanged(w, h, oldw, oldh);
-                    if (w <= 0 || h <= 0) return;
+            // 2. Build the KernelSU-style Floating Pill
+            LinearLayout customBar = new LinearLayout(context);
+            customBar.setTag("HyperFloatingBar");
+            customBar.setOrientation(LinearLayout.HORIZONTAL);
+            customBar.setGravity(Gravity.CENTER);
+            
+            // Block stray touches
+            customBar.setClickable(true);
+            customBar.setFocusable(true);
 
-                    float halfW = w / 2.0f;
-                    float halfH = h / 2.0f;
+            // Dark slate pill background
+            GradientDrawable pillShape = new GradientDrawable();
+            pillShape.setShape(GradientDrawable.RECTANGLE);
+            pillShape.setCornerRadius(100f); // Perfect rounded pill
+            pillShape.setColor(Color.parseColor("#1F2C34"));
+            pillShape.setStroke(2, Color.parseColor("#374248")); // Subtle border
+            customBar.setBackground(pillShape);
+            customBar.setElevation(80f);
 
-                    glassShader.setFloatUniform("halfView", halfW, halfH);
-                    glassShader.setFloatUniform("halfViewFloor", (float) Math.floor(halfW), (float) Math.floor(halfH));
-                    glassShader.setFloatUniform("cornerRadii", halfH, halfH, halfH, halfH);
-                    glassShader.setFloatUniform("innerBlurRadius", 28.0f);
-                    glassShader.setFloatUniform("innerBlurRadiusSq", 28.0f * 28.0f);
-                    glassShader.setFloatUniform("strokeWidth", 2.0f);
-                    glassShader.setFloatUniform("strokeAlphaMul", 1.2f);
-                    glassShader.setFloatUniform("highlightAlpha", 0.80f);
-                    glassShader.setColorUniform("strokeColor", Color.parseColor("#60FFFFFF"));
+            // 3. Extract and Inject (The Ram Heist)
+            ViewGroup menuContainer = (ViewGroup) stockBar.getChildAt(0);
+            if (menuContainer != null) {
+                int tabCount = menuContainer.getChildCount();
+                
+                for (int i = 0; i < tabCount; i++) {
+                    final int tabIndex = i;
+                    View stockTab = menuContainer.getChildAt(i);
                     
-                    glassShader.setFloatUniform("lightDir1", -0.707f, -0.707f, 0.5f);
-                    glassShader.setColorUniform("lightColor1", Color.WHITE);
-                    glassShader.setFloatUniform("lightIntensity1", 1.1f);
-                    glassShader.setFloatUniform("lightDir2", 0.707f, 0.707f, 0.2f);
-                    glassShader.setColorUniform("lightColor2", Color.parseColor("#90FFFFFF"));
-                    glassShader.setFloatUniform("lightIntensity2", 0.5f);
+                    // Steal the native views
+                    ImageView nativeIcon = findImageView((ViewGroup) stockTab);
+                    TextView nativeText = findTextView((ViewGroup) stockTab);
 
-                    RenderEffect glassFx = RenderEffect.createRuntimeShaderEffect(glassShader, "child");
-                    this.setRenderEffect(RenderEffect.createChainEffect(glassFx, blurFx));
-                }
+                    if (nativeIcon == null || nativeText == null) continue;
 
-                @Override
-                protected void onDraw(Canvas canvas) {
-                    super.onDraw(canvas);
+                    // Create Custom Vertical Tab (Icon stacked above Text)
+                    LinearLayout customTab = new LinearLayout(context);
+                    customTab.setOrientation(LinearLayout.VERTICAL);
+                    customTab.setGravity(Gravity.CENTER);
+                    customTab.setPadding(35, 20, 35, 20);
+
+                    // Replicate the Icon
+                    ImageView customIcon = new ImageView(context);
+                    // Clone the drawable so it doesn't break WhatsApp's rendering
+                    Drawable clonedDrawable = nativeIcon.getDrawable().getConstantState().newDrawable().mutate();
+                    customIcon.setImageDrawable(clonedDrawable);
                     
-                    // Draw Floating Glass Pill
-                    RectF rect = new RectF(0, 0, getWidth(), getHeight());
-                    float radius = rect.height() / 2.0f;
-                    canvas.drawRoundRect(rect, radius, radius, glassBgPaint);
+                    // Style the Icon Container (For the active indicator highlight)
+                    LinearLayout iconContainer = new LinearLayout(context);
+                    iconContainer.setGravity(Gravity.CENTER);
+                    iconContainer.setPadding(20, 10, 20, 10);
+                    iconContainer.addView(customIcon, new LinearLayout.LayoutParams(65, 65)); // Icon sizing
 
-                    // Scan and Draw iOS Pill
-                    try {
-                        for (int i = 0; i < realBar.getChildCount(); i++) {
-                            View child = realBar.getChildAt(i);
-                            if (child instanceof ViewGroup && !"HyperGlassOverlay".equals(child.getTag())) {
-                                ViewGroup menuContainer = (ViewGroup) child;
-                                for (int j = 0; j < menuContainer.getChildCount(); j++) {
-                                    View tab = menuContainer.getChildAt(j);
-                                    
-                                    boolean isActive = tab.isSelected() || tab.isActivated();
-                                    try {
-                                        if (!isActive) isActive = (boolean) XposedHelpers.callMethod(tab, "isChecked");
-                                    } catch (Throwable ignored) {}
+                    // Replicate the Text
+                    TextView customText = new TextView(context);
+                    customText.setText(nativeText.getText());
+                    customText.setTextSize(11f); // Smaller text, iOS style
+                    customText.setPadding(0, 8, 0, 0);
+                    customText.setGravity(Gravity.CENTER);
 
-                                    if (isActive) {
-                                        float myLeft = this.getLeft();
-                                        float myTop = this.getTop();
-                                        float tabCx = menuContainer.getLeft() + tab.getLeft() + (tab.getWidth() / 2.0f);
-                                        float tabCy = menuContainer.getTop() + tab.getTop() + (tab.getHeight() / 2.0f);
-                                        
-                                        float localCx = tabCx - myLeft;
-                                        float localCy = tabCy - myTop;
+                    // Assemble the Tab
+                    customTab.addView(iconContainer);
+                    customTab.addView(customText);
 
-                                        // Size of the iOS indicator
-                                        float pillW = tab.getWidth() * 0.40f;
-                                        float pillH = tab.getHeight() * 0.35f;
-                                        
-                                        RectF pillRect = new RectF(localCx - pillW, localCy - pillH, localCx + pillW, localCy + pillH);
-                                        canvas.drawRoundRect(pillRect, pillH, pillH, indicatorPaint);
-                                    }
-                                }
-                            }
-                        }
-                    } catch (Exception e) {
-                        Log.e("HyperBounce", "Indicator logic failed: ", e);
-                    }
+                    // The Puppeteer Listener
+                    customTab.setOnClickListener(v -> {
+                        // Switch Fragments
+                        stockTab.performClick();
+                        // Update our UI states
+                        currentActiveIndex = tabIndex;
+                        updateTabStates();
+                    });
+
+                    customTabs.add(customTab);
+                    customBar.addView(customTab);
                 }
-            };
+            }
 
-            glassOverlay.setTag("HyperGlassOverlay");
-            glassOverlay.setClickable(false);
-            glassOverlay.setFocusable(false);
-
-            FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, 
-                    ViewGroup.LayoutParams.MATCH_PARENT
+            // 4. Inject into the Master Window
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
             );
-            flp.setMargins(48, 12, 48, 36);
+            lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+            lp.bottomMargin = 70; // Float height
 
-            realBar.addView(glassOverlay, 0, flp);
+            rootView.addView(customBar, lp);
+            
+            // Initialize the starting UI state
+            updateTabStates();
 
         } catch (Exception e) {
-            XposedBridge.log("[HyperBounce] FATAL ERROR during execution: " + Log.getStackTraceString(e));
+            XposedBridge.log("[HyperBounce] Heist Failed: " + e.getMessage());
         }
+    }
+
+    // --- State Manager (The Page Indicator) ---
+    private void updateTabStates() {
+        for (int i = 0; i < customTabs.size(); i++) {
+            LinearLayout tab = customTabs.get(i);
+            LinearLayout iconContainer = (LinearLayout) tab.getChildAt(0);
+            ImageView icon = (ImageView) iconContainer.getChildAt(0);
+            TextView text = (TextView) tab.getChildAt(1);
+
+            if (i == currentActiveIndex) {
+                // ACTIVE STATE: Bright White + Subtle Pill Highlight
+                icon.setColorFilter(Color.parseColor("#FFFFFF"));
+                text.setTextColor(Color.parseColor("#FFFFFF"));
+                
+                GradientDrawable activeHighlight = new GradientDrawable();
+                activeHighlight.setShape(GradientDrawable.RECTANGLE);
+                activeHighlight.setCornerRadius(40f);
+                activeHighlight.setColor(Color.parseColor("#2A3942")); // Lighter highlight bubble
+                iconContainer.setBackground(activeHighlight);
+            } else {
+                // INACTIVE STATE: Dim Grey + No Highlight
+                icon.setColorFilter(Color.parseColor("#888888"));
+                text.setTextColor(Color.parseColor("#888888"));
+                iconContainer.setBackground(null);
+            }
+        }
+    }
+
+    // --- Recursive View Stealers ---
+    private ImageView findImageView(ViewGroup group) {
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View v = group.getChildAt(i);
+            if (v instanceof ImageView) return (ImageView) v;
+            if (v instanceof ViewGroup) {
+                ImageView iv = findImageView((ViewGroup) v);
+                if (iv != null) return iv;
+            }
+        }
+        return null;
+    }
+
+    private TextView findTextView(ViewGroup group) {
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View v = group.getChildAt(i);
+            if (v instanceof TextView) return (TextView) v;
+            if (v instanceof ViewGroup) {
+                TextView tv = findTextView((ViewGroup) v);
+                if (tv != null) return tv;
+            }
+        }
+        return null;
     }
 }
