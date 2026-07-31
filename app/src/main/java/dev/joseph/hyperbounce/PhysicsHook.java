@@ -3,7 +3,6 @@ package dev.joseph.hyperbounce;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.util.Log;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
@@ -35,17 +34,34 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             return;
         }
 
-        XposedBridge.hookAllMethods(wdsBottomBarClass, "dispatchTouchEvent", new XC_MethodHook() {
+        XposedBridge.log("[HyperBounce-Recon] WDSBottomBar found! Hooking constructors...");
+
+        // Constructor is guaranteed to exist
+        XposedBridge.hookAllConstructors(wdsBottomBarClass, new XC_MethodHook() {
             @Override
-            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                MotionEvent event = (MotionEvent) param.args[0];
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                if (hasLogged) return;
                 
-                // Only run the dump once per app launch on the first tap to prevent log flooding
-                if (event.getActionMasked() == MotionEvent.ACTION_DOWN && !hasLogged) {
-                    hasLogged = true;
-                    View bar = (View) param.thisObject;
-                    executeDeepRecon(bar);
-                }
+                final View bar = (View) param.thisObject;
+                XposedBridge.log("[HyperBounce-Recon] Constructor hooked! Waiting for view to attach...");
+
+                bar.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                    @Override
+                    public void onViewAttachedToWindow(View v) {
+                        if (hasLogged) return;
+                        hasLogged = true;
+                        
+                        XposedBridge.log("[HyperBounce-Recon] View Attached! Running deep scan in 2 seconds...");
+                        
+                        // Wait 2 seconds for WhatsApp to fully paint the black background and green indicator
+                        bar.postDelayed(() -> {
+                            executeDeepRecon(bar);
+                        }, 2000);
+                    }
+
+                    @Override
+                    public void onViewDetachedFromWindow(View v) {}
+                });
             }
         });
     }
@@ -79,11 +95,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
             // 4. Dump Class Methods to find the Green Indicator / Background setters
             XposedBridge.log("\n--- REFLECTION: SUSPICIOUS METHODS IN WDSBottomBar ---");
-            Method[] methods = targetBar.getClass().getMethods();
+            Method[] methods = targetBar.getClass().getDeclaredMethods();
             for (Method m : methods) {
                 String name = m.getName().toLowerCase();
                 // Filter only for methods related to backgrounds, indicators, or colors
-                if (name.contains("indicator") || name.contains("background") || name.contains("color") || name.contains("tint")) {
+                if (name.contains("indicator") || name.contains("background") || name.contains("color") || name.contains("tint") || name.contains("setitem")) {
                     XposedBridge.log("Method Found: " + m.getName() + " | Params: " + m.getParameterTypes().length);
                 }
             }
@@ -112,7 +128,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         int width = v.getWidth();
         int height = v.getHeight();
         
-        // Extract layout parameters
         String lpInfo = "null";
         if (v.getLayoutParams() != null) {
             lpInfo = v.getLayoutParams().getClass().getSimpleName();
@@ -122,7 +137,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             }
         }
 
-        // Extract background details and exact color hex codes
         String bgInfo = "null";
         Drawable bg = v.getBackground();
         if (bg != null) {
@@ -130,7 +144,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             if (bg instanceof ColorDrawable) {
                 bgInfo += String.format(" (Hex: #%08X)", ((ColorDrawable) bg).getColor());
             } else {
-                bgInfo += " (Complex Drawable - Might be MaterialShapeDrawable)";
+                bgInfo += " (Complex Drawable)";
             }
         }
 
