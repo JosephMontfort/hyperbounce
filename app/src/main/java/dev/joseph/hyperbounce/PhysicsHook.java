@@ -5,9 +5,12 @@ import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.ViewTreeObserver;
@@ -31,8 +34,14 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private List<View> stockTabs = new ArrayList<>();
     private int currentActiveIndex = 0;
     private boolean isDarkMode = true;
-    private float swipeStartX = 0f;
-    private static final float SWIPE_THRESHOLD = 80f; // Distance threshold in px for pull gesture
+
+    // Gesture & Long-press state tracking
+    private boolean isDragging = false;
+    private int initialTouchIndex = -1;
+    private float touchStartX = 0f;
+    private float touchStartY = 0f;
+    private final Handler longPressHandler = new Handler(Looper.getMainLooper());
+    private Runnable longPressRunnable = null;
 
     @Override
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
@@ -41,15 +50,30 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         Class<?> wdsBottomBarClass = XposedHelpers.findClassIfExists("com.whatsapp.ui.wds.components.bottombar.WDSBottomBar", lpparam.classLoader);
         if (wdsBottomBarClass == null) return;
 
-        // 1. CLASS-LEVEL NUKE: Intercept setVisibility directly to eliminate startup flash
+        // 1. CLASS-LEVEL NUKE: Prevent stock bar flash
         XposedBridge.hookAllMethods(wdsBottomBarClass, "setVisibility", new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                param.args[0] = View.GONE; // Always force GONE before drawing
+                param.args[0] = View.GONE;
             }
         });
 
-        // 2. CONSTRUCTOR HOOK: Synchronous pre-render execution
+        // 2. THEME CHANGE RE-INJECTION HOOK: Fix bar disappearance on light/dark mode switch
+        XposedBridge.hookAllMethods(wdsBottomBarClass, "onConfigurationChanged", new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                ViewGroup stockBar = (ViewGroup) param.thisObject;
+                ViewGroup rootView = (ViewGroup) stockBar.getRootView();
+                
+                View existingBar = rootView.findViewWithTag("HyperFloatingBar");
+                if (existingBar != null) {
+                    rootView.removeView(existingBar); // Clean up old themed bar
+                }
+                executeUIHeist(stockBar); // Re-inject freshly themed bar
+            }
+        });
+
+        // 3. CONSTRUCTOR HOOK: Initial load
         XposedBridge.hookAllConstructors(wdsBottomBarClass, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -59,16 +83,13 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 stockBar.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
                     @Override
                     public void onViewAttachedToWindow(View v) {
-                        // Immediately hide parent wrapper without delay
                         ViewParent parent = stockBar.getParent();
                         if (parent instanceof View) {
                             ((View) parent).setVisibility(View.GONE);
                         }
 
-                        // Execute UI Heist synchronously (NO post() delay)
                         executeUIHeist(stockBar);
 
-                        // Backup PreDraw Sentinel
                         stockBar.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
                             @Override
                             public boolean onPreDraw() {
@@ -94,22 +115,24 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private void executeUIHeist(ViewGroup stockBar) {
         try {
             ViewGroup rootView = (ViewGroup) stockBar.getRootView();
-            if (rootView.findViewWithTag("HyperFloatingBar") != null) return; // Prevent duplicate injection
+            View existingBar = rootView.findViewWithTag("HyperFloatingBar");
+            if (existingBar != null) {
+                rootView.removeView(existingBar); // Avoid duplicates during theme switches
+            }
 
             Context context = stockBar.getContext();
             customTabs.clear();
             stockTabs.clear();
 
-            // --- THEME DETECTION & TRANSLUCENT PALETTE ---
+            // --- THEME DETECTION & PALETTE ---
             int uiMode = context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
             isDarkMode = (uiMode == Configuration.UI_MODE_NIGHT_YES);
 
-            // Translucent Backgrounds (75% Alpha)
             String bgColor = isDarkMode ? "#C01F2C34" : "#C0FFFFFF";
             String strokeColor = isDarkMode ? "#40FFFFFF" : "#30000000";
 
-            // Build the Translucent Custom Pill
-            LinearLayout customBar = new LinearLayout(context);
+            // --- WIDER BAR CONTAINER (88% Screen Width) ---
+            final LinearLayout customBar = new LinearLayout(context);
             customBar.setTag("HyperFloatingBar");
             customBar.setOrientation(LinearLayout.HORIZONTAL);
             customBar.setGravity(Gravity.CENTER);
@@ -124,13 +147,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             customBar.setBackground(pillShape);
             customBar.setElevation(80f);
 
-            // Extract Native Icons & Setup Custom Tabs
+            // Extract Stock Tabs & Build Custom Weighted Tabs
             ViewGroup menuContainer = (ViewGroup) stockBar.getChildAt(0);
             if (menuContainer != null) {
                 int tabCount = menuContainer.getChildCount();
 
                 for (int i = 0; i < tabCount; i++) {
-                    final int tabIndex = i;
                     View stockTab = menuContainer.getChildAt(i);
                     stockTabs.add(stockTab);
 
@@ -139,11 +161,18 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     if (nativeIcon == null || nativeText == null) continue;
 
-                    // Custom Tab Layout (Indicator wraps BOTH Icon and Text)
+                    // Tab Layout with Equal Weighting (Prevents Text Truncation)
                     LinearLayout customTab = new LinearLayout(context);
                     customTab.setOrientation(LinearLayout.VERTICAL);
                     customTab.setGravity(Gravity.CENTER);
-                    customTab.setPadding(35, 18, 35, 18);
+                    
+                    LinearLayout.LayoutParams tabLp = new LinearLayout.LayoutParams(
+                            0, 
+                            ViewGroup.LayoutParams.WRAP_CONTENT, 
+                            1.0f // Equal distribution across the 88% bar width
+                    );
+                    customTab.setLayoutParams(tabLp);
+                    customTab.setPadding(10, 16, 10, 16);
 
                     ImageView customIcon = new ImageView(context);
                     Drawable clonedDrawable = nativeIcon.getDrawable().getConstantState().newDrawable().mutate();
@@ -151,60 +180,116 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     TextView customText = new TextView(context);
                     customText.setText(nativeText.getText());
-                    customText.setTextSize(11f);
-                    customText.setPadding(0, 6, 0, 0);
+                    customText.setTextSize(10.5f);
+                    customText.setSingleLine(true);
                     customText.setGravity(Gravity.CENTER);
 
-                    customTab.addView(customIcon, new LinearLayout.LayoutParams(60, 60));
+                    customTab.addView(customIcon, new LinearLayout.LayoutParams(56, 56));
                     customTab.addView(customText);
-
-                    // --- TAP & HORIZONTAL PULL GESTURE LISTENER ---
-                    customTab.setOnTouchListener((v, event) -> {
-                        switch (event.getAction()) {
-                            case MotionEvent.ACTION_DOWN:
-                                swipeStartX = event.getRawX();
-                                break;
-                            case MotionEvent.ACTION_MOVE:
-                                float deltaX = event.getRawX() - swipeStartX;
-                                if (deltaX < -SWIPE_THRESHOLD) { // Pulled Left -> Next Tab
-                                    if (currentActiveIndex < customTabs.size() - 1) {
-                                        switchToTab(currentActiveIndex + 1);
-                                        swipeStartX = event.getRawX();
-                                    }
-                                    return true;
-                                } else if (deltaX > SWIPE_THRESHOLD) { // Pulled Right -> Previous Tab
-                                    if (currentActiveIndex > 0) {
-                                        switchToTab(currentActiveIndex - 1);
-                                        swipeStartX = event.getRawX();
-                                    }
-                                    return true;
-                                }
-                                break;
-                        }
-                        return false; // Allow standard click if not swiped
-                    });
-
-                    customTab.setOnClickListener(v -> switchToTab(tabIndex));
 
                     customTabs.add(customTab);
                     customBar.addView(customTab);
                 }
             }
 
-            // Inject into Root Window
+            // --- LONG PRESS & PULL-TO-SWITCH GESTURE ENGINE ---
+            customBar.setOnTouchListener((v, event) -> {
+                float rawX = event.getRawX();
+                float rawY = event.getRawY();
+
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        touchStartX = rawX;
+                        touchStartY = rawY;
+                        isDragging = false;
+                        initialTouchIndex = calculateTabIndexFromX(rawX, customBar);
+
+                        if (longPressRunnable != null) longPressHandler.removeCallbacks(longPressRunnable);
+                        longPressRunnable = () -> {
+                            isDragging = true;
+                            if (initialTouchIndex != -1) {
+                                currentActiveIndex = initialTouchIndex;
+                                updateTabStates();
+                            }
+                        };
+                        longPressHandler.postDelayed(longPressRunnable, ViewConfiguration.getLongPressTimeout());
+                        return true;
+
+                    case MotionEvent.ACTION_MOVE:
+                        float dx = Math.abs(rawX - touchStartX);
+                        float dy = Math.abs(rawY - touchStartY);
+
+                        if (dx > 25 || dy > 25) {
+                            if (!isDragging && dx > dy) {
+                                isDragging = true;
+                                if (longPressRunnable != null) longPressHandler.removeCallbacks(longPressRunnable);
+                            }
+                        }
+
+                        if (isDragging) {
+                            int hoverIdx = calculateTabIndexFromX(rawX, customBar);
+                            if (hoverIdx != -1 && hoverIdx != currentActiveIndex) {
+                                currentActiveIndex = hoverIdx;
+                                updateTabStates(); // Live slide indicator follow finger
+                            }
+                        }
+                        return true;
+
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        if (longPressRunnable != null) longPressHandler.removeCallbacks(longPressRunnable);
+                        if (isDragging) {
+                            int releaseIdx = calculateTabIndexFromX(rawX, customBar);
+                            if (releaseIdx != -1) {
+                                switchToTab(releaseIdx);
+                            }
+                            isDragging = false;
+                        } else {
+                            // Instant Tap Switch
+                            int tapIdx = calculateTabIndexFromX(rawX, customBar);
+                            if (tapIdx != -1) {
+                                switchToTab(tapIdx);
+                            }
+                        }
+                        return true;
+                }
+                return false;
+            });
+
+            // Layout Parameters (88% Width & Raised Float Position)
+            int displayWidth = context.getResources().getDisplayMetrics().widthPixels;
+            int barWidth = (int) (displayWidth * 0.88f);
+
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    barWidth,
                     ViewGroup.LayoutParams.WRAP_CONTENT
             );
             lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-            lp.bottomMargin = 70;
+            lp.bottomMargin = 110; // Lifted up higher above navigation bar / FAB
 
             rootView.addView(customBar, lp);
             updateTabStates();
 
         } catch (Exception e) {
-            XposedBridge.log("[HyperBounce] UI Heist Exception: " + e.getMessage());
+            XposedBridge.log("[HyperBounce] Heist Exception: " + e.getMessage());
         }
+    }
+
+    private int calculateTabIndexFromX(float rawX, LinearLayout customBar) {
+        int[] location = new int[2];
+        customBar.getLocationOnScreen(location);
+        float barLeft = location[0];
+        float barWidth = customBar.getWidth();
+        if (barWidth <= 0) return -1;
+
+        float relativeX = rawX - barLeft;
+        if (relativeX < 0 || relativeX > barWidth) return -1;
+
+        int count = customTabs.size();
+        if (count == 0) return -1;
+
+        int idx = (int) ((relativeX / barWidth) * count);
+        return Math.max(0, Math.min(count - 1, idx));
     }
 
     private void switchToTab(int tabIndex) {
@@ -215,7 +300,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         }
     }
 
-    // --- STATE MANAGER (Indicator Wraps Icon + Text) ---
     private void updateTabStates() {
         String activeHighlightColor = isDarkMode ? "#C02A3942" : "#C0E0E0E0";
         String activeTextColor = isDarkMode ? "#FFFFFF" : "#111B21";
@@ -230,10 +314,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 icon.setColorFilter(Color.parseColor(activeTextColor));
                 text.setTextColor(Color.parseColor(activeTextColor));
 
-                // Active Pill Highlight wrapping the entire tab (Icon + Text)
                 GradientDrawable activeHighlight = new GradientDrawable();
                 activeHighlight.setShape(GradientDrawable.RECTANGLE);
-                activeHighlight.setCornerRadius(50f);
+                activeHighlight.setCornerRadius(40f);
                 activeHighlight.setColor(Color.parseColor(activeHighlightColor));
                 tab.setBackground(activeHighlight);
             } else {
