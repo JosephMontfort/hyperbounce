@@ -10,11 +10,17 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
@@ -80,7 +86,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                             }
                         })
                     }
-
                     override fun onViewDetachedFromWindow(v: View) {}
                 })
             }
@@ -89,7 +94,7 @@ class PhysicsHook : IXposedHookLoadPackage {
 
     private fun executeUIHeist(stockBar: ViewGroup) {
         try {
-            val rootView = stockBar.rootView as ViewGroup
+            val rootView = stockBar.rootView as View
             if (rootView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
             val context = stockBar.context
@@ -104,11 +109,18 @@ class PhysicsHook : IXposedHookLoadPackage {
                     gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                 }
                 
-                // Construct fake lifecycle required to run Jetpack Compose outside an Activity
+                // Construct fake lifecycle and inject into WhatsApp's view tree
                 val lifecycleOwner = FakeLifecycleOwner()
                 lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+                
+                if (rootView.findViewTreeLifecycleOwner() == null) rootView.setViewTreeLifecycleOwner(lifecycleOwner)
+                if (rootView.findViewTreeSavedStateRegistryOwner() == null) rootView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+                if (rootView.findViewTreeViewModelStoreOwner() == null) rootView.setViewTreeViewModelStoreOwner(lifecycleOwner)
+                
                 this.setViewTreeLifecycleOwner(lifecycleOwner)
                 this.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+                this.setViewTreeViewModelStoreOwner(lifecycleOwner)
+
                 lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
                 lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
@@ -117,16 +129,17 @@ class PhysicsHook : IXposedHookLoadPackage {
                 }
             }
 
-            rootView.addView(composeView)
+            (rootView as ViewGroup).addView(composeView)
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Heist Exception: " + e.message)
         }
     }
 }
 
-class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner {
+class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
     val registry = LifecycleRegistry(this)
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
+    private val store = ViewModelStore()
 
     init {
         savedStateRegistryController.performRestore(null)
@@ -134,4 +147,5 @@ class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner {
 
     override val lifecycle: Lifecycle get() = registry
     override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
+    override val viewModelStore: ViewModelStore get() = store
 }
