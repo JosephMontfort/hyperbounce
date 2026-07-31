@@ -1,13 +1,13 @@
 package dev.joseph.hyperbounce;
 
 import android.content.Context;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewParent;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -25,7 +25,8 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 public class PhysicsHook implements IXposedHookLoadPackage {
 
     private List<LinearLayout> customTabs = new ArrayList<>();
-    private int currentActiveIndex = 0; // Default to Chats
+    private int currentActiveIndex = 0;
+    private boolean isDarkMode = true;
 
     @Override
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
@@ -34,11 +35,38 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         Class<?> wdsBottomBarClass = XposedHelpers.findClassIfExists("com.whatsapp.ui.wds.components.bottombar.WDSBottomBar", lpparam.classLoader);
         if (wdsBottomBarClass == null) return;
 
+        // 1. The Ultimate Nuke: Intercept Layout Calculations
+        XposedBridge.hookAllMethods(wdsBottomBarClass, "onMeasure", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                View stockBar = (View) param.thisObject;
+                
+                // Force the stock bar height to 0
+                ViewGroup.LayoutParams lp = stockBar.getLayoutParams();
+                if (lp != null && lp.height != 0) {
+                    lp.height = 0;
+                    stockBar.setLayoutParams(lp);
+                }
+                stockBar.setVisibility(View.GONE);
+
+                // Force the parent container height to 0
+                View parent = (View) stockBar.getParent();
+                if (parent != null) {
+                    ViewGroup.LayoutParams parentLp = parent.getLayoutParams();
+                    if (parentLp != null && parentLp.height != 0) {
+                        parentLp.height = 0;
+                        parent.setLayoutParams(parentLp);
+                    }
+                    parent.setVisibility(View.GONE);
+                }
+            }
+        });
+
+        // 2. UI Heist Trigger
         XposedBridge.hookAllConstructors(wdsBottomBarClass, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 final ViewGroup stockBar = (ViewGroup) param.thisObject;
-                
                 stockBar.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
                     @Override
                     public void onViewAttachedToWindow(View v) {
@@ -53,38 +81,36 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
     private void executeUIHeist(ViewGroup stockBar) {
         try {
-            // 1. Space Reclamation (Nuke the stock wrapper)
-            ViewParent parent = stockBar.getParent();
-            if (parent instanceof View) {
-                ((View) parent).setVisibility(View.GONE);
-            }
-
             ViewGroup rootView = (ViewGroup) stockBar.getRootView();
             if (rootView.findViewWithTag("HyperFloatingBar") != null) return; // Prevent duplicates
 
             Context context = stockBar.getContext();
-            customTabs.clear(); // Reset on rebuild
+            customTabs.clear();
 
-            // 2. Build the KernelSU-style Floating Pill
+            // --- THEME DETECTION ---
+            int uiMode = context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+            isDarkMode = (uiMode == Configuration.UI_MODE_NIGHT_YES);
+
+            String bgColor = isDarkMode ? "#1F2C34" : "#FFFFFF";
+            String strokeColor = isDarkMode ? "#374248" : "#E0E0E0";
+
+            // Build the Custom Pill
             LinearLayout customBar = new LinearLayout(context);
             customBar.setTag("HyperFloatingBar");
             customBar.setOrientation(LinearLayout.HORIZONTAL);
             customBar.setGravity(Gravity.CENTER);
-            
-            // Block stray touches
             customBar.setClickable(true);
             customBar.setFocusable(true);
 
-            // Dark slate pill background
             GradientDrawable pillShape = new GradientDrawable();
             pillShape.setShape(GradientDrawable.RECTANGLE);
-            pillShape.setCornerRadius(100f); // Perfect rounded pill
-            pillShape.setColor(Color.parseColor("#1F2C34"));
-            pillShape.setStroke(2, Color.parseColor("#374248")); // Subtle border
+            pillShape.setCornerRadius(100f);
+            pillShape.setColor(Color.parseColor(bgColor));
+            pillShape.setStroke(2, Color.parseColor(strokeColor));
             customBar.setBackground(pillShape);
             customBar.setElevation(80f);
 
-            // 3. Extract and Inject (The Ram Heist)
+            // Extract Native Icons & Inject
             ViewGroup menuContainer = (ViewGroup) stockBar.getChildAt(0);
             if (menuContainer != null) {
                 int tabCount = menuContainer.getChildCount();
@@ -93,46 +119,36 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     final int tabIndex = i;
                     View stockTab = menuContainer.getChildAt(i);
                     
-                    // Steal the native views
                     ImageView nativeIcon = findImageView((ViewGroup) stockTab);
                     TextView nativeText = findTextView((ViewGroup) stockTab);
 
                     if (nativeIcon == null || nativeText == null) continue;
 
-                    // Create Custom Vertical Tab (Icon stacked above Text)
                     LinearLayout customTab = new LinearLayout(context);
                     customTab.setOrientation(LinearLayout.VERTICAL);
                     customTab.setGravity(Gravity.CENTER);
                     customTab.setPadding(35, 20, 35, 20);
 
-                    // Replicate the Icon
                     ImageView customIcon = new ImageView(context);
-                    // Clone the drawable so it doesn't break WhatsApp's rendering
                     Drawable clonedDrawable = nativeIcon.getDrawable().getConstantState().newDrawable().mutate();
                     customIcon.setImageDrawable(clonedDrawable);
                     
-                    // Style the Icon Container (For the active indicator highlight)
                     LinearLayout iconContainer = new LinearLayout(context);
                     iconContainer.setGravity(Gravity.CENTER);
                     iconContainer.setPadding(20, 10, 20, 10);
-                    iconContainer.addView(customIcon, new LinearLayout.LayoutParams(65, 65)); // Icon sizing
+                    iconContainer.addView(customIcon, new LinearLayout.LayoutParams(65, 65));
 
-                    // Replicate the Text
                     TextView customText = new TextView(context);
                     customText.setText(nativeText.getText());
-                    customText.setTextSize(11f); // Smaller text, iOS style
+                    customText.setTextSize(11f);
                     customText.setPadding(0, 8, 0, 0);
                     customText.setGravity(Gravity.CENTER);
 
-                    // Assemble the Tab
                     customTab.addView(iconContainer);
                     customTab.addView(customText);
 
-                    // The Puppeteer Listener
                     customTab.setOnClickListener(v -> {
-                        // Switch Fragments
                         stockTab.performClick();
-                        // Update our UI states
                         currentActiveIndex = tabIndex;
                         updateTabStates();
                     });
@@ -142,17 +158,15 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 }
             }
 
-            // 4. Inject into the Master Window
+            // Inject into Window
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
             );
             lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-            lp.bottomMargin = 70; // Float height
+            lp.bottomMargin = 70;
 
             rootView.addView(customBar, lp);
-            
-            // Initialize the starting UI state
             updateTabStates();
 
         } catch (Exception e) {
@@ -160,8 +174,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         }
     }
 
-    // --- State Manager (The Page Indicator) ---
     private void updateTabStates() {
+        // Theme-aware indicator colors
+        String activeHighlightColor = isDarkMode ? "#2A3942" : "#F0F2F5";
+        String activeTextColor = isDarkMode ? "#FFFFFF" : "#111B21";
+        String inactiveTextColor = isDarkMode ? "#888888" : "#5E6C75";
+
         for (int i = 0; i < customTabs.size(); i++) {
             LinearLayout tab = customTabs.get(i);
             LinearLayout iconContainer = (LinearLayout) tab.getChildAt(0);
@@ -169,25 +187,22 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             TextView text = (TextView) tab.getChildAt(1);
 
             if (i == currentActiveIndex) {
-                // ACTIVE STATE: Bright White + Subtle Pill Highlight
-                icon.setColorFilter(Color.parseColor("#FFFFFF"));
-                text.setTextColor(Color.parseColor("#FFFFFF"));
+                icon.setColorFilter(Color.parseColor(activeTextColor));
+                text.setTextColor(Color.parseColor(activeTextColor));
                 
                 GradientDrawable activeHighlight = new GradientDrawable();
                 activeHighlight.setShape(GradientDrawable.RECTANGLE);
                 activeHighlight.setCornerRadius(40f);
-                activeHighlight.setColor(Color.parseColor("#2A3942")); // Lighter highlight bubble
+                activeHighlight.setColor(Color.parseColor(activeHighlightColor));
                 iconContainer.setBackground(activeHighlight);
             } else {
-                // INACTIVE STATE: Dim Grey + No Highlight
-                icon.setColorFilter(Color.parseColor("#888888"));
-                text.setTextColor(Color.parseColor("#888888"));
+                icon.setColorFilter(Color.parseColor(inactiveTextColor));
+                text.setTextColor(Color.parseColor(inactiveTextColor));
                 iconContainer.setBackground(null);
             }
         }
     }
 
-    // --- Recursive View Stealers ---
     private ImageView findImageView(ViewGroup group) {
         for (int i = 0; i < group.getChildCount(); i++) {
             View v = group.getChildAt(i);
