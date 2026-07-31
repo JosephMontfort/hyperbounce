@@ -1,11 +1,14 @@
 package dev.joseph.hyperbounce;
 
 import android.content.Context;
+import android.content.res.Configuration;
+import android.graphics.Color;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewParent;
 import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -37,23 +40,20 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 final ViewGroup stockBar = (ViewGroup) param.thisObject;
-                stockBar.setAlpha(0f);
 
                 stockBar.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
                     @Override
                     public void onViewAttachedToWindow(View v) {
                         stockBar.post(() -> executeUIHeist(stockBar));
 
-                        stockBar.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
-                            @Override
-                            public boolean onPreDraw() {
-                                if (stockBar.getVisibility() != View.GONE) stockBar.setVisibility(View.GONE);
-                                ViewParent p = stockBar.getParent();
-                                if (p instanceof View && ((View) p).getVisibility() != View.GONE) {
-                                    ((View) p).setVisibility(View.GONE);
-                                }
-                                return true;
+                        // Lock down the stock bar's background and native children so WhatsApp can't revert it
+                        stockBar.getViewTreeObserver().addOnPreDrawListener(() -> {
+                            ViewGroup menuContainer = (ViewGroup) stockBar.getChildAt(0);
+                            if (menuContainer != null && menuContainer.getVisibility() != View.GONE) {
+                                menuContainer.setVisibility(View.GONE);
                             }
+                            stockBar.setBackgroundColor(Color.TRANSPARENT);
+                            return true;
                         });
                     }
                     @Override
@@ -65,16 +65,25 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
     private void executeUIHeist(ViewGroup stockBar) {
         try {
-            ViewGroup rootView = (ViewGroup) stockBar.getRootView();
-            if (rootView.findViewWithTag("HyperFloatingBar") != null) return; 
+            if (stockBar.findViewWithTag("HyperGlassContainer") != null) return; 
 
             Context context = stockBar.getContext();
+            float density = context.getResources().getDisplayMetrics().density;
+            
+            // Allow our pill to stretch outside the bounds natively
+            stockBar.setClipChildren(false);
+            stockBar.setClipToPadding(false);
+            ViewGroup parent = (ViewGroup) stockBar.getParent();
+            if (parent != null) {
+                parent.setClipChildren(false);
+                parent.setClipToPadding(false);
+            }
+
+            // Extract Tabs
             List<ExtractedTab> extractedTabs = new ArrayList<>();
             ViewGroup menuContainer = (ViewGroup) stockBar.getChildAt(0);
-            
             if (menuContainer != null) {
-                int tabCount = menuContainer.getChildCount();
-                for (int i = 0; i < tabCount; i++) {
+                for (int i = 0; i < menuContainer.getChildCount(); i++) {
                     View stockTab = menuContainer.getChildAt(i);
                     ImageView nativeIcon = findImageView((ViewGroup) stockTab);
                     TextView nativeText = findTextView((ViewGroup) stockTab);
@@ -82,30 +91,61 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     
                     Drawable clonedDrawable = nativeIcon.getDrawable().getConstantState().newDrawable().mutate();
                     String label = nativeText.getText().toString();
-                    
                     extractedTabs.add(new ExtractedTab(label, clonedDrawable, i, stockTab));
                 }
             }
 
-            // PASSING ROOT VIEW: Pipe the extracted tabs and the DecorView into the Jetpack Compose Bridge
-            View composeFloatingBar = ComposeBridge.createFloatingBar(context, rootView, extractedTabs, index -> {
+            // --- MASTER CONTAINER ---
+            FrameLayout container = new FrameLayout(context);
+            container.setTag("HyperGlassContainer");
+            container.setClipChildren(false);
+
+            // --- 1. THE NATIVE GLASS BLUR LAYER ---
+            View glassView = new View(context);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setShape(GradientDrawable.RECTANGLE);
+            bg.setCornerRadius(1000f);
+            
+            boolean isDark = (context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+            // Highly transparent base to let the blur shine
+            bg.setColor(Color.parseColor(isDark ? "#331F2C34" : "#33FFFFFF"));
+            bg.setStroke(2, Color.parseColor(isDark ? "#20FFFFFF" : "#15000000"));
+            glassView.setBackground(bg);
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                glassView.setBackgroundBlurRadius(80); // NATIVE HARDWARE BLUR
+            }
+
+            // Fixed Premium Width (260dp)
+            int barWidth = (int)(260 * density);
+            int glassHeight = (int)(56 * density);
+            
+            FrameLayout.LayoutParams glassLp = new FrameLayout.LayoutParams(barWidth, glassHeight);
+            glassLp.gravity = Gravity.CENTER;
+            container.addView(glassView, glassLp);
+
+            // --- 2. THE COMPOSE UI LAYER (Overflows the Glass) ---
+            View composeFloatingBar = ComposeBridge.createFloatingBar(context, stockBar, extractedTabs, index -> {
                 extractedTabs.get(index).getStockView().performClick();
                 return Unit.INSTANCE;
             });
 
-            composeFloatingBar.setTag("HyperFloatingBar");
+            // Compose view is 80dp tall so the jelly pill can stretch vertically outside the 56dp glass
+            int composeHeight = (int)(80 * density);
+            FrameLayout.LayoutParams composeLp = new FrameLayout.LayoutParams(barWidth, composeHeight);
+            composeLp.gravity = Gravity.CENTER;
+            container.addView(composeFloatingBar, composeLp);
 
-            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+            // --- 3. INJECT INTO WHATSAPP ---
+            // Adding this inside WDSBottomBar means it inherently follows WhatsApp's visibility rules (e.g. Search screen)
+            ViewGroup.LayoutParams containerLp = new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
+                    (int)(100 * density)
             );
-            lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-            lp.bottomMargin = 130;
-
-            rootView.addView(composeFloatingBar, lp);
+            stockBar.addView(container, containerLp);
 
         } catch (Exception e) {
-            XposedBridge.log("[HyperBounce] Compose Injection Exception: " + e.getMessage());
+            XposedBridge.log("[HyperBounce] Heist Exception: " + e.getMessage());
         }
     }
 
