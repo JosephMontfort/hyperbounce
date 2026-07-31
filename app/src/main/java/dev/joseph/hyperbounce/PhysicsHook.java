@@ -8,10 +8,10 @@ import android.graphics.RenderEffect;
 import android.graphics.RuntimeShader;
 import android.graphics.Shader;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
-import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 
@@ -97,18 +97,14 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "}";
 
     private void hookWhatsApp(ClassLoader classLoader) {
-        XposedBridge.log("[HyperBounce] Starting WDSBottomBar tracking...");
         Class<?> wdsBottomBarClass = XposedHelpers.findClassIfExists("com.whatsapp.ui.wds.components.bottombar.WDSBottomBar", classLoader);
-        if (wdsBottomBarClass == null) {
-            XposedBridge.log("[HyperBounce] ERROR: WDSBottomBar not found.");
-            return;
-        }
+        if (wdsBottomBarClass == null) return;
 
+        // 1. Hook Constructors to execute Rip & Float safely once
         XposedBridge.hookAllConstructors(wdsBottomBarClass, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 final ViewGroup realBar = (ViewGroup) param.thisObject;
-                XposedBridge.log("[HyperBounce] WDSBottomBar created.");
 
                 realBar.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
                     @Override
@@ -120,51 +116,77 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 });
             }
         });
+
+        // 2. Safe Continuous Strip (No loops!)
+        XposedBridge.hookAllMethods(wdsBottomBarClass, "dispatchDraw", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                ViewGroup realBar = (ViewGroup) param.thisObject;
+                
+                // Aggressively kill Material 3 Green Blob Indicator on every draw
+                try {
+                    XposedHelpers.callMethod(realBar, "setItemActiveIndicatorEnabled", false);
+                } catch (Throwable ignored) {}
+
+                // Strip the black box background
+                stripBackgroundsSafely(realBar);
+            }
+        });
+
+        // 3. Touch Triggered Indicator Redraw (Safe state update)
+        XposedBridge.hookAllMethods(wdsBottomBarClass, "dispatchTouchEvent", new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                ViewGroup realBar = (ViewGroup) param.thisObject;
+                View overlay = realBar.findViewWithTag("HyperGlassOverlay");
+                if (overlay != null) {
+                    // Tell overlay to update the iOS pill location ONLY when touched
+                    overlay.postInvalidate(); 
+                }
+            }
+        });
+    }
+
+    private void stripBackgroundsSafely(View v) {
+        if (v == null || "HyperGlassOverlay".equals(v.getTag())) return;
+        if (v.getBackground() != null) v.setBackground(null);
+        
+        if (v instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) v;
+            vg.setClipChildren(false);
+            vg.setClipToPadding(false);
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                stripBackgroundsSafely(vg.getChildAt(i));
+            }
+        }
     }
 
     private void executeRipAndFloat(ViewGroup realBar) {
         try {
-            if (realBar.findViewWithTag("HyperGlassOverlay") != null) {
-                return; // Already initialized
-            }
+            if (realBar.findViewWithTag("HyperGlassOverlay") != null) return;
 
-            XposedBridge.log("[HyperBounce] [STEP 1] Starting Rip & Float sequence...");
             ViewGroup parent = (ViewGroup) realBar.getParent();
             
             if (parent != null && parent.getClass().getName().contains("LinearLayout")) {
-                XposedBridge.log("[HyperBounce] [STEP 2] Ripping WDSBottomBar out of LinearLayout!");
                 int index = parent.indexOfChild(realBar);
                 parent.removeView(realBar);
 
-                // Add an invisible spacer so the chat list doesn't get covered by our floating bar
+                // Invisible spacer
                 View spacer = new View(realBar.getContext());
-                spacer.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 200));
+                spacer.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 220));
                 parent.addView(spacer, index);
 
-                XposedBridge.log("[HyperBounce] [STEP 3] Attaching to DecorView root...");
+                // Re-attach to absolute root
                 ViewGroup root = (ViewGroup) realBar.getRootView();
                 FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, 180
+                        ViewGroup.LayoutParams.MATCH_PARENT, 170
                 );
                 flp.gravity = android.view.Gravity.BOTTOM;
-                flp.setMargins(48, 0, 48, 60); // Side and bottom margins to make it float
+                flp.setMargins(48, 0, 48, 60); 
                 root.addView(realBar, flp);
             }
 
-            XposedBridge.log("[HyperBounce] [STEP 4] Nuking Stock Indicator via Reflection...");
-            try {
-                XposedHelpers.callMethod(realBar, "setItemActiveIndicatorEnabled", false);
-                XposedBridge.log("[HyperBounce] SUCCESS: setItemActiveIndicatorEnabled(false) called.");
-            } catch (Throwable t) {
-                XposedBridge.log("[HyperBounce] Reflection failed (Material 3 method missing): " + t.getMessage());
-            }
-
-            try {
-                XposedHelpers.callMethod(realBar, "setItemBackground", (Object) null);
-                XposedBridge.log("[HyperBounce] SUCCESS: setItemBackground(null) called.");
-            } catch (Throwable t) {}
-
-            XposedBridge.log("[HyperBounce] [STEP 5] Building Glass Overlay & Custom Indicator...");
+            // Build Glass Overlay & iOS Pill Indicator
             View glassOverlay = new View(realBar.getContext()) {
                 private final Paint glassBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
                 private final Paint indicatorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -172,8 +194,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 private final RenderEffect blurFx = RenderEffect.createBlurEffect(45.0f, 45.0f, Shader.TileMode.CLAMP);
 
                 {
-                    glassBgPaint.setColor(Color.parseColor("#30000000")); // Base tint
-                    indicatorPaint.setColor(Color.parseColor("#25FFFFFF")); // Custom iOS Pill Color
+                    glassBgPaint.setColor(Color.parseColor("#30000000")); // Deep glass tint
+                    indicatorPaint.setColor(Color.parseColor("#35FFFFFF")); // Custom iOS White Pill
                 }
 
                 @Override
@@ -209,36 +231,37 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 protected void onDraw(Canvas canvas) {
                     super.onDraw(canvas);
                     
-                    // Draw Glass Base
+                    // 1. Draw Glass Base
                     RectF rect = new RectF(0, 0, getWidth(), getHeight());
                     float radius = rect.height() / 2.0f;
                     canvas.drawRoundRect(rect, radius, radius, glassBgPaint);
 
-                    // Dynamically scan for active tab and draw custom iOS Pill
+                    // 2. Scan and Draw iOS Pill
                     try {
                         if (realBar.getChildCount() > 1) {
-                            ViewGroup menuContainer = (ViewGroup) realBar.getChildAt(1); // Overlay is 0, Menu is 1
+                            ViewGroup menuContainer = (ViewGroup) realBar.getChildAt(1); 
                             for (int i = 0; i < menuContainer.getChildCount(); i++) {
                                 View tab = menuContainer.getChildAt(i);
                                 
-                                // FORCE strip stock backgrounds
-                                if (tab.getBackground() != null) tab.setBackground(null);
-                                
                                 if (tab.isSelected()) {
-                                    // Calculate exact coordinates of the selected tab
                                     float left = tab.getLeft() + menuContainer.getLeft();
                                     float right = tab.getRight() + menuContainer.getLeft();
                                     float top = tab.getTop() + menuContainer.getTop();
                                     float bottom = tab.getBottom() + menuContainer.getTop();
 
-                                    // Shrink it down to a neat pill shape inside the glass
-                                    RectF pillRect = new RectF(left + 16, top + 16, right - 16, bottom - 16);
-                                    canvas.drawRoundRect(pillRect, 40f, 40f, indicatorPaint);
+                                    // Shape it into a perfect floating pill behind the icon
+                                    float pillHeight = (bottom - top) * 0.65f;
+                                    float pillWidth = (right - left) * 0.55f;
+                                    float cx = left + (right - left) / 2.0f;
+                                    float cy = top + (bottom - top) / 2.0f;
+                                    
+                                    RectF pillRect = new RectF(cx - pillWidth, cy - pillHeight, cx + pillWidth, cy + pillHeight);
+                                    canvas.drawRoundRect(pillRect, pillHeight, pillHeight, indicatorPaint);
                                 }
                             }
                         }
                     } catch (Exception e) {
-                        Log.e("HyperBounce", "Error drawing custom indicator: ", e);
+                        Log.e("HyperBounce", "Error drawing pill: ", e);
                     }
                 }
             };
@@ -252,35 +275,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     ViewGroup.LayoutParams.MATCH_PARENT
             );
             realBar.addView(glassOverlay, 0, flp);
-            XposedBridge.log("[HyperBounce] [STEP 6] Glass Overlay injected at index 0.");
-
-            // 7. Aggressive Continuous Background Stripping
-            // This ensures the black box NEVER comes back when WhatsApp redraws
-            realBar.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
-                @Override
-                public boolean onPreDraw() {
-                    // Force the overlay to redraw our custom indicator when tabs are clicked
-                    glassOverlay.invalidate();
-
-                    // Strip WDSBottomBar background
-                    if (realBar.getBackground() != null) realBar.setBackground(null);
-
-                    // Strip any lingering parent backgrounds
-                    ViewParent p = realBar.getParent();
-                    while (p instanceof ViewGroup) {
-                        ViewGroup vg = (ViewGroup) p;
-                        if (vg.getBackground() != null) vg.setBackground(null);
-                        vg.setClipChildren(false);
-                        p = vg.getParent();
-                    }
-                    return true;
-                }
-            });
-            XposedBridge.log("[HyperBounce] [STEP 7] Continuous Background Stripper enabled.");
 
         } catch (Exception e) {
-            XposedBridge.log("[HyperBounce] FATAL ERROR during execution:");
-            XposedBridge.log(Log.getStackTraceString(e));
+            XposedBridge.log("[HyperBounce] FATAL ERROR during execution: " + Log.getStackTraceString(e));
         }
     }
 }
