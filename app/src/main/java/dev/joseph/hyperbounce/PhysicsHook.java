@@ -6,8 +6,10 @@ import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -26,8 +28,11 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 public class PhysicsHook implements IXposedHookLoadPackage {
 
     private List<LinearLayout> customTabs = new ArrayList<>();
+    private List<View> stockTabs = new ArrayList<>();
     private int currentActiveIndex = 0;
     private boolean isDarkMode = true;
+    private float swipeStartX = 0f;
+    private static final float SWIPE_THRESHOLD = 80f; // Distance threshold in px for pull gesture
 
     @Override
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
@@ -36,55 +41,51 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         Class<?> wdsBottomBarClass = XposedHelpers.findClassIfExists("com.whatsapp.ui.wds.components.bottombar.WDSBottomBar", lpparam.classLoader);
         if (wdsBottomBarClass == null) return;
 
-        XposedBridge.log("[HyperBounce] Found WDSBottomBar! Hooking constructor...");
+        // 1. CLASS-LEVEL NUKE: Intercept setVisibility directly to eliminate startup flash
+        XposedBridge.hookAllMethods(wdsBottomBarClass, "setVisibility", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                param.args[0] = View.GONE; // Always force GONE before drawing
+            }
+        });
 
+        // 2. CONSTRUCTOR HOOK: Synchronous pre-render execution
         XposedBridge.hookAllConstructors(wdsBottomBarClass, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 final ViewGroup stockBar = (ViewGroup) param.thisObject;
-                XposedBridge.log("[HyperBounce] WDSBottomBar constructed. Attaching listeners...");
+                stockBar.setVisibility(View.GONE);
 
                 stockBar.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
                     @Override
                     public void onViewAttachedToWindow(View v) {
-                        XposedBridge.log("[HyperBounce] Stock bar attached to window. Executing Heist & Sentinel...");
-                        
-                        // 1. Execute the UI Heist
-                        stockBar.post(() -> executeUIHeist(stockBar));
+                        // Immediately hide parent wrapper without delay
+                        ViewParent parent = stockBar.getParent();
+                        if (parent instanceof View) {
+                            ((View) parent).setVisibility(View.GONE);
+                        }
 
-                        // 2. The Sentinel (Aggressive Nuke replacing onMeasure)
-                        // This fires every single time the screen updates.
+                        // Execute UI Heist synchronously (NO post() delay)
+                        executeUIHeist(stockBar);
+
+                        // Backup PreDraw Sentinel
                         stockBar.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
                             @Override
                             public boolean onPreDraw() {
-                                boolean stateChanged = false;
-
-                                // Force stock bar to vanish
                                 if (stockBar.getVisibility() != View.GONE) {
                                     stockBar.setVisibility(View.GONE);
-                                    stateChanged = true;
                                 }
-
-                                // Force stock bar wrapper to vanish (reclaims the space!)
-                                View parent = (View) stockBar.getParent();
-                                if (parent != null && parent.getVisibility() != View.GONE) {
-                                    parent.setVisibility(View.GONE);
-                                    stateChanged = true;
+                                ViewParent p = stockBar.getParent();
+                                if (p instanceof View && ((View) p).getVisibility() != View.GONE) {
+                                    ((View) p).setVisibility(View.GONE);
                                 }
-
-                                if (stateChanged) {
-                                    XposedBridge.log("[HyperBounce] AGGRESSIVE NUKE: WhatsApp tried to reveal the stock bar. Forced it GONE.");
-                                }
-
-                                return true; // Let the frame draw (with our bar hidden)
+                                return true;
                             }
                         });
                     }
-                    
+
                     @Override
-                    public void onViewDetachedFromWindow(View v) {
-                        XposedBridge.log("[HyperBounce] Stock bar detached.");
-                    }
+                    public void onViewDetachedFromWindow(View v) {}
                 });
             }
         });
@@ -93,21 +94,21 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private void executeUIHeist(ViewGroup stockBar) {
         try {
             ViewGroup rootView = (ViewGroup) stockBar.getRootView();
-            if (rootView.findViewWithTag("HyperFloatingBar") != null) {
-                XposedBridge.log("[HyperBounce] Custom bar already exists. Skipping duplicate injection.");
-                return;
-            }
+            if (rootView.findViewWithTag("HyperFloatingBar") != null) return; // Prevent duplicate injection
 
-            XposedBridge.log("[HyperBounce] Building Custom Theme-Aware Floating Bar...");
             Context context = stockBar.getContext();
             customTabs.clear();
+            stockTabs.clear();
 
+            // --- THEME DETECTION & TRANSLUCENT PALETTE ---
             int uiMode = context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
             isDarkMode = (uiMode == Configuration.UI_MODE_NIGHT_YES);
 
-            String bgColor = isDarkMode ? "#1F2C34" : "#FFFFFF";
-            String strokeColor = isDarkMode ? "#374248" : "#E0E0E0";
+            // Translucent Backgrounds (75% Alpha)
+            String bgColor = isDarkMode ? "#C01F2C34" : "#C0FFFFFF";
+            String strokeColor = isDarkMode ? "#40FFFFFF" : "#30000000";
 
+            // Build the Translucent Custom Pill
             LinearLayout customBar = new LinearLayout(context);
             customBar.setTag("HyperFloatingBar");
             customBar.setOrientation(LinearLayout.HORIZONTAL);
@@ -123,57 +124,74 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             customBar.setBackground(pillShape);
             customBar.setElevation(80f);
 
+            // Extract Native Icons & Setup Custom Tabs
             ViewGroup menuContainer = (ViewGroup) stockBar.getChildAt(0);
             if (menuContainer != null) {
                 int tabCount = menuContainer.getChildCount();
-                XposedBridge.log("[HyperBounce] Found " + tabCount + " tabs to extract.");
-                
+
                 for (int i = 0; i < tabCount; i++) {
                     final int tabIndex = i;
                     View stockTab = menuContainer.getChildAt(i);
-                    
+                    stockTabs.add(stockTab);
+
                     ImageView nativeIcon = findImageView((ViewGroup) stockTab);
                     TextView nativeText = findTextView((ViewGroup) stockTab);
 
                     if (nativeIcon == null || nativeText == null) continue;
 
+                    // Custom Tab Layout (Indicator wraps BOTH Icon and Text)
                     LinearLayout customTab = new LinearLayout(context);
                     customTab.setOrientation(LinearLayout.VERTICAL);
                     customTab.setGravity(Gravity.CENTER);
-                    customTab.setPadding(35, 20, 35, 20);
+                    customTab.setPadding(35, 18, 35, 18);
 
                     ImageView customIcon = new ImageView(context);
                     Drawable clonedDrawable = nativeIcon.getDrawable().getConstantState().newDrawable().mutate();
                     customIcon.setImageDrawable(clonedDrawable);
-                    
-                    LinearLayout iconContainer = new LinearLayout(context);
-                    iconContainer.setGravity(Gravity.CENTER);
-                    iconContainer.setPadding(20, 10, 20, 10);
-                    iconContainer.addView(customIcon, new LinearLayout.LayoutParams(65, 65));
 
                     TextView customText = new TextView(context);
                     customText.setText(nativeText.getText());
                     customText.setTextSize(11f);
-                    customText.setPadding(0, 8, 0, 0);
+                    customText.setPadding(0, 6, 0, 0);
                     customText.setGravity(Gravity.CENTER);
 
-                    customTab.addView(iconContainer);
+                    customTab.addView(customIcon, new LinearLayout.LayoutParams(60, 60));
                     customTab.addView(customText);
 
-                    customTab.setOnClickListener(v -> {
-                        XposedBridge.log("[HyperBounce] Custom Tab " + tabIndex + " clicked. Routing touch...");
-                        stockTab.performClick();
-                        currentActiveIndex = tabIndex;
-                        updateTabStates();
+                    // --- TAP & HORIZONTAL PULL GESTURE LISTENER ---
+                    customTab.setOnTouchListener((v, event) -> {
+                        switch (event.getAction()) {
+                            case MotionEvent.ACTION_DOWN:
+                                swipeStartX = event.getRawX();
+                                break;
+                            case MotionEvent.ACTION_MOVE:
+                                float deltaX = event.getRawX() - swipeStartX;
+                                if (deltaX < -SWIPE_THRESHOLD) { // Pulled Left -> Next Tab
+                                    if (currentActiveIndex < customTabs.size() - 1) {
+                                        switchToTab(currentActiveIndex + 1);
+                                        swipeStartX = event.getRawX();
+                                    }
+                                    return true;
+                                } else if (deltaX > SWIPE_THRESHOLD) { // Pulled Right -> Previous Tab
+                                    if (currentActiveIndex > 0) {
+                                        switchToTab(currentActiveIndex - 1);
+                                        swipeStartX = event.getRawX();
+                                    }
+                                    return true;
+                                }
+                                break;
+                        }
+                        return false; // Allow standard click if not swiped
                     });
+
+                    customTab.setOnClickListener(v -> switchToTab(tabIndex));
 
                     customTabs.add(customTab);
                     customBar.addView(customTab);
                 }
-            } else {
-                XposedBridge.log("[HyperBounce] WARNING: Menu container not found inside WDSBottomBar.");
             }
 
+            // Inject into Root Window
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
@@ -183,38 +201,45 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
             rootView.addView(customBar, lp);
             updateTabStates();
-            
-            XposedBridge.log("[HyperBounce] UI Injection successful!");
 
         } catch (Exception e) {
-            XposedBridge.log("[HyperBounce] Heist Failed: " + e.getMessage());
+            XposedBridge.log("[HyperBounce] UI Heist Exception: " + e.getMessage());
         }
     }
 
+    private void switchToTab(int tabIndex) {
+        if (tabIndex >= 0 && tabIndex < stockTabs.size()) {
+            stockTabs.get(tabIndex).performClick();
+            currentActiveIndex = tabIndex;
+            updateTabStates();
+        }
+    }
+
+    // --- STATE MANAGER (Indicator Wraps Icon + Text) ---
     private void updateTabStates() {
-        String activeHighlightColor = isDarkMode ? "#2A3942" : "#F0F2F5";
+        String activeHighlightColor = isDarkMode ? "#C02A3942" : "#C0E0E0E0";
         String activeTextColor = isDarkMode ? "#FFFFFF" : "#111B21";
-        String inactiveTextColor = isDarkMode ? "#888888" : "#5E6C75";
+        String inactiveTextColor = isDarkMode ? "#99888888" : "#885E6C75";
 
         for (int i = 0; i < customTabs.size(); i++) {
             LinearLayout tab = customTabs.get(i);
-            LinearLayout iconContainer = (LinearLayout) tab.getChildAt(0);
-            ImageView icon = (ImageView) iconContainer.getChildAt(0);
+            ImageView icon = (ImageView) tab.getChildAt(0);
             TextView text = (TextView) tab.getChildAt(1);
 
             if (i == currentActiveIndex) {
                 icon.setColorFilter(Color.parseColor(activeTextColor));
                 text.setTextColor(Color.parseColor(activeTextColor));
-                
+
+                // Active Pill Highlight wrapping the entire tab (Icon + Text)
                 GradientDrawable activeHighlight = new GradientDrawable();
                 activeHighlight.setShape(GradientDrawable.RECTANGLE);
-                activeHighlight.setCornerRadius(40f);
+                activeHighlight.setCornerRadius(50f);
                 activeHighlight.setColor(Color.parseColor(activeHighlightColor));
-                iconContainer.setBackground(activeHighlight);
+                tab.setBackground(activeHighlight);
             } else {
                 icon.setColorFilter(Color.parseColor(inactiveTextColor));
                 text.setTextColor(Color.parseColor(inactiveTextColor));
-                iconContainer.setBackground(null);
+                tab.setBackground(null);
             }
         }
     }
