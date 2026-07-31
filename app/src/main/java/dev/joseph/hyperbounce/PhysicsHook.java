@@ -87,8 +87,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 }
             }
 
-            // Pipe the extracted tabs into the Jetpack Compose Bridge
-            View composeFloatingBar = ComposeBridge.createFloatingBar(context, extractedTabs, index -> {
+            // PASSING ROOT VIEW: Pipe the extracted tabs and the DecorView into the Jetpack Compose Bridge
+            View composeFloatingBar = ComposeBridge.createFloatingBar(context, rootView, extractedTabs, index -> {
                 extractedTabs.get(index).getStockView().performClick();
                 return Unit.INSTANCE;
             });

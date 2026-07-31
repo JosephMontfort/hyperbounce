@@ -5,6 +5,7 @@ import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.View
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -46,14 +47,27 @@ object ComposeBridge {
     @JvmStatic
     fun createFloatingBar(
         context: Context,
+        rootView: View, // NEW: We must intercept the DecorView
         tabs: List<ExtractedTab>,
         onTabSelected: (Int) -> Unit
     ): View {
         val composeView = ComposeView(context)
         
-        // Attach spoofed Android lifecycles required for Xposed injection
+        // Prevent Compose from crashing when WhatsApp destroys the view natively
+        composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+        
         val fakeOwner = FakeLifecycleOwner()
+        
+        // Attach to the local compose view
         fakeOwner.attachToView(composeView)
+        
+        // CRITICAL FIX: The WindowRecomposer walks up the tree. 
+        // We must forcefully tag WhatsApp's root DecorView with our spoofed lifecycle.
+        try {
+            fakeOwner.attachToView(rootView)
+        } catch (e: Exception) {
+            // Failsafe in case it's locked, but it usually isn't.
+        }
         
         composeView.setContent {
             KernelFloatingBottomBar(
