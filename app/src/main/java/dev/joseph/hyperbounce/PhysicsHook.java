@@ -7,9 +7,12 @@ import android.graphics.RectF;
 import android.graphics.RenderEffect;
 import android.graphics.RuntimeShader;
 import android.graphics.Shader;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.widget.FrameLayout;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -23,7 +26,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     @Override
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
         if (lpparam.packageName.equals("com.whatsapp")) {
-            XposedBridge.log("[HyperBounce] Executing Precision WhatsApp Glass Engine...");
+            XposedBridge.log("[HyperBounce] Executing RAM Patch Glass Engine...");
             hookWhatsApp(lpparam.classLoader);
         }
     }
@@ -97,7 +100,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         Class<?> wdsBottomBarClass = XposedHelpers.findClassIfExists("com.whatsapp.ui.wds.components.bottombar.WDSBottomBar", classLoader);
         if (wdsBottomBarClass == null) return;
 
-        // 1. Inject Overlay safely via constructor listener
+        // 1. Inject Glass Overlay once when the view attaches
         XposedBridge.hookAllConstructors(wdsBottomBarClass, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -113,47 +116,50 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             }
         });
 
-        // 2. Surgical Background Stripper (Executes on every UI update)
+        // 2. RAM Patching: Silently execute background drawables during draw phase (Crash-Free)
         XposedBridge.hookAllMethods(wdsBottomBarClass, "dispatchDraw", new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 ViewGroup realBar = (ViewGroup) param.thisObject;
                 
-                // Kill the black bar
-                realBar.setBackground(null);
-                realBar.setClipChildren(false);
+                // --- TARGET 1: Kill the WDSBottomBar Background ---
+                realBar.setBackgroundColor(Color.TRANSPARENT);
 
-                // Dive in and execute the green blob
-                for (int i = 0; i < realBar.getChildCount(); i++) {
-                    View child = realBar.getChildAt(i);
-                    // Find the tab container (ignore our injected overlay)
-                    if (child instanceof ViewGroup && !"HyperGlassOverlay".equals(child.getTag())) {
-                        ViewGroup tabContainer = (ViewGroup) child;
-                        tabContainer.setBackground(null);
-                        tabContainer.setClipChildren(false);
+                // --- TARGET 2: Kill the Parent Black Containers (Based on Recon Log) ---
+                ViewParent parent = realBar.getParent();
+                int depth = 0;
+                while (parent instanceof View && depth < 7) {
+                    View pView = (View) parent;
+                    Drawable bg = pView.getBackground();
+                    if (bg instanceof ColorDrawable) {
+                        int color = ((ColorDrawable) bg).getColor();
+                        // If it's WhatsApp's #FF0A1014 dark theme color, nuke it
+                        if (color == Color.parseColor("#FF0A1014") || color == Color.parseColor("#0A1014")) {
+                            pView.setBackgroundColor(Color.TRANSPARENT);
+                        }
+                    }
+                    parent = parent.getParent();
+                    depth++;
+                }
 
-                        // Iterate through the tabs
-                        for (int j = 0; j < tabContainer.getChildCount(); j++) {
-                            View tabView = tabContainer.getChildAt(j);
+                // --- TARGET 3: Kill the Green Material Blob ---
+                if (realBar.getChildCount() > 1) {
+                    View menuView = realBar.getChildAt(1); // Index 1 is the tab menu
+                    if (menuView instanceof ViewGroup && !"HyperGlassOverlay".equals(menuView.getTag())) {
+                        ViewGroup menu = (ViewGroup) menuView;
+                        for (int i = 0; i < menu.getChildCount(); i++) {
+                            View tabView = menu.getChildAt(i);
                             if (tabView instanceof ViewGroup) {
                                 ViewGroup tab = (ViewGroup) tabView;
-                                tab.setBackground(null);
-                                tab.setClipChildren(false);
-
-                                // Find the FrameLayout holding the icon
-                                for (int k = 0; k < tab.getChildCount(); k++) {
-                                    View tabChild = tab.getChildAt(k);
+                                for (int j = 0; j < tab.getChildCount(); j++) {
+                                    View tabChild = tab.getChildAt(j);
                                     if (tabChild instanceof FrameLayout) {
                                         FrameLayout fl = (FrameLayout) tabChild;
-                                        fl.setBackground(null);
-                                        
-                                        // Target the raw View injected by WhatsApp for the green blob
-                                        for (int l = 0; l < fl.getChildCount(); l++) {
-                                            View flChild = fl.getChildAt(l);
-                                            // The blob is a raw android.view.View. The icon is an AppCompatImageView.
+                                        for (int k = 0; k < fl.getChildCount(); k++) {
+                                            View flChild = fl.getChildAt(k);
+                                            // The blob is the only raw android.view.View in this layout
                                             if (flChild.getClass() == View.class) {
-                                                flChild.setBackground(null); // Execute the green blob
-                                                flChild.setVisibility(View.GONE);
+                                                flChild.setAlpha(0.0f); // GPU-level transparent (NO LAYOUT PASS TRIGGERED)
                                             }
                                         }
                                     }
@@ -163,9 +169,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     }
                 }
 
-                // Force custom overlay to sync redraws
+                // Update the iOS pill position
                 View overlay = realBar.findViewWithTag("HyperGlassOverlay");
-                if (overlay != null) overlay.invalidate();
+                if (overlay != null) overlay.postInvalidate();
             }
         });
     }
@@ -181,7 +187,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 private final RenderEffect blurFx = RenderEffect.createBlurEffect(45.0f, 45.0f, Shader.TileMode.CLAMP);
 
                 {
-                    glassBgPaint.setColor(Color.parseColor("#30000000")); // Base glass tint
+                    glassBgPaint.setColor(Color.parseColor("#30000000")); // Deep glass tint
                     indicatorPaint.setColor(Color.parseColor("#35FFFFFF")); // iOS White Pill
                 }
 
@@ -223,7 +229,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float radius = rect.height() / 2.0f;
                     canvas.drawRoundRect(rect, radius, radius, glassBgPaint);
 
-                    // Map and Draw iOS Tab Indicator
+                    // Scan and Draw iOS Pill
                     try {
                         for (int i = 0; i < realBar.getChildCount(); i++) {
                             View child = realBar.getChildAt(i);
@@ -266,7 +272,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             glassOverlay.setClickable(false);
             glassOverlay.setFocusable(false);
 
-            // Apply layout margins specifically to our internal overlay, physically squishing the shader into a floating pill shape
             FrameLayout.LayoutParams flp = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, 
                     ViewGroup.LayoutParams.MATCH_PARENT
