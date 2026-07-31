@@ -66,13 +66,13 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
     var selectedIndex by remember { mutableStateOf(0) }
     val tabs = remember { extractTabs(stockBar) }
 
-    val backdrop = rememberLayerBackdrop {
-        drawRect(MiuixTheme.colorScheme.surface)
-        drawContent()
-    }
-    
     // Automatically apply Dark/Light Miuix Palette
     MiuixTheme {
+        val surfaceColor = MiuixTheme.colorScheme.surface
+        val backdrop = rememberLayerBackdrop {
+            drawRect(surfaceColor)
+            drawContent()
+        }
         Box(
             modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
             contentAlignment = Alignment.BottomCenter

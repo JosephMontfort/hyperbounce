@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Offset
@@ -199,7 +200,7 @@ fun FloatingBottomBar(
             Modifier.onGloballyPositioned { coords ->
                 totalWidthPx = coords.size.width.toFloat()
                 tabWidthPx = ((totalWidthPx - with(density) { 8.dp.toPx() }) / tabsCount).coerceAtLeast(0f)
-            }.graphicsLayer { translationX = panelOffset }.dropShadow(shape = pillShape, shadow = top.yukonga.miuix.kmp.graphics.shadow.Shadow(radius = 10.dp, color = Color.Black, alpha = if (isInDark) 0.2f else 0.1f))
+            }.graphicsLayer { translationX = panelOffset }.shadow(elevation = 10.dp, shape = pillShape)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {})
             .then(
                 if (isBlurEnabled) Modifier.drawBackdrop(
