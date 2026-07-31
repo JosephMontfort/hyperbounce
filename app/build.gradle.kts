@@ -63,6 +63,6 @@ dependencies {
     implementation("androidx.savedstate:savedstate:1.2.1")
     
     // KernelSU's exact UI engine
-    implementation("top.yukonga.miuix.kmp:miuix-ui:0.8.0")
-    implementation("top.yukonga.miuix.kmp:miuix-blur:0.8.0")
+    implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.3")
+    implementation("top.yukonga.miuix.kmp:miuix-blur-android:0.9.3")
 }
