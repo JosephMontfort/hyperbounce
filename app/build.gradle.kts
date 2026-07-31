@@ -59,12 +59,19 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     
+    // Explicitly add Runtime and Animation to prevent IR Lowering crashes
+    implementation("androidx.compose.runtime:runtime")
+    implementation("androidx.compose.animation:animation")
+
     // Miuix Navigation Bar components
     implementation("top.yukonga.miuix.kmp:miuix:0.2.0")
 
-    // Lifecycle & Coroutines (Fixes IR Lowering crashes)
+    // Lifecycle spoofers for Xposed Injection
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.0")
     implementation("androidx.savedstate:savedstate:1.2.1")
+    
+    // Explicitly add Coroutines Core to fix the IR Compiler Panic
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
