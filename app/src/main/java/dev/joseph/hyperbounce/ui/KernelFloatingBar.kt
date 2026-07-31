@@ -29,6 +29,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -56,7 +59,9 @@ fun KernelFloatingBottomBar(
     modifier: Modifier = Modifier,
     onTabSelected: (Int) -> Unit
 ) {
-    val coroutineScope = rememberCoroutineScope()
+    // Compiler bug workaround: Manually inject the scope instead of rememberCoroutineScope()
+    val coroutineScope = remember { CoroutineScope(Dispatchers.Main.immediate + SupervisorJob()) }
+    
     var totalWidthPx by remember { mutableFloatStateOf(0f) }
     var selectedIndex by remember { mutableIntStateOf(0) }
     
@@ -90,7 +95,6 @@ fun KernelFloatingBottomBar(
                     shader.setFloatUniform("size", size.width, size.height)
                     shader.setFloatUniform("blurAmount", 30f)
                     
-                    // Explicitly qualifying android.graphics.RenderEffect to prevent Compose collision
                     val blurEffect = android.graphics.RenderEffect.createBlurEffect(30f, 30f, android.graphics.Shader.TileMode.CLAMP)
                     val runtimeEffect = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "composable")
                     val combinedEffect = android.graphics.RenderEffect.createChainEffect(runtimeEffect, blurEffect)

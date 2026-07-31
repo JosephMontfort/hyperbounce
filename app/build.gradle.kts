@@ -62,8 +62,9 @@ dependencies {
     // Miuix Navigation Bar components
     implementation("top.yukonga.miuix.kmp:miuix:0.2.0")
 
-    // Lifecycle spoofers for Xposed Injection
+    // Lifecycle & Coroutines (Fixes IR Lowering crashes)
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.0")
     implementation("androidx.savedstate:savedstate:1.2.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
