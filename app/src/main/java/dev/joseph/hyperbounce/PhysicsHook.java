@@ -189,6 +189,16 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 glassBackground.setRenderEffect(RenderEffect.createBlurEffect(30f, 30f, Shader.TileMode.CLAMP));
             }
+            
+            // CRITICAL FIX: Force hardware to clip the blur bleed so it stays a pill shape
+            glassBackground.setOutlineProvider(new android.view.ViewOutlineProvider() {
+                @Override
+                public void getOutline(View view, android.graphics.Outline outline) {
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), 150f);
+                }
+            });
+            glassBackground.setClipToOutline(true);
+            
             addView(glassBackground, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
             // 2. Unclipped Sliding Indicator
@@ -402,7 +412,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 highlightPaint.setBlendMode(BlendMode.PLUS);
                 // Exact KernelSU AGSL Shader for smoothstep glow tracking
-                String shaderStr = "uniform float2 size; uniform half4 color; uniform float radius; uniform float2 position; " +
+                String shaderStr = "uniform float2 size; layout(color) uniform half4 color; uniform float radius; uniform float2 position; " +
                         "half4 main(float2 coord) { float dist = distance(coord, position); float intensity = smoothstep(radius, radius * 0.5, dist); return color * intensity; }";
                 agslShader = new RuntimeShader(shaderStr);
             }
