@@ -47,27 +47,27 @@ object ComposeBridge {
     @JvmStatic
     fun createFloatingBar(
         context: Context,
-        rootView: View, // NEW: We must intercept the DecorView
+        anchorView: View, 
         tabs: List<ExtractedTab>,
         onTabSelected: (Int) -> Unit
     ): View {
         val composeView = ComposeView(context)
-        
-        // Prevent Compose from crashing when WhatsApp destroys the view natively
         composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         
         val fakeOwner = FakeLifecycleOwner()
         
-        // Attach to the local compose view
-        fakeOwner.attachToView(composeView)
+        // 1. Tag the anchor view and its current hierarchy instantly
+        tagEntireTree(anchorView, fakeOwner)
+        tagEntireTree(composeView, fakeOwner)
         
-        // CRITICAL FIX: The WindowRecomposer walks up the tree. 
-        // We must forcefully tag WhatsApp's root DecorView with our spoofed lifecycle.
-        try {
-            fakeOwner.attachToView(rootView)
-        } catch (e: Exception) {
-            // Failsafe in case it's locked, but it usually isn't.
-        }
+        // 2. Aggressively re-tag when attached to the window (This explicitly intercepts app:id/root_view)
+        composeView.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {
+                tagEntireTree(v, fakeOwner)
+                tagEntireTree(v.rootView, fakeOwner)
+            }
+            override fun onViewDetachedFromWindow(v: View) {}
+        })
         
         composeView.setContent {
             KernelFloatingBottomBar(
@@ -76,5 +76,18 @@ object ComposeBridge {
             )
         }
         return composeView
+    }
+    
+    // Recursively climbs up the Android UI tree and forcefully injects the LifecycleOwner
+    private fun tagEntireTree(startView: View, owner: FakeLifecycleOwner) {
+        try {
+            var current: View? = startView
+            while (current != null) {
+                owner.attachToView(current)
+                current = current.parent as? View
+            }
+        } catch (e: Exception) {
+            // Ignore failsafe
+        }
     }
 }
