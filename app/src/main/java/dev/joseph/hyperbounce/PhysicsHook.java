@@ -68,13 +68,28 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         stockBar.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
                             @Override
                             public boolean onPreDraw() {
-                                // 1. Enforce Stock Bar Nuke seamlessly
-                                if (stockBar.getVisibility() != View.GONE) {
-                                    stockBar.setVisibility(View.GONE);
-                                }
+                                // 1. Sync Visibility & Heavy Logging
                                 ViewParent p = stockBar.getParent();
-                                if (p instanceof View && ((View) p).getVisibility() != View.GONE) {
-                                    ((View) p).setVisibility(View.GONE);
+                                int parentVis = (p instanceof View) ? ((View)p).getVisibility() : -1;
+                                float transY = stockBar.getTranslationY();
+                                
+                                XposedBridge.log("[HyperBounce] PreDraw | Stock Vis: " + stockBar.getVisibility() + " | Parent Vis: " + parentVis + " | TransY: " + transY);
+
+                                ViewGroup rootView = (ViewGroup) stockBar.getRootView();
+                                View customBar = rootView.findViewWithTag("HyperFloatingBar");
+                                
+                                if (customBar != null) {
+                                    // WhatsApp sets stockBar or parent to GONE on search/camera screens
+                                    boolean shouldHide = stockBar.getVisibility() == View.GONE || parentVis == View.GONE || transY > 50f;
+                                    customBar.setVisibility(shouldHide ? View.GONE : View.VISIBLE);
+                                }
+
+                                // Non-destructive Nuke: Zero out height & alpha instead of forcing GONE
+                                // This allows WhatsApp's native state machine to keep updating visibilities
+                                stockBar.setAlpha(0f);
+                                if (stockBar.getLayoutParams() != null && stockBar.getLayoutParams().height != 0) {
+                                    stockBar.getLayoutParams().height = 0;
+                                    stockBar.requestLayout();
                                 }
 
                                 // 2. Dynamic Theme Change Detection
@@ -181,8 +196,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     customText.setSingleLine(true);
                     customText.setGravity(Gravity.CENTER);
 
-                    customTab.addView(customIcon, new LinearLayout.LayoutParams(56, 56));
-                    customTab.addView(customText);
+                    customTab.addView(customIcon, new LinearLayout.LayoutParams(72, 72));
+                    // Text stripped for premium look
 
                     customTabs.add(customTab);
                     customBar.addView(customTab);
@@ -242,7 +257,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
             // Layout Parameters (92% Width & Lifted High)
             int displayWidth = context.getResources().getDisplayMetrics().widthPixels;
-            int barWidth = (int) (displayWidth * 0.92f);
+            int barWidth = (int) (displayWidth * 0.70f); // Reduced to clear Meta AI button
 
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                     barWidth,
@@ -304,11 +319,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         for (int i = 0; i < customTabs.size(); i++) {
             LinearLayout tab = customTabs.get(i);
             ImageView icon = (ImageView) tab.getChildAt(0);
-            TextView text = (TextView) tab.getChildAt(1);
+            TextView text = tab.getChildCount() > 1 ? (TextView) tab.getChildAt(1) : null;
 
             if (i == currentActiveIndex) {
                 icon.setColorFilter(Color.parseColor(activeTextColor));
-                text.setTextColor(Color.parseColor(activeTextColor));
+                if (text != null) text.setTextColor(Color.parseColor(activeTextColor));
 
                 // Indicator bubble wraps the icon + text
                 GradientDrawable activeHighlight = new GradientDrawable();
@@ -318,7 +333,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 tab.setBackground(activeHighlight);
             } else {
                 icon.setColorFilter(Color.parseColor(inactiveTextColor));
-                text.setTextColor(Color.parseColor(inactiveTextColor));
+                if (text != null) text.setTextColor(Color.parseColor(inactiveTextColor));
                 tab.setBackground(null); // Remove highlight
             }
         }
