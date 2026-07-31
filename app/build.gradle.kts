@@ -48,11 +48,12 @@ dependencies {
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.activity:activity-compose:1.9.0")
+    implementation("androidx.activity:activity-compose:1.10.1")
     
     // Lifecycles required to run Compose inside an Xposed Hook
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.savedstate:savedstate:1.2.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime:2.8.7")
+    implementation("androidx.savedstate:savedstate:1.3.1")
     
     // KernelSU's exact UI engine
     implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.3")
