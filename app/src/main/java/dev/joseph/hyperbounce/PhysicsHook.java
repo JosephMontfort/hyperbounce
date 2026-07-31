@@ -107,13 +107,14 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             bg.setCornerRadius(1000f);
             
             boolean isDark = (context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-            // Highly transparent base to let the blur shine
-            bg.setColor(Color.parseColor(isDark ? "#331F2C34" : "#33FFFFFF"));
+            // Increased opacity to 70% (#B3) for a premium frosted look without requiring Window root blur
+            bg.setColor(Color.parseColor(isDark ? "#B31F2C34" : "#B3FFFFFF"));
             bg.setStroke(2, Color.parseColor(isDark ? "#20FFFFFF" : "#15000000"));
             glassView.setBackground(bg);
             
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                glassView.setBackgroundBlurRadius(80); // NATIVE HARDWARE BLUR
+                // Safely soften the glass view's own canvas (Valid API 31+ method)
+                glassView.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(15f, 15f, android.graphics.Shader.TileMode.CLAMP));
             }
 
             // Fixed Premium Width (260dp)
@@ -137,7 +138,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             container.addView(composeFloatingBar, composeLp);
 
             // --- 3. INJECT INTO WHATSAPP ---
-            // Adding this inside WDSBottomBar means it inherently follows WhatsApp's visibility rules (e.g. Search screen)
             ViewGroup.LayoutParams containerLp = new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     (int)(100 * density)
