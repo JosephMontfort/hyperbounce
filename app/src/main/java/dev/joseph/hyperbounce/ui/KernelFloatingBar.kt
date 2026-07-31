@@ -21,7 +21,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -70,7 +69,7 @@ fun KernelFloatingBottomBar(
     val contentWidthPx = totalWidthPx - (8f * density)
     val tabWidthPx = if (tabsCount > 0 && contentWidthPx > 0) contentWidthPx / tabsCount else 1f
 
-    // 4. Rubber-band Edge Pull Math
+    // Rubber-band Edge Pull Math
     val fraction = if (tabsCount > 0) ((dragPosition.value - selectedIndex) / tabsCount.toFloat()).coerceIn(-1f, 1f) else 0f
     val easeOutFraction = 1f - (1f - abs(fraction)) * (1f - abs(fraction))
     val panelOffset = (4f * density) * fraction.sign * easeOutFraction
@@ -84,13 +83,15 @@ fun KernelFloatingBottomBar(
                 clip = true
                 shape = CircleShape
             }
-            // 5. AGSL Glass / Liquid Backdrop Pipeline
+            // AGSL Glass / Liquid Backdrop Pipeline
             .drawWithCache {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     val shader = RuntimeShader(LiquidGlassShader)
                     shader.setFloatUniform("size", size.width, size.height)
                     shader.setFloatUniform("blurAmount", 30f)
-                    val blurEffect = RenderEffect.createBlurEffect(30f, 30f, android.graphics.Shader.TileMode.CLAMP)
+                    
+                    // Explicitly qualifying android.graphics.RenderEffect to prevent Compose collision
+                    val blurEffect = android.graphics.RenderEffect.createBlurEffect(30f, 30f, android.graphics.Shader.TileMode.CLAMP)
                     val runtimeEffect = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "composable")
                     val combinedEffect = android.graphics.RenderEffect.createChainEffect(runtimeEffect, blurEffect)
                     
@@ -144,7 +145,7 @@ fun KernelFloatingBottomBar(
             }
             .padding(horizontal = 4.dp, vertical = 4.dp)
     ) {
-        // 3. Jelly / Water-bubble Deformation
+        // Jelly / Water-bubble Deformation
         val velocity = dragPosition.velocity
         val v = velocity / 10f
         val scaleX = 1f - (v * 0.75f).coerceIn(-0.2f, 0.2f)
@@ -161,7 +162,7 @@ fun KernelFloatingBottomBar(
                     this.scaleY = scaleY
                 }
                 .background(Color(0xFF2A3942), CircleShape)
-                // 6. Specular Highlight via BlendMode.Plus
+                // Specular Highlight via BlendMode.Plus
                 .drawWithContent {
                     drawContent()
                     if (isPressed && pressOffset != null) {
@@ -179,7 +180,7 @@ fun KernelFloatingBottomBar(
                 }
         )
 
-        // 7. Transparent Content Overlay
+        // Transparent Content Overlay
         Row(
             modifier = Modifier.matchParentSize(),
             verticalAlignment = Alignment.CenterVertically
@@ -206,7 +207,6 @@ fun KernelFloatingBottomBar(
                             },
                             modifier = Modifier.size(24.dp).padding(bottom = 2.dp)
                         )
-                        // Miuix SelectedLabel mode implementation
                         if (distance < 0.5f) {
                             Text(text = tab.label, color = color, fontSize = 11.sp, maxLines = 1)
                         }
