@@ -32,7 +32,24 @@ jobs:
           RELEASE_KEY_ALIAS: hyperbounce
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
-        run: ./gradlew assembleRelease --stacktrace
+        run: |
+          echo "===== Release Compile Classpath ====="
+          ./gradlew :app:dependencies --configuration releaseCompileClasspath
+
+          echo "===== Dependency Insight: lifecycle-runtime ====="
+          ./gradlew :app:dependencyInsight --configuration releaseCompileClasspath --dependency androidx.lifecycle:lifecycle-runtime || true
+
+          echo "===== Dependency Insight: lifecycle-runtime-ktx ====="
+          ./gradlew :app:dependencyInsight --configuration releaseCompileClasspath --dependency androidx.lifecycle:lifecycle-runtime-ktx || true
+
+          echo "===== Dependency Insight: savedstate ====="
+          ./gradlew :app:dependencyInsight --configuration releaseCompileClasspath --dependency androidx.savedstate:savedstate || true
+
+          echo "===== Dependency Insight: activity-compose ====="
+          ./gradlew :app:dependencyInsight --configuration releaseCompileClasspath --dependency androidx.activity:activity-compose || true
+
+          echo "===== Build ====="
+          ./gradlew assembleRelease --stacktrace
 
       - name: Rename APK for Release
         run: |
