@@ -204,7 +204,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 }
             }
 
-            // --- ADVANCED SLIDE & TAP GESTURE ENGINE ---
+            // --- ADVANCED SLIDE & TAP GESTURE ENGINE (WITH ANIMATION) ---
             customBar.setOnTouchListener((v, event) -> {
                 float rawX = event.getRawX();
                 float rawY = event.getRawY();
@@ -215,36 +215,47 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         touchStartY = rawY;
                         isDragging = false;
                         initialTouchIndex = calculateTabIndexFromX(rawX, customBar);
-                        return true; // Consume touch to allow MOVE tracking
+                        
+                        // Squish & Stretch animation to simulate grabbing the bubble
+                        if (currentActiveIndex >= 0 && currentActiveIndex < customTabs.size()) {
+                            animateTabScale(customTabs.get(currentActiveIndex), 1.25f, 0.85f);
+                        }
+                        return true; 
 
                     case MotionEvent.ACTION_MOVE:
                         float dx = Math.abs(rawX - touchStartX);
-                        
-                        // If they move their finger horizontally more than 20 pixels, engage Drag Mode
                         if (!isDragging && dx > 20) {
                             isDragging = true;
                         }
 
-                        // Live-update the highlight bubble under their finger
                         if (isDragging) {
                             int hoverIdx = calculateTabIndexFromX(rawX, customBar);
                             if (hoverIdx != -1 && hoverIdx != currentActiveIndex) {
+                                // Restore old tab's scale instantly
+                                if (currentActiveIndex >= 0 && currentActiveIndex < customTabs.size()) {
+                                    animateTabScale(customTabs.get(currentActiveIndex), 1.0f, 1.0f);
+                                }
                                 currentActiveIndex = hoverIdx;
-                                updateTabStates(); // Visually move the bubble instantly
+                                updateTabStates(); 
+                                // Stretch new hovered tab
+                                animateTabScale(customTabs.get(currentActiveIndex), 1.25f, 0.85f);
                             }
                         }
                         return true;
 
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL:
+                        // Snap all tabs back to original shape on release
+                        for (int i = 0; i < customTabs.size(); i++) {
+                            animateTabScale(customTabs.get(i), 1.0f, 1.0f);
+                        }
+                        
                         if (isDragging) {
-                            // Released after a swipe
                             int releaseIdx = calculateTabIndexFromX(rawX, customBar);
                             if (releaseIdx != -1) {
-                                switchToTab(releaseIdx); // Native fragment switch
+                                switchToTab(releaseIdx); 
                             }
                         } else {
-                            // Standard Tap
                             if (initialTouchIndex != -1) {
                                 switchToTab(initialTouchIndex);
                             }
@@ -257,14 +268,14 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
             // Layout Parameters (92% Width & Lifted High)
             int displayWidth = context.getResources().getDisplayMetrics().widthPixels;
-            int barWidth = (int) (displayWidth * 0.70f); // Reduced to clear Meta AI button
+            int barWidth = (int) (displayWidth * 0.62f);
 
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                     barWidth,
                     ViewGroup.LayoutParams.WRAP_CONTENT
             );
             lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-            lp.bottomMargin = 130; // Lifted safely above navigation pill
+            lp.bottomMargin = 100;
 
             rootView.addView(customBar, lp);
             
@@ -361,5 +372,15 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             }
         }
         return null;
+    }
+
+    private void animateTabScale(View v, float scaleX, float scaleY) {
+        if (v == null) return;
+        v.animate()
+         .scaleX(scaleX)
+         .scaleY(scaleY)
+         .setDuration(200)
+         .setInterpolator(new android.view.animation.OvershootInterpolator(1.5f))
+         .start();
     }
 }
