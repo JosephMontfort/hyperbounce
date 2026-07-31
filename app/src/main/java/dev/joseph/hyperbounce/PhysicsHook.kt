@@ -10,11 +10,11 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
-import androidx.lifecycle.ViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.ViewTreeSavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
@@ -107,8 +107,8 @@ class PhysicsHook : IXposedHookLoadPackage {
                 // Construct fake lifecycle required to run Jetpack Compose outside an Activity
                 val lifecycleOwner = FakeLifecycleOwner()
                 lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-                ViewTreeLifecycleOwner.set(this, lifecycleOwner)
-                ViewTreeSavedStateRegistryOwner.set(this, lifecycleOwner)
+                this.setViewTreeLifecycleOwner(lifecycleOwner)
+                this.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
                 lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
