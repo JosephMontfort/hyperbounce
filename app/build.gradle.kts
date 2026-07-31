@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "dev.joseph.hyperbounce"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "dev.joseph.hyperbounce"
         minSdk = 31
-        targetSdk = 37
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
     }
@@ -63,6 +63,6 @@ dependencies {
     implementation("androidx.savedstate:savedstate:1.2.1")
     
     // KernelSU's exact UI engine
-    implementation("top.yukonga.miuix.kmp:miuix-ui:0.9.3")
-    implementation("top.yukonga.miuix.kmp:miuix-blur:0.9.3")
+    implementation("top.yukonga.miuix.kmp:miuix-ui:0.8.0")
+    implementation("top.yukonga.miuix.kmp:miuix-blur:0.8.0")
 }
