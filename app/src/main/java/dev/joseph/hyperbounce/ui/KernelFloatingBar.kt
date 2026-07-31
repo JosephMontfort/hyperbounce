@@ -29,9 +29,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -59,8 +56,8 @@ fun KernelFloatingBottomBar(
     modifier: Modifier = Modifier,
     onTabSelected: (Int) -> Unit
 ) {
-    // THE FIX: Completely bypass the buggy rememberCoroutineScope() inline function
-    val coroutineScope = remember { CoroutineScope(Dispatchers.Main.immediate + SupervisorJob()) }
+    // Restored to the proper native Compose function (K2 compiler handles this flawlessly)
+    val coroutineScope = rememberCoroutineScope()
     
     var totalWidthPx by remember { mutableFloatStateOf(0f) }
     var selectedIndex by remember { mutableIntStateOf(0) }

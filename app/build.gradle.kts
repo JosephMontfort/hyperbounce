@@ -1,6 +1,8 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android") version "1.9.24"
+    id("org.jetbrains.kotlin.android") version "2.0.0"
+    // The Magic Bullet: Native K2 Compose Compiler
+    id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"
 }
 
 android {
@@ -43,10 +45,8 @@ android {
     buildFeatures {
         compose = true
     }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
-    }
+    
+    // NOTE: composeOptions block deleted! K2 compiler handles this natively now.
 }
 
 dependencies {
@@ -59,7 +59,6 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     
-    // Explicitly add Runtime and Animation to prevent IR Lowering crashes
     implementation("androidx.compose.runtime:runtime")
     implementation("androidx.compose.animation:animation")
 
@@ -71,7 +70,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.0")
     implementation("androidx.savedstate:savedstate:1.2.1")
     
-    // Explicitly add Coroutines Core to fix the IR Compiler Panic
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
