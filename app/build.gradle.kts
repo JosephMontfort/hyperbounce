@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "dev.joseph.hyperbounce"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "dev.joseph.hyperbounce"
         minSdk = 31
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0.0"
     }
