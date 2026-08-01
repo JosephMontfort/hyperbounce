@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Outline
 import android.os.Build
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -38,11 +39,11 @@ class PhysicsHook : IXposedHookLoadPackage {
     private var lastUiMode = -1
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
-        // DIAGNOSTIC LOG: Unconditionally log EVERY package LSPosed allows us into
-        XposedBridge.log("[HyperBounce-Tracer] Loaded into: ${lpparam.packageName}")
+        // ALWAYS use standard Log.e for critical diagnostics to bypass LSPosed log swallowers
+        Log.e("HyperBounce-Tracer", "Injected into: ${lpparam.packageName}")
 
         if (lpparam.packageName.contains("instagram")) {
-            XposedBridge.log("[HyperBounce-IG] Instagram variant detected: ${lpparam.packageName}!")
+            Log.e("HyperBounce-IG", "Target acquired: ${lpparam.packageName}")
             hookInstagram()
         } else if (lpparam.packageName == "com.whatsapp") {
             hookWhatsApp(lpparam)
@@ -50,31 +51,62 @@ class PhysicsHook : IXposedHookLoadPackage {
     }
 
     private fun hookInstagram() {
-        XposedBridge.log("[HyperBounce-IG] Setting up Framework Activity lifecycle hooks...")
         try {
             XposedHelpers.findAndHookMethod(
                 android.app.Activity::class.java,
-                "onResume",
+                "onWindowFocusChanged",
+                Boolean::class.javaPrimitiveType,
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
+                        val hasFocus = param.args[0] as Boolean
+                        if (!hasFocus) return
+                        
                         val activity = param.thisObject as Activity
                         if (!activity.packageName.contains("instagram")) return
                         
                         val activityName = activity.javaClass.simpleName
+                        val window = activity.window ?: return
+                        val decorView = window.decorView
                         
-                        val resId = activity.resources.getIdentifier("tab_bar", "id", activity.packageName)
-                        if (resId != 0) {
-                            val stockBar = activity.findViewById<ViewGroup>(resId)
-                            if (stockBar != null && stockBar.getTag(stockBar.id) == null) {
-                                stockBar.setTag(stockBar.id, true)
-                                XposedBridge.log("[HyperBounce-IG] tab_bar found in Activity: $activityName!")
-                            }
-                        }
+                        // Only run the dump once per activity instantiation
+                        if (decorView.getTag(activityName.hashCode()) != null) return
+                        decorView.setTag(activityName.hashCode(), true)
+                        
+                        Log.e("HyperBounce-IG", "=== VIEW DUMP FOR: $activityName ===")
+                        scanViewTreeForNavBar(decorView, 0)
                     }
                 }
             )
         } catch (e: Throwable) {
-            XposedBridge.log("[HyperBounce-IG] Failed to hook Activity.onResume: " + e.message)
+            Log.e("HyperBounce-IG", "Failed to hook Activity: " + e.message)
+        }
+    }
+
+    private fun scanViewTreeForNavBar(view: View?, depth: Int) {
+        if (view == null) return
+        
+        val idName = try {
+            if (view.id != View.NO_ID && view.resources != null) {
+                view.resources.getResourceEntryName(view.id)
+            } else {
+                "NO_ID"
+            }
+        } catch (e: Exception) {
+            "UNKNOWN"
+        }
+
+        val className = view.javaClass.simpleName
+
+        // Flag anything that sounds remotely like a navigation bar
+        if (idName.contains("tab", true) || idName.contains("bottom", true) || idName.contains("nav", true)) {
+            val indent = "  ".repeat(depth)
+            Log.e("HyperBounce-IG", "$indent[+] FOUND POTENTIAL TARGET: Class=[$className], ID=[$idName], Height=[${view.height}]")
+        }
+
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                scanViewTreeForNavBar(view.getChildAt(i), depth + 1)
+            }
         }
     }
 
@@ -89,11 +121,9 @@ class PhysicsHook : IXposedHookLoadPackage {
 
     private fun setupStockBarHook(stockBar: ViewGroup) {
         stockBar.alpha = 0f
-
         stockBar.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
                 stockBar.post { executeUIHeist(stockBar) }
-
                 stockBar.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
                     override fun onPreDraw(): Boolean {
                         val p = stockBar.parent
@@ -212,7 +242,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             rootGroup.addView(composeView)
             
         } catch (e: Exception) {
-            XposedBridge.log("[HyperBounce] Heist Exception: " + e.message)
+            Log.e("HyperBounce", "Heist Exception: " + e.message)
         }
     }
 }
