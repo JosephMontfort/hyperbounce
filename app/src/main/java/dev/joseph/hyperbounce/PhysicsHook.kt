@@ -71,7 +71,7 @@ class PhysicsHook : IXposedHookLoadPackage {
                                     if (lp.height != 0) { lp.height = 0; stockBar.requestLayout() }
                                 }
 
-                                // Sync WhatsApp swipe changes
+                                // Sync WhatsApp native swipes
                                 val menuContainer = stockBar.getChildAt(0) as? ViewGroup
                                 if (menuContainer != null) {
                                     for (i in 0 until menuContainer.childCount) {
@@ -79,7 +79,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                                         if (tab.isSelected || tab.isActivated) {
                                             if (NavSync.externalSelectedTab.intValue != i) {
                                                 NavSync.externalSelectedTab.intValue = i
-                                                XposedBridge.log("[HyperBounce] Swipe sync from host -> Tab $i")
                                             }
                                             break
                                         }
@@ -126,10 +125,12 @@ class PhysicsHook : IXposedHookLoadPackage {
                 rootView.setViewTreeViewModelStoreOwner(lifecycleOwner)
             } catch (t: Throwable) {}
 
-            val barWidth = (displayWidth * 0.85f).toInt()
+            // Reduce width factor to 0.68f to stay well clear of the New Chat FAB
+            val barWidth = (displayWidth * 0.68f).toInt()
             val barHeight = (64 * density).toInt()
-            val marginBot = (32 * density).toInt()
+            val marginBot = (28 * density).toInt()
 
+            // Hardware Blur View (Resting State Background Blur)
             val blurView = View(context).apply {
                 tag = "HyperFloatingBarBlur"
                 layoutParams = FrameLayout.LayoutParams(barWidth, barHeight).apply {
@@ -137,10 +138,10 @@ class PhysicsHook : IXposedHookLoadPackage {
                     bottomMargin = marginBot
                 }
                 val isDark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-                setBackgroundColor(Color.parseColor(if (isDark) "#801F2C34" else "#80FFFFFF"))
+                setBackgroundColor(Color.parseColor(if (isDark) "#6018222A" else "#60FFFFFF"))
                 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    this.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(40f * density, 40f * density, android.graphics.Shader.TileMode.CLAMP))
+                    this.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(35f * density, 35f * density, android.graphics.Shader.TileMode.CLAMP))
                 }
                 outlineProvider = object : ViewOutlineProvider() {
                     override fun getOutline(view: View, outline: Outline) {
@@ -150,14 +151,15 @@ class PhysicsHook : IXposedHookLoadPackage {
                 clipToOutline = true
             }
 
+            // Compose View Container: 120dp height with clipChildren = false to prevent ANY expansion clipping!
+            val composeContainerHeight = (120 * density).toInt()
             val composeView = ComposeView(context).apply {
                 tag = "HyperFloatingBar"
-                clipChildren = true
-                clipToPadding = true
-                // CRITICAL FIX: Lock Compose dimensions to perfectly match the blur placeholder
-                layoutParams = FrameLayout.LayoutParams(barWidth, barHeight).apply {
+                clipChildren = false
+                clipToPadding = false
+                layoutParams = FrameLayout.LayoutParams(barWidth, composeContainerHeight).apply {
                     gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                    bottomMargin = marginBot
+                    bottomMargin = marginBot - ((120 - 64) / 2 * density).toInt() // Centers Compose 120dp over the 64dp blurView
                 }
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
@@ -166,6 +168,8 @@ class PhysicsHook : IXposedHookLoadPackage {
             }
 
             val rootGroup = rootView as ViewGroup
+            rootGroup.clipChildren = false
+            rootGroup.clipToPadding = false
             rootGroup.addView(blurView)
             rootGroup.addView(composeView)
             

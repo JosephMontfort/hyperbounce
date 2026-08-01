@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -84,10 +85,9 @@ fun LiquidBottomTabs(
 ) {
     val isLightTheme = !isSystemInDarkTheme()
     
-    // Theme-aware colors
-    val containerColor = Color.Transparent
-    val inactiveColor = if (isLightTheme) Color.Black.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.5f)
-    val activeColor = if (isLightTheme) Color.Black else Color.White
+    val containerColor = if (isLightTheme) Color(0xFFFAFAFA).copy(0.2f) else Color(0xFF121212).copy(0.2f)
+    val inactiveColor = if (isLightTheme) Color.Black.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.45f)
+    val activeColor = if (isLightTheme) Color(0xFF0088FF) else Color(0xFF0091FF)
 
     val tabsBackdrop = rememberLayerBackdrop()
 
@@ -145,7 +145,7 @@ fun LiquidBottomTabs(
             )
         }
 
-        // BACKGROUND ROW (Inactive Icons)
+        // 1. INACTIVE BACKGROUND ROW
         CompositionLocalProvider(LocalTabColor provides inactiveColor) {
             Row(
                 Modifier
@@ -153,13 +153,13 @@ fun LiquidBottomTabs(
                     .then(interactiveHighlight.modifier)
                     .height(64.dp)
                     .fillMaxWidth()
-                    .padding(4.dp), // CRITICAL: Padding matches foreground exactly to prevent doubling
+                    .padding(4.dp), // Identical padding prevents double icon vision
                 verticalAlignment = Alignment.CenterVertically,
                 content = content
             )
         }
 
-        // FOREGROUND ROW (Active Icons - only visible through the liquid pill)
+        // 2. ACTIVE FOREGROUND ROW (Captured by tabsBackdrop)
         CompositionLocalProvider(
             LocalLiquidBottomTabScale provides { lerp(1f, 1.2f, dampedDragAnimation.pressProgress) },
             LocalTabColor provides activeColor
@@ -167,22 +167,22 @@ fun LiquidBottomTabs(
             Row(
                 Modifier
                     .clearAndSetSemantics {}
-                    .alpha(0f) // Keep invisible until captured
+                    .alpha(0f)
                     .layerBackdrop(tabsBackdrop)
                     .graphicsLayer { translationX = panelOffset }
                     .then(interactiveHighlight.modifier)
                     .height(64.dp)
                     .fillMaxWidth()
-                    .padding(4.dp), // CRITICAL: Padding matches background exactly to prevent doubling
+                    .padding(4.dp), // Identical padding prevents double icon vision
                 verticalAlignment = Alignment.CenterVertically,
                 content = content
             )
         }
 
-        // LIQUID INDICATOR PILL (The Lens that reveals the foreground)
+        // 3. PURE AGSL LIQUID GLASS INDICATOR PILL
         Box(
             Modifier
-                .padding(4.dp) // Offsets the pill to match the inner bounds of the rows
+                .padding(4.dp)
                 .graphicsLayer { translationX = if (isLtr) dampedDragAnimation.value * tabWidth + panelOffset else size.width - (dampedDragAnimation.value + 1f) * tabWidth + panelOffset }
                 .then(interactiveHighlight.gestureModifier)
                 .then(dampedDragAnimation.modifier)
@@ -191,11 +191,19 @@ fun LiquidBottomTabs(
                     shape = { Capsule() },
                     effects = {
                         val progress = dampedDragAnimation.pressProgress
-                        lens(10.dp.toPx() * progress, 14.dp.toPx() * progress, chromaticAberration = true)
+                        // Always active lens + chromatic aberration dispersion
+                        vibrancy()
+                        blur(6.dp.toPx() * (1f - progress))
+                        lens(
+                            refractionHeight = lerp(12.dp.toPx(), 18.dp.toPx(), progress),
+                            refractionAmount = lerp(16.dp.toPx(), 24.dp.toPx(), progress),
+                            depthEffect = true,
+                            chromaticAberration = true
+                        )
                     },
-                    highlight = { Highlight.Default.copy(alpha = dampedDragAnimation.pressProgress) },
-                    shadow = { Shadow(alpha = dampedDragAnimation.pressProgress) },
-                    innerShadow = { InnerShadow(radius = 8.dp * dampedDragAnimation.pressProgress, alpha = dampedDragAnimation.pressProgress) },
+                    highlight = { Highlight.Default.copy(alpha = 0.85f) },
+                    shadow = { Shadow(radius = 8.dp, color = Color.Black.copy(alpha = 0.15f)) },
+                    innerShadow = { InnerShadow(radius = 8.dp, color = Color.Black.copy(alpha = 0.2f)) },
                     layerBlock = {
                         scaleX = dampedDragAnimation.scaleX; scaleY = dampedDragAnimation.scaleY
                         val velocity = dampedDragAnimation.velocity / 10f
@@ -204,9 +212,11 @@ fun LiquidBottomTabs(
                     },
                     onDrawSurface = {
                         val progress = dampedDragAnimation.pressProgress
-                        val frostedAlpha = if (isLightTheme) 0.35f else 0.25f
-                        drawRect(Color.White.copy(alpha = frostedAlpha), alpha = 1f - progress)
-                        drawRect(Color.White.copy(alpha = frostedAlpha + 0.15f * progress))
+                        val surfaceAlpha = if (isLightTheme) 0.25f else 0.18f
+                        drawRoundRect(
+                            color = Color.White.copy(alpha = lerp(surfaceAlpha, surfaceAlpha + 0.15f, progress)),
+                            cornerRadius = CornerRadius(size.height / 2f)
+                        )
                     }
                 )
                 .height(56.dp)
