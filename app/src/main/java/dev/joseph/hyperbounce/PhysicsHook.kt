@@ -1,9 +1,13 @@
 package dev.joseph.hyperbounce
 
 import android.content.res.Configuration
+import android.graphics.Color
+import android.graphics.Outline
+import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import androidx.compose.ui.platform.ComposeView
@@ -55,10 +59,12 @@ class PhysicsHook : IXposedHookLoadPackage {
 
                                 val injectedRootView = stockBar.rootView as ViewGroup
                                 val customBar = injectedRootView.findViewWithTag<View>("HyperFloatingBar")
+                                val blurView = injectedRootView.findViewWithTag<View>("HyperFloatingBarBlur")
 
                                 if (customBar != null) {
                                     val shouldHide = stockBar.visibility == View.GONE || parentVis == View.GONE || transY > 50f
                                     customBar.visibility = if (shouldHide) View.GONE else View.VISIBLE
+                                    blurView?.visibility = if (shouldHide) View.GONE else View.VISIBLE
                                 }
 
                                 stockBar.alpha = 0f
@@ -74,9 +80,8 @@ class PhysicsHook : IXposedHookLoadPackage {
                                     val currentUiMode = ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
                                     if (lastUiMode != -1 && lastUiMode != currentUiMode) {
                                         lastUiMode = currentUiMode
-                                        if (customBar != null) {
-                                            injectedRootView.removeView(customBar)
-                                        }
+                                        if (customBar != null) injectedRootView.removeView(customBar)
+                                        if (blurView != null) injectedRootView.removeView(blurView)
                                         executeUIHeist(stockBar)
                                     } else if (lastUiMode == -1) {
                                         lastUiMode = currentUiMode
@@ -98,29 +103,60 @@ class PhysicsHook : IXposedHookLoadPackage {
             if (rootView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
             val context = stockBar.context
+            val density = context.resources.displayMetrics.density
+            val displayWidth = context.resources.displayMetrics.widthPixels
             
-            // 1. Create and Resume Fake Lifecycle
+            // Log measurements for kitsune pie tracking
+            XposedBridge.log("[HyperBounce] Injecting Hybrid UI. Width: $displayWidth, Density: $density")
+
             val lifecycleOwner = FakeLifecycleOwner()
             lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
             lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
             lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
-            // 2. CRITICAL FIX: Inject immediately into DecorView BEFORE creating ComposeView.
-            // Do not wait for attach listeners. Compose requires this during onMeasure.
             if (rootView.findViewTreeLifecycleOwner() == null) rootView.setViewTreeLifecycleOwner(lifecycleOwner)
             if (rootView.findViewTreeSavedStateRegistryOwner() == null) rootView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             if (rootView.findViewTreeViewModelStoreOwner() == null) rootView.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
+            // 1. LAYER ONE: Hardware Blur Pill (Perfectly clipped, no rectangle bleed)
+            val blurView = View(context).apply {
+                tag = "HyperFloatingBarBlur"
+                val barWidth = (displayWidth * 0.65f).toInt()
+                val barHeight = (64 * density).toInt()
+                
+                layoutParams = FrameLayout.LayoutParams(barWidth, barHeight).apply {
+                    gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                    bottomMargin = (100 * density).toInt()
+                }
+                
+                val isDark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+                setBackgroundColor(Color.parseColor(if (isDark) "#201F2C34" else "#20FFFFFF"))
+                
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    this.setBackgroundBlurRadius((30 * density).toInt())
+                }
+                
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        outline.setRoundRect(0, 0, view.width, view.height, view.height / 2f)
+                    }
+                }
+                clipToOutline = true
+            }
+
+            // 2. LAYER TWO: Unclipped Compose Engine
             val composeView = ComposeView(context).apply {
                 tag = "HyperFloatingBar"
+                clipChildren = false
+                clipToPadding = false
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
                     gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                    bottomMargin = (100 * density).toInt()
                 }
                 
-                // Inject into ComposeView as a fallback
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
@@ -130,12 +166,16 @@ class PhysicsHook : IXposedHookLoadPackage {
                 }
             }
 
-            // Measuring starts immediately upon addView, so tags MUST be present beforehand.
-            (rootView as ViewGroup).addView(composeView)
+            val rootGroup = rootView as ViewGroup
+            rootGroup.addView(blurView)
+            rootGroup.addView(composeView)
+            XposedBridge.log("[HyperBounce] Hybrid layers attached successfully.")
+            
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Heist Exception: " + e.message)
         }
     }
+}
 
 class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
     val registry = LifecycleRegistry(this)
@@ -149,6 +189,4 @@ class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelSto
     override val lifecycle: Lifecycle get() = registry
     override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
     override val viewModelStore: ViewModelStore get() = store
-}
-
 }

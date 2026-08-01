@@ -12,7 +12,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import androidx.compose.ui.graphics.layer.GraphicsLayerScope
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -63,12 +67,27 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
     var selectedIndex by remember { mutableStateOf(0) }
     val tabs = remember { extractTabs(stockBar) }
     
-    // CRITICAL FIX: Empty backdrop prevents the infinite recursive StackOverflow loop
-    val backdrop = rememberLayerBackdrop()
+    // CRITICAL FIX: Dummy Backdrop executes NO-OP. 
+    // It prevents StackOverflow while allowing AGSL interactiveHighlights to render.
+    val dummyBackdrop = remember {
+        object : Backdrop {
+            override val isCoordinatesDependent = false
+            override val offsetResidualX = 0f
+            override val offsetResidualY = 0f
+            override fun DrawScope.drawBackdrop(
+                density: Density,
+                coordinates: LayoutCoordinates?,
+                layerBlock: (GraphicsLayerScope.() -> Unit)?,
+                downscaleFactor: Int
+            ) {
+                // NO-OP. Do not draw UI tree.
+            }
+        }
+    }
     
     MiuixTheme {
         Box(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
+            modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.BottomCenter
         ) {
             FloatingBottomBar(
@@ -77,7 +96,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
                     selectedIndex = idx
                     clickStockTab(stockBar, idx)
                 },
-                backdrop = backdrop,
+                backdrop = dummyBackdrop,
                 tabsCount = tabs.size,
                 isBlurEnabled = true
             ) {
