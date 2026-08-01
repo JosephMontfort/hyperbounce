@@ -13,7 +13,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendModeFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -185,7 +189,7 @@ fun LiquidBottomTabs(
                     .height(56.dp)
                     .fillMaxWidth()
                     .padding(horizontal = 4.dp)
-                    .graphicsLayer { colorFilter = ColorFilter.tint(accentColor) },
+                    .drawWithContent { drawContent(); drawRect(accentColor, blendMode = BlendMode.SrcIn) },
                 verticalAlignment = Alignment.CenterVertically,
                 content = content
             )
