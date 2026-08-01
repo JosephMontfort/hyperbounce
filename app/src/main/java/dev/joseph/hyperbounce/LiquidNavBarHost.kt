@@ -68,7 +68,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
     val contentColor = if (isLightTheme) Color.Black else Color.White
 
     Box(
-        modifier = Modifier.fillMaxWidth(0.85f),
+        modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.BottomCenter
     ) {
         LiquidBottomTabs(
@@ -79,7 +79,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
             },
             backdrop = dummyBackdrop,
             tabsCount = tabs.size,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxSize()
         ) {
             tabs.forEachIndexed { index, tabData ->
                 LiquidBottomTab(
@@ -89,11 +89,14 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
                     }
                 ) {
                     if (tabData.bitmap != null) {
+                        val isSelected = selectedIndex == index
+                        // Highlight selected icon with accent color, unselected with default
+                        val iconColor = if (isSelected) (if (isLightTheme) Color(0xFF0088FF) else Color(0xFF0091FF)) else contentColor
                         Image(
                             bitmap = tabData.bitmap.asImageBitmap(),
                             contentDescription = null,
                             modifier = Modifier.size(26.dp),
-                            colorFilter = ColorFilter.tint(contentColor)
+                            colorFilter = ColorFilter.tint(iconColor)
                         )
                     }
                 }

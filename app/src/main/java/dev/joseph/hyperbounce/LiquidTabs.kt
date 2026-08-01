@@ -11,9 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
@@ -84,8 +82,7 @@ fun LiquidBottomTabs(
     content: @Composable RowScope.() -> Unit
 ) {
     val isLightTheme = !isSystemInDarkTheme()
-    val accentColor = if (isLightTheme) Color(0xFF0088FF) else Color(0xFF0091FF)
-    val containerColor = if (isLightTheme) Color(0xFFFAFAFA).copy(0.4f) else Color(0xFF121212).copy(0.4f)
+    val containerColor = if (isLightTheme) Color(0xFFFAFAFA).copy(0.3f) else Color(0xFF121212).copy(0.3f)
 
     val tabsBackdrop = rememberLayerBackdrop()
 
@@ -185,11 +182,7 @@ fun LiquidBottomTabs(
                     .then(interactiveHighlight.modifier)
                     .height(56.dp)
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp)
-                    .drawWithContent { 
-                        drawContent() 
-                        drawRect(accentColor, blendMode = BlendMode.SrcIn) 
-                    },
+                    .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 content = content
             )
@@ -219,8 +212,9 @@ fun LiquidBottomTabs(
                     },
                     onDrawSurface = {
                         val progress = dampedDragAnimation.pressProgress
-                        drawRect(if (isLightTheme) Color.Black.copy(0.1f) else Color.White.copy(0.1f), alpha = 1f - progress)
-                        drawRect(Color.Black.copy(alpha = 0.03f * progress))
+                        val baseAlpha = if (isLightTheme) 0.3f else 0.2f
+                        drawRect(Color.White.copy(alpha = baseAlpha), alpha = 1f - progress)
+                        drawRect(Color.White.copy(alpha = baseAlpha + 0.2f * progress))
                     }
                 )
                 .height(56.dp)
