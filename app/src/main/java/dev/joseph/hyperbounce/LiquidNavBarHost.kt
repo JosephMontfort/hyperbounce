@@ -10,14 +10,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.GraphicsLayerScope
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 data class TabData(val bitmap: Bitmap?)
@@ -63,27 +58,13 @@ fun clickStockTab(stockBar: ViewGroup, index: Int) {
 }
 
 @Composable
-fun LiquidNavBarHost(stockBar: ViewGroup) {
+fun LiquidNavBarHost(stockBar: ViewGroup, isDark: Boolean) {
     var selectedIndex by remember { mutableStateOf(0) }
     val tabs = remember { extractTabs(stockBar) }
     
-    val dummyBackdrop = remember {
-        object : Backdrop {
-            override val isCoordinatesDependent = false
-            override val offsetResidualX = 0f
-            override val offsetResidualY = 0f
-            override fun DrawScope.drawBackdrop(
-                density: Density,
-                coordinates: LayoutCoordinates?,
-                layerBlock: (GraphicsLayerScope.() -> Unit)?,
-                downscaleFactor: Int
-            ) { }
-        }
-    }
-    
     MiuixTheme {
         Box(
-            modifier = Modifier.fillMaxWidth(0.85f),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             contentAlignment = Alignment.BottomCenter
         ) {
             FloatingBottomBar(
@@ -92,9 +73,8 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
                     selectedIndex = idx
                     clickStockTab(stockBar, idx)
                 },
-                backdrop = dummyBackdrop,
                 tabsCount = tabs.size,
-                isBlurEnabled = true
+                isDarkTheme = isDark
             ) {
                 tabs.forEachIndexed { index, tabData ->
                     FloatingBottomBarItem(
@@ -107,8 +87,14 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
                             Image(
                                 bitmap = tabData.bitmap.asImageBitmap(),
                                 contentDescription = null,
-                                modifier = Modifier.size(26.dp),
-                                colorFilter = ColorFilter.tint(LocalContentColor.current)
+                                modifier = Modifier.size(28.dp),
+                                // Dynamic Tinting Based on Active State & Theme
+                                colorFilter = ColorFilter.tint(
+                                    if (selectedIndex == index) 
+                                        if (isDark) Color.White else Color.Black 
+                                    else 
+                                        if (isDark) Color(0xFFAAAAAA) else Color(0xFF666666)
+                                )
                             )
                         }
                     }

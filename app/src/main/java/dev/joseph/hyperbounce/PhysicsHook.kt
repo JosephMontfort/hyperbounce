@@ -1,13 +1,9 @@
 package dev.joseph.hyperbounce
 
 import android.content.res.Configuration
-import android.graphics.Color
-import android.graphics.Outline
-import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import androidx.compose.ui.platform.ComposeView
@@ -53,12 +49,10 @@ class PhysicsHook : IXposedHookLoadPackage {
 
                                 val injectedRootView = stockBar.rootView as ViewGroup
                                 val customBar = injectedRootView.findViewWithTag<View>("HyperFloatingBar")
-                                val blurView = injectedRootView.findViewWithTag<View>("HyperFloatingBarBlur")
 
                                 if (customBar != null) {
                                     val shouldHide = stockBar.visibility == View.GONE || parentVis == View.GONE || transY > 50f
                                     customBar.visibility = if (shouldHide) View.GONE else View.VISIBLE
-                                    blurView?.visibility = if (shouldHide) View.GONE else View.VISIBLE
                                 }
 
                                 stockBar.alpha = 0f
@@ -72,7 +66,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                                     if (lastUiMode != -1 && lastUiMode != currentUiMode) {
                                         lastUiMode = currentUiMode
                                         if (customBar != null) injectedRootView.removeView(customBar)
-                                        if (blurView != null) injectedRootView.removeView(blurView)
                                         executeUIHeist(stockBar)
                                     } else if (lastUiMode == -1) lastUiMode = currentUiMode
                                 }
@@ -93,41 +86,16 @@ class PhysicsHook : IXposedHookLoadPackage {
 
             val context = stockBar.context
             val density = context.resources.displayMetrics.density
-            val displayWidth = context.resources.displayMetrics.widthPixels
+            val isDark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
             val lifecycleOwner = FakeLifecycleOwner()
             lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
             lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
             lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
-            try {
-                rootView.setViewTreeLifecycleOwner(lifecycleOwner)
-                rootView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-                rootView.setViewTreeViewModelStoreOwner(lifecycleOwner)
-            } catch (t: Throwable) {}
-
-            val barWidth = (displayWidth * 0.85f).toInt()
-            val barHeight = (64 * density).toInt()
-
-            val blurView = View(context).apply {
-                tag = "HyperFloatingBarBlur"
-                layoutParams = FrameLayout.LayoutParams(barWidth, barHeight).apply {
-                    gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                    bottomMargin = (100 * density).toInt()
-                }
-                val isDark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-                setBackgroundColor(Color.parseColor(if (isDark) "#201F2C34" else "#20FFFFFF"))
-                
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    this.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(30f * density, 30f * density, android.graphics.Shader.TileMode.CLAMP))
-                }
-                outlineProvider = object : ViewOutlineProvider() {
-                    override fun getOutline(view: View, outline: Outline) {
-                        outline.setRoundRect(0, 0, view.width, view.height, view.height / 2f)
-                    }
-                }
-                clipToOutline = true
-            }
+            if (androidx.lifecycle.ViewTreeLifecycleOwner.get(rootView) == null) androidx.lifecycle.ViewTreeLifecycleOwner.set(rootView, lifecycleOwner)
+            if (androidx.savedstate.ViewTreeSavedStateRegistryOwner.get(rootView) == null) androidx.savedstate.ViewTreeSavedStateRegistryOwner.set(rootView, lifecycleOwner)
+            if (androidx.lifecycle.ViewTreeViewModelStoreOwner.get(rootView) == null) androidx.lifecycle.ViewTreeViewModelStoreOwner.set(rootView, lifecycleOwner)
 
             val composeView = ComposeView(context).apply {
                 tag = "HyperFloatingBar"
@@ -135,17 +103,16 @@ class PhysicsHook : IXposedHookLoadPackage {
                 clipToPadding = false
                 layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                    bottomMargin = (100 * density).toInt()
+                    bottomMargin = (32 * density).toInt()
                 }
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
-                setContent { LiquidNavBarHost(stockBar) }
+                
+                setContent { LiquidNavBarHost(stockBar, isDark) }
             }
 
-            val rootGroup = rootView as ViewGroup
-            rootGroup.addView(blurView)
-            rootGroup.addView(composeView)
+            (rootView as ViewGroup).addView(composeView)
             
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Heist Exception: " + e.message)
