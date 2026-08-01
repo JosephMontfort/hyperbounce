@@ -24,7 +24,6 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
@@ -37,10 +36,7 @@ class PhysicsHook : IXposedHookLoadPackage {
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.whatsapp") return
 
-        val wdsBottomBarClass = XposedHelpers.findClassIfExists(
-            "com.whatsapp.ui.wds.components.bottombar.WDSBottomBar",
-            lpparam.classLoader
-        ) ?: return
+        val wdsBottomBarClass = XposedHelpers.findClassIfExists("com.whatsapp.ui.wds.components.bottombar.WDSBottomBar", lpparam.classLoader) ?: return
 
         XposedBridge.hookAllConstructors(wdsBottomBarClass, object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
@@ -69,10 +65,7 @@ class PhysicsHook : IXposedHookLoadPackage {
 
                                 stockBar.alpha = 0f
                                 stockBar.layoutParams?.let { lp ->
-                                    if (lp.height != 0) {
-                                        lp.height = 0
-                                        stockBar.requestLayout()
-                                    }
+                                    if (lp.height != 0) { lp.height = 0; stockBar.requestLayout() }
                                 }
 
                                 val ctx = stockBar.context
@@ -83,9 +76,7 @@ class PhysicsHook : IXposedHookLoadPackage {
                                         if (customBar != null) injectedRootView.removeView(customBar)
                                         if (blurView != null) injectedRootView.removeView(blurView)
                                         executeUIHeist(stockBar)
-                                    } else if (lastUiMode == -1) {
-                                        lastUiMode = currentUiMode
-                                    }
+                                    } else if (lastUiMode == -1) lastUiMode = currentUiMode
                                 }
                                 return true
                             }
@@ -105,9 +96,6 @@ class PhysicsHook : IXposedHookLoadPackage {
             val context = stockBar.context
             val density = context.resources.displayMetrics.density
             val displayWidth = context.resources.displayMetrics.widthPixels
-            
-            // Log measurements for kitsune pie tracking
-            XposedBridge.log("[HyperBounce] Injecting Hybrid UI. Width: $displayWidth, Density: $density")
 
             val lifecycleOwner = FakeLifecycleOwner()
             lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -118,24 +106,21 @@ class PhysicsHook : IXposedHookLoadPackage {
             if (rootView.findViewTreeSavedStateRegistryOwner() == null) rootView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             if (rootView.findViewTreeViewModelStoreOwner() == null) rootView.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
-            // 1. LAYER ONE: Hardware Blur Pill (Perfectly clipped, no rectangle bleed)
+            val barWidth = (displayWidth * 0.85f).toInt()
+            val barHeight = (64 * density).toInt()
+
             val blurView = View(context).apply {
                 tag = "HyperFloatingBarBlur"
-                val barWidth = (displayWidth * 0.85f).toInt()
-                val barHeight = (64 * density).toInt()
-                
                 layoutParams = FrameLayout.LayoutParams(barWidth, barHeight).apply {
                     gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                     bottomMargin = (100 * density).toInt()
                 }
-                
                 val isDark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
                 setBackgroundColor(Color.parseColor(if (isDark) "#201F2C34" else "#20FFFFFF"))
                 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     this.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(30f * density, 30f * density, android.graphics.Shader.TileMode.CLAMP))
                 }
-                
                 outlineProvider = object : ViewOutlineProvider() {
                     override fun getOutline(view: View, outline: Outline) {
                         outline.setRoundRect(0, 0, view.width, view.height, view.height / 2f)
@@ -144,32 +129,23 @@ class PhysicsHook : IXposedHookLoadPackage {
                 clipToOutline = true
             }
 
-            // 2. LAYER TWO: Unclipped Compose Engine
             val composeView = ComposeView(context).apply {
                 tag = "HyperFloatingBar"
                 clipChildren = false
                 clipToPadding = false
-                layoutParams = FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply {
+                layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                     bottomMargin = (100 * density).toInt()
                 }
-                
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
-
-                setContent {
-                    LiquidNavBarHost(stockBar)
-                }
+                setContent { LiquidNavBarHost(stockBar) }
             }
 
             val rootGroup = rootView as ViewGroup
             rootGroup.addView(blurView)
             rootGroup.addView(composeView)
-            XposedBridge.log("[HyperBounce] Hybrid layers attached successfully.")
             
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Heist Exception: " + e.message)
@@ -181,11 +157,7 @@ class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelSto
     val registry = LifecycleRegistry(this)
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
     private val store = ViewModelStore()
-
-    init {
-        savedStateRegistryController.performRestore(null)
-    }
-
+    init { savedStateRegistryController.performRestore(null) }
     override val lifecycle: Lifecycle get() = registry
     override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
     override val viewModelStore: ViewModelStore get() = store

@@ -67,8 +67,6 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
     var selectedIndex by remember { mutableStateOf(0) }
     val tabs = remember { extractTabs(stockBar) }
     
-    // CRITICAL FIX: Dummy Backdrop executes NO-OP. 
-    // It prevents StackOverflow while allowing AGSL interactiveHighlights to render.
     val dummyBackdrop = remember {
         object : Backdrop {
             override val isCoordinatesDependent = false
@@ -79,15 +77,13 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
                 coordinates: LayoutCoordinates?,
                 layerBlock: (GraphicsLayerScope.() -> Unit)?,
                 downscaleFactor: Int
-            ) {
-                // NO-OP. Do not draw UI tree.
-            }
+            ) { }
         }
     }
     
     MiuixTheme {
         Box(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(0.85f),
             contentAlignment = Alignment.BottomCenter
         ) {
             FloatingBottomBar(
@@ -96,7 +92,6 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
                     selectedIndex = idx
                     clickStockTab(stockBar, idx)
                 },
-                modifier = Modifier.fillMaxWidth(0.85f),
                 backdrop = dummyBackdrop,
                 tabsCount = tabs.size,
                 isBlurEnabled = true
