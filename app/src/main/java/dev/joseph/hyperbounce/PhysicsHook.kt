@@ -141,6 +141,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             XposedBridge.log("[HyperBounce] Heist Exception: " + e.message)
         }
     }
+}
 
 class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
     val registry = LifecycleRegistry(this)
