@@ -55,7 +55,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime:2.9.0")
     implementation("androidx.savedstate:savedstate:1.3.0")
     
-    // KernelSU's exact UI engine
-    implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.3")
-    implementation("top.yukonga.miuix.kmp:miuix-blur-android:0.9.3")
+    // Pure Liquid Glass Implementation
+    implementation("io.github.kyant0:backdrop:1.0.6")
+    implementation("io.github.kyant0:shapes:1.2.0")
 }

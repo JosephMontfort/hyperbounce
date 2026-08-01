@@ -189,8 +189,8 @@ class PhysicsHook : IXposedHookLoadPackage {
             // itself at BottomCenter with the correct bottom padding.
             val composeView = ComposeView(context).apply {
                 tag = "HyperFloatingBar"
-                clipChildren = false
-                clipToPadding = false
+                clipChildren = true
+                clipToPadding = true
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,  // full-screen so WindowInsets work

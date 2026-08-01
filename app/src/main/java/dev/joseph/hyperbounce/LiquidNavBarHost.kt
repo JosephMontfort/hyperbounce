@@ -5,18 +5,16 @@ import android.graphics.Canvas
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.theme.LocalContentColor
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-
-// ── Tab icon extraction ───────────────────────────────────────────────────────
+import com.kyant.backdrop.backdrops.emptyBackdrop
 
 data class TabData(val bitmap: Bitmap?)
 
@@ -56,71 +54,47 @@ fun findImageView(group: ViewGroup): ImageView? {
 
 fun clickStockTab(stockBar: ViewGroup, index: Int) {
     val menuContainer = stockBar.getChildAt(0) as? ViewGroup ?: return
-    menuContainer.getChildAt(index)?.performClick()
+    val tab = menuContainer.getChildAt(index)
+    tab?.performClick()
 }
-
-// ── Composable host ───────────────────────────────────────────────────────────
 
 @Composable
 fun LiquidNavBarHost(stockBar: ViewGroup) {
-    var selectedIndex by remember { mutableStateOf(0) }
+    var selectedIndex by remember { mutableIntStateOf(0) }
     val tabs = remember { extractTabs(stockBar) }
+    
+    val dummyBackdrop = emptyBackdrop()
+    val isLightTheme = !isSystemInDarkTheme()
+    val contentColor = if (isLightTheme) Color.Black else Color.White
 
-    MiuixTheme {
-        // ── Glass backdrop ────────────────────────────────────────────────
-        // We can't capture WhatsApp's Compose tree from here, so we use the
-        // surfaceContainer colour as the base plate for the glass effects.
-        // The hardware-blur view in PhysicsHook.kt (RenderEffect) sits below
-        // this ComposeView and provides the real blurred-WhatsApp content
-        // visible through the pill's 40 % alpha surface colour.
-        //
-        // Even with a solid-colour backdrop, the BloomStroke specular
-        // highlight, lens edge distortion, and inner-shadow press effect
-        // are fully rendered and make the pill look like real liquid glass.
-        val surfaceColor = MiuixTheme.colorScheme.surfaceContainer
-        val backdrop = rememberLayerBackdrop {
-            drawRect(surfaceColor)
-        }
-
-        // ── Root: fills the full-screen ComposeView ───────────────────────
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.BottomCenter,
+    Box(
+        modifier = Modifier.fillMaxWidth(0.85f),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        LiquidBottomTabs(
+            selectedTabIndex = { selectedIndex },
+            onTabSelected = { idx -> 
+                selectedIndex = idx
+                clickStockTab(stockBar, idx)
+            },
+            backdrop = dummyBackdrop,
+            tabsCount = tabs.size,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            FloatingBottomBar(
-                modifier = Modifier
-                    .padding(
-                        // 12 dp clearance above the system nav bar,
-                        // matching the KernelSU BottomBarMiuix positioning.
-                        bottom = 12.dp + WindowInsets.navigationBars
-                            .asPaddingValues()
-                            .calculateBottomPadding(),
-                    ),
-                selectedIndex = { selectedIndex },
-                onSelected = { idx ->
-                    selectedIndex = idx
-                    clickStockTab(stockBar, idx)
-                },
-                backdrop = backdrop,
-                tabsCount = tabs.size,
-                isBlurEnabled = true,
-            ) {
-                tabs.forEachIndexed { index, tabData ->
-                    FloatingBottomBarItem(
-                        onClick = {
-                            selectedIndex = index
-                            clickStockTab(stockBar, index)
-                        },
-                        modifier = Modifier.defaultMinSize(minWidth = 64.dp),
-                    ) {
-                        if (tabData.bitmap != null) {
-                            Image(
-                                bitmap = tabData.bitmap.asImageBitmap(),
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                                colorFilter = ColorFilter.tint(LocalContentColor.current),
-                            )
-                        }
+            tabs.forEachIndexed { index, tabData ->
+                LiquidBottomTab(
+                    onClick = {
+                        selectedIndex = index
+                        clickStockTab(stockBar, index)
+                    }
+                ) {
+                    if (tabData.bitmap != null) {
+                        Image(
+                            bitmap = tabData.bitmap.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.size(26.dp),
+                            colorFilter = ColorFilter.tint(contentColor)
+                        )
                     }
                 }
             }
