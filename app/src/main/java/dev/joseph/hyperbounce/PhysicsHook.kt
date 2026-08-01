@@ -100,9 +100,11 @@ class PhysicsHook : IXposedHookLoadPackage {
             lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
             lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
-            if (androidx.lifecycle.ViewTreeLifecycleOwner.get(rootView) == null) androidx.lifecycle.ViewTreeLifecycleOwner.set(rootView, lifecycleOwner)
-            if (androidx.savedstate.ViewTreeSavedStateRegistryOwner.get(rootView) == null) androidx.savedstate.ViewTreeSavedStateRegistryOwner.set(rootView, lifecycleOwner)
-            if (androidx.lifecycle.ViewTreeViewModelStoreOwner.get(rootView) == null) androidx.lifecycle.ViewTreeViewModelStoreOwner.set(rootView, lifecycleOwner)
+            try {
+                rootView.setViewTreeLifecycleOwner(lifecycleOwner)
+                rootView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+                rootView.setViewTreeViewModelStoreOwner(lifecycleOwner)
+            } catch (t: Throwable) {}
 
             val barWidth = (displayWidth * 0.85f).toInt()
             val barHeight = (64 * density).toInt()
