@@ -39,11 +39,45 @@ class PhysicsHook : IXposedHookLoadPackage {
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName == "com.instagram.android") {
-            // Absolute first line check. If this doesn't print, LSPosed is locked out by the OS/Root Hide.
             XposedBridge.log("[HyperBounce-IG] INJECTION SUCCESSFUL into com.instagram.android!")
             hookInstagram()
         } else if (lpparam.packageName == "com.whatsapp") {
             hookWhatsApp(lpparam)
+        }
+    }
+
+    private fun hookInstagram() {
+        XposedBridge.log("[HyperBounce-IG] Setting up Framework Activity lifecycle hooks...")
+        try {
+            // Instagram uses heavily obfuscated Application classes. 
+            // We hook the Android Framework's Activity class directly. Every Activity MUST pass through here.
+            XposedHelpers.findAndHookMethod(
+                android.app.Activity::class.java,
+                "onResume",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val activity = param.thisObject as Activity
+                        // Ensure we only process Instagram activities (since Activity is a framework class)
+                        if (activity.packageName != "com.instagram.android") return
+                        
+                        val activityName = activity.javaClass.simpleName
+                        
+                        val resId = activity.resources.getIdentifier("tab_bar", "id", "com.instagram.android")
+                        if (resId != 0) {
+                            val stockBar = activity.findViewById<ViewGroup>(resId)
+                            if (stockBar != null && stockBar.getTag(stockBar.id) == null) {
+                                stockBar.setTag(stockBar.id, true)
+                                XposedBridge.log("[HyperBounce-IG] tab_bar found in Activity: $activityName!")
+                                
+                                // Placeholder for future Instagram UI Heist
+                                // setupStockBarHook(stockBar)
+                            }
+                        }
+                    }
+                }
+            )
+        } catch (e: Throwable) {
+            XposedBridge.log("[HyperBounce-IG] Failed to hook Activity.onResume: " + e.message)
         }
     }
 
@@ -54,48 +88,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setupStockBarHook(param.thisObject as ViewGroup)
             }
         })
-    }
-
-    private fun hookInstagram() {
-        XposedBridge.log("[HyperBounce-IG] Setting up Application lifecycle hooks...")
-        
-        try {
-            XposedHelpers.findAndHookMethod(
-                android.app.Application::class.java,
-                "onCreate",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val app = param.thisObject as android.app.Application
-                        XposedBridge.log("[HyperBounce-IG] Application.onCreate triggered. Registering universal callbacks.")
-                        
-                        app.registerActivityLifecycleCallbacks(object : android.app.Application.ActivityLifecycleCallbacks {
-                            override fun onActivityResumed(activity: Activity) {
-                                val activityName = activity.javaClass.simpleName
-                                XposedBridge.log("[HyperBounce-IG] Activity Resumed: $activityName")
-                                
-                                val resId = activity.resources.getIdentifier("tab_bar", "id", "com.instagram.android")
-                                if (resId != 0) {
-                                    val stockBar = activity.findViewById<ViewGroup>(resId)
-                                    if (stockBar != null && stockBar.getTag(stockBar.id) == null) {
-                                        stockBar.setTag(stockBar.id, true)
-                                        XposedBridge.log("[HyperBounce-IG] tab_bar found in $activityName! Executing heist.")
-                                        setupStockBarHook(stockBar)
-                                    }
-                                }
-                            }
-                            override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) {}
-                            override fun onActivityStarted(activity: Activity) {}
-                            override fun onActivityPaused(activity: Activity) {}
-                            override fun onActivityStopped(activity: Activity) {}
-                            override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) {}
-                            override fun onActivityDestroyed(activity: Activity) {}
-                        })
-                    }
-                }
-            )
-        } catch (e: Throwable) {
-            XposedBridge.log("[HyperBounce-IG] Failed to hook Application: " + e.message)
-        }
     }
 
     private fun setupStockBarHook(stockBar: ViewGroup) {
@@ -126,9 +118,8 @@ class PhysicsHook : IXposedHookLoadPackage {
                             if (lp.height != 0) { lp.height = 0; stockBar.requestLayout() }
                         }
 
-                        val child0 = stockBar.getChildAt(0)
-                        val menuContainer = if (stockBar.childCount > 1) stockBar else (child0 as? ViewGroup ?: stockBar)
-                        
+                        // Sync WhatsApp native swipes
+                        val menuContainer = stockBar.getChildAt(0) as? ViewGroup
                         if (menuContainer != null) {
                             for (i in 0 until menuContainer.childCount) {
                                 val tab = menuContainer.getChildAt(i)
@@ -179,7 +170,7 @@ class PhysicsHook : IXposedHookLoadPackage {
                 rootView.setViewTreeViewModelStoreOwner(lifecycleOwner)
             } catch (t: Throwable) {}
 
-            val barWidth = (displayWidth * 0.85f).toInt()
+            val barWidth = (displayWidth * 0.68f).toInt()
             val barHeight = (64 * density).toInt()
             val marginBot = (28 * density).toInt()
 
@@ -225,7 +216,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             rootGroup.addView(composeView)
             
         } catch (e: Exception) {
-            XposedBridge.log("[HyperBounce-IG] Heist Exception: " + e.message)
+            XposedBridge.log("[HyperBounce] Heist Exception: " + e.message)
         }
     }
 }
