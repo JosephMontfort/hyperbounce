@@ -4,21 +4,19 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.ViewGroup
 import android.widget.ImageView
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.GraphicsLayerScope
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import top.yukonga.miuix.kmp.blur.Backdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+// ── Tab icon extraction ───────────────────────────────────────────────────────
 
 data class TabData(val bitmap: Bitmap?)
 
@@ -58,58 +56,69 @@ fun findImageView(group: ViewGroup): ImageView? {
 
 fun clickStockTab(stockBar: ViewGroup, index: Int) {
     val menuContainer = stockBar.getChildAt(0) as? ViewGroup ?: return
-    val tab = menuContainer.getChildAt(index)
-    tab?.performClick()
+    menuContainer.getChildAt(index)?.performClick()
 }
+
+// ── Composable host ───────────────────────────────────────────────────────────
 
 @Composable
 fun LiquidNavBarHost(stockBar: ViewGroup) {
     var selectedIndex by remember { mutableStateOf(0) }
     val tabs = remember { extractTabs(stockBar) }
-    
-    val dummyBackdrop = remember {
-        object : Backdrop {
-            override val isCoordinatesDependent = false
-            override val offsetResidualX = 0f
-            override val offsetResidualY = 0f
-            override fun DrawScope.drawBackdrop(
-                density: Density,
-                coordinates: LayoutCoordinates?,
-                layerBlock: (GraphicsLayerScope.() -> Unit)?,
-                downscaleFactor: Int
-            ) { }
-        }
-    }
-    
+
     MiuixTheme {
+        // ── Glass backdrop ────────────────────────────────────────────────
+        // We can't capture WhatsApp's Compose tree from here, so we use the
+        // surfaceContainer colour as the base plate for the glass effects.
+        // The hardware-blur view in PhysicsHook.kt (RenderEffect) sits below
+        // this ComposeView and provides the real blurred-WhatsApp content
+        // visible through the pill's 40 % alpha surface colour.
+        //
+        // Even with a solid-colour backdrop, the BloomStroke specular
+        // highlight, lens edge distortion, and inner-shadow press effect
+        // are fully rendered and make the pill look like real liquid glass.
+        val surfaceColor = MiuixTheme.colorScheme.surfaceContainer
+        val backdrop = rememberLayerBackdrop {
+            drawRect(surfaceColor)
+        }
+
+        // ── Root: fills the full-screen ComposeView ───────────────────────
         Box(
-            modifier = Modifier.fillMaxWidth(0.85f),
-            contentAlignment = Alignment.BottomCenter
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.BottomCenter,
         ) {
             FloatingBottomBar(
-                modifier = Modifier.fillMaxWidth(0.85f),
+                modifier = Modifier
+                    .padding(
+                        // 12 dp clearance above the system nav bar,
+                        // matching the KernelSU BottomBarMiuix positioning.
+                        bottom = 12.dp + WindowInsets.navigationBars
+                            .asPaddingValues()
+                            .calculateBottomPadding(),
+                    ),
                 selectedIndex = { selectedIndex },
-                onSelected = { idx -> 
+                onSelected = { idx ->
                     selectedIndex = idx
                     clickStockTab(stockBar, idx)
                 },
-                backdrop = dummyBackdrop,
+                backdrop = backdrop,
                 tabsCount = tabs.size,
-                isBlurEnabled = true
+                isBlurEnabled = true,
             ) {
                 tabs.forEachIndexed { index, tabData ->
                     FloatingBottomBarItem(
                         onClick = {
                             selectedIndex = index
                             clickStockTab(stockBar, index)
-                        }
+                        },
+                        modifier = Modifier.defaultMinSize(minWidth = 64.dp),
                     ) {
                         if (tabData.bitmap != null) {
                             Image(
                                 bitmap = tabData.bitmap.asImageBitmap(),
                                 contentDescription = null,
-                                modifier = Modifier.size(26.dp),
-                                colorFilter = ColorFilter.tint(LocalContentColor.current)
+                                modifier = Modifier.size(24.dp),
+                                colorFilter = ColorFilter.tint(LocalContentColor.current),
                             )
                         }
                     }
