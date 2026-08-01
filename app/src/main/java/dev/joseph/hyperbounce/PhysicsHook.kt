@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -27,6 +28,10 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+
+object NavSync {
+    val externalSelectedTab = mutableIntStateOf(0)
+}
 
 class PhysicsHook : IXposedHookLoadPackage {
     private var lastUiMode = -1
@@ -64,6 +69,21 @@ class PhysicsHook : IXposedHookLoadPackage {
                                 stockBar.alpha = 0f
                                 stockBar.layoutParams?.let { lp ->
                                     if (lp.height != 0) { lp.height = 0; stockBar.requestLayout() }
+                                }
+
+                                // Sync WhatsApp swipe changes
+                                val menuContainer = stockBar.getChildAt(0) as? ViewGroup
+                                if (menuContainer != null) {
+                                    for (i in 0 until menuContainer.childCount) {
+                                        val tab = menuContainer.getChildAt(i)
+                                        if (tab.isSelected || tab.isActivated) {
+                                            if (NavSync.externalSelectedTab.intValue != i) {
+                                                NavSync.externalSelectedTab.intValue = i
+                                                XposedBridge.log("[HyperBounce] Swipe sync from host -> Tab $i")
+                                            }
+                                            break
+                                        }
+                                    }
                                 }
 
                                 val ctx = stockBar.context
@@ -117,8 +137,7 @@ class PhysicsHook : IXposedHookLoadPackage {
                     bottomMargin = marginBot
                 }
                 val isDark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-                // Amped up opacity to 40% (#66 hex) to create a stronger resting frosted glass base
-                setBackgroundColor(Color.parseColor(if (isDark) "#661F2C34" else "#66FFFFFF"))
+                setBackgroundColor(Color.parseColor(if (isDark) "#801F2C34" else "#80FFFFFF"))
                 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     this.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(40f * density, 40f * density, android.graphics.Shader.TileMode.CLAMP))
@@ -133,9 +152,10 @@ class PhysicsHook : IXposedHookLoadPackage {
 
             val composeView = ComposeView(context).apply {
                 tag = "HyperFloatingBar"
-                clipChildren = false // Allow Compose shadows to bleed safely
-                clipToPadding = false
-                layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                clipChildren = true
+                clipToPadding = true
+                // CRITICAL FIX: Lock Compose dimensions to perfectly match the blur placeholder
+                layoutParams = FrameLayout.LayoutParams(barWidth, barHeight).apply {
                     gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                     bottomMargin = marginBot
                 }

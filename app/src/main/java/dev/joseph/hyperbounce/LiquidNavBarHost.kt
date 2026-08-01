@@ -5,12 +5,10 @@ import android.graphics.Canvas
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
@@ -60,51 +58,54 @@ fun clickStockTab(stockBar: ViewGroup, index: Int) {
 
 @Composable
 fun LiquidNavBarHost(stockBar: ViewGroup) {
-    var selectedIndex by remember { mutableIntStateOf(0) }
+    var selectedIndex by remember { mutableIntStateOf(NavSync.externalSelectedTab.intValue) }
     val tabs = remember { extractTabs(stockBar) }
     
-    val dummyBackdrop = emptyBackdrop()
-    val isLightTheme = !isSystemInDarkTheme()
-    val contentColor = if (isLightTheme) Color.Black else Color.White
+    // Sync external swipes from WhatsApp
+    LaunchedEffect(NavSync.externalSelectedTab.intValue) {
+        val externalIdx = NavSync.externalSelectedTab.intValue
+        if (selectedIndex != externalIdx) {
+            selectedIndex = externalIdx
+        }
+    }
 
-    // This wrapper spans MATCH_PARENT to center the UI
+    val dummyBackdrop = emptyBackdrop()
+
     Box(
-        modifier = Modifier.fillMaxWidth(),
-        contentAlignment = Alignment.BottomCenter
+        modifier = Modifier.fillMaxSize(), // Matches LayoutParams exact bounds
+        contentAlignment = Alignment.Center
     ) {
-        // This Box geometrically locks the Nav Bar to exactly match the blurView
-        Box(
-            modifier = Modifier.fillMaxWidth(0.85f).height(64.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            LiquidBottomTabs(
-                selectedTabIndex = { selectedIndex },
-                onTabSelected = { idx -> 
-                    selectedIndex = idx
+        LiquidBottomTabs(
+            selectedTabIndex = { selectedIndex },
+            onTabSelected = { idx -> 
+                selectedIndex = idx
+                if (NavSync.externalSelectedTab.intValue != idx) {
+                    NavSync.externalSelectedTab.intValue = idx
                     clickStockTab(stockBar, idx)
-                },
-                backdrop = dummyBackdrop,
-                tabsCount = tabs.size,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                tabs.forEachIndexed { index, tabData ->
-                    LiquidBottomTab(
-                        onClick = {
-                            selectedIndex = index
+                }
+            },
+            backdrop = dummyBackdrop,
+            tabsCount = tabs.size,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            tabs.forEachIndexed { index, tabData ->
+                LiquidBottomTab(
+                    onClick = {
+                        selectedIndex = index
+                        if (NavSync.externalSelectedTab.intValue != index) {
+                            NavSync.externalSelectedTab.intValue = index
                             clickStockTab(stockBar, index)
                         }
-                    ) {
-                        if (tabData.bitmap != null) {
-                            val isSelected = selectedIndex == index
-                            // Bold active icons, soft alpha for inactive
-                            val iconColor = if (isSelected) contentColor else contentColor.copy(alpha = 0.5f)
-                            Image(
-                                bitmap = tabData.bitmap.asImageBitmap(),
-                                contentDescription = null,
-                                modifier = Modifier.size(26.dp),
-                                colorFilter = ColorFilter.tint(iconColor)
-                            )
-                        }
+                    }
+                ) {
+                    if (tabData.bitmap != null) {
+                        Image(
+                            bitmap = tabData.bitmap.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.size(26.dp),
+                            // LocalTabColor allows the liquid layer to transition smoothly
+                            colorFilter = ColorFilter.tint(LocalTabColor.current)
+                        )
                     }
                 }
             }

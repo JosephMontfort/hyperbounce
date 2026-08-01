@@ -42,6 +42,7 @@ import kotlin.math.abs
 import kotlin.math.sign
 
 internal val LocalLiquidBottomTabScale = staticCompositionLocalOf { { 1f } }
+val LocalTabColor = staticCompositionLocalOf { Color.Unspecified }
 
 @Composable
 fun RowScope.LiquidBottomTab(
@@ -82,7 +83,11 @@ fun LiquidBottomTabs(
     content: @Composable RowScope.() -> Unit
 ) {
     val isLightTheme = !isSystemInDarkTheme()
-    val containerColor = if (isLightTheme) Color(0xFFFAFAFA).copy(0.3f) else Color(0xFF121212).copy(0.3f)
+    
+    // Theme-aware colors
+    val containerColor = Color.Transparent
+    val inactiveColor = if (isLightTheme) Color.Black.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.5f)
+    val activeColor = if (isLightTheme) Color.Black else Color.White
 
     val tabsBackdrop = rememberLayerBackdrop()
 
@@ -140,57 +145,44 @@ fun LiquidBottomTabs(
             )
         }
 
-        Row(
-            Modifier
-                .graphicsLayer { translationX = panelOffset }
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { Capsule() },
-                    effects = { vibrancy(); blur(8.dp.toPx()); lens(24.dp.toPx(), 24.dp.toPx()) },
-                    layerBlock = {
-                        val progress = dampedDragAnimation.pressProgress
-                        val scale = lerp(1f, 1f + 16.dp.toPx() / size.width, progress)
-                        scaleX = scale; scaleY = scale
-                    },
-                    onDrawSurface = { drawRect(containerColor) }
-                )
-                .then(interactiveHighlight.modifier)
-                .height(64.dp)
-                .fillMaxWidth()
-                .padding(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            content = content
-        )
-
-        CompositionLocalProvider(LocalLiquidBottomTabScale provides { lerp(1f, 1.2f, dampedDragAnimation.pressProgress) }) {
+        // BACKGROUND ROW (Inactive Icons)
+        CompositionLocalProvider(LocalTabColor provides inactiveColor) {
             Row(
                 Modifier
-                    .clearAndSetSemantics {}
-                    .alpha(0f) // Keep icons invisible on this layer, only here to map positions
-                    .layerBackdrop(tabsBackdrop)
                     .graphicsLayer { translationX = panelOffset }
-                    .drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { Capsule() },
-                        effects = {
-                            val progress = dampedDragAnimation.pressProgress
-                            vibrancy(); blur(8.dp.toPx()); lens(24.dp.toPx() * progress, 24.dp.toPx() * progress)
-                        },
-                        highlight = { Highlight.Default.copy(alpha = dampedDragAnimation.pressProgress) },
-                        onDrawSurface = { drawRect(containerColor) }
-                    )
                     .then(interactiveHighlight.modifier)
-                    .height(56.dp)
+                    .height(64.dp)
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
+                    .padding(4.dp), // CRITICAL: Padding matches foreground exactly to prevent doubling
                 verticalAlignment = Alignment.CenterVertically,
                 content = content
             )
         }
 
+        // FOREGROUND ROW (Active Icons - only visible through the liquid pill)
+        CompositionLocalProvider(
+            LocalLiquidBottomTabScale provides { lerp(1f, 1.2f, dampedDragAnimation.pressProgress) },
+            LocalTabColor provides activeColor
+        ) {
+            Row(
+                Modifier
+                    .clearAndSetSemantics {}
+                    .alpha(0f) // Keep invisible until captured
+                    .layerBackdrop(tabsBackdrop)
+                    .graphicsLayer { translationX = panelOffset }
+                    .then(interactiveHighlight.modifier)
+                    .height(64.dp)
+                    .fillMaxWidth()
+                    .padding(4.dp), // CRITICAL: Padding matches background exactly to prevent doubling
+                verticalAlignment = Alignment.CenterVertically,
+                content = content
+            )
+        }
+
+        // LIQUID INDICATOR PILL (The Lens that reveals the foreground)
         Box(
             Modifier
-                .padding(horizontal = 4.dp)
+                .padding(4.dp) // Offsets the pill to match the inner bounds of the rows
                 .graphicsLayer { translationX = if (isLtr) dampedDragAnimation.value * tabWidth + panelOffset else size.width - (dampedDragAnimation.value + 1f) * tabWidth + panelOffset }
                 .then(interactiveHighlight.gestureModifier)
                 .then(dampedDragAnimation.modifier)
@@ -212,9 +204,9 @@ fun LiquidBottomTabs(
                     },
                     onDrawSurface = {
                         val progress = dampedDragAnimation.pressProgress
-                        val baseAlpha = if (isLightTheme) 0.25f else 0.2f
-                        drawRect(Color.White.copy(alpha = baseAlpha), alpha = 1f - progress)
-                        drawRect(Color.White.copy(alpha = baseAlpha + 0.15f * progress))
+                        val frostedAlpha = if (isLightTheme) 0.35f else 0.25f
+                        drawRect(Color.White.copy(alpha = frostedAlpha), alpha = 1f - progress)
+                        drawRect(Color.White.copy(alpha = frostedAlpha + 0.15f * progress))
                     }
                 )
                 .height(56.dp)
