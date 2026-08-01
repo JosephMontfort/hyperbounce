@@ -87,6 +87,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
             contentAlignment = Alignment.BottomCenter
         ) {
             FloatingBottomBar(
+                modifier = Modifier.fillMaxWidth(0.85f),
                 selectedIndex = { selectedIndex },
                 onSelected = { idx -> 
                     selectedIndex = idx
