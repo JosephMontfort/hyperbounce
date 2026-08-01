@@ -150,3 +150,5 @@ class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelSto
     override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
     override val viewModelStore: ViewModelStore get() = store
 }
+
+}
