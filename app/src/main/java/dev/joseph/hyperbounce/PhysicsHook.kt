@@ -99,6 +99,18 @@ class PhysicsHook : IXposedHookLoadPackage {
 
             val context = stockBar.context
             
+            // 1. Create and Resume Fake Lifecycle
+            val lifecycleOwner = FakeLifecycleOwner()
+            lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+            lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+            lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+
+            // 2. CRITICAL FIX: Inject immediately into DecorView BEFORE creating ComposeView.
+            // Do not wait for attach listeners. Compose requires this during onMeasure.
+            if (rootView.findViewTreeLifecycleOwner() == null) rootView.setViewTreeLifecycleOwner(lifecycleOwner)
+            if (rootView.findViewTreeSavedStateRegistryOwner() == null) rootView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            if (rootView.findViewTreeViewModelStoreOwner() == null) rootView.setViewTreeViewModelStoreOwner(lifecycleOwner)
+
             val composeView = ComposeView(context).apply {
                 tag = "HyperFloatingBar"
                 layoutParams = FrameLayout.LayoutParams(
@@ -108,40 +120,22 @@ class PhysicsHook : IXposedHookLoadPackage {
                     gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                 }
                 
-                val lifecycleOwner = FakeLifecycleOwner()
-                
-                // CRITICAL FIX: Bind lifecycle directly to WhatsApp's DecorView exactly when attached
-                addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-                    override fun onViewAttachedToWindow(v: View) {
-                        val root = v.rootView
-                        root.setViewTreeLifecycleOwner(lifecycleOwner)
-                        root.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-                        root.setViewTreeViewModelStoreOwner(lifecycleOwner)
-                        
-                        v.setViewTreeLifecycleOwner(lifecycleOwner)
-                        v.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-                        v.setViewTreeViewModelStoreOwner(lifecycleOwner)
-                        
-                        lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-                        lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-                        lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-                    }
-                    override fun onViewDetachedFromWindow(v: View) {
-                        lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-                    }
-                })
+                // Inject into ComposeView as a fallback
+                setViewTreeLifecycleOwner(lifecycleOwner)
+                setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+                setViewTreeViewModelStoreOwner(lifecycleOwner)
 
                 setContent {
                     LiquidNavBarHost(stockBar)
                 }
             }
 
+            // Measuring starts immediately upon addView, so tags MUST be present beforehand.
             (rootView as ViewGroup).addView(composeView)
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Heist Exception: " + e.message)
         }
     }
-}
 
 class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
     val registry = LifecycleRegistry(this)
