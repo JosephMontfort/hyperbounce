@@ -185,7 +185,7 @@ fun LiquidBottomTabs(
                     .height(56.dp)
                     .fillMaxWidth()
                     .padding(horizontal = 4.dp)
-                    .graphicsLayer(colorFilter = ColorFilter.tint(accentColor)),
+                    .graphicsLayer { colorFilter = ColorFilter.tint(accentColor) },
                 verticalAlignment = Alignment.CenterVertically,
                 content = content
             )
