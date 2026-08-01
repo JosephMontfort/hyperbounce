@@ -18,8 +18,6 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
-import androidx.lifecycle.findViewTreeLifecycleOwner
-import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
@@ -102,9 +100,9 @@ class PhysicsHook : IXposedHookLoadPackage {
             lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
             lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
-            if (rootView.findViewTreeLifecycleOwner() == null) rootView.setViewTreeLifecycleOwner(lifecycleOwner)
-            if (rootView.findViewTreeSavedStateRegistryOwner() == null) rootView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            if (rootView.findViewTreeViewModelStoreOwner() == null) rootView.setViewTreeViewModelStoreOwner(lifecycleOwner)
+            if (androidx.lifecycle.ViewTreeLifecycleOwner.get(rootView) == null) androidx.lifecycle.ViewTreeLifecycleOwner.set(rootView, lifecycleOwner)
+            if (androidx.savedstate.ViewTreeSavedStateRegistryOwner.get(rootView) == null) androidx.savedstate.ViewTreeSavedStateRegistryOwner.set(rootView, lifecycleOwner)
+            if (androidx.lifecycle.ViewTreeViewModelStoreOwner.get(rootView) == null) androidx.lifecycle.ViewTreeViewModelStoreOwner.set(rootView, lifecycleOwner)
 
             val barWidth = (displayWidth * 0.85f).toInt()
             val barHeight = (64 * density).toInt()

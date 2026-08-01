@@ -273,7 +273,7 @@ class DampedDragAnimation(
     val scaleY: Float get() = scaleYAnimation.value
     val velocity: Float get() = velocityAnimation.value
 
-    val modifier: Modifier get() = Modifier.pointerInput(Unit) {
+    val modifier: Modifier = Modifier.pointerInput(Unit) {
         detectDragGestures(
             onDragStart = { offset -> onDragStarted(offset); press() },
             onDragEnd = { onDragStopped(); release() },
@@ -310,7 +310,7 @@ class InteractiveHighlight(val animationScope: CoroutineScope, val position: (si
     private var startPosition = Offset.Zero
     private val shader = RuntimeShader("uniform float2 size; layout(color) uniform half4 color; uniform float radius; uniform float2 position; half4 main(float2 coord) { float dist = distance(coord, position); float intensity = smoothstep(radius, radius * 0.5, dist); return color * intensity; }")
 
-    val modifier: Modifier get() = Modifier.drawWithContent {
+    val modifier: Modifier = Modifier.drawWithContent {
         val progress = pressProgressAnimation.value
         if (progress > 0f) {
             drawRect(Color.White.copy(0.06f * progress), blendMode = BlendMode.Plus)
@@ -320,7 +320,7 @@ class InteractiveHighlight(val animationScope: CoroutineScope, val position: (si
         drawContent()
     }
 
-    val gestureModifier: Modifier get() = Modifier.pointerInput(animationScope) {
+    val gestureModifier: Modifier = Modifier.pointerInput(animationScope) {
         detectDragGestures(
             onDragStart = { offset -> startPosition = offset; animationScope.launch { launch { pressProgressAnimation.animateTo(1f, spring(0.5f, 300f, 0.001f)) }; launch { positionAnimation.snapTo(startPosition) } } },
             onDragEnd = { animationScope.launch { launch { pressProgressAnimation.animateTo(0f, spring(0.5f, 300f, 0.001f)) }; launch { positionAnimation.animateTo(startPosition, spring(0.5f, 300f, Offset.VisibilityThreshold)) } } },
@@ -368,10 +368,8 @@ private class InnerShadowNode(var shape: Shape, var shadow: () -> InnerShadow?) 
         val radPx = shadow.radius.toPx()
         layer.renderEffect = if (radPx > 0f) BlurEffect(radPx, radPx, TileMode.Decal) else null
         
-        // BREAK DENSITY LOOP: Pre-calculate px to avoid DrawScope getDensity inside layer.record
         val offsetX = shadow.offset.x.toPx()
         val offsetY = shadow.offset.y.toPx()
-        layer.density = Density(this.density, this.fontScale)
         
         layer.record { 
             drawContext.canvas.let { canvas -> 
