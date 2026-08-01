@@ -122,7 +122,6 @@ fun FloatingBottomBar(
     val surfaceContainer = MiuixTheme.colorScheme.surfaceContainer
     val containerColor = if (isBlurEnabled) surfaceContainer.copy(0.4f) else surfaceContainer
 
-    val tabsBackdrop = rememberLayerBackdrop()
     val density = LocalDensity.current
     val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
     val animationScope = rememberCoroutineScope()
@@ -193,7 +192,6 @@ fun FloatingBottomBar(
 
     val baseHighlight = rememberGravityRotatedHighlight(iosIndicatorSpecular, extraDegrees = -45f)
     val pillHighlight = rememberGravityRotatedHighlight(iosIndicatorSpecular, extraDegrees = 90f)
-    val combinedBackdrop = rememberCombinedBackdrop(backdrop, tabsBackdrop)
 
     Box(modifier = modifier.width(IntrinsicSize.Min), contentAlignment = Alignment.CenterStart) {
         Row(
@@ -221,7 +219,7 @@ fun FloatingBottomBar(
         if (isBlurEnabled) {
             CompositionLocalProvider(LocalFloatingBottomBarTabScale provides { androidx.compose.ui.util.lerp(1f, 1.2f, dampedDragAnimation.pressProgress) }, LocalContentColor provides accentColor) {
                 Row(
-                    Modifier.clearAndSetSemantics {}.alpha(0f).layerBackdrop(tabsBackdrop).graphicsLayer { translationX = panelOffset }
+                    Modifier.clearAndSetSemantics {}.alpha(0f).graphicsLayer { translationX = panelOffset }
                         .drawBackdrop(
                             backdrop = backdrop, shape = { pillShape },
                             effects = { vibrancy(); blur(4.dp.toPx(), 4.dp.toPx()); lens(24.dp.toPx(), 24.dp.toPx()) },
@@ -241,7 +239,7 @@ fun FloatingBottomBar(
                         translationX = if (isLtr) progressOffset + panelOffset else -progressOffset + panelOffset
                     }.then(interactiveHighlight.gestureModifier).then(dampedDragAnimation.modifier)
                     .drawBackdrop(
-                        backdrop = combinedBackdrop, shape = { pillShape },
+                        backdrop = backdrop, shape = { pillShape },
                         effects = {
                             val progress = dampedDragAnimation.pressProgress
                             lens(10.dp.toPx() * progress, 14.dp.toPx() * progress, depthEffect = true, chromaticAberration = 0.5f)
