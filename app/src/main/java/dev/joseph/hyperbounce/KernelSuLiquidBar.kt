@@ -193,9 +193,9 @@ fun FloatingBottomBar(
     val baseHighlight = rememberGravityRotatedHighlight(iosIndicatorSpecular, extraDegrees = -45f)
     val pillHighlight = rememberGravityRotatedHighlight(iosIndicatorSpecular, extraDegrees = 90f)
 
-    Box(modifier = modifier.width(IntrinsicSize.Min), contentAlignment = Alignment.CenterStart) {
+    Box(modifier = modifier, contentAlignment = Alignment.CenterStart) {
         Row(
-            Modifier.onGloballyPositioned { coords ->
+            Modifier.fillMaxWidth().onGloballyPositioned { coords ->
                 totalWidthPx = coords.size.width.toFloat()
                 tabWidthPx = ((totalWidthPx - with(density) { 8.dp.toPx() }) / tabsCount).coerceAtLeast(0f)
             }.graphicsLayer { translationX = panelOffset }.shadow(elevation = 10.dp, shape = pillShape)
@@ -219,7 +219,7 @@ fun FloatingBottomBar(
         if (isBlurEnabled) {
             CompositionLocalProvider(LocalFloatingBottomBarTabScale provides { androidx.compose.ui.util.lerp(1f, 1.2f, dampedDragAnimation.pressProgress) }, LocalContentColor provides accentColor) {
                 Row(
-                    Modifier.clearAndSetSemantics {}.alpha(0f).graphicsLayer { translationX = panelOffset }
+                    Modifier.fillMaxWidth().clearAndSetSemantics {}.alpha(0f).graphicsLayer { translationX = panelOffset }
                         .drawBackdrop(
                             backdrop = backdrop, shape = { pillShape },
                             effects = { vibrancy(); blur(4.dp.toPx(), 4.dp.toPx()); lens(24.dp.toPx(), 24.dp.toPx()) },

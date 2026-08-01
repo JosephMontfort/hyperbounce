@@ -96,9 +96,10 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
                     selectedIndex = idx
                     clickStockTab(stockBar, idx)
                 },
+                modifier = Modifier.fillMaxWidth(0.85f),
                 backdrop = dummyBackdrop,
                 tabsCount = tabs.size,
-                isBlurEnabled = false
+                isBlurEnabled = true
             ) {
                 tabs.forEachIndexed { index, tabData ->
                     FloatingBottomBarItem(

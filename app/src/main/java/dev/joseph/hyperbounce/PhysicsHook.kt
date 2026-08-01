@@ -121,7 +121,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             // 1. LAYER ONE: Hardware Blur Pill (Perfectly clipped, no rectangle bleed)
             val blurView = View(context).apply {
                 tag = "HyperFloatingBarBlur"
-                val barWidth = (displayWidth * 0.65f).toInt()
+                val barWidth = (displayWidth * 0.85f).toInt()
                 val barHeight = (64 * density).toInt()
                 
                 layoutParams = FrameLayout.LayoutParams(barWidth, barHeight).apply {
