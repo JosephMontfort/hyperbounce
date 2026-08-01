@@ -166,7 +166,7 @@ fun LiquidBottomTabs(
             Row(
                 Modifier
                     .clearAndSetSemantics {}
-                    .alpha(0f)
+                    .alpha(0f) // Keep icons invisible on this layer, only here to map positions
                     .layerBackdrop(tabsBackdrop)
                     .graphicsLayer { translationX = panelOffset }
                     .drawBackdrop(
@@ -212,9 +212,9 @@ fun LiquidBottomTabs(
                     },
                     onDrawSurface = {
                         val progress = dampedDragAnimation.pressProgress
-                        val baseAlpha = if (isLightTheme) 0.3f else 0.2f
+                        val baseAlpha = if (isLightTheme) 0.25f else 0.2f
                         drawRect(Color.White.copy(alpha = baseAlpha), alpha = 1f - progress)
-                        drawRect(Color.White.copy(alpha = baseAlpha + 0.2f * progress))
+                        drawRect(Color.White.copy(alpha = baseAlpha + 0.15f * progress))
                     }
                 )
                 .height(56.dp)

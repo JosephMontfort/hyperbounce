@@ -67,37 +67,44 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
     val isLightTheme = !isSystemInDarkTheme()
     val contentColor = if (isLightTheme) Color.Black else Color.White
 
+    // This wrapper spans MATCH_PARENT to center the UI
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.BottomCenter
     ) {
-        LiquidBottomTabs(
-            selectedTabIndex = { selectedIndex },
-            onTabSelected = { idx -> 
-                selectedIndex = idx
-                clickStockTab(stockBar, idx)
-            },
-            backdrop = dummyBackdrop,
-            tabsCount = tabs.size,
-            modifier = Modifier.fillMaxSize()
+        // This Box geometrically locks the Nav Bar to exactly match the blurView
+        Box(
+            modifier = Modifier.fillMaxWidth(0.85f).height(64.dp),
+            contentAlignment = Alignment.Center
         ) {
-            tabs.forEachIndexed { index, tabData ->
-                LiquidBottomTab(
-                    onClick = {
-                        selectedIndex = index
-                        clickStockTab(stockBar, index)
-                    }
-                ) {
-                    if (tabData.bitmap != null) {
-                        val isSelected = selectedIndex == index
-                        // Highlight selected icon with accent color, unselected with default
-                        val iconColor = if (isSelected) (if (isLightTheme) Color(0xFF0088FF) else Color(0xFF0091FF)) else contentColor
-                        Image(
-                            bitmap = tabData.bitmap.asImageBitmap(),
-                            contentDescription = null,
-                            modifier = Modifier.size(26.dp),
-                            colorFilter = ColorFilter.tint(iconColor)
-                        )
+            LiquidBottomTabs(
+                selectedTabIndex = { selectedIndex },
+                onTabSelected = { idx -> 
+                    selectedIndex = idx
+                    clickStockTab(stockBar, idx)
+                },
+                backdrop = dummyBackdrop,
+                tabsCount = tabs.size,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                tabs.forEachIndexed { index, tabData ->
+                    LiquidBottomTab(
+                        onClick = {
+                            selectedIndex = index
+                            clickStockTab(stockBar, index)
+                        }
+                    ) {
+                        if (tabData.bitmap != null) {
+                            val isSelected = selectedIndex == index
+                            // Bold active icons, soft alpha for inactive
+                            val iconColor = if (isSelected) contentColor else contentColor.copy(alpha = 0.5f)
+                            Image(
+                                bitmap = tabData.bitmap.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.size(26.dp),
+                                colorFilter = ColorFilter.tint(iconColor)
+                            )
+                        }
                     }
                 }
             }
