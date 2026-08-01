@@ -133,7 +133,7 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setBackgroundColor(Color.parseColor(if (isDark) "#201F2C34" else "#20FFFFFF"))
                 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    this.setBackgroundBlurRadius((30 * density).toInt())
+                    this.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(30f * density, 30f * density, android.graphics.Shader.TileMode.CLAMP))
                 }
                 
                 outlineProvider = object : ViewOutlineProvider() {
