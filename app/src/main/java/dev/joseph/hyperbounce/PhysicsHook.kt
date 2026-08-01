@@ -55,13 +55,12 @@ class PhysicsHook : IXposedHookLoadPackage {
                         stockBar.viewTreeObserver.addOnPreDrawListener(
                             object : ViewTreeObserver.OnPreDrawListener {
                                 override fun onPreDraw(): Boolean {
-                                    val p = stockBar.parent
-                                    val parentVis = if (p is View) p.visibility else -1
-                                    val transY = stockBar.translationY
+                                    val parentVis = (stockBar.parent as? View)?.visibility ?: -1
+                                    val transY   = stockBar.translationY
 
                                     val injectedRoot = stockBar.rootView as ViewGroup
                                     val customBar = injectedRoot.findViewWithTag<View>("HyperFloatingBar")
-                                    val blurView = injectedRoot.findViewWithTag<View>("HyperFloatingBarBlur")
+                                    val blurView  = injectedRoot.findViewWithTag<View>("HyperFloatingBarBlur")
 
                                     if (customBar != null) {
                                         val shouldHide =
@@ -70,10 +69,10 @@ class PhysicsHook : IXposedHookLoadPackage {
                                             transY > 50f
                                         val vis = if (shouldHide) View.GONE else View.VISIBLE
                                         customBar.visibility = vis
-                                        blurView?.visibility = vis
+                                        blurView?.visibility  = vis
                                     }
 
-                                    // Keep stock bar invisible and collapsed
+                                    // keep stock bar invisible and height-collapsed
                                     stockBar.alpha = 0f
                                     stockBar.layoutParams?.let { lp ->
                                         if (lp.height != 0) {
@@ -82,11 +81,11 @@ class PhysicsHook : IXposedHookLoadPackage {
                                         }
                                     }
 
-                                    // Re-inject after theme change
+                                    // reinject after dark/light mode change
                                     val ctx = stockBar.context
                                     if (ctx != null) {
                                         val nightMask = Configuration.UI_MODE_NIGHT_MASK
-                                        val current = ctx.resources.configuration.uiMode and nightMask
+                                        val current   = ctx.resources.configuration.uiMode and nightMask
                                         if (lastUiMode != -1 && lastUiMode != current) {
                                             lastUiMode = current
                                             injectedRoot.removeView(customBar)
@@ -113,109 +112,123 @@ class PhysicsHook : IXposedHookLoadPackage {
             val rootView = stockBar.rootView as View
             if (rootView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            val context = stockBar.context
-            val density = context.resources.displayMetrics.density
+            val context     = stockBar.context
+            val density     = context.resources.displayMetrics.density
             val displayWidth = context.resources.displayMetrics.widthPixels
-            val displayHeight = context.resources.displayMetrics.heightPixels
 
-            XposedBridge.log("[HyperBounce] Injecting. w=$displayWidth h=$displayHeight d=$density")
+            val isDark = (context.resources.configuration.uiMode and
+                    Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
+            // System nav bar height in px — used to align the blur pill with
+            // the Compose pill which uses WindowInsets.navigationBars.
+            val navBarHeightPx = getNavBarHeight(context, density)
+
+            // Pill metrics (must match FloatingBottomBar defaults):
+            //   height = 64dp, bottom clearance = 12dp above nav bar.
+            val pillHeightPx     = (64 * density).toInt()
+            val pillBottomMargin = navBarHeightPx + (12 * density).toInt()
+
+            // Width: make the blur view wider than the pill so it always
+            // covers even if IntrinsicSize.Min resolves slightly wider than
+            // our estimate.  Extra width beyond the pill is hidden by the
+            // Compose layer's transparency (no pill drawn there).
+            // 80 % covers 4-tab pills across all common screen widths.
+            val blurWidthPx = (displayWidth * 0.80f).toInt()
+
+            // ── Layer 1: frosted-glass base ───────────────────────────────
+            //
+            // This View lives BELOW the ComposeView in the Android view
+            // hierarchy.  Because the Compose pill is now semi-transparent
+            // (40 % containerColor), the OS compositor blends this View's
+            // rendered pixels with the pill, producing the frosted look.
+            //
+            // RenderEffect.createBlurEffect blurs this View's OWN draw
+            // output (background colour + children).  The blurry tinted
+            // background visible through the 60 % transparent Compose pill
+            // reads as real frosted glass to the eye.
+            //
+            // Colour: 18 % white (light) / 18 % black (dark) — enough
+            // tint to separate the pill from the screen without hiding it.
+            val blurView = View(context).apply {
+                tag = "HyperFloatingBarBlur"
+                layoutParams = FrameLayout.LayoutParams(blurWidthPx, pillHeightPx).apply {
+                    gravity     = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                    bottomMargin = pillBottomMargin
+                }
+
+                setBackgroundColor(
+                    Color.parseColor(if (isDark) "#2DFFFFFF" else "#2D000000")
+                )
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    // Blur radius ≈ 24 dp  (strong enough to read as frosted)
+                    val blurRadius = 24f * density
+                    setRenderEffect(
+                        android.graphics.RenderEffect.createBlurEffect(
+                            blurRadius, blurRadius,
+                            android.graphics.Shader.TileMode.CLAMP,
+                        )
+                    )
+                }
+
+                // Clip to pill shape so blurred tint doesn't bleed outside.
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        outline.setRoundRect(
+                            0, 0, view.width, view.height,
+                            view.height / 2f,
+                        )
+                    }
+                }
+                clipToOutline = true
+            }
+
+            // ── Layer 2: Compose UI (glass decorations + physics) ─────────
+            //
+            // Full-screen MATCH_PARENT so WindowInsets work correctly and
+            // the Alignment.BottomCenter in LiquidNavBarHost can place the
+            // pill at exactly the right height.
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
 
-            if (rootView.findViewTreeLifecycleOwner() == null)
-                rootView.setViewTreeLifecycleOwner(lifecycleOwner)
-            if (rootView.findViewTreeSavedStateRegistryOwner() == null)
-                rootView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            if (rootView.findViewTreeViewModelStoreOwner() == null)
-                rootView.setViewTreeViewModelStoreOwner(lifecycleOwner)
+            val rootGroup = rootView as ViewGroup
+            if (rootGroup.findViewTreeLifecycleOwner() == null)
+                rootGroup.setViewTreeLifecycleOwner(lifecycleOwner)
+            if (rootGroup.findViewTreeSavedStateRegistryOwner() == null)
+                rootGroup.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            if (rootGroup.findViewTreeViewModelStoreOwner() == null)
+                rootGroup.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
-            val isDark = (context.resources.configuration.uiMode and
-                    Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-
-            // ── Layer 1: Hardware-blur pill ───────────────────────────────
-            // Provides the real "content-behind-the-pill" frosted-glass look.
-            // The Compose layer on top adds specular highlights, lens edges,
-            // and the indicator pill's glass effects on top of this.
-            //
-            // Width ~60% of screen, height 64dp (matches pill height).
-            // A pill-radius outline clip keeps the blur contained.
-            val pillHeightPx = (64 * density).toInt()
-            val pillWidthPx  = (displayWidth * 0.60f).toInt()
-
-            // Nav bar height: derive from insets if possible, else fallback 48dp
-            val navBarHeightPx = getNavBarHeight(context, density)
-            // Pill bottom margin = 12dp above nav bar (matches Compose padding in LiquidNavBarHost)
-            val pillBottomMargin = navBarHeightPx + (12 * density).toInt()
-
-            val blurView = View(context).apply {
-                tag = "HyperFloatingBarBlur"
-                layoutParams = FrameLayout.LayoutParams(pillWidthPx, pillHeightPx).apply {
-                    gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                    bottomMargin = pillBottomMargin
-                }
-
-                // Tinted frosted background — very translucent, colour matches theme
-                setBackgroundColor(
-                    Color.parseColor(if (isDark) "#1AFFFFFF" else "#1A000000")
-                )
-
-                // Hardware Gaussian blur (API 31+) — blurs whatever WhatsApp
-                // renders behind this view through the OS compositor.
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    setRenderEffect(
-                        android.graphics.RenderEffect.createBlurEffect(
-                            28f * density,
-                            28f * density,
-                            android.graphics.Shader.TileMode.CLAMP,
-                        )
-                    )
-                }
-
-                // Clip to pill shape so the blur doesn't bleed outside the pill.
-                outlineProvider = object : ViewOutlineProvider() {
-                    override fun getOutline(view: View, outline: Outline) {
-                        outline.setRoundRect(0, 0, view.width, view.height, view.height / 2f)
-                    }
-                }
-                clipToOutline = true
-            }
-
-            // ── Layer 2: Compose UI ───────────────────────────────────────
-            // Full-width, wraps content height. The FloatingBottomBar places
-            // itself at BottomCenter with the correct bottom padding.
             val composeView = ComposeView(context).apply {
                 tag = "HyperFloatingBar"
-                clipChildren = false
+                clipChildren  = false
                 clipToPadding = false
-                layoutParams = FrameLayout.LayoutParams(
+                layoutParams  = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,  // full-screen so WindowInsets work
+                    ViewGroup.LayoutParams.MATCH_PARENT,
                 )
-
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
-
                 setContent { LiquidNavBarHost(stockBar) }
             }
 
-            val rootGroup = rootView as ViewGroup
             rootGroup.addView(blurView)
             rootGroup.addView(composeView)
-            XposedBridge.log("[HyperBounce] Layers attached.")
+            XposedBridge.log("[HyperBounce] Layers attached. navBar=${navBarHeightPx}px")
 
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception: ${e.message}")
         }
     }
 
-    /** Best-effort nav bar height in px. Falls back to 48dp if unavailable. */
     private fun getNavBarHeight(context: android.content.Context, density: Float): Int {
-        val resId = context.resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        val resId = context.resources.getIdentifier(
+            "navigation_bar_height", "dimen", "android"
+        )
         return if (resId > 0) context.resources.getDimensionPixelSize(resId)
                else (48 * density).toInt()
     }
@@ -232,8 +245,10 @@ class FakeLifecycleOwner :
 
     init { savedStateRegistryController.performRestore(null) }
 
-    override val lifecycle: Lifecycle           get() = registry
+    override val lifecycle: Lifecycle
+        get() = registry
     override val savedStateRegistry: SavedStateRegistry
         get() = savedStateRegistryController.savedStateRegistry
-    override val viewModelStore: ViewModelStore get() = store
+    override val viewModelStore: ViewModelStore
+        get() = store
 }
