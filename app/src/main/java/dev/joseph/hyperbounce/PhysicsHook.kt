@@ -38,8 +38,11 @@ class PhysicsHook : IXposedHookLoadPackage {
     private var lastUiMode = -1
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
-        if (lpparam.packageName == "com.instagram.android") {
-            XposedBridge.log("[HyperBounce-IG] INJECTION SUCCESSFUL into com.instagram.android!")
+        // DIAGNOSTIC LOG: Unconditionally log EVERY package LSPosed allows us into
+        XposedBridge.log("[HyperBounce-Tracer] Loaded into: ${lpparam.packageName}")
+
+        if (lpparam.packageName.contains("instagram")) {
+            XposedBridge.log("[HyperBounce-IG] Instagram variant detected: ${lpparam.packageName}!")
             hookInstagram()
         } else if (lpparam.packageName == "com.whatsapp") {
             hookWhatsApp(lpparam)
@@ -49,28 +52,22 @@ class PhysicsHook : IXposedHookLoadPackage {
     private fun hookInstagram() {
         XposedBridge.log("[HyperBounce-IG] Setting up Framework Activity lifecycle hooks...")
         try {
-            // Instagram uses heavily obfuscated Application classes. 
-            // We hook the Android Framework's Activity class directly. Every Activity MUST pass through here.
             XposedHelpers.findAndHookMethod(
                 android.app.Activity::class.java,
                 "onResume",
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         val activity = param.thisObject as Activity
-                        // Ensure we only process Instagram activities (since Activity is a framework class)
-                        if (activity.packageName != "com.instagram.android") return
+                        if (!activity.packageName.contains("instagram")) return
                         
                         val activityName = activity.javaClass.simpleName
                         
-                        val resId = activity.resources.getIdentifier("tab_bar", "id", "com.instagram.android")
+                        val resId = activity.resources.getIdentifier("tab_bar", "id", activity.packageName)
                         if (resId != 0) {
                             val stockBar = activity.findViewById<ViewGroup>(resId)
                             if (stockBar != null && stockBar.getTag(stockBar.id) == null) {
                                 stockBar.setTag(stockBar.id, true)
                                 XposedBridge.log("[HyperBounce-IG] tab_bar found in Activity: $activityName!")
-                                
-                                // Placeholder for future Instagram UI Heist
-                                // setupStockBarHook(stockBar)
                             }
                         }
                     }
@@ -118,7 +115,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                             if (lp.height != 0) { lp.height = 0; stockBar.requestLayout() }
                         }
 
-                        // Sync WhatsApp native swipes
                         val menuContainer = stockBar.getChildAt(0) as? ViewGroup
                         if (menuContainer != null) {
                             for (i in 0 until menuContainer.childCount) {
