@@ -48,7 +48,6 @@ class PhysicsHook : IXposedHookLoadPackage {
             object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val activity = param.thisObject as Activity
-
                     if (activity.javaClass.simpleName != "MainActivity") return
 
                     val res = activity.resources
@@ -56,34 +55,38 @@ class PhysicsHook : IXposedHookLoadPackage {
 
                     if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-                    decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
-                        override fun onGlobalLayout() {
-                            val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
-                            val pivotId     = res.getIdentifier("pivot_bar",            "id", "com.google.android.youtube")
-                            
-                            val container = if (containerId != 0) activity.findViewById<ViewGroup>(containerId) else null
-                            val pivot     = if (pivotId != 0) activity.findViewById<ViewGroup>(pivotId) else null
+                    val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
+                    val pivotId     = res.getIdentifier("pivot_bar",            "id", "com.google.android.youtube")
 
-                            // VISIBILITY FIX: Only show our pill if YouTube's native bar is supposed to be on screen!
-                            var shouldShow = false
-                            if (container != null && container.visibility == View.VISIBLE) shouldShow = true
-                            if (pivot != null && pivot.visibility == View.VISIBLE) shouldShow = true
-                            isBarVisible.value = shouldShow
+                    // VISIBILITY FIX: 60fps PreDraw loop tracks exact screen coordinates to hide/show the pill instantly
+                    decorView.viewTreeObserver.addOnPreDrawListener {
+                        val container = if (containerId != 0) activity.findViewById<ViewGroup>(containerId) else null
+                        val pivot     = if (pivotId != 0) activity.findViewById<ViewGroup>(pivotId) else null
 
-                            if (container != null) {
-                                container.setBackgroundColor(Color.TRANSPARENT)
+                        var visible = false
+                        if (container != null && container.isShown && container.alpha > 0f) {
+                            val loc = IntArray(2)
+                            container.getLocationOnScreen(loc)
+                            // If the container is physically pushed below the screen (e.g. comments/video), hide our pill!
+                            if (loc[1] < decorView.height) {
+                                visible = true
                             }
+                            container.setBackgroundColor(Color.TRANSPARENT)
+                        }
 
-                            if (pivot != null && pivot.alpha != 0f) {
-                                pivot.alpha = 0f
-                                
-                                val wrapper = pivot.getChildAt(0) as? ViewGroup
-                                if (wrapper != null && wrapper.childCount >= 3) {
-                                    executeUIHeist(activity, pivot)
-                                }
+                        if (isBarVisible.value != visible) {
+                            isBarVisible.value = visible
+                        }
+
+                        if (pivot != null && pivot.alpha != 0f) {
+                            pivot.alpha = 0f
+                            val wrapper = pivot.getChildAt(0) as? ViewGroup
+                            if (wrapper != null && wrapper.childCount >= 3 && externalTabState == null) {
+                                executeUIHeist(activity, pivot)
                             }
                         }
-                    })
+                        true
+                    }
                 }
             }
         )
@@ -94,7 +97,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             val contentView = activity.findViewById<ViewGroup>(android.R.id.content)
             if (contentView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            XposedBridge.log("[HyperBounce] Injecting True Liquid Glass UI...")
+            XposedBridge.log("[HyperBounce] Injecting Faux-Glass UI...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -114,14 +117,16 @@ class PhysicsHook : IXposedHookLoadPackage {
                 val navInsets = try {
                     contentView.rootWindowInsets?.getInsets(WindowInsets.Type.systemBars())?.bottom ?: 0
                 } catch (e: Exception) { 0 }
+                
+                val extraPadding = (32 * activity.resources.displayMetrics.density).toInt()
 
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
                     gravity      = Gravity.BOTTOM
-                    // SHORTS PROGRESS BAR FIX: Physically move the view up 40px so it doesn't overlap shorts UI!
-                    bottomMargin = navInsets + 40
+                    // SHORTS FIX: Lift the pill 32dp higher so it clears the progress bar completely
+                    bottomMargin = navInsets + extraPadding
                 }
 
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
@@ -144,7 +149,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                     )
                 }
             }
-
             contentView.addView(composeView)
 
         } catch (e: Exception) {
