@@ -46,7 +46,6 @@ class PhysicsHook : IXposedHookLoadPackage {
             object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val activity = param.thisObject as Activity
-                    
                     if (activity.javaClass.simpleName != "MainActivity") return
 
                     val res = activity.resources
@@ -57,13 +56,12 @@ class PhysicsHook : IXposedHookLoadPackage {
                             val pivotId = res.getIdentifier("pivot_bar", "id", "com.google.android.youtube")
                             val dividerId = res.getIdentifier("navigation_bar_divider_frame", "id", "com.google.android.youtube")
 
-                            // Hide the divider line
                             if (dividerId != 0) activity.findViewById<View>(dividerId)?.alpha = 0f
 
                             if (pivotId != 0) {
                                 val pivot = activity.findViewById<ViewGroup>(pivotId)
                                 if (pivot != null && pivot.alpha != 0f) {
-                                    pivot.alpha = 0f
+                                    pivot.alpha = 0f // Make stock bar invisible without breaking layout height
                                     val wrapper = pivot.getChildAt(0) as? ViewGroup
                                     if (wrapper != null && wrapper.childCount >= 3) {
                                         executeUIHeist(activity, pivot)
@@ -82,7 +80,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             val decorView = activity.window.decorView as ViewGroup
             if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            XposedBridge.log("[HyperBounce] Injecting Liquid Glass overlay...")
+            XposedBridge.log("[HyperBounce] Injecting DRM-Safe Floating UI...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -99,7 +97,7 @@ class PhysicsHook : IXposedHookLoadPackage {
                 clipToPadding = false
                 setBackgroundColor(Color.TRANSPARENT)
                 
-                // CRITICAL FIX 1: Physically constrain the view to the bottom so it cannot occlude the video player!
+                // CRITICAL: Physically constrain the view to the bottom. WRAP_CONTENT ensures it never touches the video player bounds.
                 val navInsets = decorView.rootWindowInsets?.systemWindowInsetBottom ?: 0
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -109,13 +107,11 @@ class PhysicsHook : IXposedHookLoadPackage {
                     bottomMargin = navInsets
                 }
                 
-                // CRITICAL FIX 2: Apply lifecycles ONLY to our ComposeView, leaving YouTube's root untouched!
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
 
-                // CRITICAL FIX 3: Local Recomposer with AndroidUiDispatcher frame clock to prevent crashes
                 val coroutineContext = AndroidUiDispatcher.CurrentThread
                 val recomposer = Recomposer(coroutineContext)
                 setParentCompositionContext(recomposer)
@@ -132,7 +128,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             }
 
             decorView.addView(composeView)
-            XposedBridge.log("[HyperBounce] Liquid Glass injected successfully!")
+            XposedBridge.log("[HyperBounce] DRM-Safe UI injected successfully!")
 
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception in YouTube UI Heist: ${e.message}")
