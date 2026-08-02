@@ -15,11 +15,17 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.widget.ImageView
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.FilterQuality
@@ -34,10 +40,10 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.blur.Backdrop
+import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.lang.ref.WeakReference
 
-// Switched back to Bitmap for native YouTube icon extraction
 data class TabData(val sourceView: View, val bitmap: Bitmap)
 
 fun findViewByName(view: View, name: String): View? {
@@ -71,7 +77,6 @@ fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
             
             val liveDrawable = imgView?.drawable
             if (liveDrawable != null) {
-                // THE SAFE CLONE: Prevents Hardware Rendering crash!
                 val safeClone = liveDrawable.constantState?.newDrawable()?.mutate()
                 if (safeClone != null) {
                     val w = safeClone.intrinsicWidth.coerceAtLeast(1)
@@ -87,6 +92,16 @@ fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
         }
     } catch (e: Exception) {}
     return out
+}
+
+// HOME TAB BUG FIX: Deep click to ensure the view registers the touch
+fun deepClick(view: View) {
+    view.performClick()
+    if (view is ViewGroup) {
+        for (i in 0 until view.childCount) {
+            deepClick(view.getChildAt(i))
+        }
+    }
 }
 
 private fun resolveWindow(context: Context): Window? {
@@ -110,7 +125,10 @@ private class PixelCopyBlurBackdrop(
     @Volatile var bY = 0
     @Volatile var bW = 0
     @Volatile var bH = 0
-    @Volatile private var latest: ImageBitmap? = null
+    
+    // REAL-TIME BLUR FIX: Making this a MutableState forces Compose to redraw continuously
+    var latest by mutableStateOf<ImageBitmap?>(null)
+    
     @Volatile private var inFlight = false
     private var prev: Bitmap? = null
 
@@ -137,9 +155,10 @@ private class PixelCopyBlurBackdrop(
             @Suppress("DEPRECATION")
             PixelCopy.request(window, srcRect, bmp, { result ->
                 if (result == PixelCopy.SUCCESS) {
-                    prev?.recycle()
+                    val old = prev
                     prev = bmp
                     latest = bmp.asImageBitmap()
+                    old?.recycle()
                 } else {
                     bmp.recycle()
                 }
@@ -173,21 +192,31 @@ private class PixelCopyBlurBackdrop(
 fun LiquidNavBarHost(
     stockBar: ViewGroup,
     externalTabState: State<Int>,
+    isVisible: State<Boolean>
 ) {
     var tabs by remember { mutableStateOf(emptyList<TabData>()) }
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
 
     LaunchedEffect(stockBar) {
-        var attempts = 0
-        // Wait longer to allow async loading of profile pictures and all 5 tabs
-        while (attempts < 20) {
-            val extracted = extractYouTubeTabs(stockBar)
-            if (extracted.size > tabs.size) {
-                tabs = extracted 
+        while (true) {
+            // 1. Fetch missing icons
+            if (tabs.size < 4) {
+                val extracted = extractYouTubeTabs(stockBar)
+                if (extracted.size > tabs.size) {
+                    tabs = extracted 
+                }
             }
-            if (tabs.size >= 5) break
-            attempts++
-            delay(300)
+            
+            // 2. BACK BUTTON BUG FIX: Sync the selected tab directly from YouTube's native state!
+            for (i in tabs.indices) {
+                if (tabs[i].sourceView.isSelected) {
+                    if (selectedIndex != i) {
+                        selectedIndex = i
+                    }
+                    break
+                }
+            }
+            delay(100) // Fast 10fps polling keeps it perfectly synced
         }
     }
 
@@ -226,47 +255,55 @@ fun LiquidNavBarHost(
             }
         }
 
-        if (tabs.isNotEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight(),
-                contentAlignment = Alignment.BottomCenter,
-            ) {
-                FloatingBottomBar(
+        // VISIBILITY SCOPE FIX: Hides cleanly when a video plays or comments open
+        AnimatedVisibility(
+            visible = isVisible.value,
+            enter = slideInVertically { it / 2 } + fadeIn(),
+            exit = slideOutVertically { it / 2 } + fadeOut()
+        ) {
+            if (tabs.isNotEmpty()) {
+                Box(
                     modifier = Modifier
-                        .onGloballyPositioned { coords: LayoutCoordinates ->
-                            captureBackdrop?.let {
-                                val pos = coords.positionInWindow()
-                                it.bX = pos.x.toInt()
-                                it.bY = pos.y.toInt()
-                                it.bW = coords.size.width
-                                it.bH = coords.size.height
-                            }
-                        }
-                        .padding(bottom = 12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
-                    selectedIndex = { selectedIndex },
-                    onSelected = { idx ->
-                        selectedIndex = idx
-                        if (externalTabState.value != idx && idx < tabs.size) {
-                            tabs[idx].sourceView.performClick()
-                        }
-                    },
-                    backdrop = backdrop,
-                    tabsCount = tabs.size,
-                    isBlurEnabled = true,
+                        .fillMaxWidth()
+                        .wrapContentHeight(),
+                    contentAlignment = Alignment.BottomCenter,
                 ) {
-                    tabs.forEachIndexed { index, tabData ->
-                        FloatingBottomBarItem(
-                            onClick = { selectedIndex = index },
-                            modifier = Modifier.defaultMinSize(minWidth = 60.dp),
-                        ) {
-                            // Rendering the safe native YouTube bitmap clones!
-                            Image(
-                                bitmap = tabData.bitmap.asImageBitmap(),
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp)
-                            )
+                    FloatingBottomBar(
+                        modifier = Modifier
+                            .onGloballyPositioned { coords: LayoutCoordinates ->
+                                captureBackdrop?.let {
+                                    val pos = coords.positionInWindow()
+                                    it.bX = pos.x.toInt()
+                                    it.bY = pos.y.toInt()
+                                    it.bW = coords.size.width
+                                    it.bH = coords.size.height
+                                }
+                            }
+                            .padding(bottom = 12.dp),
+                        selectedIndex = { selectedIndex },
+                        onSelected = { idx ->
+                            selectedIndex = idx
+                            if (externalTabState.value != idx && idx < tabs.size) {
+                                deepClick(tabs[idx].sourceView) // HOME BUG FIX: Deep click logic
+                            }
+                        },
+                        backdrop = backdrop,
+                        tabsCount = tabs.size,
+                        isBlurEnabled = true,
+                    ) {
+                        tabs.forEachIndexed { index, tabData ->
+                            FloatingBottomBarItem(
+                                onClick = { selectedIndex = index },
+                                modifier = Modifier.defaultMinSize(minWidth = 60.dp),
+                            ) {
+                                Image(
+                                    bitmap = tabData.bitmap.asImageBitmap(),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    // ICON VISIBILITY FIX: Tints the extracted shapes perfectly white/dark!
+                                    colorFilter = ColorFilter.tint(LocalContentColor.current)
+                                )
+                            }
                         }
                     }
                 }

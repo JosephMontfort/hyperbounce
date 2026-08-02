@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 class PhysicsHook : IXposedHookLoadPackage {
 
     private var externalTabState: MutableState<Int>? = null
+    private var isBarVisible: MutableState<Boolean> = mutableStateOf(false)
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.google.android.youtube") return
@@ -59,19 +60,21 @@ class PhysicsHook : IXposedHookLoadPackage {
                         override fun onGlobalLayout() {
                             val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
                             val pivotId     = res.getIdentifier("pivot_bar",            "id", "com.google.android.youtube")
-
-                            // CRITICAL FIX: NEVER touch 'navigation_bar_divider_frame' - it wraps the entire app!
                             
                             val container = if (containerId != 0) activity.findViewById<ViewGroup>(containerId) else null
                             val pivot     = if (pivotId != 0) activity.findViewById<ViewGroup>(pivotId) else null
 
+                            // VISIBILITY FIX: Only show our pill if YouTube's native bar is supposed to be on screen!
+                            var shouldShow = false
+                            if (container != null && container.visibility == View.VISIBLE) shouldShow = true
+                            if (pivot != null && pivot.visibility == View.VISIBLE) shouldShow = true
+                            isBarVisible.value = shouldShow
+
                             if (container != null) {
-                                // Remove the opaque black background behind the stock bar without breaking layout
                                 container.setBackgroundColor(Color.TRANSPARENT)
                             }
 
                             if (pivot != null && pivot.alpha != 0f) {
-                                // Hide the stock icons safely
                                 pivot.alpha = 0f
                                 
                                 val wrapper = pivot.getChildAt(0) as? ViewGroup
@@ -117,12 +120,11 @@ class PhysicsHook : IXposedHookLoadPackage {
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
                     gravity      = Gravity.BOTTOM
-                    bottomMargin = navInsets
+                    // SHORTS PROGRESS BAR FIX: Physically move the view up 40px so it doesn't overlap shorts UI!
+                    bottomMargin = navInsets + 40
                 }
 
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-                
-                // Safely attach to the ComposeView ONLY
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
@@ -138,11 +140,11 @@ class PhysicsHook : IXposedHookLoadPackage {
                     LiquidNavBarHost(
                         stockBar = stockBar,
                         externalTabState = tabState,
+                        isVisible = isBarVisible
                     )
                 }
             }
 
-            // Inject into R.id.content to avoid DecorView z-order issues entirely
             contentView.addView(composeView)
 
         } catch (e: Exception) {
