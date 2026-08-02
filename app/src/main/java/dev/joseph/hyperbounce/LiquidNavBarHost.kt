@@ -35,24 +35,27 @@ import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.lang.ref.WeakReference
 
-// ── Tab icon extraction ───────────────────────────────────────────────────────
 data class TabData(val bitmap: Bitmap?)
 
 fun extractTabs(stockBar: ViewGroup): List<TabData> {
     val out = mutableListOf<TabData>()
-    val menu = stockBar
-    for (i in 0 until menu.childCount) {
-        val tab = menu.getChildAt(i) as? ViewGroup ?: continue
-        val icon = findImageView(tab)
-        val drawable = icon?.drawable?.mutate()
+    for (i in 0 until stockBar.childCount) {
+        val child = stockBar.getChildAt(i)
+        val icon = if (child is ViewGroup) findImageView(child) else (child as? ImageView)
         var bmp: Bitmap? = null
-        if (drawable != null) {
-            drawable.setTintList(null)
-            val w = drawable.intrinsicWidth.coerceAtLeast(1)
-            val h = drawable.intrinsicHeight.coerceAtLeast(1)
-            bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            drawable.setBounds(0, 0, w, h)
-            drawable.draw(Canvas(bmp))
+        if (icon?.drawable != null) {
+            try {
+                val drawable = icon.drawable.mutate()
+                drawable.setTintList(null)
+                val w = drawable.intrinsicWidth.coerceAtLeast(1)
+                val h = drawable.intrinsicHeight.coerceAtLeast(1)
+                bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bmp)
+                drawable.setBounds(0, 0, w, h)
+                drawable.draw(canvas)
+            } catch (e: Exception) {
+                // Ignore extraction failures on non-drawable nodes
+            }
         }
         out.add(TabData(bmp))
     }
@@ -63,16 +66,20 @@ fun findImageView(g: ViewGroup): ImageView? {
     for (i in 0 until g.childCount) {
         val v = g.getChildAt(i)
         if (v is ImageView) return v
-        if (v is ViewGroup) findImageView(v)?.let { return it }
+        if (v is ViewGroup) {
+            val res = findImageView(v)
+            if (res != null) return res
+        }
     }
     return null
 }
 
 fun clickStockTab(stockBar: ViewGroup, index: Int) {
-    stockBar.getChildAt(index)?.performClick()
+    if (index in 0 until stockBar.childCount) {
+        stockBar.getChildAt(index)?.performClick()
+    }
 }
 
-// ── Window resolver ───────────────────────────────────────────────────────────
 private fun resolveWindow(context: Context): Window? {
     var ctx: Context = context
     while (true) {
@@ -81,26 +88,6 @@ private fun resolveWindow(context: Context): Window? {
     }
 }
 
-// ── Real-time PixelCopy blur backdrop ────────────────────────────────────────
-//
-// PixelCopy reads directly from the GPU front-buffer (what is actually
-// rendered on screen), so it captures hardware-accelerated RecyclerView
-// items — contact avatars, names, timestamps — all perfectly.
-//
-// It DOES include our own ComposeView in the capture, but since the pill
-// is now only 20–28% opaque, the feedback contribution is small and
-// converges to a stable steady-state within 2–3 frames:
-//
-// steady_state ≈ 83% blur(real WhatsApp content) + 17% surface tint
-//
-// This is real frosted liquid glass — the chat list is genuinely blurred
-// and updates frame-by-frame as the user scrolls.
-//
-// Scale-down factor (sf = 8) doubles as the blur kernel: downsampling from
-// pill-resolution → 1/8 size averages 64 pixels into 1, producing a
-// Gaussian-quality blur. FilterQuality.High bilinear upscale at draw
-// time adds smoothing → the result looks like a 15–20 dp blur radius.
-//
 private class PixelCopyBlurBackdrop(
     windowRef: WeakReference<Window>,
     private val handler: Handler,
@@ -110,7 +97,6 @@ private class PixelCopyBlurBackdrop(
     override val offsetResidualX: Float = 0f
     override val offsetResidualY: Float = 0f
 
-    // Pill bounds in window-pixel coordinates (set from onGloballyPositioned)
     @Volatile var bX = 0
     @Volatile var bY = 0
     @Volatile var bW = 0
@@ -119,10 +105,6 @@ private class PixelCopyBlurBackdrop(
     @Volatile private var inFlight = false
     private var prev: Bitmap? = null
 
-    /**
-     * Request one PixelCopy frame. Called from Choreographer on UI thread.
-     * Guards against overlapping requests with [inFlight].
-     */
     fun tick() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         if (inFlight) return
@@ -131,8 +113,6 @@ private class PixelCopyBlurBackdrop(
         val h = bH
         if (w <= 0 || h <= 0) return
 
-        // Downscale → the GPU will blit and average the srcRect into the
-        // smaller bitmap, acting as a hardware-accelerated box blur.
         val sf = 8
         val outW = (w / sf).coerceAtLeast(1)
         val outH = (h / sf).coerceAtLeast(1)
@@ -160,8 +140,6 @@ private class PixelCopyBlurBackdrop(
         downscaleFactor: Int,
     ) {
         val bmp = latest ?: return
-        // Upscale with bilinear filtering — this final interpolation adds
-        // a secondary smoothing pass and eliminates block artifacts.
         drawImage(
             image = bmp,
             srcOffset = IntOffset.Zero,
@@ -173,33 +151,31 @@ private class PixelCopyBlurBackdrop(
     }
 }
 
-// ── Composable host ───────────────────────────────────────────────────────────
 @Composable
 fun LiquidNavBarHost(
     stockBar: ViewGroup,
-    externalTabState: State<Int>, // driven by WhatsApp swipe detection
+    externalTabState: State<Int>,
 ) {
-    val tabs = remember { extractTabs(stockBar) }
-    // Our indicator's selected index.
+    var tabs by remember { mutableStateOf(extractTabs(stockBar)) }
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
 
-    // ── External tab sync (WhatsApp swipe → our indicator) ───────────────
+    // Dynamically update tab icons if stockBar populates children late
+    LaunchedEffect(stockBar.childCount) {
+        tabs = extractTabs(stockBar)
+    }
+
     val externalIdx by externalTabState
     LaunchedEffect(externalIdx) {
         if (externalIdx != selectedIndex) selectedIndex = externalIdx
     }
 
     MiuixTheme {
-        // ── Backdrop: PixelCopy for real GPU-rendered blur ────────────────
         val window: Window? = remember(stockBar) { resolveWindow(stockBar.context) }
         val mainHandler = remember { Handler(Looper.getMainLooper()) }
         val captureBackdrop: PixelCopyBlurBackdrop? = remember(window) {
             window?.let { PixelCopyBlurBackdrop(WeakReference(it), mainHandler) }
         }
 
-        // Frame-synced capture loop — Choreographer fires once per display
-        // frame on the UI thread. The inFlight guard prevents piling up
-        // requests when PixelCopy is slower than the display refresh.
         if (captureBackdrop != null) {
             DisposableEffect(captureBackdrop) {
                 val ch = Choreographer.getInstance()
@@ -214,11 +190,8 @@ fun LiquidNavBarHost(
             }
         }
 
-        // Fallback (API < 26 or no window): empty transparent backdrop so
-        // the 20 % tint + specular highlight still look like glass.
-        val backdrop: Backdrop = captureBackdrop ?: rememberLayerBackdrop { /* transparent */ }
+        val backdrop: Backdrop = captureBackdrop ?: rememberLayerBackdrop { }
 
-        // ── UI ────────────────────────────────────────────────────────────
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.BottomCenter,
@@ -242,24 +215,12 @@ fun LiquidNavBarHost(
                 selectedIndex = { selectedIndex },
                 onSelected = { idx ->
                     selectedIndex = idx
-                    // ── Drag + tap bug fix ────────────────────────────────
-                    // Call clickStockTab if and only if WhatsApp is NOT
-                    // already on this tab.
-                    //
-                    // This handles three cases correctly:
-                    // • User taps our pill → WhatsApp is on old tab
-                    //   → externalTabState != idx
-                    //   → clickStockTab called ✓
-                    // • User drags indicator → same as tap ✓
-                    // • WhatsApp swipe → WhatsApp already on idx
-                    //   → externalTabState == idx
-                    //   → NO redundant click ✓
                     if (externalTabState.value != idx) {
                         clickStockTab(stockBar, idx)
                     }
                 },
                 backdrop = backdrop,
-                tabsCount = tabs.size,
+                tabsCount = tabs.size.coerceAtLeast(1),
                 isBlurEnabled = true,
             ) {
                 tabs.forEachIndexed { index, tabData ->

@@ -1,7 +1,6 @@
 package dev.joseph.hyperbounce
 
 import android.app.Activity
-import android.content.res.Configuration
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -44,38 +43,28 @@ class PhysicsHook : IXposedHookLoadPackage {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val activity = param.thisObject as Activity
                     val res = activity.resources
-
                     val decorView = activity.window.decorView as? ViewGroup ?: return
 
                     decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
                         override fun onGlobalLayout() {
-                            val idsToNuke = listOf("bottom_bar_container", "pivot_bar", "navigation_bar_divider_frame")
-                            var stockBar: ViewGroup? = null
+                            val pivotId = res.getIdentifier("pivot_bar", "id", "com.google.android.youtube")
+                            val dividerId = res.getIdentifier("navigation_bar_divider_frame", "id", "com.google.android.youtube")
 
-                            idsToNuke.forEach { idName ->
-                                val resId = res.getIdentifier(idName, "id", "com.google.android.youtube")
-                                if (resId != 0) {
-                                    activity.findViewById<View>(resId)?.let { view ->
-                                        if (idName == "pivot_bar") stockBar = view as? ViewGroup
-                                        
-                                        // Aggressively kill visibility, padding, and margins
-                                        view.visibility = View.GONE
-                                        view.setPadding(0, 0, 0, 0)
-                                        val lp = view.layoutParams
-                                        if (lp != null) {
-                                            lp.height = 0
-                                            if (lp is ViewGroup.MarginLayoutParams) {
-                                                lp.bottomMargin = 0
-                                                lp.topMargin = 0
-                                            }
-                                            view.layoutParams = lp
-                                        }
-                                    }
-                                }
+                            if (dividerId != 0) {
+                                activity.findViewById<View>(dividerId)?.visibility = View.GONE
                             }
 
-                            if (stockBar != null) {
-                                executeUIHeist(activity, stockBar!!)
+                            if (pivotId != 0) {
+                                val pivot = activity.findViewById<ViewGroup>(pivotId)
+                                if (pivot != null) {
+                                    // Hide stock pivot bar visually without breaking parent layout bounds
+                                    pivot.alpha = 0f
+                                    
+                                    // Wait until YouTube finishes inflating all tabs (Home, Shorts, Subscriptions, You)
+                                    if (pivot.childCount >= 3) {
+                                        executeUIHeist(activity, pivot)
+                                    }
+                                }
                             }
                         }
                     })
