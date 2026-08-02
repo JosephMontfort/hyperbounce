@@ -1,75 +1,158 @@
 package dev.joseph.hyperbounce
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Bitmap
-import android.graphics.Canvas
+import android.graphics.Rect
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.view.Choreographer
+import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import android.view.Window
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import top.yukonga.miuix.kmp.blur.Backdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.theme.LocalContentColor
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import java.lang.ref.WeakReference
 
-data class TabData(val bitmap: Bitmap, val sourceView: View)
-
-fun findViewByName(view: View, name: String): View? {
-    if (view.id != View.NO_ID) {
-        try {
-            if (view.resources.getResourceEntryName(view.id) == name) return view
-        } catch (e: Exception) {}
-    }
-    if (view is ViewGroup) {
-        for (i in 0 until view.childCount) {
-            val found = findViewByName(view.getChildAt(i), name)
-            if (found != null) return found
-        }
-    }
-    return null
-}
+// Using Native Compose Vectors instead of unreliable YouTube image extraction
+data class TabData(val sourceView: View, val icon: ImageVector)
 
 fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
     val out = mutableListOf<TabData>()
     try {
         val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return out
         
+        // Native module icons for perfect, instant rendering
+        val fallbackIcons = listOf(
+            Icons.Default.Home,
+            Icons.Default.PlayArrow, // Shorts
+            Icons.Default.Add,       // Create
+            Icons.Default.List,      // Subscriptions
+            Icons.Default.Person     // You
+        )
+        
+        var iconIdx = 0
         for (i in 0 until wrapper.childCount) {
             val tab = wrapper.getChildAt(i) as? ViewGroup ?: continue
-            val thumbnailLayout = findViewByName(tab, "thumbnail_layout") as? ViewGroup ?: continue
-            
-            var imgView = findViewByName(thumbnailLayout, "image") as? ImageView
-            if (imgView == null) {
-                imgView = findViewByName(thumbnailLayout, "pivot_bar_thumbnail") as? ImageView
-            }
-            
-            val liveDrawable = imgView?.drawable
-            if (liveDrawable != null) {
-                // THE REAL CULPRIT DESTROYED: We clone the drawable safely using constantState
-                // This prevents us from corrupting YouTube's live ViewRoot render bounds!
-                val safeClone = liveDrawable.constantState?.newDrawable()?.mutate()
-                if (safeClone != null) {
-                    val w = safeClone.intrinsicWidth.coerceAtLeast(1)
-                    val h = safeClone.intrinsicHeight.coerceAtLeast(1)
-                    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                    val canvas = Canvas(bmp)
-                    safeClone.setBounds(0, 0, w, h)
-                    safeClone.draw(canvas)
-                    
-                    out.add(TabData(bmp, tab)) 
-                }
+            // Ignore spacers, only grab actual tab containers
+            if (tab.childCount > 0) {
+                val vectorIcon = fallbackIcons.getOrElse(iconIdx) { Icons.Default.Home }
+                out.add(TabData(tab, vectorIcon))
+                iconIdx++
             }
         }
     } catch (e: Exception) {}
     return out
+}
+
+private fun resolveWindow(context: Context): Window? {
+    var ctx: Context = context
+    while (true) {
+        if (ctx is Activity) return ctx.window
+        ctx = (ctx as? ContextWrapper)?.baseContext ?: return null
+    }
+}
+
+// Crash-Safe PixelCopy Engine
+private class PixelCopyBlurBackdrop(
+    windowRef: WeakReference<Window>,
+    private val handler: Handler,
+) : Backdrop {
+    private val ref = windowRef
+    override val isCoordinatesDependent: Boolean = false
+    override val offsetResidualX: Float = 0f
+    override val offsetResidualY: Float = 0f
+
+    @Volatile var bX = 0
+    @Volatile var bY = 0
+    @Volatile var bW = 0
+    @Volatile var bH = 0
+    @Volatile private var latest: ImageBitmap? = null
+    @Volatile private var inFlight = false
+    private var prev: Bitmap? = null
+
+    fun tick() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (inFlight) return
+        val window = ref.get() ?: return
+        
+        val decor = window.peekDecorView()
+        if (decor == null || decor.windowToken == null) return
+
+        val w = bW
+        val h = bH
+        if (w <= 0 || h <= 0) return
+
+        val sf = 8
+        val outW = (w / sf).coerceAtLeast(1)
+        val outH = (h / sf).coerceAtLeast(1)
+        val bmp = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+        val srcRect = Rect(bX, bY, bX + w, bY + h)
+        inFlight = true
+
+        try {
+            @Suppress("DEPRECATION")
+            PixelCopy.request(window, srcRect, bmp, { result ->
+                if (result == PixelCopy.SUCCESS) {
+                    prev?.recycle()
+                    prev = bmp
+                    latest = bmp.asImageBitmap()
+                } else {
+                    bmp.recycle()
+                }
+                inFlight = false
+            }, handler)
+        } catch (e: Exception) {
+            bmp.recycle()
+            inFlight = false
+        }
+    }
+
+    override fun DrawScope.drawBackdrop(
+        density: Density,
+        coordinates: LayoutCoordinates?,
+        layerBlock: (GraphicsLayerScope.() -> Unit)?,
+        downscaleFactor: Int,
+    ) {
+        val bmp = latest ?: return
+        drawImage(
+            image = bmp,
+            srcOffset = IntOffset.Zero,
+            srcSize = IntSize(bmp.width, bmp.height),
+            dstOffset = IntOffset.Zero,
+            dstSize = IntSize(size.width.toInt(), size.height.toInt()),
+            filterQuality = FilterQuality.High,
+        )
+    }
 }
 
 @Composable
@@ -82,7 +165,6 @@ fun LiquidNavBarHost(
 
     LaunchedEffect(stockBar) {
         var attempts = 0
-        // CULPRIT FIX 2: Stop looping infinitely if tabs fail to load (prevents thread lock)
         while (tabs.isEmpty() && attempts < 10) {
             val extracted = extractYouTubeTabs(stockBar)
             if (extracted.isNotEmpty()) {
@@ -99,47 +181,72 @@ fun LiquidNavBarHost(
         if (externalIdx != selectedIndex) selectedIndex = externalIdx
     }
 
-    if (tabs.isNotEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = 24.dp, start = 16.dp, end = 16.dp),
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            // Pure, opaque pill. Zero blur, zero Miuix rendering.
-            Row(
+    MiuixTheme {
+        val window: Window? = remember(stockBar) { resolveWindow(stockBar.context) }
+        val mainHandler = remember { Handler(Looper.getMainLooper()) }
+        val captureBackdrop: PixelCopyBlurBackdrop? = remember(window) {
+            window?.let { PixelCopyBlurBackdrop(WeakReference(it), mainHandler) }
+        }
+
+        if (captureBackdrop != null) {
+            DisposableEffect(captureBackdrop) {
+                val ch = Choreographer.getInstance()
+                val cb = object : Choreographer.FrameCallback {
+                    override fun doFrame(frameTimeNanos: Long) {
+                        captureBackdrop.tick()
+                        ch.postFrameCallback(this)
+                    }
+                }
+                ch.postFrameCallback(cb)
+                onDispose { ch.removeFrameCallback(cb) }
+            }
+        }
+
+        val backdrop: Backdrop = captureBackdrop ?: rememberLayerBackdrop { }
+
+        if (tabs.isNotEmpty()) {
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(64.dp)
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(Color(0xFF1E1E1E)),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+                    .wrapContentHeight(),
+                contentAlignment = Alignment.BottomCenter,
             ) {
-                tabs.forEachIndexed { index, tabData ->
-                    val interactionSource = remember { MutableInteractionSource() }
-                    
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable(
-                                interactionSource = interactionSource,
-                                indication = null
-                            ) {
-                                selectedIndex = index
-                                if (externalTabState.value != index) {
-                                    tabData.sourceView.performClick()
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            bitmap = tabData.bitmap.asImageBitmap(),
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            alpha = if (selectedIndex == index) 1f else 0.5f
-                        )
+                FloatingBottomBar(
+                    modifier = Modifier
+                        .onGloballyPositioned { coords: LayoutCoordinates ->
+                            captureBackdrop?.let {
+                                val pos = coords.positionInWindow()
+                                it.bX = pos.x.toInt()
+                                it.bY = pos.y.toInt()
+                                it.bW = coords.size.width
+                                it.bH = coords.size.height
+                            }
+                        }
+                        .padding(bottom = 12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
+                    selectedIndex = { selectedIndex },
+                    onSelected = { idx ->
+                        selectedIndex = idx
+                        if (externalTabState.value != idx && idx < tabs.size) {
+                            tabs[idx].sourceView.performClick()
+                        }
+                    },
+                    backdrop = backdrop,
+                    tabsCount = tabs.size,
+                    isBlurEnabled = true,
+                ) {
+                    tabs.forEachIndexed { index, tabData ->
+                        FloatingBottomBarItem(
+                            onClick = { selectedIndex = index },
+                            modifier = Modifier.defaultMinSize(minWidth = 60.dp),
+                        ) {
+                            // Using native tintable Compose Icons for perfect rendering!
+                            Icon(
+                                imageVector = tabData.icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(26.dp),
+                                tint = LocalContentColor.current // Perfectly matches Miuix theme dynamics
+                            )
+                        }
                     }
                 }
             }
