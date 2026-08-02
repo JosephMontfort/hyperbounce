@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -25,6 +26,9 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class PhysicsHook : IXposedHookLoadPackage {
 
@@ -41,7 +45,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val activity = param.thisObject as Activity
                     
-                    // CRITICAL FIX: Only inject into the real MainActivity to avoid Shell$HomeActivity crashes
                     if (activity.javaClass.simpleName != "MainActivity") return
 
                     val res = activity.resources
@@ -101,11 +104,18 @@ class PhysicsHook : IXposedHookLoadPackage {
                 
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
 
-                // CRITICAL FIX: Only apply the fake lifecycle to OUR view. 
-                // Do NOT touch decorView, otherwise we kill YouTube's real video rendering fragments!
+                // 1. Tag our view exclusively so we don't break YouTube's DecorView
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
+
+                // 2. THE SILVER BULLET: Bypass WindowRecomposer entirely.
+                // This stops Compose from climbing up to the DecorView and crashing when it finds nothing.
+                val recomposer = Recomposer(Dispatchers.Main)
+                compositionContext = recomposer
+                CoroutineScope(Dispatchers.Main).launch {
+                    recomposer.runRecomposeAndApplyChanges()
+                }
 
                 setContent {
                     LiquidNavBarHost(
