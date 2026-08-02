@@ -90,7 +90,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             val rootView = activity.window.decorView as ViewGroup
             if (rootView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            XposedBridge.log("[HyperBounce] Injecting True Liquid UI...")
+            XposedBridge.log("[HyperBounce] Injecting DRM-Safe UI...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -114,7 +114,7 @@ class PhysicsHook : IXposedHookLoadPackage {
                 clipToPadding = false
                 setBackgroundColor(Color.TRANSPARENT)
                 
-                // FORCE BOTTOM CONFINEMENT (DRM SAFE)
+                // Confinement guarantees we don't accidentally overlay the video surface
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -135,7 +135,6 @@ class PhysicsHook : IXposedHookLoadPackage {
             }
 
             rootView.addView(composeView)
-            XposedBridge.log("[HyperBounce] Liquid UI attached.")
 
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception in YouTube UI Heist: ${e.message}")

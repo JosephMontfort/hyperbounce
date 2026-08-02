@@ -1,144 +1,56 @@
 package dev.joseph.hyperbounce
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
-import android.graphics.Bitmap
-import android.graphics.Rect
-import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.view.Choreographer
-import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
-import android.view.Window
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.GraphicsLayerScope
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import java.lang.ref.WeakReference
 
-data class TabData(val sourceView: View, val iconSymbol: String)
+data class TabData(val sourceView: View, val icon: ImageVector)
 
 fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
     val out = mutableListOf<TabData>()
     try {
         val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return out
         
-        // Zero-dependency bulletproof emoji symbols for the tabs
-        val fallbackIcons = listOf("🏠", "▶", "➕", "📋", "👤")
+        val fallbackIcons = listOf(
+            Icons.Default.Home,
+            Icons.Default.PlayArrow,
+            Icons.Default.Add,
+            Icons.Default.List,
+            Icons.Default.Person
+        )
         
         var iconIdx = 0
         for (i in 0 until wrapper.childCount) {
             val tab = wrapper.getChildAt(i) as? ViewGroup ?: continue
+            // Ensure we are grabbing an actual tab container, not a 0-width spacer
             if (tab.childCount > 0) {
-                val symbol = fallbackIcons.getOrElse(iconIdx) { "🏠" }
-                out.add(TabData(tab, symbol))
+                val vectorIcon = fallbackIcons.getOrElse(iconIdx) { Icons.Default.Home }
+                out.add(TabData(tab, vectorIcon))
                 iconIdx++
             }
         }
     } catch (e: Exception) {}
     return out
-}
-
-private fun resolveWindow(context: Context): Window? {
-    var ctx: Context = context
-    while (true) {
-        if (ctx is Activity) return ctx.window
-        ctx = (ctx as? ContextWrapper)?.baseContext ?: return null
-    }
-}
-
-private class PixelCopyBlurBackdrop(
-    windowRef: WeakReference<Window>,
-    private val handler: Handler,
-) : Backdrop {
-    private val ref = windowRef
-    override val isCoordinatesDependent: Boolean = false
-    override val offsetResidualX: Float = 0f
-    override val offsetResidualY: Float = 0f
-
-    @Volatile var bX = 0
-    @Volatile var bY = 0
-    @Volatile var bW = 0
-    @Volatile var bH = 0
-    @Volatile private var latest: ImageBitmap? = null
-    @Volatile private var inFlight = false
-    private var prev: Bitmap? = null
-
-    fun tick() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        if (inFlight) return
-        val window = ref.get() ?: return
-        
-        val decor = window.peekDecorView()
-        if (decor == null || decor.windowToken == null) return
-
-        val w = bW
-        val h = bH
-        if (w <= 0 || h <= 0) return
-
-        val sf = 8
-        val outW = (w / sf).coerceAtLeast(1)
-        val outH = (h / sf).coerceAtLeast(1)
-        val bmp = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
-        val srcRect = Rect(bX, bY, bX + w, bY + h)
-        inFlight = true
-
-        try {
-            @Suppress("DEPRECATION")
-            PixelCopy.request(window, srcRect, bmp, { result ->
-                if (result == PixelCopy.SUCCESS) {
-                    prev?.recycle()
-                    prev = bmp
-                    latest = bmp.asImageBitmap()
-                } else {
-                    bmp.recycle()
-                }
-                inFlight = false
-            }, handler)
-        } catch (e: Exception) {
-            bmp.recycle()
-            inFlight = false
-        }
-    }
-
-    override fun DrawScope.drawBackdrop(
-        density: Density,
-        coordinates: LayoutCoordinates?,
-        layerBlock: (GraphicsLayerScope.() -> Unit)?,
-        downscaleFactor: Int,
-    ) {
-        val bmp = latest ?: return
-        drawImage(
-            image = bmp,
-            srcOffset = IntOffset.Zero,
-            srcSize = IntSize(bmp.width, bmp.height),
-            dstOffset = IntOffset.Zero,
-            dstSize = IntSize(size.width.toInt(), size.height.toInt()),
-            filterQuality = FilterQuality.High,
-        )
-    }
 }
 
 @Composable
@@ -151,12 +63,13 @@ fun LiquidNavBarHost(
 
     LaunchedEffect(stockBar) {
         var attempts = 0
-        while (tabs.isEmpty() && attempts < 10) {
+        // CRITICAL FIX: Wait for ALL 5 tabs to load, not just the first one!
+        while (tabs.size < 4 && attempts < 20) {
             val extracted = extractYouTubeTabs(stockBar)
             if (extracted.isNotEmpty()) {
-                tabs = extracted
-                break
+                tabs = extracted // Update UI dynamically as they load
             }
+            if (extracted.size >= 4) break
             attempts++
             delay(300)
         }
@@ -168,27 +81,22 @@ fun LiquidNavBarHost(
     }
 
     MiuixTheme {
-        val window: Window? = remember(stockBar) { resolveWindow(stockBar.context) }
-        val mainHandler = remember { Handler(Looper.getMainLooper()) }
-        val captureBackdrop: PixelCopyBlurBackdrop? = remember(window) {
-            window?.let { PixelCopyBlurBackdrop(WeakReference(it), mainHandler) }
-        }
-
-        if (captureBackdrop != null) {
-            DisposableEffect(captureBackdrop) {
-                val ch = Choreographer.getInstance()
-                val cb = object : Choreographer.FrameCallback {
-                    override fun doFrame(frameTimeNanos: Long) {
-                        captureBackdrop.tick()
-                        ch.postFrameCallback(this)
-                    }
+        // DRM-SAFE DUMMY BACKDROP: Satisfies Miuix compiler but performs ZERO screen recording.
+        val safeDummyBackdrop = remember {
+            object : Backdrop {
+                override val isCoordinatesDependent = false
+                override val offsetResidualX = 0f
+                override val offsetResidualY = 0f
+                override fun DrawScope.drawBackdrop(
+                    density: Density,
+                    coordinates: LayoutCoordinates?,
+                    layerBlock: (GraphicsLayerScope.() -> Unit)?,
+                    downscaleFactor: Int
+                ) {
+                    // Do nothing. DRM safe!
                 }
-                ch.postFrameCallback(cb)
-                onDispose { ch.removeFrameCallback(cb) }
             }
         }
-
-        val backdrop: Backdrop = captureBackdrop ?: rememberLayerBackdrop { }
 
         if (tabs.isNotEmpty()) {
             Box(
@@ -198,17 +106,7 @@ fun LiquidNavBarHost(
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 FloatingBottomBar(
-                    modifier = Modifier
-                        .onGloballyPositioned { coords: LayoutCoordinates ->
-                            captureBackdrop?.let {
-                                val pos = coords.positionInWindow()
-                                it.bX = pos.x.toInt()
-                                it.bY = pos.y.toInt()
-                                it.bW = coords.size.width
-                                it.bH = coords.size.height
-                            }
-                        }
-                        .padding(bottom = 12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
+                    modifier = Modifier.padding(bottom = 24.dp),
                     selectedIndex = { selectedIndex },
                     onSelected = { idx ->
                         selectedIndex = idx
@@ -216,19 +114,20 @@ fun LiquidNavBarHost(
                             tabs[idx].sourceView.performClick()
                         }
                     },
-                    backdrop = backdrop,
+                    backdrop = safeDummyBackdrop, // Inject safe backdrop
                     tabsCount = tabs.size,
-                    isBlurEnabled = true,
+                    isBlurEnabled = false, // STRIP BLUR TO BYPASS DRM
                 ) {
                     tabs.forEachIndexed { index, tabData ->
                         FloatingBottomBarItem(
                             onClick = { selectedIndex = index },
                             modifier = Modifier.defaultMinSize(minWidth = 60.dp),
                         ) {
-                            Text(
-                                text = tabData.iconSymbol,
-                                fontSize = 20.sp,
-                                color = LocalContentColor.current
+                            Icon(
+                                imageVector = tabData.icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(26.dp),
+                                tint = LocalContentColor.current
                             )
                         }
                     }
