@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
@@ -13,8 +14,9 @@ import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
+import android.widget.ImageView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,29 +32,57 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.lang.ref.WeakReference
 
-data class TabData(val sourceView: View, val iconSymbol: String)
+// Switched back to Bitmap for native YouTube icon extraction
+data class TabData(val sourceView: View, val bitmap: Bitmap)
+
+fun findViewByName(view: View, name: String): View? {
+    if (view.id != View.NO_ID) {
+        try {
+            if (view.resources.getResourceEntryName(view.id) == name) return view
+        } catch (e: Exception) {}
+    }
+    if (view is ViewGroup) {
+        for (i in 0 until view.childCount) {
+            val found = findViewByName(view.getChildAt(i), name)
+            if (found != null) return found
+        }
+    }
+    return null
+}
 
 fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
     val out = mutableListOf<TabData>()
     try {
         val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return out
         
-        val fallbackIcons = listOf("🏠", "⚡", "➕", "📚", "👤")
-        
-        var iconIdx = 0
         for (i in 0 until wrapper.childCount) {
             val tab = wrapper.getChildAt(i) as? ViewGroup ?: continue
-            if (tab.childCount > 0) {
-                val symbol = fallbackIcons.getOrElse(iconIdx) { "🏠" }
-                out.add(TabData(tab, symbol))
-                iconIdx++
+            val thumbnailLayout = findViewByName(tab, "thumbnail_layout") as? ViewGroup ?: continue
+            
+            var imgView = findViewByName(thumbnailLayout, "image") as? ImageView
+            if (imgView == null) {
+                imgView = findViewByName(thumbnailLayout, "pivot_bar_thumbnail") as? ImageView
+            }
+            
+            val liveDrawable = imgView?.drawable
+            if (liveDrawable != null) {
+                // THE SAFE CLONE: Prevents Hardware Rendering crash!
+                val safeClone = liveDrawable.constantState?.newDrawable()?.mutate()
+                if (safeClone != null) {
+                    val w = safeClone.intrinsicWidth.coerceAtLeast(1)
+                    val h = safeClone.intrinsicHeight.coerceAtLeast(1)
+                    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(bmp)
+                    safeClone.setBounds(0, 0, w, h)
+                    safeClone.draw(canvas)
+                    
+                    out.add(TabData(tab, bmp)) 
+                }
             }
         }
     } catch (e: Exception) {}
@@ -67,7 +97,6 @@ private fun resolveWindow(context: Context): Window? {
     }
 }
 
-// REAL LIQUID GLASS ENGINE IS BACK
 private class PixelCopyBlurBackdrop(
     windowRef: WeakReference<Window>,
     private val handler: Handler,
@@ -150,12 +179,13 @@ fun LiquidNavBarHost(
 
     LaunchedEffect(stockBar) {
         var attempts = 0
-        while (tabs.size < 4 && attempts < 20) {
+        // Wait longer to allow async loading of profile pictures and all 5 tabs
+        while (attempts < 20) {
             val extracted = extractYouTubeTabs(stockBar)
-            if (extracted.isNotEmpty()) {
+            if (extracted.size > tabs.size) {
                 tabs = extracted 
             }
-            if (extracted.size >= 4) break
+            if (tabs.size >= 5) break
             attempts++
             delay(300)
         }
@@ -224,17 +254,18 @@ fun LiquidNavBarHost(
                     },
                     backdrop = backdrop,
                     tabsCount = tabs.size,
-                    isBlurEnabled = true, // BLUR RESTORED
+                    isBlurEnabled = true,
                 ) {
                     tabs.forEachIndexed { index, tabData ->
                         FloatingBottomBarItem(
                             onClick = { selectedIndex = index },
                             modifier = Modifier.defaultMinSize(minWidth = 60.dp),
                         ) {
-                            Text(
-                                text = tabData.iconSymbol,
-                                fontSize = 24.sp,
-                                color = LocalContentColor.current
+                            // Rendering the safe native YouTube bitmap clones!
+                            Image(
+                                bitmap = tabData.bitmap.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }
