@@ -8,6 +8,7 @@ import android.widget.FrameLayout
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -71,8 +72,8 @@ class PhysicsHook : IXposedHookLoadPackage {
 
     private fun executeUIHeist(activity: Activity, stockBar: ViewGroup) {
         try {
-            val rootView = activity.window.decorView as ViewGroup
-            if (rootView.findViewWithTag<View>("HyperFloatingBar") != null) return
+            val decorView = activity.window.decorView as ViewGroup
+            if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
             XposedBridge.log("[HyperBounce] Injecting Liquid Glass overlay into YouTube...")
 
@@ -81,6 +82,13 @@ class PhysicsHook : IXposedHookLoadPackage {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
+
+            // CRITICAL FIX: Compose traverses UP to the root DecorView to find the WindowRecomposer lifecycle.
+            // We MUST tag the DecorView directly BEFORE calling setContent or addView, 
+            // because ComposeView.onMeasure can trigger synchronously and crash immediately if this is missing.
+            decorView.setViewTreeLifecycleOwner(lifecycleOwner)
+            decorView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            decorView.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
             val tabState = mutableStateOf(0)
             externalTabState = tabState
@@ -94,16 +102,13 @@ class PhysicsHook : IXposedHookLoadPackage {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
                 
-                // CRITICAL FIX: Dynamically attach to the absolute root exactly when added to window
-                addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-                    override fun onViewAttachedToWindow(v: View) {
-                        val actualRoot = v.rootView
-                        actualRoot.setViewTreeLifecycleOwner(lifecycleOwner)
-                        actualRoot.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-                        actualRoot.setViewTreeViewModelStoreOwner(lifecycleOwner)
-                    }
-                    override fun onViewDetachedFromWindow(v: View) {}
-                })
+                // Prevent memory leaks since we don't get natural Activity.onDestroy events
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+
+                // Tag the ComposeView as well for redundancy
+                setViewTreeLifecycleOwner(lifecycleOwner)
+                setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+                setViewTreeViewModelStoreOwner(lifecycleOwner)
 
                 setContent {
                     LiquidNavBarHost(
@@ -113,7 +118,8 @@ class PhysicsHook : IXposedHookLoadPackage {
                 }
             }
 
-            rootView.addView(composeView)
+            decorView.addView(composeView)
+            XposedBridge.log("[HyperBounce] Liquid Glass injected successfully!")
 
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception in YouTube UI Heist: ${e.message}")
