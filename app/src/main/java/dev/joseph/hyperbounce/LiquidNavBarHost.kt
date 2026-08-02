@@ -187,27 +187,7 @@ fun LiquidNavBarHost(
     }
 
     MiuixTheme {
-        val window: Window? = remember(stockBar) { resolveWindow(stockBar.context) }
-        val mainHandler = remember { Handler(Looper.getMainLooper()) }
-        val captureBackdrop: PixelCopyBlurBackdrop? = remember(window) {
-            window?.let { PixelCopyBlurBackdrop(WeakReference(it), mainHandler) }
-        }
-
-        if (captureBackdrop != null) {
-            DisposableEffect(captureBackdrop) {
-                val ch = Choreographer.getInstance()
-                val cb = object : Choreographer.FrameCallback {
-                    override fun doFrame(frameTimeNanos: Long) {
-                        captureBackdrop.tick()
-                        ch.postFrameCallback(this)
-                    }
-                }
-                ch.postFrameCallback(cb)
-                onDispose { ch.removeFrameCallback(cb) }
-            }
-        }
-
-        val backdrop: Backdrop = captureBackdrop ?: rememberLayerBackdrop { }
+        val backdrop: Backdrop = rememberLayerBackdrop { }
 
         if (tabs.isNotEmpty()) {
             Box(
@@ -238,7 +218,7 @@ fun LiquidNavBarHost(
                     },
                     backdrop = backdrop,
                     tabsCount = tabs.size,
-                    isBlurEnabled = true,
+                    isBlurEnabled = false,
                 ) {
                     tabs.forEachIndexed { index, tabData ->
                         FloatingBottomBarItem(
