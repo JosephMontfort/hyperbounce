@@ -17,11 +17,14 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
@@ -49,9 +52,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                     val res = activity.resources
                     val decorView = activity.window.decorView as? ViewGroup ?: return
 
-                    // Guard: don't add another listener if we already injected.
-                    // Without this, every onResume (back from another app, screen-on, etc.)
-                    // stacks a new OnGlobalLayoutListener onto the DecorView indefinitely.
                     if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
                     decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
@@ -93,6 +93,15 @@ class PhysicsHook : IXposedHookLoadPackage {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
+            
+            // THE CRITICAL FIX: We must seed the LifecycleOwner directly into the DecorView. 
+            // Without this, Compose's WindowRecomposer Policy crashes trying to initialize at the root.
+            if (decorView.findViewTreeLifecycleOwner() == null)
+                decorView.setViewTreeLifecycleOwner(lifecycleOwner)
+            if (decorView.findViewTreeSavedStateRegistryOwner() == null)
+                decorView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            if (decorView.findViewTreeViewModelStoreOwner() == null)
+                decorView.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
             val tabState = mutableStateOf(0)
             externalTabState = tabState
@@ -103,7 +112,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                 clipToPadding = false
                 setBackgroundColor(Color.TRANSPARENT)
 
-                // Use the modern non-deprecated insets API (minSdk 33, so WindowInsets.Type is safe).
                 val navInsets = try {
                     decorView.rootWindowInsets
                         ?.getInsets(WindowInsets.Type.systemBars())
@@ -119,26 +127,11 @@ class PhysicsHook : IXposedHookLoadPackage {
                 }
 
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+                
+                // Keep local scopes as backups for Compose view hierarchies internally
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
-
-                // *** KEY FIX ***
-                // Do NOT call setParentCompositionContext() here.
-                //
-                // The old code created its own Recomposer running
-                // runRecomposeAndApplyChanges() on AndroidUiDispatcher.CurrentThread.
-                // That spawned a second Choreographer-driven frame loop alongside
-                // YouTube's own Recomposer.  Modern YouTube is almost entirely Jetpack
-                // Compose; two Recomposers racing on the same Choreographer caused
-                // YouTube's compositions to miss their frame slots → blank screen.
-                //
-                // Without setParentCompositionContext, ComposeView calls
-                // findViewTreeCompositionContext() which walks up to the DecorView.
-                // YouTube's ComponentActivity stores its Recomposer there via
-                // setViewTreeCompositionContext.  Our content is therefore composed
-                // as a sibling under YouTube's properly-configured Recomposer —
-                // no second frame loop, no conflict, videos render normally.
 
                 setContent {
                     LiquidNavBarHost(
