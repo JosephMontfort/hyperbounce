@@ -1,15 +1,12 @@
 package dev.joseph.hyperbounce
 
 import android.content.res.Configuration
-import android.graphics.Color
-import android.graphics.Outline
-import android.os.Build
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -35,15 +32,20 @@ class PhysicsHook : IXposedHookLoadPackage {
 
     private var lastUiMode = -1
 
+    // Shared state written by the pre-draw tab-detection loop,
+    // read by the Compose composition inside LiquidNavBarHost.
+    // Exposed as State<Int> so Compose observes changes reactively.
+    private var externalTabState: MutableState<Int>? = null
+
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.whatsapp") return
 
-        val wdsBottomBarClass = XposedHelpers.findClassIfExists(
+        val wdsClass = XposedHelpers.findClassIfExists(
             "com.whatsapp.ui.wds.components.bottombar.WDSBottomBar",
             lpparam.classLoader,
         ) ?: return
 
-        XposedBridge.hookAllConstructors(wdsBottomBarClass, object : XC_MethodHook() {
+        XposedBridge.hookAllConstructors(wdsClass, object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
                 val stockBar = param.thisObject as ViewGroup
                 stockBar.alpha = 0f
@@ -55,24 +57,21 @@ class PhysicsHook : IXposedHookLoadPackage {
                         stockBar.viewTreeObserver.addOnPreDrawListener(
                             object : ViewTreeObserver.OnPreDrawListener {
                                 override fun onPreDraw(): Boolean {
-                                    val parentVis = (stockBar.parent as? View)?.visibility ?: -1
-                                    val transY   = stockBar.translationY
 
-                                    val injectedRoot = stockBar.rootView as ViewGroup
-                                    val customBar = injectedRoot.findViewWithTag<View>("HyperFloatingBar")
-                                    val blurView  = injectedRoot.findViewWithTag<View>("HyperFloatingBarBlur")
+                                    // ── Visibility mirror ─────────────────
+                                    val parentVis = (stockBar.parent as? View)?.visibility ?: -1
+                                    val injected  = stockBar.rootView as ViewGroup
+                                    val customBar = injected.findViewWithTag<View>("HyperFloatingBar")
 
                                     if (customBar != null) {
-                                        val shouldHide =
+                                        val hide =
                                             stockBar.visibility == View.GONE ||
                                             parentVis == View.GONE ||
-                                            transY > 50f
-                                        val vis = if (shouldHide) View.GONE else View.VISIBLE
-                                        customBar.visibility = vis
-                                        blurView?.visibility  = vis
+                                            stockBar.translationY > 50f
+                                        customBar.visibility = if (hide) View.GONE else View.VISIBLE
                                     }
 
-                                    // keep stock bar invisible and height-collapsed
+                                    // Keep stock bar invisible + zero-height
                                     stockBar.alpha = 0f
                                     stockBar.layoutParams?.let { lp ->
                                         if (lp.height != 0) {
@@ -81,18 +80,28 @@ class PhysicsHook : IXposedHookLoadPackage {
                                         }
                                     }
 
-                                    // reinject after dark/light mode change
+                                    // ── Tab detection ─────────────────────
+                                    // Detect which WhatsApp tab is visually
+                                    // selected so swipe-based navigation
+                                    // updates our pill indicator too.
+                                    detectWhatsAppTab(stockBar)?.let { idx ->
+                                        val state = externalTabState
+                                        if (state != null && state.value != idx) {
+                                            state.value = idx
+                                        }
+                                    }
+
+                                    // ── Theme-change re-inject ────────────
                                     val ctx = stockBar.context
                                     if (ctx != null) {
                                         val nightMask = Configuration.UI_MODE_NIGHT_MASK
-                                        val current   = ctx.resources.configuration.uiMode and nightMask
-                                        if (lastUiMode != -1 && lastUiMode != current) {
-                                            lastUiMode = current
-                                            injectedRoot.removeView(customBar)
-                                            injectedRoot.removeView(blurView)
+                                        val cur = ctx.resources.configuration.uiMode and nightMask
+                                        if (lastUiMode != -1 && lastUiMode != cur) {
+                                            lastUiMode = cur
+                                            injected.removeView(customBar)
                                             executeUIHeist(stockBar)
                                         } else if (lastUiMode == -1) {
-                                            lastUiMode = current
+                                            lastUiMode = cur
                                         }
                                     }
                                     return true
@@ -107,93 +116,38 @@ class PhysicsHook : IXposedHookLoadPackage {
         })
     }
 
+    /**
+     * Returns the index of the tab WhatsApp currently considers selected,
+     * or null if detection fails.  Checks isSelected → isActivated → alpha
+     * so it works across different WhatsApp versions.
+     */
+    private fun detectWhatsAppTab(stockBar: ViewGroup): Int? {
+        val menu = stockBar.getChildAt(0) as? ViewGroup ?: return null
+        // isSelected
+        for (i in 0 until menu.childCount) {
+            if (menu.getChildAt(i).isSelected) return i
+        }
+        // isActivated
+        for (i in 0 until menu.childCount) {
+            if (menu.getChildAt(i).isActivated) return i
+        }
+        return null
+    }
+
     private fun executeUIHeist(stockBar: ViewGroup) {
         try {
             val rootView = stockBar.rootView as View
             if (rootView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            val context     = stockBar.context
-            val density     = context.resources.displayMetrics.density
-            val displayWidth = context.resources.displayMetrics.widthPixels
+            val context = stockBar.context
+            XposedBridge.log("[HyperBounce] Injecting overlay…")
 
-            val isDark = (context.resources.configuration.uiMode and
-                    Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-
-            // System nav bar height in px — used to align the blur pill with
-            // the Compose pill which uses WindowInsets.navigationBars.
-            val navBarHeightPx = getNavBarHeight(context, density)
-
-            // Pill metrics (must match FloatingBottomBar defaults):
-            //   height = 64dp, bottom clearance = 12dp above nav bar.
-            val pillHeightPx     = (64 * density).toInt()
-            val pillBottomMargin = navBarHeightPx + (12 * density).toInt()
-
-            // Width: make the blur view wider than the pill so it always
-            // covers even if IntrinsicSize.Min resolves slightly wider than
-            // our estimate.  Extra width beyond the pill is hidden by the
-            // Compose layer's transparency (no pill drawn there).
-            // 80 % covers 4-tab pills across all common screen widths.
-            val blurWidthPx = (displayWidth * 0.80f).toInt()
-
-            // ── Layer 1: frosted-glass base ───────────────────────────────
-            //
-            // This View lives BELOW the ComposeView in the Android view
-            // hierarchy.  Because the Compose pill is now semi-transparent
-            // (40 % containerColor), the OS compositor blends this View's
-            // rendered pixels with the pill, producing the frosted look.
-            //
-            // RenderEffect.createBlurEffect blurs this View's OWN draw
-            // output (background colour + children).  The blurry tinted
-            // background visible through the 60 % transparent Compose pill
-            // reads as real frosted glass to the eye.
-            //
-            // Colour: 18 % white (light) / 18 % black (dark) — enough
-            // tint to separate the pill from the screen without hiding it.
-            val blurView = View(context).apply {
-                tag = "HyperFloatingBarBlur"
-                layoutParams = FrameLayout.LayoutParams(blurWidthPx, pillHeightPx).apply {
-                    gravity     = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                    bottomMargin = pillBottomMargin
-                }
-
-                setBackgroundColor(
-                    Color.parseColor(if (isDark) "#2DFFFFFF" else "#2D000000")
-                )
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    // Blur radius ≈ 24 dp  (strong enough to read as frosted)
-                    val blurRadius = 24f * density
-                    setRenderEffect(
-                        android.graphics.RenderEffect.createBlurEffect(
-                            blurRadius, blurRadius,
-                            android.graphics.Shader.TileMode.CLAMP,
-                        )
-                    )
-                }
-
-                // Clip to pill shape so blurred tint doesn't bleed outside.
-                outlineProvider = object : ViewOutlineProvider() {
-                    override fun getOutline(view: View, outline: Outline) {
-                        outline.setRoundRect(
-                            0, 0, view.width, view.height,
-                            view.height / 2f,
-                        )
-                    }
-                }
-                clipToOutline = true
-            }
-
-            // ── Layer 2: Compose UI (glass decorations + physics) ─────────
-            //
-            // Full-screen MATCH_PARENT so WindowInsets work correctly and
-            // the Alignment.BottomCenter in LiquidNavBarHost can place the
-            // pill at exactly the right height.
+            // ── Lifecycle owner ───────────────────────────────────────────
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
-
             val rootGroup = rootView as ViewGroup
             if (rootGroup.findViewTreeLifecycleOwner() == null)
                 rootGroup.setViewTreeLifecycleOwner(lifecycleOwner)
@@ -202,8 +156,24 @@ class PhysicsHook : IXposedHookLoadPackage {
             if (rootGroup.findViewTreeViewModelStoreOwner() == null)
                 rootGroup.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
+            // ── Tab state ─────────────────────────────────────────────────
+            // mutableStateOf is safe to create off-composition; Compose will
+            // observe it reactively inside LiquidNavBarHost.
+            val tabState = mutableStateOf(0)
+            externalTabState = tabState
+
+            // ── WhatsApp content view ─────────────────────────────────────
+            // The DecorView's first child is WhatsApp's entire UI, added by
+            // the framework before our injection.  Drawing it gives us the
+            // actual chat content WITHOUT our Compose overlay.
+            val whatsAppContent: View? = rootGroup.getChildAt(0)
+
+            // ── Compose overlay (full-screen, transparent background) ─────
+            // No separate blur View is needed: ContentCaptureBackdrop handles
+            // the real-time capture + downscale-blur, and miuix's drawBackdrop
+            // composites it correctly with the glass effects.
             val composeView = ComposeView(context).apply {
-                tag = "HyperFloatingBar"
+                tag           = "HyperFloatingBar"
                 clipChildren  = false
                 clipToPadding = false
                 layoutParams  = FrameLayout.LayoutParams(
@@ -213,24 +183,21 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
-                setContent { LiquidNavBarHost(stockBar) }
+                setContent {
+                    LiquidNavBarHost(
+                        stockBar      = stockBar,
+                        whatsAppContent = whatsAppContent,
+                        externalTabState = tabState,
+                    )
+                }
             }
 
-            rootGroup.addView(blurView)
             rootGroup.addView(composeView)
-            XposedBridge.log("[HyperBounce] Layers attached. navBar=${navBarHeightPx}px")
+            XposedBridge.log("[HyperBounce] Overlay attached.")
 
         } catch (e: Exception) {
-            XposedBridge.log("[HyperBounce] Exception: ${e.message}")
+            XposedBridge.log("[HyperBounce] Exception in executeUIHeist: ${e.message}")
         }
-    }
-
-    private fun getNavBarHeight(context: android.content.Context, density: Float): Int {
-        val resId = context.resources.getIdentifier(
-            "navigation_bar_height", "dimen", "android"
-        )
-        return if (resId > 0) context.resources.getDimensionPixelSize(resId)
-               else (48 * density).toInt()
     }
 }
 
