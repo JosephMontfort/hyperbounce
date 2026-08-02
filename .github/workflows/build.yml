@@ -2,7 +2,7 @@ name: Build HyperBounce Release
 
 on:
   push:
-    branches: [ "master", "main", "whatsapp-only" ]
+    branches: [ "master", "main", "youtube-only" ]
   workflow_dispatch:
 
 permissions:
@@ -44,7 +44,7 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           name: HyperBounce Release #${{ github.run_number }}
-          body: "Automated HyperBounce LSPosed build - WhatsApp Isolated Branch"
+          body: "Automated HyperBounce LSPosed build - YouTube Isolated Branch"
           files: app/build/outputs/apk/release/HyperBounce-v1.0.${{ github.run_number }}.apk
           draft: false
           prerelease: false

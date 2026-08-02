@@ -1,5 +1,6 @@
 package dev.joseph.hyperbounce
 
+import android.app.Activity
 import android.content.res.Configuration
 import android.view.View
 import android.view.ViewGroup
@@ -31,152 +32,89 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 class PhysicsHook : IXposedHookLoadPackage {
 
     private var lastUiMode = -1
-
-    // Shared state written by the pre-draw tab-detection loop,
-    // read by the Compose composition inside LiquidNavBarHost.
-    // Exposed as State<Int> so Compose observes changes reactively.
     private var externalTabState: MutableState<Int>? = null
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
-        if (lpparam.packageName != "com.whatsapp") return
+        if (lpparam.packageName != "com.google.android.youtube") return
 
-        val wdsClass = XposedHelpers.findClassIfExists(
-            "com.whatsapp.ui.wds.components.bottombar.WDSBottomBar",
+        XposedHelpers.findAndHookMethod(
+            "android.app.Activity",
             lpparam.classLoader,
-        ) ?: return
+            "onResume",
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val activity = param.thisObject as Activity
+                    val res = activity.resources
 
-        XposedBridge.hookAllConstructors(wdsClass, object : XC_MethodHook() {
-            override fun afterHookedMethod(param: MethodHookParam) {
-                val stockBar = param.thisObject as ViewGroup
-                stockBar.alpha = 0f
+                    val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
+                    val pivotId = res.getIdentifier("pivot_bar", "id", "com.google.android.youtube")
 
-                stockBar.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-                    override fun onViewAttachedToWindow(v: View) {
-                        stockBar.post { executeUIHeist(stockBar) }
+                    if (containerId == 0 && pivotId == 0) return
 
-                        stockBar.viewTreeObserver.addOnPreDrawListener(
-                            object : ViewTreeObserver.OnPreDrawListener {
-                                override fun onPreDraw(): Boolean {
+                    val decorView = activity.window.decorView as? ViewGroup ?: return
 
-                                    // ── Visibility mirror ─────────────────
-                                    val parentVis = (stockBar.parent as? View)?.visibility ?: -1
-                                    val injected  = stockBar.rootView as ViewGroup
-                                    val customBar = injected.findViewWithTag<View>("HyperFloatingBar")
+                    decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+                        override fun onGlobalLayout() {
+                            val container = if (containerId != 0) activity.findViewById<ViewGroup>(containerId) else null
+                            val pivot = if (pivotId != 0) activity.findViewById<ViewGroup>(pivotId) else null
 
-                                    if (customBar != null) {
-                                        val hide =
-                                            stockBar.visibility == View.GONE ||
-                                            parentVis == View.GONE ||
-                                            stockBar.translationY > 50f
-                                        customBar.visibility = if (hide) View.GONE else View.VISIBLE
-                                    }
+                            val stockBar = container ?: pivot ?: return
 
-                                    // Keep stock bar invisible + zero-height
-                                    stockBar.alpha = 0f
-                                    stockBar.layoutParams?.let { lp ->
-                                        if (lp.height != 0) {
-                                            lp.height = 0
-                                            stockBar.requestLayout()
-                                        }
-                                    }
-
-                                    // ── Tab detection ─────────────────────
-                                    // Detect which WhatsApp tab is visually
-                                    // selected so swipe-based navigation
-                                    // updates our pill indicator too.
-                                    detectWhatsAppTab(stockBar)?.let { idx ->
-                                        val state = externalTabState
-                                        if (state != null && state.value != idx) {
-                                            state.value = idx
-                                        }
-                                    }
-
-                                    // ── Theme-change re-inject ────────────
-                                    val ctx = stockBar.context
-                                    if (ctx != null) {
-                                        val nightMask = Configuration.UI_MODE_NIGHT_MASK
-                                        val cur = ctx.resources.configuration.uiMode and nightMask
-                                        if (lastUiMode != -1 && lastUiMode != cur) {
-                                            lastUiMode = cur
-                                            injected.removeView(customBar)
-                                            executeUIHeist(stockBar)
-                                        } else if (lastUiMode == -1) {
-                                            lastUiMode = cur
-                                        }
-                                    }
-                                    return true
+                            // Nuke stock bottom views to prevent gaps
+                            if (container != null) {
+                                container.visibility = View.GONE
+                                val params = container.layoutParams
+                                if (params != null && params.height != 0) {
+                                    params.height = 0
+                                    container.layoutParams = params
                                 }
                             }
-                        )
-                    }
 
-                    override fun onViewDetachedFromWindow(v: View) {}
-                })
+                            if (pivot != null) {
+                                pivot.visibility = View.GONE
+                                val params = pivot.layoutParams
+                                if (params != null && params.height != 0) {
+                                    params.height = 0
+                                    pivot.layoutParams = params
+                                }
+                            }
+
+                            executeUIHeist(activity, stockBar)
+                        }
+                    })
+                }
             }
-        })
+        )
     }
 
-    /**
-     * Returns the index of the tab WhatsApp currently considers selected,
-     * or null if detection fails.  Checks isSelected → isActivated → alpha
-     * so it works across different WhatsApp versions.
-     */
-    private fun detectWhatsAppTab(stockBar: ViewGroup): Int? {
-        val menu = stockBar.getChildAt(0) as? ViewGroup ?: return null
-        // isSelected
-        for (i in 0 until menu.childCount) {
-            if (menu.getChildAt(i).isSelected) return i
-        }
-        // isActivated
-        for (i in 0 until menu.childCount) {
-            if (menu.getChildAt(i).isActivated) return i
-        }
-        return null
-    }
-
-    private fun executeUIHeist(stockBar: ViewGroup) {
+    private fun executeUIHeist(activity: Activity, stockBar: ViewGroup) {
         try {
-            val rootView = stockBar.rootView as View
+            val rootView = activity.window.decorView as ViewGroup
             if (rootView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            val context = stockBar.context
-            XposedBridge.log("[HyperBounce] Injecting overlay…")
+            XposedBridge.log("[HyperBounce] Injecting overlay into YouTube...")
 
-            // ── Lifecycle owner ───────────────────────────────────────────
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
-            val rootGroup = rootView as ViewGroup
-            if (rootGroup.findViewTreeLifecycleOwner() == null)
-                rootGroup.setViewTreeLifecycleOwner(lifecycleOwner)
-            if (rootGroup.findViewTreeSavedStateRegistryOwner() == null)
-                rootGroup.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            if (rootGroup.findViewTreeViewModelStoreOwner() == null)
-                rootGroup.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
-            // ── Tab state ─────────────────────────────────────────────────
-            // mutableStateOf is safe to create off-composition; Compose will
-            // observe it reactively inside LiquidNavBarHost.
+            if (rootView.findViewTreeLifecycleOwner() == null)
+                rootView.setViewTreeLifecycleOwner(lifecycleOwner)
+            if (rootView.findViewTreeSavedStateRegistryOwner() == null)
+                rootView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            if (rootView.findViewTreeViewModelStoreOwner() == null)
+                rootView.setViewTreeViewModelStoreOwner(lifecycleOwner)
+
             val tabState = mutableStateOf(0)
             externalTabState = tabState
 
-            // ── WhatsApp content view ─────────────────────────────────────
-            // The DecorView's first child is WhatsApp's entire UI, added by
-            // the framework before our injection.  Drawing it gives us the
-            // actual chat content WITHOUT our Compose overlay.
-            val whatsAppContent: View? = rootGroup.getChildAt(0)
-
-            // ── Compose overlay (full-screen, transparent background) ─────
-            // No separate blur View is needed: ContentCaptureBackdrop handles
-            // the real-time capture + downscale-blur, and miuix's drawBackdrop
-            // composites it correctly with the glass effects.
-            val composeView = ComposeView(context).apply {
-                tag           = "HyperFloatingBar"
-                clipChildren  = false
+            val composeView = ComposeView(activity).apply {
+                tag = "HyperFloatingBar"
+                clipChildren = false
                 clipToPadding = false
-                layoutParams  = FrameLayout.LayoutParams(
+                layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
@@ -185,17 +123,17 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
                 setContent {
                     LiquidNavBarHost(
-                        stockBar      = stockBar,
+                        stockBar = stockBar,
                         externalTabState = tabState,
                     )
                 }
             }
 
-            rootGroup.addView(composeView)
-            XposedBridge.log("[HyperBounce] Overlay attached.")
+            rootView.addView(composeView)
+            XposedBridge.log("[HyperBounce] YouTube overlay attached.")
 
         } catch (e: Exception) {
-            XposedBridge.log("[HyperBounce] Exception in executeUIHeist: ${e.message}")
+            XposedBridge.log("[HyperBounce] Exception in YouTube UI Heist: ${e.message}")
         }
     }
 }
