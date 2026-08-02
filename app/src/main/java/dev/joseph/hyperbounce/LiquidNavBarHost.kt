@@ -14,22 +14,15 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.GraphicsLayerScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -37,6 +30,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
@@ -44,27 +38,22 @@ import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.lang.ref.WeakReference
 
-data class TabData(val sourceView: View, val icon: ImageVector)
+data class TabData(val sourceView: View, val iconSymbol: String)
 
 fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
     val out = mutableListOf<TabData>()
     try {
         val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return out
         
-        val fallbackIcons = listOf(
-            Icons.Default.Home,
-            Icons.Default.PlayArrow,
-            Icons.Default.Add,
-            Icons.Default.List,
-            Icons.Default.Person
-        )
+        // Zero-dependency bulletproof emoji symbols for the tabs
+        val fallbackIcons = listOf("🏠", "▶", "➕", "📋", "👤")
         
         var iconIdx = 0
         for (i in 0 until wrapper.childCount) {
             val tab = wrapper.getChildAt(i) as? ViewGroup ?: continue
             if (tab.childCount > 0) {
-                val vectorIcon = fallbackIcons.getOrElse(iconIdx) { Icons.Default.Home }
-                out.add(TabData(tab, vectorIcon))
+                val symbol = fallbackIcons.getOrElse(iconIdx) { "🏠" }
+                out.add(TabData(tab, symbol))
                 iconIdx++
             }
         }
@@ -236,11 +225,10 @@ fun LiquidNavBarHost(
                             onClick = { selectedIndex = index },
                             modifier = Modifier.defaultMinSize(minWidth = 60.dp),
                         ) {
-                            Icon(
-                                imageVector = tabData.icon,
-                                contentDescription = null,
-                                modifier = Modifier.size(26.dp),
-                                tint = LocalContentColor.current
+                            Text(
+                                text = tabData.iconSymbol,
+                                fontSize = 20.sp,
+                                color = LocalContentColor.current
                             )
                         }
                     }
