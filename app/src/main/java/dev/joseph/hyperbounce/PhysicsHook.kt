@@ -112,7 +112,7 @@ class PhysicsHook : IXposedHookLoadPackage {
                 // 2. THE SILVER BULLET: Bypass WindowRecomposer entirely.
                 // This stops Compose from climbing up to the DecorView and crashing when it finds nothing.
                 val recomposer = Recomposer(Dispatchers.Main)
-                compositionContext = recomposer
+                parentCompositionContext = recomposer
                 CoroutineScope(Dispatchers.Main).launch {
                     recomposer.runRecomposeAndApplyChanges()
                 }
