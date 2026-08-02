@@ -186,7 +186,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setContent {
                     LiquidNavBarHost(
                         stockBar      = stockBar,
-                        whatsAppContent = whatsAppContent,
                         externalTabState = tabState,
                     )
                 }
