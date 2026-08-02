@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -43,7 +44,6 @@ import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.lang.ref.WeakReference
 
-// Using Native Compose Vectors instead of unreliable YouTube image extraction
 data class TabData(val sourceView: View, val icon: ImageVector)
 
 fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
@@ -51,19 +51,17 @@ fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
     try {
         val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return out
         
-        // Native module icons for perfect, instant rendering
         val fallbackIcons = listOf(
             Icons.Default.Home,
-            Icons.Default.PlayArrow, // Shorts
-            Icons.Default.Add,       // Create
-            Icons.Default.List,      // Subscriptions
-            Icons.Default.Person     // You
+            Icons.Default.PlayArrow,
+            Icons.Default.Add,
+            Icons.Default.List,
+            Icons.Default.Person
         )
         
         var iconIdx = 0
         for (i in 0 until wrapper.childCount) {
             val tab = wrapper.getChildAt(i) as? ViewGroup ?: continue
-            // Ignore spacers, only grab actual tab containers
             if (tab.childCount > 0) {
                 val vectorIcon = fallbackIcons.getOrElse(iconIdx) { Icons.Default.Home }
                 out.add(TabData(tab, vectorIcon))
@@ -82,7 +80,6 @@ private fun resolveWindow(context: Context): Window? {
     }
 }
 
-// Crash-Safe PixelCopy Engine
 private class PixelCopyBlurBackdrop(
     windowRef: WeakReference<Window>,
     private val handler: Handler,
@@ -239,12 +236,11 @@ fun LiquidNavBarHost(
                             onClick = { selectedIndex = index },
                             modifier = Modifier.defaultMinSize(minWidth = 60.dp),
                         ) {
-                            // Using native tintable Compose Icons for perfect rendering!
                             Icon(
                                 imageVector = tabData.icon,
                                 contentDescription = null,
                                 modifier = Modifier.size(26.dp),
-                                tint = LocalContentColor.current // Perfectly matches Miuix theme dynamics
+                                tint = LocalContentColor.current
                             )
                         }
                     }
