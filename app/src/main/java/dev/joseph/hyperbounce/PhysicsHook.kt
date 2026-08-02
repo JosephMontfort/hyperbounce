@@ -57,22 +57,26 @@ class PhysicsHook : IXposedHookLoadPackage {
 
                     decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
                         override fun onGlobalLayout() {
-                            val pivotId   = res.getIdentifier("pivot_bar",                  "id", "com.google.android.youtube")
-                            val dividerId = res.getIdentifier("navigation_bar_divider_frame","id", "com.google.android.youtube")
+                            val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
+                            val pivotId     = res.getIdentifier("pivot_bar",            "id", "com.google.android.youtube")
 
-                            if (dividerId != 0) {
-                                activity.findViewById<View>(dividerId)?.alpha = 0f
+                            // CRITICAL FIX: NEVER touch 'navigation_bar_divider_frame' - it wraps the entire app!
+                            
+                            val container = if (containerId != 0) activity.findViewById<ViewGroup>(containerId) else null
+                            val pivot     = if (pivotId != 0) activity.findViewById<ViewGroup>(pivotId) else null
+
+                            if (container != null) {
+                                // Remove the opaque black background behind the stock bar without breaking layout
+                                container.setBackgroundColor(Color.TRANSPARENT)
                             }
 
-                            if (pivotId != 0) {
-                                val pivot = activity.findViewById<ViewGroup>(pivotId)
-                                if (pivot != null) {
-                                    pivot.alpha = 0f
-
-                                    val wrapper = pivot.getChildAt(0) as? ViewGroup
-                                    if (wrapper != null && wrapper.childCount >= 3) {
-                                        executeUIHeist(activity, pivot)
-                                    }
+                            if (pivot != null && pivot.alpha != 0f) {
+                                // Hide the stock icons safely
+                                pivot.alpha = 0f
+                                
+                                val wrapper = pivot.getChildAt(0) as? ViewGroup
+                                if (wrapper != null && wrapper.childCount >= 3) {
+                                    executeUIHeist(activity, pivot)
                                 }
                             }
                         }
@@ -84,10 +88,10 @@ class PhysicsHook : IXposedHookLoadPackage {
 
     private fun executeUIHeist(activity: Activity, stockBar: ViewGroup) {
         try {
-            val decorView = activity.window.decorView as ViewGroup
-            if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
+            val contentView = activity.findViewById<ViewGroup>(android.R.id.content)
+            if (contentView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            XposedBridge.log("[HyperBounce] Injecting Isolated UI...")
+            XposedBridge.log("[HyperBounce] Injecting True Liquid Glass UI...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -105,25 +109,24 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setBackgroundColor(Color.TRANSPARENT)
 
                 val navInsets = try {
-                    decorView.rootWindowInsets?.getInsets(WindowInsets.Type.systemBars())?.bottom ?: 0
+                    contentView.rootWindowInsets?.getInsets(WindowInsets.Type.systemBars())?.bottom ?: 0
                 } catch (e: Exception) { 0 }
 
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    gravity     = Gravity.BOTTOM
+                    gravity      = Gravity.BOTTOM
                     bottomMargin = navInsets
                 }
 
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 
-                // CRITICAL FIX 1: Attach lifecycles ONLY to ComposeView so we don't poison YouTube's fragments!
+                // Safely attach to the ComposeView ONLY
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
 
-                // CRITICAL FIX 2: Attach a local Recomposer so Compose never searches the root DecorView and crashes!
                 val coroutineContext = AndroidUiDispatcher.CurrentThread
                 val recomposer = Recomposer(coroutineContext)
                 setParentCompositionContext(recomposer)
@@ -139,8 +142,8 @@ class PhysicsHook : IXposedHookLoadPackage {
                 }
             }
 
-            decorView.addView(composeView)
-            XposedBridge.log("[HyperBounce] Isolated UI injected successfully!")
+            // Inject into R.id.content to avoid DecorView z-order issues entirely
+            contentView.addView(composeView)
 
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception in UI Heist: ${e.message}")
