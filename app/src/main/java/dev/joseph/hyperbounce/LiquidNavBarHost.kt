@@ -6,25 +6,20 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 
 data class TabData(val bitmap: Bitmap, val sourceView: View)
 
@@ -32,8 +27,7 @@ fun findViewByName(view: View, name: String): View? {
     if (view.id != View.NO_ID) {
         try {
             if (view.resources.getResourceEntryName(view.id) == name) return view
-        } catch (_: Exception) {
-        }
+        } catch (e: Exception) {}
     }
     if (view is ViewGroup) {
         for (i in 0 until view.childCount) {
@@ -48,16 +42,16 @@ fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
     val out = mutableListOf<TabData>()
     try {
         val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return out
-
+        
         for (i in 0 until wrapper.childCount) {
             val tab = wrapper.getChildAt(i) as? ViewGroup ?: continue
             val thumbnailLayout = findViewByName(tab, "thumbnail_layout") as? ViewGroup ?: continue
-
+            
             var imgView = findViewByName(thumbnailLayout, "image") as? ImageView
             if (imgView == null) {
                 imgView = findViewByName(thumbnailLayout, "pivot_bar_thumbnail") as? ImageView
             }
-
+            
             if (imgView?.drawable != null) {
                 val drawable = imgView.drawable.mutate()
                 val w = drawable.intrinsicWidth.coerceAtLeast(1)
@@ -66,11 +60,11 @@ fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
                 val canvas = Canvas(bmp)
                 drawable.setBounds(0, 0, w, h)
                 drawable.draw(canvas)
-                out.add(TabData(bmp, tab))
+                
+                out.add(TabData(bmp, tab)) 
             }
         }
-    } catch (_: Exception) {
-    }
+    } catch (e: Exception) {}
     return out
 }
 
@@ -85,7 +79,9 @@ fun LiquidNavBarHost(
     LaunchedEffect(stockBar) {
         while (tabs.size < 4) {
             val extracted = extractYouTubeTabs(stockBar)
-            if (extracted.size > tabs.size) tabs = extracted
+            if (extracted.size > tabs.size) {
+                tabs = extracted
+            }
             delay(300)
         }
     }
@@ -100,30 +96,42 @@ fun LiquidNavBarHost(
             modifier = Modifier
                 .fillMaxWidth()
                 .wrapContentHeight()
-                .padding(bottom = 12.dp),
-            contentAlignment = Alignment.BottomCenter,
+                .padding(bottom = 24.dp, start = 16.dp, end = 16.dp),
+            contentAlignment = Alignment.BottomCenter
         ) {
-            FloatingBottomBar(
-                modifier = Modifier,
-                selectedIndex = { selectedIndex },
-                onSelected = { idx ->
-                    selectedIndex = idx
-                    if (idx < tabs.size) {
-                        tabs[idx].sourceView.performClick()
-                    }
-                },
-                backdrop = rememberLayerBackdrop { },
-                tabsCount = tabs.size,
-                isBlurEnabled = false,
+            // ZERO SUSPECTS: A purely opaque, hardcoded dark grey pill. No blur libraries.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(Color(0xFF1E1E1E)), // Solid Dark Grey
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 tabs.forEachIndexed { index, tabData ->
-                    FloatingBottomBarItem(
-                        onClick = { selectedIndex = index },
-                        modifier = Modifier.defaultMinSize(minWidth = 60.dp),
+                    val interactionSource = remember { MutableInteractionSource() }
+                    
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null
+                            ) {
+                                selectedIndex = index
+                                if (externalTabState.value != index) {
+                                    tabData.sourceView.performClick()
+                                }
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
                         Image(
                             bitmap = tabData.bitmap.asImageBitmap(),
-                            contentDescription = null
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
+                            alpha = if (selectedIndex == index) 1f else 0.6f // Simple opacity state
                         )
                     }
                 }
