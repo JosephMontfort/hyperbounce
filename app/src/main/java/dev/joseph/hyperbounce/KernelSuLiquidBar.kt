@@ -144,7 +144,7 @@ fun FloatingBottomBar(
     val accentColor = MiuixTheme.colorScheme.primary
     val tabContentColor = MiuixTheme.colorScheme.onSurface
     val surfaceContainer = MiuixTheme.colorScheme.surfaceContainer
-    val containerColor = if (isBlurEnabled) (if (isInDark) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.03f) else androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.03f)) else surfaceContainer
+    val containerColor = androidx.compose.ui.graphics.Color.Transparent
 
     // ── tabsBackdrop: captures the invisible accent-coloured row so the
     //    indicator pill can composite the tinted icons on top of the blur. ──

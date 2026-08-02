@@ -2,9 +2,13 @@ package dev.joseph.hyperbounce
 
 import android.app.Activity
 import android.graphics.Color
+import android.graphics.Outline
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
+import android.widget.FrameLayout
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.mutableStateOf
@@ -52,7 +56,6 @@ class PhysicsHook : IXposedHookLoadPackage {
 
                     decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
                         override fun onGlobalLayout() {
-                            val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
                             val pivotId = res.getIdentifier("pivot_bar", "id", "com.google.android.youtube")
                             val dividerId = res.getIdentifier("navigation_bar_divider_frame", "id", "com.google.android.youtube")
 
@@ -60,17 +63,14 @@ class PhysicsHook : IXposedHookLoadPackage {
                                 activity.findViewById<View>(dividerId)?.alpha = 0f
                             }
 
-                            // Inject directly into YouTube's container to avoid full-screen culling
-                            if (containerId != 0 && pivotId != 0) {
-                                val container = activity.findViewById<ViewGroup>(containerId)
+                            if (pivotId != 0) {
                                 val pivot = activity.findViewById<ViewGroup>(pivotId)
-                                
-                                if (container != null && pivot != null) {
+                                if (pivot != null) {
                                     pivot.alpha = 0f
                                     
                                     val wrapper = pivot.getChildAt(0) as? ViewGroup
                                     if (wrapper != null && wrapper.childCount >= 3) {
-                                        executeUIHeist(activity, container, pivot)
+                                        executeUIHeist(activity, pivot)
                                     }
                                 }
                             }
@@ -81,11 +81,12 @@ class PhysicsHook : IXposedHookLoadPackage {
         )
     }
 
-    private fun executeUIHeist(activity: Activity, container: ViewGroup, stockBar: ViewGroup) {
+    private fun executeUIHeist(activity: Activity, stockBar: ViewGroup) {
         try {
-            if (container.findViewWithTag<View>("HyperFloatingBar") != null) return
+            val decorView = activity.window.decorView as ViewGroup
+            if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            XposedBridge.log("[HyperBounce] Injecting Liquid Glass into bottom_bar_container...")
+            XposedBridge.log("[HyperBounce] Injecting DRM-Safe Liquid Glass overlay...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -100,13 +101,32 @@ class PhysicsHook : IXposedHookLoadPackage {
                 tag = "HyperFloatingBar"
                 clipChildren = false
                 clipToPadding = false
-                setBackgroundColor(Color.TRANSPARENT)
+
+                // 1. Give the Android View a perfect Pill Outline
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        outline.setRoundRect(0, 0, view.width, view.height, view.height / 2f)
+                    }
+                }
+                clipToOutline = true
+
+                // 2. Hardware-accelerated background blur (Bypasses YouTube DRM Blackout!)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    setBackgroundBlurRadius(100)
+                }
                 
-                // Use generic ViewGroup params since we are inside YouTube's container
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
+                // 3. Subtle translucent glass tint
+                setBackgroundColor(Color.parseColor("#15FFFFFF"))
+
+                // 4. Wrap content precisely so we don't overlay the video player at all
+                val navInsets = decorView.rootWindowInsets?.systemWindowInsetBottom ?: 50
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
-                )
+                ).apply {
+                    gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                    bottomMargin = navInsets + 30 // Hover above system navigation
+                }
                 
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setViewTreeLifecycleOwner(lifecycleOwner)
@@ -128,9 +148,8 @@ class PhysicsHook : IXposedHookLoadPackage {
                 }
             }
 
-            // CRITICAL FIX: Add directly to YouTube's bottom bar container instead of the Activity!
-            container.addView(composeView)
-            XposedBridge.log("[HyperBounce] Liquid Glass injected successfully into native container!")
+            decorView.addView(composeView)
+            XposedBridge.log("[HyperBounce] Liquid Glass injected successfully!")
 
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception in YouTube UI Heist: ${e.message}")
