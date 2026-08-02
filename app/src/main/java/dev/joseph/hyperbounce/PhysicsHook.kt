@@ -31,7 +31,6 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 
 class PhysicsHook : IXposedHookLoadPackage {
 
-    private var lastUiMode = -1
     private var externalTabState: MutableState<Int>? = null
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
@@ -46,40 +45,38 @@ class PhysicsHook : IXposedHookLoadPackage {
                     val activity = param.thisObject as Activity
                     val res = activity.resources
 
-                    val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
-                    val pivotId = res.getIdentifier("pivot_bar", "id", "com.google.android.youtube")
-
-                    if (containerId == 0 && pivotId == 0) return
-
                     val decorView = activity.window.decorView as? ViewGroup ?: return
 
                     decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
                         override fun onGlobalLayout() {
-                            val container = if (containerId != 0) activity.findViewById<ViewGroup>(containerId) else null
-                            val pivot = if (pivotId != 0) activity.findViewById<ViewGroup>(pivotId) else null
+                            val idsToNuke = listOf("bottom_bar_container", "pivot_bar", "navigation_bar_divider_frame")
+                            var stockBar: ViewGroup? = null
 
-                            val stockBar = container ?: pivot ?: return
-
-                            // Nuke stock bottom views to prevent gaps
-                            if (container != null) {
-                                container.visibility = View.GONE
-                                val params = container.layoutParams
-                                if (params != null && params.height != 0) {
-                                    params.height = 0
-                                    container.layoutParams = params
+                            idsToNuke.forEach { idName ->
+                                val resId = res.getIdentifier(idName, "id", "com.google.android.youtube")
+                                if (resId != 0) {
+                                    activity.findViewById<View>(resId)?.let { view ->
+                                        if (idName == "pivot_bar") stockBar = view as? ViewGroup
+                                        
+                                        // Aggressively kill visibility, padding, and margins
+                                        view.visibility = View.GONE
+                                        view.setPadding(0, 0, 0, 0)
+                                        val lp = view.layoutParams
+                                        if (lp != null) {
+                                            lp.height = 0
+                                            if (lp is ViewGroup.MarginLayoutParams) {
+                                                lp.bottomMargin = 0
+                                                lp.topMargin = 0
+                                            }
+                                            view.layoutParams = lp
+                                        }
+                                    }
                                 }
                             }
 
-                            if (pivot != null) {
-                                pivot.visibility = View.GONE
-                                val params = pivot.layoutParams
-                                if (params != null && params.height != 0) {
-                                    params.height = 0
-                                    pivot.layoutParams = params
-                                }
+                            if (stockBar != null) {
+                                executeUIHeist(activity, stockBar!!)
                             }
-
-                            executeUIHeist(activity, stockBar)
                         }
                     })
                 }
@@ -92,7 +89,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             val rootView = activity.window.decorView as ViewGroup
             if (rootView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            XposedBridge.log("[HyperBounce] Injecting overlay into YouTube...")
+            XposedBridge.log("[HyperBounce] Injecting Liquid Glass overlay into YouTube...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -130,7 +127,6 @@ class PhysicsHook : IXposedHookLoadPackage {
             }
 
             rootView.addView(composeView)
-            XposedBridge.log("[HyperBounce] YouTube overlay attached.")
 
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception in YouTube UI Heist: ${e.message}")
@@ -142,17 +138,11 @@ class FakeLifecycleOwner :
     LifecycleOwner,
     SavedStateRegistryOwner,
     ViewModelStoreOwner {
-
     val registry = LifecycleRegistry(this)
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
     private val store = ViewModelStore()
-
     init { savedStateRegistryController.performRestore(null) }
-
-    override val lifecycle: Lifecycle
-        get() = registry
-    override val savedStateRegistry: SavedStateRegistry
-        get() = savedStateRegistryController.savedStateRegistry
-    override val viewModelStore: ViewModelStore
-        get() = store
+    override val lifecycle: Lifecycle get() = registry
+    override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
+    override val viewModelStore: ViewModelStore get() = store
 }

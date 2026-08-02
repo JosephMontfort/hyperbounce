@@ -144,7 +144,7 @@ fun FloatingBottomBar(
     val accentColor = MiuixTheme.colorScheme.primary
     val tabContentColor = MiuixTheme.colorScheme.onSurface
     val surfaceContainer = MiuixTheme.colorScheme.surfaceContainer
-    val containerColor = if (isBlurEnabled) surfaceContainer.copy(0.4f) else surfaceContainer
+    val containerColor = if (isBlurEnabled) (if (isInDark) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.03f) else androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.03f)) else surfaceContainer
 
     // ── tabsBackdrop: captures the invisible accent-coloured row so the
     //    indicator pill can composite the tinted icons on top of the blur. ──
@@ -269,10 +269,10 @@ fun FloatingBottomBar(
                             shape = { pillShape },
                             effects = {
                                 vibrancy()
-                                blur(4.dp.toPx(), 4.dp.toPx())
+                                blur(28.dp.toPx(), 28.dp.toPx())
                                 lens(
-                                    refractionHeight = 24.dp.toPx(),
-                                    refractionAmount = 24.dp.toPx(),
+                                    refractionHeight = 42.dp.toPx(),
+                                    refractionAmount = 36.dp.toPx(),
                                 )
                             },
                             highlight = { baseHighlight.copy(alpha = 0.75f) },
@@ -317,10 +317,10 @@ fun FloatingBottomBar(
                             shape = { pillShape },
                             effects = {
                                 vibrancy()
-                                blur(4.dp.toPx(), 4.dp.toPx())
+                                blur(28.dp.toPx(), 28.dp.toPx())
                                 lens(
-                                    refractionHeight = 24.dp.toPx(),
-                                    refractionAmount = 24.dp.toPx(),
+                                    refractionHeight = 42.dp.toPx(),
+                                    refractionAmount = 36.dp.toPx(),
                                 )
                             },
                             onDrawSurface = { drawRect(containerColor) },

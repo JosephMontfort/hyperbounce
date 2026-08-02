@@ -40,7 +40,7 @@ data class TabData(val bitmap: Bitmap?)
 
 fun extractTabs(stockBar: ViewGroup): List<TabData> {
     val out = mutableListOf<TabData>()
-    val menu = stockBar.getChildAt(0) as? ViewGroup ?: return out
+    val menu = stockBar
     for (i in 0 until menu.childCount) {
         val tab = menu.getChildAt(i) as? ViewGroup ?: continue
         val icon = findImageView(tab)
@@ -69,7 +69,7 @@ fun findImageView(g: ViewGroup): ImageView? {
 }
 
 fun clickStockTab(stockBar: ViewGroup, index: Int) {
-    (stockBar.getChildAt(0) as? ViewGroup)?.getChildAt(index)?.performClick()
+    stockBar.getChildAt(index)?.performClick()
 }
 
 // ── Window resolver ───────────────────────────────────────────────────────────
