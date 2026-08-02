@@ -140,7 +140,6 @@ private class PixelCopyBlurBackdrop(
                 inFlight = false
             }, handler)
         } catch (e: Exception) {
-            // Fails silently if window surface is lost during app switch
             bmp.recycle()
             inFlight = false
         }
@@ -212,7 +211,11 @@ fun LiquidNavBarHost(
 
         if (tabs.isNotEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                // CRITICAL FIX 4: Prevent Compose Box from expanding full screen
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight()
+                    .padding(bottom = 12.dp),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 FloatingBottomBar(
@@ -225,12 +228,7 @@ fun LiquidNavBarHost(
                                 it.bW = coords.size.width
                                 it.bH = coords.size.height
                             }
-                        }
-                        .padding(
-                            bottom = 12.dp + WindowInsets.navigationBars
-                                .asPaddingValues()
-                                .calculateBottomPadding(),
-                        ),
+                        },
                     selectedIndex = { selectedIndex },
                     onSelected = { idx ->
                         selectedIndex = idx
@@ -250,7 +248,7 @@ fun LiquidNavBarHost(
                             Image(
                                 bitmap = tabData.bitmap.asImageBitmap(),
                                 contentDescription = null,
-                                modifier = Modifier.size(24.dp) // Native color rendering
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }
