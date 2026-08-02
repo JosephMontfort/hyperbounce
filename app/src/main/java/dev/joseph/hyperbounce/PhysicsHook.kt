@@ -40,6 +40,10 @@ class PhysicsHook : IXposedHookLoadPackage {
             object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val activity = param.thisObject as Activity
+                    
+                    // CRITICAL FIX: Only inject into the real MainActivity to avoid Shell$HomeActivity crashes
+                    if (activity.javaClass.simpleName != "MainActivity") return
+
                     val res = activity.resources
                     val decorView = activity.window.decorView as? ViewGroup ?: return
 
@@ -83,13 +87,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
 
-            // CRITICAL FIX: Compose traverses UP to the root DecorView to find the WindowRecomposer lifecycle.
-            // We MUST tag the DecorView directly BEFORE calling setContent or addView, 
-            // because ComposeView.onMeasure can trigger synchronously and crash immediately if this is missing.
-            decorView.setViewTreeLifecycleOwner(lifecycleOwner)
-            decorView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            decorView.setViewTreeViewModelStoreOwner(lifecycleOwner)
-
             val tabState = mutableStateOf(0)
             externalTabState = tabState
 
@@ -102,10 +99,10 @@ class PhysicsHook : IXposedHookLoadPackage {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
                 
-                // Prevent memory leaks since we don't get natural Activity.onDestroy events
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
 
-                // Tag the ComposeView as well for redundancy
+                // CRITICAL FIX: Only apply the fake lifecycle to OUR view. 
+                // Do NOT touch decorView, otherwise we kill YouTube's real video rendering fragments!
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)

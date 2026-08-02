@@ -69,7 +69,7 @@ fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
             
             if (imgView?.drawable != null) {
                 val drawable = imgView.drawable.mutate()
-                drawable.setTintList(null)
+                // Do NOT set tint to null aggressively if we want to preserve original YouTube colors
                 val w = drawable.intrinsicWidth.coerceAtLeast(1)
                 val h = drawable.intrinsicHeight.coerceAtLeast(1)
                 val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -113,6 +113,11 @@ private class PixelCopyBlurBackdrop(
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         if (inFlight) return
         val window = ref.get() ?: return
+        
+        // CRITICAL FIX: Prevent crashes when app is minimized (no surface available)
+        val decor = window.peekDecorView()
+        if (decor == null || decor.windowToken == null) return
+
         val w = bW
         val h = bH
         if (w <= 0 || h <= 0) return
@@ -124,17 +129,26 @@ private class PixelCopyBlurBackdrop(
         val srcRect = Rect(bX, bY, bX + w, bY + h)
         inFlight = true
 
-        @Suppress("DEPRECATION")
-        PixelCopy.request(window, srcRect, bmp, { result ->
-            if (result == PixelCopy.SUCCESS) {
-                prev?.recycle()
-                prev = bmp
-                latest = bmp.asImageBitmap()
-            } else {
-                bmp.recycle()
-            }
+        try {
+            @Suppress("DEPRECATION")
+            PixelCopy.request(window, srcRect, bmp, { result ->
+                if (result == PixelCopy.SUCCESS) {
+                    prev?.recycle()
+                    prev = bmp
+                    latest = bmp.asImageBitmap()
+                } else {
+                    bmp.recycle()
+                }
+                inFlight = false
+            }, handler)
+        } catch (e: IllegalArgumentException) {
+            // Fails silently if surface is destroyed during the frame cycle
+            bmp.recycle()
             inFlight = false
-        }, handler)
+        } catch (e: Exception) {
+            bmp.recycle()
+            inFlight = false
+        }
     }
 
     override fun DrawScope.drawBackdrop(
@@ -241,8 +255,8 @@ fun LiquidNavBarHost(
                             Image(
                                 bitmap = tabData.bitmap.asImageBitmap(),
                                 contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                                colorFilter = ColorFilter.tint(LocalContentColor.current),
+                                modifier = Modifier.size(24.dp)
+                                // CRITICAL FIX: Removed colorFilter. Now icons will display in their native YouTube colors (no more blue blobs!)
                             )
                         }
                     }
