@@ -2,11 +2,9 @@ package dev.joseph.hyperbounce
 
 import android.app.Activity
 import android.graphics.Color
-import android.graphics.Outline
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import androidx.compose.runtime.MutableState
@@ -101,31 +99,15 @@ class PhysicsHook : IXposedHookLoadPackage {
                 tag = "HyperFloatingBar"
                 clipChildren = false
                 clipToPadding = false
+                setBackgroundColor(Color.TRANSPARENT)
 
-                // 1. Give the Android View a perfect Pill Outline
-                outlineProvider = object : ViewOutlineProvider() {
-                    override fun getOutline(view: View, outline: Outline) {
-                        outline.setRoundRect(0, 0, view.width, view.height, view.height / 2f)
-                    }
-                }
-                clipToOutline = true
-
-                // 2. Hardware-accelerated background blur (Bypasses YouTube DRM Blackout!)
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                    setBackgroundBlurRadius(100)
-                }
-                
-                // 3. Subtle translucent glass tint
-                setBackgroundColor(Color.parseColor("#15FFFFFF"))
-
-                // 4. Wrap content precisely so we don't overlay the video player at all
                 val navInsets = decorView.rootWindowInsets?.systemWindowInsetBottom ?: 50
                 layoutParams = FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                    bottomMargin = navInsets + 30 // Hover above system navigation
+                    gravity = Gravity.BOTTOM
+                    bottomMargin = navInsets
                 }
                 
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)

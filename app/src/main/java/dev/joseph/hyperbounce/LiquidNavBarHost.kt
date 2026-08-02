@@ -8,6 +8,7 @@ import android.widget.ImageView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
@@ -87,29 +88,36 @@ fun LiquidNavBarHost(
 
     MiuixTheme {
         if (tabs.isNotEmpty()) {
-            FloatingBottomBar(
-                modifier = Modifier.wrapContentSize(), // Let the view shrink perfectly to the pill bounds
-                selectedIndex = { selectedIndex },
-                onSelected = { idx ->
-                    selectedIndex = idx
-                    if (externalTabState.value != idx && idx < tabs.size) {
-                        tabs[idx].sourceView.performClick()
-                    }
-                },
-                backdrop = rememberLayerBackdrop(),
-                tabsCount = tabs.size,
-                isBlurEnabled = false, // Disabled Miuix software blur, Hardware blur handles it now!
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight()
+                    .padding(bottom = 12.dp),
+                contentAlignment = Alignment.BottomCenter
             ) {
-                tabs.forEachIndexed { index, tabData ->
-                    FloatingBottomBarItem(
-                        onClick = { selectedIndex = index },
-                        modifier = Modifier.defaultMinSize(minWidth = 60.dp),
-                    ) {
-                        Image(
-                            bitmap = tabData.bitmap.asImageBitmap(),
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp)
-                        )
+                FloatingBottomBar(
+                    selectedIndex = { selectedIndex },
+                    onSelected = { idx ->
+                        selectedIndex = idx
+                        if (externalTabState.value != idx && idx < tabs.size) {
+                            tabs[idx].sourceView.performClick()
+                        }
+                    },
+                    backdrop = rememberLayerBackdrop(),
+                    tabsCount = tabs.size,
+                    isBlurEnabled = true,
+                ) {
+                    tabs.forEachIndexed { index, tabData ->
+                        FloatingBottomBarItem(
+                            onClick = { selectedIndex = index },
+                            modifier = Modifier.defaultMinSize(minWidth = 60.dp),
+                        ) {
+                            Image(
+                                bitmap = tabData.bitmap.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 }
             }
