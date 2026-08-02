@@ -1,12 +1,24 @@
 package dev.joseph.hyperbounce
 
 import android.app.Activity
-import android.content.res.Resources
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
-import android.widget.ImageView
-import android.widget.TextView
+import android.widget.FrameLayout
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.ComposeView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
@@ -15,7 +27,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 
 class PhysicsHook : IXposedHookLoadPackage {
 
-    private var hasDumped = false
+    private var externalTabState: MutableState<Int>? = null
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.google.android.youtube") return
@@ -32,25 +44,25 @@ class PhysicsHook : IXposedHookLoadPackage {
 
                     decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
                         override fun onGlobalLayout() {
-                            if (hasDumped) return
-
                             val pivotId = res.getIdentifier("pivot_bar", "id", "com.google.android.youtube")
-                            if (pivotId == 0) return
+                            val dividerId = res.getIdentifier("navigation_bar_divider_frame", "id", "com.google.android.youtube")
 
-                            val pivot = activity.findViewById<ViewGroup>(pivotId) ?: return
-                            
-                            // Check the inner wrapper (the LinearLayout we saw in the logs)
-                            val wrapper = pivot.getChildAt(0) as? ViewGroup
-                            
-                            // If the wrapper is fully inflated with the 5 tabs, trigger the aggressive dump
-                            if (wrapper != null && wrapper.childCount >= 3) {
-                                hasDumped = true // Prevent log flooding
-                                
-                                XposedBridge.log("[HyperBounce] =========================================")
-                                XposedBridge.log("[HyperBounce] INITIATING AGGRESSIVE VIEW DUMP")
-                                XposedBridge.log("[HyperBounce] =========================================")
-                                dumpView(pivot, "", res)
-                                XposedBridge.log("[HyperBounce] =========================================")
+                            if (dividerId != 0) {
+                                activity.findViewById<View>(dividerId)?.alpha = 0f
+                            }
+
+                            if (pivotId != 0) {
+                                val pivot = activity.findViewById<ViewGroup>(pivotId)
+                                if (pivot != null) {
+                                    // Make it invisible without collapsing layout bounds
+                                    pivot.alpha = 0f
+                                    
+                                    val wrapper = pivot.getChildAt(0) as? ViewGroup
+                                    // Wait until YouTube fully injects all 5 tabs
+                                    if (wrapper != null && wrapper.childCount >= 3) {
+                                        executeUIHeist(activity, pivot)
+                                    }
+                                }
                             }
                         }
                     })
@@ -59,36 +71,62 @@ class PhysicsHook : IXposedHookLoadPackage {
         )
     }
 
-    private fun dumpView(view: View, indent: String, res: Resources) {
-        val className = view.javaClass.simpleName
-        var idName = "NO_ID"
-        
-        if (view.id != View.NO_ID) {
-            try {
-                idName = res.getResourceEntryName(view.id)
-            } catch (e: Exception) {
-                idName = "UNKNOWN_ID"
+    private fun executeUIHeist(activity: Activity, stockBar: ViewGroup) {
+        try {
+            val rootView = activity.window.decorView as ViewGroup
+            if (rootView.findViewWithTag<View>("HyperFloatingBar") != null) return
+
+            XposedBridge.log("[HyperBounce] Injecting Liquid Glass overlay into YouTube...")
+
+            val lifecycleOwner = FakeLifecycleOwner().apply {
+                registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+                registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+                registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
-        }
 
-        var extraInfo = ""
-        if (view is TextView) {
-            extraInfo = " [TEXT: '${view.text}']"
-        } else if (view is ImageView) {
-            extraInfo = " [IMAGEVIEW: HasDrawable=${view.drawable != null}]"
-        }
+            val tabState = mutableStateOf(0)
+            externalTabState = tabState
 
-        var desc = ""
-        if (view.contentDescription != null) {
-            desc = " [DESC: '${view.contentDescription}']"
-        }
-
-        XposedBridge.log("[HyperBounce] $indent-> $className (id/$idName)$extraInfo$desc")
-
-        if (view is ViewGroup) {
-            for (i in 0 until view.childCount) {
-                dumpView(view.getChildAt(i), "$indent  ", res)
+            val composeView = ComposeView(activity).apply {
+                tag = "HyperFloatingBar"
+                clipChildren = false
+                clipToPadding = false
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                )
             }
+
+            // CRITICAL FIX: Attach lifecycle ONLY to our custom view, not YouTube's root view.
+            // This prevents the Shell$HomeActivity crash!
+            composeView.setViewTreeLifecycleOwner(lifecycleOwner)
+            composeView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            composeView.setViewTreeViewModelStoreOwner(lifecycleOwner)
+
+            composeView.setContent {
+                LiquidNavBarHost(
+                    stockBar = stockBar,
+                    externalTabState = tabState,
+                )
+            }
+
+            rootView.addView(composeView)
+
+        } catch (e: Exception) {
+            XposedBridge.log("[HyperBounce] Exception in YouTube UI Heist: ${e.message}")
         }
     }
+}
+
+class FakeLifecycleOwner :
+    LifecycleOwner,
+    SavedStateRegistryOwner,
+    ViewModelStoreOwner {
+    val registry = LifecycleRegistry(this)
+    private val savedStateRegistryController = SavedStateRegistryController.create(this)
+    private val store = ViewModelStore()
+    init { savedStateRegistryController.performRestore(null) }
+    override val lifecycle: Lifecycle get() = registry
+    override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
+    override val viewModelStore: ViewModelStore get() = store
 }

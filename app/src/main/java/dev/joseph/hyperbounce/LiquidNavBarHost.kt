@@ -38,47 +38,56 @@ import java.lang.ref.WeakReference
 
 data class TabData(val bitmap: Bitmap, val sourceView: View)
 
-fun extractTabsDeep(viewGroup: ViewGroup): List<TabData> {
-    val imageViews = mutableListOf<ImageView>()
-    
-    fun traverse(view: View) {
-        if (view is ImageView && view.drawable != null && view.width > 0) {
-            imageViews.add(view)
-        } else if (view is ViewGroup) {
-            for (i in 0 until view.childCount) {
-                traverse(view.getChildAt(i))
-            }
-        }
-    }
-    
-    traverse(viewGroup)
-    
-    return imageViews.mapNotNull { icon ->
+fun findViewByName(view: View, name: String): View? {
+    if (view.id != View.NO_ID) {
         try {
-            val drawable = icon.drawable.mutate()
-            drawable.setTintList(null)
-            val w = drawable.intrinsicWidth.coerceAtLeast(1)
-            val h = drawable.intrinsicHeight.coerceAtLeast(1)
-            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bmp)
-            drawable.setBounds(0, 0, w, h)
-            drawable.draw(canvas)
-            TabData(bmp, icon)
-        } catch (e: Exception) {
-            null
+            if (view.resources.getResourceEntryName(view.id) == name) return view
+        } catch (e: Exception) {}
+    }
+    if (view is ViewGroup) {
+        for (i in 0 until view.childCount) {
+            val found = findViewByName(view.getChildAt(i), name)
+            if (found != null) return found
         }
     }
+    return null
 }
 
-fun clickStockTab(icon: View) {
-    var current: View? = icon
-    while (current != null) {
-        if (current.isClickable || current.hasOnClickListeners()) {
-            current.performClick()
-            return
+fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
+    val out = mutableListOf<TabData>()
+    try {
+        // pivotBar child 0 is the LinearLayout wrapper
+        val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return out
+        
+        for (i in 0 until wrapper.childCount) {
+            // Each child is a ConstraintLayout representing a Tab
+            val tab = wrapper.getChildAt(i) as? ViewGroup ?: continue
+            
+            // Find the FrameLayout holding the icon
+            val thumbnailLayout = findViewByName(tab, "thumbnail_layout") as? ViewGroup ?: continue
+            
+            // Look for "image" (Standard tabs) or "pivot_bar_thumbnail" (You tab)
+            var imgView = findViewByName(thumbnailLayout, "image") as? ImageView
+            if (imgView == null) {
+                imgView = findViewByName(thumbnailLayout, "pivot_bar_thumbnail") as? ImageView
+            }
+            
+            if (imgView?.drawable != null) {
+                val drawable = imgView.drawable.mutate()
+                drawable.setTintList(null)
+                val w = drawable.intrinsicWidth.coerceAtLeast(1)
+                val h = drawable.intrinsicHeight.coerceAtLeast(1)
+                val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bmp)
+                drawable.setBounds(0, 0, w, h)
+                drawable.draw(canvas)
+                
+                // Pass 'tab' as the sourceView so we trigger clicks on the ConstraintLayout parent
+                out.add(TabData(bmp, tab)) 
+            }
         }
-        current = current.parent as? View
-    }
+    } catch (e: Exception) {}
+    return out
 }
 
 private fun resolveWindow(context: Context): Window? {
@@ -160,14 +169,14 @@ fun LiquidNavBarHost(
     var tabs by remember { mutableStateOf(emptyList<TabData>()) }
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
 
-    // Poll for tabs dynamically. YouTube adds them after layout pass.
+    // Poll until we have all the tabs inflated
     LaunchedEffect(stockBar) {
-        while (tabs.size < 3) {
-            val extracted = extractTabsDeep(stockBar)
+        while (tabs.size < 4) {
+            val extracted = extractYouTubeTabs(stockBar)
             if (extracted.size > tabs.size) {
                 tabs = extracted
             }
-            delay(500)
+            delay(300)
         }
     }
 
@@ -199,7 +208,6 @@ fun LiquidNavBarHost(
 
         val backdrop: Backdrop = captureBackdrop ?: rememberLayerBackdrop { }
 
-        // Only draw the bar if we successfully extracted tabs
         if (tabs.isNotEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -225,7 +233,7 @@ fun LiquidNavBarHost(
                     onSelected = { idx ->
                         selectedIndex = idx
                         if (externalTabState.value != idx && idx < tabs.size) {
-                            clickStockTab(tabs[idx].sourceView)
+                            tabs[idx].sourceView.performClick()
                         }
                     },
                     backdrop = backdrop,
