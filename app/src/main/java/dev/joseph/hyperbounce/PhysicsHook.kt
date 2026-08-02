@@ -2,11 +2,9 @@ package dev.joseph.hyperbounce
 
 import android.app.Activity
 import android.graphics.Color
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
-import android.widget.FrameLayout
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +52,7 @@ class PhysicsHook : IXposedHookLoadPackage {
 
                     decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
                         override fun onGlobalLayout() {
+                            val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
                             val pivotId = res.getIdentifier("pivot_bar", "id", "com.google.android.youtube")
                             val dividerId = res.getIdentifier("navigation_bar_divider_frame", "id", "com.google.android.youtube")
 
@@ -61,14 +60,17 @@ class PhysicsHook : IXposedHookLoadPackage {
                                 activity.findViewById<View>(dividerId)?.alpha = 0f
                             }
 
-                            if (pivotId != 0) {
+                            // Inject directly into YouTube's container to avoid full-screen culling
+                            if (containerId != 0 && pivotId != 0) {
+                                val container = activity.findViewById<ViewGroup>(containerId)
                                 val pivot = activity.findViewById<ViewGroup>(pivotId)
-                                if (pivot != null) {
+                                
+                                if (container != null && pivot != null) {
                                     pivot.alpha = 0f
                                     
                                     val wrapper = pivot.getChildAt(0) as? ViewGroup
                                     if (wrapper != null && wrapper.childCount >= 3) {
-                                        executeUIHeist(activity, pivot)
+                                        executeUIHeist(activity, container, pivot)
                                     }
                                 }
                             }
@@ -79,12 +81,11 @@ class PhysicsHook : IXposedHookLoadPackage {
         )
     }
 
-    private fun executeUIHeist(activity: Activity, stockBar: ViewGroup) {
+    private fun executeUIHeist(activity: Activity, container: ViewGroup, stockBar: ViewGroup) {
         try {
-            val decorView = activity.window.decorView as ViewGroup
-            if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
+            if (container.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            XposedBridge.log("[HyperBounce] Injecting Liquid Glass overlay into YouTube...")
+            XposedBridge.log("[HyperBounce] Injecting Liquid Glass into bottom_bar_container...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -101,14 +102,11 @@ class PhysicsHook : IXposedHookLoadPackage {
                 clipToPadding = false
                 setBackgroundColor(Color.TRANSPARENT)
                 
-                // CRITICAL FIX: Make the ComposeView wrap its content and sit at the bottom.
-                // This prevents MiuixTheme from drawing a fullscreen background that blocks the video SurfaceView!
-                layoutParams = FrameLayout.LayoutParams(
+                // Use generic ViewGroup params since we are inside YouTube's container
+                layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    gravity = Gravity.BOTTOM
-                }
+                )
                 
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setViewTreeLifecycleOwner(lifecycleOwner)
@@ -130,8 +128,9 @@ class PhysicsHook : IXposedHookLoadPackage {
                 }
             }
 
-            activity.addContentView(composeView, composeView.layoutParams)
-            XposedBridge.log("[HyperBounce] Liquid Glass injected successfully!")
+            // CRITICAL FIX: Add directly to YouTube's bottom bar container instead of the Activity!
+            container.addView(composeView)
+            XposedBridge.log("[HyperBounce] Liquid Glass injected successfully into native container!")
 
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception in YouTube UI Heist: ${e.message}")
