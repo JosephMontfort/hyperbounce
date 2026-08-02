@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 data class TabData(val bitmap: Bitmap, val sourceView: View)
@@ -102,8 +103,9 @@ fun LiquidNavBarHost(
                             tabs[idx].sourceView.performClick()
                         }
                     },
+                    backdrop = rememberLayerBackdrop(), // CRITICAL FIX: Add missing backdrop parameter
                     tabsCount = tabs.size,
-                    isBlurEnabled = false, // STRIP BLUR TO PREVENT DRM BLACKOUT
+                    isBlurEnabled = false,
                 ) {
                     tabs.forEachIndexed { index, tabData ->
                         FloatingBottomBarItem(
