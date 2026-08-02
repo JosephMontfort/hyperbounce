@@ -16,11 +16,14 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.findViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
@@ -84,6 +87,16 @@ class PhysicsHook : IXposedHookLoadPackage {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+            }
+
+            if (decorView.findViewTreeLifecycleOwner() == null) {
+                decorView.setViewTreeLifecycleOwner(lifecycleOwner)
+            }
+            if (decorView.findViewTreeSavedStateRegistryOwner() == null) {
+                decorView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            }
+            if (decorView.findViewTreeViewModelStoreOwner() == null) {
+                decorView.setViewTreeViewModelStoreOwner(lifecycleOwner)
             }
 
             val tabState = mutableStateOf(0)
