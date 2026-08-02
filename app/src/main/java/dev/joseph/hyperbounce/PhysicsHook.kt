@@ -58,7 +58,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                     val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
                     val pivotId     = res.getIdentifier("pivot_bar",            "id", "com.google.android.youtube")
 
-                    // VISIBILITY FIX: 60fps PreDraw loop tracks exact screen coordinates to hide/show the pill instantly
                     decorView.viewTreeObserver.addOnPreDrawListener {
                         val container = if (containerId != 0) activity.findViewById<ViewGroup>(containerId) else null
                         val pivot     = if (pivotId != 0) activity.findViewById<ViewGroup>(pivotId) else null
@@ -67,7 +66,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                         if (container != null && container.isShown && container.alpha > 0f) {
                             val loc = IntArray(2)
                             container.getLocationOnScreen(loc)
-                            // If the container is physically pushed below the screen (e.g. comments/video), hide our pill!
                             if (loc[1] < decorView.height) {
                                 visible = true
                             }
@@ -118,14 +116,14 @@ class PhysicsHook : IXposedHookLoadPackage {
                     contentView.rootWindowInsets?.getInsets(WindowInsets.Type.systemBars())?.bottom ?: 0
                 } catch (e: Exception) { 0 }
                 
-                val extraPadding = (32 * activity.resources.displayMetrics.density).toInt()
+                // SHORTS PROGRESS BAR FIX: Push it 56dp above the nav insets!
+                val extraPadding = (56 * activity.resources.displayMetrics.density).toInt()
 
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
                     gravity      = Gravity.BOTTOM
-                    // SHORTS FIX: Lift the pill 32dp higher so it clears the progress bar completely
                     bottomMargin = navInsets + extraPadding
                 }
 

@@ -2,10 +2,9 @@ package dev.joseph.hyperbounce
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.os.SystemClock
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.ImageView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -15,22 +14,19 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.darkColorScheme
-import top.yukonga.miuix.kmp.theme.lightColorScheme
 
 data class TabData(val sourceView: View, val bitmap: Bitmap)
 
@@ -52,8 +48,12 @@ fun findViewByName(view: View, name: String): View? {
 fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
     val out = mutableListOf<TabData>()
     try {
+        val uiMode = pivotBar.resources.configuration.uiMode
+        val isDark = (uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        // VISIBILITY FIX: Hardware level tint to force icons to pure White/Black!
+        val tintColor = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
+
         val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return out
-        
         for (i in 0 until wrapper.childCount) {
             val tab = wrapper.getChildAt(i) as? ViewGroup ?: continue
             val thumbnailLayout = findViewByName(tab, "thumbnail_layout") as? ViewGroup ?: continue
@@ -67,6 +67,7 @@ fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
             if (liveDrawable != null) {
                 val safeClone = liveDrawable.constantState?.newDrawable()?.mutate()
                 if (safeClone != null) {
+                    safeClone.setTint(tintColor) // Apply the bright tint!
                     val w = safeClone.intrinsicWidth.coerceAtLeast(1)
                     val h = safeClone.intrinsicHeight.coerceAtLeast(1)
                     val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -82,19 +83,28 @@ fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
     return out
 }
 
-// HOME CLICK FIX: Simulates a literal hardware finger touch on the exact center of the tab
-fun simulateHardwareTouch(view: View) {
-    val x = view.width / 2f
-    val y = view.height / 2f
-    val downTime = SystemClock.uptimeMillis()
-    
-    val downEvent = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, x, y, 0)
-    view.dispatchTouchEvent(downEvent)
-    downEvent.recycle()
+// HOME BUG FIX 1: Recursively check all children because YouTube hides the "selected" state deep inside the view tree!
+fun isViewOrChildSelected(view: View): Boolean {
+    if (view.isSelected || view.isActivated) return true
+    if (view is ViewGroup) {
+        for (i in 0 until view.childCount) {
+            if (isViewOrChildSelected(view.getChildAt(i))) return true
+        }
+    }
+    return false
+}
 
-    val upEvent = MotionEvent.obtain(downTime, downTime + 50, MotionEvent.ACTION_UP, x, y, 0)
-    view.dispatchTouchEvent(upEvent)
-    upEvent.recycle()
+// HOME BUG FIX 2: Accessibility click bypasses touch interception
+fun forceClick(view: View) {
+    view.performClick()
+    view.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null)
+    if (view is ViewGroup) {
+        for (i in 0 until view.childCount) {
+            val child = view.getChildAt(i)
+            child.performClick()
+            child.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null)
+        }
+    }
 }
 
 @Composable
@@ -117,10 +127,10 @@ fun LiquidNavBarHost(
                 attempts++
             }
             
-            // BACK BUTTON SYNC FIX: Constantly checks YouTube's internal activation state
+            // Sync with YouTube's deep native state to stop the snap-back bug!
             if (tabs.isNotEmpty()) {
                 for (i in tabs.indices) {
-                    if (tabs[i].sourceView.isSelected || tabs[i].sourceView.isActivated) {
+                    if (isViewOrChildSelected(tabs[i].sourceView)) {
                         if (selectedIndex != i) {
                             selectedIndex = i
                         }
@@ -128,7 +138,7 @@ fun LiquidNavBarHost(
                     }
                 }
             }
-            delay(100) // 10fps sync loop
+            delay(100)
         }
     }
 
@@ -137,12 +147,7 @@ fun LiquidNavBarHost(
         if (externalIdx != selectedIndex) selectedIndex = externalIdx
     }
 
-    // Force strict contrast colors to prevent neon green Miuix defaults
-    val isDark = isSystemInDarkTheme()
-    val forcedColors = if (isDark) darkColorScheme(primary = Color.White, onSurface = Color.White) 
-                       else lightColorScheme(primary = Color.Black, onSurface = Color.Black)
-
-    MiuixTheme(colors = forcedColors) {
+    MiuixTheme {
         AnimatedVisibility(
             visible = isVisible.value,
             enter = slideInVertically(animationSpec = tween(300)) { it } + fadeIn(tween(300)),
@@ -155,26 +160,28 @@ fun LiquidNavBarHost(
                         .wrapContentHeight(),
                     contentAlignment = Alignment.BottomCenter,
                 ) {
-                    // FAUX-GLASS PILL: Beautiful translucency without GPU green-screen crashes
-                    val glassColor = if (isDark) Color(0x33FFFFFF) else Color(0x1A000000)
+                    val isDark = isSystemInDarkTheme()
+                    // VISIBILITY & OUTLINE FIX: 95% opacity for readability, sharp shadow removed, clean 1.5dp border added!
+                    val pillColor = if (isDark) Color(0xF21C1C1E) else Color(0xF2F2F2F7)
+                    val outlineColor = if (isDark) Color(0x4DFFFFFF) else Color(0x4D000000)
                     
                     Box(
                         modifier = Modifier
                             .padding(bottom = 12.dp)
-                            .shadow(12.dp, CircleShape)
-                            .background(glassColor, CircleShape)
+                            .border(1.5.dp, outlineColor, CircleShape)
+                            .background(pillColor, CircleShape)
                     ) {
                         FloatingBottomBar(
                             selectedIndex = { selectedIndex },
                             onSelected = { idx ->
                                 selectedIndex = idx
                                 if (externalTabState.value != idx && idx < tabs.size) {
-                                    simulateHardwareTouch(tabs[idx].sourceView)
+                                    forceClick(tabs[idx].sourceView) // Fire the ultimate clicker
                                 }
                             },
                             backdrop = rememberLayerBackdrop(),
                             tabsCount = tabs.size,
-                            isBlurEnabled = false, // True blur causes Qualcomm DRM Green-Screen
+                            isBlurEnabled = false,
                         ) {
                             tabs.forEachIndexed { index, tabData ->
                                 FloatingBottomBarItem(
@@ -185,8 +192,7 @@ fun LiquidNavBarHost(
                                         bitmap = tabData.bitmap.asImageBitmap(),
                                         contentDescription = null,
                                         modifier = Modifier.size(24.dp),
-                                        // BRIGHTNESS FIX: Force icons to pure White/Black
-                                        colorFilter = ColorFilter.tint(if (isDark) Color.White else Color.Black)
+                                        alpha = if (selectedIndex == index) 1f else 0.5f
                                     )
                                 }
                             }
