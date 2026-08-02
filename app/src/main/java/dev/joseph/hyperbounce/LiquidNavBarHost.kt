@@ -69,7 +69,6 @@ fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
             
             if (imgView?.drawable != null) {
                 val drawable = imgView.drawable.mutate()
-                // Do NOT set tint to null aggressively if we want to preserve original YouTube colors
                 val w = drawable.intrinsicWidth.coerceAtLeast(1)
                 val h = drawable.intrinsicHeight.coerceAtLeast(1)
                 val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -114,7 +113,6 @@ private class PixelCopyBlurBackdrop(
         if (inFlight) return
         val window = ref.get() ?: return
         
-        // CRITICAL FIX: Prevent crashes when app is minimized (no surface available)
         val decor = window.peekDecorView()
         if (decor == null || decor.windowToken == null) return
 
@@ -142,7 +140,6 @@ private class PixelCopyBlurBackdrop(
                 inFlight = false
             }, handler)
         } catch (e: IllegalArgumentException) {
-            // Fails silently if surface is destroyed during the frame cycle
             bmp.recycle()
             inFlight = false
         } catch (e: Exception) {
@@ -217,7 +214,8 @@ fun LiquidNavBarHost(
 
         if (tabs.isNotEmpty()) {
             Box(
-                modifier = Modifier.fillMaxWidth().wrapContentHeight().background(androidx.compose.ui.graphics.Color.Transparent),
+                // CRITICAL FIX: Only occupy the width and required height, leaving the rest of the screen untouched
+                modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 FloatingBottomBar(
@@ -256,7 +254,6 @@ fun LiquidNavBarHost(
                                 bitmap = tabData.bitmap.asImageBitmap(),
                                 contentDescription = null,
                                 modifier = Modifier.size(24.dp)
-                                // CRITICAL FIX: Removed colorFilter. Now icons will display in their native YouTube colors (no more blue blobs!)
                             )
                         }
                     }
