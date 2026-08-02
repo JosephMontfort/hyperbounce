@@ -199,16 +199,7 @@ fun LiquidNavBarHost(
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 FloatingBottomBar(
-                    modifier = Modifier
-                        .onGloballyPositioned { coords: LayoutCoordinates ->
-                            captureBackdrop?.let {
-                                val pos = coords.positionInWindow()
-                                it.bX = pos.x.toInt()
-                                it.bY = pos.y.toInt()
-                                it.bW = coords.size.width
-                                it.bH = coords.size.height
-                            }
-                        },
+                    modifier = Modifier,
                     selectedIndex = { selectedIndex },
                     onSelected = { idx ->
                         selectedIndex = idx
