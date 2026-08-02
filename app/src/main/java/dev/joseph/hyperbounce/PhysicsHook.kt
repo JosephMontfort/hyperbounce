@@ -8,6 +8,7 @@ import android.widget.FrameLayout
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
@@ -27,7 +28,6 @@ import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class PhysicsHook : IXposedHookLoadPackage {
@@ -104,15 +104,15 @@ class PhysicsHook : IXposedHookLoadPackage {
                 
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
 
-                // 1. Tag our view exclusively so we don't break YouTube's DecorView
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
 
-                // 2. THE SILVER BULLET: Bypass WindowRecomposer entirely.
-                val recomposer = Recomposer(Dispatchers.Main)
-                setParentCompositionContext(recomposer) // <-- CORRECT EXPLICIT SETTER
-                CoroutineScope(Dispatchers.Main).launch {
+                // CRITICAL FIX: Supply the AndroidUiDispatcher to give Compose its required MonotonicFrameClock
+                val coroutineContext = AndroidUiDispatcher.CurrentThread
+                val recomposer = Recomposer(coroutineContext)
+                setParentCompositionContext(recomposer)
+                CoroutineScope(coroutineContext).launch {
                     recomposer.runRecomposeAndApplyChanges()
                 }
 
