@@ -110,9 +110,8 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
 
                 // 2. THE SILVER BULLET: Bypass WindowRecomposer entirely.
-                // This stops Compose from climbing up to the DecorView and crashing when it finds nothing.
                 val recomposer = Recomposer(Dispatchers.Main)
-                parentCompositionContext = recomposer
+                setParentCompositionContext(recomposer) // <-- CORRECT EXPLICIT SETTER
                 CoroutineScope(Dispatchers.Main).launch {
                     recomposer.runRecomposeAndApplyChanges()
                 }
