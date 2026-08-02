@@ -8,9 +8,7 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
@@ -29,8 +27,6 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 
 class PhysicsHook : IXposedHookLoadPackage {
 
@@ -114,14 +110,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
-
-                // CRITICAL FIX 3: Local Recomposer with AndroidUiDispatcher frame clock to prevent crashes
-                val coroutineContext = AndroidUiDispatcher.CurrentThread
-                val recomposer = Recomposer(coroutineContext)
-                setParentCompositionContext(recomposer)
-                CoroutineScope(coroutineContext).launch {
-                    recomposer.runRecomposeAndApplyChanges()
-                }
 
                 setContent {
                     LiquidNavBarHost(

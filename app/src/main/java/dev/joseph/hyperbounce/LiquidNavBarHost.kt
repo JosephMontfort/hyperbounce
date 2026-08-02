@@ -33,7 +33,6 @@ import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.theme.LocalContentColor
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.lang.ref.WeakReference
 
 data class TabData(val bitmap: Bitmap, val sourceView: View)
@@ -88,7 +87,6 @@ private fun resolveWindow(context: Context): Window? {
     while (true) {
         if (ctx is Activity) return ctx.window
         ctx = (ctx as? ContextWrapper)?.baseContext ?: return null
-    }
 }
 
 private class PixelCopyBlurBackdrop(
@@ -160,7 +158,6 @@ private class PixelCopyBlurBackdrop(
             dstSize = IntSize(size.width.toInt(), size.height.toInt()),
             filterQuality = FilterQuality.High,
         )
-    }
 }
 
 @Composable
@@ -186,7 +183,6 @@ fun LiquidNavBarHost(
         if (externalIdx != selectedIndex) selectedIndex = externalIdx
     }
 
-    MiuixTheme {
         val backdrop: Backdrop = rememberLayerBackdrop { }
 
         if (tabs.isNotEmpty()) {
@@ -226,5 +222,4 @@ fun LiquidNavBarHost(
                 }
             }
         }
-    }
 }
