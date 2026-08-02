@@ -2,7 +2,6 @@ package dev.joseph.hyperbounce
 
 import android.app.Activity
 import android.graphics.Color
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -48,23 +47,38 @@ class PhysicsHook : IXposedHookLoadPackage {
                     val res = activity.resources
                     val decorView = activity.window.decorView as? ViewGroup ?: return
 
+                    val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
+                    val pivotId = res.getIdentifier("pivot_bar", "id", "com.google.android.youtube")
+
+                    if (containerId == 0 && pivotId == 0) return
+
                     decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
                         override fun onGlobalLayout() {
-                            val pivotId = res.getIdentifier("pivot_bar", "id", "com.google.android.youtube")
-                            val dividerId = res.getIdentifier("navigation_bar_divider_frame", "id", "com.google.android.youtube")
+                            val container = if (containerId != 0) activity.findViewById<ViewGroup>(containerId) else null
+                            val pivot = if (pivotId != 0) activity.findViewById<ViewGroup>(pivotId) else null
 
-                            if (dividerId != 0) activity.findViewById<View>(dividerId)?.alpha = 0f
+                            val stockBar = container ?: pivot ?: return
 
-                            if (pivotId != 0) {
-                                val pivot = activity.findViewById<ViewGroup>(pivotId)
-                                if (pivot != null && pivot.alpha != 0f) {
-                                    pivot.alpha = 0f
-                                    val wrapper = pivot.getChildAt(0) as? ViewGroup
-                                    if (wrapper != null && wrapper.childCount >= 3) {
-                                        executeUIHeist(activity, pivot)
-                                    }
+                            // Exact Code 1 logic: Safely collapse the stock views
+                            if (container != null) {
+                                container.visibility = View.GONE
+                                val params = container.layoutParams
+                                if (params != null && params.height != 0) {
+                                    params.height = 0
+                                    container.layoutParams = params
                                 }
                             }
+
+                            if (pivot != null) {
+                                pivot.visibility = View.GONE
+                                val params = pivot.layoutParams
+                                if (params != null && params.height != 0) {
+                                    params.height = 0
+                                    pivot.layoutParams = params
+                                }
+                            }
+
+                            executeUIHeist(activity, stockBar)
                         }
                     })
                 }
@@ -77,7 +91,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             val rootView = activity.window.decorView as ViewGroup
             if (rootView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            XposedBridge.log("[HyperBounce] Injecting Zero-Suspect Opaque UI...")
+            XposedBridge.log("[HyperBounce] Injecting UI...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -85,7 +99,7 @@ class PhysicsHook : IXposedHookLoadPackage {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
 
-            // PROVEN FALLBACK FROM YOUR FIRST BUILD
+            // Exact Code 1 Root Injection
             if (rootView.findViewTreeLifecycleOwner() == null)
                 rootView.setViewTreeLifecycleOwner(lifecycleOwner)
             if (rootView.findViewTreeSavedStateRegistryOwner() == null)
@@ -102,13 +116,10 @@ class PhysicsHook : IXposedHookLoadPackage {
                 clipToPadding = false
                 setBackgroundColor(Color.TRANSPARENT)
                 
-                // FORCE BOTTOM CONFINEMENT - ZERO CHANCE OF FULL SCREEN BLOCK
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).apply {
-                    gravity = Gravity.BOTTOM
-                }
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                )
                 
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
@@ -123,7 +134,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             }
 
             rootView.addView(composeView)
-            XposedBridge.log("[HyperBounce] Opaque UI attached.")
+            XposedBridge.log("[HyperBounce] UI attached.")
 
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception in YouTube UI Heist: ${e.message}")

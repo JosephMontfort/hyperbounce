@@ -11,7 +11,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,16 +51,21 @@ fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
                 imgView = findViewByName(thumbnailLayout, "pivot_bar_thumbnail") as? ImageView
             }
             
-            if (imgView?.drawable != null) {
-                val drawable = imgView.drawable.mutate()
-                val w = drawable.intrinsicWidth.coerceAtLeast(1)
-                val h = drawable.intrinsicHeight.coerceAtLeast(1)
-                val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(bmp)
-                drawable.setBounds(0, 0, w, h)
-                drawable.draw(canvas)
-                
-                out.add(TabData(bmp, tab)) 
+            val liveDrawable = imgView?.drawable
+            if (liveDrawable != null) {
+                // THE REAL CULPRIT DESTROYED: We clone the drawable safely using constantState
+                // This prevents us from corrupting YouTube's live ViewRoot render bounds!
+                val safeClone = liveDrawable.constantState?.newDrawable()?.mutate()
+                if (safeClone != null) {
+                    val w = safeClone.intrinsicWidth.coerceAtLeast(1)
+                    val h = safeClone.intrinsicHeight.coerceAtLeast(1)
+                    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(bmp)
+                    safeClone.setBounds(0, 0, w, h)
+                    safeClone.draw(canvas)
+                    
+                    out.add(TabData(bmp, tab)) 
+                }
             }
         }
     } catch (e: Exception) {}
@@ -77,11 +81,15 @@ fun LiquidNavBarHost(
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
 
     LaunchedEffect(stockBar) {
-        while (tabs.size < 4) {
+        var attempts = 0
+        // CULPRIT FIX 2: Stop looping infinitely if tabs fail to load (prevents thread lock)
+        while (tabs.isEmpty() && attempts < 10) {
             val extracted = extractYouTubeTabs(stockBar)
-            if (extracted.size > tabs.size) {
+            if (extracted.isNotEmpty()) {
                 tabs = extracted
+                break
             }
+            attempts++
             delay(300)
         }
     }
@@ -94,18 +102,17 @@ fun LiquidNavBarHost(
     if (tabs.isNotEmpty()) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight()
+                .fillMaxSize()
                 .padding(bottom = 24.dp, start = 16.dp, end = 16.dp),
             contentAlignment = Alignment.BottomCenter
         ) {
-            // ZERO SUSPECTS: A purely opaque, hardcoded dark grey pill. No blur libraries.
+            // Pure, opaque pill. Zero blur, zero Miuix rendering.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(64.dp)
                     .clip(RoundedCornerShape(32.dp))
-                    .background(Color(0xFF1E1E1E)), // Solid Dark Grey
+                    .background(Color(0xFF1E1E1E)),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -130,8 +137,8 @@ fun LiquidNavBarHost(
                         Image(
                             bitmap = tabData.bitmap.asImageBitmap(),
                             contentDescription = null,
-                            modifier = Modifier.size(28.dp),
-                            alpha = if (selectedIndex == index) 1f else 0.6f // Simple opacity state
+                            modifier = Modifier.size(24.dp),
+                            alpha = if (selectedIndex == index) 1f else 0.5f
                         )
                     }
                 }
