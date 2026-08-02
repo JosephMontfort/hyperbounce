@@ -13,14 +13,11 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.findViewTreeLifecycleOwner
-import androidx.lifecycle.findViewTreeViewModelStoreOwner
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.findViewTreeSavedStateRegistryOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
@@ -47,24 +44,25 @@ class PhysicsHook : IXposedHookLoadPackage {
 
                     decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
                         override fun onGlobalLayout() {
-                            val pivotId = res.getIdentifier("pivot_bar", "id", "com.google.android.youtube")
-                            val dividerId = res.getIdentifier("navigation_bar_divider_frame", "id", "com.google.android.youtube")
+                            val idsToHide = listOf("bottom_bar_container", "pivot_bar", "navigation_bar_divider_frame")
+                            var stockBarFound: ViewGroup? = null
 
-                            if (dividerId != 0) {
-                                activity.findViewById<View>(dividerId)?.visibility = View.GONE
-                            }
-
-                            if (pivotId != 0) {
-                                val pivot = activity.findViewById<ViewGroup>(pivotId)
-                                if (pivot != null) {
-                                    // Hide stock pivot bar visually without breaking parent layout bounds
-                                    pivot.alpha = 0f
-                                    
-                                    // Wait until YouTube finishes inflating all tabs (Home, Shorts, Subscriptions, You)
-                                    if (pivot.childCount >= 3) {
-                                        executeUIHeist(activity, pivot)
+                            idsToHide.forEach { idName ->
+                                val resId = res.getIdentifier(idName, "id", "com.google.android.youtube")
+                                if (resId != 0) {
+                                    activity.findViewById<View>(resId)?.let { view ->
+                                        if (idName == "pivot_bar") stockBarFound = view as? ViewGroup
+                                        
+                                        // DO NOT USE GONE or height=0. It collapses the whole UI.
+                                        // Instead, make them invisible and unclickable.
+                                        view.alpha = 0f
+                                        view.isClickable = false
                                     }
                                 }
+                            }
+
+                            if (stockBarFound != null) {
+                                executeUIHeist(activity, stockBarFound!!)
                             }
                         }
                     })
@@ -86,13 +84,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
 
-            if (rootView.findViewTreeLifecycleOwner() == null)
-                rootView.setViewTreeLifecycleOwner(lifecycleOwner)
-            if (rootView.findViewTreeSavedStateRegistryOwner() == null)
-                rootView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            if (rootView.findViewTreeViewModelStoreOwner() == null)
-                rootView.setViewTreeViewModelStoreOwner(lifecycleOwner)
-
             val tabState = mutableStateOf(0)
             externalTabState = tabState
 
@@ -104,9 +95,11 @@ class PhysicsHook : IXposedHookLoadPackage {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
+                // STRICTLY apply lifecycle to ComposeView only so we don't break YouTube's fragments
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
+                
                 setContent {
                     LiquidNavBarHost(
                         stockBar = stockBar,

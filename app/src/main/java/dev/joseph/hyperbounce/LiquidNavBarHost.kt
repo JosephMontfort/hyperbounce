@@ -29,54 +29,55 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.lang.ref.WeakReference
 
-data class TabData(val bitmap: Bitmap?)
+data class TabData(val bitmap: Bitmap, val sourceView: View)
 
-fun extractTabs(stockBar: ViewGroup): List<TabData> {
-    val out = mutableListOf<TabData>()
-    for (i in 0 until stockBar.childCount) {
-        val child = stockBar.getChildAt(i)
-        val icon = if (child is ViewGroup) findImageView(child) else (child as? ImageView)
-        var bmp: Bitmap? = null
-        if (icon?.drawable != null) {
-            try {
-                val drawable = icon.drawable.mutate()
-                drawable.setTintList(null)
-                val w = drawable.intrinsicWidth.coerceAtLeast(1)
-                val h = drawable.intrinsicHeight.coerceAtLeast(1)
-                bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(bmp)
-                drawable.setBounds(0, 0, w, h)
-                drawable.draw(canvas)
-            } catch (e: Exception) {
-                // Ignore extraction failures on non-drawable nodes
+fun extractTabsDeep(viewGroup: ViewGroup): List<TabData> {
+    val imageViews = mutableListOf<ImageView>()
+    
+    fun traverse(view: View) {
+        if (view is ImageView && view.drawable != null && view.width > 0) {
+            imageViews.add(view)
+        } else if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                traverse(view.getChildAt(i))
             }
         }
-        out.add(TabData(bmp))
     }
-    return out
-}
-
-fun findImageView(g: ViewGroup): ImageView? {
-    for (i in 0 until g.childCount) {
-        val v = g.getChildAt(i)
-        if (v is ImageView) return v
-        if (v is ViewGroup) {
-            val res = findImageView(v)
-            if (res != null) return res
+    
+    traverse(viewGroup)
+    
+    return imageViews.mapNotNull { icon ->
+        try {
+            val drawable = icon.drawable.mutate()
+            drawable.setTintList(null)
+            val w = drawable.intrinsicWidth.coerceAtLeast(1)
+            val h = drawable.intrinsicHeight.coerceAtLeast(1)
+            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bmp)
+            drawable.setBounds(0, 0, w, h)
+            drawable.draw(canvas)
+            TabData(bmp, icon)
+        } catch (e: Exception) {
+            null
         }
     }
-    return null
 }
 
-fun clickStockTab(stockBar: ViewGroup, index: Int) {
-    if (index in 0 until stockBar.childCount) {
-        stockBar.getChildAt(index)?.performClick()
+fun clickStockTab(icon: View) {
+    var current: View? = icon
+    while (current != null) {
+        if (current.isClickable || current.hasOnClickListeners()) {
+            current.performClick()
+            return
+        }
+        current = current.parent as? View
     }
 }
 
@@ -156,12 +157,18 @@ fun LiquidNavBarHost(
     stockBar: ViewGroup,
     externalTabState: State<Int>,
 ) {
-    var tabs by remember { mutableStateOf(extractTabs(stockBar)) }
+    var tabs by remember { mutableStateOf(emptyList<TabData>()) }
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
 
-    // Dynamically update tab icons if stockBar populates children late
-    LaunchedEffect(stockBar.childCount) {
-        tabs = extractTabs(stockBar)
+    // Poll for tabs dynamically. YouTube adds them after layout pass.
+    LaunchedEffect(stockBar) {
+        while (tabs.size < 3) {
+            val extracted = extractTabsDeep(stockBar)
+            if (extracted.size > tabs.size) {
+                tabs = extracted
+            }
+            delay(500)
+        }
     }
 
     val externalIdx by externalTabState
@@ -192,43 +199,44 @@ fun LiquidNavBarHost(
 
         val backdrop: Backdrop = captureBackdrop ?: rememberLayerBackdrop { }
 
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.BottomCenter,
-        ) {
-            FloatingBottomBar(
-                modifier = Modifier
-                    .onGloballyPositioned { coords: LayoutCoordinates ->
-                        captureBackdrop?.let {
-                            val pos = coords.positionInWindow()
-                            it.bX = pos.x.toInt()
-                            it.bY = pos.y.toInt()
-                            it.bW = coords.size.width
-                            it.bH = coords.size.height
-                        }
-                    }
-                    .padding(
-                        bottom = 12.dp + WindowInsets.navigationBars
-                            .asPaddingValues()
-                            .calculateBottomPadding(),
-                    ),
-                selectedIndex = { selectedIndex },
-                onSelected = { idx ->
-                    selectedIndex = idx
-                    if (externalTabState.value != idx) {
-                        clickStockTab(stockBar, idx)
-                    }
-                },
-                backdrop = backdrop,
-                tabsCount = tabs.size.coerceAtLeast(1),
-                isBlurEnabled = true,
+        // Only draw the bar if we successfully extracted tabs
+        if (tabs.isNotEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.BottomCenter,
             ) {
-                tabs.forEachIndexed { index, tabData ->
-                    FloatingBottomBarItem(
-                        onClick = { selectedIndex = index },
-                        modifier = Modifier.defaultMinSize(minWidth = 60.dp),
-                    ) {
-                        if (tabData.bitmap != null) {
+                FloatingBottomBar(
+                    modifier = Modifier
+                        .onGloballyPositioned { coords: LayoutCoordinates ->
+                            captureBackdrop?.let {
+                                val pos = coords.positionInWindow()
+                                it.bX = pos.x.toInt()
+                                it.bY = pos.y.toInt()
+                                it.bW = coords.size.width
+                                it.bH = coords.size.height
+                            }
+                        }
+                        .padding(
+                            bottom = 12.dp + WindowInsets.navigationBars
+                                .asPaddingValues()
+                                .calculateBottomPadding(),
+                        ),
+                    selectedIndex = { selectedIndex },
+                    onSelected = { idx ->
+                        selectedIndex = idx
+                        if (externalTabState.value != idx && idx < tabs.size) {
+                            clickStockTab(tabs[idx].sourceView)
+                        }
+                    },
+                    backdrop = backdrop,
+                    tabsCount = tabs.size,
+                    isBlurEnabled = true,
+                ) {
+                    tabs.forEachIndexed { index, tabData ->
+                        FloatingBottomBarItem(
+                            onClick = { selectedIndex = index },
+                            modifier = Modifier.defaultMinSize(minWidth = 60.dp),
+                        ) {
                             Image(
                                 bitmap = tabData.bitmap.asImageBitmap(),
                                 contentDescription = null,
