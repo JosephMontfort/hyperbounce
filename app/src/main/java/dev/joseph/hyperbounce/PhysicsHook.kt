@@ -54,11 +54,9 @@ class PhysicsHook : IXposedHookLoadPackage {
                             if (pivotId != 0) {
                                 val pivot = activity.findViewById<ViewGroup>(pivotId)
                                 if (pivot != null) {
-                                    // Make it invisible without collapsing layout bounds
                                     pivot.alpha = 0f
                                     
                                     val wrapper = pivot.getChildAt(0) as? ViewGroup
-                                    // Wait until YouTube fully injects all 5 tabs
                                     if (wrapper != null && wrapper.childCount >= 3) {
                                         executeUIHeist(activity, pivot)
                                     }
@@ -95,19 +93,24 @@ class PhysicsHook : IXposedHookLoadPackage {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
-            }
+                
+                // CRITICAL FIX: Dynamically attach to the absolute root exactly when added to window
+                addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                    override fun onViewAttachedToWindow(v: View) {
+                        val actualRoot = v.rootView
+                        actualRoot.setViewTreeLifecycleOwner(lifecycleOwner)
+                        actualRoot.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+                        actualRoot.setViewTreeViewModelStoreOwner(lifecycleOwner)
+                    }
+                    override fun onViewDetachedFromWindow(v: View) {}
+                })
 
-            // CRITICAL FIX: Attach lifecycle ONLY to our custom view, not YouTube's root view.
-            // This prevents the Shell$HomeActivity crash!
-            composeView.setViewTreeLifecycleOwner(lifecycleOwner)
-            composeView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            composeView.setViewTreeViewModelStoreOwner(lifecycleOwner)
-
-            composeView.setContent {
-                LiquidNavBarHost(
-                    stockBar = stockBar,
-                    externalTabState = tabState,
-                )
+                setContent {
+                    LiquidNavBarHost(
+                        stockBar = stockBar,
+                        externalTabState = tabState,
+                    )
+                }
             }
 
             rootView.addView(composeView)

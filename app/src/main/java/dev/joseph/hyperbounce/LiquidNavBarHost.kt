@@ -56,17 +56,12 @@ fun findViewByName(view: View, name: String): View? {
 fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
     val out = mutableListOf<TabData>()
     try {
-        // pivotBar child 0 is the LinearLayout wrapper
         val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return out
         
         for (i in 0 until wrapper.childCount) {
-            // Each child is a ConstraintLayout representing a Tab
             val tab = wrapper.getChildAt(i) as? ViewGroup ?: continue
-            
-            // Find the FrameLayout holding the icon
             val thumbnailLayout = findViewByName(tab, "thumbnail_layout") as? ViewGroup ?: continue
             
-            // Look for "image" (Standard tabs) or "pivot_bar_thumbnail" (You tab)
             var imgView = findViewByName(thumbnailLayout, "image") as? ImageView
             if (imgView == null) {
                 imgView = findViewByName(thumbnailLayout, "pivot_bar_thumbnail") as? ImageView
@@ -82,7 +77,6 @@ fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
                 drawable.setBounds(0, 0, w, h)
                 drawable.draw(canvas)
                 
-                // Pass 'tab' as the sourceView so we trigger clicks on the ConstraintLayout parent
                 out.add(TabData(bmp, tab)) 
             }
         }
@@ -169,7 +163,6 @@ fun LiquidNavBarHost(
     var tabs by remember { mutableStateOf(emptyList<TabData>()) }
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
 
-    // Poll until we have all the tabs inflated
     LaunchedEffect(stockBar) {
         while (tabs.size < 4) {
             val extracted = extractYouTubeTabs(stockBar)
