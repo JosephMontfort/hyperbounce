@@ -9,7 +9,9 @@ import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import android.widget.FrameLayout
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
@@ -17,20 +19,19 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.findViewTreeLifecycleOwner
-import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 class PhysicsHook : IXposedHookLoadPackage {
 
@@ -86,22 +87,13 @@ class PhysicsHook : IXposedHookLoadPackage {
             val decorView = activity.window.decorView as ViewGroup
             if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            XposedBridge.log("[HyperBounce] Injecting Liquid Glass overlay...")
+            XposedBridge.log("[HyperBounce] Injecting Isolated UI...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
-            
-            // THE CRITICAL FIX: We must seed the LifecycleOwner directly into the DecorView. 
-            // Without this, Compose's WindowRecomposer Policy crashes trying to initialize at the root.
-            if (decorView.findViewTreeLifecycleOwner() == null)
-                decorView.setViewTreeLifecycleOwner(lifecycleOwner)
-            if (decorView.findViewTreeSavedStateRegistryOwner() == null)
-                decorView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            if (decorView.findViewTreeViewModelStoreOwner() == null)
-                decorView.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
             val tabState = mutableStateOf(0)
             externalTabState = tabState
@@ -113,9 +105,7 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setBackgroundColor(Color.TRANSPARENT)
 
                 val navInsets = try {
-                    decorView.rootWindowInsets
-                        ?.getInsets(WindowInsets.Type.systemBars())
-                        ?.bottom ?: 0
+                    decorView.rootWindowInsets?.getInsets(WindowInsets.Type.systemBars())?.bottom ?: 0
                 } catch (e: Exception) { 0 }
 
                 layoutParams = FrameLayout.LayoutParams(
@@ -128,21 +118,29 @@ class PhysicsHook : IXposedHookLoadPackage {
 
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 
-                // Keep local scopes as backups for Compose view hierarchies internally
+                // CRITICAL FIX 1: Attach lifecycles ONLY to ComposeView so we don't poison YouTube's fragments!
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
 
+                // CRITICAL FIX 2: Attach a local Recomposer so Compose never searches the root DecorView and crashes!
+                val coroutineContext = AndroidUiDispatcher.CurrentThread
+                val recomposer = Recomposer(coroutineContext)
+                setParentCompositionContext(recomposer)
+                CoroutineScope(coroutineContext).launch {
+                    recomposer.runRecomposeAndApplyChanges()
+                }
+
                 setContent {
                     LiquidNavBarHost(
-                        stockBar        = stockBar,
+                        stockBar = stockBar,
                         externalTabState = tabState,
                     )
                 }
             }
 
             decorView.addView(composeView)
-            XposedBridge.log("[HyperBounce] Liquid Glass injected successfully!")
+            XposedBridge.log("[HyperBounce] Isolated UI injected successfully!")
 
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception in UI Heist: ${e.message}")
@@ -154,15 +152,11 @@ class FakeLifecycleOwner :
     LifecycleOwner,
     SavedStateRegistryOwner,
     ViewModelStoreOwner {
-
     val registry = LifecycleRegistry(this)
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
     private val store = ViewModelStore()
-
     init { savedStateRegistryController.performRestore(null) }
-
-    override val lifecycle: Lifecycle          get() = registry
-    override val savedStateRegistry: SavedStateRegistry
-        get() = savedStateRegistryController.savedStateRegistry
+    override val lifecycle: Lifecycle get() = registry
+    override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
     override val viewModelStore: ViewModelStore get() = store
 }
