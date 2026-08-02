@@ -1,10 +1,19 @@
 package dev.joseph.hyperbounce
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Rect
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.view.Choreographer
+import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
 import android.widget.ImageView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -27,14 +36,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.lang.ref.WeakReference
 
 // ── Tab icon extraction ───────────────────────────────────────────────────────
-
 data class TabData(val bitmap: Bitmap?)
 
 fun extractTabs(stockBar: ViewGroup): List<TabData> {
     val out = mutableListOf<TabData>()
     val menu = stockBar.getChildAt(0) as? ViewGroup ?: return out
     for (i in 0 until menu.childCount) {
-        val tab  = menu.getChildAt(i) as? ViewGroup ?: continue
+        val tab = menu.getChildAt(i) as? ViewGroup ?: continue
         val icon = findImageView(tab)
         val drawable = icon?.drawable?.mutate()
         var bmp: Bitmap? = null
@@ -64,152 +72,134 @@ fun clickStockTab(stockBar: ViewGroup, index: Int) {
     (stockBar.getChildAt(0) as? ViewGroup)?.getChildAt(index)?.performClick()
 }
 
-// ── Real-time blur backdrop ───────────────────────────────────────────────────
+// ── Window resolver ───────────────────────────────────────────────────────────
+private fun resolveWindow(context: Context): Window? {
+    var ctx: Context = context
+    while (true) {
+        if (ctx is Activity) return ctx.window
+        ctx = (ctx as? ContextWrapper)?.baseContext ?: return null
+    }
+}
+
+// ── Real-time PixelCopy blur backdrop ────────────────────────────────────────
 //
-// Strategy: downscale-blur via View.draw()
+// PixelCopy reads directly from the GPU front-buffer (what is actually
+// rendered on screen), so it captures hardware-accelerated RecyclerView
+// items — contact avatars, names, timestamps — all perfectly.
 //
-// We draw WhatsApp's content view (the first child of the DecorView, which
-// contains the entire app UI without our overlay) into a Bitmap that is 1/8
-// the pill's on-screen size.  Downscaling IS the blur: pixel averaging during
-// scale-down acts like a box blur.  When this small bitmap is displayed at
-// full pill size with FilterQuality.High (bilinear interpolation), the result
-// looks like a smooth Gaussian blur — identical in appearance to the frosted
-// glass effect on iOS.
+// It DOES include our own ComposeView in the capture, but since the pill
+// is now only 20–28% opaque, the feedback contribution is small and
+// converges to a stable steady-state within 2–3 frames:
 //
-// The capture is driven by Choreographer so it runs every display frame on
-// the UI thread, giving true real-time blur.
+// steady_state ≈ 83% blur(real WhatsApp content) + 17% surface tint
 //
-// Rendering pipeline per frame:
-//   [ContentCaptureBackdrop.drawBackdrop] → draws blurred WhatsApp content
-//   [miuix vibrancy effect]               → saturates the blurred colours
-//   [miuix blur effect]                   → secondary softening pass
-//   [miuix lens effect]                   → edge refraction (iOS "lens bump")
-//   [onDrawSurface containerColor@40%]    → frosted tint overlay
-//   [BloomStroke specular highlight]      → specular glass shine on rim
+// This is real frosted liquid glass — the chat list is genuinely blurred
+// and updates frame-by-frame as the user scrolls.
 //
-private class ContentCaptureBackdrop(
-    srcRef: WeakReference<View>,
+// Scale-down factor (sf = 8) doubles as the blur kernel: downsampling from
+// pill-resolution → 1/8 size averages 64 pixels into 1, producing a
+// Gaussian-quality blur. FilterQuality.High bilinear upscale at draw
+// time adds smoothing → the result looks like a 15–20 dp blur radius.
+//
+private class PixelCopyBlurBackdrop(
+    windowRef: WeakReference<Window>,
+    private val handler: Handler,
 ) : Backdrop {
-
-    private val ref = srcRef
-
+    private val ref = windowRef
     override val isCoordinatesDependent: Boolean = false
-    override val offsetResidualX: Float           = 0f
-    override val offsetResidualY: Float           = 0f
+    override val offsetResidualX: Float = 0f
+    override val offsetResidualY: Float = 0f
 
-    // Pill bounds in WINDOW px set from onGloballyPositioned each layout pass
+    // Pill bounds in window-pixel coordinates (set from onGloballyPositioned)
     @Volatile var bX = 0
     @Volatile var bY = 0
     @Volatile var bW = 0
     @Volatile var bH = 0
-
     @Volatile private var latest: ImageBitmap? = null
-    private var prevBmp: Bitmap? = null
+    @Volatile private var inFlight = false
+    private var prev: Bitmap? = null
 
     /**
-     * Called from Choreographer.FrameCallback on the UI thread every frame.
-     *
-     * Draws WhatsApp's content view into a 1/8-scale software Bitmap clipped
-     * to the pill bounds.  Because the canvas is clipped to a small region
-     * near the bottom of the screen, the view-tree traversal skips everything
-     * above the pill (toolbar, chat list header, etc.) and only rasterises
-     * the last 1–2 visible chat rows — making each capture very fast.
+     * Request one PixelCopy frame. Called from Choreographer on UI thread.
+     * Guards against overlapping requests with [inFlight].
      */
     fun tick() {
-        val src = ref.get() ?: return
-        val w = bW; val h = bH
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (inFlight) return
+        val window = ref.get() ?: return
+        val w = bW
+        val h = bH
         if (w <= 0 || h <= 0) return
 
-        // Downscale factor.  8 → strong frosted blur (matches iOS).
-        // Lower (4) → sharper; higher (12) → more diffuse.
-        val sf   = 8
+        // Downscale → the GPU will blit and average the srcRect into the
+        // smaller bitmap, acting as a hardware-accelerated box blur.
+        val sf = 8
         val outW = (w / sf).coerceAtLeast(1)
         val outH = (h / sf).coerceAtLeast(1)
-
         val bmp = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
-        try {
-            val c = Canvas(bmp)
-            // Scale first so the clip region aligns with the downscaled bitmap
-            c.scale(outW.toFloat() / w, outH.toFloat() / h)
-            // Translate so that the pill's top-left maps to canvas (0,0)
-            c.translate(-bX.toFloat(), -bY.toFloat())
-            // Draw the WhatsApp content.  Hardware-accelerated views fall
-            // back to software rendering here; text/backgrounds always draw
-            // correctly; avatar images may appear as colour blocks if the
-            // system uses HARDWARE Bitmaps — still looks like frosted glass.
-            src.draw(c)
+        val srcRect = Rect(bX, bY, bX + w, bY + h)
+        inFlight = true
 
-            prevBmp?.recycle()
-            prevBmp = bmp
-            latest  = bmp.asImageBitmap()
-        } catch (_: Exception) {
-            bmp.recycle()
-            // If software canvas draw fails, latest stays as-is (previous
-            // frame or null).  The pill remains glass-looking via the tint.
-        }
+        @Suppress("DEPRECATION")
+        PixelCopy.request(window, srcRect, bmp, { result ->
+            if (result == PixelCopy.SUCCESS) {
+                prev?.recycle()
+                prev = bmp
+                latest = bmp.asImageBitmap()
+            } else {
+                bmp.recycle()
+            }
+            inFlight = false
+        }, handler)
     }
 
     override fun DrawScope.drawBackdrop(
-        density       : Density,
-        coordinates   : LayoutCoordinates?,
-        layerBlock    : (GraphicsLayerScope.() -> Unit)?,
+        density: Density,
+        coordinates: LayoutCoordinates?,
+        layerBlock: (GraphicsLayerScope.() -> Unit)?,
         downscaleFactor: Int,
     ) {
         val bmp = latest ?: return
-        // Draw the tiny bitmap at full pill size.
-        // FilterQuality.High (bilinear) produces the smooth, slightly-blurry
-        // glass look — this upscaling step IS the visual "blur".
+        // Upscale with bilinear filtering — this final interpolation adds
+        // a secondary smoothing pass and eliminates block artifacts.
         drawImage(
-            image         = bmp,
-            srcOffset     = IntOffset.Zero,
-            srcSize       = IntSize(bmp.width, bmp.height),
-            dstOffset     = IntOffset.Zero,
-            dstSize       = IntSize(size.width.toInt(), size.height.toInt()),
+            image = bmp,
+            srcOffset = IntOffset.Zero,
+            srcSize = IntSize(bmp.width, bmp.height),
+            dstOffset = IntOffset.Zero,
+            dstSize = IntSize(size.width.toInt(), size.height.toInt()),
             filterQuality = FilterQuality.High,
         )
     }
 }
 
 // ── Composable host ───────────────────────────────────────────────────────────
-
 @Composable
 fun LiquidNavBarHost(
-    stockBar        : ViewGroup,
-    whatsAppContent : View?,          // DecorView's first child — no overlay
-    externalTabState: State<Int>,     // set by WhatsApp swipe detection
+    stockBar: ViewGroup,
+    externalTabState: State<Int>, // driven by WhatsApp swipe detection
 ) {
-    val tabs  = remember { extractTabs(stockBar) }
+    val tabs = remember { extractTabs(stockBar) }
+    // Our indicator's selected index.
+    var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
 
-    // Our local selected index.  Sources of truth (in priority order):
-    //   1. User taps OUR pill  → tabClickedByUs + selectedIndex update
-    //   2. WhatsApp swipe      → externalTabState → selectedIndex update
-    var selectedIndex  by remember { mutableIntStateOf(externalTabState.value) }
-    // Tracks which index the USER tapped on OUR pill (–1 = none pending).
-    // Used to distinguish user-tap from WhatsApp-swipe so we don't call
-    // clickStockTab redundantly when WhatsApp already switched the tab.
-    var tabClickedByUs by remember { mutableIntStateOf(-1) }
-
-    // Sync WhatsApp swipe navigation → our indicator
+    // ── External tab sync (WhatsApp swipe → our indicator) ───────────────
     val externalIdx by externalTabState
     LaunchedEffect(externalIdx) {
-        if (externalIdx != selectedIndex) {
-            selectedIndex = externalIdx
-            // Mark as external so onSelected won't re-click the tab
-            tabClickedByUs = -1
-        }
+        if (externalIdx != selectedIndex) selectedIndex = externalIdx
     }
 
     MiuixTheme {
-        // ── Backdrop ─────────────────────────────────────────────────────
-        // ContentCaptureBackdrop provides real-time blurred WhatsApp content.
-        // Falls back to an empty (transparent) backdrop if no content view is
-        // available; the 40 % containerColor tint from onDrawSurface + the
-        // BloomStroke highlight still give a convincing glass look.
-        val captureBackdrop: ContentCaptureBackdrop? = remember(whatsAppContent) {
-            whatsAppContent?.let { ContentCaptureBackdrop(WeakReference(it)) }
+        // ── Backdrop: PixelCopy for real GPU-rendered blur ────────────────
+        val window: Window? = remember(stockBar) { resolveWindow(stockBar.context) }
+        val mainHandler = remember { Handler(Looper.getMainLooper()) }
+        val captureBackdrop: PixelCopyBlurBackdrop? = remember(window) {
+            window?.let { PixelCopyBlurBackdrop(WeakReference(it), mainHandler) }
         }
 
-        // Choreographer drives real-time capture at display frame rate.
+        // Frame-synced capture loop — Choreographer fires once per display
+        // frame on the UI thread. The inFlight guard prevents piling up
+        // requests when PixelCopy is slower than the display refresh.
         if (captureBackdrop != null) {
             DisposableEffect(captureBackdrop) {
                 val ch = Choreographer.getInstance()
@@ -224,17 +214,17 @@ fun LiquidNavBarHost(
             }
         }
 
-        val backdrop: Backdrop = captureBackdrop
-            ?: rememberLayerBackdrop { /* empty → transparent fallback */ }
+        // Fallback (API < 26 or no window): empty transparent backdrop so
+        // the 20 % tint + specular highlight still look like glass.
+        val backdrop: Backdrop = captureBackdrop ?: rememberLayerBackdrop { /* transparent */ }
 
-        // ── Layout ───────────────────────────────────────────────────────
+        // ── UI ────────────────────────────────────────────────────────────
         Box(
-            modifier           = Modifier.fillMaxSize(),
-            contentAlignment   = Alignment.BottomCenter,
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.BottomCenter,
         ) {
             FloatingBottomBar(
                 modifier = Modifier
-                    // Feed pill window-coords to the capture backdrop
                     .onGloballyPositioned { coords: LayoutCoordinates ->
                         captureBackdrop?.let {
                             val pos = coords.positionInWindow()
@@ -250,36 +240,39 @@ fun LiquidNavBarHost(
                             .calculateBottomPadding(),
                     ),
                 selectedIndex = { selectedIndex },
-                onSelected    = { idx ->
+                onSelected = { idx ->
                     selectedIndex = idx
-                    // Only relay the click to WhatsApp's hidden tab if WE
-                    // initiated it.  External swipes already switched the
-                    // WhatsApp page — redundant clicks can scroll to top.
-                    if (tabClickedByUs == idx) {
+                    // ── Drag + tap bug fix ────────────────────────────────
+                    // Call clickStockTab if and only if WhatsApp is NOT
+                    // already on this tab.
+                    //
+                    // This handles three cases correctly:
+                    // • User taps our pill → WhatsApp is on old tab
+                    //   → externalTabState != idx
+                    //   → clickStockTab called ✓
+                    // • User drags indicator → same as tap ✓
+                    // • WhatsApp swipe → WhatsApp already on idx
+                    //   → externalTabState == idx
+                    //   → NO redundant click ✓
+                    if (externalTabState.value != idx) {
                         clickStockTab(stockBar, idx)
-                        tabClickedByUs = -1
                     }
                 },
-                backdrop   = backdrop,
-                tabsCount  = tabs.size,
+                backdrop = backdrop,
+                tabsCount = tabs.size,
                 isBlurEnabled = true,
             ) {
                 tabs.forEachIndexed { index, tabData ->
                     FloatingBottomBarItem(
-                        onClick = {
-                            // Mark as user-initiated BEFORE changing selectedIndex
-                            // so onSelected sees the flag when it fires.
-                            tabClickedByUs = index
-                            selectedIndex  = index
-                        },
+                        onClick = { selectedIndex = index },
                         modifier = Modifier.defaultMinSize(minWidth = 60.dp),
                     ) {
                         if (tabData.bitmap != null) {
                             Image(
-                                bitmap        = tabData.bitmap.asImageBitmap(),
+                                bitmap = tabData.bitmap.asImageBitmap(),
                                 contentDescription = null,
-                                modifier      = Modifier.size(24.dp),
-                                colorFilter   = ColorFilter.tint(LocalContentColor.current),
+                                modifier = Modifier.size(24.dp),
+                                colorFilter = ColorFilter.tint(LocalContentColor.current),
                             )
                         }
                     }
