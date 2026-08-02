@@ -61,7 +61,7 @@ class PhysicsHook : IXposedHookLoadPackage {
                             if (pivotId != 0) {
                                 val pivot = activity.findViewById<ViewGroup>(pivotId)
                                 if (pivot != null && pivot.alpha != 0f) {
-                                    pivot.alpha = 0f // Make stock bar invisible without breaking layout height
+                                    pivot.alpha = 0f
                                     val wrapper = pivot.getChildAt(0) as? ViewGroup
                                     if (wrapper != null && wrapper.childCount >= 3) {
                                         executeUIHeist(activity, pivot)
@@ -80,7 +80,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             val decorView = activity.window.decorView as ViewGroup
             if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            XposedBridge.log("[HyperBounce] Injecting DRM-Safe Floating UI...")
+            XposedBridge.log("[HyperBounce] Injecting Layout-Safe Floating UI...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -97,14 +97,12 @@ class PhysicsHook : IXposedHookLoadPackage {
                 clipToPadding = false
                 setBackgroundColor(Color.TRANSPARENT)
                 
-                // CRITICAL: Physically constrain the view to the bottom. WRAP_CONTENT ensures it never touches the video player bounds.
-                val navInsets = decorView.rootWindowInsets?.systemWindowInsetBottom ?: 0
+                // CRITICAL FIX: Explicitly restrict size so it can NEVER cover the screen or block touch events
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
+                    200 // Fixed compact height in pixels, enough for the floating pill only
                 ).apply {
                     gravity = Gravity.BOTTOM
-                    bottomMargin = navInsets
                 }
                 
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
@@ -128,7 +126,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             }
 
             decorView.addView(composeView)
-            XposedBridge.log("[HyperBounce] DRM-Safe UI injected successfully!")
+            XposedBridge.log("[HyperBounce] Layout-Safe UI injected successfully!")
 
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception in YouTube UI Heist: ${e.message}")

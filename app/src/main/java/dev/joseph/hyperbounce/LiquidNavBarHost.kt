@@ -90,9 +90,8 @@ fun LiquidNavBarHost(
         if (tabs.isNotEmpty()) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight()
-                    .padding(bottom = 12.dp),
+                    .fillMaxSize()
+                    .padding(bottom = 8.dp),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 FloatingBottomBar(
@@ -103,7 +102,7 @@ fun LiquidNavBarHost(
                             tabs[idx].sourceView.performClick()
                         }
                     },
-                    backdrop = rememberLayerBackdrop(), // CRITICAL FIX: Add missing backdrop parameter
+                    backdrop = rememberLayerBackdrop(),
                     tabsCount = tabs.size,
                     isBlurEnabled = false,
                 ) {
