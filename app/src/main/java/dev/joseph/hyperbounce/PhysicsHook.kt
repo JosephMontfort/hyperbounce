@@ -2,8 +2,7 @@ package dev.joseph.hyperbounce
 
 import android.app.Activity
 import android.graphics.Color
-import android.os.Handler
-import android.os.Looper
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -100,15 +99,16 @@ class PhysicsHook : IXposedHookLoadPackage {
                 tag = "HyperFloatingBar"
                 clipChildren = false
                 clipToPadding = false
-                
-                // CRITICAL FIX: Tell Android this view is see-through. 
-                // Prevents the GPU from culling (blacking out) the YouTube app underneath!
                 setBackgroundColor(Color.TRANSPARENT)
                 
+                // CRITICAL FIX: Make the ComposeView wrap its content and sit at the bottom.
+                // This prevents MiuixTheme from drawing a fullscreen background that blocks the video SurfaceView!
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                )
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    gravity = Gravity.BOTTOM
+                }
                 
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setViewTreeLifecycleOwner(lifecycleOwner)
@@ -130,21 +130,8 @@ class PhysicsHook : IXposedHookLoadPackage {
                 }
             }
 
-            // Using addContentView is strictly safer for overlays than touching DecorView directly
             activity.addContentView(composeView, composeView.layoutParams)
             XposedBridge.log("[HyperBounce] Liquid Glass injected successfully!")
-
-            // DIAGNOSTIC PROBE: Logs YouTube's content dimensions 2 seconds after injection
-            Handler(Looper.getMainLooper()).postDelayed({
-                XposedBridge.log("[HyperBounce] --- DIAGNOSTIC PROBE ---")
-                val content = activity.findViewById<ViewGroup>(android.R.id.content)
-                if (content != null) {
-                    for (i in 0 until content.childCount) {
-                        val child = content.getChildAt(i)
-                        XposedBridge.log("[HyperBounce] Content Child $i: ${child.javaClass.simpleName} (w:${child.width}, h:${child.height}, visibility:${child.visibility})")
-                    }
-                }
-            }, 2000)
 
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception in YouTube UI Heist: ${e.message}")

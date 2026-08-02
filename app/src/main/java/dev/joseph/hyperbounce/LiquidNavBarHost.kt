@@ -217,7 +217,7 @@ fun LiquidNavBarHost(
 
         if (tabs.isNotEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth().wrapContentHeight().background(androidx.compose.ui.graphics.Color.Transparent),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 FloatingBottomBar(
