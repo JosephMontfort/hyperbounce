@@ -3,6 +3,7 @@ package dev.joseph.hyperbounce
 import android.app.Activity
 import android.graphics.Color
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -36,12 +37,49 @@ import kotlinx.coroutines.launch
 class PhysicsHook : IXposedHookLoadPackage {
 
     private var externalTabState: MutableState<Int>? = null
-    
-    // MISSING PARAMETER RESTORED: Holds the visibility state for Compose
-    private var isBarVisible: MutableState<Boolean> = mutableStateOf(false)
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.google.android.youtube") return
+
+        // --- INJECTED RAW TOUCH TRACER ---
+        try {
+            XposedHelpers.findAndHookMethod(
+                "android.view.View",
+                lpparam.classLoader,
+                "dispatchTouchEvent",
+                MotionEvent::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        val view = param.thisObject as View
+                        val event = param.args[0] as MotionEvent
+                        
+                        // Only log the initial finger-down press to avoid spamming the log with drag/swipe events
+                        if (event.action == MotionEvent.ACTION_DOWN) {
+                            var viewName = "NO_ID"
+                            if (view.id > 0) {
+                                try {
+                                    viewName = view.context.resources.getResourceEntryName(view.id)
+                                } catch (e: Exception) {}
+                            }
+                            
+                            // Filter specifically for the bottom navigation bar elements
+                            if (viewName.contains("pivot") || viewName.contains("tab") || viewName.contains("icon")) {
+                                XposedBridge.log("\n=======================================================")
+                                XposedBridge.log("[+] [TouchTracer] Raw Touch Detected on: ${view.javaClass.name}")
+                                XposedBridge.log("[+] [TouchTracer] View ID Name: $viewName")
+                                XposedBridge.log("[+] [TouchTracer] MotionEvent: X=${event.rawX}, Y=${event.rawY}")
+                                XposedBridge.log("[+] [TouchTracer] Stack Trace:")
+                                XposedBridge.log(android.util.Log.getStackTraceString(java.lang.Exception("TouchTrace")))
+                                XposedBridge.log("=======================================================\n")
+                            }
+                        }
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            XposedBridge.log("[HyperBounce] Failed to inject Touch Tracer: ${e.message}")
+        }
+        // ---------------------------------
 
         XposedHelpers.findAndHookMethod(
             "android.app.Activity",
@@ -58,42 +96,29 @@ class PhysicsHook : IXposedHookLoadPackage {
 
                     if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-                    decorView.viewTreeObserver.addOnPreDrawListener {
-                        val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
-                        val pivotId     = res.getIdentifier("pivot_bar", "id", "com.google.android.youtube")
+                    decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+                        override fun onGlobalLayout() {
+                            val pivotId = res.getIdentifier("pivot_bar", "id", "com.google.android.youtube")
+                            val dividerId = res.getIdentifier("navigation_bar_divider_frame", "id", "com.google.android.youtube")
 
-                        // 1. MAKE STOCK BAR DISAPPEAR: Shrink it to 0 height
-                        val container = if (containerId != 0) activity.findViewById<ViewGroup>(containerId) else null
-                        if (container != null) {
-                            val params = container.layoutParams
-                            if (params != null && params.height != 0) {
-                                params.height = 0
-                                container.layoutParams = params
-                            }
-                            container.setBackgroundColor(Color.TRANSPARENT)
-                        }
-
-                        // 2. TRACK VISIBILITY via Y-Coordinate
-                        val pivot = if (pivotId != 0) activity.findViewById<ViewGroup>(pivotId) else null
-                        if (pivot != null) {
-                            pivot.alpha = 0f
-
-                            val loc = IntArray(2)
-                            pivot.getLocationOnScreen(loc)
-                            val isVisible = loc[1] <= decorView.height
-                            
-                            // Update the state so AnimatedVisibility works smoothly
-                            if (isBarVisible.value != isVisible) {
-                                isBarVisible.value = isVisible
+                            if (dividerId != 0) {
+                                // This causes the blank screen, exactly as you wanted for the sandbox
+                                activity.findViewById<View>(dividerId)?.alpha = 0f
                             }
 
-                            val wrapper = pivot.getChildAt(0) as? ViewGroup
-                            if (wrapper != null && wrapper.childCount >= 3 && externalTabState == null) {
-                                executeUIHeist(activity, pivot)
+                            if (pivotId != 0) {
+                                val pivot = activity.findViewById<ViewGroup>(pivotId)
+                                if (pivot != null) {
+                                    pivot.alpha = 0f
+
+                                    val wrapper = pivot.getChildAt(0) as? ViewGroup
+                                    if (wrapper != null && wrapper.childCount >= 3) {
+                                        executeUIHeist(activity, pivot)
+                                    }
+                                }
                             }
                         }
-                        true
-                    }
+                    })
                 }
             }
         )
@@ -103,8 +128,6 @@ class PhysicsHook : IXposedHookLoadPackage {
         try {
             val decorView = activity.window.decorView as ViewGroup
             if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
-
-            XposedBridge.log("[HyperBounce] Injecting Liquid Glass overlay...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -140,7 +163,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
 
-                // Required for Compose AnimatedVisibility
                 val coroutineContext = AndroidUiDispatcher.CurrentThread
                 val recomposer = Recomposer(coroutineContext)
                 setParentCompositionContext(recomposer)
@@ -151,14 +173,12 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setContent {
                     LiquidNavBarHost(
                         stockBar        = stockBar,
-                        externalTabState = tabState,
-                        isVisible       = isBarVisible // THE FIX: Parameter provided!
+                        externalTabState = tabState
                     )
                 }
             }
 
             decorView.addView(composeView)
-            XposedBridge.log("[HyperBounce] Liquid Glass injected successfully!")
 
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception in UI Heist: ${e.message}")
