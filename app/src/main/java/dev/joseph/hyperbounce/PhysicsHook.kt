@@ -5,13 +5,10 @@ import android.graphics.Color
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import android.widget.FrameLayout
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
@@ -30,13 +27,10 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 
 class PhysicsHook : IXposedHookLoadPackage {
 
     private var externalTabState: MutableState<Int>? = null
-    private var isBarVisible: MutableState<Boolean> = mutableStateOf(false)
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.google.android.youtube") return
@@ -48,6 +42,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val activity = param.thisObject as Activity
+
                     if (activity.javaClass.simpleName != "MainActivity") return
 
                     val res = activity.resources
@@ -55,40 +50,41 @@ class PhysicsHook : IXposedHookLoadPackage {
 
                     if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-                    val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
-                    val pivotId     = res.getIdentifier("pivot_bar",            "id", "com.google.android.youtube")
-                    val panelId     = res.getIdentifier("app_engagement_panel_wrapper", "id", "com.google.android.youtube")
-
+                    // VISIBILITY FIX: PreDrawListener runs every frame to track coordinates natively
                     decorView.viewTreeObserver.addOnPreDrawListener {
-                        val container = if (containerId != 0) activity.findViewById<ViewGroup>(containerId) else null
-                        val pivot     = if (pivotId != 0) activity.findViewById<ViewGroup>(pivotId) else null
-                        val panel     = if (panelId != 0) activity.findViewById<View>(panelId) else null
+                        val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
+                        val pivotId     = res.getIdentifier("pivot_bar", "id", "com.google.android.youtube")
 
-                        // 1. Ensure stock bar is visible, drawn, and not pushed off screen
-                        var visible = false
-                        if (pivot != null && pivot.visibility == View.VISIBLE && pivot.isShown) {
-                            val loc = IntArray(2)
-                            pivot.getLocationOnScreen(loc)
-                            if (loc[1] < decorView.height) {
-                                visible = true
+                        // 1. MAKE STOCK BAR DISAPPEAR: Shrink it to 0 height to reclaim the space safely
+                        val container = if (containerId != 0) activity.findViewById<ViewGroup>(containerId) else null
+                        if (container != null) {
+                            val params = container.layoutParams
+                            if (params != null && params.height != 0) {
+                                params.height = 0
+                                container.layoutParams = params
                             }
                         }
 
-                        // 2. Hide immediately if the Comments / Engagement Panel is open
-                        if (panel != null && panel.visibility == View.VISIBLE && panel.height > 0) {
-                            visible = false
-                        }
+                        // 2. TRACK VISIBILITY & HIDE ICONS
+                        val pivot = if (pivotId != 0) activity.findViewById<ViewGroup>(pivotId) else null
+                        if (pivot != null) {
+                            pivot.alpha = 0f // Keep stock icons invisible
 
-                        if (isBarVisible.value != visible) {
-                            isBarVisible.value = visible
-                        }
+                            val loc = IntArray(2)
+                            pivot.getLocationOnScreen(loc)
+                            // If Y-coordinate is <= screen height, YouTube intends for it to be visible
+                            val isVisible = loc[1] <= decorView.height
 
-                        container?.setBackgroundColor(Color.TRANSPARENT)
-                        if (pivot != null && pivot.alpha != 0f) {
-                            pivot.alpha = 0f
-                            val wrapper = pivot.getChildAt(0) as? ViewGroup
-                            if (wrapper != null && wrapper.childCount >= 3 && externalTabState == null) {
-                                executeUIHeist(activity, pivot)
+                            // Toggle our floating pill visibility directly
+                            val composeView = decorView.findViewWithTag<View>("HyperFloatingBar")
+                            if (composeView != null) {
+                                composeView.visibility = if (isVisible) View.VISIBLE else View.GONE
+                            } else {
+                                // Inject if not present
+                                val wrapper = pivot.getChildAt(0) as? ViewGroup
+                                if (wrapper != null && wrapper.childCount >= 3) {
+                                    executeUIHeist(activity, pivot)
+                                }
                             }
                         }
                         true
@@ -100,8 +96,10 @@ class PhysicsHook : IXposedHookLoadPackage {
 
     private fun executeUIHeist(activity: Activity, stockBar: ViewGroup) {
         try {
-            val contentView = activity.findViewById<ViewGroup>(android.R.id.content)
-            if (contentView.findViewWithTag<View>("HyperFloatingBar") != null) return
+            val decorView = activity.window.decorView as ViewGroup
+            if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
+
+            XposedBridge.log("[HyperBounce] Injecting Liquid Glass overlay...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -119,18 +117,17 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setBackgroundColor(Color.TRANSPARENT)
 
                 val navInsets = try {
-                    contentView.rootWindowInsets?.getInsets(WindowInsets.Type.systemBars())?.bottom ?: 0
+                    decorView.rootWindowInsets
+                        ?.getInsets(WindowInsets.Type.systemBars())
+                        ?.bottom ?: 0
                 } catch (e: Exception) { 0 }
-                
-                // SHORTS PROGRESS BAR FIX: Push it 56dp above the nav insets!
-                val extraPadding = (56 * activity.resources.displayMetrics.density).toInt()
 
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    gravity      = Gravity.BOTTOM
-                    bottomMargin = navInsets + extraPadding
+                    gravity     = Gravity.BOTTOM
+                    bottomMargin = navInsets
                 }
 
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
@@ -138,22 +135,16 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
 
-                val coroutineContext = AndroidUiDispatcher.CurrentThread
-                val recomposer = Recomposer(coroutineContext)
-                setParentCompositionContext(recomposer)
-                CoroutineScope(coroutineContext).launch {
-                    recomposer.runRecomposeAndApplyChanges()
-                }
-
                 setContent {
                     LiquidNavBarHost(
-                        stockBar = stockBar,
+                        stockBar        = stockBar,
                         externalTabState = tabState,
-                        isVisible = isBarVisible
                     )
                 }
             }
-            contentView.addView(composeView)
+
+            decorView.addView(composeView)
+            XposedBridge.log("[HyperBounce] Liquid Glass injected successfully!")
 
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception in UI Heist: ${e.message}")
@@ -165,11 +156,15 @@ class FakeLifecycleOwner :
     LifecycleOwner,
     SavedStateRegistryOwner,
     ViewModelStoreOwner {
+
     val registry = LifecycleRegistry(this)
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
     private val store = ViewModelStore()
+
     init { savedStateRegistryController.performRestore(null) }
-    override val lifecycle: Lifecycle get() = registry
-    override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
+
+    override val lifecycle: Lifecycle          get() = registry
+    override val savedStateRegistry: SavedStateRegistry
+        get() = savedStateRegistryController.savedStateRegistry
     override val viewModelStore: ViewModelStore get() = store
 }
