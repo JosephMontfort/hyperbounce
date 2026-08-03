@@ -37,6 +37,8 @@ import kotlinx.coroutines.launch
 class PhysicsHook : IXposedHookLoadPackage {
 
     private var externalTabState: MutableState<Int>? = null
+    // Set to true so the pill is visible in our sandbox
+    private var isBarVisible: MutableState<Boolean> = mutableStateOf(true)
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.google.android.youtube") return
@@ -173,7 +175,8 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setContent {
                     LiquidNavBarHost(
                         stockBar        = stockBar,
-                        externalTabState = tabState
+                        externalTabState = tabState,
+                        isVisible       = isBarVisible // THE MISSING PARAMETER ADDED HERE
                     )
                 }
             }
