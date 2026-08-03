@@ -41,6 +41,38 @@ class PhysicsHook : IXposedHookLoadPackage {
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.google.android.youtube") return
 
+        // --- INJECTED XPOSED CLICK TRACER ---
+        try {
+            XposedHelpers.findAndHookMethod(
+                "android.view.View",
+                lpparam.classLoader,
+                "performClick",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val view = param.thisObject as View
+                        var viewName = "NO_ID"
+                        if (view.id > 0) {
+                            try {
+                                viewName = view.context.resources.getResourceEntryName(view.id)
+                            } catch (e: Exception) {}
+                        }
+                        
+                        // Filter to avoid spamming the logcat with every single tap on the screen
+                        if (viewName.contains("pivot") || viewName.contains("tab") || viewName.contains("icon")) {
+                            XposedBridge.log("\n=======================================================")
+                            XposedBridge.log("[+] [ClickTracer] View Clicked: ${view.javaClass.name}")
+                            XposedBridge.log("[+] [ClickTracer] View ID Name: $viewName")
+                            XposedBridge.log(android.util.Log.getStackTraceString(java.lang.Exception("ClickTrace")))
+                            XposedBridge.log("=======================================================\n")
+                        }
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            XposedBridge.log("[HyperBounce] Failed to inject Click Tracer: ${e.message}")
+        }
+        // ------------------------------------
+
         XposedHelpers.findAndHookMethod(
             "android.app.Activity",
             lpparam.classLoader,
