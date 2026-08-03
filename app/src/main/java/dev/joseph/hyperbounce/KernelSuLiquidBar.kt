@@ -144,7 +144,12 @@ fun FloatingBottomBar(
     val accentColor = MiuixTheme.colorScheme.primary
     val tabContentColor = MiuixTheme.colorScheme.onSurface
     val surfaceContainer = MiuixTheme.colorScheme.surfaceContainer
-    val containerColor = androidx.compose.ui.graphics.Color.Transparent
+    // Subtle frosted-glass tint.  rememberLayerBackdrop() captures the Compose
+    // layer system, not YouTube's native views, so the blur operates on near-
+    // transparent pixels.  This tint gives the pill visible material while the
+    // AGSL lens / specular / inner-shadow effects deliver the liquid-glass look.
+    val containerColor = if (isInDark) Color.White.copy(alpha = 0.12f)
+                         else          Color.Black.copy(alpha = 0.06f)
 
     // ── tabsBackdrop: captures the invisible accent-coloured row so the
     //    indicator pill can composite the tinted icons on top of the blur. ──

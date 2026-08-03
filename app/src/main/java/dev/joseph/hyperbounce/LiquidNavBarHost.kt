@@ -13,9 +13,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
@@ -160,28 +157,22 @@ fun LiquidNavBarHost(
                         .wrapContentHeight(),
                     contentAlignment = Alignment.BottomCenter,
                 ) {
-                    val isDark = isSystemInDarkTheme()
-                    // VISIBILITY & OUTLINE FIX: 95% opacity for readability, sharp shadow removed, clean 1.5dp border added!
-                    val pillColor = if (isDark) Color(0xF21C1C1E) else Color(0xF2F2F2F7)
-                    val outlineColor = if (isDark) Color(0x4DFFFFFF) else Color(0x4D000000)
-                    
+                    // Plain padding wrapper — FloatingBottomBar owns all visuals
+                    // (drawBackdrop glass, lens AGSL shader, specular highlights, shadow).
                     Box(
-                        modifier = Modifier
-                            .padding(bottom = 12.dp)
-                            .border(1.5.dp, outlineColor, CircleShape)
-                            .background(pillColor, CircleShape)
+                        modifier = Modifier.padding(bottom = 12.dp)
                     ) {
                         FloatingBottomBar(
                             selectedIndex = { selectedIndex },
                             onSelected = { idx ->
                                 selectedIndex = idx
                                 if (externalTabState.value != idx && idx < tabs.size) {
-                                    forceClick(tabs[idx].sourceView) // Fire the ultimate clicker
+                                    forceClick(tabs[idx].sourceView)
                                 }
                             },
                             backdrop = rememberLayerBackdrop(),
                             tabsCount = tabs.size,
-                            isBlurEnabled = false,
+                            isBlurEnabled = true,
                         ) {
                             tabs.forEachIndexed { index, tabData ->
                                 FloatingBottomBarItem(
