@@ -62,24 +62,24 @@ class PhysicsHook : IXposedHookLoadPackage {
                         val container = if (containerId != 0) activity.findViewById<ViewGroup>(containerId) else null
                         val pivot     = if (pivotId != 0) activity.findViewById<ViewGroup>(pivotId) else null
 
-                        var visible = false
-                        if (container != null && container.isShown && container.alpha > 0f) {
+                        // Bug 5: track bar visibility via pivot_bar's screen position.
+                        // YouTube hides the nav bar by translating it off-screen (not
+                        // visibility/alpha changes), so getLocationOnScreen reliably
+                        // catches the slide-out during video fullscreen, comments, etc.
+                        container?.setBackgroundColor(Color.TRANSPARENT)
+                        if (pivot != null) {
                             val loc = IntArray(2)
-                            container.getLocationOnScreen(loc)
-                            if (loc[1] < decorView.height) {
-                                visible = true
-                            }
-                            container.setBackgroundColor(Color.TRANSPARENT)
-                        }
-
-                        if (isBarVisible.value != visible) {
-                            isBarVisible.value = visible
+                            pivot.getLocationOnScreen(loc)
+                            val nowVisible = loc[1] < decorView.height
+                            if (isBarVisible.value != nowVisible) isBarVisible.value = nowVisible
                         }
 
                         if (pivot != null && pivot.alpha != 0f) {
                             pivot.alpha = 0f
                             val wrapper = pivot.getChildAt(0) as? ViewGroup
-                            if (wrapper != null && wrapper.childCount >= 3 && externalTabState == null) {
+                            // Bug 6: removed externalTabState==null guard so a theme-change
+                            // Activity recreation (new decorView, no tag) triggers re-injection.
+                            if (wrapper != null && wrapper.childCount >= 3) {
                                 executeUIHeist(activity, pivot)
                             }
                         }
