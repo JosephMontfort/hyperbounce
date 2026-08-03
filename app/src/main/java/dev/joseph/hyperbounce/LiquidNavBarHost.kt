@@ -2,9 +2,10 @@ package dev.joseph.hyperbounce
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.os.SystemClock
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.ImageView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -13,11 +14,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -47,6 +52,7 @@ fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
         val uiMode = pivotBar.resources.configuration.uiMode
         val isDark = (uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                      android.content.res.Configuration.UI_MODE_NIGHT_YES
+        // VISIBILITY FIX: Pure White/Black hardware tint overrides muddy grey
         val tintColor = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
 
         val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return out
@@ -88,16 +94,28 @@ fun isViewOrChildSelected(view: View): Boolean {
     return false
 }
 
-fun forceClick(view: View) {
-    view.performClick()
-    view.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null)
-    if (view is ViewGroup) {
-        for (i in 0 until view.childCount) {
-            val child = view.getChildAt(i)
-            child.performClick()
-            child.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null)
-        }
-    }
+// THE ULTIMATE HOME TAB FIX: Simulates a physical touch injected directly into the absolute Window Root
+fun simulateRootTouch(sourceView: View) {
+    val rootView = sourceView.rootView
+    val loc = IntArray(2)
+    sourceView.getLocationInWindow(loc) // Get exact coordinates relative to the window
+    
+    // Calculate the absolute center of the stock invisible tab
+    val x = loc[0] + (sourceView.width / 2f)
+    val y = loc[1] + (sourceView.height / 2f)
+    
+    val downTime = SystemClock.uptimeMillis()
+    
+    // Fire Action Down
+    val downEvent = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, x, y, 0)
+    rootView.dispatchTouchEvent(downEvent)
+    
+    // Fire Action Up (50ms delay mimics a human tap)
+    val upEvent = MotionEvent.obtain(downTime, downTime + 50, MotionEvent.ACTION_UP, x, y, 0)
+    rootView.dispatchTouchEvent(upEvent)
+    
+    downEvent.recycle()
+    upEvent.recycle()
 }
 
 @Composable
@@ -109,29 +127,20 @@ fun LiquidNavBarHost(
     var tabs by remember { mutableStateOf(emptyList<TabData>()) }
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
 
-    // Bug 3 – light-theme icon colours:
-    // extractYouTubeTabs tints icons WHITE (dark) or BLACK (light) at capture time.
-    // When the user flips the theme we must re-capture with the new tint colour.
     val isDark = isSystemInDarkTheme()
-    LaunchedEffect(isDark) { tabs = emptyList() }
+    LaunchedEffect(isDark) { tabs = emptyList() } // Refresh icons on theme change
 
-    // Bug 4 – home snap-back:
-    // After the user taps a tab, YouTube's internal selected-state lags ~300 ms behind.
-    // If we keep polling isViewOrChildSelected during that window we read "Shorts" and
-    // snap selectedIndex back.  Suppress native-sync for 700 ms after any user tap.
     var lastClickMs by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(stockBar) {
         var attempts = 0
         while (true) {
-            // Keep trying until we have all tabs (max 20 attempts × 100 ms = 2 s).
             if (tabs.size < 4 && attempts < 20) {
                 val extracted = extractYouTubeTabs(stockBar)
                 if (extracted.size > tabs.size) tabs = extracted
                 attempts++
             }
 
-            // Native-state sync — debounced so a user tap isn't overridden immediately.
             if (tabs.isNotEmpty() && System.currentTimeMillis() - lastClickMs > 700L) {
                 for (i in tabs.indices) {
                     if (isViewOrChildSelected(tabs[i].sourceView)) {
@@ -162,37 +171,43 @@ fun LiquidNavBarHost(
                         .wrapContentHeight(),
                     contentAlignment = Alignment.BottomCenter,
                 ) {
-                    // Bug 1 – indicator clipped at top:
-                    // The indicator pill scale-animates beyond its 56 dp measured height.
-                    // padding(top = 14.dp) gives it 14 dp of headroom inside the ComposeView
-                    // so the expansion can't escape the view bounds upward.
-                    // (The ComposeView is WRAP_CONTENT + gravity=BOTTOM, so adding top padding
-                    //  simply makes it taller while keeping the pill at the same screen Y.)
+                    // INCREASED OPACITY: 95% opacity for solid, premium readability
+                    val pillColor = if (isDark) Color(0xF21C1C1E) else Color(0xF2F2F2F7)
+                    // SHADOW REMOVED: Clean 1.5dp outline border added
+                    val outlineColor = if (isDark) Color(0x4DFFFFFF) else Color(0x4D000000)
+                    
                     Box(modifier = Modifier.padding(top = 14.dp, bottom = 12.dp)) {
-                        FloatingBottomBar(
-                            selectedIndex = { selectedIndex },
-                            onSelected = { idx ->
-                                lastClickMs = System.currentTimeMillis() // start debounce window
-                                selectedIndex = idx
-                                if (externalTabState.value != idx && idx < tabs.size) {
-                                    forceClick(tabs[idx].sourceView)
-                                }
-                            },
-                            backdrop     = rememberLayerBackdrop(),
-                            tabsCount    = tabs.size,
-                            isBlurEnabled = true,  // liquid glass on
+                        Box(
+                            modifier = Modifier
+                                .border(1.5.dp, outlineColor, CircleShape)
+                                .background(pillColor, CircleShape)
                         ) {
-                            tabs.forEachIndexed { index, tabData ->
-                                FloatingBottomBarItem(
-                                    onClick   = { selectedIndex = index },
-                                    modifier  = Modifier.defaultMinSize(minWidth = 60.dp),
-                                ) {
-                                    Image(
-                                        bitmap             = tabData.bitmap.asImageBitmap(),
-                                        contentDescription = null,
-                                        modifier           = Modifier.size(24.dp),
-                                        alpha              = if (selectedIndex == index) 1f else 0.5f,
-                                    )
+                            FloatingBottomBar(
+                                selectedIndex = { selectedIndex },
+                                onSelected = { idx ->
+                                    lastClickMs = System.currentTimeMillis()
+                                    selectedIndex = idx
+                                    if (externalTabState.value != idx && idx < tabs.size) {
+                                        // Execute literal window touch injection
+                                        simulateRootTouch(tabs[idx].sourceView) 
+                                    }
+                                },
+                                backdrop     = rememberLayerBackdrop(),
+                                tabsCount    = tabs.size,
+                                isBlurEnabled = false,
+                            ) {
+                                tabs.forEachIndexed { index, tabData ->
+                                    FloatingBottomBarItem(
+                                        onClick   = { selectedIndex = index },
+                                        modifier  = Modifier.defaultMinSize(minWidth = 60.dp),
+                                    ) {
+                                        Image(
+                                            bitmap             = tabData.bitmap.asImageBitmap(),
+                                            contentDescription = null,
+                                            modifier           = Modifier.size(24.dp),
+                                            alpha              = if (selectedIndex == index) 1f else 0.5f,
+                                        )
+                                    }
                                 }
                             }
                         }

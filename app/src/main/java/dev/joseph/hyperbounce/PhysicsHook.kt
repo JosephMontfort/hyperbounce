@@ -41,38 +41,6 @@ class PhysicsHook : IXposedHookLoadPackage {
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.google.android.youtube") return
 
-        // --- INJECTED XPOSED CLICK TRACER ---
-        try {
-            XposedHelpers.findAndHookMethod(
-                "android.view.View",
-                lpparam.classLoader,
-                "performClick",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val view = param.thisObject as View
-                        var viewName = "NO_ID"
-                        if (view.id > 0) {
-                            try {
-                                viewName = view.context.resources.getResourceEntryName(view.id)
-                            } catch (e: Exception) {}
-                        }
-                        
-                        // Filter to avoid spamming the logcat with every single tap on the screen
-                        if (viewName.contains("pivot") || viewName.contains("tab") || viewName.contains("icon")) {
-                            XposedBridge.log("\n=======================================================")
-                            XposedBridge.log("[+] [ClickTracer] View Clicked: ${view.javaClass.name}")
-                            XposedBridge.log("[+] [ClickTracer] View ID Name: $viewName")
-                            XposedBridge.log(android.util.Log.getStackTraceString(java.lang.Exception("ClickTrace")))
-                            XposedBridge.log("=======================================================\n")
-                        }
-                    }
-                }
-            )
-        } catch (e: Exception) {
-            XposedBridge.log("[HyperBounce] Failed to inject Click Tracer: ${e.message}")
-        }
-        // ------------------------------------
-
         XposedHelpers.findAndHookMethod(
             "android.app.Activity",
             lpparam.classLoader,
@@ -89,29 +57,37 @@ class PhysicsHook : IXposedHookLoadPackage {
 
                     val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
                     val pivotId     = res.getIdentifier("pivot_bar",            "id", "com.google.android.youtube")
+                    val panelId     = res.getIdentifier("app_engagement_panel_wrapper", "id", "com.google.android.youtube")
 
                     decorView.viewTreeObserver.addOnPreDrawListener {
                         val container = if (containerId != 0) activity.findViewById<ViewGroup>(containerId) else null
                         val pivot     = if (pivotId != 0) activity.findViewById<ViewGroup>(pivotId) else null
+                        val panel     = if (panelId != 0) activity.findViewById<View>(panelId) else null
 
-                        // Bug 5: track bar visibility via pivot_bar's screen position.
-                        // YouTube hides the nav bar by translating it off-screen (not
-                        // visibility/alpha changes), so getLocationOnScreen reliably
-                        // catches the slide-out during video fullscreen, comments, etc.
-                        container?.setBackgroundColor(Color.TRANSPARENT)
-                        if (pivot != null) {
+                        // 1. Ensure stock bar is visible, drawn, and not pushed off screen
+                        var visible = false
+                        if (pivot != null && pivot.visibility == View.VISIBLE && pivot.isShown) {
                             val loc = IntArray(2)
                             pivot.getLocationOnScreen(loc)
-                            val nowVisible = loc[1] < decorView.height
-                            if (isBarVisible.value != nowVisible) isBarVisible.value = nowVisible
+                            if (loc[1] < decorView.height) {
+                                visible = true
+                            }
                         }
 
+                        // 2. Hide immediately if the Comments / Engagement Panel is open
+                        if (panel != null && panel.visibility == View.VISIBLE && panel.height > 0) {
+                            visible = false
+                        }
+
+                        if (isBarVisible.value != visible) {
+                            isBarVisible.value = visible
+                        }
+
+                        container?.setBackgroundColor(Color.TRANSPARENT)
                         if (pivot != null && pivot.alpha != 0f) {
                             pivot.alpha = 0f
                             val wrapper = pivot.getChildAt(0) as? ViewGroup
-                            // Bug 6: removed externalTabState==null guard so a theme-change
-                            // Activity recreation (new decorView, no tag) triggers re-injection.
-                            if (wrapper != null && wrapper.childCount >= 3) {
+                            if (wrapper != null && wrapper.childCount >= 3 && externalTabState == null) {
                                 executeUIHeist(activity, pivot)
                             }
                         }
@@ -126,8 +102,6 @@ class PhysicsHook : IXposedHookLoadPackage {
         try {
             val contentView = activity.findViewById<ViewGroup>(android.R.id.content)
             if (contentView.findViewWithTag<View>("HyperFloatingBar") != null) return
-
-            XposedBridge.log("[HyperBounce] Injecting Faux-Glass UI...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
