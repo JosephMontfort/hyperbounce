@@ -144,10 +144,12 @@ fun FloatingBottomBar(
     val accentColor = MiuixTheme.colorScheme.primary
     val tabContentColor = MiuixTheme.colorScheme.onSurface
     val surfaceContainer = MiuixTheme.colorScheme.surfaceContainer
-    // Bug 2 & 3: replace invisible Transparent with a frosted-glass tint.
-    // Dark mode → subtle white frost; Light mode → subtle dark frost so icons stay visible.
-    val containerColor = if (isInDark) Color.White.copy(alpha = 0.18f)
-                         else          Color.Black.copy(alpha = 0.18f)
+    // 80 % opaque frosted glass: the user sees the pill as a translucent material
+    // (~20 % of the content below shows through) while the lens / specular effects
+    // on top deliver the liquid-glass premium look. Theme-aware: dark uses the iOS
+    // "system background" dark value (#1C1C1E), light uses the light value (#F2F2F7).
+    val containerColor = if (isInDark) Color(0xFF1C1C1E).copy(alpha = 0.80f)
+                         else          Color(0xFFF2F2F7).copy(alpha = 0.80f)
 
     // ── tabsBackdrop: captures the invisible accent-coloured row so the
     //    indicator pill can composite the tinted icons on top of the blur. ──
@@ -350,16 +352,9 @@ fun FloatingBottomBar(
                             translationX =
                                 if (isLtr) progressOffset + panelOffset
                                 else -progressOffset + panelOffset
-                            // Bug 1 fix: apply scale here (clip=false) instead of inside
-                            // drawBackdrop's layerBlock. The internal GraphicsLayer inside
-                            // drawBackdrop clips to the measured 56 dp; this outer layer with
-                            // clip=false lets the visual expansion escape upward into the
-                            // 14 dp headroom added in LiquidNavBarHost.
-                            val velocity = dampedDragAnimation.velocity / 10f
-                            scaleX = dampedDragAnimation.scaleX /
-                                     (1f - (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f))
-                            scaleY = dampedDragAnimation.scaleY *
-                                     (1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f))
+                            // clip=false: lets dampedDragAnimation.modifier's scaleY overflow
+                            // upward into the 14 dp headroom added in LiquidNavBarHost,
+                            // fixing the top-clip without touching the glass-effect pipeline.
                             clip = false
                         }
                         .then(interactiveHighlight.gestureModifier)
@@ -379,7 +374,16 @@ fun FloatingBottomBar(
                             highlight = {
                                 pillHighlight.copy(alpha = dampedDragAnimation.pressProgress)
                             },
-                            layerBlock = null, // scale moved to outer graphicsLayer above
+                            layerBlock = {
+                                // Capture-layer scale: tells the backdrop sampler the area
+                                // that the scaled pill covers so the lens refraction is
+                                // correctly aligned with the visual indicator.
+                                scaleX = dampedDragAnimation.scaleX
+                                scaleY = dampedDragAnimation.scaleY
+                                val velocity = dampedDragAnimation.velocity / 10f
+                                scaleX /= 1f - (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
+                                scaleY *= 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+                            },
                             onDrawSurface = {
                                 val progress = dampedDragAnimation.pressProgress
                                 drawRect(
