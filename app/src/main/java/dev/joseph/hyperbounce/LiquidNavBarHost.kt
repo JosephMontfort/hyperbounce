@@ -130,13 +130,29 @@ fun LiquidNavBarHost(
     var lastClickMs by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(stockBar) {
-        var attempts = 0
+        var stableCount = 0
         while (true) {
-            if (tabs.size < 5 && attempts < 25) {
-                val extracted = extractYouTubeTabs(stockBar)
-                if (extracted.size > tabs.size) { tabs = extracted; attempts = 0 }
-                else attempts++
+            // Keep extracting until tab count stabilises for 10 consecutive cycles.
+            // No hard "must reach 5" limit — YouTube's Create (+) button has no
+            // thumbnail_layout and is correctly skipped, leaving 4 real nav tabs.
+            val extracted = extractYouTubeTabs(stockBar)
+            if (extracted.size > tabs.size) {
+                tabs = extracted
+                stableCount = 0           // reset when we find more tabs
+            } else {
+                stableCount++
             }
+            // After 10 stable cycles (1 s) with at least 1 tab, stop hammering the tree.
+            // We will still respond to any future increase in tab count.
+            if (tabs.isNotEmpty() && stableCount < 10) {
+                // still stabilising — loop quickly
+            } else if (tabs.isNotEmpty()) {
+                // Stable — do a slow re-check every 5 s in case YouTube re-inflates tabs
+                delay(5000)
+                stableCount = 0
+                continue
+            }
+
             // Native-state sync — debounced so user taps are not overridden mid-navigation
             if (tabs.isNotEmpty() && System.currentTimeMillis() - lastClickMs > 700L) {
                 for (i in tabs.indices) {
@@ -184,9 +200,14 @@ fun LiquidNavBarHost(
                                 lastClickMs   = System.currentTimeMillis()
                                 selectedIndex = idx
                                 if (externalTabState.value != idx && idx < tabs.size) {
-                                    // simulateRootTouch fires a real MotionEvent — the only
-                                    // reliable way to activate YouTube's Home tab.
-                                    simulateRootTouch(tabs[idx].sourceView)
+                                    // forceClick uses performClick + AccessibilityAction — it works
+                                    // through the accessibility framework and is unaffected by the
+                                    // container height=0 collapse (unlike simulateRootTouch which
+                                    // needs correct window coordinates).
+                                    forceClick(tabs[idx].sourceView)
+                                    // Home tab (idx 0) sometimes ignores accessibility clicks.
+                                    // Fire a real MotionEvent as an extra belt-and-suspenders attempt.
+                                    if (idx == 0) simulateRootTouch(tabs[idx].sourceView)
                                 }
                             },
                             backdrop      = rememberLayerBackdrop(),

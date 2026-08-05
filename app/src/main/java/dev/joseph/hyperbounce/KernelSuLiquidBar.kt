@@ -144,12 +144,13 @@ fun FloatingBottomBar(
     val accentColor = MiuixTheme.colorScheme.primary
     val tabContentColor = MiuixTheme.colorScheme.onSurface
     val surfaceContainer = MiuixTheme.colorScheme.surfaceContainer
-    // 80 % opaque frosted glass: the user sees the pill as a translucent material
-    // (~20 % of the content below shows through) while the lens / specular effects
-    // on top deliver the liquid-glass premium look. Theme-aware: dark uses the iOS
-    // "system background" dark value (#1C1C1E), light uses the light value (#F2F2F7).
-    val containerColor = if (isInDark) Color(0xFF1C1C1E).copy(alpha = 0.80f)
-                         else          Color(0xFFF2F2F7).copy(alpha = 0.80f)
+    // Frosted-glass surface: translucent enough that the content behind shows through
+    // (~70 % transparent), but substantial enough to read the glass material.
+    // The miuix specular highlight + lens effect on top sell the "frosted" look.
+    // Theme-aware: dark mode uses a dark tint (visible on light content),
+    // light mode uses a light tint (visible on dark content) — both at ~30 % opacity.
+    val containerColor = if (isInDark) Color(0xFF1C1C1E).copy(alpha = 0.28f)
+                         else          Color(0xFFF2F2F7).copy(alpha = 0.32f)
 
     // ── tabsBackdrop: captures the invisible accent-coloured row so the
     //    indicator pill can composite the tinted icons on top of the blur. ──
