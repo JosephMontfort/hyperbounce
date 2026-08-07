@@ -43,9 +43,9 @@ class PhysicsHook : IXposedHookLoadPackage {
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (!lpparam.packageName.contains("instagram")) return
 
-        Log.e("HyperBounce-IG", "Target acquired: \${lpparam.packageName}")
+        Log.e("HyperBounce-IG", "Target acquired: ${lpparam.packageName}")
 
-        // 1. Lie to Litho about Tab Bar Dimensions globally (The Matrix Architect)
+        // 1. Lie to Litho about Tab Bar Dimensions globally
         try {
             XposedHelpers.findAndHookMethod(
                 Resources::class.java,
@@ -67,76 +67,74 @@ class PhysicsHook : IXposedHookLoadPackage {
                     }
                 }
             )
-            Log.e("HyperBounce-IG", "[+] Hooked Resources: Litho now believes bottom UI is 0px.")
-        } catch (t: Throwable) {
-            Log.e("HyperBounce-IG", "[-] Failed to hook Resources: " + t.message)
-        }
-
-        // 2. Lie about OS Navigation Bar Insets (nullify system-level bottom padding)
-        try {
-            XposedHelpers.findAndHookMethod(
-                WindowInsets::class.java,
-                "getSystemWindowInsetBottom",
-                object : XC_MethodReplacement() {
-                    override fun replaceHookedMethod(param: MethodHookParam): Any {
-                        return 0
-                    }
-                }
-            )
-            Log.e("HyperBounce-IG", "[+] Hooked WindowInsets: OS Nav Bar inset nullified.")
         } catch (t: Throwable) {}
 
-        // 3. Activity Lifecycle Hook for Ghosting & UI Injection
+        // 2. Direct Class Hook for TouchInterceptorLinearLayout (The Stock Bar)
         try {
-            XposedHelpers.findAndHookMethod(
-                Activity::class.java,
-                "onResume",
-                object : XC_MethodHook() {
+            val touchLayoutClass = XposedHelpers.findClassIfExists(
+                "com.instagram.common.ui.widget.touchinterceptorlayout.TouchInterceptorLinearLayout",
+                lpparam.classLoader
+            )
+            
+            if (touchLayoutClass != null) {
+                XposedBridge.hookAllConstructors(touchLayoutClass, object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        val activity = param.thisObject as Activity
-                        val className = activity.javaClass.name
+                        val stockBar = param.thisObject as ViewGroup
                         
-                        if (className.contains("MainActivity") || className.contains("MainTabActivity")) {
-                            val decorView = activity.window.decorView as ViewGroup
-                            
-                            decorView.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
-                                override fun onPreDraw(): Boolean {
-                                    ghostTabBar(activity)
-                                    return true
+                        stockBar.post {
+                            // Verify this is actually the tab_bar by checking resource name or height bounds
+                            try {
+                                val resName = stockBar.resources.getResourceEntryName(stockBar.id)
+                                if (resName == "tab_bar") {
+                                    Log.e("HyperBounce-IG", "[+] Direct TouchInterceptorLinearLayout constructor caught: tab_bar")
+                                    applyBarNuking(stockBar)
                                 }
-                            })
-                            
-                            // Inject our custom Liquid Glass bar
-                            executeUIHeist(activity, decorView)
+                            } catch (e: Throwable) {
+                                // Fallback: if ID check fails, check if parent/dimensions match bottom bar profile
+                                if (stockBar.height > 0 && stockBar.height < 200) {
+                                    applyBarNuking(stockBar)
+                                }
+                            }
                         }
                     }
-                }
-            )
-        } catch (e: Throwable) {
-            Log.e("HyperBounce-IG", "[-] Failed to hook Activity: " + e.message)
-        }
-    }
-
-    private fun ghostTabBar(activity: Activity) {
-        val res = activity.resources
-        val pkg = activity.packageName
-        
-        val hideIds = arrayOf("tab_bar", "tab_bar_shadow")
-        for (idName in hideIds) {
-            val resId = res.getIdentifier(idName, "id", pkg)
-            if (resId != 0) {
-                val view = activity.findViewById<View>(resId)
-                if (view != null && view.translationY != 5000f) {
-                    view.translationY = 5000f
-                    view.alpha = 0f
-                    view.isClickable = false
-                    view.isEnabled = false
-                }
+                })
+                Log.e("HyperBounce-IG", "[+] Successfully hooked TouchInterceptorLinearLayout constructors!")
             }
+        } catch (t: Throwable) {
+            Log.e("HyperBounce-IG", "[-] Failed to hook TouchInterceptorLinearLayout: ${t.message}")
         }
     }
 
-    private fun executeUIHeist(activity: Activity, rootGroup: ViewGroup) {
+    private fun applyBarNuking(stockBar: ViewGroup) {
+        stockBar.translationY = 5000f
+        stockBar.alpha = 0f
+        stockBar.isClickable = false
+        stockBar.isEnabled = false
+
+        stockBar.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                stockBar.translationY = 5000f
+                stockBar.alpha = 0f
+                stockBar.isClickable = false
+                stockBar.isEnabled = false
+                
+                stockBar.layoutParams?.let { lp ->
+                    if (lp.height != 0) {
+                        lp.height = 0
+                        stockBar.requestLayout()
+                    }
+                }
+                return true
+            }
+        })
+
+        val context = stockBar.context
+        if (context is Activity) {
+            executeUIHeist(context, context.window.decorView as ViewGroup, stockBar)
+        }
+    }
+
+    private fun executeUIHeist(activity: Activity, rootGroup: ViewGroup, stockBar: ViewGroup) {
         try {
             if (rootGroup.findViewWithTag<View>("HyperFloatingBar") != null) return
 
@@ -179,10 +177,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                 clipToOutline = true
             }
 
-            // Fetch the stockBar to pass to LiquidNavBarHost for ghost clicks
-            val resId = activity.resources.getIdentifier("tab_bar", "id", activity.packageName)
-            val stockBar = if (resId != 0) activity.findViewById<ViewGroup>(resId) else null
-
             val composeContainerHeight = (120 * density).toInt()
             val composeView = ComposeView(context).apply {
                 tag = "HyperFloatingBar"
@@ -195,11 +189,7 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
-                setContent { 
-                    if (stockBar != null) {
-                        LiquidNavBarHost(stockBar) 
-                    }
-                }
+                setContent { LiquidNavBarHost(stockBar) }
             }
 
             rootGroup.clipChildren = false
@@ -207,7 +197,7 @@ class PhysicsHook : IXposedHookLoadPackage {
             rootGroup.addView(blurView)
             rootGroup.addView(composeView)
             
-            Log.e("HyperBounce-IG", "[*] Custom iOS Liquid Glass Bar Injected!")
+            Log.e("HyperBounce-IG", "[*] Custom iOS Liquid Glass Bar Injected Successfully!")
         } catch (e: Exception) {
             Log.e("HyperBounce-IG", "Heist Exception: " + e.message)
         }
