@@ -2,7 +2,9 @@ package dev.joseph.hyperbounce
 
 import android.app.Activity
 import android.os.Bundle
+import android.view.Gravity
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.*
@@ -48,9 +50,10 @@ fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: View
             
             mainWrapper.addView(
                 composeView,
-                ViewGroup.LayoutParams(
+                FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.BOTTOM
                 )
             )
             android.util.Log.e("HyperBounce-Tracer", "[SUCCESS] Liquid Glass Compose UI Injected!")

@@ -112,13 +112,14 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
     }
 
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.BottomCenter
     ) {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .padding(bottom = 16.dp)
-                .width(320.dp)
+                .widthIn(max = 344.dp)
+                .fillMaxWidth(0.88f)
                 .height(64.dp)
                 .drawBackdrop(
                     backdrop = rememberLayerBackdrop(),
@@ -134,8 +135,8 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
         ) {
             if (tabs.isNotEmpty()) {
                 val density = LocalDensity.current
-                val tabWidthDp = 320f / tabs.size
-                val tabWidthPx = with(density) { tabWidthDp.dp.toPx() }
+                val tabWidthDp = maxWidth / tabs.size
+                val tabWidthPx = with(density) { tabWidthDp.toPx() }
                 
                 var isPressed by remember { mutableStateOf(false) }
                 var dragOffset by remember { mutableFloatStateOf(0f) }
@@ -156,7 +157,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                     Box(
                         modifier = Modifier
                             .offset { IntOffset(animatedOffsetPx.roundToInt(), 0) }
-                            .width(animatedWidthDp.dp)
+                            .width(animatedWidthDp)
                             .fillMaxHeight()
                             .padding(6.dp)
                             .clip(Capsule())
