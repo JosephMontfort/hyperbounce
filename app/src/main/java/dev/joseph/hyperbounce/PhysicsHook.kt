@@ -2,17 +2,16 @@ package dev.joseph.hyperbounce
 
 import android.app.Activity
 import android.content.res.Configuration
-import android.content.res.Resources
 import android.graphics.Color
 import android.graphics.Outline
 import android.os.Build
 import android.util.Log
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
-import android.view.WindowInsets
 import android.widget.FrameLayout
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.ComposeView
@@ -29,8 +28,6 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XC_MethodReplacement
-import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 
@@ -43,98 +40,76 @@ class PhysicsHook : IXposedHookLoadPackage {
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (!lpparam.packageName.contains("instagram")) return
 
-        Log.e("HyperBounce-IG", "Target acquired: ${lpparam.packageName}")
+        Log.e("HyperBounce-IG", "[*] Target acquired: ${lpparam.packageName}")
 
-        // 1. Lie to Litho about Tab Bar Dimensions globally
+        // The exact Frida approach: Hook touch events to guarantee the UI is fully inflated
         try {
             XposedHelpers.findAndHookMethod(
-                Resources::class.java,
-                "getDimensionPixelSize",
-                Int::class.javaPrimitiveType,
-                object : XC_MethodReplacement() {
-                    override fun replaceHookedMethod(param: MethodHookParam): Any {
-                        val res = param.thisObject as Resources
-                        val id = param.args[0] as Int
-                        try {
-                            val resName = res.getResourceEntryName(id)
-                            if (resName.contains("tab_bar_height") || 
-                                resName.contains("bottom_nav") || 
-                                resName.contains("bottom_padding")) {
-                                return 0
-                            }
-                        } catch (e: Exception) {}
-                        return XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args)
-                    }
-                }
-            )
-        } catch (t: Throwable) {}
-
-        // 2. Direct Class Hook for TouchInterceptorLinearLayout (The Stock Bar)
-        try {
-            val touchLayoutClass = XposedHelpers.findClassIfExists(
-                "com.instagram.common.ui.widget.touchinterceptorlayout.TouchInterceptorLinearLayout",
-                lpparam.classLoader
-            )
-            
-            if (touchLayoutClass != null) {
-                XposedBridge.hookAllConstructors(touchLayoutClass, object : XC_MethodHook() {
+                Activity::class.java,
+                "dispatchTouchEvent",
+                MotionEvent::class.java,
+                object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        val stockBar = param.thisObject as ViewGroup
-                        
-                        stockBar.post {
-                            // Verify this is actually the tab_bar by checking resource name or height bounds
+                        val activity = param.thisObject as Activity
+                        val className = activity.javaClass.name
+
+                        if (className.contains("MainActivity") || className.contains("MainTabActivity")) {
+                            val decorView = activity.window?.decorView as? ViewGroup ?: return
+                            
+                            // Prevent double injection by tagging the DecorView
+                            if (decorView.getTag(activity.hashCode()) != null) return
+                            decorView.setTag(activity.hashCode(), true)
+
+                            Log.e("HyperBounce-IG", "[+] Captured Target Activity via Touch: $className")
+
+                            // 1. The PreDraw Assassin (Exactly like Frida V18/V22)
+                            decorView.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+                                override fun onPreDraw(): Boolean {
+                                    try {
+                                        val res = activity.resources
+                                        val pkg = activity.packageName
+                                        
+                                        val hideIds = arrayOf("tab_bar", "tab_bar_shadow")
+                                        for (idName in hideIds) {
+                                            val resId = res.getIdentifier(idName, "id", pkg)
+                                            if (resId != 0) {
+                                                val view = activity.findViewById<View>(resId)
+                                                if (view != null && view.translationY != 5000f) {
+                                                    view.translationY = 5000f
+                                                    view.alpha = 0f
+                                                    view.isClickable = false
+                                                    view.isEnabled = false
+                                                }
+                                            }
+                                        }
+                                    } catch (e: Exception) {}
+                                    return true
+                                }
+                            })
+                            Log.e("HyperBounce-IG", "[+] PreDraw Assassin Attached!")
+
+                            // 2. Fetch the stock bar for RPC clicks
+                            var stockBar: ViewGroup? = null
                             try {
-                                val resName = stockBar.resources.getResourceEntryName(stockBar.id)
-                                if (resName == "tab_bar") {
-                                    Log.e("HyperBounce-IG", "[+] Direct TouchInterceptorLinearLayout constructor caught: tab_bar")
-                                    applyBarNuking(stockBar)
+                                val resId = activity.resources.getIdentifier("tab_bar", "id", activity.packageName)
+                                if (resId != 0) {
+                                    stockBar = activity.findViewById(resId)
                                 }
-                            } catch (e: Throwable) {
-                                // Fallback: if ID check fails, check if parent/dimensions match bottom bar profile
-                                if (stockBar.height > 0 && stockBar.height < 200) {
-                                    applyBarNuking(stockBar)
-                                }
-                            }
+                            } catch (e: Exception) {}
+
+                            // 3. Inject the Liquid Glass UI
+                            executeUIHeist(activity, decorView, stockBar)
                         }
                     }
-                })
-                Log.e("HyperBounce-IG", "[+] Successfully hooked TouchInterceptorLinearLayout constructors!")
-            }
-        } catch (t: Throwable) {
-            Log.e("HyperBounce-IG", "[-] Failed to hook TouchInterceptorLinearLayout: ${t.message}")
-        }
-    }
-
-    private fun applyBarNuking(stockBar: ViewGroup) {
-        stockBar.translationY = 5000f
-        stockBar.alpha = 0f
-        stockBar.isClickable = false
-        stockBar.isEnabled = false
-
-        stockBar.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
-            override fun onPreDraw(): Boolean {
-                stockBar.translationY = 5000f
-                stockBar.alpha = 0f
-                stockBar.isClickable = false
-                stockBar.isEnabled = false
-                
-                stockBar.layoutParams?.let { lp ->
-                    if (lp.height != 0) {
-                        lp.height = 0
-                        stockBar.requestLayout()
-                    }
                 }
-                return true
-            }
-        })
-
-        val context = stockBar.context
-        if (context is Activity) {
-            executeUIHeist(context, context.window.decorView as ViewGroup, stockBar)
+            )
+            Log.e("HyperBounce-IG", "[*] Touch interceptor injected. Waiting for user tap...")
+        } catch (t: Throwable) {
+            Log.e("HyperBounce-IG", "[-] Failed to hook Activity dispatchTouchEvent: ${t.message}")
         }
     }
 
-    private fun executeUIHeist(activity: Activity, rootGroup: ViewGroup, stockBar: ViewGroup) {
+    private fun executeUIHeist(activity: Activity, rootGroup: ViewGroup, stockBar: ViewGroup?) {
         try {
             if (rootGroup.findViewWithTag<View>("HyperFloatingBar") != null) return
 
@@ -189,7 +164,11 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
-                setContent { LiquidNavBarHost(stockBar) }
+                setContent { 
+                    if (stockBar != null) {
+                        LiquidNavBarHost(stockBar) 
+                    }
+                }
             }
 
             rootGroup.clipChildren = false
