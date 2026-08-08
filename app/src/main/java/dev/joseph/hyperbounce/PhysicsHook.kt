@@ -7,11 +7,9 @@ import android.graphics.Outline
 import android.os.Build
 import android.util.Log
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
-import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.ComposeView
@@ -40,76 +38,55 @@ class PhysicsHook : IXposedHookLoadPackage {
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (!lpparam.packageName.contains("instagram")) return
 
-        Log.e("HyperBounce-IG", "[*] Target acquired: ${lpparam.packageName}")
+        Log.e("HyperBounce-IG", "[*] Targeted Instagram process: ${lpparam.packageName}")
 
-        // The exact Frida approach: Hook touch events to guarantee the UI is fully inflated
         try {
+            // Hook low-level View.onAttachedToWindow to intercept tab_bar inflation instantly
             XposedHelpers.findAndHookMethod(
-                Activity::class.java,
-                "dispatchTouchEvent",
-                MotionEvent::class.java,
+                View::class.java,
+                "onAttachedToWindow",
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        val activity = param.thisObject as Activity
-                        val className = activity.javaClass.name
+                        val view = param.thisObject as View
+                        if (view.id == View.NO_ID || view.resources == null) return
 
-                        if (className.contains("MainActivity") || className.contains("MainTabActivity")) {
-                            val decorView = activity.window?.decorView as? ViewGroup ?: return
-                            
-                            // Prevent double injection by tagging the DecorView
-                            if (decorView.getTag(activity.hashCode()) != null) return
-                            decorView.setTag(activity.hashCode(), true)
+                        try {
+                            val entryName = view.resources.getResourceEntryName(view.id)
 
-                            Log.e("HyperBounce-IG", "[+] Captured Target Activity via Touch: $className")
+                            if (entryName == "tab_bar" || entryName == "tab_bar_shadow") {
+                                Log.e("HyperBounce-IG", "[+] BINGO! Intercepted $entryName attached to window!")
 
-                            // 1. The PreDraw Assassin (Exactly like Frida V18/V22)
-                            decorView.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
-                                override fun onPreDraw(): Boolean {
-                                    try {
-                                        val res = activity.resources
-                                        val pkg = activity.packageName
-                                        
-                                        val hideIds = arrayOf("tab_bar", "tab_bar_shadow")
-                                        for (idName in hideIds) {
-                                            val resId = res.getIdentifier(idName, "id", pkg)
-                                            if (resId != 0) {
-                                                val view = activity.findViewById<View>(resId)
-                                                if (view != null && view.translationY != 5000f) {
-                                                    view.translationY = 5000f
-                                                    view.alpha = 0f
-                                                    view.isClickable = false
-                                                    view.isEnabled = false
-                                                }
+                                // 1. Ghost the target view natively
+                                view.visibility = View.GONE
+                                view.translationY = 5000f
+                                view.alpha = 0f
+                                view.isClickable = false
+                                view.isEnabled = false
+
+                                // 2. If this is the main tab bar, trigger the Compose UI heist
+                                if (entryName == "tab_bar" && view is ViewGroup) {
+                                    val context = view.context
+                                    if (context is Activity) {
+                                        val decorView = context.window?.decorView as? ViewGroup
+                                        if (decorView != null) {
+                                            view.post {
+                                                executeUIHeist(context, decorView, view)
                                             }
                                         }
-                                    } catch (e: Exception) {}
-                                    return true
+                                    }
                                 }
-                            })
-                            Log.e("HyperBounce-IG", "[+] PreDraw Assassin Attached!")
-
-                            // 2. Fetch the stock bar for RPC clicks
-                            var stockBar: ViewGroup? = null
-                            try {
-                                val resId = activity.resources.getIdentifier("tab_bar", "id", activity.packageName)
-                                if (resId != 0) {
-                                    stockBar = activity.findViewById(resId)
-                                }
-                            } catch (e: Exception) {}
-
-                            // 3. Inject the Liquid Glass UI
-                            executeUIHeist(activity, decorView, stockBar)
-                        }
+                            }
+                        } catch (e: Exception) {}
                     }
                 }
             )
-            Log.e("HyperBounce-IG", "[*] Touch interceptor injected. Waiting for user tap...")
+            Log.e("HyperBounce-IG", "[*] View.onAttachedToWindow hook active and waiting...")
         } catch (t: Throwable) {
-            Log.e("HyperBounce-IG", "[-] Failed to hook Activity dispatchTouchEvent: ${t.message}")
+            Log.e("HyperBounce-IG", "[-] Failed to hook View.onAttachedToWindow: ${t.message}")
         }
     }
 
-    private fun executeUIHeist(activity: Activity, rootGroup: ViewGroup, stockBar: ViewGroup?) {
+    private fun executeUIHeist(activity: Activity, rootGroup: ViewGroup, stockBar: ViewGroup) {
         try {
             if (rootGroup.findViewWithTag<View>("HyperFloatingBar") != null) return
 
@@ -140,7 +117,7 @@ class PhysicsHook : IXposedHookLoadPackage {
                 }
                 val isDark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
                 setBackgroundColor(Color.parseColor(if (isDark) "#6018222A" else "#60FFFFFF"))
-                
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     this.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(35f * density, 35f * density, android.graphics.Shader.TileMode.CLAMP))
                 }
@@ -159,23 +136,19 @@ class PhysicsHook : IXposedHookLoadPackage {
                 clipToPadding = false
                 layoutParams = FrameLayout.LayoutParams(barWidth, composeContainerHeight).apply {
                     gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                    bottomMargin = marginBot - ((120 - 64) / 2 * density).toInt() 
+                    bottomMargin = marginBot - ((120 - 64) / 2 * density).toInt()
                 }
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
-                setContent { 
-                    if (stockBar != null) {
-                        LiquidNavBarHost(stockBar) 
-                    }
-                }
+                setContent { LiquidNavBarHost(stockBar) }
             }
 
             rootGroup.clipChildren = false
             rootGroup.clipToPadding = false
             rootGroup.addView(blurView)
             rootGroup.addView(composeView)
-            
+
             Log.e("HyperBounce-IG", "[*] Custom iOS Liquid Glass Bar Injected Successfully!")
         } catch (e: Exception) {
             Log.e("HyperBounce-IG", "Heist Exception: " + e.message)
