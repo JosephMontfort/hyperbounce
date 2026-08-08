@@ -85,16 +85,13 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                 }
                             }
                             
-                            // 2. Target the exact text components from the Raycaster logs and push them UP
-                            if (resName.equals("clips_media_info_component") || 
-                                resName.equals("clips_bottom_legibility_gradient_component") || 
-                                resName.equals("clips_item_overlay_component")) {
-                                
+                            // 2. Target the master container for ALL Reels text overlays to push them up
+                            if (resName.equals("clips_swipe_refresh_container") || resName.equals("clips_viewer_container")) {
                                 ViewGroup.LayoutParams lp = child.getLayoutParams();
                                 if (lp instanceof ViewGroup.MarginLayoutParams) {
                                     ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-                                    // 180px gives enough breathing room for the floating nav bar
-                                    mlp.bottomMargin = 180;
+                                    // Set 180px margin only if it isn't already set, pushing the entire stack up
+                                    if (mlp.bottomMargin < 100) mlp.bottomMargin = 180;
                                 }
                             }
                         } catch (Exception e) {}
