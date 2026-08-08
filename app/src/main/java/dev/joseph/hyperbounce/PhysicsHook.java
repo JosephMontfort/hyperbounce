@@ -3,7 +3,10 @@ package dev.joseph.hyperbounce;
 import android.app.Activity;
 import android.content.res.Resources;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -21,7 +24,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         if (!lpparam.packageName.contains("instagram")) return;
 
         log("==================================================");
-        log("[INIT] HyperBounce: Opaque Bar Extermination");
+        log("[INIT] HyperBounce: Void Nuke + Aggressive Background Tracer");
         log("==================================================");
 
         // 1. DIMENSION SPOOFER: Force OS resource dimension lookups to 0px
@@ -71,7 +74,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                             try {
                                 String resName = view.getResources().getResourceEntryName(view.getId());
                                 if ("tab_bar".equals(resName)) {
-                                    // Force heightMeasureSpec to 0px EXACTLY
                                     int zeroHeightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.EXACTLY);
                                     param.args[1] = zeroHeightSpec;
                                 }
@@ -79,7 +81,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         }
                     }
                 );
-                log("[SUCCESS] Hooked TouchInterceptorLinearLayout.onMeasure -> 0px forced!");
             }
         } catch (Throwable t) {
             log("[ERROR] Failed to hook onMeasure: " + t.getMessage());
@@ -111,7 +112,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                     view.setLayoutParams(lp);
                                 }
 
-                                // Set system navigation bar background to transparent
                                 if (view.getContext() instanceof Activity) {
                                     Activity activity = (Activity) view.getContext();
                                     Window window = activity.getWindow();
@@ -119,7 +119,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                         window.setNavigationBarColor(Color.TRANSPARENT);
                                     }
                                 }
-                                log("[NUKE] Background cleared & height collapsed for: " + resName);
                             }
 
                             // B. Strip bottom margins & paddings from main containers
@@ -147,6 +146,96 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             );
         } catch (Throwable t) {
             log("[ERROR] View Attachment hook failed: " + t.getMessage());
+        }
+
+        // 4. AGGRESSIVE BACKGROUND TRACER: Tap the void to hunt down the opaque renderer
+        try {
+            XposedHelpers.findAndHookMethod(
+                Activity.class,
+                "dispatchTouchEvent",
+                MotionEvent.class,
+                new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        MotionEvent event = (MotionEvent) param.args[0];
+                        Activity activity = (Activity) param.thisObject;
+
+                        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                            float touchY = event.getRawY();
+                            float touchX = event.getRawX();
+                            int screenHeight = activity.getResources().getDisplayMetrics().heightPixels;
+
+                            // Target the bottom 15% where the void lives
+                            if (touchY > screenHeight * 0.85f) {
+                                log("\n==================================================");
+                                log("[OPAQUE BAR HUNT] Touch Intercepted at X:" + touchX + " Y:" + touchY);
+                                log("Activity: " + activity.getClass().getName());
+                                log("==================================================");
+
+                                ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
+                                if (decorView != null) {
+                                    log("--- DEEP Z-AXIS BACKGROUND DUMP ---");
+                                    dumpAggressiveBackgroundsAtPoint(decorView, touchX, touchY, 0);
+                                }
+
+                                log("\n--- VOID TOUCH STACKTRACE ---");
+                                log(Log.getStackTraceString(new Throwable("OpaqueHuntStack")));
+                                log("==================================================\n");
+                            }
+                        }
+                    }
+                }
+            );
+            log("[SUCCESS] Aggressive Background Tracer Armed");
+        } catch (Throwable t) {
+            log("[ERROR] Touch hook failed: " + t.getMessage());
+        }
+    }
+
+    private void dumpAggressiveBackgroundsAtPoint(View view, float x, float y, int depth) {
+        int[] loc = new int[2];
+        view.getLocationOnScreen(loc);
+        int vx = loc[0], vy = loc[1], vw = view.getWidth(), vh = view.getHeight();
+
+        // Check intersection
+        if (x >= vx && x <= vx + vw && y >= vy && y <= vy + vh) {
+            StringBuilder indent = new StringBuilder();
+            for (int i = 0; i < depth; i++) indent.append("  ");
+
+            String resName = "NO_ID";
+            try {
+                if (view.getId() != View.NO_ID && view.getResources() != null) {
+                    resName = view.getResources().getResourceEntryName(view.getId());
+                }
+            } catch (Exception e) {}
+
+            // Extract Layout Params
+            int marginBot = 0;
+            if (view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+                marginBot = ((ViewGroup.MarginLayoutParams) view.getLayoutParams()).bottomMargin;
+            }
+
+            // Extract Background Info
+            String bgData = "null";
+            Drawable bg = view.getBackground();
+            if (bg != null) {
+                bgData = bg.getClass().getSimpleName();
+                if (bg instanceof ColorDrawable) {
+                    int color = ((ColorDrawable) bg).getColor();
+                    bgData += String.format("(HEX: #%08X)", color);
+                }
+            }
+
+            log(indent.toString() + "-> " + resName + " [" + view.getClass().getSimpleName() + "]");
+            log(indent.toString() + "   Bounds: " + vw + "x" + vh + " | MarginBot: " + marginBot + " | PadBot: " + view.getPaddingBottom());
+            log(indent.toString() + "   Background: " + bgData + " | Vis: " + view.getVisibility() + " | Alpha: " + view.getAlpha());
+
+            if (view instanceof ViewGroup) {
+                ViewGroup vg = (ViewGroup) view;
+                for (int i = 0; i < vg.getChildCount(); i++) {
+                    dumpAggressiveBackgroundsAtPoint(vg.getChildAt(i), x, y, depth + 1);
+                }
+            }
         }
     }
 
