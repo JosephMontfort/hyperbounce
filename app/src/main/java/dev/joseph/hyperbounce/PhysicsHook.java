@@ -2,11 +2,11 @@ package dev.joseph.hyperbounce;
 
 import android.app.Activity;
 import android.graphics.Color;
-import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.Window;
+import android.view.WindowInsets;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -20,61 +20,84 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
         if (!lpparam.packageName.contains("instagram")) return;
 
-        XposedBridge.log("[HyperBounce] [INIT] The Global Layout Enforcer Armed");
+        XposedBridge.log("[HyperBounce] [INIT] Absolute Layout Enforcer Armed");
 
+        // 1. THE INSETS ASSASSIN: Blind Instagram to the system navigation bar
+        try {
+            XposedHelpers.findAndHookMethod(View.class, "dispatchApplyWindowInsets", WindowInsets.class, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    View view = (View) param.thisObject;
+                    if (view.getId() == View.NO_ID || view.getResources() == null) return;
+                    
+                    try {
+                        String resName = view.getResources().getResourceEntryName(view.getId());
+                        if (resName.equals("layout_container_center_right_coordinator_layout") || 
+                            resName.equals("swipe_navigation_container") || 
+                            resName.equals("layout_container_main_panel")) {
+                            
+                            // Tell the layout engine the insets have already been consumed
+                            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                                param.setResult(WindowInsets.CONSUMED);
+                            } else {
+                                WindowInsets insets = (WindowInsets) param.args[0];
+                                param.setResult(insets.consumeSystemWindowInsets());
+                            }
+                        }
+                    } catch (Exception e) {}
+                }
+            });
+        } catch (Throwable t) {}
+
+        // 2. TRUE EDGE-TO-EDGE + THE PREDRAW WATCHDOG
         try {
             XposedHelpers.findAndHookMethod(Activity.class, "onResume", new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     Activity activity = (Activity) param.thisObject;
-                    if (!activity.getClass().getName().contains("MainActivity") && !activity.getClass().getName().contains("MainTabActivity")) {
-                        return;
-                    }
+                    if (!activity.getClass().getName().contains("MainActivity") && !activity.getClass().getName().contains("MainTabActivity")) return;
 
                     Window window = activity.getWindow();
                     if (window != null) {
-                        // 1. Edge-to-Edge Window Flags
+                        // Strip Android OS window protections
                         window.setNavigationBarColor(Color.TRANSPARENT);
-                        View decorView = window.getDecorView();
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                            window.setDecorFitsSystemWindows(false);
+                        }
+
+                        final View decorView = window.getDecorView();
                         int flags = decorView.getSystemUiVisibility();
                         flags |= View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
                         flags |= View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
                         decorView.setSystemUiVisibility(flags);
 
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                            window.setDecorFitsSystemWindows(false);
-                        }
-
-                        // 2. The Unstoppable Global Layout Watchdog
-                        // Tag checks ensure we only attach one listener per activity instance
+                        // Attach the enforcer. It runs every single time the UI tries to update.
                         if (decorView.getTag(activity.hashCode()) == null) {
                             decorView.setTag(activity.hashCode(), true);
-                            decorView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+
+                            decorView.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
                                 @Override
-                                public void onGlobalLayout() {
-                                    enforceNoMarginsAndKillTabBar(activity, decorView);
+                                public boolean onPreDraw() {
+                                    enforceLayout(activity, decorView);
+                                    return true; // Allow the draw pass to continue
                                 }
                             });
                         }
                     }
                 }
             });
-        } catch (Throwable t) {
-            Log.e("HyperBounce", "[ERROR] Enforcer Hook failed: " + t.getMessage());
-        }
+        } catch (Throwable t) {}
     }
 
-    private void enforceNoMarginsAndKillTabBar(Activity activity, View decorView) {
-        // 1. EXTERMINATE THE TAB BAR DYNAMICALLY
-        String[] barIds = {"tab_bar", "tab_bar_shadow", "layout_bottom_searchbar"};
-        for (String barIdName : barIds) {
-            int barResId = activity.getResources().getIdentifier(barIdName, "id", activity.getPackageName());
-            if (barResId != 0) {
-                View bar = decorView.findViewById(barResId);
+    private void enforceLayout(Activity activity, View decorView) {
+        // A. EXTERMINATE THE TAB BAR TARGETS
+        String[] barIds = {"tab_bar", "tab_bar_shadow", "layout_bottom_searchbar", "ls_vertical_nav_bar_stub"};
+        for (String barId : barIds) {
+            int resId = activity.getResources().getIdentifier(barId, "id", activity.getPackageName());
+            if (resId != 0) {
+                View bar = decorView.findViewById(resId);
                 if (bar != null) {
-                    if (bar.getVisibility() != View.GONE) {
-                        bar.setVisibility(View.GONE);
-                    }
+                    if (bar.getVisibility() != View.GONE) bar.setVisibility(View.GONE);
                     ViewGroup.LayoutParams lp = bar.getLayoutParams();
                     if (lp != null && lp.height != 0) {
                         lp.height = 0;
@@ -84,8 +107,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             }
         }
 
-        // 2. STRIP ROGUE MARGINS FROM ALL MAIN CONTAINERS
-        String[] targetIds = {
+        // B. BRUTE-FORCE STRETCH THE MAIN CONTAINERS
+        String[] containerIds = {
             "layout_container_main",
             "layout_container_main_wrapper",
             "layout_container_main_panel",
@@ -94,29 +117,36 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             "bottom_sheet_camera_container"
         };
 
-        for (String idName : targetIds) {
-            int resId = activity.getResources().getIdentifier(idName, "id", activity.getPackageName());
+        for (String cId : containerIds) {
+            int resId = activity.getResources().getIdentifier(cId, "id", activity.getPackageName());
             if (resId != 0) {
-                View target = decorView.findViewById(resId);
-                if (target != null) {
-                    // Kill Margins
-                    ViewGroup.LayoutParams lp = target.getLayoutParams();
+                View container = decorView.findViewById(resId);
+                if (container != null) {
+                    boolean needsLayoutUpdate = false;
+                    ViewGroup.LayoutParams lp = container.getLayoutParams();
+                    
+                    // Nuke any bottom margins dynamically generated by Coordinator/Constraint layouts
                     if (lp instanceof ViewGroup.MarginLayoutParams) {
                         ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-                        if (mlp.bottomMargin > 0) {
+                        if (mlp.bottomMargin != 0) {
                             mlp.bottomMargin = 0;
-                            target.setLayoutParams(mlp);
+                            needsLayoutUpdate = true;
                         }
                     }
-
-                    // Kill Paddings
-                    if (target.getPaddingBottom() > 0) {
-                        target.setPadding(target.getPaddingLeft(), target.getPaddingTop(), target.getPaddingRight(), 0);
-                    }
                     
-                    // Kill Translation Y Shifts
-                    if (target.getTranslationY() < 0) {
-                        target.setTranslationY(0);
+                    // Force the height to stretch
+                    if (lp != null && lp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+                        lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
+                        needsLayoutUpdate = true;
+                    }
+
+                    if (needsLayoutUpdate) {
+                        container.setLayoutParams(lp);
+                    }
+
+                    // Nuke rogue padding
+                    if (container.getPaddingBottom() != 0) {
+                        container.setPadding(container.getPaddingLeft(), container.getPaddingTop(), container.getPaddingRight(), 0);
                     }
                 }
             }
