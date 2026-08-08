@@ -80,52 +80,46 @@ fun isViewOrChildSelected(view: View): Boolean {
 
 // ── THE DEFINITIVE HOME-TAB FIX ──────────────────────────────────────────────
 //
-// Diagnostic logs proved that all click approaches (performClick,
-// performAccessibilityAction, simulateRootTouch) fail for Home because they
-// bypass PivotBar's internal gesture chain.
+// Diagnostic logs proved:
+//   Natural tap chain:
+//     PivotBar.dispatchTouchEvent → atca.f → GestureDetector
+//     → aucq.onSingleTapUp        ← uses EVENT.X to find which tab
+//     → Flienmp.performClick → owd.onClick (navigation handler)
 //
-// Natural tap chain (from logs):
-//   PivotBar.dispatchTouchEvent(PG:88)
-//   → atca.f (gesture helper, sets state owd.onClick depends on)
-//   → GestureDetector.onTouchEvent
-//   → aucq.onSingleTapUp          ← determines WHICH tab from X coordinate
-//   → Flienmp.performClick
-//   → owd.onClick                 ← the navigation handler
+// forceClick/performAccessibilityAction bypass the atca.f/aucq chain, so owd
+// doesn't know which tab was intended and defaults to "refresh current tab."
 //
-// Fix: dispatch a real MotionEvent (DOWN + UP) directly to PivotBar at the
-// target tab's LOCAL X coordinate.  This triggers the complete native chain
-// identically to a real finger tap — for ALL tabs including Home.
+// simulatePivotBarTap dispatches a real DOWN+UP directly to PivotBar, which
+// triggers the full natural chain including atca.f and aucq.onSingleTapUp.
 //
-// Notes on collapsed container (container.layoutParams.height = 0):
-// - X positions of tabs are unaffected (only height was changed)
-// - pivotBar.dispatchTouchEvent is called directly, bypassing window
-//   hit-testing entirely, so alpha=0f and height=0 are irrelevant
-// - PivotBar's custom dispatchTouchEvent override runs regardless
-// - The GestureDetector uses only X to identify which tab was tapped
+// KEY: use view.left for the X coordinate, NOT getLocationInWindow().
+//   container.layoutParams.height = 0 squishes vertical layout → window-Y
+//   coordinates become garbage.  Horizontal layout (left positions) is
+//   NEVER affected by a height collapse — they are identical to the original.
+//   wrapper.left = 0 (fills PivotBar width)
+//   targetTab.left = that tab's pixel offset within wrapper (e.g. 0, 161, 323…)
+//   localX = wrapper.left + targetTab.left + targetTab.width/2 = tab centre ✓
+//
+// Y value: aucq.onSingleTapUp only uses event.x to identify the tab.
+//   Any Y ≥ 0 works. We use 1f so even a 0-height PivotBar accepts the event.
 
 fun simulatePivotBarTap(pivotBar: ViewGroup, targetTab: View) {
     try {
-        // Compute tab centre in PivotBar's local coordinate space.
-        val pivotLoc = IntArray(2)
-        pivotBar.getLocationInWindow(pivotLoc)
-        val tabLoc = IntArray(2)
-        targetTab.getLocationInWindow(tabLoc)
+        val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return
 
-        val localX = (tabLoc[0] - pivotLoc[0] + targetTab.width / 2).toFloat()
-        // Y only needs to be a non-negative number; PivotBar uses X for tab
-        // identification.  When the container is collapsed to 0 height we
-        // use 0f — PivotBar's custom code still runs.
-        val localY = if (pivotBar.height > 0) pivotBar.height / 2f else 0f
+        // Horizontal position: unaffected by height collapse
+        val localX = (wrapper.left + targetTab.left + targetTab.width / 2).toFloat()
+        // Vertical: aucq only uses X; use 1f so the event is never rejected
+        val localY = 1f
 
-        val t    = SystemClock.uptimeMillis()
-        val down = MotionEvent.obtain(t, t,       MotionEvent.ACTION_DOWN, localX, localY, 0)
-        val up   = MotionEvent.obtain(t, t + 80L, MotionEvent.ACTION_UP,   localX, localY, 0)
-        pivotBar.dispatchTouchEvent(down)
+        val t  = SystemClock.uptimeMillis()
+        val dn = MotionEvent.obtain(t, t,       MotionEvent.ACTION_DOWN, localX, localY, 0)
+        val up = MotionEvent.obtain(t, t + 50L, MotionEvent.ACTION_UP,   localX, localY, 0)
+        pivotBar.dispatchTouchEvent(dn)
         pivotBar.dispatchTouchEvent(up)
-        down.recycle(); up.recycle()
+        dn.recycle(); up.recycle()
     } catch (_: Exception) {
-        // Fallback: at least fire a raw click so something happens
-        targetTab.performClick()
+        targetTab.performClick()   // last-resort fallback
     }
 }
 
