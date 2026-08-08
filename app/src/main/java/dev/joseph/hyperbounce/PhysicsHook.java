@@ -9,6 +9,39 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
+// Add this import to the top of PhysicsHook.java
+import androidx.compose.ui.platform.ComposeView;
+
+private void injectLiquidGlass(Activity activity, ViewGroup mainWrapper, ViewGroup stockBar) {
+    if (mainWrapper.findViewWithTag("LiquidGlassInjected") != null) return;
+
+    activity.runOnUiThread(() -> {
+        try {
+            ComposeView composeView = new ComposeView(activity);
+            composeView.setTag("LiquidGlassInjected");
+            
+            // Attach the required Jetpack Compose Lifecycle
+            ComposeLifecycleHelper.FakeLifecycleOwner.Companion.attachTo(composeView);
+
+            // Set the Compose content
+            composeView.setContent((composer, key) -> {
+                LiquidNavBarHostKt.LiquidNavBarHost(stockBar, composer, key);
+                return kotlin.Unit.INSTANCE;
+            });
+
+            // Add the ComposeView to the Instagram hierarchy overlaying the feed
+            ViewGroup.LayoutParams lp = new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 
+                ViewGroup.LayoutParams.MATCH_PARENT
+            );
+            mainWrapper.addView(composeView, lp);
+            
+            log("[SUCCESS] Liquid Glass Compose UI Injected!");
+        } catch (Exception e) {
+            log("[ERROR] Compose Injection Failed: " + e.getMessage());
+        }
+    });
+}
 
 public class PhysicsHook implements IXposedHookLoadPackage {
 
