@@ -1,11 +1,19 @@
 package dev.joseph.hyperbounce
 
 import android.app.Activity
-import android.view.View
 import android.view.ViewGroup
 import androidx.compose.ui.platform.ComposeView
-import androidx.lifecycle.*
-import androidx.savedstate.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.ViewTreeLifecycleOwner
+import androidx.lifecycle.ViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.ViewTreeSavedStateRegistryOwner
 
 class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
     private val registry = LifecycleRegistry(this)
@@ -22,15 +30,6 @@ class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelSto
     override val lifecycle: Lifecycle get() = registry
     override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
     override val viewModelStore: ViewModelStore get() = store
-
-    companion object {
-        fun attachTo(view: View) {
-            val owner = FakeLifecycleOwner()
-            view.setViewTreeLifecycleOwner(owner)
-            view.setViewTreeSavedStateRegistryOwner(owner)
-            view.setViewTreeViewModelStoreOwner(owner)
-        }
-    }
 }
 
 fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: ViewGroup?) {
@@ -40,7 +39,12 @@ fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: View
         try {
             val composeView = ComposeView(activity).apply {
                 tag = "LiquidGlassInjected"
-                FakeLifecycleOwner.attachTo(this)
+                
+                val owner = FakeLifecycleOwner()
+                ViewTreeLifecycleOwner.set(this, owner)
+                ViewTreeSavedStateRegistryOwner.set(this, owner)
+                ViewTreeViewModelStoreOwner.set(this, owner)
+                
                 setContent {
                     LiquidNavBarHost(stockBar)
                 }

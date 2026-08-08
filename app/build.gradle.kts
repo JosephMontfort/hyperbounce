@@ -1,7 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.compose") // The new Kotlin 2.0+ compiler
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -41,6 +41,8 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        // THE COMPILER MUZZLE: Stops the K2 compiler from crashing on older AndroidX metadata
+        freeCompilerArgs += listOf("-Xskip-metadata-version-check")
     }
 }
 
@@ -54,13 +56,14 @@ tasks.configureEach {
 dependencies {
     compileOnly("de.robv.android.xposed:api:82")
     
-    val composeBom = platform("androidx.compose:compose-bom:2024.05.00")
+    val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material:material")
     
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
     implementation("androidx.savedstate:savedstate-ktx:1.2.1")
     implementation("androidx.activity:activity-compose:1.9.0")
 
