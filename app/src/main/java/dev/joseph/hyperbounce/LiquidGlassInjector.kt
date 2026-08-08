@@ -8,12 +8,12 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.ViewTreeLifecycleOwner
-import androidx.lifecycle.ViewTreeViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.ViewTreeSavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
 class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
     private val registry = LifecycleRegistry(this)
@@ -41,9 +41,10 @@ fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: View
                 tag = "LiquidGlassInjected"
                 
                 val owner = FakeLifecycleOwner()
-                ViewTreeLifecycleOwner.set(this, owner)
-                ViewTreeSavedStateRegistryOwner.set(this, owner)
-                ViewTreeViewModelStoreOwner.set(this, owner)
+                // Use the correct Kotlin extension functions
+                setViewTreeLifecycleOwner(owner)
+                setViewTreeSavedStateRegistryOwner(owner)
+                setViewTreeViewModelStoreOwner(owner)
                 
                 setContent {
                     LiquidNavBarHost(stockBar)
