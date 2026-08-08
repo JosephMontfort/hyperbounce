@@ -1,7 +1,6 @@
 package dev.joseph.hyperbounce;
 
 import android.app.Activity;
-import android.content.res.Resources;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,9 +18,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         if (!lpparam.packageName.contains("instagram")) return;
 
         log("==================================================");
-        log("[INIT] HyperBounce: Liquid Glass & Overlay Spoofer");
+        log("[INIT] HyperBounce: Target Overlay Spoofer");
         log("==================================================");
 
+        // 1. GHOST THE TAB BAR & INJECT UI
         try {
             XposedHelpers.findAndHookMethod(View.class, "onAttachedToWindow", new XC_MethodHook() {
                 @Override
@@ -60,7 +60,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // THE MARGIN ASSASSIN & TEXT PUSHER
+        // 2. THE OVERLAY ASSASSIN
         try {
             XposedHelpers.findAndHookMethod(ViewGroup.class, "measureChildWithMargins", 
                 View.class, int.class, int.class, int.class, int.class, 
@@ -73,7 +73,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         try {
                             String resName = child.getResources().getResourceEntryName(child.getId());
                             
-                            // 1. Stretch the video containers to the absolute bottom (0 margin)
+                            // A. Stretch the video containers to the absolute bottom (0 margin)
                             if (resName.equals("layout_container_main") || 
                                 resName.equals("layout_container_main_wrapper") || 
                                 resName.equals("swipeable_tab_view_pager")) {
@@ -85,13 +85,43 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                 }
                             }
                             
-                            // 2. Target the master container for ALL Reels text overlays to push them up
-                            if (resName.equals("clips_swipe_refresh_container") || resName.equals("clips_viewer_container")) {
-                                ViewGroup.LayoutParams lp = child.getLayoutParams();
-                                if (lp instanceof ViewGroup.MarginLayoutParams) {
-                                    ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-                                    // Set 180px margin only if it isn't already set, pushing the entire stack up
-                                    if (mlp.bottomMargin < 100) mlp.bottomMargin = 180;
+                            // B. Target ONLY the overlay components to push them UP
+                            String[] pushUpTargets = {
+                                "clips_media_info_component",
+                                "clips_bottom_legibility_gradient_component",
+                                "clips_ufi_component",
+                                "pog_root_view",
+                                "pog_avatar_view",
+                                "avatar_container",
+                                "reel_viewer_front_avatar",
+                                "reel_viewer_back_avatar",
+                                "pog_like_view_stub",
+                                "comment_facepile_stub",
+                                "comment_facepile_gif_stub",
+                                "face_swarm_stub",
+                                "floating_send_stub",
+                                "interest_banner_send_stub",
+                                "interest_banner_reply_bar_stub",
+                                "clips_follow_request_footer_stub",
+                                "basel_cta_stub",
+                                "attribution_bottom_bar_stub",
+                                "shop_lab_entry_point_stub",
+                                "clips_footer_mask_container"
+                            };
+
+                            boolean shouldPushUp = false;
+                            for (String target : pushUpTargets) {
+                                if (resName.equals(target)) {
+                                    shouldPushUp = true;
+                                    break;
+                                }
+                            }
+
+                            if (shouldPushUp) {
+                                // Use TranslationY to physically shift the rendered pixels and touch areas up.
+                                // -150f sits nicely above the 64dp Liquid Nav Bar.
+                                if (child.getTranslationY() != -150f) {
+                                    child.setTranslationY(-150f);
                                 }
                             }
                         } catch (Exception e) {}
