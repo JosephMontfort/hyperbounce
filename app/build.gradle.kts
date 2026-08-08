@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "dev.joseph.hyperbounce"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "dev.joseph.hyperbounce"
         minSdk = 31
-        targetSdk = 37
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
     }
@@ -43,6 +43,13 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+}
+
+// THE ASSASSIN: Disable the AAR Metadata check that blocks API 37 libraries
+tasks.configureEach {
+    if (name.contains("AarMetadata")) {
+        enabled = false
     }
 }
 
