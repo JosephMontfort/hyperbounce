@@ -30,11 +30,11 @@ import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Capsule
 
 @Composable
-fun LiquidNavBarHost(stockBar: ViewGroup) {
+fun LiquidNavBarHost(stockBar: ViewGroup?) {
     val backdrop = rememberLayerBackdrop()
     val isDark = isSystemInDarkTheme()
     
-    // Dynamic Surface Colors based on system theme
+    // Surface color matches Kyant's backdrop docs styling
     val containerColor = if (isDark) Color(0xFF121212).copy(alpha = 0.45f) else Color(0xFFFAFAFA).copy(alpha = 0.65f)
     val accentColor = if (isDark) Color.White else Color.Black
     
@@ -47,7 +47,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
     ) {
         Row(
             modifier = Modifier
-                .padding(bottom = 28.dp) // Hovers exactly over the eliminated void
+                .padding(bottom = 28.dp)
                 .width(300.dp)
                 .height(64.dp)
                 .drawBackdrop(
@@ -61,9 +61,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
                     highlight = { Highlight.Default },
                     shadow = { Shadow(radius = 12.dp, color = Color.Black.copy(alpha = 0.15f)) },
                     innerShadow = { InnerShadow(radius = 4.dp, alpha = 0.3f) },
-                    onDrawSurface = {
-                        drawRect(containerColor)
-                    }
+                    onDrawSurface = { drawRect(containerColor) }
                 )
                 .padding(horizontal = 8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -76,14 +74,14 @@ fun LiquidNavBarHost(stockBar: ViewGroup) {
                         .clip(CircleShape)
                         .clickable {
                             selectedIndex = index
-                            // Trigger the ghosted stock layout
                             try {
                                 val tabs = listOf("feed_tab", "search_tab", "clips_tab", "direct_tab", "profile_tab")
-                                val context = stockBar.context
-                                val resId = context.resources.getIdentifier(tabs[index], "id", context.packageName)
-                                if (resId != 0) {
-                                    val tab = stockBar.findViewById<View>(resId)
-                                    tab?.performClick()
+                                stockBar?.let { bar ->
+                                    val context = bar.context
+                                    val resId = context.resources.getIdentifier(tabs[index], "id", context.packageName)
+                                    if (resId != 0) {
+                                        bar.findViewById<View>(resId)?.performClick()
+                                    }
                                 }
                             } catch (e: Exception) {}
                         },
