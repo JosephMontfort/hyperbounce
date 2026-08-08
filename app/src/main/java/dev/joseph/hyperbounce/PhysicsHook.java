@@ -22,7 +22,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         log("[INIT] HyperBounce: Liquid Glass & iOS Layout Spoofer");
         log("==================================================");
 
-        // 1. DIMENSION SPOOFER: Force controls UP while keeping video stretched
+        // 1. DIMENSION SPOOFER: Force text/buttons UP while keeping video stretched
         try {
             XposedHelpers.findAndHookMethod(Resources.class, "getDimensionPixelSize", int.class, new XC_MethodHook() {
                 @Override
@@ -31,7 +31,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     try {
                         String name = res.getResourceEntryName((Integer) param.args[0]);
                         // Tell Instagram the tab bar is 180px (~60dp). 
-                        // This naturally forces the Reels description and follow buttons up.
+                        // This forces the Reels description and follow buttons up out of the void.
                         if (name.equals("tab_bar_height")) {
                             param.setResult(180); 
                         } else if (name.equals("tab_bar_separator_height")) {
@@ -82,7 +82,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {}
 
         // 3. THE MARGIN ASSASSIN (Intercept setLayoutParams)
-        // Kills the 180px margin on the video, so it stretches to the bottom underneath our floating bar
         try {
             XposedHelpers.findAndHookMethod(View.class, "setLayoutParams", ViewGroup.LayoutParams.class, new XC_MethodHook() {
                 @Override

@@ -5,18 +5,8 @@ import android.os.Bundle
 import android.view.ViewGroup
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
-import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.findViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
-import androidx.savedstate.SavedStateRegistry
-import androidx.savedstate.SavedStateRegistryController
-import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import androidx.lifecycle.*
+import androidx.savedstate.*
 
 class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
     private val registry = LifecycleRegistry(this)
@@ -42,13 +32,10 @@ fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: View
         try {
             val decorView = activity.window.decorView
             
-            // Use Kotlin extension functions to check and attach the lifecycle
-            if (decorView.findViewTreeLifecycleOwner() == null) {
-                val owner = FakeLifecycleOwner().apply { start() }
-                decorView.setViewTreeLifecycleOwner(owner)
-                decorView.setViewTreeSavedStateRegistryOwner(owner)
-                decorView.setViewTreeViewModelStoreOwner(owner)
-            }
+            val owner = FakeLifecycleOwner().apply { start() }
+            decorView.setViewTreeLifecycleOwner(owner)
+            decorView.setViewTreeSavedStateRegistryOwner(owner)
+            decorView.setViewTreeViewModelStoreOwner(owner)
 
             val composeView = ComposeView(activity).apply {
                 tag = "LiquidGlassInjected"
