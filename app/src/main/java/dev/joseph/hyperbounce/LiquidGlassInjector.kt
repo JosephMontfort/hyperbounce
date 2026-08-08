@@ -10,12 +10,13 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.ViewTreeLifecycleOwner
-import androidx.lifecycle.ViewTreeViewModelStoreOwner
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.ViewTreeSavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
 class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
     private val registry = LifecycleRegistry(this)
@@ -41,18 +42,16 @@ fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: View
         try {
             val decorView = activity.window.decorView
             
-            // Compose's WindowRecomposer searches the root view of the window.
-            // We inject our FakeLifecycle directly into Instagram's DecorView to satisfy Compose.
-            if (ViewTreeLifecycleOwner.get(decorView) == null) {
+            // Use Kotlin extension functions to check and attach the lifecycle
+            if (decorView.findViewTreeLifecycleOwner() == null) {
                 val owner = FakeLifecycleOwner().apply { start() }
-                ViewTreeLifecycleOwner.set(decorView, owner)
-                ViewTreeSavedStateRegistryOwner.set(decorView, owner)
-                ViewTreeViewModelStoreOwner.set(decorView, owner)
+                decorView.setViewTreeLifecycleOwner(owner)
+                decorView.setViewTreeSavedStateRegistryOwner(owner)
+                decorView.setViewTreeViewModelStoreOwner(owner)
             }
 
             val composeView = ComposeView(activity).apply {
                 tag = "LiquidGlassInjected"
-                // Prevent memory leaks when the view is destroyed
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 
                 setContent {
