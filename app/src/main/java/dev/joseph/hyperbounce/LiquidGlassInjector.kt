@@ -1,27 +1,29 @@
 package dev.joseph.hyperbounce
 
 import android.app.Activity
+import android.os.Bundle
 import android.view.ViewGroup
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.lifecycle.ViewTreeLifecycleOwner
+import androidx.lifecycle.ViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import androidx.savedstate.ViewTreeSavedStateRegistryOwner
 
 class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
     private val registry = LifecycleRegistry(this)
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
     private val store = ViewModelStore()
 
-    init {
-        savedStateRegistryController.performRestore(null)
+    fun start() {
+        savedStateRegistryController.performRestore(Bundle())
         registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
         registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
@@ -37,19 +39,27 @@ fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: View
 
     activity.runOnUiThread {
         try {
+            val decorView = activity.window.decorView
+            
+            // Compose's WindowRecomposer searches the root view of the window.
+            // We inject our FakeLifecycle directly into Instagram's DecorView to satisfy Compose.
+            if (ViewTreeLifecycleOwner.get(decorView) == null) {
+                val owner = FakeLifecycleOwner().apply { start() }
+                ViewTreeLifecycleOwner.set(decorView, owner)
+                ViewTreeSavedStateRegistryOwner.set(decorView, owner)
+                ViewTreeViewModelStoreOwner.set(decorView, owner)
+            }
+
             val composeView = ComposeView(activity).apply {
                 tag = "LiquidGlassInjected"
-                
-                val owner = FakeLifecycleOwner()
-                // Use the correct Kotlin extension functions
-                setViewTreeLifecycleOwner(owner)
-                setViewTreeSavedStateRegistryOwner(owner)
-                setViewTreeViewModelStoreOwner(owner)
+                // Prevent memory leaks when the view is destroyed
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 
                 setContent {
                     LiquidNavBarHost(stockBar)
                 }
             }
+            
             mainWrapper.addView(
                 composeView,
                 ViewGroup.LayoutParams(
