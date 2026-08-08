@@ -12,8 +12,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -28,7 +27,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -67,7 +65,7 @@ fun extractTabs(stockBar: ViewGroup, tabNames: List<String>): List<TabData> {
     }
 }
 
-// Deep search to find the icon view inside the ProxyFrameLayout
+// Deep search to find the icon view
 fun findImageView(group: ViewGroup): ImageView? {
     for (i in 0 until group.childCount) {
         val v = group.getChildAt(i)
@@ -83,8 +81,7 @@ fun findImageView(group: ViewGroup): ImageView? {
 @Composable
 fun LiquidNavBarHost(stockBar: ViewGroup?) {
     val isDark = isSystemInDarkTheme()
-    // Translucency fix: increased opacity and added a subtle border below
-    val containerColor = if (isDark) Color(0x77121212) else Color(0x77FAFAFA)
+    val containerColor = if (isDark) Color(0x66121212) else Color(0x66FAFAFA)
     val accentColor = if (isDark) Color.White else Color.Black
     
     var selectedIndex by remember { mutableIntStateOf(0) }
@@ -96,7 +93,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
         if (stockBar != null) extractTabs(stockBar, orderedTabNames) else emptyList()
     }
 
-    // Two-Way Sync: Poll Instagram's hidden tabs to detect physical screen swipes
+    // Two-Way Sync: Poll Instagram's hidden tabs
     LaunchedEffect(stockBar) {
         while (true) {
             delay(100)
@@ -128,11 +125,12 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                     shape = { Capsule() },
                     effects = {
                         vibrancy()
-                        blur(24f.dp.toPx()) // Removed Lens temporarily to guarantee visibility
+                        blur(32f.dp.toPx())
                     },
                     onDrawSurface = { drawRect(containerColor) }
                 )
-                .border(1.dp, Color(0x22FFFFFF), Capsule())
+                .background(containerColor, Capsule())
+                .border(0.5.dp, Color.White.copy(alpha = 0.2f), Capsule())
         ) {
             if (tabs.isNotEmpty()) {
                 val density = LocalDensity.current
@@ -142,16 +140,14 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                 var isPressed by remember { mutableStateOf(false) }
                 var dragOffset by remember { mutableFloatStateOf(0f) }
 
-                // Determine target offset based on whether user is actively dragging
                 val targetOffset = if (isPressed) dragOffset else selectedIndex * tabWidthPx
                 val animatedOffsetPx by animateFloatAsState(
                     targetValue = targetOffset,
                     animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessLow)
                 )
                 
-                // Expand pill width when long pressed
                 val animatedWidthDp by animateFloatAsState(
-                    targetValue = if (isPressed) tabWidthDp * 1.5f else tabWidthDp,
+                    targetValue = if (isPressed) tabWidthDp * 1.6f else tabWidthDp,
                     animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessLow)
                 )
 
@@ -164,38 +160,33 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                             .fillMaxHeight()
                             .padding(6.dp)
                             .clip(Capsule())
-                            .background(if (isDark) Color(0x33FFFFFF) else Color(0x22000000))
-                            .pointerInput(Unit) {
-                                awaitEachGesture {
-                                    val down = awaitFirstDown()
-                                    isPressed = true
-                                    dragOffset = selectedIndex * tabWidthPx
-                                    
-                                    while (true) {
-                                        val event = awaitPointerEvent()
-                                        val change = event.changes.firstOrNull { it.id == down.id }
-                                        if (change != null && change.pressed) {
-                                            dragOffset = (dragOffset + change.positionChange().x)
-                                                .coerceIn(0f, (tabs.size - 1) * tabWidthPx)
-                                            change.consume()
-                                        } else {
-                                            break
-                                        }
-                                    }
-                                    
-                                    isPressed = false
-                                    // Snap to nearest tab on release
-                                    val nearestIndex = (dragOffset / tabWidthPx).roundToInt().coerceIn(0, tabs.size - 1)
-                                    selectedIndex = nearestIndex
-                                    stockBar?.findViewById<View>(tabs[nearestIndex].resId)?.performClick()
-                                }
-                            }
+                            .background(if (isDark) Color(0x44FFFFFF) else Color(0x33000000))
                     )
                 }
 
-                // Render the Extracted Icons over the Pill
+                // Render Icons & Detect Long Press Scrubbing
                 Row(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { offset ->
+                                    isPressed = true
+                                    dragOffset = selectedIndex * tabWidthPx
+                                },
+                                onDragEnd = {
+                                    isPressed = false
+                                    val nearestIndex = (dragOffset / tabWidthPx).roundToInt().coerceIn(0, tabs.size - 1)
+                                    selectedIndex = nearestIndex
+                                    stockBar?.findViewById<View>(tabs[nearestIndex].resId)?.performClick()
+                                },
+                                onDragCancel = { isPressed = false },
+                                onDrag = { change, dragAmount ->
+                                    dragOffset = (dragOffset + dragAmount.x).coerceIn(0f, (tabs.size - 1) * tabWidthPx)
+                                    change.consume()
+                                }
+                            )
+                        },
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -218,15 +209,19 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                                     targetValue = if (selectedIndex == index) 1.15f else 1.0f,
                                     animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium)
                                 )
+                                
+                                val isProfile = orderedTabNames[index] == "profile_tab"
+                                
                                 Image(
                                     bitmap = tab.bitmap,
                                     contentDescription = null,
-                                    colorFilter = ColorFilter.tint(
+                                    // Strip the color filter ONLY for the profile tab to avoid the square bug
+                                    colorFilter = if (isProfile) null else ColorFilter.tint(
                                         if (selectedIndex == index) accentColor else accentColor.copy(alpha = 0.6f)
                                     ),
                                     modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape) // Forces profile icon and others into a perfect circle
+                                        .size(26.dp)
+                                        .clip(CircleShape)
                                         .graphicsLayer {
                                             scaleX = scale
                                             scaleY = scale
