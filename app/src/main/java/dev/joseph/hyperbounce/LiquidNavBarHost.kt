@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
@@ -147,7 +148,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                     animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessLow)
                 )
                 
-                val animatedWidthDp by animateFloatAsState(
+                val animatedWidthDp by animateDpAsState(
                     targetValue = if (isPressed) tabWidthDp * 1.6f else tabWidthDp,
                     animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessLow)
                 )
