@@ -17,10 +17,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         if (!lpparam.packageName.contains("instagram")) return;
 
         log("==================================================");
-        log("[INIT] HyperBounce: The Magenta Margin Assassin");
+        log("[INIT] HyperBounce: The ViewPager2 Assassin");
         log("==================================================");
 
-        // 1. THE GHOST: Completely un-render the actual tab bar buttons
+        // 1. GHOST THE TAB BAR
         try {
             XposedHelpers.findAndHookMethod(View.class, "onAttachedToWindow", new XC_MethodHook() {
                 @Override
@@ -43,7 +43,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // 2. THE INTERCEPTOR: Kill the margin right before it's applied
+        // 2. THE 95px MARGIN ASSASSIN (Intercept setLayoutParams)
         try {
             XposedHelpers.findAndHookMethod(View.class, "setLayoutParams", ViewGroup.LayoutParams.class, new XC_MethodHook() {
                 @Override
@@ -53,13 +53,17 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     try {
                         String resName = view.getResources().getResourceEntryName(view.getId());
-                        // Only target the main feed, leaving the comment bottom sheets completely alone
-                        if (resName.equals("layout_container_main") || resName.equals("layout_container_main_wrapper")) {
+                        
+                        // We caught the ViewPager2! Strip the margin from it and its sibling.
+                        if (resName.equals("layout_container_main") || 
+                            resName.equals("layout_container_main_wrapper") || 
+                            resName.equals("swipeable_tab_view_pager")) {
+                            
                             ViewGroup.LayoutParams lp = (ViewGroup.LayoutParams) param.args[0];
                             if (lp instanceof ViewGroup.MarginLayoutParams) {
                                 ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
                                 if (mlp.bottomMargin > 50) {
-                                    mlp.bottomMargin = 0; // Modify the object in-place before it applies
+                                    mlp.bottomMargin = 0;
                                 }
                             }
                         }
@@ -68,7 +72,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // 3. THE ASSASSIN: Kill the margin during the parent's math calculation
+        // 3. THE 95px MARGIN ASSASSIN (Intercept measureChildWithMargins)
         try {
             XposedHelpers.findAndHookMethod(ViewGroup.class, "measureChildWithMargins", 
                 View.class, int.class, int.class, int.class, int.class, 
@@ -80,12 +84,16 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                         try {
                             String resName = child.getResources().getResourceEntryName(child.getId());
-                            if (resName.equals("layout_container_main") || resName.equals("layout_container_main_wrapper")) {
+                            
+                            if (resName.equals("layout_container_main") || 
+                                resName.equals("layout_container_main_wrapper") || 
+                                resName.equals("swipeable_tab_view_pager")) {
+                                
                                 ViewGroup.LayoutParams lp = child.getLayoutParams();
                                 if (lp instanceof ViewGroup.MarginLayoutParams) {
                                     ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
                                     if (mlp.bottomMargin > 50) {
-                                        mlp.bottomMargin = 0; // Strip the margin from memory before the parent calculates layout bounds
+                                        mlp.bottomMargin = 0; // Strip it from memory before parent calculates
                                     }
                                 }
                             }
