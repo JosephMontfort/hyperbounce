@@ -1,6 +1,7 @@
 package dev.joseph.hyperbounce;
 
 import android.app.Activity;
+import android.content.res.Resources;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,7 +19,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         if (!lpparam.packageName.contains("instagram")) return;
 
         log("==================================================");
-        log("[INIT] HyperBounce: Litho Overlay Assassin");
+        log("[INIT] HyperBounce: Liquid Glass & Overlay Spoofer");
         log("==================================================");
 
         try {
@@ -30,8 +31,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     try {
                         String resName = view.getResources().getResourceEntryName(view.getId());
-
-                        // 1. Ghost the Tab Bar
                         if (resName.equals("tab_bar") || resName.equals("tab_bar_shadow") || resName.equals("layout_bottom_searchbar")) {
                             view.setVisibility(View.GONE);
                             ViewGroup.LayoutParams lp = view.getLayoutParams();
@@ -41,7 +40,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                             }
                         }
 
-                        // 2. Trigger Liquid Glass Injection
+                        // Trigger Injection exactly when the main wrapper attaches
                         if (resName.equals("layout_container_main_wrapper")) {
                             if (view.getContext() instanceof Activity) {
                                 Activity activity = (Activity) view.getContext();
@@ -56,54 +55,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                 });
                             }
                         }
-
-                        // 3. THE LITHO OVERLAY ASSASSIN
-                        // Target ONLY the specific overlay elements to push them UP independently of the video
-                        String[] pushUpTargets = {
-                            "clips_media_info_component",
-                            "clips_bottom_legibility_gradient_component",
-                            "clips_ufi_component",
-                            "clips_item_overlay_component",
-                            "pog_root_view",
-                            "pog_avatar_view",
-                            "avatar_container",
-                            "reel_viewer_front_avatar",
-                            "reel_viewer_back_avatar",
-                            "pog_like_view_stub",
-                            "comment_facepile_stub",
-                            "comment_facepile_gif_stub",
-                            "face_swarm_stub",
-                            "floating_send_stub",
-                            "interest_banner_send_stub",
-                            "interest_banner_reply_bar_stub",
-                            "clips_follow_request_footer_stub",
-                            "basel_cta_stub",
-                            "attribution_bottom_bar_stub",
-                            "shop_lab_entry_point_stub",
-                            "clips_footer_mask_container"
-                        };
-
-                        for (String target : pushUpTargets) {
-                            if (resName.equals(target)) {
-                                // Shift the pixels and the touch target UP by 180px
-                                view.setTranslationY(-180f);
-                                
-                                // Force it to stay up even if Litho dynamically recalculates the UI
-                                view.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
-                                    if (v.getTranslationY() != -180f) {
-                                        v.setTranslationY(-180f);
-                                    }
-                                });
-                                break;
-                            }
-                        }
-
                     } catch (Exception e) {}
                 }
             });
         } catch (Throwable t) {}
 
-        // 4. THE MARGIN ASSASSIN (Keep video stretched to the bottom)
+        // THE MARGIN ASSASSIN & TEXT PUSHER
         try {
             XposedHelpers.findAndHookMethod(ViewGroup.class, "measureChildWithMargins", 
                 View.class, int.class, int.class, int.class, int.class, 
@@ -116,6 +73,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         try {
                             String resName = child.getResources().getResourceEntryName(child.getId());
                             
+                            // 1. Stretch the video containers to the absolute bottom (0 margin)
                             if (resName.equals("layout_container_main") || 
                                 resName.equals("layout_container_main_wrapper") || 
                                 resName.equals("swipeable_tab_view_pager")) {
@@ -124,6 +82,19 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                 if (lp instanceof ViewGroup.MarginLayoutParams) {
                                     ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
                                     if (mlp.bottomMargin > 50) mlp.bottomMargin = 0;
+                                }
+                            }
+                            
+                            // 2. Target the exact text components from the Raycaster logs and push them UP
+                            if (resName.equals("clips_media_info_component") || 
+                                resName.equals("clips_bottom_legibility_gradient_component") || 
+                                resName.equals("clips_item_overlay_component")) {
+                                
+                                ViewGroup.LayoutParams lp = child.getLayoutParams();
+                                if (lp instanceof ViewGroup.MarginLayoutParams) {
+                                    ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
+                                    // 180px gives enough breathing room for the floating nav bar
+                                    mlp.bottomMargin = 180;
                                 }
                             }
                         } catch (Exception e) {}
