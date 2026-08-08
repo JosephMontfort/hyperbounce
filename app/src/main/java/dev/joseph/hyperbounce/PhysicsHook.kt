@@ -1,167 +1,140 @@
 package dev.joseph.hyperbounce
 
 import android.app.Activity
-import android.content.res.Configuration
-import android.graphics.Color
-import android.graphics.Outline
-import android.os.Build
 import android.util.Log
-import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
-import android.widget.FrameLayout
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.ui.platform.ComposeView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
-import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
-import androidx.savedstate.SavedStateRegistry
-import androidx.savedstate.SavedStateRegistryController
-import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
+import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
-
-object NavSync {
-    val externalSelectedTab = mutableIntStateOf(0)
-}
 
 class PhysicsHook : IXposedHookLoadPackage {
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (!lpparam.packageName.contains("instagram")) return
 
-        Log.e("HyperBounce-IG", "[*] Targeted Instagram process: ${lpparam.packageName}")
+        log("==================================================")
+        log("[INIT] HyperBounce Aggressive Tracer Active in: ${lpparam.packageName}")
+        log("==================================================")
 
+        // 1. Hook Activity.dispatchTouchEvent for aggressive touch tracing
         try {
-            // Hook low-level View.onAttachedToWindow to intercept tab_bar inflation instantly
+            XposedHelpers.findAndHookMethod(
+                Activity::class.java,
+                "dispatchTouchEvent",
+                MotionEvent::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        val event = param.args[0] as? MotionEvent ?: return
+                        val activity = param.thisObject as? Activity ?: return
+
+                        if (event.action == MotionEvent.ACTION_DOWN) {
+                            val displayMetrics = activity.resources.displayMetrics
+                            val screenHeight = displayMetrics.heightPixels
+                            val touchY = event.rawY
+                            val touchX = event.rawX
+
+                            // Target the bottom 20% of the screen (Navigation Area)
+                            if (touchY > screenHeight * 0.80f) {
+                                log("\n==================================================")
+                                log("[TOUCH IN NAV BAR ZONE] RawX: $touchX, RawY: $touchY / ScreenH: $screenHeight")
+                                log("Activity: ${activity.javaClass.name}")
+                                log("==================================================")
+
+                                val decorView = activity.window?.decorView as? ViewGroup
+                                if (decorView != null) {
+                                    log("--- DUMPING VIEW INTERSECTIONS AT TOUCH POINT ---")
+                                    dumpViewsAtPoint(decorView, touchX, touchY)
+                                }
+
+                                log("\n--- TOUCH EVENT STACKTRACE ---")
+                                val stackTrace = Log.getStackTraceString(Throwable("NavTouchStack"))
+                                log(stackTrace)
+                                log("==================================================\n")
+                            }
+                        }
+                    }
+                }
+            )
+            log("[SUCCESS] Hooked Activity.dispatchTouchEvent")
+        } catch (t: Throwable) {
+            log("[ERROR] Failed to hook dispatchTouchEvent: ${t.message}")
+        }
+
+        // 2. Hook View.onAttachedToWindow to catch inflating components
+        try {
             XposedHelpers.findAndHookMethod(
                 View::class.java,
                 "onAttachedToWindow",
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        val view = param.thisObject as View
-                        if (view.id == View.NO_ID || view.resources == null) return
+                        val view = param.thisObject as? View ?: return
+                        val resName = safeGetResourceName(view)
+                        val className = view.javaClass.name
 
-                        try {
-                            val entryName = view.resources.getResourceEntryName(view.id)
-
-                            if (entryName == "tab_bar" || entryName == "tab_bar_shadow") {
-                                Log.e("HyperBounce-IG", "[+] BINGO! Intercepted $entryName attached to window!")
-
-                                // 1. Ghost the target view natively
-                                view.visibility = View.GONE
-                                view.translationY = 5000f
-                                view.alpha = 0f
-                                view.isClickable = false
-                                view.isEnabled = false
-
-                                // 2. If this is the main tab bar, trigger the Compose UI heist
-                                if (entryName == "tab_bar" && view is ViewGroup) {
-                                    val context = view.context
-                                    if (context is Activity) {
-                                        val decorView = context.window?.decorView as? ViewGroup
-                                        if (decorView != null) {
-                                            view.post {
-                                                executeUIHeist(context, decorView, view)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {}
+                        if (resName.contains("tab", ignoreCase = true) ||
+                            resName.contains("nav", ignoreCase = true) ||
+                            resName.contains("bottom", ignoreCase = true) ||
+                            className.contains("TouchInterceptor", ignoreCase = true) ||
+                            className.contains("Litho", ignoreCase = true) ||
+                            className.contains("ComponentHost", ignoreCase = true)
+                        ) {
+                            log("\n[VIEW ATTACHED] Class: $className | ID: $resName | Vis: ${view.visibility} | Size: ${view.width}x${view.height}")
+                            log("Parent: ${view.parent?.javaClass?.name ?: "null"}")
+                            log("Stacktrace:\n" + Log.getStackTraceString(Throwable("ViewAttachStack")))
+                        }
                     }
                 }
             )
-            Log.e("HyperBounce-IG", "[*] View.onAttachedToWindow hook active and waiting...")
+            log("[SUCCESS] Hooked View.onAttachedToWindow")
         } catch (t: Throwable) {
-            Log.e("HyperBounce-IG", "[-] Failed to hook View.onAttachedToWindow: ${t.message}")
+            log("[ERROR] Failed to hook View.onAttachedToWindow: ${t.message}")
         }
     }
 
-    private fun executeUIHeist(activity: Activity, rootGroup: ViewGroup, stockBar: ViewGroup) {
-        try {
-            if (rootGroup.findViewWithTag<View>("HyperFloatingBar") != null) return
+    private fun dumpViewsAtPoint(view: View, x: Float, y: Float, depth: Int = 0) {
+        val location = IntArray(2)
+        view.getLocationOnScreen(location)
+        val vx = location[0]
+        val vy = location[1]
+        val vw = view.width
+        val vh = view.height
 
-            val context = activity
-            val density = context.resources.displayMetrics.density
-            val displayWidth = context.resources.displayMetrics.widthPixels
-
-            val lifecycleOwner = FakeLifecycleOwner()
-            lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-            lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-            lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-
-            try {
-                rootGroup.setViewTreeLifecycleOwner(lifecycleOwner)
-                rootGroup.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-                rootGroup.setViewTreeViewModelStoreOwner(lifecycleOwner)
-            } catch (t: Throwable) {}
-
-            val barWidth = (displayWidth * 0.68f).toInt()
-            val barHeight = (64 * density).toInt()
-            val marginBot = (28 * density).toInt()
-
-            val blurView = View(context).apply {
-                tag = "HyperFloatingBarBlur"
-                layoutParams = FrameLayout.LayoutParams(barWidth, barHeight).apply {
-                    gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                    bottomMargin = marginBot
-                }
-                val isDark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-                setBackgroundColor(Color.parseColor(if (isDark) "#6018222A" else "#60FFFFFF"))
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    this.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(35f * density, 35f * density, android.graphics.Shader.TileMode.CLAMP))
-                }
-                outlineProvider = object : ViewOutlineProvider() {
-                    override fun getOutline(view: View, outline: Outline) {
-                        outline.setRoundRect(0, 0, view.width, view.height, view.height / 2f)
-                    }
-                }
-                clipToOutline = true
+        // Intersects touch point
+        if (x >= vx && x <= vx + vw && y >= vy && y <= vy + vh) {
+            val indent = "  ".repeat(depth)
+            val resName = safeGetResourceName(view)
+            val visStr = when (view.visibility) {
+                View.VISIBLE -> "VISIBLE"
+                View.INVISIBLE -> "INVISIBLE"
+                View.GONE -> "GONE"
+                else -> "UNKNOWN"
             }
 
-            val composeContainerHeight = (120 * density).toInt()
-            val composeView = ComposeView(context).apply {
-                tag = "HyperFloatingBar"
-                clipChildren = false
-                clipToPadding = false
-                layoutParams = FrameLayout.LayoutParams(barWidth, composeContainerHeight).apply {
-                    gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                    bottomMargin = marginBot - ((120 - 64) / 2 * density).toInt()
+            log("$indent-> [DEPTH $depth] ${view.javaClass.name} | ID: $resName | Rect: ($vx, $vy, ${vx + vw}, ${vy + vh}) | Vis: $visStr | Alpha: ${view.alpha} | TransY: ${view.translationY}")
+
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) {
+                    dumpViewsAtPoint(view.getChildAt(i), x, y, depth + 1)
                 }
-                setViewTreeLifecycleOwner(lifecycleOwner)
-                setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-                setViewTreeViewModelStoreOwner(lifecycleOwner)
-                setContent { LiquidNavBarHost(stockBar) }
             }
+        }
+    }
 
-            rootGroup.clipChildren = false
-            rootGroup.clipToPadding = false
-            rootGroup.addView(blurView)
-            rootGroup.addView(composeView)
-
-            Log.e("HyperBounce-IG", "[*] Custom iOS Liquid Glass Bar Injected Successfully!")
+    private fun safeGetResourceName(view: View): String {
+        if (view.id == View.NO_ID || view.resources == null) return "NO_ID"
+        return try {
+            view.resources.getResourceEntryName(view.id)
         } catch (e: Exception) {
-            Log.e("HyperBounce-IG", "Heist Exception: " + e.message)
+            "0x${Integer.toHexString(view.id)}"
         }
     }
-}
 
-class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
-    val registry = LifecycleRegistry(this)
-    private val savedStateRegistryController = SavedStateRegistryController.create(this)
-    private val store = ViewModelStore()
-    init { savedStateRegistryController.performRestore(null) }
-    override val lifecycle: Lifecycle get() = registry
-    override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
-    override val viewModelStore: ViewModelStore get() = store
+    private fun log(msg: String) {
+        Log.e("HyperBounce-Tracer", msg)
+        XposedBridge.log("[HyperBounce-Tracer] $msg")
+    }
 }
