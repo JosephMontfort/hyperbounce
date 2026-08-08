@@ -1,6 +1,7 @@
 package dev.joseph.hyperbounce;
 
 import android.app.Activity;
+import android.content.res.Resources;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,10 +19,30 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         if (!lpparam.packageName.contains("instagram")) return;
 
         log("==================================================");
-        log("[INIT] HyperBounce: Liquid Glass Injector");
+        log("[INIT] HyperBounce: Liquid Glass & iOS Layout Spoofer");
         log("==================================================");
 
-        // 1. GHOST THE TAB BAR & INJECT UI
+        // 1. DIMENSION SPOOFER: Force controls UP while keeping video stretched
+        try {
+            XposedHelpers.findAndHookMethod(Resources.class, "getDimensionPixelSize", int.class, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    Resources res = (Resources) param.thisObject;
+                    try {
+                        String name = res.getResourceEntryName((Integer) param.args[0]);
+                        // Tell Instagram the tab bar is 180px (~60dp). 
+                        // This naturally forces the Reels description and follow buttons up.
+                        if (name.equals("tab_bar_height")) {
+                            param.setResult(180); 
+                        } else if (name.equals("tab_bar_separator_height")) {
+                            param.setResult(0);
+                        }
+                    } catch (Exception e) {}
+                }
+            });
+        } catch (Throwable t) {}
+
+        // 2. GHOST THE TAB BAR & INJECT UI
         try {
             XposedHelpers.findAndHookMethod(View.class, "onAttachedToWindow", new XC_MethodHook() {
                 @Override
@@ -60,7 +81,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // 2. THE 95px MARGIN ASSASSIN (Intercept setLayoutParams)
+        // 3. THE MARGIN ASSASSIN (Intercept setLayoutParams)
+        // Kills the 180px margin on the video, so it stretches to the bottom underneath our floating bar
         try {
             XposedHelpers.findAndHookMethod(View.class, "setLayoutParams", ViewGroup.LayoutParams.class, new XC_MethodHook() {
                 @Override
@@ -85,7 +107,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // 3. THE 95px MARGIN ASSASSIN (Intercept measureChildWithMargins)
+        // 4. THE MARGIN ASSASSIN (Intercept measureChildWithMargins)
         try {
             XposedHelpers.findAndHookMethod(ViewGroup.class, "measureChildWithMargins", 
                 View.class, int.class, int.class, int.class, int.class, 
