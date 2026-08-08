@@ -1,9 +1,11 @@
 package dev.joseph.hyperbounce;
 
 import android.app.Activity;
+import android.content.res.Resources;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -18,9 +20,28 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         if (!lpparam.packageName.contains("instagram")) return;
 
         log("==================================================");
-        log("[INIT] HyperBounce: Litho Overlay Assassin");
+        log("[INIT] HyperBounce: Liquid Glass & Litho Spoofer");
         log("==================================================");
 
+        // 1. DIMENSION SPOOFER: Force the video to the bottom & fix DM Layouts
+        try {
+            XposedHelpers.findAndHookMethod(Resources.class, "getDimensionPixelSize", int.class, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    Resources res = (Resources) param.thisObject;
+                    try {
+                        String name = res.getResourceEntryName((Integer) param.args[0]);
+                        // Telling Instagram the tab bar doesn't exist naturally stretches the 
+                        // video to the bottom and restores the broken DM Notes layout.
+                        if (name.equals("tab_bar_height")) {
+                            param.setResult(0); 
+                        }
+                    } catch (Exception e) {}
+                }
+            });
+        } catch (Throwable t) {}
+
+        // 2. GHOST THE TAB BAR & INJECT UI
         try {
             XposedHelpers.findAndHookMethod(View.class, "onAttachedToWindow", new XC_MethodHook() {
                 @Override
@@ -30,8 +51,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     try {
                         String resName = view.getResources().getResourceEntryName(view.getId());
-
-                        // 1. Ghost the Tab Bar
+                        
                         if (resName.equals("tab_bar") || resName.equals("tab_bar_shadow") || resName.equals("layout_bottom_searchbar")) {
                             view.setVisibility(View.GONE);
                             ViewGroup.LayoutParams lp = view.getLayoutParams();
@@ -41,7 +61,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                             }
                         }
 
-                        // 2. Trigger Liquid Glass Injection
                         if (resName.equals("layout_container_main_wrapper")) {
                             if (view.getContext() instanceof Activity) {
                                 Activity activity = (Activity) view.getContext();
@@ -50,87 +69,54 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                         int stockBarId = activity.getResources().getIdentifier("tab_bar", "id", activity.getPackageName());
                                         ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
                                         ViewGroup stockBar = decorView.findViewById(stockBarId);
-                                        
                                         LiquidGlassInjectorKt.injectLiquidGlass(activity, (ViewGroup) view, stockBar);
+                                        
+                                        // 3. THE LITHO OVERLAY ASSASSIN
+                                        // Continuously scans and pushes the Reels text/buttons up by 240px (~80dp)
+                                        decorView.getViewTreeObserver().addOnGlobalLayoutListener(() -> shiftOverlays(decorView));
+                                        
                                     } catch (Exception e) {}
                                 });
                             }
                         }
-
-                        // 3. THE LITHO OVERLAY ASSASSIN
-                        // Target ONLY the specific overlay elements to push them UP independently of the video
-                        String[] pushUpTargets = {
-                            "clips_media_info_component",
-                            "clips_bottom_legibility_gradient_component",
-                            "clips_ufi_component",
-                            "clips_item_overlay_component",
-                            "pog_root_view",
-                            "pog_avatar_view",
-                            "avatar_container",
-                            "reel_viewer_front_avatar",
-                            "reel_viewer_back_avatar",
-                            "pog_like_view_stub",
-                            "comment_facepile_stub",
-                            "comment_facepile_gif_stub",
-                            "face_swarm_stub",
-                            "floating_send_stub",
-                            "interest_banner_send_stub",
-                            "interest_banner_reply_bar_stub",
-                            "clips_follow_request_footer_stub",
-                            "basel_cta_stub",
-                            "attribution_bottom_bar_stub",
-                            "shop_lab_entry_point_stub",
-                            "clips_footer_mask_container"
-                        };
-
-                        for (String target : pushUpTargets) {
-                            if (resName.equals(target)) {
-                                // Shift the pixels and the touch target UP by 180px
-                                view.setTranslationY(-180f);
-                                
-                                // Force it to stay up even if Litho dynamically recalculates the UI
-                                view.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
-                                    if (v.getTranslationY() != -180f) {
-                                        v.setTranslationY(-180f);
-                                    }
-                                });
-                                break;
-                            }
-                        }
-
                     } catch (Exception e) {}
                 }
             });
         } catch (Throwable t) {}
+    }
 
-        // 4. THE MARGIN ASSASSIN (Keep video stretched to the bottom)
-        try {
-            XposedHelpers.findAndHookMethod(ViewGroup.class, "measureChildWithMargins", 
-                View.class, int.class, int.class, int.class, int.class, 
-                new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        View child = (View) param.args[0];
-                        if (child.getId() == View.NO_ID || child.getResources() == null) return;
-
-                        try {
-                            String resName = child.getResources().getResourceEntryName(child.getId());
-                            
-                            if (resName.equals("layout_container_main") || 
-                                resName.equals("layout_container_main_wrapper") || 
-                                resName.equals("swipeable_tab_view_pager")) {
-                                
-                                ViewGroup.LayoutParams lp = child.getLayoutParams();
-                                if (lp instanceof ViewGroup.MarginLayoutParams) {
-                                    ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-                                    if (mlp.bottomMargin > 50) mlp.bottomMargin = 0;
-                                }
-                            }
-                        } catch (Exception e) {}
+    private void shiftOverlays(ViewGroup group) {
+        if (group == null) return;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View child = group.getChildAt(i);
+            if (child == null) continue;
+            
+            boolean isTarget = false;
+            if (child.getId() != View.NO_ID && child.getResources() != null) {
+                try {
+                    String name = child.getResources().getResourceEntryName(child.getId());
+                    if (name.equals("clips_media_info_component") || 
+                        name.equals("clips_bottom_legibility_gradient_component") || 
+                        name.equals("clips_item_overlay_component") ||
+                        name.equals("clips_ufi_component") ||
+                        name.equals("pog_root_view") ||
+                        name.equals("pog_avatar_view") ||
+                        name.equals("avatar_container")) {
+                        isTarget = true;
                     }
+                } catch (Exception e) {}
+            }
+            
+            if (isTarget) {
+                // Physically lifts the rendered component and its touch targets UP 
+                if (child.getTranslationY() != -240f) {
+                    child.setTranslationY(-240f);
                 }
-            );
-        } catch (Throwable t) {}
+            } else if (child instanceof ViewGroup) {
+                // Only recurse if we didn't translate this node (prevents double-shifting)
+                shiftOverlays((ViewGroup) child);
+            }
+        }
     }
 
     private void log(String msg) {

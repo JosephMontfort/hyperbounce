@@ -97,8 +97,7 @@ fun findImageView(group: ViewGroup): ImageView? {
 @Composable
 fun LiquidNavBarHost(stockBar: ViewGroup?) {
     val isDark = isSystemInDarkTheme()
-    // Translucency fix: increased opacity and added a subtle border below
-    val containerColor = if (isDark) Color(0x99121212) else Color(0x99FAFAFA)
+    val containerColor = if (isDark) Color(0x88121212) else Color(0x88FAFAFA)
     val accentColor = if (isDark) Color.White else Color.Black
     
     var selectedIndex by remember { mutableIntStateOf(0) }
@@ -147,7 +146,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                     onDrawSurface = { drawRect(containerColor) }
                 )
                 .background(containerColor, Capsule())
-                .border(0.5.dp, Color.White.copy(alpha = 0.2f), Capsule())
+                .border(0.5.dp, Color.White.copy(alpha = 0.3f), Capsule())
         ) {
             if (tabs.isNotEmpty()) {
                 val density = LocalDensity.current
@@ -164,7 +163,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                 )
                 
                 val animatedWidthDp by animateFloatAsState(
-                    targetValue = if (isPressed) tabWidthDp * 1.6f else tabWidthDp,
+                    targetValue = if (isPressed) tabWidthDp * 1.5f else tabWidthDp,
                     animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessLow)
                 )
 
@@ -177,7 +176,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                             .fillMaxHeight()
                             .padding(6.dp)
                             .clip(Capsule())
-                            .background(if (isDark) Color(0x44FFFFFF) else Color(0x33000000))
+                            .background(if (isDark) Color(0x33FFFFFF) else Color(0x22000000))
                     )
                 }
 
