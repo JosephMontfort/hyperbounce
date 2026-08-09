@@ -40,7 +40,6 @@ class PhysicsHook : IXposedHookLoadPackage {
         if (lpparam.packageName != "com.google.android.youtube") return
 
         // 1. THE INSET ASSASSIN (ZERO-LAG FULLSCREEN)
-        // Intercepts WindowInsets in mid-air and lies to YouTube, telling it the bottom nav bar is 0px tall.
         try {
             XposedHelpers.findAndHookMethod(View::class.java, "dispatchApplyWindowInsets",
                 WindowInsets::class.java,
@@ -50,7 +49,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                         if (view.id == View.NO_ID || view.resources == null) return
 
                         try {
-                            // Ultra-fast ID caching to prevent UI lag
                             if (cachedInsetTargets.isEmpty()) {
                                 val res = view.resources
                                 cachedInsetTargets = intArrayOf(
@@ -65,7 +63,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                                 val type = WindowInsets.Type.systemBars()
                                 val current = insets.getInsets(type)
 
-                                // If Android reports a bottom inset, rewrite it to 0
                                 if (current.bottom > 0) {
                                     val fakeInsets = WindowInsets.Builder(insets)
                                         .setInsets(type, Insets.of(current.left, current.top, current.right, 0))
@@ -101,12 +98,14 @@ class PhysicsHook : IXposedHookLoadPackage {
 
                         // Shift regular YouTube FABs
                         if (resName == "fab_container") {
-                            view.translationY = -180f
+                            view.translationY = -190f
                         }
 
-                        // Shift YouTube Shorts Master Footer (Captions, Account, Action Buttons)
-                        if (resName == "reel_player_footer_container") {
-                            view.translationY = -200f
+                        // Shift YouTube Shorts Master Footer AND Ad Overlays
+                        if (resName == "reel_player_footer_container" || 
+                            resName == "reel_player_delegated_overlay" || 
+                            resName == "reel_video_interactions") {
+                            view.translationY = -190f
                         }
 
                         // Trigger Compose Injection
@@ -137,7 +136,6 @@ class PhysicsHook : IXposedHookLoadPackage {
         } catch (t: Throwable) {}
     }
 
-    // Mathematical Luminance Scanner to beat YouTube's custom theme engine
     private fun isYouTubeInDarkMode(activity: Activity): Boolean {
         val typedValue = TypedValue()
         activity.theme.resolveAttribute(android.R.attr.colorBackground, typedValue, true)
@@ -146,11 +144,9 @@ class PhysicsHook : IXposedHookLoadPackage {
             val r = Color.red(color)
             val g = Color.green(color)
             val b = Color.blue(color)
-            // Standard relative luminance formula
             val luminance = 0.299 * r + 0.587 * g + 0.114 * b
-            return luminance < 128 // Less than 128 means the background is dark
+            return luminance < 128
         }
-        // Fallback to system uiMode if extraction fails
         val uiMode = activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         return uiMode == Configuration.UI_MODE_NIGHT_YES
     }

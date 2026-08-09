@@ -127,7 +127,7 @@ fun LiquidNavBarHost(
     ) {
         Box(
             modifier = Modifier
-                .padding(bottom = 40.dp)
+                .padding(bottom = 24.dp) // Lowered slightly per final spec
                 .width(320.dp)
                 .height(64.dp)
                 .background(containerColor, pillShape)
