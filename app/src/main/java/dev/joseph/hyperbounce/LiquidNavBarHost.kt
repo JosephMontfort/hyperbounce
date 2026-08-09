@@ -30,10 +30,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.vibrancy
 import com.kyant.shapes.Capsule
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -79,7 +75,8 @@ fun findImageView(group: ViewGroup): ImageView? {
 @Composable
 fun LiquidNavBarHost(stockBar: ViewGroup?) {
     val isDark = isSystemInDarkTheme()
-    val containerColor = if (isDark) Color(0x66121212) else Color(0x66FAFAFA)
+    // Blur removed: using a clean, 90% opaque solid background
+    val containerColor = if (isDark) Color(0xE6121212) else Color(0xE6FAFAFA)
     val accentColor = if (isDark) Color.White else Color.Black
     
     var selectedIndex by remember { mutableIntStateOf(0) }
@@ -112,18 +109,9 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
     ) {
         Box(
             modifier = Modifier
-                .padding(bottom = 76.dp) // Pushed the nav bar significantly higher
+                .padding(bottom = 56.dp) // Brought down from 76dp
                 .width(320.dp)
                 .height(64.dp)
-                .drawBackdrop(
-                    backdrop = rememberLayerBackdrop(),
-                    shape = { Capsule() },
-                    effects = {
-                        vibrancy()
-                        blur(32f.dp.toPx())
-                    },
-                    onDrawSurface = { drawRect(containerColor) }
-                )
                 .background(containerColor, Capsule())
                 .border(0.5.dp, Color.White.copy(alpha = 0.2f), Capsule())
         ) {
@@ -146,6 +134,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                     animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessLow)
                 )
 
+                // The crisp pill highlight (no blur required)
                 Box(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
@@ -154,7 +143,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                             .fillMaxHeight()
                             .padding(6.dp)
                             .clip(Capsule())
-                            .background(if (isDark) Color(0x44FFFFFF) else Color(0x33000000))
+                            .background(if (isDark) Color(0x33FFFFFF) else Color(0x1A000000))
                     )
                 }
 

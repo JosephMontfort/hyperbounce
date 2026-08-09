@@ -42,7 +42,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // 2. GHOST TAB BAR, INJECT UI, & CACHE PARENTS
+        // 2. GHOST TAB BAR, INJECT UI, STRETCH VIDEO, & CACHE PARENTS
         try {
             XposedHelpers.findAndHookMethod(View.class, "onAttachedToWindow", new XC_MethodHook() {
                 @Override
@@ -72,6 +72,15 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                             ViewGroup.LayoutParams lp = view.getLayoutParams();
                             if (lp != null) {
                                 lp.height = 0;
+                                view.setLayoutParams(lp);
+                            }
+                        }
+
+                        // THE STRETCHER: Force the video containers to fill the black void
+                        if ("clips_video_container".equals(resName) || "clips_viewer_video_layout".equals(resName)) {
+                            ViewGroup.LayoutParams lp = view.getLayoutParams();
+                            if (lp != null && lp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+                                lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
                                 view.setLayoutParams(lp);
                             }
                         }
@@ -106,8 +115,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                                 }
                                             }
 
-                                            // Determine target shift (Increased to -260px)
-                                            float shiftY = isReelsTabActive ? -260.0f : 0.0f; 
+                                            // Determine target shift (Brought down to -210px)
+                                            float shiftY = isReelsTabActive ? -210.0f : 0.0f; 
 
                                             // INSTANT O(1) SHIFT: Loop strictly through the cached parents
                                             for (ViewGroup overlayParent : sOverlayParents.keySet()) {
