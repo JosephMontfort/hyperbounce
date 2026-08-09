@@ -40,7 +40,6 @@ import kotlin.math.roundToInt
 
 data class TabData(val resId: Int, val bitmap: ImageBitmap?)
 
-// Scrapes the original icons from Instagram's hidden tab bar
 fun extractTabs(stockBar: ViewGroup, tabNames: List<String>): List<TabData> {
     val context = stockBar.context
     return tabNames.map { name ->
@@ -65,7 +64,6 @@ fun extractTabs(stockBar: ViewGroup, tabNames: List<String>): List<TabData> {
     }
 }
 
-// Deep search to find the icon view
 fun findImageView(group: ViewGroup): ImageView? {
     for (i in 0 until group.childCount) {
         val v = group.getChildAt(i)
@@ -85,15 +83,12 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
     val accentColor = if (isDark) Color.White else Color.Black
     
     var selectedIndex by remember { mutableIntStateOf(0) }
-    
-    // Requested Order: Home, Reels, Messages, Search, Profile
     val orderedTabNames = listOf("feed_tab", "clips_tab", "direct_tab", "search_tab", "profile_tab")
     
     val tabs = remember(stockBar) {
         if (stockBar != null) extractTabs(stockBar, orderedTabNames) else emptyList()
     }
 
-    // Two-Way Sync: Poll Instagram's hidden tabs
     LaunchedEffect(stockBar) {
         while (true) {
             delay(100)
@@ -117,7 +112,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
     ) {
         Box(
             modifier = Modifier
-                .padding(bottom = 16.dp)
+                .padding(bottom = 40.dp) // Pushed the nav bar up further
                 .width(320.dp)
                 .height(64.dp)
                 .drawBackdrop(
@@ -151,7 +146,6 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                     animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessLow)
                 )
 
-                // The Interactive Liquid Pill
                 Box(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
@@ -164,7 +158,6 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                     )
                 }
 
-                // Render Icons & Detect Long Press Scrubbing
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
@@ -215,7 +208,6 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                                 Image(
                                     bitmap = tab.bitmap,
                                     contentDescription = null,
-                                    // Strip the color filter ONLY for the profile tab to avoid the square bug
                                     colorFilter = if (isProfile) null else ColorFilter.tint(
                                         if (selectedIndex == index) accentColor else accentColor.copy(alpha = 0.6f)
                                     ),

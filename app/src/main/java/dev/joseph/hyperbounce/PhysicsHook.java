@@ -19,7 +19,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         if (!lpparam.packageName.contains("instagram")) return;
 
         log("==================================================");
-        log("[INIT] HyperBounce: Ultimate Smart Shifter Active");
+        log("[INIT] HyperBounce: Ultimate Smart Shifter (Lag-Free)");
         log("==================================================");
 
         // 1. DIMENSION SPOOFER: Force video to bottom & fix DM Layouts
@@ -38,7 +38,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // 2. GHOST TAB BAR & INJECT UI
+        // 2. GHOST TAB BAR, INJECT UI, & SHIFT OVERLAYS
         try {
             XposedHelpers.findAndHookMethod(View.class, "onAttachedToWindow", new XC_MethodHook() {
                 @Override
@@ -64,7 +64,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                             }
                         }
 
-                        // Trigger Injection
+                        // Trigger Injection & Lightweight Visibility Tracker
                         if ("layout_container_main_wrapper".equals(resName)) {
                             if (view.getContext() instanceof Activity) {
                                 Activity activity = (Activity) view.getContext();
@@ -76,24 +76,60 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                         
                                         LiquidGlassInjectorKt.injectLiquidGlass(activity, (ViewGroup) view, (ViewGroup) stockBar);
 
-                                        // Global Layout Listener to handle Smart Shifting & Context-Aware Visibility
-                                        decorView.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+                                        // ULTRA-LIGHTWEIGHT Listener: Only toggles visibility. No recursion!
+                                        view.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
                                             View injectedBar = view.findViewWithTag("LiquidGlassInjected");
-                                            
-                                            // Check if we are in the main tabs (stock bar is meant to be visible)
                                             boolean isTabBarActive = (stockBar != null && stockBar.getVisibility() == View.VISIBLE);
-
                                             if (injectedBar != null) {
                                                 injectedBar.setVisibility(isTabBarActive ? View.VISIBLE : View.GONE);
                                             }
-
-                                            // If tab bar is visible (we are on the main reels tab), shift overlays UP.
-                                            // If not (we are in DMs or Home Feed reel), shift them back to 0.
-                                            shiftOverlays(decorView, isTabBarActive ? -160.0f : 0.0f);
                                         });
                                     } catch (Exception e) {}
                                 });
                             }
+                        }
+
+                        // Localized Overlay Shifter: NO MORE GLOBAL RECURSION (Kills the lag)
+                        if ("clips_item_overlay_component".equals(resName)) {
+                            view.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+                                ViewGroup parent = (ViewGroup) v.getParent();
+                                if (parent == null) return;
+                                
+                                Activity activity = (Activity) v.getContext();
+                                int stockBarId = activity.getResources().getIdentifier("tab_bar", "id", activity.getPackageName());
+                                View stockBar = activity.getWindow().getDecorView().findViewById(stockBarId);
+                                
+                                // Check if we are in the main tabs. If not (DMs/Home), shift resets to 0.
+                                boolean isTabBarActive = (stockBar != null && stockBar.getVisibility() == View.VISIBLE);
+                                float shiftY = isTabBarActive ? -200.0f : 0.0f; // Increased height to 200
+                                
+                                // Loop ONLY through the ~10 siblings. Extremely fast.
+                                for (int c = 0; c < parent.getChildCount(); c++) {
+                                    View sibling = parent.getChildAt(c);
+                                    int sibId = sibling.getId();
+                                    String sibName = "";
+                                    if (sibId != View.NO_ID && sibling.getResources() != null) {
+                                        try { sibName = sibling.getResources().getResourceEntryName(sibId); } catch(Exception e){}
+                                    }
+
+                                    // Ignore background, gradient, master wrappers, and mute components
+                                    if ("clips_bottom_legibility_gradient_component".equals(sibName) ||
+                                        "clips_touchable_background".equals(sibName) ||
+                                        "clips_item_overlay_component".equals(sibName) ||
+                                        "clips_pause_and_mute_component".equals(sibName)) {
+                                        continue;
+                                    }
+
+                                    // Ignore the scrubber
+                                    if (containsScrubber(sibling)) {
+                                        continue;
+                                    }
+
+                                    if (sibling.getTranslationY() != shiftY) {
+                                        sibling.setTranslationY(shiftY);
+                                    }
+                                }
+                            });
                         }
                     } catch (Exception e) {}
                 }
@@ -127,53 +163,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 }
             );
         } catch (Throwable t) {}
-    }
-
-    private void shiftOverlays(ViewGroup group, float shiftY) {
-        if (group == null) return;
-        for (int i = 0; i < group.getChildCount(); i++) {
-            View child = group.getChildAt(i);
-            if (child == null) continue;
-
-            int id = child.getId();
-            String resName = "";
-            if (id != View.NO_ID && child.getResources() != null) {
-                try { resName = child.getResources().getResourceEntryName(id); } catch (Exception e) {}
-            }
-
-            if ("clips_item_overlay_component".equals(resName)) {
-                ViewGroup parent = (ViewGroup) child.getParent();
-                if (parent != null) {
-                    for (int c = 0; c < parent.getChildCount(); c++) {
-                        View sibling = parent.getChildAt(c);
-                        int sibId = sibling.getId();
-                        String sibName = "";
-                        if (sibId != View.NO_ID && sibling.getResources() != null) {
-                            try { sibName = sibling.getResources().getResourceEntryName(sibId); } catch(Exception e){}
-                        }
-
-                        // Ignore background, gradient, master wrappers, and mute components
-                        if ("clips_bottom_legibility_gradient_component".equals(sibName) ||
-                            "clips_touchable_background".equals(sibName) ||
-                            "clips_item_overlay_component".equals(sibName) ||
-                            "clips_pause_and_mute_component".equals(sibName)) {
-                            continue;
-                        }
-
-                        // Ignore the scrubber
-                        if (containsScrubber(sibling)) {
-                            continue;
-                        }
-
-                        if (sibling.getTranslationY() != shiftY) {
-                            sibling.setTranslationY(shiftY);
-                        }
-                    }
-                }
-            } else if (child instanceof ViewGroup) {
-                shiftOverlays((ViewGroup) child, shiftY);
-            }
-        }
     }
 
     private boolean containsScrubber(View view) {
