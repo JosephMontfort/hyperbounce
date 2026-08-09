@@ -1,5 +1,6 @@
 package dev.joseph.hyperbounce
 
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.View
@@ -14,7 +15,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
@@ -60,14 +60,13 @@ fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
     val out = mutableListOf<TabData>()
     try {
         val uiMode = pivotBar.resources.configuration.uiMode
-        val isDark = (uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val isDark = (uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         val tint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
         val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return out
         
         for (i in 0 until wrapper.childCount) {
             val tab = wrapper.getChildAt(i) as? ViewGroup ?: continue
             
-            // Search for standard images or the profile thumbnail
             var img = findViewByName(tab, "image") as? ImageView
             if (img == null) img = findViewByName(tab, "pivot_bar_thumbnail") as? ImageView
             if (img == null) img = findImageView(tab)
@@ -96,9 +95,12 @@ fun LiquidNavBarHost(
     pivotBar: ViewGroup,
     externalTabState: State<Int>
 ) {
-    val isDark = isSystemInDarkTheme()
+    // Explicit Theme Detection directly from YouTube Resources
+    val isDark = remember(pivotBar) {
+        val mode = pivotBar.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        mode == Configuration.UI_MODE_NIGHT_YES
+    }
     
-    // Theme-Aware Colors matching Instagram / WhatsApp builds
     val containerColor = if (isDark) Color(0xE6121212) else Color(0xE6FAFAFA)
     val accentColor = if (isDark) Color.White else Color.Black
     val borderColor = if (isDark) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.20f)
@@ -107,7 +109,6 @@ fun LiquidNavBarHost(
     var tabs by remember { mutableStateOf(emptyList<TabData>()) }
     var selectedIndex by remember { mutableIntStateOf(0) }
 
-    // Real-time tab extraction & state sync
     LaunchedEffect(pivotBar, isDark) {
         while (true) {
             val extracted = extractYouTubeTabs(pivotBar)
@@ -132,7 +133,7 @@ fun LiquidNavBarHost(
     ) {
         Box(
             modifier = Modifier
-                .padding(bottom = 40.dp) // Exact padding specified
+                .padding(bottom = 40.dp)
                 .width(320.dp)
                 .height(64.dp)
                 .background(containerColor, pillShape)
@@ -159,7 +160,6 @@ fun LiquidNavBarHost(
                     label = "width"
                 )
 
-                // Crisp active pill highlight (No blur distortion)
                 Box(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
