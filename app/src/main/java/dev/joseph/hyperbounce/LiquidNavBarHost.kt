@@ -2,44 +2,56 @@ package dev.joseph.hyperbounce
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.os.SystemClock
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlin.math.roundToInt
 
 data class TabData(val sourceView: View, val bitmap: Bitmap)
 
-// ── View helpers ──────────────────────────────────────────────────────────────
+fun findImageView(g: ViewGroup): ImageView? {
+    for (i in 0 until g.childCount) {
+        val v = g.getChildAt(i)
+        if (v is ImageView) return v
+        if (v is ViewGroup) findImageView(v)?.let { return it }
+    }
+    return null
+}
 
 fun findViewByName(view: View, name: String): View? {
     if (view.id != View.NO_ID) {
         try { if (view.resources.getResourceEntryName(view.id) == name) return view }
-        catch (_: Exception) {}
+        catch (e: Exception) {}
     }
     if (view is ViewGroup) {
-        for (i in 0 until view.childCount)
+        for (i in 0 until view.childCount) {
             findViewByName(view.getChildAt(i), name)?.let { return it }
+        }
     }
     return null
 }
@@ -48,115 +60,63 @@ fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
     val out = mutableListOf<TabData>()
     try {
         val uiMode = pivotBar.resources.configuration.uiMode
-        val isDark  = (uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
-                       android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val isDark = (uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
         val tint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
         val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return out
+        
         for (i in 0 until wrapper.childCount) {
-            val tab   = wrapper.getChildAt(i) as? ViewGroup ?: continue
-            val thumb = findViewByName(tab, "thumbnail_layout") as? ViewGroup ?: continue
-            var img   = findViewByName(thumb, "image")              as? ImageView
-            if (img == null) img = findViewByName(thumb, "pivot_bar_thumbnail") as? ImageView
+            val tab = wrapper.getChildAt(i) as? ViewGroup ?: continue
+            
+            // Search for standard images or the profile thumbnail
+            var img = findViewByName(tab, "image") as? ImageView
+            if (img == null) img = findViewByName(tab, "pivot_bar_thumbnail") as? ImageView
+            if (img == null) img = findImageView(tab)
+            
             val d = img?.drawable?.constantState?.newDrawable()?.mutate() ?: continue
             d.setTint(tint)
             val w = d.intrinsicWidth.coerceAtLeast(1)
             val h = d.intrinsicHeight.coerceAtLeast(1)
             val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            d.setBounds(0, 0, w, h); d.draw(Canvas(bmp))
+            val canvas = Canvas(bmp)
+            d.setBounds(0, 0, w, h)
+            d.draw(canvas)
             out.add(TabData(tab, bmp))
         }
-    } catch (_: Exception) {}
+    } catch (e: Exception) {}
     return out
 }
 
-fun isViewOrChildSelected(view: View): Boolean {
-    if (view.isSelected || view.isActivated) return true
-    if (view is ViewGroup) {
-        for (i in 0 until view.childCount)
-            if (isViewOrChildSelected(view.getChildAt(i))) return true
-    }
-    return false
+fun clickStockTab(pivotBar: ViewGroup, index: Int) {
+    val wrapper = pivotBar.getChildAt(0) as? ViewGroup
+    wrapper?.getChildAt(index)?.performClick()
 }
-
-// ── THE DEFINITIVE HOME-TAB FIX ──────────────────────────────────────────────
-//
-// Diagnostic logs proved:
-//   Natural tap chain:
-//     PivotBar.dispatchTouchEvent → atca.f → GestureDetector
-//     → aucq.onSingleTapUp        ← uses EVENT.X to find which tab
-//     → Flienmp.performClick → owd.onClick (navigation handler)
-//
-// forceClick/performAccessibilityAction bypass the atca.f/aucq chain, so owd
-// doesn't know which tab was intended and defaults to "refresh current tab."
-//
-// simulatePivotBarTap dispatches a real DOWN+UP directly to PivotBar, which
-// triggers the full natural chain including atca.f and aucq.onSingleTapUp.
-//
-// KEY: use view.left for the X coordinate, NOT getLocationInWindow().
-//   container.layoutParams.height = 0 squishes vertical layout → window-Y
-//   coordinates become garbage.  Horizontal layout (left positions) is
-//   NEVER affected by a height collapse — they are identical to the original.
-//   wrapper.left = 0 (fills PivotBar width)
-//   targetTab.left = that tab's pixel offset within wrapper (e.g. 0, 161, 323…)
-//   localX = wrapper.left + targetTab.left + targetTab.width/2 = tab centre ✓
-//
-// Y value: aucq.onSingleTapUp only uses event.x to identify the tab.
-//   Any Y ≥ 0 works. We use 1f so even a 0-height PivotBar accepts the event.
-
-fun simulatePivotBarTap(pivotBar: ViewGroup, targetTab: View) {
-    try {
-        val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return
-
-        // Horizontal position: unaffected by height collapse
-        val localX = (wrapper.left + targetTab.left + targetTab.width / 2).toFloat()
-        // Vertical: aucq only uses X; use 1f so the event is never rejected
-        val localY = 1f
-
-        val t  = SystemClock.uptimeMillis()
-        val dn = MotionEvent.obtain(t, t,       MotionEvent.ACTION_DOWN, localX, localY, 0)
-        val up = MotionEvent.obtain(t, t + 50L, MotionEvent.ACTION_UP,   localX, localY, 0)
-        pivotBar.dispatchTouchEvent(dn)
-        pivotBar.dispatchTouchEvent(up)
-        dn.recycle(); up.recycle()
-    } catch (_: Exception) {
-        targetTab.performClick()   // last-resort fallback
-    }
-}
-
-// ── Composable ────────────────────────────────────────────────────────────────
 
 @Composable
 fun LiquidNavBarHost(
-    stockBar: ViewGroup,
-    externalTabState: State<Int>,
-    isVisible: State<Boolean>,
+    pivotBar: ViewGroup,
+    externalTabState: State<Int>
 ) {
-    var tabs          by remember { mutableStateOf(emptyList<TabData>()) }
-    var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
-
-    // Re-extract icons whenever the theme flips so tint colour is correct
     val isDark = isSystemInDarkTheme()
-    LaunchedEffect(isDark) { tabs = emptyList() }
+    
+    // Theme-Aware Colors matching Instagram / WhatsApp builds
+    val containerColor = if (isDark) Color(0xE6121212) else Color(0xE6FAFAFA)
+    val accentColor = if (isDark) Color.White else Color.Black
+    val borderColor = if (isDark) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.20f)
+    val pillShape = RoundedCornerShape(50)
 
-    // Debounce: suppress native-state sync for 700 ms after a user tap so
-    // YouTube's internal selection state has time to settle.
-    var lastClickMs by remember { mutableLongStateOf(0L) }
+    var tabs by remember { mutableStateOf(emptyList<TabData>()) }
+    var selectedIndex by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(stockBar) {
-        var stableCount = 0
+    // Real-time tab extraction & state sync
+    LaunchedEffect(pivotBar, isDark) {
         while (true) {
-            val extracted = extractYouTubeTabs(stockBar)
-            if (extracted.size > tabs.size) { tabs = extracted; stableCount = 0 }
-            else stableCount++
-
-            // After 10 stable cycles (1 s) slow down to a 5 s re-check.
-            if (tabs.isNotEmpty() && stableCount >= 10) {
-                delay(5_000); stableCount = 0; continue
+            val extracted = extractYouTubeTabs(pivotBar)
+            if (extracted.isNotEmpty() && extracted.size != tabs.size) {
+                tabs = extracted
             }
-
-            if (tabs.isNotEmpty() && System.currentTimeMillis() - lastClickMs > 700L) {
+            if (tabs.isNotEmpty()) {
                 for (i in tabs.indices) {
-                    if (isViewOrChildSelected(tabs[i].sourceView)) {
+                    if (tabs[i].sourceView.isSelected || tabs[i].sourceView.isActivated) {
                         if (selectedIndex != i) selectedIndex = i
                         break
                     }
@@ -166,64 +126,110 @@ fun LiquidNavBarHost(
         }
     }
 
-    val externalIdx by externalTabState
-    LaunchedEffect(externalIdx) { if (externalIdx != selectedIndex) selectedIndex = externalIdx }
-
-    MiuixTheme {
-        AnimatedVisibility(
-            visible = isVisible.value,
-            enter = slideInVertically(tween(300)) { it } + fadeIn(tween(300)),
-            exit  = slideOutVertically(tween(300)) { it } + fadeOut(tween(300)),
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(bottom = 40.dp) // Exact padding specified
+                .width(320.dp)
+                .height(64.dp)
+                .background(containerColor, pillShape)
+                .border(1.dp, borderColor, pillShape)
         ) {
             if (tabs.isNotEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().wrapContentHeight(),
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    // Light-mode outline: gives the pill a visible edge on bright
-                    // backgrounds.  Transparent (invisible) in dark mode.
-                    val pillOutline = if (isDark) Color.Transparent
-                                     else        Color.Black.copy(alpha = 0.20f)
+                val density = LocalDensity.current
+                val tabWidthDp = 320f / tabs.size
+                val tabWidthPx = with(density) { tabWidthDp.dp.toPx() }
+                
+                var isPressed by remember { mutableStateOf(false) }
+                var dragOffset by remember { mutableFloatStateOf(0f) }
 
-                    // padding(top = 14.dp): extra headroom so the indicator pill's
-                    // press-scale animation doesn't clip at the top of the ComposeView.
+                val targetOffset = if (isPressed) dragOffset else selectedIndex * tabWidthPx
+                val animatedOffsetPx by animateFloatAsState(
+                    targetValue = targetOffset,
+                    animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessLow),
+                    label = "offset"
+                )
+                
+                val animatedWidthDp by animateFloatAsState(
+                    targetValue = if (isPressed) tabWidthDp * 1.6f else tabWidthDp,
+                    animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessLow),
+                    label = "width"
+                )
+
+                // Crisp active pill highlight (No blur distortion)
+                Box(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
-                            .padding(top = 14.dp, bottom = 12.dp)
-                            .border(1.dp, pillOutline, CircleShape)
-                    ) {
-                        FloatingBottomBar(
-                            selectedIndex = { selectedIndex },
-                            onSelected    = { idx ->
-                                lastClickMs   = System.currentTimeMillis()
-                                selectedIndex = idx
-                                if (externalTabState.value != idx && idx < tabs.size) {
-                                    // Dispatch directly into PivotBar's gesture chain.
-                                    // This is the ONLY approach that works for Home tab
-                                    // (and all other tabs) — see simulatePivotBarTap above.
-                                    simulatePivotBarTap(
-                                        pivotBar  = stockBar,
-                                        targetTab = tabs[idx].sourceView,
-                                    )
+                            .offset { IntOffset(animatedOffsetPx.roundToInt(), 0) }
+                            .width(animatedWidthDp.dp)
+                            .fillMaxHeight()
+                            .padding(6.dp)
+                            .clip(pillShape)
+                            .background(if (isDark) Color(0x33FFFFFF) else Color(0x1A000000))
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { _ ->
+                                    isPressed = true
+                                    dragOffset = selectedIndex * tabWidthPx
+                                },
+                                onDragEnd = {
+                                    isPressed = false
+                                    val nearestIndex = (dragOffset / tabWidthPx).roundToInt().coerceIn(0, tabs.size - 1)
+                                    selectedIndex = nearestIndex
+                                    clickStockTab(pivotBar, nearestIndex)
+                                },
+                                onDragCancel = { isPressed = false },
+                                onDrag = { change, dragAmount ->
+                                    dragOffset = (dragOffset + dragAmount.x).coerceIn(0f, (tabs.size - 1) * tabWidthPx)
+                                    change.consume()
                                 }
-                            },
-                            backdrop      = rememberLayerBackdrop(),
-                            tabsCount     = tabs.size,
-                            isBlurEnabled = true,
-                        ) {
-                            tabs.forEachIndexed { index, tabData ->
-                                FloatingBottomBarItem(
-                                    onClick  = { selectedIndex = index },
-                                    modifier = Modifier.defaultMinSize(minWidth = 60.dp),
+                            )
+                        },
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    tabs.forEachIndexed { index, tab ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
                                 ) {
-                                    Image(
-                                        bitmap             = tabData.bitmap.asImageBitmap(),
-                                        contentDescription = null,
-                                        modifier           = Modifier.size(24.dp),
-                                        alpha = if (selectedIndex == index) 1f else 0.5f,
-                                    )
-                                }
-                            }
+                                    selectedIndex = index
+                                    clickStockTab(pivotBar, index)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val scale by animateFloatAsState(
+                                targetValue = if (selectedIndex == index) 1.15f else 1.0f,
+                                animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium),
+                                label = "scale"
+                            )
+                            
+                            Image(
+                                bitmap = tab.bitmap.asImageBitmap(),
+                                contentDescription = null,
+                                colorFilter = ColorFilter.tint(
+                                    if (selectedIndex == index) accentColor else accentColor.copy(alpha = 0.6f)
+                                ),
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .graphicsLayer {
+                                        scaleX = scale
+                                        scaleY = scale
+                                    }
+                            )
                         }
                     }
                 }

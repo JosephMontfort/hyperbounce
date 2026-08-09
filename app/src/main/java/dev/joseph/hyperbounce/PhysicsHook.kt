@@ -1,23 +1,19 @@
 package dev.joseph.hyperbounce
 
 import android.app.Activity
-import android.graphics.Color
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsets
 import android.widget.FrameLayout
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.findViewTreeSavedStateRegistryOwner
+import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
@@ -29,77 +25,81 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 
 class PhysicsHook : IXposedHookLoadPackage {
-
-    private var externalTabState: MutableState<Int>? = null
-    private var isBarVisible: MutableState<Boolean> = mutableStateOf(false)
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.google.android.youtube") return
 
-        XposedHelpers.findAndHookMethod(
-            "android.app.Activity",
-            lpparam.classLoader,
-            "onResume",
-            object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val activity = param.thisObject as Activity
-                    if (activity.javaClass.simpleName != "MainActivity") return
-
-                    val res        = activity.resources
-                    val decorView  = activity.window.decorView as? ViewGroup ?: return
-
-                    if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
-
-                    val containerId = res.getIdentifier("bottom_bar_container", "id", "com.google.android.youtube")
-                    val pivotId     = res.getIdentifier("pivot_bar",            "id", "com.google.android.youtube")
-
-                    decorView.viewTreeObserver.addOnPreDrawListener {
-                        val container = if (containerId != 0) activity.findViewById<ViewGroup>(containerId) else null
-                        val pivot     = if (pivotId     != 0) activity.findViewById<ViewGroup>(pivotId)     else null
-
-                        // ── Hide stock bar: collapse height to 0 (no blank-screen) ────
-                        if (container != null) {
-                            val params = container.layoutParams
-                            if (params != null && params.height != 0) {
-                                params.height = 0
-                                container.layoutParams = params
-                            }
-                            container.setBackgroundColor(Color.TRANSPARENT)
+        // 1. THE ZERO-LAG STRETCHER
+        // Natively kills the padding on the feed container to fill the white void
+        try {
+            XposedHelpers.findAndHookMethod(View::class.java, "setPadding", 
+                Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, 
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        val view = param.thisObject as View
+                        if (view.id != View.NO_ID && view.resources != null) {
+                            try {
+                                if (view.resources.getResourceEntryName(view.id) == "pane_fragment_container") {
+                                    param.args[3] = 0 // Force bottom padding to 0 natively
+                                }
+                            } catch (e: Exception) {}
                         }
-
-                        // ── Hide pivot bar visually ──────────────────────────────────
-                        if (pivot != null) {
-                            if (pivot.alpha != 0f) pivot.alpha = 0f
-
-                            // Visibility tracking: pivot Y tells us if YouTube slid it out
-                            val loc = IntArray(2)
-                            pivot.getLocationOnScreen(loc)
-                            val nowVisible = loc[1] <= decorView.height
-                            if (isBarVisible.value != nowVisible) isBarVisible.value = nowVisible
-
-                            // Inject our floating bar if not yet done
-                            val wrapper = pivot.getChildAt(0) as? ViewGroup
-                            if (wrapper != null && wrapper.childCount >= 3) {
-                                executeUIHeist(activity, pivot)
-                            }
-                        }
-                        true
                     }
+                })
+        } catch (t: Throwable) {}
+
+        // 2. GHOST BAR & FAB SHIFTER
+        try {
+            XposedHelpers.findAndHookMethod(View::class.java, "onAttachedToWindow", object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val view = param.thisObject as View
+                    if (view.id == View.NO_ID || view.resources == null) return
+
+                    try {
+                        val resName = view.resources.getResourceEntryName(view.id)
+
+                        // Ghost the stock bars completely
+                        if (resName == "bottom_bar_container" || resName == "pivot_bar") {
+                            view.alpha = 0f
+                            view.translationY = 9999f
+                            val lp = view.layoutParams
+                            if (lp != null && lp.height != 0) {
+                                lp.height = 0
+                                view.layoutParams = lp
+                            }
+                        }
+
+                        // Shift YouTube's floating action buttons up to clear our 40.dp bar
+                        if (resName == "fab_container") {
+                            view.translationY = -180f
+                        }
+
+                        // Trigger Compose Injection when the master layout attaches
+                        if (resName == "watch_while_layout_coordinator_layout") {
+                            val activity = view.context as? Activity
+                            if (activity != null) {
+                                view.post {
+                                    val pivotId = activity.resources.getIdentifier("pivot_bar", "id", activity.packageName)
+                                    val pivotBar = activity.window.decorView.findViewById<ViewGroup>(pivotId)
+                                    if (pivotBar != null) {
+                                        executeUIHeist(activity, view as ViewGroup, pivotBar)
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {}
                 }
-            }
-        )
+            })
+        } catch (t: Throwable) {}
     }
 
-    private fun executeUIHeist(activity: Activity, stockBar: ViewGroup) {
+    private fun executeUIHeist(activity: Activity, rootGroup: ViewGroup, pivotBar: ViewGroup) {
         try {
-            val contentView = activity.findViewById<ViewGroup>(android.R.id.content)
-            if (contentView.findViewWithTag<View>("HyperFloatingBar") != null) return
+            if (rootGroup.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            XposedBridge.log("[HyperBounce] Injecting Liquid Glass overlay...")
+            XposedBridge.log("[HyperBounce] Injecting YouTube Liquid Bar...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -107,52 +107,36 @@ class PhysicsHook : IXposedHookLoadPackage {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
 
+            if (rootGroup.findViewTreeLifecycleOwner() == null) rootGroup.setViewTreeLifecycleOwner(lifecycleOwner)
+            if (rootGroup.findViewTreeSavedStateRegistryOwner() == null) rootGroup.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            if (rootGroup.findViewTreeViewModelStoreOwner() == null) rootGroup.setViewTreeViewModelStoreOwner(lifecycleOwner)
+
             val tabState = mutableStateOf(0)
-            externalTabState = tabState
 
             val composeView = ComposeView(activity).apply {
                 tag = "HyperFloatingBar"
-                clipChildren  = false
+                clipChildren = false
                 clipToPadding = false
-                setBackgroundColor(Color.TRANSPARENT)
-
-                val navInsets = try {
-                    contentView.rootWindowInsets
-                        ?.getInsets(WindowInsets.Type.systemBars())?.bottom ?: 0
-                } catch (_: Exception) { 0 }
-                val extraPadding = (56 * activity.resources.displayMetrics.density).toInt()
-
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    gravity      = Gravity.BOTTOM
-                    bottomMargin = navInsets + extraPadding
-                }
-
-                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
-
-                val ctx = AndroidUiDispatcher.CurrentThread
-                val recomposer = Recomposer(ctx)
-                setParentCompositionContext(recomposer)
-                CoroutineScope(ctx).launch { recomposer.runRecomposeAndApplyChanges() }
-
+                
                 setContent {
                     LiquidNavBarHost(
-                        stockBar         = stockBar,
-                        externalTabState = tabState,
-                        isVisible        = isBarVisible,
+                        pivotBar = pivotBar,
+                        externalTabState = tabState
                     )
                 }
             }
-            contentView.addView(composeView)
-            XposedBridge.log("[HyperBounce] Injected successfully.")
 
+            rootGroup.addView(composeView)
+            XposedBridge.log("[HyperBounce] Overlay attached.")
         } catch (e: Exception) {
-            XposedBridge.log("[HyperBounce] executeUIHeist failed: ${e.message}")
+            XposedBridge.log("[HyperBounce] Exception: ${e.message}")
         }
     }
 }
