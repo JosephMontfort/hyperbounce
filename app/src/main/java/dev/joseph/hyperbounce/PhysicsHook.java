@@ -19,9 +19,26 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         if (!lpparam.packageName.contains("instagram")) return;
 
         log("==================================================");
-        log("[INIT] HyperBounce: Liquid Glass & Overlay Spoofer");
+        log("[INIT] HyperBounce: Ultimate Smart Shifter Active");
         log("==================================================");
 
+        // 1. DIMENSION SPOOFER: Force video to bottom & fix DM Layouts
+        try {
+            XposedHelpers.findAndHookMethod(Resources.class, "getDimensionPixelSize", int.class, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    Resources res = (Resources) param.thisObject;
+                    try {
+                        String name = res.getResourceEntryName((Integer) param.args[0]);
+                        if ("tab_bar_height".equals(name)) {
+                            param.setResult(0); 
+                        }
+                    } catch (Exception e) {}
+                }
+            });
+        } catch (Throwable t) {}
+
+        // 2. GHOST TAB BAR & INJECT UI
         try {
             XposedHelpers.findAndHookMethod(View.class, "onAttachedToWindow", new XC_MethodHook() {
                 @Override
@@ -31,8 +48,15 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     try {
                         String resName = view.getResources().getResourceEntryName(view.getId());
-                        if (resName.equals("tab_bar") || resName.equals("tab_bar_shadow") || resName.equals("layout_bottom_searchbar")) {
-                            view.setVisibility(View.GONE);
+
+                        // Hide stock elements, but keep tab_bar's visibility state intact for tracking
+                        if ("tab_bar".equals(resName) || "tab_bar_shadow".equals(resName) || "layout_bottom_searchbar".equals(resName)) {
+                            if ("tab_bar".equals(resName)) {
+                                view.setAlpha(0f);
+                                view.setTranslationY(9999f);
+                            } else {
+                                view.setVisibility(View.GONE);
+                            }
                             ViewGroup.LayoutParams lp = view.getLayoutParams();
                             if (lp != null) {
                                 lp.height = 0;
@@ -40,17 +64,33 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                             }
                         }
 
-                        // Trigger Injection exactly when the main wrapper attaches
-                        if (resName.equals("layout_container_main_wrapper")) {
+                        // Trigger Injection
+                        if ("layout_container_main_wrapper".equals(resName)) {
                             if (view.getContext() instanceof Activity) {
                                 Activity activity = (Activity) view.getContext();
                                 view.post(() -> {
                                     try {
                                         int stockBarId = activity.getResources().getIdentifier("tab_bar", "id", activity.getPackageName());
                                         ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
-                                        ViewGroup stockBar = decorView.findViewById(stockBarId);
+                                        View stockBar = decorView.findViewById(stockBarId);
                                         
-                                        LiquidGlassInjectorKt.injectLiquidGlass(activity, (ViewGroup) view, stockBar);
+                                        LiquidGlassInjectorKt.injectLiquidGlass(activity, (ViewGroup) view, (ViewGroup) stockBar);
+
+                                        // Global Layout Listener to handle Smart Shifting & Context-Aware Visibility
+                                        decorView.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+                                            View injectedBar = view.findViewWithTag("LiquidGlassInjected");
+                                            
+                                            // Check if we are in the main tabs (stock bar is meant to be visible)
+                                            boolean isTabBarActive = (stockBar != null && stockBar.getVisibility() == View.VISIBLE);
+
+                                            if (injectedBar != null) {
+                                                injectedBar.setVisibility(isTabBarActive ? View.VISIBLE : View.GONE);
+                                            }
+
+                                            // If tab bar is visible (we are on the main reels tab), shift overlays UP.
+                                            // If not (we are in DMs or Home Feed reel), shift them back to 0.
+                                            shiftOverlays(decorView, isTabBarActive ? -160.0f : 0.0f);
+                                        });
                                     } catch (Exception e) {}
                                 });
                             }
@@ -60,7 +100,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // THE MARGIN ASSASSIN & TEXT PUSHER
+        // 3. THE MARGIN ASSASSIN (Keep video stretched to the bottom)
         try {
             XposedHelpers.findAndHookMethod(ViewGroup.class, "measureChildWithMargins", 
                 View.class, int.class, int.class, int.class, int.class, 
@@ -72,11 +112,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                         try {
                             String resName = child.getResources().getResourceEntryName(child.getId());
-                            
-                            // 1. Stretch the video containers to the absolute bottom (0 margin)
-                            if (resName.equals("layout_container_main") || 
-                                resName.equals("layout_container_main_wrapper") || 
-                                resName.equals("swipeable_tab_view_pager")) {
+                            if ("layout_container_main".equals(resName) || 
+                                "layout_container_main_wrapper".equals(resName) || 
+                                "swipeable_tab_view_pager".equals(resName)) {
                                 
                                 ViewGroup.LayoutParams lp = child.getLayoutParams();
                                 if (lp instanceof ViewGroup.MarginLayoutParams) {
@@ -84,24 +122,75 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                     if (mlp.bottomMargin > 50) mlp.bottomMargin = 0;
                                 }
                             }
-                            
-                            // 2. Target the exact text components from the Raycaster logs and push them UP
-                            if (resName.equals("clips_media_info_component") || 
-                                resName.equals("clips_bottom_legibility_gradient_component") || 
-                                resName.equals("clips_item_overlay_component")) {
-                                
-                                ViewGroup.LayoutParams lp = child.getLayoutParams();
-                                if (lp instanceof ViewGroup.MarginLayoutParams) {
-                                    ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-                                    // 180px gives enough breathing room for the floating nav bar
-                                    mlp.bottomMargin = 180;
-                                }
-                            }
                         } catch (Exception e) {}
                     }
                 }
             );
         } catch (Throwable t) {}
+    }
+
+    private void shiftOverlays(ViewGroup group, float shiftY) {
+        if (group == null) return;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View child = group.getChildAt(i);
+            if (child == null) continue;
+
+            int id = child.getId();
+            String resName = "";
+            if (id != View.NO_ID && child.getResources() != null) {
+                try { resName = child.getResources().getResourceEntryName(id); } catch (Exception e) {}
+            }
+
+            if ("clips_item_overlay_component".equals(resName)) {
+                ViewGroup parent = (ViewGroup) child.getParent();
+                if (parent != null) {
+                    for (int c = 0; c < parent.getChildCount(); c++) {
+                        View sibling = parent.getChildAt(c);
+                        int sibId = sibling.getId();
+                        String sibName = "";
+                        if (sibId != View.NO_ID && sibling.getResources() != null) {
+                            try { sibName = sibling.getResources().getResourceEntryName(sibId); } catch(Exception e){}
+                        }
+
+                        // Ignore background, gradient, master wrappers, and mute components
+                        if ("clips_bottom_legibility_gradient_component".equals(sibName) ||
+                            "clips_touchable_background".equals(sibName) ||
+                            "clips_item_overlay_component".equals(sibName) ||
+                            "clips_pause_and_mute_component".equals(sibName)) {
+                            continue;
+                        }
+
+                        // Ignore the scrubber
+                        if (containsScrubber(sibling)) {
+                            continue;
+                        }
+
+                        if (sibling.getTranslationY() != shiftY) {
+                            sibling.setTranslationY(shiftY);
+                        }
+                    }
+                }
+            } else if (child instanceof ViewGroup) {
+                shiftOverlays((ViewGroup) child, shiftY);
+            }
+        }
+    }
+
+    private boolean containsScrubber(View view) {
+        if (view == null) return false;
+        int id = view.getId();
+        if (id != View.NO_ID && view.getResources() != null) {
+            try {
+                if ("scrubber".equals(view.getResources().getResourceEntryName(id))) return true;
+            } catch (Exception e) {}
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) view;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                if (containsScrubber(vg.getChildAt(i))) return true;
+            }
+        }
+        return false;
     }
 
     private void log(String msg) {
