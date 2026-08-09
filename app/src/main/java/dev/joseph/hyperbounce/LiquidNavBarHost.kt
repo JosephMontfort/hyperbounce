@@ -70,7 +70,6 @@ fun clickStockTab(stockBar: ViewGroup, index: Int) {
 @Composable
 fun LiquidNavBarHost(
     stockBar: ViewGroup,
-    whatsAppContent: View?,
     externalTabState: State<Int>
 ) {
     val isDark = isSystemInDarkTheme()
@@ -202,7 +201,6 @@ fun LiquidNavBarHost(
                                             scaleX = scale
                                             scaleY = scale
                                         }
-                                        // Removed clip(CircleShape) entirely per your request!
                                 )
                             }
                         }

@@ -31,10 +31,6 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 class PhysicsHook : IXposedHookLoadPackage {
 
     private var lastUiMode = -1
-
-    // Shared state written by the pre-draw tab-detection loop,
-    // read by the Compose composition inside LiquidNavBarHost.
-    // Exposed as State<Int> so Compose observes changes reactively.
     private var externalTabState: MutableState<Int>? = null
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
@@ -57,8 +53,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                         stockBar.viewTreeObserver.addOnPreDrawListener(
                             object : ViewTreeObserver.OnPreDrawListener {
                                 override fun onPreDraw(): Boolean {
-
-                                    // ── Visibility mirror ─────────────────
                                     val parentVis = (stockBar.parent as? View)?.visibility ?: -1
                                     val injected  = stockBar.rootView as ViewGroup
                                     val customBar = injected.findViewWithTag<View>("HyperFloatingBar")
@@ -71,7 +65,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                                         customBar.visibility = if (hide) View.GONE else View.VISIBLE
                                     }
 
-                                    // Keep stock bar invisible + zero-height
                                     stockBar.alpha = 0f
                                     stockBar.layoutParams?.let { lp ->
                                         if (lp.height != 0) {
@@ -80,10 +73,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                                         }
                                     }
 
-                                    // ── Tab detection ─────────────────────
-                                    // Detect which WhatsApp tab is visually
-                                    // selected so swipe-based navigation
-                                    // updates our pill indicator too.
                                     detectWhatsAppTab(stockBar)?.let { idx ->
                                         val state = externalTabState
                                         if (state != null && state.value != idx) {
@@ -91,7 +80,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                                         }
                                     }
 
-                                    // ── Theme-change re-inject ────────────
                                     val ctx = stockBar.context
                                     if (ctx != null) {
                                         val nightMask = Configuration.UI_MODE_NIGHT_MASK
@@ -109,25 +97,17 @@ class PhysicsHook : IXposedHookLoadPackage {
                             }
                         )
                     }
-
                     override fun onViewDetachedFromWindow(v: View) {}
                 })
             }
         })
     }
 
-    /**
-     * Returns the index of the tab WhatsApp currently considers selected,
-     * or null if detection fails.  Checks isSelected → isActivated → alpha
-     * so it works across different WhatsApp versions.
-     */
     private fun detectWhatsAppTab(stockBar: ViewGroup): Int? {
         val menu = stockBar.getChildAt(0) as? ViewGroup ?: return null
-        // isSelected
         for (i in 0 until menu.childCount) {
             if (menu.getChildAt(i).isSelected) return i
         }
-        // isActivated
         for (i in 0 until menu.childCount) {
             if (menu.getChildAt(i).isActivated) return i
         }
@@ -142,7 +122,6 @@ class PhysicsHook : IXposedHookLoadPackage {
             val context = stockBar.context
             XposedBridge.log("[HyperBounce] Injecting overlay…")
 
-            // ── Lifecycle owner ───────────────────────────────────────────
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
@@ -156,22 +135,9 @@ class PhysicsHook : IXposedHookLoadPackage {
             if (rootGroup.findViewTreeViewModelStoreOwner() == null)
                 rootGroup.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
-            // ── Tab state ─────────────────────────────────────────────────
-            // mutableStateOf is safe to create off-composition; Compose will
-            // observe it reactively inside LiquidNavBarHost.
             val tabState = mutableStateOf(0)
             externalTabState = tabState
 
-            // ── WhatsApp content view ─────────────────────────────────────
-            // The DecorView's first child is WhatsApp's entire UI, added by
-            // the framework before our injection.  Drawing it gives us the
-            // actual chat content WITHOUT our Compose overlay.
-            val whatsAppContent: View? = rootGroup.getChildAt(0)
-
-            // ── Compose overlay (full-screen, transparent background) ─────
-            // No separate blur View is needed: ContentCaptureBackdrop handles
-            // the real-time capture + downscale-blur, and miuix's drawBackdrop
-            // composites it correctly with the glass effects.
             val composeView = ComposeView(context).apply {
                 tag           = "HyperFloatingBar"
                 clipChildren  = false
@@ -183,10 +149,11 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setViewTreeLifecycleOwner(lifecycleOwner)
                 setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 setViewTreeViewModelStoreOwner(lifecycleOwner)
+                
                 setContent {
                     LiquidNavBarHost(
-                        stockBar      = stockBar,
-                        externalTabState = tabState,
+                        stockBar = stockBar,
+                        externalTabState = tabState
                     )
                 }
             }
