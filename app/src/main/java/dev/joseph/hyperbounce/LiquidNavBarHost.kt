@@ -30,6 +30,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.vibrancy
 import com.kyant.shapes.Capsule
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -75,9 +79,11 @@ fun findImageView(group: ViewGroup): ImageView? {
 @Composable
 fun LiquidNavBarHost(stockBar: ViewGroup?) {
     val isDark = isSystemInDarkTheme()
-    // Blur removed: using a clean, 90% opaque solid background
-    val containerColor = if (isDark) Color(0xE6121212) else Color(0xE6FAFAFA)
+    val containerColor = if (isDark) Color(0x66121212) else Color(0x66FAFAFA)
     val accentColor = if (isDark) Color.White else Color.Black
+    
+    // Prominent outline dynamic to the theme
+    val borderColor = if (isDark) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.20f)
     
     var selectedIndex by remember { mutableIntStateOf(0) }
     val orderedTabNames = listOf("feed_tab", "clips_tab", "direct_tab", "search_tab", "profile_tab")
@@ -109,11 +115,20 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
     ) {
         Box(
             modifier = Modifier
-                .padding(bottom = 56.dp) // Brought down from 76dp
+                .padding(bottom = 76.dp) // Pushed the nav bar significantly higher
                 .width(320.dp)
                 .height(64.dp)
+                .drawBackdrop(
+                    backdrop = rememberLayerBackdrop(),
+                    shape = { Capsule() },
+                    effects = {
+                        vibrancy()
+                        blur(32f.dp.toPx())
+                    },
+                    onDrawSurface = { drawRect(containerColor) }
+                )
                 .background(containerColor, Capsule())
-                .border(0.5.dp, Color.White.copy(alpha = 0.2f), Capsule())
+                .border(1.dp, borderColor, Capsule()) // Added prominent outline
         ) {
             if (tabs.isNotEmpty()) {
                 val density = LocalDensity.current
@@ -134,7 +149,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                     animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessLow)
                 )
 
-                // The crisp pill highlight (no blur required)
+                // Crisp pill highlight (No blur on the indicator)
                 Box(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
@@ -194,19 +209,26 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                                 
                                 val isProfile = orderedTabNames[index] == "profile_tab"
                                 
+                                // Base modifier
+                                var iconModifier = Modifier
+                                    .size(26.dp)
+                                    .graphicsLayer {
+                                        scaleX = scale
+                                        scaleY = scale
+                                    }
+                                    
+                                // Only apply CircleShape clipping to the profile picture
+                                if (isProfile) {
+                                    iconModifier = iconModifier.clip(CircleShape)
+                                }
+                                
                                 Image(
                                     bitmap = tab.bitmap,
                                     contentDescription = null,
                                     colorFilter = if (isProfile) null else ColorFilter.tint(
                                         if (selectedIndex == index) accentColor else accentColor.copy(alpha = 0.6f)
                                     ),
-                                    modifier = Modifier
-                                        .size(26.dp)
-                                        .clip(CircleShape)
-                                        .graphicsLayer {
-                                            scaleX = scale
-                                            scaleY = scale
-                                        }
+                                    modifier = iconModifier
                                 )
                             }
                         }
