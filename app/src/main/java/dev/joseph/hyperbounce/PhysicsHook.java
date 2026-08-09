@@ -16,7 +16,6 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 public class PhysicsHook implements IXposedHookLoadPackage {
 
-    // CACHE: Directly tracks the active master wrappers. Kills 99.9% of the CPU workload.
     private static final WeakHashMap<ViewGroup, Boolean> sOverlayParents = new WeakHashMap<>();
 
     @Override
@@ -24,7 +23,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         if (!lpparam.packageName.contains("instagram")) return;
 
         log("==================================================");
-        log("[INIT] HyperBounce: Zero-Lag Smart Shifter Active");
+        log("[INIT] HyperBounce: Ultimate Smart Shifter Final");
         log("==================================================");
 
         // 1. DIMENSION SPOOFER: Force video to bottom & fix DM Layouts
@@ -54,7 +53,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     try {
                         String resName = view.getResources().getResourceEntryName(view.getId());
 
-                        // Cache the exact parent holding the overlays to bypass recursive scanning
+                        // Cache the exact parent holding the overlays
                         if ("clips_item_overlay_component".equals(resName)) {
                             View parent = (View) view.getParent();
                             if (parent instanceof ViewGroup) {
@@ -62,7 +61,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                             }
                         }
 
-                        // Hide stock elements, but keep tab_bar's visibility state intact for context checking
+                        // Hide stock elements, but keep tab_bar's visibility state intact for tracking
                         if ("tab_bar".equals(resName) || "tab_bar_shadow".equals(resName) || "layout_bottom_searchbar".equals(resName)) {
                             if ("tab_bar".equals(resName)) {
                                 view.setAlpha(0f);
@@ -77,7 +76,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                             }
                         }
 
-                        // Trigger Injection & Context-Aware Shift
+                        // Trigger Injection & UI Management
                         if ("layout_container_main_wrapper".equals(resName)) {
                             if (view.getContext() instanceof Activity) {
                                 Activity activity = (Activity) view.getContext();
@@ -89,13 +88,17 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                         
                                         LiquidGlassInjectorKt.injectLiquidGlass(activity, (ViewGroup) view, (ViewGroup) stockBar);
 
-                                        // Lightweight listener targeting the cache
+                                        // Lightweight listener: Liquid Bar purely mimics stock bar visibility
                                         decorView.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
                                             View injectedBar = view.findViewWithTag("LiquidGlassInjected");
-                                            
-                                            // STRICT CONTEXT CHECK: Are we explicitly in the dedicated Reels Tab?
+                                            boolean isTabBarActive = (stockBar != null && stockBar.getVisibility() == View.VISIBLE);
+                                            if (injectedBar != null) {
+                                                injectedBar.setVisibility(isTabBarActive ? View.VISIBLE : View.GONE);
+                                            }
+
+                                            // STRICT SHIFT LOGIC: Only shift if Tab Bar is visible AND we are on the Reels tab
                                             boolean isReelsTabActive = false;
-                                            if (stockBar != null && stockBar.getVisibility() == View.VISIBLE) {
+                                            if (isTabBarActive) {
                                                 int clipsTabId = activity.getResources().getIdentifier("clips_tab", "id", activity.getPackageName());
                                                 View clipsTab = stockBar.findViewById(clipsTabId);
                                                 if (clipsTab != null && (clipsTab.isSelected() || clipsTab.isActivated())) {
@@ -103,13 +106,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                                 }
                                             }
 
-                                            // Hide the Liquid Bar entirely if opened from Home Feed or DMs
-                                            if (injectedBar != null) {
-                                                injectedBar.setVisibility(isReelsTabActive ? View.VISIBLE : View.GONE);
-                                            }
-
-                                            // Determine target shift (-200px if active, 0px if viewing via DM/Home)
-                                            float shiftY = isReelsTabActive ? -200.0f : 0.0f; 
+                                            // Determine target shift (Increased to -260px)
+                                            float shiftY = isReelsTabActive ? -260.0f : 0.0f; 
 
                                             // INSTANT O(1) SHIFT: Loop strictly through the cached parents
                                             for (ViewGroup overlayParent : sOverlayParents.keySet()) {
@@ -122,7 +120,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                                             try { sibName = sibling.getResources().getResourceEntryName(sibId); } catch(Exception e){}
                                                         }
 
-                                                        // Ignore standard backgrounds/wrappers
                                                         if ("clips_bottom_legibility_gradient_component".equals(sibName) ||
                                                             "clips_touchable_background".equals(sibName) ||
                                                             "clips_item_overlay_component".equals(sibName) ||
@@ -130,12 +127,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                                             continue;
                                                         }
 
-                                                        // Ignore the scrubber
-                                                        if (containsScrubber(sibling, 0)) {
-                                                            continue;
-                                                        }
+                                                        if (containsScrubber(sibling, 0)) continue;
 
-                                                        // Safely shift Captions, UFIs, Avatars, and Anonymous Buttons
                                                         if (sibling.getTranslationY() != shiftY) {
                                                             sibling.setTranslationY(shiftY);
                                                         }
@@ -152,7 +145,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        // 3. THE MARGIN ASSASSIN (Keep video stretched to the bottom)
+        // 3. THE MARGIN ASSASSIN
         try {
             XposedHelpers.findAndHookMethod(ViewGroup.class, "measureChildWithMargins", 
                 View.class, int.class, int.class, int.class, int.class, 
@@ -181,7 +174,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {}
     }
 
-    // Depth-limited scrubber check prevents recursion lag
     private boolean containsScrubber(View view, int depth) {
         if (view == null || depth > 4) return false; 
         int id = view.getId();
