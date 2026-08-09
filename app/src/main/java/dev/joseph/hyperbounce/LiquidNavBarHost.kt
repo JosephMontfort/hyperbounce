@@ -6,7 +6,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
@@ -113,14 +112,13 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
     }
 
     Box(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter
     ) {
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .padding(bottom = 16.dp)
-                .widthIn(max = 344.dp)
-                .fillMaxWidth(0.88f)
+                .width(320.dp)
                 .height(64.dp)
                 .drawBackdrop(
                     backdrop = rememberLayerBackdrop(),
@@ -136,8 +134,8 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
         ) {
             if (tabs.isNotEmpty()) {
                 val density = LocalDensity.current
-                val tabWidthDp = maxWidth / tabs.size
-                val tabWidthPx = with(density) { tabWidthDp.toPx() }
+                val tabWidthDp = 320f / tabs.size
+                val tabWidthPx = with(density) { tabWidthDp.dp.toPx() }
                 
                 var isPressed by remember { mutableStateOf(false) }
                 var dragOffset by remember { mutableFloatStateOf(0f) }
@@ -148,7 +146,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                     animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessLow)
                 )
                 
-                val animatedWidthDp by animateDpAsState(
+                val animatedWidthDp by animateFloatAsState(
                     targetValue = if (isPressed) tabWidthDp * 1.6f else tabWidthDp,
                     animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessLow)
                 )
@@ -158,7 +156,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                     Box(
                         modifier = Modifier
                             .offset { IntOffset(animatedOffsetPx.roundToInt(), 0) }
-                            .width(animatedWidthDp)
+                            .width(animatedWidthDp.dp)
                             .fillMaxHeight()
                             .padding(6.dp)
                             .clip(Capsule())
