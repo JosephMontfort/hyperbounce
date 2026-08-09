@@ -1,6 +1,9 @@
 package dev.joseph.hyperbounce
 
 import android.app.Activity
+import android.content.res.Configuration
+import android.graphics.Color
+import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -28,11 +31,12 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 
 class PhysicsHook : IXposedHookLoadPackage {
 
+    private val isDarkState = mutableStateOf(false)
+
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.google.android.youtube") return
 
         // 1. THE ZERO-LAG STRETCHER
-        // Natively kills the padding on the feed container to fill the white void
         try {
             XposedHelpers.findAndHookMethod(View::class.java, "setPadding", 
                 Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, 
@@ -50,7 +54,7 @@ class PhysicsHook : IXposedHookLoadPackage {
                 })
         } catch (t: Throwable) {}
 
-        // 2. GHOST BAR & FAB SHIFTER
+        // 2. GHOST BAR & COMPONENT SHIFTER
         try {
             XposedHelpers.findAndHookMethod(View::class.java, "onAttachedToWindow", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
@@ -71,12 +75,17 @@ class PhysicsHook : IXposedHookLoadPackage {
                             }
                         }
 
-                        // Shift YouTube's floating action buttons up to clear our 40.dp bar
+                        // Shift regular YouTube FABs
                         if (resName == "fab_container") {
                             view.translationY = -180f
                         }
 
-                        // Trigger Compose Injection when the master layout attaches
+                        // Shift YouTube Shorts Master Footer (Captions, Account, Action Buttons)
+                        if (resName == "reel_player_footer_container") {
+                            view.translationY = -200f
+                        }
+
+                        // Trigger Compose Injection
                         if (resName == "watch_while_layout_coordinator_layout") {
                             val activity = view.context as? Activity
                             if (activity != null) {
@@ -85,6 +94,15 @@ class PhysicsHook : IXposedHookLoadPackage {
                                     val pivotBar = activity.window.decorView.findViewById<ViewGroup>(pivotId)
                                     if (pivotBar != null) {
                                         executeUIHeist(activity, view as ViewGroup, pivotBar)
+                                        
+                                        // Continuous Theme Checker
+                                        activity.window.decorView.viewTreeObserver.addOnPreDrawListener {
+                                            val currentDark = isYouTubeInDarkMode(activity)
+                                            if (isDarkState.value != currentDark) {
+                                                isDarkState.value = currentDark
+                                            }
+                                            true
+                                        }
                                     }
                                 }
                             }
@@ -93,6 +111,24 @@ class PhysicsHook : IXposedHookLoadPackage {
                 }
             })
         } catch (t: Throwable) {}
+    }
+
+    // Mathematical Luminance Scanner to beat YouTube's custom theme engine
+    private fun isYouTubeInDarkMode(activity: Activity): Boolean {
+        val typedValue = TypedValue()
+        activity.theme.resolveAttribute(android.R.attr.colorBackground, typedValue, true)
+        if (typedValue.type in TypedValue.TYPE_FIRST_COLOR_INT..TypedValue.TYPE_LAST_COLOR_INT) {
+            val color = typedValue.data
+            val r = Color.red(color)
+            val g = Color.green(color)
+            val b = Color.blue(color)
+            // Standard relative luminance formula
+            val luminance = 0.299 * r + 0.587 * g + 0.114 * b
+            return luminance < 128 // Less than 128 means the background is dark
+        }
+        // Fallback to system uiMode if extraction fails
+        val uiMode = activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        return uiMode == Configuration.UI_MODE_NIGHT_YES
     }
 
     private fun executeUIHeist(activity: Activity, rootGroup: ViewGroup, pivotBar: ViewGroup) {
@@ -109,8 +145,6 @@ class PhysicsHook : IXposedHookLoadPackage {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
 
-            // FIX: Attach owners to the absolute top of the view tree (DecorView) 
-            // so Compose's WindowRecomposer can always find them!
             if (decorView.findViewTreeLifecycleOwner() == null) decorView.setViewTreeLifecycleOwner(lifecycleOwner)
             if (decorView.findViewTreeSavedStateRegistryOwner() == null) decorView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             if (decorView.findViewTreeViewModelStoreOwner() == null) decorView.setViewTreeViewModelStoreOwner(lifecycleOwner)
@@ -132,7 +166,8 @@ class PhysicsHook : IXposedHookLoadPackage {
                 setContent {
                     LiquidNavBarHost(
                         pivotBar = pivotBar,
-                        externalTabState = tabState
+                        externalTabState = tabState,
+                        isDarkState = isDarkState
                     )
                 }
             }

@@ -1,6 +1,5 @@
 package dev.joseph.hyperbounce
 
-import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.View
@@ -56,11 +55,9 @@ fun findViewByName(view: View, name: String): View? {
     return null
 }
 
-fun extractYouTubeTabs(pivotBar: ViewGroup): List<TabData> {
+fun extractYouTubeTabs(pivotBar: ViewGroup, isDark: Boolean): List<TabData> {
     val out = mutableListOf<TabData>()
     try {
-        val uiMode = pivotBar.resources.configuration.uiMode
-        val isDark = (uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         val tint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
         val wrapper = pivotBar.getChildAt(0) as? ViewGroup ?: return out
         
@@ -93,13 +90,10 @@ fun clickStockTab(pivotBar: ViewGroup, index: Int) {
 @Composable
 fun LiquidNavBarHost(
     pivotBar: ViewGroup,
-    externalTabState: State<Int>
+    externalTabState: State<Int>,
+    isDarkState: State<Boolean>
 ) {
-    // Explicit Theme Detection directly from YouTube Resources
-    val isDark = remember(pivotBar) {
-        val mode = pivotBar.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-        mode == Configuration.UI_MODE_NIGHT_YES
-    }
+    val isDark = isDarkState.value
     
     val containerColor = if (isDark) Color(0xE6121212) else Color(0xE6FAFAFA)
     val accentColor = if (isDark) Color.White else Color.Black
@@ -111,7 +105,7 @@ fun LiquidNavBarHost(
 
     LaunchedEffect(pivotBar, isDark) {
         while (true) {
-            val extracted = extractYouTubeTabs(pivotBar)
+            val extracted = extractYouTubeTabs(pivotBar, isDark)
             if (extracted.isNotEmpty() && extracted.size != tabs.size) {
                 tabs = extracted
             }
