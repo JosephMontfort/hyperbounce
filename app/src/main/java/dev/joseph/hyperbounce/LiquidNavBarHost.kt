@@ -115,7 +115,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
     ) {
         Box(
             modifier = Modifier
-                .padding(bottom = 76.dp) // Pushed the nav bar significantly higher
+                .padding(bottom = 50.dp) // Finalized padding to 50.dp
                 .width(320.dp)
                 .height(64.dp)
                 .drawBackdrop(

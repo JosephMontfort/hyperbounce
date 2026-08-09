@@ -101,7 +101,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                         decorView.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
                                             View injectedBar = view.findViewWithTag("LiquidGlassInjected");
                                             boolean isTabBarActive = (stockBar != null && stockBar.getVisibility() == View.VISIBLE);
-                                            
                                             if (injectedBar != null) {
                                                 injectedBar.setVisibility(isTabBarActive ? View.VISIBLE : View.GONE);
                                             }
@@ -116,8 +115,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                                 }
                                             }
 
-                                            // Determine target shift (Shifted up even more to clear the raised nav bar)
-                                            float shiftY = isReelsTabActive ? -230.0f : 0.0f; 
+                                            // Determine target shift (Finalized at -200px)
+                                            float shiftY = isReelsTabActive ? -200.0f : 0.0f; 
 
                                             // INSTANT O(1) SHIFT: Loop strictly through the cached parents
                                             for (ViewGroup overlayParent : sOverlayParents.keySet()) {
