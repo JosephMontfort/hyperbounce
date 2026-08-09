@@ -115,7 +115,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
     ) {
         Box(
             modifier = Modifier
-                .padding(bottom = 50.dp) // Finalized padding to 50.dp
+                .padding(bottom = 40.dp) // Finalized to 40dp
                 .width(320.dp)
                 .height(64.dp)
                 .drawBackdrop(
@@ -128,7 +128,7 @@ fun LiquidNavBarHost(stockBar: ViewGroup?) {
                     onDrawSurface = { drawRect(containerColor) }
                 )
                 .background(containerColor, Capsule())
-                .border(1.dp, borderColor, Capsule()) // Added prominent outline
+                .border(1.dp, borderColor, Capsule()) // Prominent outline
         ) {
             if (tabs.isNotEmpty()) {
                 val density = LocalDensity.current
