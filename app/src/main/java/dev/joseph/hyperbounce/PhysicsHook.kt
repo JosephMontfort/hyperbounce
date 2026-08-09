@@ -36,6 +36,31 @@ class PhysicsHook : IXposedHookLoadPackage {
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.whatsapp") return
 
+        // 1. --- THE FAB SHIFTER ---
+        // Hunts down the Meta AI and New Chat buttons to clear the Liquid Nav Bar
+        try {
+            XposedHelpers.findAndHookMethod(View::class.java, "onAttachedToWindow", object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val view = param.thisObject as View
+                    if (view.id == View.NO_ID || view.resources == null) return
+                    try {
+                        val resName = view.resources.getResourceEntryName(view.id)
+                        if (resName == "fab" || resName == "extended_mini_fab") {
+                            // Using margin natively preserves WhatsApp's scroll-to-hide animations
+                            val lp = view.layoutParams
+                            if (lp is ViewGroup.MarginLayoutParams) {
+                                if (lp.bottomMargin < 200) {
+                                    lp.bottomMargin += 200
+                                    view.layoutParams = lp
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {}
+                }
+            })
+        } catch (t: Throwable) {}
+
+        // 2. --- WDS BOTTOM BAR HOOK (GHOST TAB BAR & INJECT UI) ---
         val wdsClass = XposedHelpers.findClassIfExists(
             "com.whatsapp.ui.wds.components.bottombar.WDSBottomBar",
             lpparam.classLoader,
