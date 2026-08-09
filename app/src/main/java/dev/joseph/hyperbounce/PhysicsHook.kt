@@ -3,9 +3,11 @@ package dev.joseph.hyperbounce
 import android.app.Activity
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.Insets
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.widget.FrameLayout
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
@@ -32,24 +34,46 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 class PhysicsHook : IXposedHookLoadPackage {
 
     private val isDarkState = mutableStateOf(false)
+    private var cachedInsetTargets = intArrayOf()
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.google.android.youtube") return
 
-        // 1. THE ZERO-LAG STRETCHER
+        // 1. THE INSET ASSASSIN (ZERO-LAG FULLSCREEN)
+        // Intercepts WindowInsets in mid-air and lies to YouTube, telling it the bottom nav bar is 0px tall.
         try {
-            XposedHelpers.findAndHookMethod(View::class.java, "setPadding", 
-                Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, 
+            XposedHelpers.findAndHookMethod(View::class.java, "dispatchApplyWindowInsets",
+                WindowInsets::class.java,
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         val view = param.thisObject as View
-                        if (view.id != View.NO_ID && view.resources != null) {
-                            try {
-                                if (view.resources.getResourceEntryName(view.id) == "pane_fragment_container") {
-                                    param.args[3] = 0 // Force bottom padding to 0 natively
+                        if (view.id == View.NO_ID || view.resources == null) return
+
+                        try {
+                            // Ultra-fast ID caching to prevent UI lag
+                            if (cachedInsetTargets.isEmpty()) {
+                                val res = view.resources
+                                cachedInsetTargets = intArrayOf(
+                                    res.getIdentifier("watch_while_layout_coordinator_layout", "id", "com.google.android.youtube"),
+                                    res.getIdentifier("pane_fragment_container", "id", "com.google.android.youtube"),
+                                    res.getIdentifier("reel_watch_fragment_root", "id", "com.google.android.youtube")
+                                )
+                            }
+
+                            if (view.id in cachedInsetTargets) {
+                                val insets = param.args[0] as WindowInsets
+                                val type = WindowInsets.Type.systemBars()
+                                val current = insets.getInsets(type)
+
+                                // If Android reports a bottom inset, rewrite it to 0
+                                if (current.bottom > 0) {
+                                    val fakeInsets = WindowInsets.Builder(insets)
+                                        .setInsets(type, Insets.of(current.left, current.top, current.right, 0))
+                                        .build()
+                                    param.args[0] = fakeInsets
                                 }
-                            } catch (e: Exception) {}
-                        }
+                            }
+                        } catch (e: Exception) {}
                     }
                 })
         } catch (t: Throwable) {}
