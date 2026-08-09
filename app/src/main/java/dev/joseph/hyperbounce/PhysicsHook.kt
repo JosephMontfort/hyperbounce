@@ -101,15 +101,19 @@ class PhysicsHook : IXposedHookLoadPackage {
 
             XposedBridge.log("[HyperBounce] Injecting YouTube Liquid Bar...")
 
+            val decorView = activity.window.decorView as ViewGroup
+
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
 
-            if (rootGroup.findViewTreeLifecycleOwner() == null) rootGroup.setViewTreeLifecycleOwner(lifecycleOwner)
-            if (rootGroup.findViewTreeSavedStateRegistryOwner() == null) rootGroup.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            if (rootGroup.findViewTreeViewModelStoreOwner() == null) rootGroup.setViewTreeViewModelStoreOwner(lifecycleOwner)
+            // FIX: Attach owners to the absolute top of the view tree (DecorView) 
+            // so Compose's WindowRecomposer can always find them!
+            if (decorView.findViewTreeLifecycleOwner() == null) decorView.setViewTreeLifecycleOwner(lifecycleOwner)
+            if (decorView.findViewTreeSavedStateRegistryOwner() == null) decorView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            if (decorView.findViewTreeViewModelStoreOwner() == null) decorView.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
             val tabState = mutableStateOf(0)
 
