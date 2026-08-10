@@ -145,6 +145,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         float startX = 0f;
         float currentX = 0f;
         long lastTime = System.currentTimeMillis();
+        boolean initialized = false;
     }
 
     private static class SliderState extends GlassState {
@@ -153,6 +154,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         boolean isTouching = false;
         boolean isDragging = false;
         long lastTime = System.currentTimeMillis();
+        boolean initialized = false;
     }
 
     private static final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
@@ -491,6 +493,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         s.colorProgress = s.progress;
                         stateMap.put(view, s);
                     }
+
+                    if (!s.initialized) {
+                        view.setDuplicateParentStateEnabled(true);
+                        s.initialized = true;
+                    }
                     int action = event.getActionMasked();
                     if (action == MotionEvent.ACTION_DOWN) {
                         s.isTouching = true; s.isDragging = false; 
@@ -514,12 +521,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
                     android.widget.CompoundButton view = (android.widget.CompoundButton) param.thisObject;
                     
-                    // FIX TOUCH STARVATION: Legacy Preference screens wrap toggles in layouts that 
-                    // steal touches. By forcing the toggle to be clickable and focusable constantly, 
-                    // it forcefully steals the ACTION_DOWN touch back from the parent row.
-                    if (!view.isClickable()) view.setClickable(true);
-                    if (!view.isLongClickable()) view.setLongClickable(true);
-                    if (!view.isFocusable()) view.setFocusable(true);
+                    
                     
                     Canvas canvas = (Canvas) param.args[0];
                     int width = view.getWidth(), height = view.getHeight();
@@ -534,6 +536,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         s.progress = view.isChecked() ? 1.0f : 0.0f;
                         s.colorProgress = s.progress;
                         stateMap.put(view, s);
+                    }
+
+                    if (!s.initialized) {
+                        view.setDuplicateParentStateEnabled(true);
+                        s.initialized = true;
                     }
 
                     boolean isChecked = view.isChecked();
