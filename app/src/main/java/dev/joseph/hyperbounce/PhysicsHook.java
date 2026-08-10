@@ -15,6 +15,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.widget.ImageView;
 import java.lang.reflect.Field;
 import java.util.WeakHashMap;
 import java.util.HashSet;
@@ -87,14 +88,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         return Color.argb((int) a, (int) r, (int) g, (int) b);
     }
 
-    // ULTIMATE GUILLOTINE BYPASS: Kills Hardware Layers and Outlines 
     private static void disableClipping(View view) {
         if (view == null) return;
-        
-        // 1. Kill the Hardware Layer (The Invisible Glass Box)
         view.setLayerType(View.LAYER_TYPE_NONE, null);
-        
-        // 2. Kill local outline clipping
         view.setClipToOutline(false);
         view.setClipBounds(null);
         
@@ -107,13 +103,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         float z = needsElevation ? 100f : 0f;
         view.setTranslationZ(z);
 
-        // 3. Walk up the tree and disable clipping constraints on every parent
         ViewParent parent = view.getParent();
         int depth = 0;
         while (parent instanceof View) {
             View pView = (View) parent;
             pView.setClipToOutline(false);
-            
             if (pView instanceof ViewGroup) {
                 ViewGroup vg = (ViewGroup) pView;
                 vg.setClipChildren(false);
@@ -176,25 +170,18 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    }\n" +
         "    vec2 center = vec2(thumbL, thumbT) + thumbSize * 0.5;\n" +
         "    vec2 diff = fragCoord - center;\n" +
-        "    \n" +
-        "    float pinchX = 1.65;\n" +
-        "    float pinchY = 1.95;\n" +
+        "    float pinchX = 1.65; float pinchY = 1.95;\n" +
         "    vec2 lensWarp = center + vec2(diff.x * pinchX, diff.y * pinchY);\n" +
-        "    \n" +
         "    vec2 distFromEdge = min(p, thumbSize - p);\n" +
         "    float edgeDist = min(distFromEdge.x, distFromEdge.y);\n" +
         "    float rimFactor = smoothstep(14.0, 0.0, edgeDist);\n" +
-        "    \n" +
         "    half4 color = content.eval(lensWarp);\n" +
         "    half4 basePixel = content.eval(fragCoord);\n" +
-        "    \n" +
         "    color.rgb = mix(color.rgb, vec3(1.0), 0.15);\n" +
         "    vec3 glowColor = mix(vec3(1.0), basePixel.rgb, 0.85);\n" +
         "    color.rgb = mix(color.rgb, glowColor, rimFactor * 0.90);\n" +
-        "    \n" +
         "    float specular = pow(rimFactor, 3.0);\n" +
         "    color.rgb += specular * 0.45;\n" +
-        "    \n" +
         "    return color;\n" +
         "}";
 
@@ -216,21 +203,16 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    vec2 distFromEdge = min(p, thumbSize - p);\n" +
         "    float edgeDist = min(distFromEdge.x, distFromEdge.y);\n" +
         "    float factor = smoothstep(0.0, refractionHeight, edgeDist);\n" +
-        "    \n" +
         "    float dist = length(diff);\n" +
         "    vec2 dir = dist > 0.0 ? diff / dist : vec2(0.0);\n" +
         "    vec2 refractOffset = dir * (1.0 - factor) * 65.0;\n" +
-        "    \n" +
         "    half4 color = content.eval(fragCoord - refractOffset);\n" +
         "    half4 basePixel = content.eval(fragCoord);\n" +
-        "    \n" +
         "    color.rgb = mix(color.rgb, vec3(1.0), 0.12);\n" +
         "    color.rgb *= mix(0.70, 1.0, factor);\n" +
-        "    \n" +
         "    float rimFactor = smoothstep(12.0, 0.0, edgeDist);\n" +
         "    vec3 glowColor = mix(vec3(1.0), basePixel.rgb, 0.85);\n" +
         "    color.rgb = mix(color.rgb, glowColor, rimFactor * 0.90);\n" +
-        "    \n" +
         "    float rim = pow(1.0 - factor, 2.5);\n" +
         "    color.rgb += rim * 0.40;\n" +
         "    return color;\n" +
@@ -239,24 +221,17 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private void renderLiquidGlassThumb(Canvas canvas, GlassState s, int w, int h, float thumbL, float thumbT, float thumbR, float thumbB, float thumbRadius, boolean isToggle) {
         if (!canvas.isHardwareAccelerated()) return;
         RectF roundRectF = new RectF(thumbL, thumbT, thumbR, thumbB);
-        
         if (s.blurNode == null) s.blurNode = new RenderNode("BlurNode");
         if (s.glassNode == null) s.glassNode = new RenderNode("GlassNode");
-
         if (!s.shaderInitialized) {
             float blurRadius = isToggle ? 8.0f : 55.0f;
-            RenderEffect blurFx = RenderEffect.createBlurEffect(blurRadius, blurRadius, Shader.TileMode.CLAMP);
-            s.blurNode.setRenderEffect(blurFx);
-
+            s.blurNode.setRenderEffect(RenderEffect.createBlurEffect(blurRadius, blurRadius, Shader.TileMode.CLAMP));
             try {
-                String shaderCode = isToggle ? AGSL_SHADER_TOGGLE : AGSL_SHADER_SLIDER;
-                s.shader = new RuntimeShader(shaderCode);
-                RenderEffect shaderFx = RenderEffect.createRuntimeShaderEffect(s.shader, "content");
-                s.glassNode.setRenderEffect(shaderFx);
+                s.shader = new RuntimeShader(isToggle ? AGSL_SHADER_TOGGLE : AGSL_SHADER_SLIDER);
+                s.glassNode.setRenderEffect(RenderEffect.createRuntimeShaderEffect(s.shader, "content"));
                 s.shaderInitialized = true;
             } catch (Throwable t) {}
         }
-
         if (s.shaderInitialized) {
             s.shader.setFloatUniform("thumbL", thumbL);
             s.shader.setFloatUniform("thumbT", thumbT);
@@ -264,29 +239,177 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             s.shader.setFloatUniform("thumbB", thumbB);
             s.shader.setFloatUniform("refractionHeight", 34.0f);
         }
-
         int exp = 100;
         s.blurNode.setPosition(0, 0, w + exp * 2, h + exp * 2);
         Canvas rcBlur = s.blurNode.beginRecording(w + exp * 2, h + exp * 2);
         rcBlur.translate(exp, exp);
         rcBlur.drawBitmap(s.trackBitmap, 0.0f, 0.0f, bmpPaint);
         s.blurNode.endRecording();
-
         s.glassNode.setPosition(0, 0, w + exp * 2, h + exp * 2);
         Canvas rcGlass = s.glassNode.beginRecording(w + exp * 2, h + exp * 2);
         rcGlass.drawRenderNode(s.blurNode);
         s.glassNode.endRecording();
-
         Path clipPath = new Path();
         clipPath.addRoundRect(roundRectF, thumbRadius, thumbRadius, Path.Direction.CW);
-        
         canvas.save();
         canvas.clipPath(clipPath);
         canvas.translate(-exp, -exp);
         canvas.drawRenderNode(s.glassNode);
         canvas.restore();
-        
         canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, highlightPaint);
+    }
+
+    private void renderDialerToggle(ImageView view, Canvas canvas) {
+        int width = view.getWidth(), height = view.getHeight();
+        if (width <= 0 || height <= 0) return;
+
+        disableClipping(view);
+
+        ToggleState s = stateMap.get(view);
+        if (s == null) {
+            s = new ToggleState();
+            stateMap.put(view, s);
+        }
+
+        // 1. Passive State Reading: Read "Checked" state from native drawable
+        boolean isChecked = false;
+        int[] states = view.getDrawableState();
+        if (states != null) {
+            for (int st : states) {
+                if (st == android.R.attr.state_checked || st == android.R.attr.state_selected || st == android.R.attr.state_activated) {
+                    isChecked = true; break;
+                }
+            }
+        }
+
+        // 2. Passive Touch Reading: Check if parent row is currently being pressed
+        boolean isTouching = false;
+        ViewParent p = view.getParent();
+        while (p instanceof View) {
+            View pv = (View) p;
+            if (pv.isPressed()) {
+                isTouching = true;
+                break;
+            }
+            if (pv.getClass().getSimpleName().equals("HyperCellLayout")) break;
+            p = pv.getParent();
+        }
+
+        boolean isEnabled = view.isEnabled();
+        boolean isDarkMode = (view.getContext().getResources().getConfiguration().uiMode & 0x30) == 0x20;
+
+        long now = System.currentTimeMillis();
+        float dt = Math.min((now - s.lastTime) / 1000.0f, 0.05f);
+        s.lastTime = now;
+
+        float drawW = width, drawH = height, offsetX = 0f, offsetY = 0f;
+        if (width > height * 2.5f && width > 200f) {
+            drawH = Math.min(height * 0.55f, 110f);
+            drawW = drawH * 1.75f;
+            offsetX = width - drawW - (height * 0.15f);
+            offsetY = (height - drawH) / 2.0f;
+        }
+
+        float trackHeight = drawH * 0.72f, padding = trackHeight * 0.07f;
+        float restThumbHeight = trackHeight - (padding * 2.0f);
+        float restThumbWidth = restThumbHeight * 1.35f;
+
+        float targetProgress = isChecked ? 1.0f : 0.0f;
+        s.progress += (targetProgress - s.progress) * dt * 18.0f; 
+
+        float targetColorRatio = (s.progress >= 0.5f) ? 1.0f : 0.0f;
+        s.colorProgress += (targetColorRatio - s.colorProgress) * dt * 16.0f;
+        s.colorProgress = Math.max(0.0f, Math.min(1.0f, s.colorProgress));
+
+        float bloomTarget = isTouching ? 1.0f : 0.0f;
+        float bloomForce = (bloomTarget - s.bloom) * 250.0f - (s.bloomVelocity * 16.0f);
+        s.bloomVelocity += bloomForce * dt;
+        s.bloom += s.bloomVelocity * dt;
+
+        if (Math.abs(s.progress - targetProgress) > 0.002f || 
+            Math.abs(s.bloom - bloomTarget) > 0.005f || Math.abs(s.bloomVelocity) > 0.01f ||
+            Math.abs(s.colorProgress - targetColorRatio) > 0.005f) {
+            view.postInvalidateOnAnimation();
+        }
+
+        float trackTop = offsetY + (drawH - trackHeight) / 2.0f;
+        float trackBottom = trackTop + trackHeight;
+        float trackRadius = trackHeight / 2.0f;
+
+        float maxExpandedW = restThumbWidth * 1.35f; 
+        float currentThumbHeight = restThumbHeight + ((drawH * 0.88f) - restThumbHeight) * s.bloom; 
+        float currentThumbWidth = restThumbWidth + (maxExpandedW - restThumbWidth) * s.bloom;
+        float thumbRadius = currentThumbHeight / 2.0f;
+
+        float baseMinX = offsetX + (restThumbWidth / 2.0f) + 2.0f;
+        float baseMaxX = offsetX + drawW - (restThumbWidth / 2.0f) - 2.0f;
+
+        float edgeOffset = (restThumbWidth / 2.0f) + 2.0f;
+        float minX = baseMinX - (edgeOffset * s.bloom);
+        float maxX = baseMaxX + (edgeOffset * s.bloom);
+
+        float cx = minX + s.progress * (maxX - minX);
+        float cy = offsetY + (drawH / 2.0f);
+
+        float thumbL = cx - (currentThumbWidth / 2.0f);
+        float thumbR = cx + (currentThumbWidth / 2.0f);
+        float thumbT = cy - (currentThumbHeight / 2.0f);
+        float thumbB = cy + (currentThumbHeight / 2.0f);
+
+        int targetOffColor = !isEnabled ? TRACK_OFF_DISABLED : (isDarkMode ? TRACK_OFF_DARK : TRACK_OFF_LIGHT);
+        int targetOnColor = !isEnabled ? TRACK_ON_DISABLED : TRACK_ON;
+        bgPaint.setColor(blendColors(targetOffColor, targetOnColor, s.colorProgress));
+
+        canvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
+
+        if (s.trackBitmap == null || s.trackBitmap.getWidth() != width || s.trackBitmap.getHeight() != height) {
+            s.trackBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            s.trackCanvas = new Canvas(s.trackBitmap);
+        }
+        s.trackCanvas.drawColor(0, PorterDuff.Mode.CLEAR);
+        s.trackCanvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
+
+        int shadowAlpha = (int)(48 * (1.0f - Math.max(0f, Math.min(1f, s.bloom))));
+        if (shadowAlpha > 0 && isEnabled) {
+            shadowPaint.setAlpha(shadowAlpha);
+            canvas.drawRoundRect(thumbL - 1.0f, thumbT + 2.0f, thumbR + 1.0f, thumbB + 3.0f, thumbRadius, thumbRadius, shadowPaint);
+        }
+
+        renderLiquidGlassThumb(canvas, s, width, height, thumbL, thumbT, thumbR, thumbB, thumbRadius, true);
+
+        RectF roundRectF = new RectF(thumbL, thumbT, thumbR, thumbB);
+        int glowStroke = blendColors(Color.parseColor("#75FFFFFF"), bgPaint.getColor(), 0.70f * Math.max(0.3f, s.bloom));
+        strokePaint.setColor(glowStroke);
+        canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, strokePaint);
+        strokePaint.setColor(Color.parseColor("#75FFFFFF"));
+
+        int whiteAlpha = (int)(255 * (1.0f - Math.max(0f, Math.min(1f, s.bloom))));
+        if (whiteAlpha > 0) {
+            baseThumbPaint.setAlpha(isEnabled ? whiteAlpha : (int)(whiteAlpha * 0.5f));
+            canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, baseThumbPaint);
+        }
+    }
+
+    private void applyDialerToggleEngine(ClassLoader classLoader) {
+        try {
+            XposedHelpers.findAndHookMethod(ImageView.class, "onDraw", Canvas.class, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    ImageView view = (ImageView) param.thisObject;
+                    int id = view.getId();
+                    if (id == View.NO_ID) return;
+                    try {
+                        String resName = view.getResources().getResourceEntryName(id);
+                        if ("secondary_action_iv".equals(resName)) {
+                            // Suppress the native static image from drawing
+                            param.setResult(null);
+                            Canvas canvas = (Canvas) param.args[0];
+                            renderDialerToggle(view, canvas);
+                        }
+                    } catch (Exception e) {}
+                }
+            });
+        } catch (Throwable t) {}
     }
 
     private void applyUnifiedToggleEngine(String className, ClassLoader classLoader) {
@@ -366,9 +489,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
                     android.widget.CompoundButton view = (android.widget.CompoundButton) param.thisObject;
                     
-                    // FIX TOUCH STARVATION: Legacy Preference screens wrap toggles in layouts that 
-                    // steal touches. By forcing the toggle to be clickable and focusable constantly, 
-                    // it forcefully steals the ACTION_DOWN touch back from the parent row.
                     if (!view.isClickable()) view.setClickable(true);
                     if (!view.isLongClickable()) view.setLongClickable(true);
                     if (!view.isFocusable()) view.setFocusable(true);
@@ -450,23 +570,14 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float maxExpandedW = restThumbWidth * 1.35f; 
                     float currentThumbHeight = restThumbHeight + ((drawH * 0.88f) - restThumbHeight) * s.bloom; 
                     float currentThumbWidth = restThumbWidth + (maxExpandedW - restThumbWidth) * s.bloom;
-
-                    currentThumbWidth *= (1.0f + (s.bubbleSquish * 0.12f)); 
-                    currentThumbHeight *= (1.0f - (s.bubbleSquish * 0.25f));
                     float thumbRadius = currentThumbHeight / 2.0f;
 
-                    // HORIZONTAL BLEED CALCULATION
-                    // Base non-expanded boundaries (center of thumb strictly inside track)
-                    float baseMinX = offsetX + (restThumbWidth / 2.0f);
-                    float baseMaxX = offsetX + drawW - (restThumbWidth / 2.0f);
+                    float baseMinX = offsetX + (restThumbWidth / 2.0f) + 2.0f;
+                    float baseMaxX = offsetX + drawW - (restThumbWidth / 2.0f) - 2.0f;
 
-                    // Expanded boundaries: push center exactly to the edge of the track
-                    float targetMinX = offsetX;
-                    float targetMaxX = offsetX + drawW;
-
-                    // Interpolate X constraints based on bloom state
-                    float minX = baseMinX + (targetMinX - baseMinX) * s.bloom;
-                    float maxX = baseMaxX + (targetMaxX - baseMaxX) * s.bloom;
+                    float edgeOffset = (restThumbWidth / 2.0f) + 2.0f;
+                    float minX = baseMinX - (edgeOffset * s.bloom);
+                    float maxX = baseMaxX + (edgeOffset * s.bloom);
 
                     float cx = minX + s.progress * (maxX - minX);
                     float cy = offsetY + (drawH / 2.0f);
@@ -715,6 +826,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
         for (String className : TARGET_TOGGLE_CLASSES) applyUnifiedToggleEngine(className, lpparam.classLoader);
         for (String className : TARGET_SLIDER_CLASSES) applyUnifiedSliderEngine(className, lpparam.classLoader);
+
+        // Apply dedicated engine for the Dialer/Legacy preference screens
+        if (lpparam.packageName.equals("com.android.phone") || lpparam.packageName.equals("com.android.contacts") || lpparam.packageName.equals("com.android.settings")) {
+            applyDialerToggleEngine(lpparam.classLoader);
+        }
 
         if (lpparam.packageName.equals("com.android.systemui") || lpparam.packageName.equals("miui.systemui.plugin")) {
             XposedHelpers.findAndHookMethod(ClassLoader.class, "loadClass", String.class, boolean.class, new XC_MethodHook() {
