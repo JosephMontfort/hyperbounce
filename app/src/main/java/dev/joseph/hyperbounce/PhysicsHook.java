@@ -365,6 +365,14 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 @Override
                 protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
                     android.widget.CompoundButton view = (android.widget.CompoundButton) param.thisObject;
+                    
+                    // FIX TOUCH STARVATION: Legacy Preference screens wrap toggles in layouts that 
+                    // steal touches. By forcing the toggle to be clickable and focusable constantly, 
+                    // it forcefully steals the ACTION_DOWN touch back from the parent row.
+                    if (!view.isClickable()) view.setClickable(true);
+                    if (!view.isLongClickable()) view.setLongClickable(true);
+                    if (!view.isFocusable()) view.setFocusable(true);
+                    
                     Canvas canvas = (Canvas) param.args[0];
                     int width = view.getWidth(), height = view.getHeight();
                     if (width <= 0 || height <= 0) return null;
@@ -448,15 +456,17 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float thumbRadius = currentThumbHeight / 2.0f;
 
                     // HORIZONTAL BLEED CALCULATION
-                    // At bloom 0.0: standard internal constraints
-                    float baseMinX = offsetX + (restThumbWidth / 2.0f) + 2.0f;
-                    float baseMaxX = offsetX + drawW - (restThumbWidth / 2.0f) - 2.0f;
+                    // Base non-expanded boundaries (center of thumb strictly inside track)
+                    float baseMinX = offsetX + (restThumbWidth / 2.0f);
+                    float baseMaxX = offsetX + drawW - (restThumbWidth / 2.0f);
 
-                    // At bloom 1.0: minX drops down to exactly offsetX, placing thumb center on track edge 
-                    // This forces exactly half the expanded thumb to bleed outside horizontally.
-                    float edgeOffset = (restThumbWidth / 2.0f) + 2.0f;
-                    float minX = baseMinX - (edgeOffset * s.bloom);
-                    float maxX = baseMaxX + (edgeOffset * s.bloom);
+                    // Expanded boundaries: push center exactly to the edge of the track
+                    float targetMinX = offsetX;
+                    float targetMaxX = offsetX + drawW;
+
+                    // Interpolate X constraints based on bloom state
+                    float minX = baseMinX + (targetMinX - baseMinX) * s.bloom;
+                    float maxX = baseMaxX + (targetMaxX - baseMaxX) * s.bloom;
 
                     float cx = minX + s.progress * (maxX - minX);
                     float cy = offsetY + (drawH / 2.0f);
