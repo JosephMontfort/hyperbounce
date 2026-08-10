@@ -88,7 +88,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         return Color.argb((int) a, (int) r, (int) g, (int) b);
     }
 
-    // ULTIMATE GUILLOTINE BYPASS: Kills Hardware Layers and Outlines 
     private static void disableClipping(View view) {
         if (view == null) return;
         
@@ -142,11 +141,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         float colorProgress = 0.0f;
         boolean isTouching = false;
         boolean isDragging = false;
-        boolean isParentPressed = false;
+        boolean isParentPressed = false; // THE SNIPER FLAG
+        boolean initializedObserver = false;
         float startX = 0f;
         float currentX = 0f;
         long lastTime = System.currentTimeMillis();
-        boolean initialized = false;
     }
 
     private static class SliderState extends GlassState {
@@ -154,9 +153,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         float touchX = 0.0f;
         boolean isTouching = false;
         boolean isDragging = false;
-        boolean isParentPressed = false;
         long lastTime = System.currentTimeMillis();
-        boolean initialized = false;
     }
 
     private static final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
@@ -278,7 +275,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, highlightPaint);
     }
 
-    // THE PASSIVE DIALER ENGINE FOR LEGACY TOGGLES
     private void renderDialerToggle(ImageView view, Canvas canvas) {
         int width = view.getWidth(), height = view.getHeight();
         if (width <= 0 || height <= 0) return;
@@ -291,7 +287,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             stateMap.put(view, s);
         }
 
-        // 1. Passive State Reading: Read "Checked" state from native drawable
         boolean isChecked = false;
         int[] states = view.getDrawableState();
         if (states != null) {
@@ -302,7 +297,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             }
         }
 
-        // 2. Passive Touch Reading: Check if parent row is currently being pressed natively
         boolean isTouching = false;
         ViewParent p = view.getParent();
         while (p instanceof View) {
@@ -423,14 +417,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     try {
                         String resName = view.getResources().getResourceEntryName(id);
                         if ("secondary_action_iv".equals(resName)) {
-                            
-                            // CONTEXT FILTER: Ensure we are in a Settings page, preventing Recents arrow collision
                             String ctxName = view.getContext().getClass().getName();
                             if (!ctxName.contains("Setting") && !ctxName.contains("Preference") && !ctxName.contains("CallFeatures")) {
                                 return; 
                             }
-                            
-                            // Suppress the native static image from drawing
                             param.setResult(null);
                             Canvas canvas = (Canvas) param.args[0];
                             renderDialerToggle(view, canvas);
@@ -495,11 +485,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         s.colorProgress = s.progress;
                         stateMap.put(view, s);
                     }
-
-                    // FIX TOUCH STARVATION:
-                    if (!view.isClickable()) view.setClickable(true);
-                    if (!view.isLongClickable()) view.setLongClickable(true);
-                    if (!view.isFocusable()) view.setFocusable(true);
                     int action = event.getActionMasked();
                     if (action == MotionEvent.ACTION_DOWN) {
                         s.isTouching = true; s.isDragging = false; 
@@ -523,7 +508,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
                     android.widget.CompoundButton view = (android.widget.CompoundButton) param.thisObject;
                     
-                    
+                    // KEEP TOUCH STARVATION HACK: The toggle MUST process its own independent swipes!
+                    if (!view.isClickable()) view.setClickable(true);
+                    if (!view.isLongClickable()) view.setLongClickable(true);
+                    if (!view.isFocusable()) view.setFocusable(true);
                     
                     Canvas canvas = (Canvas) param.args[0];
                     int width = view.getWidth(), height = view.getHeight();
@@ -540,10 +528,37 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         stateMap.put(view, s);
                     }
 
-                    // FIX TOUCH STARVATION:
-                    if (!view.isClickable()) view.setClickable(true);
-                    if (!view.isLongClickable()) view.setLongClickable(true);
-                    if (!view.isFocusable()) view.setFocusable(true);
+                    // --- THE SNIPER FIX: Inject a ViewTreeObserver to wake up the animation when parent gets pressed ---
+                    if (!s.initializedObserver) {
+                        final android.widget.CompoundButton finalView = view;
+                        final ToggleState finalS = s;
+                        view.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+                            private boolean wasParentPressed = false;
+                            @Override
+                            public boolean onPreDraw() {
+                                boolean parentPressed = false;
+                                ViewParent p = finalView.getParent();
+                                while (p instanceof View) {
+                                    View pv = (View) p;
+                                    if (pv.isPressed()) {
+                                        parentPressed = true;
+                                        break;
+                                    }
+                                    if (pv.getClass().getSimpleName().equals("RecyclerView") || pv.getClass().getSimpleName().contains("ListView")) break;
+                                    p = pv.getParent();
+                                }
+                                
+                                if (parentPressed != wasParentPressed) {
+                                    wasParentPressed = parentPressed;
+                                    finalS.isParentPressed = parentPressed;
+                                    finalView.postInvalidateOnAnimation();
+                                }
+                                return true;
+                            }
+                        });
+                        s.initializedObserver = true;
+                    }
+                    // -------------------------------------------------------------------------------------------------
 
                     boolean isChecked = view.isChecked();
                     boolean isEnabled = view.isEnabled();
@@ -578,6 +593,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     s.colorProgress += (targetColorRatio - s.colorProgress) * dt * 16.0f;
                     s.colorProgress = Math.max(0.0f, Math.min(1.0f, s.colorProgress));
 
+                    // Bloom target now combines direct touches AND parent observer state
                     float bloomTarget = (s.isTouching || s.isDragging || s.isParentPressed) ? 1.0f : 0.0f;
                     float bloomForce = (bloomTarget - s.bloom) * 250.0f - (s.bloomVelocity * 16.0f);
                     s.bloomVelocity += bloomForce * dt;
@@ -609,7 +625,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float currentThumbWidth = restThumbWidth + (maxExpandedW - restThumbWidth) * s.bloom;
                     float thumbRadius = currentThumbHeight / 2.0f;
 
-                    // HORIZONTAL BLEED CALCULATION
                     float baseMinX = offsetX + (restThumbWidth / 2.0f) + 2.0f;
                     float baseMaxX = offsetX + drawW - (restThumbWidth / 2.0f) - 2.0f;
 
@@ -737,7 +752,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float dt = Math.min((now - s.lastTime) / 1000.0f, 0.05f);
                     s.lastTime = now;
 
-                    float bloomTarget = (s.isTouching || s.isDragging || s.isParentPressed) ? 1.0f : 0.0f;
+                    float bloomTarget = (s.isTouching || s.isDragging) ? 1.0f : 0.0f;
                     float bloomForce = (bloomTarget - s.bloom) * 250.0f - (s.bloomVelocity * 16.0f);
                     s.bloomVelocity += bloomForce * dt;
                     s.bloom += s.bloomVelocity * dt;
@@ -867,29 +882,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         for (String className : TARGET_TOGGLE_CLASSES) applyUnifiedToggleEngine(className, lpparam.classLoader);
         for (String className : TARGET_SLIDER_CLASSES) applyUnifiedSliderEngine(className, lpparam.classLoader);
 
-        try {
-            XposedHelpers.findAndHookMethod(android.view.ViewGroup.class, "setPressed", boolean.class, new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    android.view.ViewGroup vg = (android.view.ViewGroup) param.thisObject;
-                    String name = vg.getClass().getSimpleName();
-                    if (name.endsWith("Layout") || name.contains("Preference")) {
-                        for (int i = 0; i < vg.getChildCount(); i++) {
-                            android.view.View child = vg.getChildAt(i);
-                            if (child != null && child.getClass().getName().contains("SlidingButton")) {
-                                ToggleState s = stateMap.get(child);
-                                if (s != null) {
-                                    s.isParentPressed = (boolean) param.args[0];
-                                    child.postInvalidateOnAnimation();
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        } catch (Throwable t) {}
-
-        // Apply dedicated passive engine for the Dialer/Legacy preference screens
         if (lpparam.packageName.equals("com.android.phone") || lpparam.packageName.equals("com.android.contacts") || lpparam.packageName.equals("com.android.settings")) {
             applyDialerToggleEngine(lpparam.classLoader);
         }
