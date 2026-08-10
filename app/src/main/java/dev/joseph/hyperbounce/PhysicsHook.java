@@ -87,9 +87,16 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         return Color.argb((int) a, (int) r, (int) g, (int) b);
     }
 
+    // ULTIMATE GUILLOTINE BYPASS: Kills Hardware Layers and Outlines 
     private static void disableClipping(View view) {
         if (view == null) return;
+        
+        // 1. Kill the Hardware Layer (The Invisible Glass Box)
+        view.setLayerType(View.LAYER_TYPE_NONE, null);
+        
+        // 2. Kill local outline clipping
         view.setClipToOutline(false);
+        view.setClipBounds(null);
         
         boolean needsElevation = false;
         ToggleState ts = stateMap.get(view);
@@ -100,14 +107,20 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         float z = needsElevation ? 100f : 0f;
         view.setTranslationZ(z);
 
+        // 3. Walk up the tree and disable clipping constraints on every parent
         ViewParent parent = view.getParent();
         int depth = 0;
-        while (parent instanceof ViewGroup) {
-            ViewGroup vg = (ViewGroup) parent;
-            vg.setClipChildren(false);
-            vg.setClipToPadding(false);
-            if (depth < 3) vg.setTranslationZ(z);
-            parent = vg.getParent();
+        while (parent instanceof View) {
+            View pView = (View) parent;
+            pView.setClipToOutline(false);
+            
+            if (pView instanceof ViewGroup) {
+                ViewGroup vg = (ViewGroup) pView;
+                vg.setClipChildren(false);
+                vg.setClipToPadding(false);
+                if (depth < 3) vg.setTranslationZ(z);
+            }
+            parent = pView.getParent();
             depth++;
         }
     }
@@ -148,7 +161,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private static final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
     private static final WeakHashMap<Object, SliderState> sliderStateMap = new WeakHashMap<>();
 
-    // AGGRESSIVE FIGMA TOGGLE SHADER: Deep optical pinch without artificial black masking
     private static final String AGSL_SHADER_TOGGLE = 
         "uniform shader content;\n" +
         "uniform float thumbL;\n" +
@@ -165,7 +177,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    vec2 center = vec2(thumbL, thumbT) + thumbSize * 0.5;\n" +
         "    vec2 diff = fragCoord - center;\n" +
         "    \n" +
-        "    // Extreme pinch to organically pull transparent pixels inward, mimicking a physical shrink\n" +
         "    float pinchX = 1.65;\n" +
         "    float pinchY = 1.95;\n" +
         "    vec2 lensWarp = center + vec2(diff.x * pinchX, diff.y * pinchY);\n" +
@@ -177,7 +188,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    half4 color = content.eval(lensWarp);\n" +
         "    half4 basePixel = content.eval(fragCoord);\n" +
         "    \n" +
-        "    // Smooth glassy overlay\n" +
         "    color.rgb = mix(color.rgb, vec3(1.0), 0.15);\n" +
         "    vec3 glowColor = mix(vec3(1.0), basePixel.rgb, 0.85);\n" +
         "    color.rgb = mix(color.rgb, glowColor, rimFactor * 0.90);\n" +
@@ -188,7 +198,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    return color;\n" +
         "}";
 
-    // SLIDER SHADER: Pure Water Droplet Refraction (No lens shrink)
     private static final String AGSL_SHADER_SLIDER = 
         "uniform shader content;\n" +
         "uniform float thumbL;\n" +
@@ -438,8 +447,16 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     currentThumbHeight *= (1.0f - (s.bubbleSquish * 0.25f));
                     float thumbRadius = currentThumbHeight / 2.0f;
 
-                    float minX = offsetX + (currentThumbWidth / 2.0f) + 2.0f;
-                    float maxX = offsetX + drawW - (currentThumbWidth / 2.0f) - 2.0f;
+                    // HORIZONTAL BLEED CALCULATION
+                    // At bloom 0.0: standard internal constraints
+                    float baseMinX = offsetX + (restThumbWidth / 2.0f) + 2.0f;
+                    float baseMaxX = offsetX + drawW - (restThumbWidth / 2.0f) - 2.0f;
+
+                    // At bloom 1.0: minX drops down to exactly offsetX, placing thumb center on track edge 
+                    // This forces exactly half the expanded thumb to bleed outside horizontally.
+                    float edgeOffset = (restThumbWidth / 2.0f) + 2.0f;
+                    float minX = baseMinX - (edgeOffset * s.bloom);
+                    float maxX = baseMaxX + (edgeOffset * s.bloom);
 
                     float cx = minX + s.progress * (maxX - minX);
                     float cy = offsetY + (drawH / 2.0f);
@@ -462,8 +479,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     
                     s.trackCanvas.drawColor(0, PorterDuff.Mode.CLEAR);
                     s.trackCanvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
-
-                    // Reverted: Removed artificial concave drawing logic completely.
 
                     int shadowAlpha = (int)(48 * (1.0f - Math.max(0f, Math.min(1f, s.bloom))));
                     if (shadowAlpha > 0 && isEnabled) {
