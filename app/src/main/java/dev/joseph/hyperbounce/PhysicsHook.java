@@ -142,6 +142,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         float colorProgress = 0.0f;
         boolean isTouching = false;
         boolean isDragging = false;
+        boolean isParentPressed = false;
         float startX = 0f;
         float currentX = 0f;
         long lastTime = System.currentTimeMillis();
@@ -153,6 +154,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         float touchX = 0.0f;
         boolean isTouching = false;
         boolean isDragging = false;
+        boolean isParentPressed = false;
         long lastTime = System.currentTimeMillis();
         boolean initialized = false;
     }
@@ -494,10 +496,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         stateMap.put(view, s);
                     }
 
-                    if (!s.initialized) {
-                        view.setDuplicateParentStateEnabled(true);
-                        s.initialized = true;
-                    }
+                    // FIX TOUCH STARVATION:
+                    if (!view.isClickable()) view.setClickable(true);
+                    if (!view.isLongClickable()) view.setLongClickable(true);
+                    if (!view.isFocusable()) view.setFocusable(true);
                     int action = event.getActionMasked();
                     if (action == MotionEvent.ACTION_DOWN) {
                         s.isTouching = true; s.isDragging = false; 
@@ -538,10 +540,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         stateMap.put(view, s);
                     }
 
-                    if (!s.initialized) {
-                        view.setDuplicateParentStateEnabled(true);
-                        s.initialized = true;
-                    }
+                    // FIX TOUCH STARVATION:
+                    if (!view.isClickable()) view.setClickable(true);
+                    if (!view.isLongClickable()) view.setLongClickable(true);
+                    if (!view.isFocusable()) view.setFocusable(true);
 
                     boolean isChecked = view.isChecked();
                     boolean isEnabled = view.isEnabled();
@@ -576,7 +578,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     s.colorProgress += (targetColorRatio - s.colorProgress) * dt * 16.0f;
                     s.colorProgress = Math.max(0.0f, Math.min(1.0f, s.colorProgress));
 
-                    float bloomTarget = (s.isTouching || s.isDragging) ? 1.0f : 0.0f;
+                    float bloomTarget = (s.isTouching || s.isDragging || s.isParentPressed) ? 1.0f : 0.0f;
                     float bloomForce = (bloomTarget - s.bloom) * 250.0f - (s.bloomVelocity * 16.0f);
                     s.bloomVelocity += bloomForce * dt;
                     s.bloom += s.bloomVelocity * dt;
@@ -735,7 +737,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float dt = Math.min((now - s.lastTime) / 1000.0f, 0.05f);
                     s.lastTime = now;
 
-                    float bloomTarget = (s.isTouching || s.isDragging) ? 1.0f : 0.0f;
+                    float bloomTarget = (s.isTouching || s.isDragging || s.isParentPressed) ? 1.0f : 0.0f;
                     float bloomForce = (bloomTarget - s.bloom) * 250.0f - (s.bloomVelocity * 16.0f);
                     s.bloomVelocity += bloomForce * dt;
                     s.bloom += s.bloomVelocity * dt;
@@ -864,6 +866,28 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
         for (String className : TARGET_TOGGLE_CLASSES) applyUnifiedToggleEngine(className, lpparam.classLoader);
         for (String className : TARGET_SLIDER_CLASSES) applyUnifiedSliderEngine(className, lpparam.classLoader);
+
+        try {
+            XposedHelpers.findAndHookMethod(android.view.ViewGroup.class, "setPressed", boolean.class, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    android.view.ViewGroup vg = (android.view.ViewGroup) param.thisObject;
+                    String name = vg.getClass().getSimpleName();
+                    if (name.endsWith("Layout") || name.contains("Preference")) {
+                        for (int i = 0; i < vg.getChildCount(); i++) {
+                            android.view.View child = vg.getChildAt(i);
+                            if (child != null && child.getClass().getName().contains("SlidingButton")) {
+                                ToggleState s = stateMap.get(child);
+                                if (s != null) {
+                                    s.isParentPressed = (boolean) param.args[0];
+                                    child.postInvalidateOnAnimation();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (Throwable t) {}
 
         // Apply dedicated passive engine for the Dialer/Legacy preference screens
         if (lpparam.packageName.equals("com.android.phone") || lpparam.packageName.equals("com.android.contacts") || lpparam.packageName.equals("com.android.settings")) {
