@@ -1,17 +1,22 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "dev.joseph.hyperbounce"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "dev.joseph.hyperbounce"
-        minSdk = 31
-        targetSdk = 36
+        minSdk = 33
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0.0"
+    }
+
+    buildFeatures {
+        compose = true
     }
 
     signingConfigs {
@@ -29,6 +34,7 @@ android {
             isMinifyEnabled = false
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -37,5 +43,17 @@ android {
 
 dependencies {
     compileOnly("de.robv.android.xposed:api:82")
-    compileOnly("de.robv.android.xposed:api:82:sources")
+
+    val composeBom = platform("androidx.compose:compose-bom:2025.05.01")
+    implementation(composeBom)
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.activity:activity-compose:1.10.1")
+
+    // Lifecycles required to run Compose inside an Xposed Hook
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.0")
+    implementation("androidx.lifecycle:lifecycle-runtime:2.9.0")
+    implementation("androidx.savedstate:savedstate:1.3.0")
+
+    // KernelSU's exact UI engine
 }

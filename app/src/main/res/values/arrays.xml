@@ -3,28 +3,7 @@
     <string-array name="xposed_scope">
         <item>android</item>
         <item>com.whatsapp</item>
-        <item>com.android.settings</item>
-        <item>com.miui.securitycenter</item>
-        <item>com.android.camera</item>
-        <item>com.xiaomi.calendar</item>
-        <item>com.android.calendar</item>
-        <item>com.miui.calendar</item>
-        <item>com.mi.android.globalFileexplorer</item>
-        <item>com.miui.gallery</item>
-        <item>com.miui.mediaeditor</item>
-        <item>com.miui.screenrecorder</item>
-        <item>com.miui.cleaner</item>
-        <item>com.miui.calculator</item>
-        <item>com.miui.notes</item>
-        <item>com.miui.weather2</item>
-        <item>com.miui.deskclock</item>
-        <item>com.android.contacts</item>
-        <item>com.android.phone</item>
-        <item>com.android.server.telecom</item>
-        <item>com.miui.securityadd</item>
-        <item>com.miui.securitycore</item>
-        <item>miui.systemui.plugin</item>
-        <item>com.miui.home</item>
-        <item>com.android.systemui</item>
+        <item>com.instagram.android</item>
+        <item>com.google.android.youtube</item>
     </string-array>
 </resources>
