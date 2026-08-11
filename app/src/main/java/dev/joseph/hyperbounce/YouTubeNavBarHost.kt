@@ -104,7 +104,7 @@ fun YouTubeNavBarHost(
     }
 
     LiquidNavigationBar(
-        bottomPadding = 24.dp,
+        bottomPadding = 28.dp,
         tabs = tabs.map { it.bitmap },
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
@@ -112,5 +112,6 @@ fun YouTubeNavBarHost(
             clickStockTab(pivotBar, index)
         },
         sourceView = backdropSource,
+        forceLightTheme = true,
     )
 }

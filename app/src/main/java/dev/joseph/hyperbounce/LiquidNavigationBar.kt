@@ -63,10 +63,11 @@ fun LiquidNavigationBar(
     onTabSelected: (Int) -> Unit,
     sourceView: android.view.View,
     circularIndices: Set<Int> = emptySet(),
+    forceLightTheme: Boolean = false,
 ) {
     if (tabs.isEmpty()) return
 
-    val isLightTheme = !isSystemInDarkTheme()
+    val isLightTheme = forceLightTheme || !isSystemInDarkTheme()
     val accentColor =
         if (isLightTheme) Color(0xFF0088FF)
         else Color(0xFF0091FF)
@@ -78,12 +79,11 @@ fun LiquidNavigationBar(
     val liveBackdrop = remember(sourceView) {
         LiquidGlassViewBackdrop(sourceView)
     }
-    // Read the live-frame state at composition time so every captured frame invalidates
-    // the Backdrop modifier and the library's GPU RenderEffect pipeline is redrawn.
-    @Suppress("UNUSED_VARIABLE")
-    val liveFrame = liveBackdrop.capturedFrame
+    // Do not read capturedFrame during composition. The custom Backdrop reads the
+    // snapshot state from its DrawScope, which invalidates only the render pass for
+    // each live frame instead of recomposing the entire navigation bar at 60 Hz.
     val capturePaddingPx = remember(density) {
-        with(density) { 32.dp.toPx().toInt() }
+        with(density) { 24.dp.toPx().toInt() }
     }
 
     DisposableEffect(liveBackdrop) {
@@ -208,7 +208,7 @@ fun LiquidNavigationBar(
                             effects = {
                                 vibrancy()
                                 blur(8f.dp.toPx())
-                                lens(24f.dp.toPx(), 24f.dp.toPx())
+                                lens(18f.dp.toPx(), 18f.dp.toPx())
                             },
                             layerBlock = {
                                 val progress = dampedDragAnimation.pressProgress
@@ -267,8 +267,8 @@ fun LiquidNavigationBar(
                                     vibrancy()
                                     blur(8f.dp.toPx())
                                     lens(
-                                        24f.dp.toPx() * progress,
-                                        24f.dp.toPx() * progress,
+                                        18f.dp.toPx() * progress,
+                                        18f.dp.toPx() * progress,
                                     )
                                 },
                                 highlight = {
@@ -292,7 +292,10 @@ fun LiquidNavigationBar(
                             LiquidBottomTab(
                                 bitmap = bitmap,
                                 isCircular = index in circularIndices,
-                                onClick = {},
+                                onClick = {
+                                    onTabSelected(index)
+                                    dampedDragAnimation.animateToValue(index.toFloat())
+                                },
                             )
                         }
                     }
@@ -322,8 +325,8 @@ fun LiquidNavigationBar(
                             effects = {
                                 val progress = dampedDragAnimation.pressProgress
                                 lens(
-                                    10f.dp.toPx() * progress,
-                                    14f.dp.toPx() * progress,
+                                    8f.dp.toPx() * progress,
+                                    11f.dp.toPx() * progress,
                                     chromaticAberration = true,
                                 )
                             },

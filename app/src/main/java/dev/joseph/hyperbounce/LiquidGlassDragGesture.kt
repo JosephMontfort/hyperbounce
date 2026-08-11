@@ -2,69 +2,67 @@ package dev.joseph.hyperbounce
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.consume
 import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.util.fastFirstOrNull
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.hypot
 
+/**
+ * Small, permissive drag recognizer used by the liquid tab indicator.
+ *
+ * A tap is allowed to pass through to the tab's clickable surface. Dragging
+ * only starts after a small touch-slop threshold, so the indicator no longer
+ * feels like it requires a long/high-distance pull before responding.
+ */
 internal suspend fun PointerInputScope.inspectDragGestures(
     onDragStart: (down: PointerInputChange) -> Unit = {},
     onDragEnd: (change: PointerInputChange) -> Unit = {},
     onDragCancel: () -> Unit = {},
-    onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit
+    onDrag: (change: PointerInputChange, dragAmount: androidx.compose.ui.geometry.Offset) -> Unit,
 ) {
     awaitEachGesture {
-        val initialDown = awaitFirstDown(false, PointerEventPass.Initial)
-        val down = awaitFirstDown(false)
-        val drag = initialDown
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        var dragging = false
+        var cancelled = false
 
-        onDragStart(down)
-        onDrag(drag, Offset.Zero)
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Main)
+            val change = event.changes.firstOrNull { it.id == down.id } ?: run {
+                cancelled = true
+                break
+            }
 
-        val upEvent = drag(
-            pointerId = drag.id,
-            onDrag = { onDrag(it, it.positionChange()) }
-        )
+            if (change.changedToUpIgnoreConsumed()) {
+                if (!dragging) {
+                    // Not a drag; leave this pointer to the tab click target.
+                    return@awaitEachGesture
+                }
+                onDragEnd(change)
+                return@awaitEachGesture
+            }
 
-        if (upEvent == null) onDragCancel() else onDragEnd(upEvent)
-    }
-}
+            val delta = change.positionChange()
+            if (!dragging) {
+                if (hypot(change.position.x - down.position.x, change.position.y - down.position.y) >=
+                    4f
+                ) {
+                    dragging = true
+                    onDragStart(down)
+                }
+            }
 
-private suspend inline fun AwaitPointerEventScope.drag(
-    pointerId: PointerId,
-    onDrag: (PointerInputChange) -> Unit
-): PointerInputChange? {
-    val isPointerUp = currentEvent.changes.fastFirstOrNull { it.id == pointerId }?.pressed != true
-    if (isPointerUp) return null
-
-    var pointer = pointerId
-    while (true) {
-        val change = awaitDragOrUp(pointer) ?: return null
-        if (change.isConsumed) return null
-        if (change.changedToUpIgnoreConsumed()) return change
-        onDrag(change)
-        pointer = change.id
-    }
-}
-
-private suspend inline fun AwaitPointerEventScope.awaitDragOrUp(
-    pointerId: PointerId
-): PointerInputChange? {
-    var pointer = pointerId
-    while (true) {
-        val event = awaitPointerEvent()
-        val dragEvent = event.changes.fastFirstOrNull { it.id == pointer } ?: return null
-        if (dragEvent.changedToUpIgnoreConsumed()) {
-            val otherDown = event.changes.fastFirstOrNull { it.pressed }
-            if (otherDown == null) return dragEvent
-            pointer = otherDown.id
-        } else if (dragEvent.previousPosition != dragEvent.position) {
-            return dragEvent
+            if (dragging) {
+                if (delta != androidx.compose.ui.geometry.Offset.Zero) {
+                    onDrag(change, delta)
+                    change.consume()
+                }
+            }
         }
+
+        if (cancelled) onDragCancel()
     }
 }

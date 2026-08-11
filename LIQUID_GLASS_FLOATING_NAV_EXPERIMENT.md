@@ -39,3 +39,12 @@ out of its own backdrop.
 - Existing fullscreen/inset/layout workarounds
 - `PhysicsHook.kt` untouched
 - No slider code is modified
+
+
+Performance/bugfix pass:
+- Retained the library Backdrop architecture; no PixelCopy.
+- Live View backdrop capture is throttled to ~60 Hz while the GPU liquid rendering remains continuous.
+- Captured-frame state is observed during drawing rather than composition to avoid recomposing the whole navigation bar for every frame.
+- Pointer tracking uses a small 4 px touch slop and snaps the indicator directly during drag; release still uses the library-style spring.
+- Restored stock-bar visibility mirroring for Instagram and added YouTube stock bottom-bar/pivot visibility mirroring.
+- YouTube liquid navigation is forced to the requested light/frosted appearance.

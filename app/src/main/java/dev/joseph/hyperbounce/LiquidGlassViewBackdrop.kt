@@ -49,6 +49,8 @@ internal class LiquidGlassViewBackdrop(
     private var region: RectFState? = null
     private var frameNumber = 0
     private var lastCapturedFrame = -1
+    private var lastCaptureNanos = 0L
+    private val minCaptureIntervalNanos = 16_666_667L // ~60 Hz: live, but avoids 120 Hz CPU capture pressure
 
     private val preDrawListener = ViewTreeObserver.OnPreDrawListener {
         captureOncePerFrame()
@@ -84,6 +86,9 @@ internal class LiquidGlassViewBackdrop(
     private fun captureOncePerFrame() {
         if (lastCapturedFrame == frameNumber) return
 
+        val now = System.nanoTime()
+        if (now - lastCaptureNanos < minCaptureIntervalNanos) return
+
         val currentRegion = region ?: return
         if (currentRegion.width <= 0 || currentRegion.height <= 0) return
 
@@ -118,6 +123,7 @@ internal class LiquidGlassViewBackdrop(
                 originInWindow = Offset(currentRegion.left, currentRegion.top),
             )
             lastCapturedFrame = frameNumber
+            lastCaptureNanos = now
         } catch (_: Throwable) {
             // Keep the previous frame. Target applications can contain views that
             // reject software Canvas recording; the liquid renderer should not crash
@@ -148,6 +154,8 @@ internal class LiquidGlassViewBackdrop(
         front = null
         back = null
         capturedFrame = null
+        lastCapturedFrame = -1
+        lastCaptureNanos = 0L
     }
 
     override fun DrawScope.drawBackdrop(

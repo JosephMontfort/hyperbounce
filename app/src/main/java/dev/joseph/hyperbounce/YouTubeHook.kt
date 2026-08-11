@@ -112,12 +112,41 @@ class YouTubeHook {
                             val activity = view.context as? Activity
                             if (activity != null) {
                                 view.post {
+                                    val decorView = activity.window.decorView as ViewGroup
                                     val pivotId = activity.resources.getIdentifier("pivot_bar", "id", activity.packageName)
-                                    val pivotBar = activity.window.decorView.findViewById<ViewGroup>(pivotId)
+                                    val pivotBar = decorView.findViewById<ViewGroup>(pivotId)
                                     if (pivotBar != null) {
                                         executeUIHeist(activity, view as ViewGroup, pivotBar)
 
-                                        // Continuous Theme Checker
+                                        val bottomBarId = activity.resources.getIdentifier(
+                                            "bottom_bar_container", "id", activity.packageName
+                                        )
+                                        val bottomBar = decorView.findViewById<View>(bottomBarId)
+
+                                        // Mirror the real YouTube bottom navigation state.
+                                        // YouTube itself toggles this container while comments,
+                                        // playback/fullscreen, Shorts transitions, etc. occur.
+                                        decorView.viewTreeObserver.addOnPreDrawListener {
+                                            val customBar =
+                                                decorView.findViewWithTag<View>("HyperFloatingBar")
+                                            val stockVisible =
+                                                (bottomBar?.visibility ?: View.VISIBLE) == View.VISIBLE &&
+                                                    (bottomBar?.parent as? View)?.visibility != View.GONE &&
+                                                    pivotBar.visibility == View.VISIBLE &&
+                                                    pivotBar.parent.let { (it as? View)?.visibility != View.GONE }
+
+                                            if (customBar != null) {
+                                                customBar.visibility =
+                                                    if (stockVisible) View.VISIBLE else View.GONE
+                                            }
+
+                                            // Keep the library bar in the user's requested
+                                            // light/frosted appearance in YouTube.
+                                            true
+                                        }
+
+                                        // Continuous Theme Checker is deliberately retained
+                                        // for compatibility with the old extraction path.
                                         activity.window.decorView.viewTreeObserver.addOnPreDrawListener {
                                             val currentDark = isYouTubeInDarkMode(activity)
                                             if (isDarkState.value != currentDark) {
