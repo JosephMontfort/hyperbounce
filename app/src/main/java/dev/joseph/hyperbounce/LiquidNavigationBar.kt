@@ -143,7 +143,7 @@ fun LiquidNavigationBar(
                         pressedScale = 78f / 56f,
                         onDragStarted = {},
                         onDragStopped = {
-                            val index = targetValue
+                            val index = kotlin.math.round(value)
                                 .toInt()
                                 .coerceIn(0, tabCount - 1)
                             animateToValue(index.toFloat())
@@ -401,7 +401,6 @@ private fun RowScope.LiquidBottomTab(
     val scale = LocalLiquidBottomTabScale.current
     Column(
         Modifier
-            .clip(Capsule())
             .clickable(
                 interactionSource = null,
                 indication = null,
@@ -436,6 +435,8 @@ private fun RowScope.LiquidBottomTab(
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                         color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White else Color.Black
                     ),
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Visible,
+                    softWrap = false,
                     maxLines = 1
                 )
             }
