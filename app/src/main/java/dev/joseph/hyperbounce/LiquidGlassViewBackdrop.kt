@@ -173,9 +173,7 @@ internal class LiquidGlassViewBackdrop(
         val targetPosition = coords.positionInWindow()
         val drawOffset = targetPosition - frame.originInWindow
 
-        androidx.compose.ui.graphics.drawscope.withTransform({
-            scale(1f / 0.5f, 1f / 0.5f, androidx.compose.ui.geometry.Offset.Zero)
-        }) {
+        scale(2f, 2f, androidx.compose.ui.geometry.Offset.Zero) {
             drawImage(
                 image = frame.bitmap.asImageBitmap(),
                 topLeft = -drawOffset * 0.5f,

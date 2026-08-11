@@ -294,6 +294,8 @@ fun LiquidNavigationBar(
                             LiquidBottomTab(
                                 bitmap = bitmap,
                                 isCircular = index in circularIndices,
+                                isSelected = selectedIndex == index,
+                                accentColor = accentColor,
                                 onClick = {
                                     onTabSelected(index)
                                     dampedDragAnimation.animateToValue(index.toFloat())
