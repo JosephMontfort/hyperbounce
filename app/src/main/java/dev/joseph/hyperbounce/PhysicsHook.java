@@ -275,9 +275,23 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, highlightPaint);
     }
 
-    // ============================================================================
-    // NUCLEAR VIEW REPLACEMENT: Bypassing hypervisor constraints in settings
-    // ============================================================================
+    /*
+     * ============================================================================
+     * BREAKTHROUGH: NUCLEAR VIEW REPLACEMENT
+     * Target: Dialer & Mobile Network Settings (com.android.phone)
+     * ============================================================================
+     * Problem: HyperOS's CustomCheckBoxPreference (via miuix_preference_widget_checkbox.xml)
+     * hardcodes the SlidingButton with clickable="false" and focusable="false".
+     * The framework forcefully strips touch events during layout binding, making standard
+     * onTouchEvent or dispatchTouchEvent hooks completely useless. The native toggle is dead.
+     * 
+     * Solution: Intercept PreferenceViewHolder.onBindViewHolder. We hide the dead native XML
+     * toggle (android.R.id.checkbox) so it stops stealing space. We then instantiate a completely
+     * fresh, unbound SlidingButton, force its touch parameters to true, wire its checked 
+     * listener directly back to the Preference framework, and inject it into the widget_frame.
+     * This restores full touch independence so our physics loop can attach normally.
+     * ============================================================================
+     */
     private void applyDialerToggleEngine(ClassLoader classLoader) {
         try {
             Class<?> customPrefClass = XposedHelpers.findClassIfExists("com.android.phone.custompreferences.CustomCheckBoxPreference", classLoader);
