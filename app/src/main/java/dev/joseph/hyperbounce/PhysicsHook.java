@@ -275,157 +275,74 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, highlightPaint);
     }
 
-    private void renderDialerToggle(ImageView view, Canvas canvas) {
-        int width = view.getWidth(), height = view.getHeight();
-        if (width <= 0 || height <= 0) return;
-
-        disableClipping(view);
-
-        ToggleState s = stateMap.get(view);
-        if (s == null) {
-            s = new ToggleState();
-            stateMap.put(view, s);
-        }
-
-        boolean isChecked = false;
-        int[] states = view.getDrawableState();
-        if (states != null) {
-            for (int st : states) {
-                if (st == 16842912 || st == 16843518 || st == 16842913) {
-                    isChecked = true; break;
-                }
-            }
-        }
-
-        boolean isTouching = false;
-        ViewParent p = view.getParent();
-        while (p instanceof View) {
-            View pv = (View) p;
-            if (pv.isPressed()) {
-                isTouching = true;
-                break;
-            }
-            if (pv.getClass().getSimpleName().equals("HyperCellLayout")) break;
-            p = pv.getParent();
-        }
-
-        boolean isEnabled = view.isEnabled();
-        boolean isDarkMode = (view.getContext().getResources().getConfiguration().uiMode & 0x30) == 0x20;
-
-        long now = System.currentTimeMillis();
-        float dt = Math.min((now - s.lastTime) / 1000.0f, 0.05f);
-        s.lastTime = now;
-
-        float drawW = width, drawH = height, offsetX = 0f, offsetY = 0f;
-        if (width > height * 2.5f && width > 200f) {
-            drawH = Math.min(height * 0.55f, 110f);
-            drawW = drawH * 1.75f;
-            offsetX = width - drawW - (height * 0.15f);
-            offsetY = (height - drawH) / 2.0f;
-        }
-
-        float trackHeight = drawH * 0.72f, padding = trackHeight * 0.07f;
-        float restThumbHeight = trackHeight - (padding * 2.0f);
-        float restThumbWidth = restThumbHeight * 1.35f;
-
-        float targetProgress = isChecked ? 1.0f : 0.0f;
-        s.progress += (targetProgress - s.progress) * dt * 18.0f; 
-
-        float targetColorRatio = (s.progress >= 0.5f) ? 1.0f : 0.0f;
-        s.colorProgress += (targetColorRatio - s.colorProgress) * dt * 16.0f;
-        s.colorProgress = Math.max(0.0f, Math.min(1.0f, s.colorProgress));
-
-        float bloomTarget = isTouching ? 1.0f : 0.0f;
-        float bloomForce = (bloomTarget - s.bloom) * 250.0f - (s.bloomVelocity * 16.0f);
-        s.bloomVelocity += bloomForce * dt;
-        s.bloom += s.bloomVelocity * dt;
-
-        if (Math.abs(s.progress - targetProgress) > 0.002f || 
-            Math.abs(s.bloom - bloomTarget) > 0.005f || Math.abs(s.bloomVelocity) > 0.01f ||
-            Math.abs(s.colorProgress - targetColorRatio) > 0.005f) {
-            view.postInvalidateOnAnimation();
-        }
-
-        float trackTop = offsetY + (drawH - trackHeight) / 2.0f;
-        float trackBottom = trackTop + trackHeight;
-        float trackRadius = trackHeight / 2.0f;
-
-        float maxExpandedW = restThumbWidth * 1.35f; 
-        float currentThumbHeight = restThumbHeight + ((drawH * 0.88f) - restThumbHeight) * s.bloom; 
-        float currentThumbWidth = restThumbWidth + (maxExpandedW - restThumbWidth) * s.bloom;
-        float thumbRadius = currentThumbHeight / 2.0f;
-
-        float baseMinX = offsetX + (restThumbWidth / 2.0f) + 2.0f;
-        float baseMaxX = offsetX + drawW - (restThumbWidth / 2.0f) - 2.0f;
-
-        float targetMinX = offsetX;
-        float targetMaxX = offsetX + drawW;
-
-        float minX = baseMinX + (targetMinX - baseMinX) * s.bloom;
-        float maxX = baseMaxX + (targetMaxX - baseMaxX) * s.bloom;
-
-        float cx = minX + s.progress * (maxX - minX);
-        float cy = offsetY + (drawH / 2.0f);
-
-        float thumbL = cx - (currentThumbWidth / 2.0f);
-        float thumbR = cx + (currentThumbWidth / 2.0f);
-        float thumbT = cy - (currentThumbHeight / 2.0f);
-        float thumbB = cy + (currentThumbHeight / 2.0f);
-
-        int targetOffColor = !isEnabled ? TRACK_OFF_DISABLED : (isDarkMode ? TRACK_OFF_DARK : TRACK_OFF_LIGHT);
-        int targetOnColor = !isEnabled ? TRACK_ON_DISABLED : TRACK_ON;
-        bgPaint.setColor(blendColors(targetOffColor, targetOnColor, s.colorProgress));
-
-        canvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
-
-        if (s.trackBitmap == null || s.trackBitmap.getWidth() != width || s.trackBitmap.getHeight() != height) {
-            s.trackBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-            s.trackCanvas = new Canvas(s.trackBitmap);
-        }
-        s.trackCanvas.drawColor(0, PorterDuff.Mode.CLEAR);
-        s.trackCanvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
-
-        int shadowAlpha = (int)(48 * (1.0f - Math.max(0f, Math.min(1f, s.bloom))));
-        if (shadowAlpha > 0 && isEnabled) {
-            shadowPaint.setAlpha(shadowAlpha);
-            canvas.drawRoundRect(thumbL - 1.0f, thumbT + 2.0f, thumbR + 1.0f, thumbB + 3.0f, thumbRadius, thumbRadius, shadowPaint);
-        }
-
-        renderLiquidGlassThumb(canvas, s, width, height, thumbL, thumbT, thumbR, thumbB, thumbRadius, true);
-
-        RectF roundRectF = new RectF(thumbL, thumbT, thumbR, thumbB);
-        int glowStroke = blendColors(Color.parseColor("#75FFFFFF"), bgPaint.getColor(), 0.70f * Math.max(0.3f, s.bloom));
-        strokePaint.setColor(glowStroke);
-        canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, strokePaint);
-        strokePaint.setColor(Color.parseColor("#75FFFFFF"));
-
-        int whiteAlpha = (int)(255 * (1.0f - Math.max(0f, Math.min(1f, s.bloom))));
-        if (whiteAlpha > 0) {
-            baseThumbPaint.setAlpha(isEnabled ? whiteAlpha : (int)(whiteAlpha * 0.5f));
-            canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, baseThumbPaint);
-        }
-    }
-
+    // ============================================================================
+    // NUCLEAR VIEW REPLACEMENT: Bypassing hypervisor constraints in settings
+    // ============================================================================
     private void applyDialerToggleEngine(ClassLoader classLoader) {
         try {
-            XposedHelpers.findAndHookMethod(ImageView.class, "onDraw", Canvas.class, new XC_MethodHook() {
+            Class<?> customPrefClass = XposedHelpers.findClassIfExists("com.android.phone.custompreferences.CustomCheckBoxPreference", classLoader);
+            if (customPrefClass == null) return;
+            
+            XposedHelpers.findAndHookMethod(customPrefClass, "onBindViewHolder", "androidx.preference.PreferenceViewHolder", new XC_MethodHook() {
                 @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    ImageView view = (ImageView) param.thisObject;
-                    int id = view.getId();
-                    if (id == View.NO_ID) return;
-                    try {
-                        String resName = view.getResources().getResourceEntryName(id);
-                        if ("secondary_action_iv".equals(resName)) {
-                            String ctxName = view.getContext().getClass().getName();
-                            if (!ctxName.contains("Setting") && !ctxName.contains("Preference") && !ctxName.contains("CallFeatures")) {
-                                return; 
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    Object preference = param.thisObject;
+                    Object holder = param.args[0];
+                    
+                    // 1. Grab the root view of the settings row
+                    View itemView = (View) XposedHelpers.getField(holder.getClass(), "itemView").get(holder);
+                    if (itemView == null) return;
+                    
+                    ViewGroup widgetFrame = itemView.findViewById(android.R.id.widget_frame);
+                    if (widgetFrame == null) return;
+                    
+                    // 2. Hide the native, dead XML toggle so it stops stealing UI space
+                    View oldToggle = itemView.findViewById(android.R.id.checkbox);
+                    if (oldToggle != null) {
+                        oldToggle.setVisibility(View.GONE); 
+                    }
+                    
+                    // 3. Inject a completely unbound, fresh SlidingButton instance
+                    View customToggle = widgetFrame.findViewWithTag("hyperbounce_liberated");
+                    if (customToggle == null) {
+                        android.content.Context context = itemView.getContext();
+                        Class<?> sbClass = XposedHelpers.findClass("miuix.slidingwidget.widget.SlidingButton", classLoader);
+                        customToggle = (View) XposedHelpers.newInstance(sbClass, context);
+                        customToggle.setTag("hyperbounce_liberated");
+                        
+                        // Overwrite the dead XML rules - MAKE IT ALIVE
+                        customToggle.setClickable(true);
+                        customToggle.setFocusable(true);
+                        customToggle.setLongClickable(true);
+                        
+                        // 4. Wire our new toggle to tell the app when its value changes
+                        final Object prefFinal = preference;
+                        ((android.widget.CompoundButton) customToggle).setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+                            public void onCheckedChanged(android.widget.CompoundButton buttonView, boolean isChecked) {
+                                try {
+                                    boolean currentPref = (boolean) XposedHelpers.callMethod(prefFinal, "isChecked");
+                                    if (currentPref != isChecked) {
+                                        boolean canChange = (boolean) XposedHelpers.callMethod(prefFinal, "callChangeListener", isChecked);
+                                        if (canChange) {
+                                            XposedHelpers.callMethod(prefFinal, "setChecked", isChecked);
+                                        } else {
+                                            buttonView.setChecked(!isChecked); // Revert UI if app rejects change
+                                        }
+                                    }
+                                } catch (Throwable t) {}
                             }
-                            param.setResult(null);
-                            Canvas canvas = (Canvas) param.args[0];
-                            renderDialerToggle(view, canvas);
-                        }
-                    } catch (Exception e) {}
+                        });
+                        
+                        // Inject it into the UI
+                        widgetFrame.addView(customToggle);
+                    }
+                    
+                    // 5. Keep the visual state in sync if the preference is changed externally
+                    boolean isChecked = (boolean) XposedHelpers.callMethod(preference, "isChecked");
+                    android.widget.CompoundButton btn = (android.widget.CompoundButton) customToggle;
+                    if (btn.isChecked() != isChecked) {
+                        btn.setChecked(isChecked);
+                    }
                 }
             });
         } catch (Throwable t) {}
@@ -508,7 +425,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
                     android.widget.CompoundButton view = (android.widget.CompoundButton) param.thisObject;
                     
-                    // ZONE 1 (THE TOGGLE): Forcefully squash native framework limits so the toggle handles its own swipes!
                     if (!view.isClickable()) view.setClickable(true);
                     if (!view.isLongClickable()) view.setLongClickable(true);
                     
@@ -527,7 +443,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         stateMap.put(view, s);
                     }
 
-                    // ZONE 2 (THE TEXT ROW): Inject a custom spy listener onto the parent row
+                    // THE ROW SPY: Sync row clicks to the physics loop
                     if (!s.initializedObserver) {
                         ViewParent p = view.getParent();
                         View rowView = null;
@@ -550,8 +466,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                         finalS.isParentPressed = isDown;
                                         finalView.postInvalidateOnAnimation();
                                     }
-                                    // VERY IMPORTANT: Return false so the row STILL processes native clicks/ripples!
-                                    return false;
+                                    return false; 
                                 }
                             });
                         }
@@ -591,7 +506,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     s.colorProgress += (targetColorRatio - s.colorProgress) * dt * 16.0f;
                     s.colorProgress = Math.max(0.0f, Math.min(1.0f, s.colorProgress));
 
-                    // Bloom target combines direct touches AND our new row spy listener
                     float bloomTarget = (s.isTouching || s.isDragging || s.isParentPressed) ? 1.0f : 0.0f;
                     float bloomForce = (bloomTarget - s.bloom) * 250.0f - (s.bloomVelocity * 16.0f);
                     s.bloomVelocity += bloomForce * dt;
