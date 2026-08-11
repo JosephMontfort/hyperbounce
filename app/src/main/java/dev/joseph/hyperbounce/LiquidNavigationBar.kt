@@ -234,6 +234,8 @@ fun LiquidNavigationBar(
                         LiquidBottomTab(
                             bitmap = bitmap,
                             isCircular = index in circularIndices,
+                            isSelected = selectedIndex == index,
+                            accentColor = accentColor,
                             onClick = {
                                 onTabSelected(index)
                                 dampedDragAnimation.animateToValue(index.toFloat())
@@ -385,6 +387,8 @@ private val LocalLiquidBottomTabScale =
 private fun RowScope.LiquidBottomTab(
     bitmap: Bitmap?,
     isCircular: Boolean,
+    isSelected: Boolean,
+    accentColor: Color,
     onClick: () -> Unit,
 ) {
     val scale = LocalLiquidBottomTabScale.current
@@ -410,6 +414,7 @@ private fun RowScope.LiquidBottomTab(
             Image(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = null,
+                colorFilter = if (isCircular) null else androidx.compose.ui.graphics.ColorFilter.tint(accentColor.copy(alpha = if (isSelected) 1f else 0.6f)),
                 modifier = Modifier
                     .size(28.dp)
                     .then(

@@ -129,13 +129,19 @@ fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: View
                 }
             }
 
-            decorView.addView(
-                composeView,
-                ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                ),
-            )
+            val parentGroup = mainWrapper.parent as? ViewGroup
+            if (parentGroup != null) {
+                parentGroup.addView(
+                    composeView,
+                    parentGroup.indexOfChild(mainWrapper) + 1,
+                    ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                )
+            } else {
+                mainWrapper.addView(
+                    composeView,
+                    ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                )
+            }
             android.util.Log.e("HyperBounce-Tracer", "[SUCCESS] Liquid Glass Compose UI Injected!")
         } catch (e: Exception) {
             android.util.Log.e("HyperBounce-Tracer", "[ERROR] Compose Injection Failed: ${e.message}")

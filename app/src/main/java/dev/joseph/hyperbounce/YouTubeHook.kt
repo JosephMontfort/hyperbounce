@@ -126,24 +126,7 @@ class YouTubeHook {
                                         // Mirror the real YouTube bottom navigation state.
                                         // YouTube itself toggles this container while comments,
                                         // playback/fullscreen, Shorts transitions, etc. occur.
-                                        decorView.viewTreeObserver.addOnPreDrawListener {
-                                            val customBar =
-                                                decorView.findViewWithTag<View>("HyperFloatingBar")
-                                            val stockVisible =
-                                                (bottomBar?.visibility ?: View.VISIBLE) == View.VISIBLE &&
-                                                    (bottomBar?.parent as? View)?.visibility != View.GONE &&
-                                                    pivotBar.visibility == View.VISIBLE &&
-                                                    pivotBar.parent.let { (it as? View)?.visibility != View.GONE }
 
-                                            if (customBar != null) {
-                                                customBar.visibility =
-                                                    if (stockVisible) View.VISIBLE else View.GONE
-                                            }
-
-                                            // Keep the library bar in the user's requested
-                                            // light/frosted appearance in YouTube.
-                                            true
-                                        }
 
                                         // Continuous Theme Checker is deliberately retained
                                         // for compatibility with the old extraction path.
@@ -199,7 +182,7 @@ class YouTubeHook {
 
             val tabState = mutableStateOf(0)
 
-            val backdropSource = decorView.findViewById<View>(android.R.id.content) ?: rootGroup
+            val backdropSource = rootGroup
 
             val composeView = ComposeView(activity).apply {
                 tag = "HyperFloatingBar"
@@ -223,7 +206,12 @@ class YouTubeHook {
                 }
             }
 
-            decorView.addView(composeView)
+            val parentGroup = rootGroup.parent as? ViewGroup
+            if (parentGroup != null) {
+                parentGroup.addView(composeView, parentGroup.indexOfChild(rootGroup) + 1)
+            } else {
+                decorView.addView(composeView)
+            }
             XposedBridge.log("[HyperBounce] Overlay attached.")
         } catch (e: Exception) {
             XposedBridge.log("[HyperBounce] Exception: ${e.message}")

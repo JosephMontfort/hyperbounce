@@ -102,13 +102,17 @@ internal class LiquidGlassViewBackdrop(
         val height = currentRegion.height
 
         try {
-            ensureBuffers(width, height)
+            val scale = 0.5f
+            val scaledWidth = (width * scale).toInt().coerceAtLeast(1)
+            val scaledHeight = (height * scale).toInt().coerceAtLeast(1)
+            ensureBuffers(scaledWidth, scaledHeight)
 
             val target = back ?: return
-            target.eraseColor(android.graphics.Color.TRANSPARENT)
+            target.eraseColor(android.graphics.Color.parseColor("#40000000"))
 
             val canvas = Canvas(target)
             canvas.save()
+            canvas.scale(scale, scale)
             canvas.clipRect(0, 0, width, height)
             canvas.translate(-localLeft, -localTop)
             sourceView.draw(canvas)
@@ -169,9 +173,13 @@ internal class LiquidGlassViewBackdrop(
         val targetPosition = coords.positionInWindow()
         val drawOffset = targetPosition - frame.originInWindow
 
-        drawImage(
-            image = frame.bitmap.asImageBitmap(),
-            topLeft = -drawOffset,
-        )
+        androidx.compose.ui.graphics.drawscope.withTransform({
+            scale(1f / 0.5f, 1f / 0.5f, androidx.compose.ui.geometry.Offset.Zero)
+        }) {
+            drawImage(
+                image = frame.bitmap.asImageBitmap(),
+                topLeft = -drawOffset * 0.5f,
+            )
+        }
     }
 }
