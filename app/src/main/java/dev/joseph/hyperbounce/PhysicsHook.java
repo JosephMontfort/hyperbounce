@@ -134,6 +134,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         float bubbleSquish = 0.0f;
         float bubbleVelocity = 0.0f; 
         float lastX = 0f;
+        float density = 1.0f;
     }
 
     private static class ToggleState extends GlassState {
@@ -159,34 +160,88 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private static final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
     private static final WeakHashMap<Object, SliderState> sliderStateMap = new WeakHashMap<>();
 
-    private static final String AGSL_SHADER_TOGGLE = 
+    /*
+     * Ported/adapted from Kyant's AndroidLiquidGlass-kmp LiquidToggle/backdrop
+     * refraction shader. HyperBounce intentionally keeps its existing Canvas /
+     * RenderNode / Xposed architecture; no Compose or backdrop dependency is used.
+     * Original project: https://github.com/Kyant0/AndroidLiquidGlass-kmp
+     * License: Apache License 2.0 (see LICENSE_AndroidLiquidGlass in module root).
+     */
+    private static final String AGSL_SHADER_TOGGLE =
         "uniform shader content;\n" +
-        "uniform float thumbL;\n" +
-        "uniform float thumbT;\n" +
-        "uniform float thumbR;\n" +
-        "uniform float thumbB;\n" +
+        "uniform float2 size;\n" +
+        "uniform float2 offset;\n" +
+        "uniform float4 cornerRadii;\n" +
         "uniform float refractionHeight;\n" +
-        "half4 main(float2 fragCoord) {\n" +
-        "    vec2 thumbSize = vec2(thumbR - thumbL, thumbB - thumbT);\n" +
-        "    vec2 p = fragCoord - vec2(thumbL, thumbT);\n" +
-        "    if (p.x < 0.0 || p.y < 0.0 || p.x > thumbSize.x || p.y > thumbSize.y) {\n" +
-        "        return content.eval(fragCoord);\n" +
+        "uniform float refractionAmount;\n" +
+        "uniform float depthEffect;\n" +
+        "uniform float chromaticAberration;\n" +
+        "\n" +
+        "float radiusAt(float2 coord, float4 radii) {\n" +
+        "    if (coord.x >= 0.0) {\n" +
+        "        if (coord.y <= 0.0) return radii.y;\n" +
+        "        else return radii.z;\n" +
+        "    } else {\n" +
+        "        if (coord.y <= 0.0) return radii.x;\n" +
+        "        else return radii.w;\n" +
         "    }\n" +
-        "    vec2 center = vec2(thumbL, thumbT) + thumbSize * 0.5;\n" +
-        "    vec2 diff = fragCoord - center;\n" +
-        "    float pinchX = 1.35; float pinchY = 1.55;\n" +
-        "    vec2 lensWarp = center + vec2(diff.x * pinchX, diff.y * pinchY);\n" +
-        "    vec2 distFromEdge = min(p, thumbSize - p);\n" +
-        "    float edgeDist = min(distFromEdge.x, distFromEdge.y);\n" +
-        "    float rimFactor = smoothstep(14.0, 0.0, edgeDist);\n" +
-        "    half4 color = content.eval(lensWarp);\n" +
-        "    half4 basePixel = content.eval(fragCoord);\n" +
-        "    color.rgb = mix(color.rgb, vec3(1.0), 0.15);\n" +
-        "    vec3 glowColor = mix(vec3(1.0), basePixel.rgb, 0.85);\n" +
-        "    color.rgb = mix(color.rgb, glowColor, rimFactor * 0.90);\n" +
-        "    float specular = pow(rimFactor, 3.0);\n" +
-        "    color.rgb += specular * 0.25;\n" +
+        "}\n" +
+        "\n" +
+        "float sdRoundedRect(float2 coord, float2 halfSize, float radius) {\n" +
+        "    float2 cornerCoord = abs(coord) - (halfSize - float2(radius));\n" +
+        "    float outside = length(max(cornerCoord, 0.0)) - radius;\n" +
+        "    float inside = min(max(cornerCoord.x, cornerCoord.y), 0.0);\n" +
+        "    return outside + inside;\n" +
+        "}\n" +
+        "\n" +
+        "float2 gradSdRoundedRect(float2 coord, float2 halfSize, float radius) {\n" +
+        "    float2 cornerCoord = abs(coord) - (halfSize - float2(radius));\n" +
+        "    if (cornerCoord.x >= 0.0 || cornerCoord.y >= 0.0) {\n" +
+        "        return sign(coord) * normalize(max(cornerCoord, 0.0));\n" +
+        "    } else {\n" +
+        "        float gradX = step(cornerCoord.y, cornerCoord.x);\n" +
+        "        return sign(coord) * float2(gradX, 1.0 - gradX);\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "float circleMap(float x) {\n" +
+        "    return 1.0 - sqrt(1.0 - x * x);\n" +
+        "}\n" +
+        "\n" +
+        "half4 sampleDispersion(float2 coord, float2 dispersedCoord) {\n" +
+        "    half4 color = half4(0.0);\n" +
+        "    half4 red = content.eval(coord + dispersedCoord);\n" +
+        "    color.r += red.r / 3.5; color.a += red.a / 7.0;\n" +
+        "    half4 orange = content.eval(coord + dispersedCoord * (2.0 / 3.0));\n" +
+        "    color.r += orange.r / 3.5; color.g += orange.g / 7.0; color.a += orange.a / 7.0;\n" +
+        "    half4 yellow = content.eval(coord + dispersedCoord * (1.0 / 3.0));\n" +
+        "    color.r += yellow.r / 3.5; color.g += yellow.g / 3.5; color.a += yellow.a / 7.0;\n" +
+        "    half4 green = content.eval(coord);\n" +
+        "    color.g += green.g / 3.5; color.a += green.a / 7.0;\n" +
+        "    half4 cyan = content.eval(coord - dispersedCoord * (1.0 / 3.0));\n" +
+        "    color.g += cyan.g / 3.5; color.b += cyan.b / 3.0; color.a += cyan.a / 7.0;\n" +
+        "    half4 blue = content.eval(coord - dispersedCoord * (2.0 / 3.0));\n" +
+        "    color.b += blue.b / 3.0; color.a += blue.a / 7.0;\n" +
+        "    half4 purple = content.eval(coord - dispersedCoord);\n" +
+        "    color.r += purple.r / 7.0; color.b += purple.b / 3.0; color.a += purple.a / 7.0;\n" +
         "    return color;\n" +
+        "}\n" +
+        "\n" +
+        "half4 main(float2 coord) {\n" +
+        "    if (refractionHeight <= 0.001 || refractionAmount <= 0.001) return content.eval(coord);\n" +
+        "    float2 halfSize = size * 0.5;\n" +
+        "    float2 centeredCoord = (coord + offset) - halfSize;\n" +
+        "    float radius = radiusAt(coord, cornerRadii);\n" +
+        "    float sd = sdRoundedRect(centeredCoord, halfSize, radius);\n" +
+        "    if (-sd >= refractionHeight) return content.eval(coord);\n" +
+        "    sd = min(sd, 0.0);\n" +
+        "    float d = circleMap(1.0 - -sd / refractionHeight) * refractionAmount;\n" +
+        "    float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));\n" +
+        "    float2 grad = normalize(gradSdRoundedRect(centeredCoord, halfSize, gradRadius) + depthEffect * normalize(centeredCoord));\n" +
+        "    float2 refractedCoord = coord + d * grad;\n" +
+        "    float dispersionIntensity = chromaticAberration * ((centeredCoord.x * centeredCoord.y) / max(halfSize.x * halfSize.y, 0.001));\n" +
+        "    float2 dispersedCoord = d * grad * dispersionIntensity;\n" +
+        "    return sampleDispersion(refractedCoord, dispersedCoord);\n" +
         "}";
 
     private static final String AGSL_SHADER_SLIDER = 
@@ -221,6 +276,96 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    color.rgb += rim * 0.40;\n" +
         "    return color;\n" +
         "}";
+
+    private void renderLiquidGlassToggleThumb(Canvas canvas, ToggleState s, int w, int h,
+                                              float thumbL, float thumbT, float thumbR, float thumbB,
+                                              float thumbRadius) {
+        if (!canvas.isHardwareAccelerated()) return;
+
+        if (s.blurNode == null) s.blurNode = new RenderNode("HyperBounceToggleBlur");
+        if (s.glassNode == null) s.glassNode = new RenderNode("HyperBounceToggleGlass");
+
+        final float density = Math.max(1.0f, s.density);
+        final float bloom = Math.max(0f, Math.min(1f, s.bloom));
+        final float refractionHeight = 5.0f * density * bloom;
+        final float refractionAmount = 10.0f * density * bloom;
+        final float blurRadius = 8.0f * density * (1.0f - bloom);
+
+        try {
+            s.blurNode.setRenderEffect(RenderEffect.createBlurEffect(
+                    Math.max(0.001f, blurRadius), Math.max(0.001f, blurRadius), Shader.TileMode.CLAMP));
+
+            if (!s.shaderInitialized) {
+                s.shader = new RuntimeShader(AGSL_SHADER_TOGGLE);
+                s.glassNode.setRenderEffect(RenderEffect.createRuntimeShaderEffect(s.shader, "content"));
+                s.shaderInitialized = true;
+            }
+
+            float sx = thumbR - thumbL;
+            float sy = thumbB - thumbT;
+            float radius = Math.min(thumbRadius, Math.min(sx, sy) * 0.5f);
+            s.shader.setFloatUniform("size", sx, sy);
+            s.shader.setFloatUniform("offset", -thumbL, -thumbT);
+            s.shader.setFloatUniform("cornerRadii", radius, radius, radius, radius);
+            s.shader.setFloatUniform("refractionHeight", refractionHeight);
+            s.shader.setFloatUniform("refractionAmount", refractionAmount);
+            s.shader.setFloatUniform("depthEffect", 0.0f);
+            s.shader.setFloatUniform("chromaticAberration", 1.0f);
+
+            s.blurNode.setPosition(0, 0, w, h);
+            Canvas rcBlur = s.blurNode.beginRecording(w, h);
+
+            // Keep the ordinary toggle track as the base backdrop, then add a
+            // contracted copy under the blooming thumb. This mirrors the repo's
+            // scaled trackBackdrop without importing Compose/backdrop.
+            rcBlur.drawBitmap(s.trackBitmap, 0.0f, 0.0f, bmpPaint);
+            float shrinkX = lerpFloatToggle(1.0f, 0.75f, bloom);
+            float shrinkY = lerpFloatToggle(1.0f, 0.75f, bloom);
+            float centerX = (thumbL + thumbR) * 0.5f;
+            float centerY = (thumbT + thumbB) * 0.5f;
+            float localRadius = Math.max(8f * density, Math.max(sx, sy) * 0.75f);
+            Path localMask = new Path();
+            localMask.addRoundRect(new RectF(
+                    centerX - localRadius, centerY - localRadius,
+                    centerX + localRadius, centerY + localRadius),
+                    localRadius, localRadius, Path.Direction.CW);
+            rcBlur.save();
+            rcBlur.clipPath(localMask);
+            rcBlur.scale(shrinkX, shrinkY, centerX, centerY);
+            rcBlur.drawBitmap(s.trackBitmap, 0.0f, 0.0f, bmpPaint);
+            rcBlur.restore();
+            s.blurNode.endRecording();
+
+            s.glassNode.setPosition(0, 0, w, h);
+            Canvas rcGlass = s.glassNode.beginRecording(w, h);
+            rcGlass.drawRenderNode(s.blurNode);
+            s.glassNode.endRecording();
+
+            Path clipPath = new Path();
+            clipPath.addRoundRect(new RectF(thumbL, thumbT, thumbR, thumbB),
+                    radius, radius, Path.Direction.CW);
+            canvas.save();
+            canvas.clipPath(clipPath);
+            canvas.drawRenderNode(s.glassNode);
+            canvas.restore();
+
+            // Let the underlying track colour bleed through the rim instead of
+            // painting an opaque white edge during the bloom.
+            int rimAlpha = (int) (48f * bloom);
+            if (rimAlpha > 0) {
+                highlightPaint.setAlpha(rimAlpha);
+                canvas.drawRoundRect(new RectF(thumbL, thumbT, thumbR, thumbB),
+                        radius, radius, highlightPaint);
+                highlightPaint.setAlpha(255);
+            }
+        } catch (Throwable ignored) {
+            // Preserve module fail-soft behavior.
+        }
+    }
+
+    private static float lerpFloatToggle(float a, float b, float t) {
+        return a + (b - a) * t;
+    }
 
     private void renderLiquidGlassThumb(Canvas canvas, GlassState s, int w, int h, float thumbL, float thumbT, float thumbR, float thumbB, float thumbRadius, boolean isToggle) {
         if (!canvas.isHardwareAccelerated()) return;
@@ -495,22 +640,30 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float dt = Math.min((now - s.lastTime) / 1000.0f, 0.05f);
                     s.lastTime = now;
 
-                    float drawW = width, drawH = height, offsetX = 0f, offsetY = 0f;
+                    // AndroidLiquidGlass-kmp LiquidToggle geometry:
+                    // track = 64dp x 28dp; thumb = 40dp x 24dp at rest.
+                    // Preserve the existing large-row/right-alignment workaround.
+                    float density = view.getResources().getDisplayMetrics().density;
+                    s.density = density;
+                    float drawW = 64.0f * density;
+                    float drawH = 28.0f * density;
+                    float offsetX, offsetY;
                     if (width > height * 2.5f && width > 200f) {
-                        drawH = Math.min(height * 0.55f, 110f);
-                        drawW = drawH * 1.75f;
                         offsetX = width - drawW - (height * 0.15f);
+                        offsetY = (height - drawH) / 2.0f;
+                    } else {
+                        offsetX = (width - drawW) / 2.0f;
                         offsetY = (height - drawH) / 2.0f;
                     }
 
-                    float trackHeight = drawH * 0.72f, padding = trackHeight * 0.07f;
-                    float restThumbHeight = trackHeight - (padding * 2.0f);
-                    float restThumbWidth = restThumbHeight * 1.35f;
+                    float trackHeight = drawH;
+                    float restThumbHeight = 24.0f * density;
+                    float restThumbWidth = 40.0f * density;
 
                     float targetProgress = isChecked ? 1.0f : 0.0f;
                     if (s.isDragging) {
-                        float minCenter = offsetX + padding + (restThumbWidth / 2.0f);
-                        float maxCenter = offsetX + drawW - padding - (restThumbWidth / 2.0f);
+                        float minCenter = offsetX + (restThumbWidth / 2.0f);
+                        float maxCenter = offsetX + drawW - (restThumbWidth / 2.0f);
                         float rawDrag = (s.currentX - minCenter) / (maxCenter - minCenter);
                         targetProgress = Math.max(0f, Math.min(1f, rawDrag));
                     }
@@ -546,16 +699,18 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float trackBottom = trackTop + trackHeight;
                     float trackRadius = trackHeight / 2.0f;
 
-                    float maxExpandedW = restThumbWidth * 1.55f; 
-                    float currentThumbHeight = restThumbHeight + ((drawH * 0.88f) - restThumbHeight) * s.bloom; 
+                    // Library pressedScale is 1.5x, so the visible thumb grows
+                    // from 40x24dp to 60x36dp while pressed/bloomed.
+                    float maxExpandedW = 60.0f * density;
+                    float maxExpandedH = 36.0f * density;
+                    float currentThumbHeight = restThumbHeight + (maxExpandedH - restThumbHeight) * s.bloom;
                     float currentThumbWidth = restThumbWidth + (maxExpandedW - restThumbWidth) * s.bloom;
                     float thumbRadius = currentThumbHeight / 2.0f;
 
-                    float baseMinX = offsetX + (restThumbWidth / 2.0f) + 2.0f;
-                    float baseMaxX = offsetX + drawW - (restThumbWidth / 2.0f) - 2.0f;
-
-                    float targetMinX = offsetX + (maxExpandedW / 6.0f);
-                    float targetMaxX = offsetX + drawW - (maxExpandedW / 6.0f);
+                    float baseMinX = offsetX + (restThumbWidth / 2.0f);
+                    float baseMaxX = offsetX + drawW - (restThumbWidth / 2.0f);
+                    float targetMinX = offsetX + (maxExpandedW / 2.0f);
+                    float targetMaxX = offsetX + drawW - (maxExpandedW / 2.0f);
 
                     float minX = baseMinX + (targetMinX - baseMinX) * s.bloom;
                     float maxX = baseMaxX + (targetMaxX - baseMaxX) * s.bloom;
@@ -588,7 +743,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         canvas.drawRoundRect(thumbL - 1.0f, thumbT + 2.0f, thumbR + 1.0f, thumbB + 3.0f, thumbRadius, thumbRadius, shadowPaint);
                     }
 
-                    renderLiquidGlassThumb(canvas, s, width, height, thumbL, thumbT, thumbR, thumbB, thumbRadius, true);
+                    renderLiquidGlassToggleThumb(canvas, s, width, height, thumbL, thumbT, thumbR, thumbB, thumbRadius);
 
                     RectF roundRectF = new RectF(thumbL, thumbT, thumbR, thumbB);
                     int glowStroke = blendColors(Color.parseColor("#75FFFFFF"), bgPaint.getColor(), 0.70f * Math.max(0.3f, s.bloom));
