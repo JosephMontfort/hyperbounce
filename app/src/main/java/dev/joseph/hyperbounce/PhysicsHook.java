@@ -312,28 +312,37 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             s.shader.setFloatUniform("depthEffect", 0.0f);
             s.shader.setFloatUniform("chromaticAberration", 1.0f);
 
+            /*
+             * LiquidToggle uses a combined backdrop:
+             *   1) the normal surrounding backdrop, and
+             *   2) a locally scaled copy of the toggle track backdrop.
+             *
+             * We do not have Compose's LayerBackdrop here, so the track bitmap is
+             * our exact local backdrop source. Crucially, do NOT draw an unscaled
+             * copy first: that would cancel the visible contraction. Instead the
+             * thumb sees only the copy whose scale moves from 1.0 at rest toward
+             * the library's 0.75x press-state scale.
+             */
+            float backdropScaleX = lerpFloatToggle(1.0f, 0.75f, bloom);
+            float backdropScaleY = lerpFloatToggle(1.0f, 0.75f, bloom);
+            float centerX = (thumbL + thumbR) * 0.5f;
+            float centerY = (thumbT + thumbB) * 0.5f;
+
             s.blurNode.setPosition(0, 0, w, h);
             Canvas rcBlur = s.blurNode.beginRecording(w, h);
 
-            // Keep the ordinary toggle track as the base backdrop, then add a
-            // contracted copy under the blooming thumb. This mirrors the repo's
-            // scaled trackBackdrop without importing Compose/backdrop.
-            rcBlur.drawBitmap(s.trackBitmap, 0.0f, 0.0f, bmpPaint);
-            float shrinkX = lerpFloatToggle(1.0f, 0.75f, bloom);
-            float shrinkY = lerpFloatToggle(1.0f, 0.75f, bloom);
-            float centerX = (thumbL + thumbR) * 0.5f;
-            float centerY = (thumbT + thumbB) * 0.5f;
-            float localRadius = Math.max(8f * density, Math.max(sx, sy) * 0.75f);
-            Path localMask = new Path();
-            localMask.addRoundRect(new RectF(
-                    centerX - localRadius, centerY - localRadius,
-                    centerX + localRadius, centerY + localRadius),
-                    localRadius, localRadius, Path.Direction.CW);
             rcBlur.save();
-            rcBlur.clipPath(localMask);
-            rcBlur.scale(shrinkX, shrinkY, centerX, centerY);
+            float backdropPadding = 10.0f * density;
+            rcBlur.clipRect(
+                    thumbL - backdropPadding, thumbT - backdropPadding,
+                    thumbR + backdropPadding, thumbB + backdropPadding);
+
+            rcBlur.translate(centerX, centerY);
+            rcBlur.scale(backdropScaleX, backdropScaleY);
+            rcBlur.translate(-centerX, -centerY);
             rcBlur.drawBitmap(s.trackBitmap, 0.0f, 0.0f, bmpPaint);
             rcBlur.restore();
+
             s.blurNode.endRecording();
 
             s.glassNode.setPosition(0, 0, w, h);
@@ -349,14 +358,44 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             canvas.drawRenderNode(s.glassNode);
             canvas.restore();
 
-            // Let the underlying track colour bleed through the rim instead of
-            // painting an opaque white edge during the bloom.
-            int rimAlpha = (int) (48f * bloom);
-            if (rimAlpha > 0) {
-                highlightPaint.setAlpha(rimAlpha);
-                canvas.drawRoundRect(new RectF(thumbL, thumbT, thumbR, thumbB),
-                        radius, radius, highlightPaint);
+            /*
+             * Reintroduce the fluid edge treatment from the library:
+             * - a soft ambient highlight that grows with press/bloom
+             * - a subtle inner-dark rim that makes the edge feel recessed
+             * - low-opacity white surface contamination, leaving the colored
+             *   backdrop visible through the liquid instead of covering it.
+             */
+            float bubbleAmount = Math.max(0.0f, Math.min(1.0f, s.bubbleSquish / 0.70f));
+
+            int ambientAlpha = (int) (38f * bloom + 18f * bubbleAmount);
+            if (ambientAlpha > 0) {
+                highlightPaint.setAlpha(Math.min(72, ambientAlpha));
+                canvas.drawRoundRect(new RectF(
+                                thumbL + 0.7f * density,
+                                thumbT + 0.7f * density,
+                                thumbR - 0.7f * density,
+                                thumbB - 0.7f * density),
+                        Math.max(0.0f, radius - 0.7f * density),
+                        Math.max(0.0f, radius - 0.7f * density),
+                        highlightPaint);
                 highlightPaint.setAlpha(255);
+            }
+
+            if (bloom > 0.01f) {
+                strokePaint.setStyle(Paint.Style.STROKE);
+                strokePaint.setStrokeWidth(Math.max(0.75f, 1.2f * density * bloom));
+                strokePaint.setColor(Color.argb(
+                        (int) (42f * bloom),
+                        255, 255, 255));
+                canvas.drawRoundRect(new RectF(
+                                thumbL + 0.9f * density,
+                                thumbT + 0.9f * density,
+                                thumbR - 0.9f * density,
+                                thumbB - 0.9f * density),
+                        Math.max(0.0f, radius - 0.9f * density),
+                        Math.max(0.0f, radius - 0.9f * density),
+                        strokePaint);
+                strokePaint.setStrokeWidth(1.0f);
             }
         } catch (Throwable ignored) {
             // Preserve module fail-soft behavior.
@@ -640,13 +679,16 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float dt = Math.min((now - s.lastTime) / 1000.0f, 0.05f);
                     s.lastTime = now;
 
-                    // AndroidLiquidGlass-kmp LiquidToggle geometry:
-                    // track = 64dp x 28dp; thumb = 40dp x 24dp at rest.
+                    // AndroidLiquidGlass-kmp LiquidToggle geometry, scaled to 95%:
+                    // track = 60.8dp x 26.6dp; thumb = 38dp x 22.8dp at rest.
+                    // This is intentionally intermediate between the original
+                    // HyperBounce toggle and the library's full 64dp x 28dp control.
                     // Preserve the existing large-row/right-alignment workaround.
+                    final float toggleScale = 0.95f;
                     float density = view.getResources().getDisplayMetrics().density;
                     s.density = density;
-                    float drawW = 64.0f * density;
-                    float drawH = 28.0f * density;
+                    float drawW = 64.0f * toggleScale * density;
+                    float drawH = 28.0f * toggleScale * density;
                     float offsetX, offsetY;
                     if (width > height * 2.5f && width > 200f) {
                         offsetX = width - drawW - (height * 0.15f);
@@ -657,8 +699,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     }
 
                     float trackHeight = drawH;
-                    float restThumbHeight = 24.0f * density;
-                    float restThumbWidth = 40.0f * density;
+                    float restThumbHeight = 24.0f * toggleScale * density;
+                    float restThumbWidth = 40.0f * toggleScale * density;
 
                     float targetProgress = isChecked ? 1.0f : 0.0f;
                     if (s.isDragging) {
@@ -699,20 +741,25 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float trackBottom = trackTop + trackHeight;
                     float trackRadius = trackHeight / 2.0f;
 
-                    // Library pressedScale is 1.5x, so the visible thumb grows
-                    // from 40x24dp to 60x36dp while pressed/bloomed.
-                    float maxExpandedW = 60.0f * density;
-                    float maxExpandedH = 36.0f * density;
-                    float currentThumbHeight = restThumbHeight + (maxExpandedH - restThumbHeight) * s.bloom;
-                    float currentThumbWidth = restThumbWidth + (maxExpandedW - restThumbWidth) * s.bloom;
+                    // Library pressedScale is 1.5x. Keep the entire control at
+                    // 95% scale, so the bloom reaches 57x34.2dp instead of the
+                    // library's full 60x36dp. The thumb also gets the original
+                    // velocity-driven liquid "bubble" deformation back.
+                    float maxExpandedW = 60.0f * toggleScale * density;
+                    float maxExpandedH = 36.0f * toggleScale * density;
+                    float bubbleAmount = Math.max(0.0f, Math.min(1.0f, s.bubbleSquish / 0.70f));
+                    float bubbleScaleX = 1.0f + (0.11f * bubbleAmount);
+                    float bubbleScaleY = 1.0f - (0.055f * bubbleAmount);
+                    float currentThumbHeight = (restThumbHeight + (maxExpandedH - restThumbHeight) * s.bloom) * bubbleScaleY;
+                    float currentThumbWidth = (restThumbWidth + (maxExpandedW - restThumbWidth) * s.bloom) * bubbleScaleX;
                     float thumbRadius = currentThumbHeight / 2.0f;
 
-                    float baseMinX = offsetX + (restThumbWidth / 2.0f);
-                    float baseMaxX = offsetX + drawW - (restThumbWidth / 2.0f);
-                    // Match the library's pressedScale behavior: the thumb scales
-                    // around its RESTING center instead of moving inward to stay
-                    // inside the track. This deliberately lets the bloomed thumb
-                    // overhang the toggle container at both ends.
+                    // Match LiquidToggle's 2dp side inset, scaled with the rest
+                    // of the control. The bloomed thumb continues to scale around
+                    // these resting centers and is therefore allowed to overhang.
+                    float thumbPadding = 2.0f * toggleScale * density;
+                    float baseMinX = offsetX + thumbPadding + (restThumbWidth / 2.0f);
+                    float baseMaxX = offsetX + drawW - thumbPadding - (restThumbWidth / 2.0f);
                     float minX = baseMinX;
                     float maxX = baseMaxX;
 
