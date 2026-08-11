@@ -290,7 +290,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     Object holder = param.args[0];
                     
                     // 1. Grab the root view of the settings row
-                    View itemView = (View) XposedHelpers.getField(holder.getClass(), "itemView").get(holder);
+                    View itemView = (View) XposedHelpers.getObjectField(holder, "itemView");
                     if (itemView == null) return;
                     
                     ViewGroup widgetFrame = itemView.findViewById(android.R.id.widget_frame);
