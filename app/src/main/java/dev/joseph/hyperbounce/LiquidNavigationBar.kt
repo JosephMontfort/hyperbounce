@@ -64,6 +64,8 @@ fun LiquidNavigationBar(
     sourceView: android.view.View,
     circularIndices: Set<Int> = emptySet(),
     forceLightTheme: Boolean = false,
+    containerAlpha: Float = 0.4f,
+    effectMultiplier: Float = 1f,
 ) {
     if (tabs.isEmpty()) return
 
@@ -72,8 +74,8 @@ fun LiquidNavigationBar(
         if (isLightTheme) Color(0xFF0088FF)
         else Color(0xFF0091FF)
     val containerColor =
-        if (isLightTheme) Color(0xFFFAFAFA).copy(0.4f)
-        else Color(0xFF121212).copy(0.4f)
+        if (isLightTheme) Color(0xFFFAFAFA).copy(containerAlpha)
+        else Color(0xFF121212).copy(containerAlpha)
 
     val density = LocalDensity.current
     val liveBackdrop = remember(sourceView) {
@@ -207,8 +209,8 @@ fun LiquidNavigationBar(
                             shape = { Capsule() },
                             effects = {
                                 vibrancy()
-                                blur(8f.dp.toPx())
-                                lens(18f.dp.toPx(), 18f.dp.toPx())
+                                blur(8f.dp.toPx() * effectMultiplier)
+                                lens(18f.dp.toPx() * effectMultiplier, 18f.dp.toPx() * effectMultiplier)
                             },
                             layerBlock = {
                                 val progress = dampedDragAnimation.pressProgress
@@ -265,10 +267,10 @@ fun LiquidNavigationBar(
                                 effects = {
                                     val progress = dampedDragAnimation.pressProgress
                                     vibrancy()
-                                    blur(8f.dp.toPx())
+                                    blur(8f.dp.toPx() * effectMultiplier)
                                     lens(
-                                        18f.dp.toPx() * progress,
-                                        18f.dp.toPx() * progress,
+                                        18f.dp.toPx() * progress * effectMultiplier,
+                                        18f.dp.toPx() * progress * effectMultiplier,
                                     )
                                 },
                                 highlight = {
@@ -325,8 +327,8 @@ fun LiquidNavigationBar(
                             effects = {
                                 val progress = dampedDragAnimation.pressProgress
                                 lens(
-                                    8f.dp.toPx() * progress,
-                                    11f.dp.toPx() * progress,
+                                    8f.dp.toPx() * progress * effectMultiplier,
+                                    11f.dp.toPx() * progress * effectMultiplier,
                                     chromaticAberration = true,
                                 )
                             },

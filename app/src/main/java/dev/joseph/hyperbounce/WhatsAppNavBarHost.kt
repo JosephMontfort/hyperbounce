@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 
 private data class WhatsAppTabData(val bitmap: Bitmap?)
 
-private fun extractWhatsAppTabs(stockBar: ViewGroup): List<WhatsAppTabData> {
+private fun extractWhatsAppTabs(stockBar: ViewGroup, isDark: Boolean): List<WhatsAppTabData> {
     val out = mutableListOf<WhatsAppTabData>()
     val menu = stockBar.getChildAt(0) as? ViewGroup ?: return out
     for (i in 0 until menu.childCount) {
@@ -26,7 +26,11 @@ private fun extractWhatsAppTabs(stockBar: ViewGroup): List<WhatsAppTabData> {
         val drawable = icon?.drawable?.mutate()
         var bmp: Bitmap? = null
         if (drawable != null) {
-            drawable.setTintList(null)
+            if (isDark) {
+                drawable.setTint(android.graphics.Color.WHITE)
+            } else {
+                drawable.setTintList(null)
+            }
             val w = drawable.intrinsicWidth.coerceAtLeast(1)
             val h = drawable.intrinsicHeight.coerceAtLeast(1)
             bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -59,7 +63,7 @@ fun WhatsAppNavBarHost(
 ) {
     val isDark = isSystemInDarkTheme()
 
-    val tabs = remember(stockBar) { extractWhatsAppTabs(stockBar) }
+    val tabs = remember(stockBar, isDark) { extractWhatsAppTabs(stockBar, isDark) }
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
 
     // Sync WhatsApp swipe navigation to our indicator
@@ -82,5 +86,7 @@ fun WhatsAppNavBarHost(
             }
         },
         sourceView = backdropSource,
+        containerAlpha = 0.15f,
+        effectMultiplier = 1.6f,
     )
 }
