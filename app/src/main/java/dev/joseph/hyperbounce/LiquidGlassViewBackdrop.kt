@@ -14,6 +14,7 @@ import androidx.compose.ui.layout.positionInWindow
 import com.kyant.backdrop.Backdrop
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.layout.LayoutCoordinates as ComposeLayoutCoordinates
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.graphics.asImageBitmap
