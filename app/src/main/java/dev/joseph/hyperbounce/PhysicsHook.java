@@ -141,7 +141,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         float colorProgress = 0.0f;
         boolean isTouching = false;
         boolean isDragging = false;
-        boolean isParentPressed = false; // THE SNIPER FLAG
+        boolean isParentPressed = false;
         boolean initializedObserver = false;
         float startX = 0f;
         float currentX = 0f;
@@ -508,10 +508,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
                     android.widget.CompoundButton view = (android.widget.CompoundButton) param.thisObject;
                     
-                    // KEEP TOUCH STARVATION HACK: The toggle MUST process its own independent swipes!
+                    // ZONE 1 (THE TOGGLE): Forcefully squash native framework limits so the toggle handles its own swipes!
                     if (!view.isClickable()) view.setClickable(true);
                     if (!view.isLongClickable()) view.setLongClickable(true);
-                    if (!view.isFocusable()) view.setFocusable(true);
                     
                     Canvas canvas = (Canvas) param.args[0];
                     int width = view.getWidth(), height = view.getHeight();
@@ -528,37 +527,36 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         stateMap.put(view, s);
                     }
 
-                    // --- THE SNIPER FIX: Inject a ViewTreeObserver to wake up the animation when parent gets pressed ---
+                    // ZONE 2 (THE TEXT ROW): Inject a custom spy listener onto the parent row
                     if (!s.initializedObserver) {
-                        final android.widget.CompoundButton finalView = view;
-                        final ToggleState finalS = s;
-                        view.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
-                            private boolean wasParentPressed = false;
-                            @Override
-                            public boolean onPreDraw() {
-                                boolean parentPressed = false;
-                                ViewParent p = finalView.getParent();
-                                while (p instanceof View) {
-                                    View pv = (View) p;
-                                    if (pv.isPressed()) {
-                                        parentPressed = true;
-                                        break;
+                        ViewParent p = view.getParent();
+                        View rowView = null;
+                        while (p instanceof View) {
+                            View pv = (View) p;
+                            String name = pv.getClass().getSimpleName();
+                            if (name.equals("RecyclerView") || name.contains("ListView")) break;
+                            rowView = pv;
+                            p = pv.getParent();
+                        }
+                        if (rowView != null) {
+                            final android.widget.CompoundButton finalView = view;
+                            final ToggleState finalS = s;
+                            rowView.setOnTouchListener(new View.OnTouchListener() {
+                                @Override
+                                public boolean onTouch(View v, MotionEvent event) {
+                                    int action = event.getActionMasked();
+                                    boolean isDown = (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE);
+                                    if (finalS.isParentPressed != isDown) {
+                                        finalS.isParentPressed = isDown;
+                                        finalView.postInvalidateOnAnimation();
                                     }
-                                    if (pv.getClass().getSimpleName().equals("RecyclerView") || pv.getClass().getSimpleName().contains("ListView")) break;
-                                    p = pv.getParent();
+                                    // VERY IMPORTANT: Return false so the row STILL processes native clicks/ripples!
+                                    return false;
                                 }
-                                
-                                if (parentPressed != wasParentPressed) {
-                                    wasParentPressed = parentPressed;
-                                    finalS.isParentPressed = parentPressed;
-                                    finalView.postInvalidateOnAnimation();
-                                }
-                                return true;
-                            }
-                        });
+                            });
+                        }
                         s.initializedObserver = true;
                     }
-                    // -------------------------------------------------------------------------------------------------
 
                     boolean isChecked = view.isChecked();
                     boolean isEnabled = view.isEnabled();
@@ -593,7 +591,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     s.colorProgress += (targetColorRatio - s.colorProgress) * dt * 16.0f;
                     s.colorProgress = Math.max(0.0f, Math.min(1.0f, s.colorProgress));
 
-                    // Bloom target now combines direct touches AND parent observer state
+                    // Bloom target combines direct touches AND our new row spy listener
                     float bloomTarget = (s.isTouching || s.isDragging || s.isParentPressed) ? 1.0f : 0.0f;
                     float bloomForce = (bloomTarget - s.bloom) * 250.0f - (s.bloomVelocity * 16.0f);
                     s.bloomVelocity += bloomForce * dt;
