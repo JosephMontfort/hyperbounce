@@ -25,7 +25,7 @@ internal class LiquidGlassInteractiveHighlight(
     private val pressProgressAnimation =
         Animatable(0f, 0.001f)
     private val positionAnimation =
-        Animatable(Offset.Zero, Offset.VectorConverter, Offset.VisibilityThreshold)
+        Animatable(Offset.Zero, Offset.VectorConverter, Offset(0.001f, 0.001f))
 
     private var startPosition = Offset.Zero
 
@@ -95,13 +95,13 @@ half4 main(float2 coord) {
             onDragEnd = {
                 animationScope.launch {
                     launch { pressProgressAnimation.animateTo(0f, androidx.compose.animation.core.spring(0.5f, 300f, 0.001f)) }
-                    launch { positionAnimation.animateTo(startPosition, androidx.compose.animation.core.spring(0.5f, 300f, Offset.VisibilityThreshold)) }
+                    launch { positionAnimation.animateTo(startPosition, androidx.compose.animation.core.spring(0.5f, 300f, Offset(0.001f, 0.001f))) }
                 }
             },
             onDragCancel = {
                 animationScope.launch {
                     launch { pressProgressAnimation.animateTo(0f, androidx.compose.animation.core.spring(0.5f, 300f, 0.001f)) }
-                    launch { positionAnimation.animateTo(startPosition, androidx.compose.animation.core.spring(0.5f, 300f, Offset.VisibilityThreshold)) }
+                    launch { positionAnimation.animateTo(startPosition, androidx.compose.animation.core.spring(0.5f, 300f, Offset(0.001f, 0.001f))) }
                 }
             }
         ) { change, _ ->

@@ -93,7 +93,6 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View) {
 
     LiquidNavigationBar(
         bottomPadding = 40.dp,
-        isDarkTheme = isDark,
         tabs = tabs.map { it.bitmap },
         selectedIndex = selectedIndex,
         onTabSelected = { index ->

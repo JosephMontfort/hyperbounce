@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.View
 import android.view.ViewGroup
-import android.view.View
 import android.widget.ImageView
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
@@ -73,7 +72,6 @@ fun WhatsAppNavBarHost(
 
     LiquidNavigationBar(
         bottomPadding = 40.dp,
-        isDarkTheme = isDark,
         tabs = tabs.map { it.bitmap },
         selectedIndex = selectedIndex,
         onTabSelected = { index ->

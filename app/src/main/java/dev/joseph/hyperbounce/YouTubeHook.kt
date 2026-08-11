@@ -152,11 +152,11 @@ class YouTubeHook {
 
     private fun executeUIHeist(activity: Activity, rootGroup: ViewGroup, pivotBar: ViewGroup) {
         try {
+            val decorView = activity.window.decorView as ViewGroup
+
             if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
             XposedBridge.log("[HyperBounce] Injecting YouTube Liquid Bar...")
-
-            val decorView = activity.window.decorView as ViewGroup
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
