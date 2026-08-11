@@ -709,11 +709,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
                     float baseMinX = offsetX + (restThumbWidth / 2.0f);
                     float baseMaxX = offsetX + drawW - (restThumbWidth / 2.0f);
-                    float targetMinX = offsetX + (maxExpandedW / 2.0f);
-                    float targetMaxX = offsetX + drawW - (maxExpandedW / 2.0f);
-
-                    float minX = baseMinX + (targetMinX - baseMinX) * s.bloom;
-                    float maxX = baseMaxX + (targetMaxX - baseMaxX) * s.bloom;
+                    // Match the library's pressedScale behavior: the thumb scales
+                    // around its RESTING center instead of moving inward to stay
+                    // inside the track. This deliberately lets the bloomed thumb
+                    // overhang the toggle container at both ends.
+                    float minX = baseMinX;
+                    float maxX = baseMaxX;
 
                     float cx = minX + s.progress * (maxX - minX);
                     float cy = offsetY + (drawH / 2.0f);
