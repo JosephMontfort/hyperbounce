@@ -174,7 +174,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    }\n" +
         "    vec2 center = vec2(thumbL, thumbT) + thumbSize * 0.5;\n" +
         "    vec2 diff = fragCoord - center;\n" +
-        "    float pinchX = 1.65; float pinchY = 1.95;\n" +
+        "    float pinchX = 1.35; float pinchY = 1.55;\n" +
         "    vec2 lensWarp = center + vec2(diff.x * pinchX, diff.y * pinchY);\n" +
         "    vec2 distFromEdge = min(p, thumbSize - p);\n" +
         "    float edgeDist = min(distFromEdge.x, distFromEdge.y);\n" +
@@ -185,7 +185,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    vec3 glowColor = mix(vec3(1.0), basePixel.rgb, 0.85);\n" +
         "    color.rgb = mix(color.rgb, glowColor, rimFactor * 0.90);\n" +
         "    float specular = pow(rimFactor, 3.0);\n" +
-        "    color.rgb += specular * 0.45;\n" +
+        "    color.rgb += specular * 0.25;\n" +
         "    return color;\n" +
         "}";
 
@@ -546,7 +546,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float trackBottom = trackTop + trackHeight;
                     float trackRadius = trackHeight / 2.0f;
 
-                    float maxExpandedW = restThumbWidth * 1.35f; 
+                    float maxExpandedW = restThumbWidth * 1.55f; 
                     float currentThumbHeight = restThumbHeight + ((drawH * 0.88f) - restThumbHeight) * s.bloom; 
                     float currentThumbWidth = restThumbWidth + (maxExpandedW - restThumbWidth) * s.bloom;
                     float thumbRadius = currentThumbHeight / 2.0f;
@@ -554,8 +554,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float baseMinX = offsetX + (restThumbWidth / 2.0f) + 2.0f;
                     float baseMaxX = offsetX + drawW - (restThumbWidth / 2.0f) - 2.0f;
 
-                    float targetMinX = offsetX;
-                    float targetMaxX = offsetX + drawW;
+                    float targetMinX = offsetX + (maxExpandedW / 6.0f);
+                    float targetMaxX = offsetX + drawW - (maxExpandedW / 6.0f);
 
                     float minX = baseMinX + (targetMinX - baseMinX) * s.bloom;
                     float maxX = baseMaxX + (targetMaxX - baseMaxX) * s.bloom;
