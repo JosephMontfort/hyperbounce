@@ -71,7 +71,7 @@ fun LiquidNavigationBar(
     customAccentColor: Color? = null,
     barHeight: Dp = 64.dp,
     tabWidth: Dp = 64.dp,
-    restingIndicatorWidthMultiplier: Float = 1.18f,
+    cornerRadius: Dp = 32.dp,
 ) {
     if (tabs.isEmpty()) return
 
@@ -213,7 +213,7 @@ fun LiquidNavigationBar(
                         }
                         .drawBackdrop(
                             backdrop = liveBackdrop,
-                            shape = { Capsule },
+                            shape = { androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius) },
                             effects = {
                                 vibrancy()
                                 blur(8f.dp.toPx() * effectMultiplier)
@@ -271,7 +271,7 @@ fun LiquidNavigationBar(
                             }
                             .drawBackdrop(
                                 backdrop = liveBackdrop,
-                                shape = { Capsule },
+                                shape = { androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius) },
                                 effects = {
                                     val progress = dampedDragAnimation.pressProgress
                                     vibrancy()
@@ -332,7 +332,7 @@ fun LiquidNavigationBar(
                                 liveBackdrop,
                                 tabsBackdrop,
                             ),
-                            shape = { Capsule },
+                            shape = { androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius) },
                             effects = {
                                 val progress = dampedDragAnimation.pressProgress
                                 lens(
@@ -357,12 +357,7 @@ fun LiquidNavigationBar(
                                 )
                             },
                             layerBlock = {
-                                val restingWidth = lerp(
-                                    restingIndicatorWidthMultiplier,
-                                    1f,
-                                    dampedDragAnimation.pressProgress,
-                                )
-                                scaleX = dampedDragAnimation.scaleX * restingWidth
+                                scaleX = dampedDragAnimation.scaleX
                                 scaleY = dampedDragAnimation.scaleY
 
                                 val velocity = dampedDragAnimation.velocity / 10f
