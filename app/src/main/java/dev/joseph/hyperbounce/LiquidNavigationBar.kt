@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastCoerceIn
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
@@ -428,10 +429,13 @@ private fun RowScope.LiquidBottomTab(
             )
             if (!label.isNullOrEmpty()) {
                 Spacer(modifier = Modifier.height(2.dp))
-                androidx.compose.material3.Text(
+                androidx.compose.foundation.text.BasicText(
                     text = label,
-                    fontSize = 11.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                    style = androidx.compose.ui.text.TextStyle(
+                        fontSize = 11.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                        color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White else Color.Black
+                    ),
                     maxLines = 1
                 )
             }
