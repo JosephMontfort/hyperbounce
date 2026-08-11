@@ -6,7 +6,6 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
-import androidx.compose.ui.input.pointer.consume
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.hypot
@@ -58,7 +57,7 @@ internal suspend fun PointerInputScope.inspectDragGestures(
             if (dragging) {
                 if (delta != androidx.compose.ui.geometry.Offset.Zero) {
                     onDrag(change, delta)
-                    change.consume()
+                    change.consumePositionChange()
                 }
             }
         }
