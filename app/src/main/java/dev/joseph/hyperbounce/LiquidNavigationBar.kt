@@ -432,7 +432,7 @@ private fun RowScope.LiquidBottomTab(
                 androidx.compose.foundation.text.BasicText(
                     text = label,
                     style = androidx.compose.ui.text.TextStyle(
-                        fontSize = 11.sp,
+                        fontSize = 13.sp,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                         color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White else Color.Black
                     ),
