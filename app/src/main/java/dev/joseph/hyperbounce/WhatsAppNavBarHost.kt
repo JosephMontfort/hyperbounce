@@ -92,7 +92,7 @@ fun WhatsAppNavBarHost(
         customAccentColor = androidx.compose.ui.graphics.Color(0xFF21C063),
         barHeight = 70.dp,
         tabWidth = 84.dp,
-        cornerRadius = 20.dp,
+        restingIndicatorWidthMultiplier = 1.18f,
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index
