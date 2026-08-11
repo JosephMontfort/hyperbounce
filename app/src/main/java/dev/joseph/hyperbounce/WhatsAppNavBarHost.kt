@@ -86,7 +86,5 @@ fun WhatsAppNavBarHost(
             }
         },
         sourceView = backdropSource,
-        containerAlpha = 0.15f,
-        effectMultiplier = 1.6f,
     )
 }
