@@ -66,13 +66,18 @@ fun LiquidNavigationBar(
     forceLightTheme: Boolean = false,
     containerAlpha: Float = 0.4f,
     effectMultiplier: Float = 1f,
+    labels: List<String> = emptyList(),
+    customAccentColor: Color? = null,
+    barHeight: Dp = 64.dp,
+    tabWidth: Dp = 64.dp,
 ) {
     if (tabs.isEmpty()) return
 
     val isLightTheme = forceLightTheme || !isSystemInDarkTheme()
-    val accentColor =
+    val accentColor = customAccentColor ?: (
         if (isLightTheme) Color(0xFF0088FF)
         else Color(0xFF0091FF)
+    )
     val containerColor =
         if (isLightTheme) Color(0xFFFAFAFA).copy(containerAlpha)
         else Color(0xFF121212).copy(containerAlpha)
@@ -100,8 +105,8 @@ fun LiquidNavigationBar(
         Box(
             modifier = Modifier
                 .padding(bottom = bottomPadding)
-                .width((tabs.size * 64).dp)
-                .height(64.dp),
+                .width((tabs.size * tabWidth.value).dp)
+                .height(barHeight),
         ) {
             BoxWithConstraints(
                 modifier = Modifier.fillMaxSize(),
@@ -227,7 +232,7 @@ fun LiquidNavigationBar(
                             },
                         )
                         .then(interactiveHighlight.modifier)
-                        .height(64.dp)
+                        .height(barHeight)
                         .fillMaxWidth()
                         .padding(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -236,6 +241,7 @@ fun LiquidNavigationBar(
                         LiquidBottomTab(
                             bitmap = bitmap,
                             isCircular = index in circularIndices,
+                            label = labels.getOrNull(index),
                             onClick = {
                                 onTabSelected(index)
                                 dampedDragAnimation.animateToValue(index.toFloat())
@@ -282,7 +288,7 @@ fun LiquidNavigationBar(
                                 },
                             )
                             .then(interactiveHighlight.modifier)
-                            .height(56.dp)
+                            .height(barHeight - 8.dp)
                             .fillMaxWidth()
                             .padding(horizontal = 4.dp)
                             .graphicsLayer(
@@ -294,6 +300,7 @@ fun LiquidNavigationBar(
                             LiquidBottomTab(
                                 bitmap = bitmap,
                                 isCircular = index in circularIndices,
+                                label = labels.getOrNull(index),
                                 onClick = {
                                     onTabSelected(index)
                                     dampedDragAnimation.animateToValue(index.toFloat())
@@ -372,7 +379,7 @@ fun LiquidNavigationBar(
                                 )
                             },
                         )
-                        .height(56.dp)
+                        .height(barHeight - 8.dp)
                         .fillMaxWidth(1f / tabCount),
                 )
             }
@@ -387,6 +394,7 @@ private val LocalLiquidBottomTabScale =
 private fun RowScope.LiquidBottomTab(
     bitmap: Bitmap?,
     isCircular: Boolean,
+    label: String?,
     onClick: () -> Unit,
 ) {
     val scale = LocalLiquidBottomTabScale.current
@@ -413,11 +421,20 @@ private fun RowScope.LiquidBottomTab(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = null,
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(if (label.isNullOrEmpty()) 28.dp else 24.dp)
                     .then(
                         if (isCircular) Modifier.clip(CircleShape) else Modifier
                     ),
             )
+            if (!label.isNullOrEmpty()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                androidx.compose.material3.Text(
+                    text = label,
+                    fontSize = 11.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                    maxLines = 1
+                )
+            }
         }
     }
 }

@@ -57,6 +57,7 @@ internal suspend fun PointerInputScope.inspectDragGestures(
             if (dragging) {
                 if (delta != androidx.compose.ui.geometry.Offset.Zero) {
                     onDrag(change, delta)
+                    change.consume()
                 }
             }
         }

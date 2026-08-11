@@ -15,7 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 
-private data class WhatsAppTabData(val bitmap: Bitmap?)
+private data class WhatsAppTabData(val bitmap: Bitmap?, val label: String)
 
 private fun extractWhatsAppTabs(stockBar: ViewGroup, isDark: Boolean): List<WhatsAppTabData> {
     val out = mutableListOf<WhatsAppTabData>()
@@ -37,9 +37,20 @@ private fun extractWhatsAppTabs(stockBar: ViewGroup, isDark: Boolean): List<What
             drawable.setBounds(0, 0, w, h)
             drawable.draw(Canvas(bmp))
         }
-        out.add(WhatsAppTabData(bmp))
+        val tv = findTextView(tab)
+        val label = tv?.text?.toString() ?: ""
+        out.add(WhatsAppTabData(bmp, label))
     }
     return out
+}
+
+private fun findTextView(g: ViewGroup): android.widget.TextView? {
+    for (i in 0 until g.childCount) {
+        val v = g.getChildAt(i)
+        if (v is android.widget.TextView) return v
+        if (v is ViewGroup) findTextView(v)?.let { return it }
+    }
+    return null
 }
 
 private fun findImageView(g: ViewGroup): ImageView? {
@@ -77,6 +88,10 @@ fun WhatsAppNavBarHost(
     LiquidNavigationBar(
         bottomPadding = 40.dp,
         tabs = tabs.map { it.bitmap },
+        labels = tabs.map { it.label },
+        customAccentColor = androidx.compose.ui.graphics.Color(0xFF21C063),
+        barHeight = 78.dp,
+        tabWidth = 76.dp,
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index
