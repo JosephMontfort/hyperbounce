@@ -112,6 +112,6 @@ fun YouTubeNavBarHost(
             clickStockTab(pivotBar, index)
         },
         sourceView = backdropSource,
-        forceLightTheme = true,
+        forceLightTheme = !isDark,
     )
 }
