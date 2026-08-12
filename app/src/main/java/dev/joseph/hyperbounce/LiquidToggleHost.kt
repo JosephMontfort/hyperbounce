@@ -122,7 +122,7 @@ internal object LiquidToggleHost {
 
             installOwnersIfNeeded(target, compose)
             composeView = compose
-            (parent.overlay as? ViewGroupOverlay)?.add(compose)
+            parent.overlay.add(compose)
 
             refreshGeometry()
             syncVisibility()
@@ -175,7 +175,7 @@ internal object LiquidToggleHost {
             composeView = null
             compose?.setContent { }
             // Fix: Safe call using 'it' as ViewGroupOverlay expects a non-null View
-            compose?.let { (parent.overlay as? ViewGroupOverlay)?.remove(it) }
+            compose?.let { parent.overlay.remove(it) }
         }
     }
 
