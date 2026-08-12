@@ -2,6 +2,7 @@ package dev.joseph.hyperbounce
 
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewGroupOverlay
 import android.widget.CompoundButton
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
@@ -37,7 +38,8 @@ internal object LiquidToggleHost {
             return
         }
 
-        val host = Host(target)
+        val parent = target.parent as? ViewGroup ?: return
+        val host = Host(target, parent)
         hosts[target] = host
         host.attach()
     }
@@ -67,8 +69,8 @@ internal object LiquidToggleHost {
         offsetEvent.recycle()
     }
 
-    private class Host(private val target: View) {
-        private val captureSource: View = (target.parent as? ViewGroup) ?: target
+    private class Host(private val target: View, private val parent: ViewGroup) {
+        private val captureSource: View = target.rootView
         private val backdrop = LiquidToggleViewBackdrop(captureSource)
 
         var composeView: ComposeView? = null
@@ -117,7 +119,7 @@ internal object LiquidToggleHost {
 
             installOwnersIfNeeded(target, compose)
             composeView = compose
-            target.overlay.add(compose)
+            (parent.overlay as? ViewGroupOverlay)?.add(compose)
 
             refreshGeometry()
             syncVisibility()
@@ -130,8 +132,8 @@ internal object LiquidToggleHost {
             val overlayWidthPx = (80f * density).roundToInt()
             val overlayHeightPx = (48f * density).roundToInt()
 
-            overlayLeftPx = (target.width - overlayWidthPx) / 2
-            overlayTopPx = (target.height - overlayHeightPx) / 2
+            overlayLeftPx = target.left + (target.width - overlayWidthPx) / 2
+            overlayTopPx = target.top + (target.height - overlayHeightPx) / 2
 
             compose.measure(
                 View.MeasureSpec.makeMeasureSpec(overlayWidthPx, View.MeasureSpec.EXACTLY),
@@ -165,7 +167,7 @@ internal object LiquidToggleHost {
             val compose = composeView
             composeView = null
             compose?.setContent { }
-            target.overlay.remove(compose)
+            (parent.overlay as? ViewGroupOverlay)?.remove(compose)
         }
     }
 
