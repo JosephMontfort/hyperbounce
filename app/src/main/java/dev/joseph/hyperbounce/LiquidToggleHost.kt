@@ -119,24 +119,21 @@ internal object LiquidToggleHost {
                     )
                 }
             }
-            
+
             composeView = compose
 
-            // THE LIFECYCLE FIX:
-            // We must apply the LifecycleOwner to the OverlayViewGroup BEFORE ComposeView is attached.
-            // A dummy view forces Android to generate the OverlayViewGroup so we can safely tag it.
+            // CRITICAL FIX: Add the ComposeView to the overlay FIRST.
+            // This ensures the OverlayViewGroup is actively instantiated.
             val overlay = parent.overlay as? ViewGroupOverlay
             if (overlay != null) {
-                val dummy = View(target.context)
-                overlay.add(dummy)
-                installOwnersIfNeeded(target, dummy.rootView)
-                overlay.remove(dummy)
+                overlay.add(compose)
+                
+                // NOW we can fetch the rootView (which evaluates synchronously to the OverlayViewGroup) 
+                // and safely attach the required lifecycle owners to it.
+                val overlayRoot = compose.rootView
+                installOwnersIfNeeded(target, overlayRoot)
+                installOwnersIfNeeded(target, compose)
             }
-
-            installOwnersIfNeeded(target, compose)
-            
-            // Now it is safe to add. Compose will find the owners seamlessly.
-            overlay?.add(compose)
 
             refreshGeometry()
             syncVisibility()
@@ -152,7 +149,7 @@ internal object LiquidToggleHost {
             composeLeftInTarget = (target.width - overlayWidthPx) / 2
             composeTopInTarget = (target.height - overlayHeightPx) / 2
 
-            // Overlay layout bounds are relative to the parent ViewGroup (the RecyclerView row)
+            // Overlay bounds are relative to the parent ViewGroup (the RecyclerView row)
             val overlayLeftPx = target.left + composeLeftInTarget
             val overlayTopPx = target.top + composeTopInTarget
 
