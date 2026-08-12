@@ -188,8 +188,8 @@ internal object LiquidToggleHost {
                 setViewCompositionStrategy(
                     ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool
                 )
-                isClickable = false
-                isFocusable = false
+                isClickable = true
+                isFocusable = true
 
                 // Composition is installed only after the host has attached and
                 // supplied the lifecycle/saved-state/ViewModel owners. This avoids
@@ -258,13 +258,22 @@ internal object LiquidToggleHost {
             val hostLeft = hostView.left
             val hostTop = hostView.top
 
-            val desiredLeft = target.left +
-                target.translationX.roundToInt() +
-                (target.width - overlayWidthPx) / 2
+            val toggleDrawWPx = (64f * density).roundToInt()
+            val toggleDrawHPx = (28f * density).roundToInt()
+            val offsetX: Int
+            val offsetY: Int
+            if (target.width > target.height * 2.5f && target.width > 200) {
+                offsetX = (target.width - toggleDrawWPx - (target.height * 0.15f)).roundToInt()
+                offsetY = (target.height - toggleDrawHPx) / 2
+            } else {
+                offsetX = (target.width - toggleDrawWPx) / 2
+                offsetY = (target.height - toggleDrawHPx) / 2
+            }
+            val boxOffsetX = offsetX - (overlayWidthPx - toggleDrawWPx) / 2
+            val boxOffsetY = offsetY - (overlayHeightPx - toggleDrawHPx) / 2
 
-            val desiredTop = target.top +
-                target.translationY.roundToInt() +
-                (target.height - overlayHeightPx) / 2
+            val desiredLeft = target.left + target.translationX.roundToInt() + boxOffsetX
+            val desiredTop = target.top + target.translationY.roundToInt() + boxOffsetY
 
             val composeLeft = desiredLeft - hostLeft
             val composeTop = desiredTop - hostTop

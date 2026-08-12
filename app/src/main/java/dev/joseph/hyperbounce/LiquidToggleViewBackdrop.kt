@@ -74,7 +74,7 @@ internal class LiquidToggleViewBackdrop(
     private var region: CaptureRegion? = null
     private var lastCaptureNanos = 0L
 
-    private val minCaptureIntervalNanos = 16_666_667L
+    private val minCaptureIntervalNanos = 250_000_000L
 
     private val preDrawListener = ViewTreeObserver.OnPreDrawListener {
         captureOncePerFrame()
