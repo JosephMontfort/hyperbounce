@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Choreographer
 import android.view.PixelCopy
 import android.view.SurfaceView
@@ -133,6 +134,10 @@ internal class LiquidGlassViewBackdrop(
             // SurfaceView. TextureView can be copied separately as well. Composite
             // those hardware-backed regions over the hierarchy snapshot so the
             // backdrop has the exact pixels that the user sees while a reel plays.
+            // Instagram can host the Reel renderer outside the specific content
+            // View passed to the nav bar (for example as a sibling under the window
+            // decor/root hierarchy). Search the whole attached window hierarchy,
+            // not only sourceView's descendants.
             requestHardwareSurfaceFrames(currentRegion, location, scale)
             drawLatestHardwareSurfaceFrames(canvas, currentRegion, location, scale)
 
@@ -158,9 +163,17 @@ internal class LiquidGlassViewBackdrop(
         scale: Float,
     ) {
         val surfaces = ArrayList<View>()
-        collectHardwareSurfaceViews(sourceView, surfaces)
+        val root = sourceView.rootView
+        collectHardwareSurfaceViews(root, surfaces)
 
-        for (surface in surfaces) {
+        // Avoid duplicate requests if the hierarchy traversal encounters a view
+        // through an unusual parent/SurfaceControl arrangement.
+        val uniqueSurfaces = surfaces.distinctBy { System.identityHashCode(it) }
+        if (uniqueSurfaces.isNotEmpty()) {
+            Log.d("HyperBounce-Backdrop", "hardware surfaces=${uniqueSurfaces.size}")
+        }
+
+        for (surface in uniqueSurfaces) {
             if (!surface.isShown || surface.width <= 0 || surface.height <= 0) continue
 
             val surfaceLocation = IntArray(2)
@@ -209,6 +222,7 @@ internal class LiquidGlassViewBackdrop(
                                     )
                                     replaceSurfaceFrame(surface, frame)
                                 } else {
+                                    Log.d("HyperBounce-Backdrop", "PixelCopy SurfaceView failed=$result")
                                     dest.recycle()
                                 }
                             },
