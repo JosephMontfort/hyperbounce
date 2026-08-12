@@ -127,7 +127,9 @@ internal object LiquidToggleHost {
          *
          * The actual ComposeView is manually laid out inside this zero-size host.
          */
-        private val hostView = LiquidToggleHostView(target.context)
+        private val hostView = LiquidToggleHostView(target.context) {
+            ownerFor(decor)
+        }
 
         private val backdrop = LiquidToggleViewBackdrop(
             sourceView = container,
@@ -170,13 +172,10 @@ internal object LiquidToggleHost {
             target.addOnLayoutChangeListener(layoutListener)
             target.addOnAttachStateChangeListener(attachListener)
 
-            installOwnersIfNeeded()
-
             hostView.apply {
                 tag = "HyperBounceLiquidToggleHost:${System.identityHashCode(target)}"
                 // A zero-size normal child: it does not alter row measurement.
                 layoutParams = ViewGroup.LayoutParams(0, 0)
-                setViewTreeLifecycleOwner(ownerFor(decor))
             }
 
             container.addView(hostView)
@@ -189,17 +188,26 @@ internal object LiquidToggleHost {
                 isClickable = false
                 isFocusable = false
 
-                // Install the synthetic owner set directly on the ComposeView.
-                // Compose's WindowRecomposer resolves lifecycle ownership from
-                // the ComposeView's own ViewTree lookup; relying only on the
-                // injected host's parent tag was unreliable in HyperOS system
-                // app hierarchies and could fall through to content_parent.
-                val composeOwner = ownerFor(decor)
-                setViewTreeLifecycleOwner(composeOwner)
-                setViewTreeSavedStateRegistryOwner(composeOwner)
-                setViewTreeViewModelStoreOwner(composeOwner)
+                // Composition is installed only after the host has attached and
+                // supplied the lifecycle/saved-state/ViewModel owners. This avoids
+                // Compose creating a WindowRecomposer from the system app's
+                // content_parent before our injected owner is visible.
+            }
 
-                setContent {
+            composeView = compose
+            hostView.addView(compose)
+
+            refreshGeometry()
+            syncVisibility()
+
+            compose.post {
+                if (disposed || compose.parent !== hostView) return@post
+
+                compose.setViewTreeLifecycleOwner(ownerFor(decor))
+                compose.setViewTreeSavedStateRegistryOwner(ownerFor(decor))
+                compose.setViewTreeViewModelStoreOwner(ownerFor(decor))
+
+                compose.setContent {
                     LiquidToggleOverlay(
                         backdrop = backdrop,
                         visible = visible,
@@ -218,11 +226,6 @@ internal object LiquidToggleHost {
                 }
             }
 
-            composeView = compose
-            hostView.addView(compose)
-
-            refreshGeometry()
-            syncVisibility()
             decor.post { backdrop.start() }
         }
 
@@ -358,24 +361,22 @@ internal object LiquidToggleHost {
             hostView.clipToPadding = false
         }
 
-        private fun installOwnersIfNeeded() {
-            /*
-             * Give the NORMAL host View its own complete synthetic owner set.
-             * ComposeView sits directly under this host, so its WindowRecomposer
-             * resolves these owners through the ordinary ViewParent chain.
-             *
-             * We deliberately do NOT overwrite lifecycle/saved-state owners on
-             * the target app's decor or container. That could interfere with the
-             * host application's own lifecycle.
-             */
-            val owner = ownerFor(decor)
-            hostView.setViewTreeLifecycleOwner(owner)
-            hostView.setViewTreeSavedStateRegistryOwner(owner)
-            hostView.setViewTreeViewModelStoreOwner(owner)
         }
     }
 
-    private class LiquidToggleHostView(context: android.content.Context) : ViewGroup(context) {
+    private class LiquidToggleHostView(
+        context: android.content.Context,
+        private val ownerProvider: () -> FakeLifecycleOwner,
+    ) : ViewGroup(context) {
+
+        override fun onAttachedToWindow() {
+            val owner = ownerProvider()
+            setViewTreeLifecycleOwner(owner)
+            setViewTreeSavedStateRegistryOwner(owner)
+            setViewTreeViewModelStoreOwner(owner)
+            super.onAttachedToWindow()
+        }
+
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             // Deliberately zero-size so this injected host never changes the native
             // row's measured dimensions.
