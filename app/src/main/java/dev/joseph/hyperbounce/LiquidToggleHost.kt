@@ -194,36 +194,37 @@ internal object LiquidToggleHost {
                 // content_parent before our injected owner is visible.
             }
 
+            // ComposeView must receive its ViewTree owners BEFORE it is attached.
+            // Compose resolves WindowRecomposer from the ViewTree during
+            // onAttachedToWindow(); installing these owners after addView() is
+            // too late and causes "ViewTreeLifecycleOwner not found".
+            val composeOwner = ownerFor(decor)
+            compose.setViewTreeLifecycleOwner(composeOwner)
+            compose.setViewTreeSavedStateRegistryOwner(composeOwner)
+            compose.setViewTreeViewModelStoreOwner(composeOwner)
+
             composeView = compose
             hostView.addView(compose)
 
             refreshGeometry()
             syncVisibility()
 
-            compose.post {
-                if (disposed || compose.parent !== hostView) return@post
-
-                compose.setViewTreeLifecycleOwner(ownerFor(decor))
-                compose.setViewTreeSavedStateRegistryOwner(ownerFor(decor))
-                compose.setViewTreeViewModelStoreOwner(ownerFor(decor))
-
-                compose.setContent {
-                    LiquidToggleOverlay(
-                        backdrop = backdrop,
-                        visible = visible,
-                        selected = { checked },
-                        onSelect = { value ->
-                            val button = target as? CompoundButton
-                            if (button != null) {
-                                if (button.isChecked != value) {
-                                    // Preserve the native HyperOS callback/state path.
-                                    button.performClick()
-                                }
-                                syncChecked()
+            compose.setContent {
+                LiquidToggleOverlay(
+                    backdrop = backdrop,
+                    visible = visible,
+                    selected = { checked },
+                    onSelect = { value ->
+                        val button = target as? CompoundButton
+                        if (button != null) {
+                            if (button.isChecked != value) {
+                                // Preserve the native HyperOS callback/state path.
+                                button.performClick()
                             }
-                        },
-                    )
-                }
+                            syncChecked()
+                        }
+                    },
+                )
             }
 
             decor.post { backdrop.start() }
