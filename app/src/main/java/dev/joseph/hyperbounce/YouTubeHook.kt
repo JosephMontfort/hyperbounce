@@ -23,18 +23,11 @@ import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 
-/**
- * YouTube-specific hooking logic. Ported 1:1 from the original standalone
- * PhysicsHook.kt - the insets trick, luminance scanner, and every shift
- * magnitude (-190f) preserved exactly.
- */
 class YouTubeHook {
-
     private val isDarkState = mutableStateOf(false)
     private var cachedInsetTargets = intArrayOf()
 
     fun handleLoadPackage(lpparam: LoadPackageParam) {
-        // 1. THE INSET ASSASSIN (ZERO-LAG FULLSCREEN)
         try {
             XposedHelpers.findAndHookMethod(
                 View::class.java,
@@ -44,7 +37,6 @@ class YouTubeHook {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         val view = param.thisObject as View
                         if (view.id == View.NO_ID || view.resources == null) return
-
                         try {
                             if (cachedInsetTargets.isEmpty()) {
                                 val res = view.resources
@@ -54,12 +46,10 @@ class YouTubeHook {
                                     res.getIdentifier("reel_watch_fragment_root", "id", "com.google.android.youtube"),
                                 )
                             }
-
                             if (view.id in cachedInsetTargets) {
                                 val insets = param.args[0] as WindowInsets
                                 val type = WindowInsets.Type.systemBars()
                                 val current = insets.getInsets(type)
-
                                 if (current.bottom > 0) {
                                     val fakeInsets = WindowInsets.Builder(insets)
                                         .setInsets(type, Insets.of(current.left, current.top, current.right, 0))
@@ -73,7 +63,6 @@ class YouTubeHook {
             )
         } catch (t: Throwable) {}
 
-        // 2. GHOST BAR & COMPONENT SHIFTER
         try {
             XposedHelpers.findAndHookMethod(View::class.java, "onAttachedToWindow", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
@@ -83,7 +72,6 @@ class YouTubeHook {
                     try {
                         val resName = view.resources.getResourceEntryName(view.id)
 
-                        // Ghost the stock bars completely
                         if (resName == "bottom_bar_container" || resName == "pivot_bar") {
                             view.alpha = 0f
                             view.translationY = 9999f
@@ -94,12 +82,10 @@ class YouTubeHook {
                             }
                         }
 
-                        // Shift regular YouTube FABs
                         if (resName == "fab_container") {
                             view.translationY = -190f
                         }
 
-                        // Shift YouTube Shorts Master Footer AND Ad Overlays
                         if (resName == "reel_player_footer_container" ||
                             resName == "reel_player_delegated_overlay" ||
                             resName == "reel_video_interactions"
@@ -107,7 +93,6 @@ class YouTubeHook {
                             view.translationY = -190f
                         }
 
-                        // Trigger Compose Injection
                         if (resName == "watch_while_layout_coordinator_layout") {
                             val activity = view.context as? Activity
                             if (activity != null) {
@@ -118,18 +103,6 @@ class YouTubeHook {
                                     if (pivotBar != null) {
                                         executeUIHeist(activity, view as ViewGroup, pivotBar)
 
-                                        val bottomBarId = activity.resources.getIdentifier(
-                                            "bottom_bar_container", "id", activity.packageName
-                                        )
-                                        val bottomBar = decorView.findViewById<View>(bottomBarId)
-
-                                        // Mirror the real YouTube bottom navigation state.
-                                        // YouTube itself toggles this container while comments,
-                                        // playback/fullscreen, Shorts transitions, etc. occur.
-
-
-                                        // Continuous Theme Checker is deliberately retained
-                                        // for compatibility with the old extraction path.
                                         activity.window.decorView.viewTreeObserver.addOnPreDrawListener {
                                             val customBar = activity.window.decorView.findViewWithTag<View>("HyperFloatingBar")
                                             if (customBar != null) {
@@ -138,11 +111,6 @@ class YouTubeHook {
                                                 } else {
                                                     customBar.visibility = View.VISIBLE
                                                 }
-                                            }
-                                            val customBar = activity.window.decorView.findViewWithTag<View>("HyperFloatingBar")
-                                            if (customBar != null) {
-                                                val isScrollingHide = pivotBar.translationY > 0f || pivotBar.translationY < 0f
-                                                customBar.visibility = if (pivotBar.visibility == View.VISIBLE || isScrollingHide) View.VISIBLE else View.GONE
                                             }
 
                                             val currentDark = isYouTubeInDarkMode(activity)
@@ -195,7 +163,6 @@ class YouTubeHook {
             if (decorView.findViewTreeViewModelStoreOwner() == null) decorView.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
             val tabState = mutableStateOf(0)
-
             val backdropSource = rootGroup
 
             val composeView = ComposeView(activity).apply {
