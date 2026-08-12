@@ -294,8 +294,7 @@ fun LiquidNavigationBar(
                             .then(interactiveHighlight.modifier)
                             .height(barHeight - 8.dp)
                             .fillMaxWidth()
-                            .padding(horizontal = 4.dp)
-
+                            .padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         tabs.forEachIndexed { index, _ ->
