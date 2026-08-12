@@ -52,35 +52,3 @@ The module uses the same Compose / Kotlin / AGP / Gradle toolchain that was
 already used successfully by the Liquid Glass floating-navigation experiment:
 AGP 9.3.0, Kotlin Compose 2.4.10, Compose Multiplatform 1.11.1, Gradle 9.6.0,
 Backdrop 2.0.0, Shapes 1.2.0.
-
-
-## Follow-up efficiency fix
-
-The initial decor-level overlay used `ViewTreeObserver.OnScrollChangedListener`
-to call `refreshGeometry()` on every scroll callback and rewrote `LayoutParams`.
-That solved alignment but was unnecessarily expensive.
-
-The current implementation keeps the decor-level overlay (needed to escape
-ancestor clipping and keep the backdrop source separate), but coalesces scroll
-callbacks with `postOnAnimation()` and moves the already-laid-out ComposeView
-with `translationX/Y`. This restores the native toggle's scroll-following
-behavior without causing a parent relayout on every scroll event.
-
-The backdrop bridge also no longer runs a perpetual Choreographer callback.
-Its existing pre-draw capture plus 60 FPS minimum capture interval provides the
-same real-time source with less always-on scheduling overhead.
-
-## Scroll/attachment architecture (fix3)
-
-The liquid toggle is intentionally attached to the native toggle's immediate
-parent via `ViewGroupOverlay`, not to the window/decor. This preserves the
-native row/container coordinate system: when RecyclerView/ListView/ScrollView
-moves the row, the overlay moves automatically with it.
-
-The backdrop captures only that same parent/container. The native toggle's
-`onDraw()` is suppressed by `PhysicsHook.java`, and the injected overlay is
-temporarily hidden during the local container capture, preventing recursive
-self-capture.
-
-Do not reintroduce a global `OnScrollChangedListener` or per-frame window
-position tracking for toggle placement. The overlay should remain parent-bound.
