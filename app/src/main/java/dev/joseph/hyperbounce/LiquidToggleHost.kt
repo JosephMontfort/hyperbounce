@@ -121,19 +121,9 @@ internal object LiquidToggleHost {
             }
 
             composeView = compose
-
-            // CRITICAL FIX: Add the ComposeView to the overlay FIRST.
-            // This ensures the OverlayViewGroup is actively instantiated.
-            val overlay = parent.overlay as? ViewGroupOverlay
-            if (overlay != null) {
-                overlay.add(compose)
-                
-                // NOW we can fetch the rootView (which evaluates synchronously to the OverlayViewGroup) 
-                // and safely attach the required lifecycle owners to it.
-                val overlayRoot = compose.rootView
-                installOwnersIfNeeded(target, overlayRoot)
-                installOwnersIfNeeded(target, compose)
-            }
+            
+            // Attach to the parent's overlay to guarantee zero scroll latency
+            (parent.overlay as? ViewGroupOverlay)?.add(compose)
 
             refreshGeometry()
             syncVisibility()
@@ -142,6 +132,17 @@ internal object LiquidToggleHost {
 
         fun refreshGeometry() {
             val compose = composeView ?: return
+            
+            // THE ULTIMATE CRASH FIX: 
+            // Aggressively walk up the tree and inject the Lifecycle tags on EVERY node
+            // exactly right before compose.measure() is executed. This absolutely guarantees 
+            // that the hidden OverlayViewGroup receives the tags before Compose initializes.
+            var p: View? = compose
+            while (p != null) {
+                installOwnersIfNeeded(target, p)
+                p = p.parent as? View
+            }
+
             val density = target.resources.displayMetrics.density
             val overlayWidthPx = (80f * density).roundToInt()
             val overlayHeightPx = (48f * density).roundToInt()
