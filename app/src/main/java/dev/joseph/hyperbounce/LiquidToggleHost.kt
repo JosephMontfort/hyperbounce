@@ -45,6 +45,7 @@ internal object LiquidToggleHost {
 
     private val hosts = WeakHashMap<View, Host>()
 
+    @JvmStatic
     fun ensure(target: View) {
         if (target.width <= 0 || target.height <= 0) return
         if (!target.isAttachedToWindow) return
@@ -61,14 +62,17 @@ internal object LiquidToggleHost {
         host.attach()
     }
 
+    @JvmStatic
     fun syncChecked(target: View) {
         hosts[target]?.syncChecked()
     }
 
+    @JvmStatic
     fun syncVisibility(target: View) {
         hosts[target]?.syncVisibility()
     }
 
+    @JvmStatic
     fun remove(target: View) {
         hosts.remove(target)?.dispose()
     }
