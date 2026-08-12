@@ -17,6 +17,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.findViewTreeViewModelStoreOwner
+import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
@@ -429,6 +432,15 @@ internal object LiquidToggleHost {
             it.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
             it.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             ownerMap[decor] = it
+            if (decor.findViewTreeLifecycleOwner() == null) {
+                decor.setViewTreeLifecycleOwner(it)
+            }
+            if (decor.findViewTreeSavedStateRegistryOwner() == null) {
+                decor.setViewTreeSavedStateRegistryOwner(it)
+            }
+            if (decor.findViewTreeViewModelStoreOwner() == null) {
+                decor.setViewTreeViewModelStoreOwner(it)
+            }
         }
     }
 
