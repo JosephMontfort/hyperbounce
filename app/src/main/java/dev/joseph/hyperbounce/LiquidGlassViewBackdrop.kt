@@ -63,6 +63,7 @@ internal class LiquidGlassViewBackdrop(
     private var frameNumber = 0
     private var lastCapturedFrame = -1
     private var lastCaptureNanos = 0L
+    private var lastHardwareSurfaceCount = -1
     private val minCaptureIntervalNanos = 16_666_667L // ~60 Hz
 
     private val preDrawListener = ViewTreeObserver.OnPreDrawListener {
@@ -73,6 +74,15 @@ internal class LiquidGlassViewBackdrop(
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             frameNumber++
+
+            // Do not rely on the target app's View hierarchy being invalidated.
+            // Instagram Reels can be updated by the media compositor without
+            // traversing/drawing mainWrapper at all. In that case an OnPreDraw
+            // listener never fires, so the backdrop would freeze on the first
+            // reel frame (which contains no video pixels in View.draw()).
+            // Capture once directly from the display-frame callback instead.
+            captureOncePerFrame()
+
             Choreographer.getInstance().postFrameCallback(this)
         }
     }
@@ -151,9 +161,13 @@ internal class LiquidGlassViewBackdrop(
             )
             lastCapturedFrame = frameNumber
             lastCaptureNanos = now
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
             // Keep the previous frame if a target app contains a view that rejects
             // software recording or a hardware-surface copy temporarily fails.
+            Log.e(
+                "HyperBounce-Backdrop",
+                "capture failed: ${t.javaClass.simpleName}: ${t.message}",
+            )
         }
     }
 
@@ -169,8 +183,12 @@ internal class LiquidGlassViewBackdrop(
         // Avoid duplicate requests if the hierarchy traversal encounters a view
         // through an unusual parent/SurfaceControl arrangement.
         val uniqueSurfaces = surfaces.distinctBy { System.identityHashCode(it) }
-        if (uniqueSurfaces.isNotEmpty()) {
-            Log.d("HyperBounce-Backdrop", "hardware surfaces=${uniqueSurfaces.size}")
+        if (uniqueSurfaces.size != lastHardwareSurfaceCount) {
+            lastHardwareSurfaceCount = uniqueSurfaces.size
+            Log.e(
+                "HyperBounce-Backdrop",
+                "root=${root.javaClass.name} hardwareSurfaces=${uniqueSurfaces.size}",
+            )
         }
 
         for (surface in uniqueSurfaces) {
