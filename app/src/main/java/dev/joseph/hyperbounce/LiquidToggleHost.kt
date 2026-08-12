@@ -2,6 +2,7 @@ package dev.joseph.hyperbounce
 
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.CompoundButton
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
@@ -99,6 +100,16 @@ internal object LiquidToggleHost {
                 refreshGeometry()
             }
 
+        /*
+         * Scroll is not a layout event. System Settings/MIUI commonly places
+         * toggles inside a scrolling container, so the target can move on screen
+         * without its own bounds changing. Keep the floating Compose overlay
+         * locked to the native toggle's WINDOW coordinates.
+         */
+        private val scrollListener = ViewTreeObserver.OnScrollChangedListener {
+            refreshGeometry()
+        }
+
         private val attachListener =
             object : View.OnAttachStateChangeListener {
                 override fun onViewAttachedToWindow(v: View) {
@@ -114,6 +125,7 @@ internal object LiquidToggleHost {
         fun attach() {
             target.addOnLayoutChangeListener(layoutListener)
             target.addOnAttachStateChangeListener(attachListener)
+            decor.viewTreeObserver.addOnScrollChangedListener(scrollListener)
 
             installOwnersIfNeeded()
 
@@ -200,12 +212,31 @@ internal object LiquidToggleHost {
         fun dispose() {
             target.removeOnLayoutChangeListener(layoutListener)
             target.removeOnAttachStateChangeListener(attachListener)
+            decor.viewTreeObserver.removeOnScrollChangedListener(scrollListener)
             backdrop.release()
 
             val compose = composeView
             composeView = null
-            compose?.setContent { }
-            (compose?.parent as? ViewGroup)?.removeView(compose)
+
+            /*
+             * A target can detach during FrameLayout.onLayout(). Removing our
+             * sibling synchronously from that callback can corrupt the parent's
+             * child array on some HyperOS builds and produce:
+             *   FrameLayout.layoutChildren() -> NPE in View.getVisibility()
+             *
+             * Post the removal until after the current traversal has completed.
+             */
+            if (compose != null) {
+                compose.visibility = View.GONE
+                decor.post {
+                    try {
+                        compose.setContent { }
+                        (compose.parent as? ViewGroup)?.removeView(compose)
+                    } catch (_: Throwable) {
+                        // Never let cleanup crash a hooked system app.
+                    }
+                }
+            }
         }
 
         private fun installOwnersIfNeeded() {

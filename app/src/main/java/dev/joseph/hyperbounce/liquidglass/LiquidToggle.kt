@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -39,6 +40,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceIn
 import androidx.compose.ui.util.lerp
+import android.view.HapticFeedbackConstants
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberBackdrop
@@ -75,6 +77,25 @@ fun LiquidToggle(
     val animationScope = rememberCoroutineScope()
     var didDrag by remember { mutableStateOf(false) }
     var fraction by remember { mutableFloatStateOf(if (selected()) 1f else 0f) }
+    var lastHapticEdge by remember { mutableIntStateOf(if (selected()) 1 else 0) }
+    val hostView = LocalView.current
+
+    fun performEdgeHaptic(progress: Float) {
+        val edge = when {
+            progress <= 0.001f -> 0
+            progress >= 0.999f -> 1
+            else -> -1
+        }
+        if (edge >= 0) {
+            if (edge != lastHapticEdge) {
+                hostView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                lastHapticEdge = edge
+            }
+        } else {
+            lastHapticEdge = -1
+        }
+    }
+
     val dampedDragAnimation = remember(animationScope) {
         DampedDragAnimation(
             animationScope = animationScope,
@@ -102,6 +123,7 @@ fun LiquidToggle(
                 fraction =
                     if (isLtr) (fraction + delta).fastCoerceIn(0f, 1f)
                     else (fraction - delta).fastCoerceIn(0f, 1f)
+                performEdgeHaptic(fraction)
             }
         )
     }
