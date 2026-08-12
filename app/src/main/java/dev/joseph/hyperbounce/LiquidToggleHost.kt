@@ -177,8 +177,6 @@ internal object LiquidToggleHost {
                 // A zero-size normal child: it does not alter row measurement.
                 layoutParams = ViewGroup.LayoutParams(0, 0)
                 setViewTreeLifecycleOwner(ownerFor(decor))
-                setViewTreeSavedStateRegistryOwner(savedStateOwnerFor(decor))
-                setViewTreeViewModelStoreOwner(viewModelOwnerFor(decor))
             }
 
             container.addView(hostView)
