@@ -5,6 +5,8 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
+import android.graphics.ColorSpace
+import android.os.Build
 import android.util.Log
 import android.view.Choreographer
 import android.view.PixelCopy
@@ -25,6 +27,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.graphics.asImageBitmap
 import com.kyant.backdrop.Backdrop
+import de.robv.android.xposed.XposedBridge
 
 /**
  * Live app-window backdrop source for Kyant's Backdrop engine.
@@ -97,6 +100,7 @@ internal class LiquidGlassViewBackdrop(
     }
 
     fun start() {
+        traceOnce("backdrop START source=${sourceView.javaClass.name}")
         sourceView.viewTreeObserver.addOnPreDrawListener(preDrawListener)
         Choreographer.getInstance().postFrameCallback(frameCallback)
     }
@@ -130,26 +134,37 @@ internal class LiquidGlassViewBackdrop(
             ensureBuffers(scaledWidth, scaledHeight)
 
             val target = back ?: return
-            target.eraseColor(android.graphics.Color.parseColor("#40000000"))
+            var capturedBySurfaceControl = false
 
-            val canvas = Canvas(target)
-            canvas.save()
-            canvas.scale(scale, scale)
-            canvas.clipRect(0, 0, width, height)
-            canvas.translate(-localLeft, -localTop)
-            sourceView.draw(canvas)
-            canvas.restore()
+            // First choice for Instagram: capture the actual SurfaceControl layer tree
+            // of the underlying activity window. This includes SurfaceView/media
+            // compositor layers that View.draw() cannot see.
+            if (Build.VERSION.SDK_INT >= 29) {
+                capturedBySurfaceControl = captureSurfaceControlRegion(
+                    target = target,
+                    sourceCrop = Rect(
+                        localLeft.toInt().coerceAtLeast(0),
+                        localTop.toInt().coerceAtLeast(0),
+                        (localLeft + width).toInt().coerceAtLeast(1),
+                        (localTop + height).toInt().coerceAtLeast(1),
+                    ),
+                    scale = scale,
+                )
+            }
 
-            // View.draw() deliberately does not contain the producer buffer of a
-            // SurfaceView. TextureView can be copied separately as well. Composite
-            // those hardware-backed regions over the hierarchy snapshot so the
-            // backdrop has the exact pixels that the user sees while a reel plays.
-            // Instagram can host the Reel renderer outside the specific content
-            // View passed to the nav bar (for example as a sibling under the window
-            // decor/root hierarchy). Search the whole attached window hierarchy,
-            // not only sourceView's descendants.
-            requestHardwareSurfaceFrames(currentRegion, location, scale)
-            drawLatestHardwareSurfaceFrames(canvas, currentRegion, location, scale)
+            if (!capturedBySurfaceControl) {
+                target.eraseColor(Color.parseColor("#40000000"))
+                val canvas = Canvas(target)
+                canvas.save()
+                canvas.scale(scale, scale)
+                canvas.clipRect(0, 0, width, height)
+                canvas.translate(-localLeft, -localTop)
+                sourceView.draw(canvas)
+                canvas.restore()
+
+                requestHardwareSurfaceFrames(currentRegion, location, scale)
+                drawLatestHardwareSurfaceFrames(canvas, currentRegion, location, scale)
+            }
 
             val previousFront = front
             front = target
@@ -162,13 +177,96 @@ internal class LiquidGlassViewBackdrop(
             lastCapturedFrame = frameNumber
             lastCaptureNanos = now
         } catch (t: Throwable) {
-            // Keep the previous frame if a target app contains a view that rejects
-            // software recording or a hardware-surface copy temporarily fails.
-            Log.e(
-                "HyperBounce-Backdrop",
-                "capture failed: ${t.javaClass.simpleName}: ${t.message}",
-            )
+            trace("capture failed: ${t.javaClass.simpleName}: ${t.message}")
         }
+    }
+
+    /**
+     * Hidden framework capture path. SurfaceControl.captureLayers() captures the
+     * compositor layer tree rather than only View.draw(), so a hardware video
+     * SurfaceView remains available to the backdrop. The Instagram bar is placed
+     * in a separate application-panel window, so this capture does not recurse into
+     * our own glass overlay.
+     */
+    private fun captureSurfaceControlRegion(
+        target: Bitmap,
+        sourceCrop: Rect,
+        scale: Float,
+    ): Boolean {
+        return try {
+            val viewRootImplMethod = View::class.java.getDeclaredMethod("getViewRootImpl")
+            viewRootImplMethod.isAccessible = true
+            val viewRootImpl = viewRootImplMethod.invoke(sourceView) ?: return false
+
+            val rootSurfaceMethod = viewRootImpl.javaClass.getDeclaredMethod("getSurfaceControl")
+            rootSurfaceMethod.isAccessible = true
+            val rootSurface = rootSurfaceMethod.invoke(viewRootImpl) ?: return false
+
+            val scClass = Class.forName("android.view.SurfaceControl")
+            val argsClass = Class.forName("android.view.SurfaceControl\$LayerCaptureArgs")
+            val builderClass = Class.forName("android.view.SurfaceControl\$LayerCaptureArgs\$Builder")
+            val builderCtor = builderClass.getConstructor(scClass)
+            val builder = builderCtor.newInstance(rootSurface)
+
+            builderClass.getMethod("setSourceCrop", Rect::class.java)
+                .invoke(builder, sourceCrop)
+            builderClass.getMethod("setFrameScale", Float::class.javaPrimitiveType)
+                .invoke(builder, scale)
+            builderClass.getMethod(
+                "setPixelFormat",
+                Int::class.javaPrimitiveType,
+            ).invoke(builder, android.graphics.PixelFormat.RGBA_8888)
+            builderClass.getMethod("setChildrenOnly", Boolean::class.javaPrimitiveType)
+                .invoke(builder, false)
+
+            val args = builderClass.getMethod("build").invoke(builder)
+            val captureMethod = scClass.getDeclaredMethod(
+                "captureLayers",
+                argsClass,
+            )
+            captureMethod.isAccessible = true
+            val screenshot = captureMethod.invoke(null, args) ?: return false
+
+            val asBitmapMethod = screenshot.javaClass.getMethod("asBitmap")
+            val bitmap = asBitmapMethod.invoke(screenshot) as? Bitmap ?: return false
+
+            val copy = bitmap.copy(Bitmap.Config.ARGB_8888, false) ?: return false
+            if (copy.width != target.width || copy.height != target.height) {
+                Canvas(target).drawBitmap(
+                    copy,
+                    null,
+                    Rect(0, 0, target.width, target.height),
+                    null,
+                )
+                copy.recycle()
+            } else {
+                Canvas(target).drawBitmap(copy, 0f, 0f, null)
+                copy.recycle()
+            }
+
+            traceOnce("SurfaceControl backdrop capture ACTIVE")
+            true
+        } catch (t: Throwable) {
+            traceOnce("SurfaceControl capture unavailable: ${t.javaClass.simpleName}: ${t.message}")
+            false
+        }
+    }
+
+    private var traceState = ""
+    private fun traceOnce(message: String) {
+        if (traceState == message) return
+        traceState = message
+        try {
+            Log.e("HyperBounce-Backdrop", message)
+            XposedBridge.log("[HyperBounce-Backdrop] $message")
+        } catch (_: Throwable) {}
+    }
+
+    private fun trace(message: String) {
+        try {
+            Log.e("HyperBounce-Backdrop", message)
+            XposedBridge.log("[HyperBounce-Backdrop] $message")
+        } catch (_: Throwable) {}
     }
 
     private fun requestHardwareSurfaceFrames(
