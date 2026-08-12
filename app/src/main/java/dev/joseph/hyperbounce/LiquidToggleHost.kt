@@ -4,7 +4,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.CompoundButton
-import android.view.ViewGroupOverlay
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,9 +18,7 @@ import androidx.compose.ui.semantics.role
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
-import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
 import java.util.WeakHashMap
 import kotlin.math.roundToInt
@@ -37,22 +34,29 @@ import kotlin.math.roundToInt
  *
  * LIQUID MODE
  * -----------
- * The Compose LiquidToggle is attached to the NATIVE TOGGLE'S IMMEDIATE PARENT
- * USING ViewGroupOverlay rather than to the window/decor. This is deliberate:
+ * The Compose LiquidToggle is hosted by a ZERO-SIZE NORMAL child of the
+ * NATIVE TOGGLE'S IMMEDIATE PARENT:
  *
  *   native row/container
  *        ├── original HyperOS toggle (onDraw suppressed)
- *        └── ViewGroupOverlay
- *              └── LiquidToggle ComposeView
+ *        └── zero-size LiquidToggleHostView
+ *              └── ComposeView (manually laid out at the toggle position)
  *
- * Because the overlay belongs to the same parent that contains the real toggle,
- * scrolling the settings page moves BOTH together automatically. There is no
- * global scroll listener, no per-scroll window-coordinate repositioning, and no
- * LayoutParams churn during scrolling.
+ * This is intentional. A ViewGroupOverlay moves with the row, but its private
+ * OverlayViewGroup does not reliably expose the lifecycle owners required by
+ * Compose in several HyperOS/system-app windows. That caused the crash:
  *
- * The overlay does not participate in normal parent layout, so it cannot change
- * row measurement or spacing. Ancestor clipping is disabled so the upstream
- * LiquidToggle's 1.5x bloom can extend outside the native toggle bounds.
+ *   ViewTreeLifecycleOwner not found from ViewOverlay$OverlayViewGroup
+ *
+ * The normal zero-size host keeps the ComposeView inside a real ViewParent tree,
+ * while its measured size remains 0x0 so it does not alter row measurement.
+ * The target and host share the same scrolling parent, so the whole subtree
+ * moves together automatically. There is no global scroll listener, no per-
+ * scroll window-coordinate repositioning, and no LayoutParams churn during
+ * scrolling.
+ *
+ * Ancestor clipping is disabled so the upstream LiquidToggle's 1.5x bloom can
+ * extend outside the native toggle bounds.
  *
  * BACKDROP
  * --------
@@ -104,7 +108,27 @@ internal object LiquidToggleHost {
         private val container: ViewGroup,
         private val decor: ViewGroup,
     ) {
-        private val overlay: ViewGroupOverlay = container.overlay
+        /*
+         * IMPORTANT:
+         * Do NOT use ViewGroupOverlay for ComposeView.
+         *
+         * AndroidX Compose resolves WindowRecomposer lifecycle owners through the
+         * normal ViewParent tree. ViewOverlay's private OverlayViewGroup does not
+         * reliably expose those owners in several HyperOS/system-app windows, which
+         * causes:
+         *
+         *   IllegalStateException: ViewTreeLifecycleOwner not found from
+         *   android.view.ViewOverlay$OverlayViewGroup
+         *
+         * The host below is a normal zero-size child of the toggle's immediate
+         * parent. It therefore participates in the same Android parent transform
+         * and scroll lifecycle as the native toggle, while its zero measured size
+         * does not change the parent's row geometry.
+         *
+         * The actual ComposeView is manually laid out inside this zero-size host.
+         */
+        private val hostView = LiquidToggleHostView(target.context)
+
         private val backdrop = LiquidToggleViewBackdrop(
             sourceView = container,
             overlayViewProvider = { composeView }
@@ -148,16 +172,24 @@ internal object LiquidToggleHost {
 
             installOwnersIfNeeded()
 
-            val compose = ComposeView(target.context).apply {
-                tag = "HyperBounceLiquidToggle:${System.identityHashCode(target)}"
-                setViewCompositionStrategy(
-                    ViewCompositionStrategy.DisposeOnDetachedFromWindow
-                )
-                isClickable = false
-                isFocusable = false
+            hostView.apply {
+                tag = "HyperBounceLiquidToggleHost:${System.identityHashCode(target)}"
+                // A zero-size normal child: it does not alter row measurement.
+                layoutParams = ViewGroup.LayoutParams(0, 0)
                 setViewTreeLifecycleOwner(ownerFor(decor))
                 setViewTreeSavedStateRegistryOwner(savedStateOwnerFor(decor))
                 setViewTreeViewModelStoreOwner(viewModelOwnerFor(decor))
+            }
+
+            container.addView(hostView)
+
+            val compose = ComposeView(target.context).apply {
+                tag = "HyperBounceLiquidToggle:${System.identityHashCode(target)}"
+                setViewCompositionStrategy(
+                    ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool
+                )
+                isClickable = false
+                isFocusable = false
 
                 setContent {
                     LiquidToggleOverlay(
@@ -179,11 +211,7 @@ internal object LiquidToggleHost {
             }
 
             composeView = compose
-            // Overlay children do NOT participate in the parent's measurement/layout.
-            // This is the key difference from adding the ComposeView as a real sibling
-            // child; list rows therefore keep their original dimensions and scroll
-            // naturally with the native toggle.
-            overlay.add(compose)
+            hostView.addView(compose)
 
             refreshGeometry()
             syncVisibility()
@@ -204,34 +232,39 @@ internal object LiquidToggleHost {
             }
 
             /*
-             * The ComposeView is hosted by the same parent as the native toggle.
-             * Therefore these are PARENT-LOCAL coordinates and remain valid while
-             * the whole row/container scrolls. We do not use getLocationInWindow()
-             * or any scroll callback here.
+             * hostView is a zero-size child whose own position may be chosen by
+             * the parent layout. The ComposeView is therefore laid out relative
+             * to the host using the delta between the target and host positions.
+             *
+             * During scrolling both hostView and target receive the same parent
+             * transform automatically; no scroll listener or window-coordinate
+             * chasing is required.
              */
-            val left = target.left +
+            val hostLeft = hostView.left
+            val hostTop = hostView.top
+
+            val desiredLeft = target.left +
                 target.translationX.roundToInt() +
                 (target.width - overlayWidthPx) / 2
-            val top = target.top +
+
+            val desiredTop = target.top +
                 target.translationY.roundToInt() +
                 (target.height - overlayHeightPx) / 2
 
+            val composeLeft = desiredLeft - hostLeft
+            val composeTop = desiredTop - hostTop
+
             if (
-                left != lastLeft ||
-                top != lastTop ||
+                desiredLeft != lastLeft ||
+                desiredTop != lastTop ||
                 target.width != lastTargetWidth ||
                 target.height != lastTargetHeight
             ) {
-                /*
-                 * ViewGroupOverlay children are manually laid out. They remain
-                 * attached to the parent overlay and are automatically transformed
-                 * with that parent when a RecyclerView/ListView/ScrollView moves.
-                 */
                 compose.layout(
-                    left,
-                    top,
-                    left + overlayWidthPx,
-                    top + overlayHeightPx
+                    composeLeft,
+                    composeTop,
+                    composeLeft + overlayWidthPx,
+                    composeTop + overlayHeightPx
                 )
 
                 backdrop.setTargetBounds(
@@ -242,8 +275,8 @@ internal object LiquidToggleHost {
                     paddingPx = (24f * density).roundToInt(),
                 )
 
-                lastLeft = left
-                lastTop = top
+                lastLeft = desiredLeft
+                lastTop = desiredTop
                 lastTargetWidth = target.width
                 lastTargetHeight = target.height
             }
@@ -261,6 +294,7 @@ internal object LiquidToggleHost {
                     target.windowVisibility == View.VISIBLE &&
                     target.isShown
 
+            hostView.visibility = if (visible) View.VISIBLE else View.INVISIBLE
             composeView?.visibility = if (visible) View.VISIBLE else View.INVISIBLE
         }
 
@@ -275,24 +309,28 @@ internal object LiquidToggleHost {
             val compose = composeView
             composeView = null
 
-            if (compose != null) {
-                compose.visibility = View.INVISIBLE
+            try {
+                if (compose != null) {
+                    compose.visibility = View.INVISIBLE
+                    hostView.removeView(compose)
+                }
+            } catch (_: Throwable) {
+                // Never crash the hooked application during cleanup.
+            }
 
-                /*
-                 * ViewGroupOverlay removal never mutates the FrameLayout child
-                 * array, so it avoids the Security Center FrameLayout.layoutChildren()
-                 * NPE seen with synchronous real-child removal.
-                 */
+            /*
+             * Always defer removal of the normal child. System-app FrameLayouts
+             * can be in the middle of a layout traversal when a hooked target
+             * disappears; synchronous child-array mutation can produce the exact
+             * FrameLayout.layoutChildren() NPE seen in Security Center.
+             */
+            decor.post {
                 try {
-                    overlay.remove(compose)
-                } catch (_: Throwable) {
-                    decor.post {
-                        try {
-                            overlay.remove(compose)
-                        } catch (_: Throwable) {
-                            // Never crash the hooked application during cleanup.
-                        }
+                    if (hostView.parent === container) {
+                        container.removeView(hostView)
                     }
+                } catch (_: Throwable) {
+                    // Never crash the hooked application during cleanup.
                 }
             }
         }
@@ -308,15 +346,43 @@ internal object LiquidToggleHost {
                 depth++
                 if (depth > 8) break
             }
+            hostView.clipChildren = false
+            hostView.clipToPadding = false
         }
 
         private fun installOwnersIfNeeded() {
+            /*
+             * Give the NORMAL host View its own complete synthetic owner set.
+             * ComposeView sits directly under this host, so its WindowRecomposer
+             * resolves these owners through the ordinary ViewParent chain.
+             *
+             * We deliberately do NOT overwrite lifecycle/saved-state owners on
+             * the target app's decor or container. That could interfere with the
+             * host application's own lifecycle.
+             */
             val owner = ownerFor(decor)
-            val saved = savedStateOwnerFor(decor)
-            val vm = viewModelOwnerFor(decor)
-            decor.setViewTreeLifecycleOwner(owner)
-            decor.setViewTreeSavedStateRegistryOwner(saved)
-            decor.setViewTreeViewModelStoreOwner(vm)
+            hostView.setViewTreeLifecycleOwner(owner)
+            hostView.setViewTreeSavedStateRegistryOwner(owner)
+            hostView.setViewTreeViewModelStoreOwner(owner)
+        }
+    }
+
+    private class LiquidToggleHostView(context: android.content.Context) : ViewGroup(context) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            // Deliberately zero-size so this injected host never changes the native
+            // row's measured dimensions.
+            setMeasuredDimension(0, 0)
+            for (i in 0 until childCount) {
+                val child = getChildAt(i)
+                child.measure(
+                    MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
+                    MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+                )
+            }
+        }
+
+        override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+            // Children are positioned explicitly by Host.refreshGeometry().
         }
     }
 
@@ -358,11 +424,6 @@ internal object LiquidToggleHost {
         }
     }
 
-    private fun savedStateOwnerFor(decor: ViewGroup) =
-        decor.findViewTreeSavedStateRegistryOwner()
-
-    private fun viewModelOwnerFor(decor: ViewGroup) =
-        decor.findViewTreeViewModelStoreOwner()
 
     private const val LIQUID_TOGGLE_SCALE = 0.975f
 }
