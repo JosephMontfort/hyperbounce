@@ -189,6 +189,16 @@ internal object LiquidToggleHost {
                 isClickable = false
                 isFocusable = false
 
+                // Install the synthetic owner set directly on the ComposeView.
+                // Compose's WindowRecomposer resolves lifecycle ownership from
+                // the ComposeView's own ViewTree lookup; relying only on the
+                // injected host's parent tag was unreliable in HyperOS system
+                // app hierarchies and could fall through to content_parent.
+                val composeOwner = ownerFor(decor)
+                setViewTreeLifecycleOwner(composeOwner)
+                setViewTreeSavedStateRegistryOwner(composeOwner)
+                setViewTreeViewModelStoreOwner(composeOwner)
+
                 setContent {
                     LiquidToggleOverlay(
                         backdrop = backdrop,
