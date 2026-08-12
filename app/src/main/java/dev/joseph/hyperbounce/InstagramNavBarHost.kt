@@ -139,7 +139,7 @@ fun InstagramNavBarHost(
     )
 }
 
-fun injectLiquidGlass(
+internal fun injectLiquidGlass(
     activity: Activity,
     mainWrapper: ViewGroup,
     stockBar: ViewGroup?,
