@@ -26,18 +26,21 @@ import dev.joseph.hyperbounce.liquidglass.LiquidToggle
 import kotlin.math.roundToInt
 import java.util.WeakHashMap
 
-// CRITICAL FIX: Swallows SystemUI's broken ContextWrapper NullPointerExceptions
-// and provides a valid applicationContext fallback for Compose.
+// CRITICAL FIX 1: Provide a Fake Application context. 
+// Compose specifically unwraps ContextWrappers looking for an Application class.
+// This safely intercepts that lookup and prevents SystemUI's NPE.
+internal class FakeApplication(base: Context) : android.app.Application() {
+    init { attachBaseContext(base) }
+    override fun getApplicationContext(): Context = this
+    override fun registerComponentCallbacks(callback: ComponentCallbacks?) {}
+    override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {}
+}
+
 internal class SafeContext(base: Context) : ContextWrapper(base) {
-    override fun getApplicationContext(): Context {
-        return super.getApplicationContext() ?: this
-    }
-    override fun registerComponentCallbacks(callback: ComponentCallbacks?) {
-        try { super.registerComponentCallbacks(callback) } catch (e: Throwable) {}
-    }
-    override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {
-        try { super.unregisterComponentCallbacks(callback) } catch (e: Throwable) {}
-    }
+    private val fakeApp by lazy { FakeApplication(base) }
+    override fun getApplicationContext(): Context = fakeApp
+    override fun registerComponentCallbacks(callback: ComponentCallbacks?) {}
+    override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {}
 }
 
 internal object LiquidToggleHost {
@@ -61,8 +64,8 @@ internal object LiquidToggleHost {
     }
 
     @JvmStatic
-    fun syncVisibility(target: View, isVisible: Boolean) {
-        hosts[target]?.updateVisibility(isVisible)
+    fun syncVisibility(target: View) {
+        hosts[target]?.syncVisibility()
     }
 
     @JvmStatic
@@ -71,12 +74,14 @@ internal object LiquidToggleHost {
     }
 
     private class Host(private val target: View, private val parent: ViewGroup) {
+        // CRITICAL FIX 2: Stop capturing the black DecorView void. 
+        // Capture the scrolling list surface instead.
         private val captureSource: View = findCaptureSource(target)
         private val backdrop = LiquidToggleViewBackdrop(captureSource)
 
         private var composeView: ComposeView? = null
         private var checked by mutableStateOf((target as? CompoundButton)?.isChecked == true)
-        private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
+        private var visible by mutableStateOf(target.visibility == View.VISIBLE)
 
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
@@ -90,6 +95,9 @@ internal object LiquidToggleHost {
         fun attach() {
             target.addOnAttachStateChangeListener(attachListener)
 
+            // CRITICAL FIX 3: Universally strip layout clipping bounds
+            disableClipping(target)
+
             val safeContext = SafeContext(target.context)
             val compose = ComposeView(safeContext).apply {
                 tag = "HyperBounceLiquidToggle:${System.identityHashCode(target)}"
@@ -97,7 +105,7 @@ internal object LiquidToggleHost {
                 setContent {
                     LiquidToggleOverlay(
                         backdrop = backdrop,
-                        visible = isVisibleState,
+                        visible = visible,
                         selected = { checked },
                         onSelect = { value ->
                             val button = target as? CompoundButton
@@ -113,36 +121,51 @@ internal object LiquidToggleHost {
                 }
             }
 
-            // NUCLEAR REPLACEMENT STRATEGY
-            // 1. Copy exact layout constraints from the native toggle
+            // CRITICAL FIX 4: UNIVERSAL NUCLEAR REPLACEMENT
+            // Replaces the physical hierarchy slot exactly like the Dialer hack.
             target.layoutParams?.let { compose.layoutParams = it }
             
-            // 2. Hide native toggle entirely so ComposeView seamlessly occupies its space
-            val index = parent.indexOfChild(target)
-            target.visibility = View.GONE
+            // Keep target completely alive for native app touches, but visually cloaked.
+            target.alpha = 0.001f
             
-            // 3. Inject Owners and Add to actual View Hierarchy (bypassing Overlay limits entirely)
+            // Inject Owners directly into the real View hierarchy's roots
+            installOwnersIfNeeded(target.rootView)
             installOwnersIfNeeded(parent)
             installOwnersIfNeeded(compose)
             
+            val index = parent.indexOfChild(target)
             parent.addView(compose, index + 1)
             composeView = compose
 
             target.post { backdrop.start() }
         }
 
+        private fun disableClipping(view: View) {
+            var p: View? = view
+            while (p != null) {
+                p.clipToOutline = false
+                if (p is ViewGroup) {
+                    p.clipChildren = false
+                    p.clipToPadding = false
+                }
+                p = p.parent as? View
+            }
+        }
+
         fun syncChecked() {
             checked = (target as? CompoundButton)?.isChecked == true
         }
 
-        fun updateVisibility(isVisible: Boolean) {
-            isVisibleState = isVisible
+        fun syncVisibility() {
+            val isVisible = target.visibility == View.VISIBLE
+            visible = isVisible
             composeView?.visibility = if (isVisible) View.VISIBLE else View.GONE
         }
 
         fun dispose() {
             target.removeOnAttachStateChangeListener(attachListener)
             backdrop.release()
+            target.alpha = 1f // Safely restore if module unhooks
 
             val compose = composeView
             composeView = null
@@ -189,8 +212,6 @@ internal object LiquidToggleHost {
     }
 
     private fun findCaptureSource(target: View): View {
-        // Ascend the tree to find the nearest scrollable container to use as a backdrop.
-        // This captures the row background completely, eliminating the deep black DecorView issue.
         var p = target.parent
         var candidate: View = target
         while (p is View) {
