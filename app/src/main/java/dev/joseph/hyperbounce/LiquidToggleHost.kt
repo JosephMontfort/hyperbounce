@@ -2,7 +2,6 @@ package dev.joseph.hyperbounce
 
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewGroupOverlay
 import android.widget.CompoundButton
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
@@ -120,9 +119,16 @@ internal object LiquidToggleHost {
                 }
             }
 
-            installOwnersIfNeeded(target, compose)
             composeView = compose
             parent.overlay.add(compose)
+
+            // CRITICAL FIX: Compose WindowRecomposer asks the ROOT view for the lifecycle owner.
+            // Inside a ViewOverlay, compose.rootView returns the OverlayViewGroup, not the DecorView.
+            // We MUST install the owners on the OverlayViewGroup (compose.rootView).
+            installOwnersIfNeeded(target, compose.rootView)
+            
+            // We also attach it to the ComposeView itself to ensure components that check parents succeed.
+            installOwnersIfNeeded(target, compose)
 
             refreshGeometry()
             syncVisibility()
@@ -174,7 +180,6 @@ internal object LiquidToggleHost {
             val compose = composeView
             composeView = null
             compose?.setContent { }
-            // Fix: Safe call using 'it' as ViewGroupOverlay expects a non-null View
             compose?.let { parent.overlay.remove(it) }
         }
     }
@@ -218,16 +223,16 @@ internal object LiquidToggleHost {
 
     private val ownerMap = WeakHashMap<View, FakeLifecycleOwner>()
 
-    private fun installOwnersIfNeeded(target: View, compose: ComposeView) {
+    private fun installOwnersIfNeeded(target: View, attachTarget: View) {
         val owner = ownerMap[target] ?: FakeLifecycleOwner().also {
             it.registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
             it.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
             it.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             ownerMap[target] = it
         }
-        compose.setViewTreeLifecycleOwner(owner)
-        compose.setViewTreeSavedStateRegistryOwner(owner)
-        compose.setViewTreeViewModelStoreOwner(owner)
+        attachTarget.setViewTreeLifecycleOwner(owner)
+        attachTarget.setViewTreeSavedStateRegistryOwner(owner)
+        attachTarget.setViewTreeViewModelStoreOwner(owner)
     }
 
     private const val LIQUID_TOGGLE_SCALE = 0.975f
