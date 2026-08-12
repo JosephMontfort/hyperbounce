@@ -34,17 +34,8 @@ private fun extractInstagramTabs(stockBar: ViewGroup, tabNames: List<String>, is
         var activeBmp: Bitmap? = null
         val isProfile = name == "profile_tab"
 
-        val ivs = mutableListOf<ImageView>()
-        fun findImageViews(v: View) {
-            if (v is ImageView) ivs.add(v)
-            else if (v is ViewGroup) {
-                for (i in 0 until v.childCount) findImageViews(v.getChildAt(i))
-            }
-        }
-        findImageViews(tabView)
-
-        if (isProfile && ivs.isNotEmpty()) {
-            val img = ivs.first()
+        val img = findImageView(tabView)
+        if (isProfile && img != null) {
             val w = img.width.coerceAtLeast(1)
             val h = img.height.coerceAtLeast(1)
             if (w > 1 && h > 1) {
@@ -53,8 +44,7 @@ private fun extractInstagramTabs(stockBar: ViewGroup, tabNames: List<String>, is
                 inactiveBmp = bmp
                 activeBmp = bmp
             }
-        } else if (ivs.isNotEmpty()) {
-            val img = ivs.first()
+        } else if (img != null) {
             val d = img.drawable?.constantState?.newDrawable()?.mutate()
             if (d != null) {
                 d.setTint(tint)
@@ -72,15 +62,25 @@ private fun extractInstagramTabs(stockBar: ViewGroup, tabNames: List<String>, is
                 d.draw(Canvas(activeBmp))
             }
         }
-
         InstagramTabData(resId, inactiveBmp, activeBmp)
     }
+}
+
+private fun findImageView(group: ViewGroup): ImageView? {
+    for (i in 0 until group.childCount) {
+        val v = group.getChildAt(i)
+        if (v is ImageView) return v
+        if (v is ViewGroup) {
+            val iv = findImageView(v)
+            if (iv != null) return iv
+        }
+    }
+    return null
 }
 
 @Composable
 fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View) {
     val isDark = isSystemInDarkTheme()
-
     var selectedIndex by remember { mutableIntStateOf(0) }
     var tabs by remember { mutableStateOf(emptyList<InstagramTabData>()) }
 
@@ -91,9 +91,7 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View) {
                 for (i in tabs.indices) {
                     val view = stockBar.findViewById<View>(tabs[i].resId)
                     if (view != null && (view.isSelected || view.isActivated)) {
-                        if (selectedIndex != i) {
-                            selectedIndex = i
-                        }
+                        if (selectedIndex != i) selectedIndex = i
                         break
                     }
                 }

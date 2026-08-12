@@ -50,18 +50,8 @@ private fun extractYouTubeTabs(pivotBar: ViewGroup, isDark: Boolean): List<YouTu
 
             var inactiveBmp: Bitmap? = null
             var activeBmp: Bitmap? = null
-            val isProfile = i == wrapper.childCount - 1
 
-            if (isProfile && img != null) {
-                val w = img.width.coerceAtLeast(1)
-                val h = img.height.coerceAtLeast(1)
-                if (w > 1 && h > 1) {
-                    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                    img.draw(Canvas(bmp))
-                    inactiveBmp = bmp
-                    activeBmp = bmp
-                }
-            } else if (img != null) {
+            if (img != null) {
                 val d = img.drawable?.constantState?.newDrawable()?.mutate()
                 if (d != null) {
                     d.setTint(tint)
@@ -79,7 +69,6 @@ private fun extractYouTubeTabs(pivotBar: ViewGroup, isDark: Boolean): List<YouTu
                     d.draw(Canvas(activeBmp))
                 }
             }
-            
             out.add(YouTubeTabData(tab, inactiveBmp, activeBmp))
         }
     } catch (e: Exception) {}
@@ -99,7 +88,6 @@ fun YouTubeNavBarHost(
     backdropSource: View,
 ) {
     val isDark = isDarkState.value
-
     var tabs by remember { mutableStateOf(emptyList<YouTubeTabData>()) }
     var selectedIndex by remember { mutableIntStateOf(0) }
 

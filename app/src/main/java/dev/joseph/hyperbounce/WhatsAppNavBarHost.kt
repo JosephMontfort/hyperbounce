@@ -15,7 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 
-private data class WhatsAppTabData(val bitmap: Bitmap?, val label: String)
+private data class WhatsAppTabData(val bitmap: Bitmap?, val activeBitmap: Bitmap?, val label: String)
 
 private fun extractWhatsAppTabs(stockBar: ViewGroup, isDark: Boolean): List<WhatsAppTabData> {
     val out = mutableListOf<WhatsAppTabData>()
@@ -25,7 +25,8 @@ private fun extractWhatsAppTabs(stockBar: ViewGroup, isDark: Boolean): List<What
         if (tab.visibility == View.GONE) continue
         val icon = findImageView(tab)
         val drawable = icon?.drawable?.mutate()
-        var bmp: Bitmap? = null
+        var inactiveBmp: Bitmap? = null
+        var activeBmp: Bitmap? = null
         if (drawable != null) {
             if (isDark) {
                 drawable.setTint(android.graphics.Color.WHITE)
@@ -34,13 +35,20 @@ private fun extractWhatsAppTabs(stockBar: ViewGroup, isDark: Boolean): List<What
             }
             val w = drawable.intrinsicWidth.coerceAtLeast(1)
             val h = drawable.intrinsicHeight.coerceAtLeast(1)
-            bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            
+            drawable.state = intArrayOf(-android.R.attr.state_selected, -android.R.attr.state_activated)
+            inactiveBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             drawable.setBounds(0, 0, w, h)
-            drawable.draw(Canvas(bmp))
+            drawable.draw(Canvas(inactiveBmp))
+            
+            drawable.state = intArrayOf(android.R.attr.state_selected, android.R.attr.state_activated)
+            activeBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            drawable.setBounds(0, 0, w, h)
+            drawable.draw(Canvas(activeBmp))
         }
         val tv = findTextView(tab)
         val label = tv?.text?.toString() ?: ""
-        out.add(WhatsAppTabData(bmp, label))
+        out.add(WhatsAppTabData(inactiveBmp, activeBmp, label))
     }
     return out
 }
@@ -78,26 +86,24 @@ fun WhatsAppNavBarHost(
     val tabs = remember(stockBar, isDark) { extractWhatsAppTabs(stockBar, isDark) }
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
 
-    // Sync WhatsApp swipe navigation to our indicator
-    val externalIdx by externalTabState
-    LaunchedEffect(externalIdx) {
-        if (externalIdx != selectedIndex) {
-            selectedIndex = externalIdx
+    LaunchedEffect(externalTabState.value) {
+        if (externalTabState.value != selectedIndex) {
+            selectedIndex = externalTabState.value
         }
     }
 
     LiquidNavigationBar(
         bottomPadding = 40.dp,
         tabs = tabs.map { it.bitmap },
+        activeTabs = tabs.map { it.activeBitmap },
         labels = tabs.map { it.label },
         customAccentColor = androidx.compose.ui.graphics.Color(0xFF21C063),
         barHeight = 70.dp,
-        tabWidth = 92.dp,
-        cornerRadius = 36.dp,
+        tabWidth = 84.dp,
+        cornerRadius = 20.dp,
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index
-            // Fix: Trigger the actual WhatsApp tab switch only if it isn't already there
             if (externalTabState.value != index) {
                 clickStockTab(stockBar, index)
             }

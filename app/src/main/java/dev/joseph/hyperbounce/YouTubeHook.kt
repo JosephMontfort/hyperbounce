@@ -74,7 +74,6 @@ class YouTubeHook {
 
                         if (resName == "bottom_bar_container" || resName == "pivot_bar") {
                             view.alpha = 0f
-                            view.translationY = 9999f
                             val lp = view.layoutParams
                             if (lp != null && lp.height != 0) {
                                 lp.height = 0
@@ -103,14 +102,13 @@ class YouTubeHook {
                                     if (pivotBar != null) {
                                         executeUIHeist(activity, view as ViewGroup, pivotBar)
 
+                                        val bottomBarId = activity.resources.getIdentifier("bottom_bar_container", "id", activity.packageName)
+                                        val bottomBar = decorView.findViewById<View>(bottomBarId)
+
                                         activity.window.decorView.viewTreeObserver.addOnPreDrawListener {
                                             val customBar = activity.window.decorView.findViewWithTag<View>("HyperFloatingBar")
-                                            if (customBar != null) {
-                                                if (pivotBar.visibility != View.VISIBLE && pivotBar.translationY == 0f) {
-                                                    customBar.visibility = View.GONE
-                                                } else {
-                                                    customBar.visibility = View.VISIBLE
-                                                }
+                                            if (customBar != null && bottomBar != null) {
+                                                customBar.visibility = if (bottomBar.visibility == View.VISIBLE) View.VISIBLE else View.GONE
                                             }
 
                                             val currentDark = isYouTubeInDarkMode(activity)

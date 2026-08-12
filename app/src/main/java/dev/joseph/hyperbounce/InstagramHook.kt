@@ -145,6 +145,7 @@ class InstagramHook {
                                                             }
 
                                                             if (containsScrubber(sibling, 0)) continue
+                                                            if (sibling.tag == "LiquidGlassInjected") continue
 
                                                             if (sibling.translationY != shiftY) {
                                                                 sibling.translationY = shiftY
