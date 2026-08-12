@@ -5,18 +5,11 @@ import android.graphics.Canvas
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
-private data class YouTubeTabData(val sourceView: View, val bitmap: Bitmap)
+private data class YouTubeTabData(val sourceView: View, val inactiveBitmap: Bitmap?, val activeBitmap: Bitmap?)
 
 private fun findImageView(g: ViewGroup): ImageView? {
     for (i in 0 until g.childCount) {
@@ -55,27 +48,39 @@ private fun extractYouTubeTabs(pivotBar: ViewGroup, isDark: Boolean): List<YouTu
             if (img == null) img = findViewByName(tab, "pivot_bar_thumbnail") as? ImageView
             if (img == null) img = findImageView(tab)
 
+            var inactiveBmp: Bitmap? = null
+            var activeBmp: Bitmap? = null
             val isProfile = i == wrapper.childCount - 1
+
             if (isProfile && img != null) {
                 val w = img.width.coerceAtLeast(1)
                 val h = img.height.coerceAtLeast(1)
                 if (w > 1 && h > 1) {
                     val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
                     img.draw(Canvas(bmp))
-                    out.add(YouTubeTabData(tab, bmp))
-                    continue
+                    inactiveBmp = bmp
+                    activeBmp = bmp
+                }
+            } else if (img != null) {
+                val d = img.drawable?.constantState?.newDrawable()?.mutate()
+                if (d != null) {
+                    d.setTint(tint)
+                    val w = d.intrinsicWidth.coerceAtLeast(1)
+                    val h = d.intrinsicHeight.coerceAtLeast(1)
+                    
+                    d.state = intArrayOf(-android.R.attr.state_selected, -android.R.attr.state_activated)
+                    inactiveBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    d.setBounds(0, 0, w, h)
+                    d.draw(Canvas(inactiveBmp))
+                    
+                    d.state = intArrayOf(android.R.attr.state_selected, android.R.attr.state_activated)
+                    activeBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    d.setBounds(0, 0, w, h)
+                    d.draw(Canvas(activeBmp))
                 }
             }
-
-            val d = img?.drawable?.constantState?.newDrawable()?.mutate() ?: continue
-            d.setTint(tint)
-            val w = d.intrinsicWidth.coerceAtLeast(1)
-            val h = d.intrinsicHeight.coerceAtLeast(1)
-            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bmp)
-            d.setBounds(0, 0, w, h)
-            d.draw(canvas)
-            out.add(YouTubeTabData(tab, bmp))
+            
+            out.add(YouTubeTabData(tab, inactiveBmp, activeBmp))
         }
     } catch (e: Exception) {}
     return out
@@ -93,7 +98,7 @@ fun YouTubeNavBarHost(
     isDarkState: State<Boolean>,
     backdropSource: View,
 ) {
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isDark = isDarkState.value
 
     var tabs by remember { mutableStateOf(emptyList<YouTubeTabData>()) }
     var selectedIndex by remember { mutableIntStateOf(0) }
@@ -112,13 +117,19 @@ fun YouTubeNavBarHost(
                     }
                 }
             }
-            delay(100)
+            delay(500)
         }
     }
+    
+    val accent = if (isDark) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black
+    val profileIndex = if (tabs.isNotEmpty()) tabs.size - 1 else -1
 
     LiquidNavigationBar(
         bottomPadding = 28.dp,
-        tabs = tabs.map { it.bitmap },
+        tabs = tabs.map { it.inactiveBitmap },
+        activeTabs = tabs.map { it.activeBitmap },
+        customAccentColor = accent,
+        circularIndices = if (profileIndex >= 0) setOf(profileIndex) else emptySet(),
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index

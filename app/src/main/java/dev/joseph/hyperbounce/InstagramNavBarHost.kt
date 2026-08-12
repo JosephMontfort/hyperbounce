@@ -7,13 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
@@ -60,38 +54,27 @@ private fun extractInstagramTabs(stockBar: ViewGroup, tabNames: List<String>, is
                 activeBmp = bmp
             }
         } else if (ivs.isNotEmpty()) {
-            val inactiveIv = ivs.first()
-            val activeIv = if (ivs.size > 1) ivs[1] else ivs.first()
-            
-            fun extractBmp(iv: ImageView): Bitmap? {
-                val d = iv.drawable?.constantState?.newDrawable()?.mutate() ?: return null
+            val img = ivs.first()
+            val d = img.drawable?.constantState?.newDrawable()?.mutate()
+            if (d != null) {
                 d.setTint(tint)
                 val w = d.intrinsicWidth.coerceAtLeast(1)
                 val h = d.intrinsicHeight.coerceAtLeast(1)
-                val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                
+                d.state = intArrayOf(-android.R.attr.state_selected, -android.R.attr.state_activated)
+                inactiveBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
                 d.setBounds(0, 0, w, h)
-                d.draw(Canvas(bmp))
-                return bmp
+                d.draw(Canvas(inactiveBmp))
+                
+                d.state = intArrayOf(android.R.attr.state_selected, android.R.attr.state_activated)
+                activeBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                d.setBounds(0, 0, w, h)
+                d.draw(Canvas(activeBmp))
             }
-            
-            inactiveBmp = extractBmp(inactiveIv)
-            activeBmp = extractBmp(activeIv)
         }
 
         InstagramTabData(resId, inactiveBmp, activeBmp)
     }
-}
-
-private fun findImageView(group: ViewGroup): ImageView? {
-    for (i in 0 until group.childCount) {
-        val v = group.getChildAt(i)
-        if (v is ImageView) return v
-        if (v is ViewGroup) {
-            val iv = findImageView(v)
-            if (iv != null) return iv
-        }
-    }
-    return null
 }
 
 @Composable
@@ -119,7 +102,7 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View) {
         }
     }
 
-    val profileIndex = instagramOrderedTabNames.indexOf("profile_tab")
+    val profileIndex = tabs.indexOfFirst { it.resId == stockBar?.context?.resources?.getIdentifier("profile_tab", "id", stockBar?.context?.packageName) }
     val accent = if (isDark) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black
 
     LiquidNavigationBar(
@@ -157,7 +140,6 @@ fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: View
             val composeView = ComposeView(activity).apply {
                 tag = "LiquidGlassInjected"
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-
                 setContent {
                     InstagramNavBarHost(stockBar, mainWrapper)
                 }
