@@ -4,43 +4,61 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.CompoundButton
+import android.view.ViewGroupOverlay
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
-import kotlin.math.roundToInt
 import java.util.WeakHashMap
+import kotlin.math.roundToInt
 
 /**
  * Xposed integration layer for the upstream AndroidLiquidGlass LiquidToggle.
  *
  * IMPORTANT ARCHITECTURE
  * ---------------------
- * The native HyperOS SlidingButton remains the real state holder and click
- * target. Its old Canvas/RenderNode renderer remains in PhysicsHook.java and
- * can be restored by setting USE_LIQUID_GLASS_TOGGLE=false.
+ * The native HyperOS CompoundButton remains the real state holder and callback
+ * source. PhysicsHook.java still contains the complete legacy Canvas/RenderNode/
+ * AGSL renderer and remains selectable with USE_LIQUID_GLASS_TOGGLE=false.
  *
- * In Liquid mode this class adds a transparent-window-level Compose overlay,
- * centered over the native toggle. LiquidToggle owns all interaction and
- * visual animation; onSelect() delegates back to native CompoundButton.performClick()
- * so HyperOS listeners/preferences continue to receive their normal callback.
+ * LIQUID MODE
+ * -----------
+ * The Compose LiquidToggle is attached to the NATIVE TOGGLE'S IMMEDIATE PARENT
+ * USING ViewGroupOverlay rather than to the window/decor. This is deliberate:
  *
- * The injected ComposeView is kept outside the source View subtree captured by
- * LiquidToggleViewBackdrop. Therefore the live backdrop never recursively captures
- * the liquid surface itself.
+ *   native row/container
+ *        ├── original HyperOS toggle (onDraw suppressed)
+ *        └── ViewGroupOverlay
+ *              └── LiquidToggle ComposeView
+ *
+ * Because the overlay belongs to the same parent that contains the real toggle,
+ * scrolling the settings page moves BOTH together automatically. There is no
+ * global scroll listener, no per-scroll window-coordinate repositioning, and no
+ * LayoutParams churn during scrolling.
+ *
+ * The overlay does not participate in normal parent layout, so it cannot change
+ * row measurement or spacing. Ancestor clipping is disabled so the upstream
+ * LiquidToggle's 1.5x bloom can extend outside the native toggle bounds.
+ *
+ * BACKDROP
+ * --------
+ * LiquidToggleViewBackdrop captures only the toggle's immediate parent/container,
+ * not the entire app. The native toggle's onDraw is already suppressed by
+ * PhysicsHook, and the Compose overlay is temporarily hidden while the source
+ * container is copied. This gives the glass the local container content directly
+ * underneath the toggle while avoiding self-recursion.
  */
 internal object LiquidToggleHost {
 
@@ -58,7 +76,8 @@ internal object LiquidToggleHost {
         }
 
         val decor = target.rootView as? ViewGroup ?: return
-        val host = Host(target, decor)
+        val parent = target.parent as? ViewGroup ?: decor
+        val host = Host(target, parent, decor)
         hosts[target] = host
         host.attach()
     }
@@ -80,46 +99,33 @@ internal object LiquidToggleHost {
 
     private class Host(
         private val target: View,
+        private val container: ViewGroup,
         private val decor: ViewGroup,
     ) {
-        private val captureSource: View = findCaptureSource(target, decor)
-        private val backdrop = LiquidToggleViewBackdrop(captureSource)
+        private val overlay: ViewGroupOverlay = container.overlay
+        private val backdrop = LiquidToggleViewBackdrop(
+            sourceView = container,
+            overlayViewProvider = { composeView }
+        )
 
         private var composeView: ComposeView? = null
         private var checked by mutableStateOf(
             (target as? CompoundButton)?.isChecked == true
         )
         private var visible by mutableStateOf(true)
-        // Geometry is host-view bookkeeping, not Compose state. Keeping these as
-        // plain fields avoids unnecessary Compose invalidations on scroll.
+
         private var overlayWidthPx = 0
         private var overlayHeightPx = 0
-        private var lastOverlayX = Float.NaN
-        private var lastOverlayY = Float.NaN
-        private var geometryRefreshPosted = false
+        private var lastLeft = Int.MIN_VALUE
+        private var lastTop = Int.MIN_VALUE
+        private var lastTargetWidth = Int.MIN_VALUE
+        private var lastTargetHeight = Int.MIN_VALUE
+        private var disposed = false
 
         private val layoutListener =
             View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
                 refreshGeometry()
             }
-
-        /*
-         * Scrolling changes the target's window position without changing its
-         * layout bounds. The old renderer never had this problem because it drew
-         * inside the native toggle itself, so the whole rendered view naturally
-         * scrolled with its row.
-         *
-         * We still keep the Compose surface at the decor level because that is
-         * what prevents ancestor clipping and keeps the live backdrop source
-         * outside the injected glass surface. The efficient fix is therefore to
-         * observe the hierarchy for scroll changes but coalesce all callbacks into
-         * ONE geometry update per display frame. We also move the already-laid-out
-         * ComposeView with translationX/Y instead of changing LayoutParams, so
-         * scrolling never triggers a parent relayout.
-         */
-        private val scrollListener = ViewTreeObserver.OnScrollChangedListener {
-            scheduleGeometryRefresh()
-        }
 
         private val attachListener =
             object : View.OnAttachStateChangeListener {
@@ -134,9 +140,9 @@ internal object LiquidToggleHost {
             }
 
         fun attach() {
+            prepareClipping(container)
             target.addOnLayoutChangeListener(layoutListener)
             target.addOnAttachStateChangeListener(attachListener)
-            decor.viewTreeObserver.addOnScrollChangedListener(scrollListener)
 
             installOwnersIfNeeded()
 
@@ -145,6 +151,12 @@ internal object LiquidToggleHost {
                 setViewCompositionStrategy(
                     ViewCompositionStrategy.DisposeOnDetachedFromWindow
                 )
+                isClickable = false
+                isFocusable = false
+                setViewTreeLifecycleOwner(ownerFor(decor))
+                setViewTreeSavedStateRegistryOwner(savedStateOwnerFor(decor))
+                setViewTreeViewModelStoreOwner(viewModelOwnerFor(decor))
+
                 setContent {
                     LiquidToggleOverlay(
                         backdrop = backdrop,
@@ -154,8 +166,7 @@ internal object LiquidToggleHost {
                             val button = target as? CompoundButton
                             if (button != null) {
                                 if (button.isChecked != value) {
-                                    // Delegate through the native button so existing
-                                    // Preference/Settings listeners and app logic run.
+                                    // Preserve the native HyperOS callback/state path.
                                     button.performClick()
                                 }
                                 syncChecked()
@@ -166,73 +177,73 @@ internal object LiquidToggleHost {
             }
 
             composeView = compose
-            decor.addView(
-                compose,
-                ViewGroup.LayoutParams(1, 1),
-            )
+            // Overlay children do NOT participate in the parent's measurement/layout.
+            // This is the key difference from adding the ComposeView as a real sibling
+            // child; list rows therefore keep their original dimensions and scroll
+            // naturally with the native toggle.
+            overlay.add(compose)
 
-            // Layout the overflow envelope once. Subsequent scrolling only changes
-            // translation, which avoids repeated ViewRoot/FrameLayout relayouts.
             refreshGeometry()
             syncVisibility()
             decor.post { backdrop.start() }
         }
 
-        private fun scheduleGeometryRefresh() {
-            val compose = composeView ?: return
-            if (geometryRefreshPosted) return
-            geometryRefreshPosted = true
-
-            // Coalesce bursts of scroll callbacks into a single UI-thread update.
-            compose.postOnAnimation {
-                geometryRefreshPosted = false
-                if (composeView === compose && compose.parent === decor) {
-                    refreshGeometry()
-                }
-            }
-        }
-
         fun refreshGeometry() {
             val compose = composeView ?: return
-            val location = IntArray(2)
-            val decorLocation = IntArray(2)
-            target.getLocationInWindow(location)
-            decor.getLocationInWindow(decorLocation)
+            if (disposed || !target.isAttachedToWindow) return
 
             val density = target.resources.displayMetrics.density
-
-            // Keep the actual library toggle at 64dp x 28dp (scaled to 97.5% below)
-            // while giving the injected ComposeView a small touch/overflow envelope
-            // so the library's 1.5x bloom never gets clipped.
             val newWidthPx = (80f * density).roundToInt()
             val newHeightPx = (48f * density).roundToInt()
 
             if (overlayWidthPx != newWidthPx || overlayHeightPx != newHeightPx) {
                 overlayWidthPx = newWidthPx
                 overlayHeightPx = newHeightPx
-                val lp = compose.layoutParams
-                    ?: ViewGroup.LayoutParams(overlayWidthPx, overlayHeightPx)
-                lp.width = overlayWidthPx
-                lp.height = overlayHeightPx
-                compose.layoutParams = lp
             }
 
-            val overlayX =
-                location[0] - decorLocation[0] +
-                    (target.width - overlayWidthPx) / 2f
-            val overlayY =
-                location[1] - decorLocation[1] +
-                    (target.height - overlayHeightPx) / 2f
+            /*
+             * The ComposeView is hosted by the same parent as the native toggle.
+             * Therefore these are PARENT-LOCAL coordinates and remain valid while
+             * the whole row/container scrolls. We do not use getLocationInWindow()
+             * or any scroll callback here.
+             */
+            val left = target.left +
+                target.translationX.roundToInt() +
+                (target.width - overlayWidthPx) / 2
+            val top = target.top +
+                target.translationY.roundToInt() +
+                (target.height - overlayHeightPx) / 2
 
-            // Translation moves the already-laid-out overlay without requesting
-            // another FrameLayout measurement/layout pass.
-            if (overlayX != lastOverlayX) {
-                compose.translationX = overlayX
-                lastOverlayX = overlayX
-            }
-            if (overlayY != lastOverlayY) {
-                compose.translationY = overlayY
-                lastOverlayY = overlayY
+            if (
+                left != lastLeft ||
+                top != lastTop ||
+                target.width != lastTargetWidth ||
+                target.height != lastTargetHeight
+            ) {
+                /*
+                 * ViewGroupOverlay children are manually laid out. They remain
+                 * attached to the parent overlay and are automatically transformed
+                 * with that parent when a RecyclerView/ListView/ScrollView moves.
+                 */
+                compose.layout(
+                    left,
+                    top,
+                    left + overlayWidthPx,
+                    top + overlayHeightPx
+                )
+
+                backdrop.setTargetBounds(
+                    left = target.left.toFloat(),
+                    top = target.top.toFloat(),
+                    width = target.width,
+                    height = target.height,
+                    paddingPx = (24f * density).roundToInt(),
+                )
+
+                lastLeft = left
+                lastTop = top
+                lastTargetWidth = target.width
+                lastTargetHeight = target.height
             }
         }
 
@@ -247,45 +258,63 @@ internal object LiquidToggleHost {
                     target.visibility == View.VISIBLE &&
                     target.windowVisibility == View.VISIBLE &&
                     target.isShown
+
+            composeView?.visibility = if (visible) View.VISIBLE else View.INVISIBLE
         }
 
         fun dispose() {
+            if (disposed) return
+            disposed = true
+
             target.removeOnLayoutChangeListener(layoutListener)
             target.removeOnAttachStateChangeListener(attachListener)
-            decor.viewTreeObserver.removeOnScrollChangedListener(scrollListener)
             backdrop.release()
 
             val compose = composeView
             composeView = null
 
-            /*
-             * A target can detach during FrameLayout.onLayout(). Removing our
-             * sibling synchronously from that callback can corrupt the parent's
-             * child array on some HyperOS builds and produce:
-             *   FrameLayout.layoutChildren() -> NPE in View.getVisibility()
-             *
-             * Post the removal until after the current traversal has completed.
-             */
             if (compose != null) {
-                compose.visibility = View.GONE
-                decor.post {
-                    try {
-                        compose.setContent { }
-                        (compose.parent as? ViewGroup)?.removeView(compose)
-                    } catch (_: Throwable) {
-                        // Never let cleanup crash a hooked system app.
+                compose.visibility = View.INVISIBLE
+
+                /*
+                 * ViewGroupOverlay removal never mutates the FrameLayout child
+                 * array, so it avoids the Security Center FrameLayout.layoutChildren()
+                 * NPE seen with synchronous real-child removal.
+                 */
+                try {
+                    overlay.remove(compose)
+                } catch (_: Throwable) {
+                    decor.post {
+                        try {
+                            overlay.remove(compose)
+                        } catch (_: Throwable) {
+                            // Never crash the hooked application during cleanup.
+                        }
                     }
                 }
             }
         }
 
+        private fun prepareClipping(start: ViewGroup) {
+            var current: View? = start
+            var depth = 0
+            while (current is ViewGroup) {
+                current.setClipChildren(false)
+                current.setClipToPadding(false)
+                current.setClipToOutline(false)
+                current = current.parent as? View
+                depth++
+                if (depth > 8) break
+            }
+        }
+
         private fun installOwnersIfNeeded() {
-            // The floating-nav branch already proved this owner strategy works
-            // for injected ComposeView hierarchies in these Xposed targets.
             val owner = ownerFor(decor)
+            val saved = savedStateOwnerFor(decor)
+            val vm = viewModelOwnerFor(decor)
             decor.setViewTreeLifecycleOwner(owner)
-            decor.setViewTreeSavedStateRegistryOwner(owner)
-            decor.setViewTreeViewModelStoreOwner(owner)
+            decor.setViewTreeSavedStateRegistryOwner(saved)
+            decor.setViewTreeViewModelStoreOwner(vm)
         }
     }
 
@@ -296,7 +325,6 @@ internal object LiquidToggleHost {
         selected: () -> Boolean,
         onSelect: (Boolean) -> Unit,
     ) {
-        val density = LocalDensity.current
         Box(
             Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
@@ -308,39 +336,13 @@ internal object LiquidToggleHost {
                     backdrop = backdrop,
                     modifier = Modifier
                         .graphicsLayer {
-                            // The upstream component remains structurally and
-                            // behaviorally unchanged; only its outer geometry is
-                            // scaled slightly below the library's full 64x28dp size.
+                            // Slightly below the upstream 64x28dp library geometry.
                             scaleX = LIQUID_TOGGLE_SCALE
                             scaleY = LIQUID_TOGGLE_SCALE
-                        }
-                        .onGloballyPositioned { coordinates ->
-                            val padding = with(density) { 24.dp.toPx().roundToInt() }
-                            backdrop.setTargetBounds(
-                                left = coordinates.positionInWindow().x,
-                                top = coordinates.positionInWindow().y,
-                                width = coordinates.size.width,
-                                height = coordinates.size.height,
-                                paddingPx = padding,
-                            )
                         },
                 )
             }
         }
-    }
-
-    private fun findCaptureSource(target: View, decor: ViewGroup): View {
-        var candidate: View = target
-        var parent = candidate.parent as? ViewGroup
-
-        // Select the highest application-content ancestor immediately below the
-        // decor/window. The Liquid Compose overlay is a sibling of this subtree.
-        while (parent != null && parent !== decor) {
-            candidate = parent
-            parent = parent.parent as? ViewGroup
-        }
-
-        return candidate
     }
 
     private val ownerMap = WeakHashMap<ViewGroup, FakeLifecycleOwner>()
@@ -353,6 +355,12 @@ internal object LiquidToggleHost {
             ownerMap[decor] = it
         }
     }
+
+    private fun savedStateOwnerFor(decor: ViewGroup) =
+        decor.getViewTreeSavedStateRegistryOwner()
+
+    private fun viewModelOwnerFor(decor: ViewGroup) =
+        decor.getViewTreeViewModelStoreOwner()
 
     private const val LIQUID_TOGGLE_SCALE = 0.975f
 }
