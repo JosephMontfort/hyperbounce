@@ -64,7 +64,10 @@ internal object LiquidToggleHost {
         val host = hosts[target] ?: return
         val compose = host.composeView ?: return
         val offsetEvent = android.view.MotionEvent.obtain(event)
-        offsetEvent.offsetLocation(-host.overlayLeftPx.toFloat(), -host.overlayTopPx.toFloat())
+        
+        // Touch events are relative to the target toggle. 
+        // We must offset them to the ComposeView's coordinate space.
+        offsetEvent.offsetLocation(-host.composeLeftInTarget.toFloat(), -host.composeTopInTarget.toFloat())
         compose.dispatchTouchEvent(offsetEvent)
         offsetEvent.recycle()
     }
@@ -77,8 +80,8 @@ internal object LiquidToggleHost {
         private var checked by mutableStateOf((target as? CompoundButton)?.isChecked == true)
         private var visible by mutableStateOf(true)
         
-        var overlayLeftPx by mutableIntStateOf(0)
-        var overlayTopPx by mutableIntStateOf(0)
+        var composeLeftInTarget by mutableIntStateOf(0)
+        var composeTopInTarget by mutableIntStateOf(0)
 
         private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             refreshGeometry()
@@ -132,8 +135,12 @@ internal object LiquidToggleHost {
             val overlayWidthPx = (80f * density).roundToInt()
             val overlayHeightPx = (48f * density).roundToInt()
 
-            overlayLeftPx = target.left + (target.width - overlayWidthPx) / 2
-            overlayTopPx = target.top + (target.height - overlayHeightPx) / 2
+            composeLeftInTarget = (target.width - overlayWidthPx) / 2
+            composeTopInTarget = (target.height - overlayHeightPx) / 2
+
+            // Overlay layout bounds are relative to the parent ViewGroup
+            val overlayLeftPx = target.left + composeLeftInTarget
+            val overlayTopPx = target.top + composeTopInTarget
 
             compose.measure(
                 View.MeasureSpec.makeMeasureSpec(overlayWidthPx, View.MeasureSpec.EXACTLY),
@@ -167,7 +174,8 @@ internal object LiquidToggleHost {
             val compose = composeView
             composeView = null
             compose?.setContent { }
-            (parent.overlay as? ViewGroupOverlay)?.remove(compose)
+            // Fix: Safe call using 'it' as ViewGroupOverlay expects a non-null View
+            compose?.let { (parent.overlay as? ViewGroupOverlay)?.remove(it) }
         }
     }
 
