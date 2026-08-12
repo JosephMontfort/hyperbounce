@@ -361,8 +361,6 @@ internal object LiquidToggleHost {
             hostView.clipChildren = false
             hostView.clipToPadding = false
         }
-
-        }
     }
 
     private class LiquidToggleHostView(
