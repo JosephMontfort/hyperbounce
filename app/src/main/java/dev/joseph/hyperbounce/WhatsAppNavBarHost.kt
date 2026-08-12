@@ -15,7 +15,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 
-private data class WhatsAppTabData(val bitmap: Bitmap?, val label: String)
+private data class WhatsAppTabData(
+    val inactiveBitmap: Bitmap?,
+    val activeBitmap: Bitmap?,
+    val label: String,
+)
 
 private fun extractWhatsAppTabs(stockBar: ViewGroup, isDark: Boolean): List<WhatsAppTabData> {
     val out = mutableListOf<WhatsAppTabData>()
@@ -24,23 +28,38 @@ private fun extractWhatsAppTabs(stockBar: ViewGroup, isDark: Boolean): List<What
         val tab = menu.getChildAt(i) as? ViewGroup ?: continue
         if (tab.visibility == View.GONE) continue
         val icon = findImageView(tab)
-        val drawable = icon?.drawable?.mutate()
-        var bmp: Bitmap? = null
-        if (drawable != null) {
+        var inactiveBmp: Bitmap? = null
+        var activeBmp: Bitmap? = null
+        val sourceDrawable = icon?.drawable?.constantState?.newDrawable()?.mutate()
+        if (sourceDrawable != null) {
             if (isDark) {
-                drawable.setTint(android.graphics.Color.WHITE)
+                sourceDrawable.setTint(android.graphics.Color.WHITE)
             } else {
-                drawable.setTintList(null)
+                sourceDrawable.setTintList(null)
             }
-            val w = drawable.intrinsicWidth.coerceAtLeast(1)
-            val h = drawable.intrinsicHeight.coerceAtLeast(1)
-            bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            drawable.setBounds(0, 0, w, h)
-            drawable.draw(Canvas(bmp))
+
+            val w = sourceDrawable.intrinsicWidth.coerceAtLeast(1)
+            val h = sourceDrawable.intrinsicHeight.coerceAtLeast(1)
+
+            sourceDrawable.state = intArrayOf(
+                -android.R.attr.state_selected,
+                -android.R.attr.state_activated,
+            )
+            inactiveBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            sourceDrawable.setBounds(0, 0, w, h)
+            sourceDrawable.draw(Canvas(inactiveBmp))
+
+            sourceDrawable.state = intArrayOf(
+                android.R.attr.state_selected,
+                android.R.attr.state_activated,
+            )
+            activeBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            sourceDrawable.setBounds(0, 0, w, h)
+            sourceDrawable.draw(Canvas(activeBmp))
         }
         val tv = findTextView(tab)
         val label = tv?.text?.toString() ?: ""
-        out.add(WhatsAppTabData(bmp, label))
+        out.add(WhatsAppTabData(inactiveBmp, activeBmp, label))
     }
     return out
 }
@@ -88,7 +107,8 @@ fun WhatsAppNavBarHost(
 
     LiquidNavigationBar(
         bottomPadding = 40.dp,
-        tabs = tabs.map { it.bitmap },
+        tabs = tabs.map { it.inactiveBitmap },
+        activeTabs = tabs.map { it.activeBitmap },
         labels = tabs.map { it.label },
         customAccentColor = androidx.compose.ui.graphics.Color(0xFF21C063),
         barHeight = 70.dp,

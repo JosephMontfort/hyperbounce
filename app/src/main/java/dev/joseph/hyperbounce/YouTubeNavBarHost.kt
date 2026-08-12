@@ -53,13 +53,27 @@ private fun extractYouTubeTabs(pivotBar: ViewGroup, isDark: Boolean): List<YouTu
             val isProfile = i == wrapper.childCount - 1
 
             if (isProfile && img != null) {
-                val w = img.width.coerceAtLeast(1)
-                val h = img.height.coerceAtLeast(1)
-                if (w > 1 && h > 1) {
+                // YouTube's profile avatar is a real image, not a tintable nav drawable.
+                // Drawing the ImageView itself can produce a blank bitmap before layout has
+                // assigned its measured size, so prefer the drawable's intrinsic content.
+                val drawable = img.drawable?.constantState?.newDrawable()?.mutate()
+                if (drawable != null) {
+                    val w = drawable.intrinsicWidth.coerceAtLeast(1)
+                    val h = drawable.intrinsicHeight.coerceAtLeast(1)
                     val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                    img.draw(Canvas(bmp))
+                    drawable.setBounds(0, 0, w, h)
+                    drawable.draw(Canvas(bmp))
                     inactiveBmp = bmp
                     activeBmp = bmp
+                } else {
+                    val w = img.width.coerceAtLeast(1)
+                    val h = img.height.coerceAtLeast(1)
+                    if (w > 1 && h > 1) {
+                        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                        img.draw(Canvas(bmp))
+                        inactiveBmp = bmp
+                        activeBmp = bmp
+                    }
                 }
             } else if (img != null) {
                 val d = img.drawable?.constantState?.newDrawable()?.mutate()
@@ -137,5 +151,6 @@ fun YouTubeNavBarHost(
         },
         sourceView = backdropSource,
         forceLightTheme = !isDark,
+        forceDarkTheme = isDark,
     )
 }

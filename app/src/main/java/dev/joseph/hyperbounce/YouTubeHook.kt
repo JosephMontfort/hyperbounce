@@ -162,6 +162,9 @@ class YouTubeHook {
             if (decorView.findViewTreeSavedStateRegistryOwner() == null) decorView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             if (decorView.findViewTreeViewModelStoreOwner() == null) decorView.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
+            // Seed the Compose theme state before first composition.
+            isDarkState.value = isYouTubeInDarkMode(activity)
+
             val tabState = mutableStateOf(0)
             val backdropSource = rootGroup
 

@@ -66,6 +66,7 @@ fun LiquidNavigationBar(
     sourceView: android.view.View,
     circularIndices: Set<Int> = emptySet(),
     forceLightTheme: Boolean = false,
+    forceDarkTheme: Boolean = false,
     containerAlpha: Float = 0.4f,
     effectMultiplier: Float = 1f,
     labels: List<String> = emptyList(),
@@ -76,7 +77,11 @@ fun LiquidNavigationBar(
 ) {
     if (tabs.isEmpty()) return
 
-    val isLightTheme = forceLightTheme || !isSystemInDarkTheme()
+    val isLightTheme = when {
+        forceLightTheme -> true
+        forceDarkTheme -> false
+        else -> !isSystemInDarkTheme()
+    }
     val accentColor = customAccentColor ?: (
         if (isLightTheme) Color(0xFF0088FF)
         else Color(0xFF0091FF)
@@ -287,11 +292,7 @@ fun LiquidNavigationBar(
                                     val progress = dampedDragAnimation.pressProgress
                                     Highlight.Default.copy(alpha = progress)
                                 },
-                                onDrawSurface = {
-                                    drawRect(containerColor)
-                                },
                             )
-                            .then(interactiveHighlight.modifier)
                             .height(barHeight - 8.dp)
                             .fillMaxWidth()
                             .padding(horizontal = 4.dp),
