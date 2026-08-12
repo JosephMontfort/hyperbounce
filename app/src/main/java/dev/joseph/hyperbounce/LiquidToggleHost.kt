@@ -62,7 +62,7 @@ internal object LiquidToggleHost {
 
     @JvmStatic
     fun syncVisibility(target: View, isVisible: Boolean) {
-        hosts[target]?.setVisible(isVisible)
+        hosts[target]?.updateVisibility(isVisible)
     }
 
     @JvmStatic
@@ -76,7 +76,7 @@ internal object LiquidToggleHost {
 
         private var composeView: ComposeView? = null
         private var checked by mutableStateOf((target as? CompoundButton)?.isChecked == true)
-        private var visible by mutableStateOf(target.visibility == View.VISIBLE)
+        private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
 
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
@@ -97,7 +97,7 @@ internal object LiquidToggleHost {
                 setContent {
                     LiquidToggleOverlay(
                         backdrop = backdrop,
-                        visible = visible,
+                        visible = isVisibleState,
                         selected = { checked },
                         onSelect = { value ->
                             val button = target as? CompoundButton
@@ -135,8 +135,8 @@ internal object LiquidToggleHost {
             checked = (target as? CompoundButton)?.isChecked == true
         }
 
-        fun setVisible(isVisible: Boolean) {
-            visible = isVisible
+        fun updateVisibility(isVisible: Boolean) {
+            isVisibleState = isVisible
             composeView?.visibility = if (isVisible) View.VISIBLE else View.GONE
         }
 
