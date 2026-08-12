@@ -97,16 +97,18 @@ class InstagramHook {
                                         try {
                                             val stockBarId = activity.resources.getIdentifier("tab_bar", "id", activity.packageName)
                                             val decorView = activity.window.decorView as ViewGroup
-                                            val stockBar = decorView.findViewById<View>(stockBarId) as? ViewGroup
+                                            val stockBar = decorView.findViewById<View>(stockBarId)
 
-                                            injectLiquidGlass(activity, view as ViewGroup, stockBar)
+                                            injectLiquidGlass(activity, view as ViewGroup, stockBar as? ViewGroup)
 
                                             // Lightweight listener: Liquid Bar purely mimics stock bar visibility
                                             decorView.viewTreeObserver.addOnGlobalLayoutListener {
-                                                val overlay = InstagramOverlayRegistry.get(activity)
+                                                val injectedBar = decorView.findViewWithTag<View>("LiquidGlassInjected")
                                                 val isTabBarActive = (stockBar != null && stockBar.visibility == View.VISIBLE)
 
-                                                overlay?.setVisible(isTabBarActive)
+                                                if (injectedBar != null) {
+                                                    injectedBar.visibility = if (isTabBarActive) View.VISIBLE else View.GONE
+                                                }
 
                                                 // STRICT SHIFT LOGIC: Only shift if Tab Bar is visible AND we are on the Reels tab
                                                 var isReelsTabActive = false

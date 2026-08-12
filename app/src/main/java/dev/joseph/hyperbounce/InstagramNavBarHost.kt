@@ -11,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
@@ -79,12 +78,7 @@ private fun extractInstagramTabs(stockBar: ViewGroup, tabNames: List<String>, is
 }
 
 @Composable
-fun InstagramNavBarHost(
-    stockBar: ViewGroup?,
-    backdropSource: View,
-    bottomPadding: androidx.compose.ui.unit.Dp = 40.dp,
-    backdropWindowOriginProvider: (() -> Offset)? = null,
-) {
+fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View) {
     val isDark = isSystemInDarkTheme()
 
     var selectedIndex by remember { mutableIntStateOf(0) }
@@ -110,19 +104,9 @@ fun InstagramNavBarHost(
 
     val profileIndex = tabs.indexOfFirst { it.resId == stockBar?.context?.resources?.getIdentifier("profile_tab", "id", stockBar?.context?.packageName) }
     val accent = if (isDark) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black
-    val backdropWindowOrigin = remember { mutableStateOf(Offset.Zero) }
-
-    LaunchedEffect(backdropWindowOriginProvider) {
-        if (backdropWindowOriginProvider != null) {
-            while (true) {
-                backdropWindowOrigin.value = backdropWindowOriginProvider()
-                kotlinx.coroutines.delay(250)
-            }
-        }
-    }
 
     LiquidNavigationBar(
-        bottomPadding = bottomPadding,
+        bottomPadding = 40.dp,
         tabs = tabs.map { it.inactiveBitmap },
         activeTabs = tabs.map { it.activeBitmap },
         customAccentColor = accent,
@@ -135,42 +119,45 @@ fun InstagramNavBarHost(
         },
         circularIndices = if (profileIndex >= 0) setOf(profileIndex) else emptySet(),
         sourceView = backdropSource,
-        backdropWindowOrigin = backdropWindowOrigin.value,
     )
 }
 
-fun injectLiquidGlass(
-    activity: Activity,
-    mainWrapper: ViewGroup,
-    stockBar: ViewGroup?,
-): InstagramOverlayWindow? {
+fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: ViewGroup?) {
+    val decorView = activity.window.decorView as ViewGroup
+    if (decorView.findViewWithTag<ComposeView>("LiquidGlassInjected") != null) return
+
     activity.runOnUiThread {
-        // The Instagram glass bar lives in a separate application-panel surface.
-        // This keeps it out of the activity SurfaceControl tree used for backdrop
-        // capture, while the panel remains directly touchable at the bar bounds.
         try {
-            val existing = InstagramOverlayRegistry.get(activity)
-            if (existing != null) {
-                existing.setVisible(true)
-                return@runOnUiThread
+            val owner = FakeLifecycleOwner().apply {
+                registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+                registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+                registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+            }
+            decorView.setViewTreeLifecycleOwner(owner)
+            decorView.setViewTreeSavedStateRegistryOwner(owner)
+            decorView.setViewTreeViewModelStoreOwner(owner)
+
+            val composeView = ComposeView(activity).apply {
+                tag = "LiquidGlassInjected"
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+                setContent {
+                    InstagramNavBarHost(stockBar, mainWrapper)
+                }
             }
 
-            val controller = InstagramOverlayWindow(activity, stockBar)
-            InstagramOverlayRegistry.put(activity, controller)
-            controller.setVisible(true)
-        } catch (_: Throwable) {}
-    }
-    return InstagramOverlayRegistry.get(activity)
-}
-
-internal object InstagramOverlayRegistry {
-    private val controllers = java.util.WeakHashMap<Activity, InstagramOverlayWindow>()
-
-    @Synchronized
-    fun get(activity: Activity): InstagramOverlayWindow? = controllers[activity]
-
-    @Synchronized
-    fun put(activity: Activity, controller: InstagramOverlayWindow) {
-        controllers[activity] = controller
+            val parentGroup = mainWrapper.parent as? ViewGroup
+            if (parentGroup != null) {
+                parentGroup.addView(
+                    composeView,
+                    parentGroup.indexOfChild(mainWrapper) + 1,
+                    ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                )
+            } else {
+                mainWrapper.addView(
+                    composeView,
+                    ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                )
+            }
+        } catch (e: Exception) {}
     }
 }

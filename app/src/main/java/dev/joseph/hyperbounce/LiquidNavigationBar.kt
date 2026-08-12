@@ -74,7 +74,6 @@ fun LiquidNavigationBar(
     barHeight: Dp = 64.dp,
     tabWidth: Dp = 64.dp,
     cornerRadius: Dp = 32.dp,
-    backdropWindowOrigin: androidx.compose.ui.geometry.Offset = androidx.compose.ui.geometry.Offset.Zero,
 ) {
     if (tabs.isEmpty()) return
 
@@ -209,7 +208,7 @@ fun LiquidNavigationBar(
                             translationX = panelOffset
                         }
                         .onGloballyPositioned { coordinates ->
-                            val position = coordinates.positionInWindow() + backdropWindowOrigin
+                            val position = coordinates.positionInWindow()
                             liveBackdrop.setTargetBounds(
                                 left = position.x,
                                 top = position.y,
