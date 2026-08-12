@@ -77,7 +77,7 @@ fun LiquidToggle(
     val animationScope = rememberCoroutineScope()
     var didDrag by remember { mutableStateOf(false) }
     var fraction by remember { mutableFloatStateOf(if (selected()) 1f else 0f) }
-    var lastHapticEdge by remember { mutableIntStateOf(if (selected()) 1 else 0) }
+    var lastHapticEdge by remember { mutableStateOf(if (selected()) 1 else 0) }
     val hostView = LocalView.current
 
     fun performEdgeHaptic(progress: Float) {

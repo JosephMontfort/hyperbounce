@@ -90,10 +90,13 @@ internal object LiquidToggleHost {
             (target as? CompoundButton)?.isChecked == true
         )
         private var visible by mutableStateOf(true)
-        private var overlayWidthPx by mutableIntStateOf(0)
-        private var overlayHeightPx by mutableIntStateOf(0)
-        private var overlayLeftPx by mutableIntStateOf(0)
-        private var overlayTopPx by mutableIntStateOf(0)
+        // Geometry is host-view bookkeeping, not Compose state. Keeping these as
+        // plain fields avoids unnecessary Compose invalidations on scroll.
+        private var overlayWidthPx = 0
+        private var overlayHeightPx = 0
+        private var lastOverlayX = Float.NaN
+        private var lastOverlayY = Float.NaN
+        private var geometryRefreshPosted = false
 
         private val layoutListener =
             View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
@@ -101,13 +104,21 @@ internal object LiquidToggleHost {
             }
 
         /*
-         * Scroll is not a layout event. System Settings/MIUI commonly places
-         * toggles inside a scrolling container, so the target can move on screen
-         * without its own bounds changing. Keep the floating Compose overlay
-         * locked to the native toggle's WINDOW coordinates.
+         * Scrolling changes the target's window position without changing its
+         * layout bounds. The old renderer never had this problem because it drew
+         * inside the native toggle itself, so the whole rendered view naturally
+         * scrolled with its row.
+         *
+         * We still keep the Compose surface at the decor level because that is
+         * what prevents ancestor clipping and keeps the live backdrop source
+         * outside the injected glass surface. The efficient fix is therefore to
+         * observe the hierarchy for scroll changes but coalesce all callbacks into
+         * ONE geometry update per display frame. We also move the already-laid-out
+         * ComposeView with translationX/Y instead of changing LayoutParams, so
+         * scrolling never triggers a parent relayout.
          */
         private val scrollListener = ViewTreeObserver.OnScrollChangedListener {
-            refreshGeometry()
+            scheduleGeometryRefresh()
         }
 
         private val attachListener =
@@ -160,9 +171,25 @@ internal object LiquidToggleHost {
                 ViewGroup.LayoutParams(1, 1),
             )
 
+            // Layout the overflow envelope once. Subsequent scrolling only changes
+            // translation, which avoids repeated ViewRoot/FrameLayout relayouts.
             refreshGeometry()
             syncVisibility()
             decor.post { backdrop.start() }
+        }
+
+        private fun scheduleGeometryRefresh() {
+            val compose = composeView ?: return
+            if (geometryRefreshPosted) return
+            geometryRefreshPosted = true
+
+            // Coalesce bursts of scroll callbacks into a single UI-thread update.
+            compose.postOnAnimation {
+                geometryRefreshPosted = false
+                if (composeView === compose && compose.parent === decor) {
+                    refreshGeometry()
+                }
+            }
         }
 
         fun refreshGeometry() {
@@ -177,23 +204,36 @@ internal object LiquidToggleHost {
             // Keep the actual library toggle at 64dp x 28dp (scaled to 97.5% below)
             // while giving the injected ComposeView a small touch/overflow envelope
             // so the library's 1.5x bloom never gets clipped.
-            overlayWidthPx = (80f * density).roundToInt()
-            overlayHeightPx = (48f * density).roundToInt()
+            val newWidthPx = (80f * density).roundToInt()
+            val newHeightPx = (48f * density).roundToInt()
 
-            overlayLeftPx =
+            if (overlayWidthPx != newWidthPx || overlayHeightPx != newHeightPx) {
+                overlayWidthPx = newWidthPx
+                overlayHeightPx = newHeightPx
+                val lp = compose.layoutParams
+                    ?: ViewGroup.LayoutParams(overlayWidthPx, overlayHeightPx)
+                lp.width = overlayWidthPx
+                lp.height = overlayHeightPx
+                compose.layoutParams = lp
+            }
+
+            val overlayX =
                 location[0] - decorLocation[0] +
-                    (target.width - overlayWidthPx) / 2
-            overlayTopPx =
+                    (target.width - overlayWidthPx) / 2f
+            val overlayY =
                 location[1] - decorLocation[1] +
-                    (target.height - overlayHeightPx) / 2
+                    (target.height - overlayHeightPx) / 2f
 
-            val lp = (compose.layoutParams as? ViewGroup.MarginLayoutParams)
-                ?: ViewGroup.MarginLayoutParams(overlayWidthPx, overlayHeightPx)
-            lp.width = overlayWidthPx
-            lp.height = overlayHeightPx
-            lp.leftMargin = overlayLeftPx
-            lp.topMargin = overlayTopPx
-            compose.layoutParams = lp
+            // Translation moves the already-laid-out overlay without requesting
+            // another FrameLayout measurement/layout pass.
+            if (overlayX != lastOverlayX) {
+                compose.translationX = overlayX
+                lastOverlayX = overlayX
+            }
+            if (overlayY != lastOverlayY) {
+                compose.translationY = overlayY
+                lastOverlayY = overlayY
+            }
         }
 
         fun syncChecked() {

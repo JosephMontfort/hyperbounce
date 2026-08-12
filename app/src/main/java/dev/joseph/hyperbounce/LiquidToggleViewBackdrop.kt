@@ -2,7 +2,6 @@ package dev.joseph.hyperbounce
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.view.Choreographer
 import android.view.View
 import android.view.ViewTreeObserver
 import androidx.compose.runtime.getValue
@@ -52,8 +51,6 @@ internal class LiquidToggleViewBackdrop(
         private set
 
     private var region: CaptureRegion? = null
-    private var frameNumber = 0
-    private var lastCapturedFrame = -1
     private var lastCaptureNanos = 0L
 
     // Same proven live cadence as the floating-nav implementation: real-time
@@ -63,13 +60,6 @@ internal class LiquidToggleViewBackdrop(
     private val preDrawListener = ViewTreeObserver.OnPreDrawListener {
         captureOncePerFrame()
         true
-    }
-
-    private val frameCallback = object : Choreographer.FrameCallback {
-        override fun doFrame(frameTimeNanos: Long) {
-            frameNumber++
-            Choreographer.getInstance().postFrameCallback(this)
-        }
     }
 
     fun setTargetBounds(
@@ -89,17 +79,13 @@ internal class LiquidToggleViewBackdrop(
 
     fun start() {
         sourceView.viewTreeObserver.addOnPreDrawListener(preDrawListener)
-        Choreographer.getInstance().postFrameCallback(frameCallback)
     }
 
     fun stop() {
         sourceView.viewTreeObserver.removeOnPreDrawListener(preDrawListener)
-        Choreographer.getInstance().removeFrameCallback(frameCallback)
     }
 
     private fun captureOncePerFrame() {
-        if (lastCapturedFrame == frameNumber) return
-
         val now = System.nanoTime()
         if (now - lastCaptureNanos < minCaptureIntervalNanos) return
 
@@ -138,7 +124,6 @@ internal class LiquidToggleViewBackdrop(
                 bitmap = target,
                 originInWindow = Offset(currentRegion.left, currentRegion.top),
             )
-            lastCapturedFrame = frameNumber
             lastCaptureNanos = now
         } catch (_: Throwable) {
             // Keep the last valid frame. Some HyperOS framework views reject
@@ -163,7 +148,6 @@ internal class LiquidToggleViewBackdrop(
         back = null
         capturedFrame = null
         region = null
-        lastCapturedFrame = -1
         lastCaptureNanos = 0L
     }
 
