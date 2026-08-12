@@ -60,6 +60,7 @@ import kotlin.math.sign
 fun LiquidNavigationBar(
     bottomPadding: Dp,
     tabs: List<Bitmap?>,
+    activeTabs: List<Bitmap?> = tabs,
     selectedIndex: Int,
     onTabSelected: (Int) -> Unit,
     sourceView: android.view.View,
@@ -243,6 +244,7 @@ fun LiquidNavigationBar(
                         LiquidBottomTab(
                             bitmap = bitmap,
                             isCircular = index in circularIndices,
+                            accentColor = null,
                             label = labels.getOrNull(index),
                             onClick = {
                                 onTabSelected(index)
@@ -293,15 +295,15 @@ fun LiquidNavigationBar(
                             .height(barHeight - 8.dp)
                             .fillMaxWidth()
                             .padding(horizontal = 4.dp)
-                            .graphicsLayer(
-                                colorFilter = ColorFilter.tint(accentColor),
-                            ),
+
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        tabs.forEachIndexed { index, bitmap ->
+                        tabs.forEachIndexed { index, _ ->
+                            val bitmap = activeTabs.getOrNull(index) ?: tabs.getOrNull(index)
                             LiquidBottomTab(
                                 bitmap = bitmap,
                                 isCircular = index in circularIndices,
+                                accentColor = accentColor,
                                 label = labels.getOrNull(index),
                                 onClick = {
                                     onTabSelected(index)
@@ -397,6 +399,7 @@ private fun RowScope.LiquidBottomTab(
     bitmap: Bitmap?,
     isCircular: Boolean,
     label: String?,
+    accentColor: Color? = null,
     onClick: () -> Unit,
 ) {
     val scale = LocalLiquidBottomTabScale.current
@@ -421,6 +424,7 @@ private fun RowScope.LiquidBottomTab(
             Image(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = null,
+                colorFilter = if (isCircular || accentColor == null) null else ColorFilter.tint(accentColor),
                 modifier = Modifier
                     .size(if (label.isNullOrEmpty()) 28.dp else 24.dp)
                     .then(

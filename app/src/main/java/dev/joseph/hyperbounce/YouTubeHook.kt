@@ -131,6 +131,11 @@ class YouTubeHook {
                                         // Continuous Theme Checker is deliberately retained
                                         // for compatibility with the old extraction path.
                                         activity.window.decorView.viewTreeObserver.addOnPreDrawListener {
+                                            val customBar = activity.window.decorView.findViewWithTag<View>("HyperFloatingBar")
+                                            if (customBar != null) {
+                                                customBar.visibility = if (pivotBar.visibility == View.VISIBLE) View.VISIBLE else View.GONE
+                                            }
+
                                             val currentDark = isYouTubeInDarkMode(activity)
                                             if (isDarkState.value != currentDark) {
                                                 isDarkState.value = currentDark

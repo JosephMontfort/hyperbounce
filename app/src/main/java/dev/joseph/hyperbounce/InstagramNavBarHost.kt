@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
@@ -22,31 +23,54 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlinx.coroutines.delay
 
-private data class InstagramTabData(val resId: Int, val bitmap: Bitmap?)
+private data class InstagramTabData(val resId: Int, val inactiveBitmap: Bitmap?, val activeBitmap: Bitmap?)
 
 private val instagramOrderedTabNames = listOf("feed_tab", "clips_tab", "direct_tab", "search_tab", "profile_tab")
 
-private fun extractInstagramTabs(stockBar: ViewGroup, tabNames: List<String>): List<InstagramTabData> {
+private fun extractInstagramTabs(stockBar: ViewGroup, tabNames: List<String>, isDark: Boolean): List<InstagramTabData> {
     val context = stockBar.context
+    val tint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
     return tabNames.map { name ->
         val resId = context.resources.getIdentifier(name, "id", context.packageName)
-        var bitmap: Bitmap? = null
+        var inactiveBmp: Bitmap? = null
+        var activeBmp: Bitmap? = null
+        
         if (resId != 0) {
             val tabView = stockBar.findViewById<View>(resId)
             if (tabView is ViewGroup) {
                 val imageView = findImageView(tabView)
-                imageView?.drawable?.let { drawable ->
+                val drawable = imageView?.drawable?.constantState?.newDrawable()?.mutate()
+                val isProfile = name == "profile_tab"
+                
+                if (drawable != null) {
+                    if (!isProfile) {
+                        drawable.setTint(tint)
+                    }
                     val w = drawable.intrinsicWidth.coerceAtLeast(1)
                     val h = drawable.intrinsicHeight.coerceAtLeast(1)
-                    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                    val canvas = Canvas(bmp)
-                    drawable.setBounds(0, 0, canvas.width, canvas.height)
-                    drawable.draw(canvas)
-                    bitmap = bmp
+                    
+                    drawable.state = intArrayOf(-android.R.attr.state_selected, -android.R.attr.state_activated)
+                    inactiveBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    drawable.setBounds(0, 0, w, h)
+                    drawable.draw(Canvas(inactiveBmp))
+                    
+                    drawable.state = intArrayOf(android.R.attr.state_selected, android.R.attr.state_activated)
+                    activeBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    drawable.setBounds(0, 0, w, h)
+                    drawable.draw(Canvas(activeBmp))
+                } else if (isProfile && imageView != null) {
+                    val w = imageView.width.coerceAtLeast(1)
+                    val h = imageView.height.coerceAtLeast(1)
+                    if (w > 1 && h > 1) {
+                        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                        imageView.draw(Canvas(bmp))
+                        inactiveBmp = bmp
+                        activeBmp = bmp
+                    }
                 }
             }
         }
-        InstagramTabData(resId, bitmap)
+        InstagramTabData(resId, inactiveBmp, activeBmp)
     }
 }
 
@@ -67,15 +91,12 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View) {
     val isDark = isSystemInDarkTheme()
 
     var selectedIndex by remember { mutableIntStateOf(0) }
+    var tabs by remember { mutableStateOf(emptyList<InstagramTabData>()) }
 
-    val tabs = remember(stockBar) {
-        if (stockBar != null) extractInstagramTabs(stockBar, instagramOrderedTabNames) else emptyList()
-    }
-
-    LaunchedEffect(stockBar) {
+    LaunchedEffect(stockBar, isDark) {
         while (true) {
-            delay(100)
             if (stockBar != null) {
+                tabs = extractInstagramTabs(stockBar, instagramOrderedTabNames, isDark)
                 for (i in tabs.indices) {
                     val view = stockBar.findViewById<View>(tabs[i].resId)
                     if (view != null && (view.isSelected || view.isActivated)) {
@@ -86,25 +107,30 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View) {
                     }
                 }
             }
+            delay(500)
         }
     }
 
     val profileIndex = instagramOrderedTabNames.indexOf("profile_tab")
+    val accent = if (isDark) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black
 
     LiquidNavigationBar(
         bottomPadding = 40.dp,
-        tabs = tabs.map { it.bitmap },
+        tabs = tabs.map { it.inactiveBitmap },
+        activeTabs = tabs.map { it.activeBitmap },
+        customAccentColor = accent,
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index
-            stockBar?.findViewById<View>(tabs[index].resId)?.performClick()
+            if (tabs.isNotEmpty()) {
+                stockBar?.findViewById<View>(tabs[index].resId)?.performClick()
+            }
         },
         circularIndices = if (profileIndex >= 0) setOf(profileIndex) else emptySet(),
         sourceView = backdropSource,
     )
 }
 
-/** Injects the Compose overlay into Instagram's main content wrapper. */
 fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: ViewGroup?) {
     val decorView = activity.window.decorView as ViewGroup
     if (decorView.findViewWithTag<ComposeView>("LiquidGlassInjected") != null) return
@@ -142,9 +168,6 @@ fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: View
                     ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                 )
             }
-            android.util.Log.e("HyperBounce-Tracer", "[SUCCESS] Liquid Glass Compose UI Injected!")
-        } catch (e: Exception) {
-            android.util.Log.e("HyperBounce-Tracer", "[ERROR] Compose Injection Failed: ${e.message}")
-        }
+        } catch (e: Exception) {}
     }
 }
