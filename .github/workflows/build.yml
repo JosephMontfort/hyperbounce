@@ -2,7 +2,7 @@ name: Build HyperBounce Release
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: [ "master", "main", "liquid-toggles" ]
   workflow_dispatch:
 
 permissions:
