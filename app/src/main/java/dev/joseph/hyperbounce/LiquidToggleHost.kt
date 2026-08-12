@@ -19,7 +19,9 @@ import androidx.compose.ui.semantics.role
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
 import java.util.WeakHashMap
 import kotlin.math.roundToInt
@@ -357,10 +359,10 @@ internal object LiquidToggleHost {
     }
 
     private fun savedStateOwnerFor(decor: ViewGroup) =
-        decor.getViewTreeSavedStateRegistryOwner()
+        decor.findViewTreeSavedStateRegistryOwner()
 
     private fun viewModelOwnerFor(decor: ViewGroup) =
-        decor.getViewTreeViewModelStoreOwner()
+        decor.findViewTreeViewModelStoreOwner()
 
     private const val LIQUID_TOGGLE_SCALE = 0.975f
 }
