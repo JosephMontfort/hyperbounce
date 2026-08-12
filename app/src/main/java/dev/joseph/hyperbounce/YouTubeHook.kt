@@ -133,7 +133,8 @@ class YouTubeHook {
                                         activity.window.decorView.viewTreeObserver.addOnPreDrawListener {
                                             val customBar = activity.window.decorView.findViewWithTag<View>("HyperFloatingBar")
                                             if (customBar != null) {
-                                                customBar.visibility = if (pivotBar.visibility == View.VISIBLE) View.VISIBLE else View.GONE
+                                                val isScrollingHide = pivotBar.translationY > 0f || pivotBar.translationY < 0f
+                                                customBar.visibility = if (pivotBar.visibility == View.VISIBLE || isScrollingHide) View.VISIBLE else View.GONE
                                             }
 
                                             val currentDark = isYouTubeInDarkMode(activity)

@@ -30,46 +30,54 @@ private val instagramOrderedTabNames = listOf("feed_tab", "clips_tab", "direct_t
 private fun extractInstagramTabs(stockBar: ViewGroup, tabNames: List<String>, isDark: Boolean): List<InstagramTabData> {
     val context = stockBar.context
     val tint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
-    return tabNames.map { name ->
+    return tabNames.mapNotNull { name ->
         val resId = context.resources.getIdentifier(name, "id", context.packageName)
+        if (resId == 0) return@mapNotNull null
+        val tabView = stockBar.findViewById<View>(resId) as? ViewGroup ?: return@mapNotNull null
+        if (tabView.visibility == View.GONE) return@mapNotNull null
+
         var inactiveBmp: Bitmap? = null
         var activeBmp: Bitmap? = null
-        
-        if (resId != 0) {
-            val tabView = stockBar.findViewById<View>(resId)
-            if (tabView is ViewGroup) {
-                val imageView = findImageView(tabView)
-                val drawable = imageView?.drawable?.constantState?.newDrawable()?.mutate()
-                val isProfile = name == "profile_tab"
-                
-                if (drawable != null) {
-                    if (!isProfile) {
-                        drawable.setTint(tint)
-                    }
-                    val w = drawable.intrinsicWidth.coerceAtLeast(1)
-                    val h = drawable.intrinsicHeight.coerceAtLeast(1)
-                    
-                    drawable.state = intArrayOf(-android.R.attr.state_selected, -android.R.attr.state_activated)
-                    inactiveBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                    drawable.setBounds(0, 0, w, h)
-                    drawable.draw(Canvas(inactiveBmp))
-                    
-                    drawable.state = intArrayOf(android.R.attr.state_selected, android.R.attr.state_activated)
-                    activeBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                    drawable.setBounds(0, 0, w, h)
-                    drawable.draw(Canvas(activeBmp))
-                } else if (isProfile && imageView != null) {
-                    val w = imageView.width.coerceAtLeast(1)
-                    val h = imageView.height.coerceAtLeast(1)
-                    if (w > 1 && h > 1) {
-                        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                        imageView.draw(Canvas(bmp))
-                        inactiveBmp = bmp
-                        activeBmp = bmp
-                    }
-                }
+        val isProfile = name == "profile_tab"
+
+        val ivs = mutableListOf<ImageView>()
+        fun findImageViews(v: View) {
+            if (v is ImageView) ivs.add(v)
+            else if (v is ViewGroup) {
+                for (i in 0 until v.childCount) findImageViews(v.getChildAt(i))
             }
         }
+        findImageViews(tabView)
+
+        if (isProfile && ivs.isNotEmpty()) {
+            val img = ivs.first()
+            val w = img.width.coerceAtLeast(1)
+            val h = img.height.coerceAtLeast(1)
+            if (w > 1 && h > 1) {
+                val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                img.draw(Canvas(bmp))
+                inactiveBmp = bmp
+                activeBmp = bmp
+            }
+        } else if (ivs.isNotEmpty()) {
+            val inactiveIv = ivs.first()
+            val activeIv = if (ivs.size > 1) ivs[1] else ivs.first()
+            
+            fun extractBmp(iv: ImageView): Bitmap? {
+                val d = iv.drawable?.constantState?.newDrawable()?.mutate() ?: return null
+                d.setTint(tint)
+                val w = d.intrinsicWidth.coerceAtLeast(1)
+                val h = d.intrinsicHeight.coerceAtLeast(1)
+                val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                d.setBounds(0, 0, w, h)
+                d.draw(Canvas(bmp))
+                return bmp
+            }
+            
+            inactiveBmp = extractBmp(inactiveIv)
+            activeBmp = extractBmp(activeIv)
+        }
+
         InstagramTabData(resId, inactiveBmp, activeBmp)
     }
 }

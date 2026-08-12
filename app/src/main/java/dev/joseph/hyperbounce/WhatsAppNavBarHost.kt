@@ -22,6 +22,7 @@ private fun extractWhatsAppTabs(stockBar: ViewGroup, isDark: Boolean): List<What
     val menu = stockBar.getChildAt(0) as? ViewGroup ?: return out
     for (i in 0 until menu.childCount) {
         val tab = menu.getChildAt(i) as? ViewGroup ?: continue
+        if (tab.visibility == View.GONE) continue
         val icon = findImageView(tab)
         val drawable = icon?.drawable?.mutate()
         var bmp: Bitmap? = null

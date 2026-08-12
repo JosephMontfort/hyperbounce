@@ -49,10 +49,23 @@ private fun extractYouTubeTabs(pivotBar: ViewGroup, isDark: Boolean): List<YouTu
 
         for (i in 0 until wrapper.childCount) {
             val tab = wrapper.getChildAt(i) as? ViewGroup ?: continue
+            if (tab.visibility == View.GONE) continue
 
             var img = findViewByName(tab, "image") as? ImageView
             if (img == null) img = findViewByName(tab, "pivot_bar_thumbnail") as? ImageView
             if (img == null) img = findImageView(tab)
+
+            val isProfile = i == wrapper.childCount - 1
+            if (isProfile && img != null) {
+                val w = img.width.coerceAtLeast(1)
+                val h = img.height.coerceAtLeast(1)
+                if (w > 1 && h > 1) {
+                    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    img.draw(Canvas(bmp))
+                    out.add(YouTubeTabData(tab, bmp))
+                    continue
+                }
+            }
 
             val d = img?.drawable?.constantState?.newDrawable()?.mutate() ?: continue
             d.setTint(tint)
@@ -80,7 +93,7 @@ fun YouTubeNavBarHost(
     isDarkState: State<Boolean>,
     backdropSource: View,
 ) {
-    val isDark = isDarkState.value
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
 
     var tabs by remember { mutableStateOf(emptyList<YouTubeTabData>()) }
     var selectedIndex by remember { mutableIntStateOf(0) }
