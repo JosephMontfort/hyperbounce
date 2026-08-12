@@ -2,9 +2,8 @@ package dev.joseph.hyperbounce
 
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewTreeObserver
+import android.view.ViewGroupOverlay
 import android.widget.CompoundButton
-import android.widget.FrameLayout
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,8 +38,8 @@ internal object LiquidToggleHost {
             return
         }
 
-        val decor = target.rootView as? ViewGroup ?: return
-        val host = Host(target, decor)
+        val parent = target.parent as? ViewGroup ?: return
+        val host = Host(target, parent)
         hosts[target] = host
         host.attach()
     }
@@ -73,11 +72,8 @@ internal object LiquidToggleHost {
         offsetEvent.recycle()
     }
 
-    private class Host(
-        private val target: View,
-        private val decor: ViewGroup,
-    ) {
-        private val captureSource: View = findCaptureSource(target, decor)
+    private class Host(private val target: View, private val parent: ViewGroup) {
+        private val captureSource: View = target.rootView
         private val backdrop = LiquidToggleViewBackdrop(captureSource)
 
         var composeView: ComposeView? = null
@@ -91,17 +87,11 @@ internal object LiquidToggleHost {
             refreshGeometry()
         }
 
-        // Ensures the ComposeView tracks pixel-perfectly as the RecyclerView scrolls
-        private val scrollListener = ViewTreeObserver.OnScrollChangedListener {
-            refreshGeometry()
-        }
-
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
                 refreshGeometry()
                 syncVisibility()
             }
-
             override fun onViewDetachedFromWindow(v: View) {
                 LiquidToggleHost.remove(v)
             }
@@ -109,10 +99,7 @@ internal object LiquidToggleHost {
 
         fun attach() {
             target.addOnLayoutChangeListener(layoutListener)
-            target.viewTreeObserver.addOnScrollChangedListener(scrollListener)
             target.addOnAttachStateChangeListener(attachListener)
-
-            installOwnersIfNeeded()
 
             val compose = ComposeView(target.context).apply {
                 tag = "HyperBounceLiquidToggle:${System.identityHashCode(target)}"
@@ -132,28 +119,32 @@ internal object LiquidToggleHost {
                     )
                 }
             }
-
-            composeView = compose
             
-            // SAFE ATTACHMENT: DecorView extends FrameLayout. Use FrameLayout.LayoutParams
-            // This prevents the original NullPointerException during the internal layout phase.
-            decor.addView(
-                compose,
-                FrameLayout.LayoutParams(1, 1)
-            )
+            composeView = compose
+
+            // THE LIFECYCLE FIX:
+            // We must apply the LifecycleOwner to the OverlayViewGroup BEFORE ComposeView is attached.
+            // A dummy view forces Android to generate the OverlayViewGroup so we can safely tag it.
+            val overlay = parent.overlay as? ViewGroupOverlay
+            if (overlay != null) {
+                val dummy = View(target.context)
+                overlay.add(dummy)
+                installOwnersIfNeeded(target, dummy.rootView)
+                overlay.remove(dummy)
+            }
+
+            installOwnersIfNeeded(target, compose)
+            
+            // Now it is safe to add. Compose will find the owners seamlessly.
+            overlay?.add(compose)
 
             refreshGeometry()
             syncVisibility()
-            decor.post { backdrop.start() }
+            target.post { backdrop.start() }
         }
 
         fun refreshGeometry() {
             val compose = composeView ?: return
-            val location = IntArray(2)
-            val decorLocation = IntArray(2)
-            target.getLocationInWindow(location)
-            decor.getLocationInWindow(decorLocation)
-
             val density = target.resources.displayMetrics.density
             val overlayWidthPx = (80f * density).roundToInt()
             val overlayHeightPx = (48f * density).roundToInt()
@@ -161,16 +152,20 @@ internal object LiquidToggleHost {
             composeLeftInTarget = (target.width - overlayWidthPx) / 2
             composeTopInTarget = (target.height - overlayHeightPx) / 2
 
-            val overlayLeftPx = location[0] - decorLocation[0] + composeLeftInTarget
-            val overlayTopPx = location[1] - decorLocation[1] + composeTopInTarget
+            // Overlay layout bounds are relative to the parent ViewGroup (the RecyclerView row)
+            val overlayLeftPx = target.left + composeLeftInTarget
+            val overlayTopPx = target.top + composeTopInTarget
 
-            val lp = (compose.layoutParams as? FrameLayout.LayoutParams)
-                ?: FrameLayout.LayoutParams(overlayWidthPx, overlayHeightPx)
-            lp.width = overlayWidthPx
-            lp.height = overlayHeightPx
-            lp.leftMargin = overlayLeftPx
-            lp.topMargin = overlayTopPx
-            compose.layoutParams = lp
+            compose.measure(
+                View.MeasureSpec.makeMeasureSpec(overlayWidthPx, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(overlayHeightPx, View.MeasureSpec.EXACTLY)
+            )
+            compose.layout(
+                overlayLeftPx,
+                overlayTopPx,
+                overlayLeftPx + overlayWidthPx,
+                overlayTopPx + overlayHeightPx
+            )
         }
 
         fun syncChecked() {
@@ -187,21 +182,13 @@ internal object LiquidToggleHost {
 
         fun dispose() {
             target.removeOnLayoutChangeListener(layoutListener)
-            target.viewTreeObserver.removeOnScrollChangedListener(scrollListener)
             target.removeOnAttachStateChangeListener(attachListener)
             backdrop.release()
 
             val compose = composeView
             composeView = null
             compose?.setContent { }
-            (compose?.parent as? ViewGroup)?.removeView(compose)
-        }
-
-        private fun installOwnersIfNeeded() {
-            val owner = ownerFor(decor)
-            decor.setViewTreeLifecycleOwner(owner)
-            decor.setViewTreeSavedStateRegistryOwner(owner)
-            decor.setViewTreeViewModelStoreOwner(owner)
+            compose?.let { (parent.overlay as? ViewGroupOverlay)?.remove(it) }
         }
     }
 
@@ -242,25 +229,18 @@ internal object LiquidToggleHost {
         }
     }
 
-    private fun findCaptureSource(target: View, decor: ViewGroup): View {
-        var candidate: View = target
-        var parent = candidate.parent as? ViewGroup
-        while (parent != null && parent !== decor) {
-            candidate = parent
-            parent = parent.parent as? ViewGroup
-        }
-        return candidate
-    }
+    private val ownerMap = WeakHashMap<View, FakeLifecycleOwner>()
 
-    private val ownerMap = WeakHashMap<ViewGroup, FakeLifecycleOwner>()
-
-    private fun ownerFor(decor: ViewGroup): FakeLifecycleOwner {
-        return ownerMap[decor] ?: FakeLifecycleOwner().also {
+    private fun installOwnersIfNeeded(target: View, attachTarget: View) {
+        val owner = ownerMap[target] ?: FakeLifecycleOwner().also {
             it.registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
             it.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
             it.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-            ownerMap[decor] = it
+            ownerMap[target] = it
         }
+        attachTarget.setViewTreeLifecycleOwner(owner)
+        attachTarget.setViewTreeSavedStateRegistryOwner(owner)
+        attachTarget.setViewTreeViewModelStoreOwner(owner)
     }
 
     private const val LIQUID_TOGGLE_SCALE = 0.975f
