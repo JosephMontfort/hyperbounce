@@ -648,7 +648,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     
                     MotionEvent event = (MotionEvent) param.args[0];
                     if (USE_LIQUID_GLASS_TOGGLE) {
-                        LiquidToggleHost.forwardTouchEvent(view, event);
+                        
                         return;
                     }
                     ToggleState s = stateMap.get(view);
