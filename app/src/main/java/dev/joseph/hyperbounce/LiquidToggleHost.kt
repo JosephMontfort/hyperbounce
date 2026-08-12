@@ -1,5 +1,8 @@
 package dev.joseph.hyperbounce
 
+import android.content.ComponentCallbacks
+import android.content.Context
+import android.content.ContextWrapper
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroupOverlay
@@ -23,6 +26,17 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
 import kotlin.math.roundToInt
 import java.util.WeakHashMap
+
+// CRITICAL FIX #1: Swallows SystemUI's broken ContextWrapper NullPointerExceptions 
+// when Compose attempts to register global configuration and memory callbacks.
+internal class SafeContext(base: Context) : ContextWrapper(base) {
+    override fun registerComponentCallbacks(callback: ComponentCallbacks?) {
+        try { super.registerComponentCallbacks(callback) } catch (e: Throwable) {}
+    }
+    override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {
+        try { super.unregisterComponentCallbacks(callback) } catch (e: Throwable) {}
+    }
+}
 
 internal object LiquidToggleHost {
     private val hosts = WeakHashMap<View, Host>()
@@ -65,8 +79,6 @@ internal object LiquidToggleHost {
         val compose = host.composeView ?: return
         val offsetEvent = android.view.MotionEvent.obtain(event)
         
-        // Touch events are relative to the target toggle. 
-        // We must offset them to the ComposeView's local coordinate space.
         offsetEvent.offsetLocation(-host.composeLeftInTarget.toFloat(), -host.composeTopInTarget.toFloat())
         compose.dispatchTouchEvent(offsetEvent)
         offsetEvent.recycle()
@@ -101,7 +113,12 @@ internal object LiquidToggleHost {
             target.addOnLayoutChangeListener(layoutListener)
             target.addOnAttachStateChangeListener(attachListener)
 
-            val compose = ComposeView(target.context).apply {
+            // CRITICAL FIX #2: Dynamically strip clipping bounds from the parent tree
+            // so the overlay can bloom outside the toggle's physical dimensions freely.
+            disableClipping(target)
+
+            val safeContext = SafeContext(target.context)
+            val compose = ComposeView(safeContext).apply {
                 tag = "HyperBounceLiquidToggle:${System.identityHashCode(target)}"
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
@@ -122,27 +139,49 @@ internal object LiquidToggleHost {
 
             composeView = compose
             
-            // Attach to the parent's overlay to guarantee zero scroll latency
-            (parent.overlay as? ViewGroupOverlay)?.add(compose)
+            val overlay = parent.overlay as? ViewGroupOverlay
+            if (overlay != null) {
+                // CRITICAL FIX #3: The Dummy View Trick
+                // Force Android to instantiate the internal OverlayViewGroup so we can safely 
+                // attach Lifecycle tags to it BEFORE Compose initialization executes.
+                val dummy = View(safeContext)
+                overlay.add(dummy)
+                
+                val overlayViewGroup = dummy.parent as? View
+                if (overlayViewGroup != null) {
+                    installOwnersIfNeeded(target, overlayViewGroup)
+                }
+                
+                overlay.remove(dummy)
+
+                // The environment is now completely safe. Proceed with Compose injection.
+                installOwnersIfNeeded(target, compose)
+                overlay.add(compose)
+            }
 
             refreshGeometry()
             syncVisibility()
             target.post { backdrop.start() }
         }
 
+        private fun disableClipping(view: View) {
+            view.clipToOutline = false
+            var p = view.parent
+            var depth = 0
+            while (p is View) {
+                p.clipToOutline = false
+                if (p is ViewGroup) {
+                    p.clipChildren = false
+                    p.clipToPadding = false
+                }
+                p = p.parent
+                depth++
+                if (depth > 4) break
+            }
+        }
+
         fun refreshGeometry() {
             val compose = composeView ?: return
-            
-            // THE ULTIMATE CRASH FIX: 
-            // Aggressively walk up the tree and inject the Lifecycle tags on EVERY node
-            // exactly right before compose.measure() is executed. This absolutely guarantees 
-            // that the hidden OverlayViewGroup receives the tags before Compose initializes.
-            var p: View? = compose
-            while (p != null) {
-                installOwnersIfNeeded(target, p)
-                p = p.parent as? View
-            }
-
             val density = target.resources.displayMetrics.density
             val overlayWidthPx = (80f * density).roundToInt()
             val overlayHeightPx = (48f * density).roundToInt()
@@ -150,7 +189,6 @@ internal object LiquidToggleHost {
             composeLeftInTarget = (target.width - overlayWidthPx) / 2
             composeTopInTarget = (target.height - overlayHeightPx) / 2
 
-            // Overlay bounds are relative to the parent ViewGroup (the RecyclerView row)
             val overlayLeftPx = target.left + composeLeftInTarget
             val overlayTopPx = target.top + composeTopInTarget
 
