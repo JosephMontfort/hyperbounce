@@ -1,15 +1,6 @@
-/*
- * Ported verbatim from AndroidLiquidGlass-kmp 2.0.0.
- * Upstream: https://github.com/Kyant0/AndroidLiquidGlass-kmp
- * License: Apache License 2.0. Original LICENSE retained in module root.
- *
- * This file is intentionally kept structurally equivalent to the upstream
- * implementation so future maintainers can compare it directly against the
- * library source. Only the package name was changed for module integration.
- */
-
 package dev.joseph.hyperbounce.liquidglass
 
+import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -32,6 +23,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -44,7 +36,6 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import dev.joseph.hyperbounce.liquidglass.DampedDragAnimation
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
@@ -62,19 +53,17 @@ fun LiquidToggle(
     modifier: Modifier = Modifier
 ) {
     val isLightTheme = !isSystemInDarkTheme()
-    val accentColor =
-        if (isLightTheme) Color(0xFF34C759)
-        else Color(0xFF30D158)
-    val trackColor =
-        if (isLightTheme) Color(0xFF787878).copy(0.2f)
-        else Color(0xFF787880).copy(0.36f)
+    val accentColor = if (isLightTheme) Color(0xFF34C759) else Color(0xFF30D158)
+    val trackColor = if (isLightTheme) Color(0xFF787878).copy(0.2f) else Color(0xFF787880).copy(0.36f)
 
     val density = LocalDensity.current
     val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
     val dragWidth = with(density) { 20f.dp.toPx() }
     val animationScope = rememberCoroutineScope()
+    val view = LocalView.current
     var didDrag by remember { mutableStateOf(false) }
     var fraction by remember { mutableFloatStateOf(if (selected()) 1f else 0f) }
+    
     val dampedDragAnimation = remember(animationScope) {
         DampedDragAnimation(
             animationScope = animationScope,
@@ -95,39 +84,41 @@ fun LiquidToggle(
                 }
             },
             onDrag = { _, dragAmount ->
-                if (!didDrag) {
-                    didDrag = dragAmount.x != 0f
-                }
+                if (!didDrag) didDrag = dragAmount.x != 0f
                 val delta = dragAmount.x / dragWidth
-                fraction =
-                    if (isLtr) (fraction + delta).fastCoerceIn(0f, 1f)
-                    else (fraction - delta).fastCoerceIn(0f, 1f)
+                fraction = if (isLtr) (fraction + delta).fastCoerceIn(0f, 1f) else (fraction - delta).fastCoerceIn(0f, 1f)
             }
         )
     }
+
+    // Surgical logic for exact haptics when thumb hits boundaries
+    var lastHapticValue by remember { mutableFloatStateOf(dampedDragAnimation.value) }
+    LaunchedEffect(dampedDragAnimation.value) {
+        val value = dampedDragAnimation.value
+        if ((value >= 0.99f && lastHapticValue < 0.99f) || (value <= 0.01f && lastHapticValue > 0.01f)) {
+            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        }
+        lastHapticValue = value
+    }
+
     LaunchedEffect(dampedDragAnimation) {
-        snapshotFlow { fraction }
-            .collectLatest { fraction ->
-                dampedDragAnimation.updateValue(fraction)
-            }
+        snapshotFlow { fraction }.collectLatest { fraction ->
+            dampedDragAnimation.updateValue(fraction)
+        }
     }
     LaunchedEffect(selected) {
-        snapshotFlow { selected() }
-            .collectLatest { isSelected ->
-                val target = if (isSelected) 1f else 0f
-                if (target != fraction) {
-                    fraction = target
-                    dampedDragAnimation.animateToValue(target)
-                }
+        snapshotFlow { selected() }.collectLatest { isSelected ->
+            val target = if (isSelected) 1f else 0f
+            if (target != fraction) {
+                fraction = target
+                dampedDragAnimation.animateToValue(target)
             }
+        }
     }
 
     val trackBackdrop = rememberLayerBackdrop()
 
-    Box(
-        modifier,
-        contentAlignment = Alignment.CenterStart
-    ) {
+    Box(modifier, contentAlignment = Alignment.CenterStart) {
         Box(
             Modifier
                 .layerBackdrop(trackBackdrop)
@@ -138,19 +129,14 @@ fun LiquidToggle(
                 }
                 .size(64f.dp, 28f.dp)
         )
-
         Box(
             Modifier
                 .graphicsLayer {
                     val fraction = dampedDragAnimation.value
                     val padding = 2f.dp.toPx()
-                    translationX =
-                        if (isLtr) lerp(padding, padding + dragWidth, fraction)
-                        else lerp(-padding, -(padding + dragWidth), fraction)
+                    translationX = if (isLtr) lerp(padding, padding + dragWidth, fraction) else lerp(-padding, -(padding + dragWidth), fraction)
                 }
-                .semantics {
-                    role = Role.Switch
-                }
+                .semantics { role = Role.Switch }
                 .then(dampedDragAnimation.modifier)
                 .drawBackdrop(
                     backdrop = rememberCombinedBackdrop(
@@ -159,42 +145,21 @@ fun LiquidToggle(
                             val progress = dampedDragAnimation.pressProgress
                             val scaleX = lerp(2f / 3f, 0.75f, progress)
                             val scaleY = lerp(0f, 0.75f, progress)
-                            scale(scaleX, scaleY) {
-                                drawBackdrop()
-                            }
+                            scale(scaleX, scaleY) { drawBackdrop() }
                         }
                     ),
                     shape = { Capsule() },
                     effects = {
                         val progress = dampedDragAnimation.pressProgress
                         blur(8f.dp.toPx() * (1f - progress))
-                        lens(
-                            5f.dp.toPx() * progress,
-                            10f.dp.toPx() * progress,
-                            chromaticAberration = true
-                        )
+                        lens(5f.dp.toPx() * progress, 10f.dp.toPx() * progress, chromaticAberration = true)
                     },
                     highlight = {
                         val progress = dampedDragAnimation.pressProgress
-                        Highlight.Ambient.copy(
-                            width = Highlight.Ambient.width / 1.5f,
-                            blurRadius = Highlight.Ambient.blurRadius / 1.5f,
-                            alpha = progress
-                        )
+                        Highlight.Ambient.copy(width = Highlight.Ambient.width / 1.5f, blurRadius = Highlight.Ambient.blurRadius / 1.5f, alpha = progress)
                     },
-                    shadow = {
-                        Shadow(
-                            radius = 4f.dp,
-                            color = Color.Black.copy(alpha = 0.05f)
-                        )
-                    },
-                    innerShadow = {
-                        val progress = dampedDragAnimation.pressProgress
-                        InnerShadow(
-                            radius = 4f.dp * progress,
-                            alpha = progress
-                        )
-                    },
+                    shadow = { Shadow(radius = 4f.dp, color = Color.Black.copy(alpha = 0.05f)) },
+                    innerShadow = { val progress = dampedDragAnimation.pressProgress; InnerShadow(radius = 4f.dp * progress, alpha = progress) },
                     layerBlock = {
                         scaleX = dampedDragAnimation.scaleX
                         scaleY = dampedDragAnimation.scaleY

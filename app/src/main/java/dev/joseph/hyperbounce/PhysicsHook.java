@@ -593,6 +593,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     if (USE_LIQUID_GLASS_TOGGLE) {
                         LiquidToggleHost.syncChecked(view);
                     }
+                            if (USE_LIQUID_GLASS_TOGGLE) {
+                                LiquidToggleHost.forwardTouchEvent(view, event);
+                                return;
+                            }
                     ToggleState s = stateMap.get(view);
                     if (s != null) { view.postInvalidateOnAnimation(); }
                 }
@@ -604,6 +608,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     View view = (View) param.thisObject;
+                            if (USE_LIQUID_GLASS_TOGGLE) {
+                                LiquidToggleHost.forwardTouchEvent(view, event);
+                                return;
+                            }
                     ToggleState s = stateMap.get(view);
                     if (s != null) {
                         s.isTouching = (boolean) param.args[0];
@@ -642,6 +650,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     disableClipping(view); 
                     
                     MotionEvent event = (MotionEvent) param.args[0];
+                            if (USE_LIQUID_GLASS_TOGGLE) {
+                                LiquidToggleHost.forwardTouchEvent(view, event);
+                                return;
+                            }
                     ToggleState s = stateMap.get(view);
                     if (s == null) {
                         s = new ToggleState();
@@ -691,6 +703,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     disableClipping(view);
                     try { if (view.getButtonDrawable() != null) view.setButtonDrawable(null); } catch (Throwable t) {}
 
+                            if (USE_LIQUID_GLASS_TOGGLE) {
+                                LiquidToggleHost.forwardTouchEvent(view, event);
+                                return;
+                            }
                     ToggleState s = stateMap.get(view);
                     if (s == null) {
                         s = new ToggleState();
