@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewGroupOverlay
 import android.widget.CompoundButton
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
@@ -27,9 +26,12 @@ import dev.joseph.hyperbounce.liquidglass.LiquidToggle
 import kotlin.math.roundToInt
 import java.util.WeakHashMap
 
-// CRITICAL FIX #1: Swallows SystemUI's broken ContextWrapper NullPointerExceptions 
-// when Compose attempts to register global configuration and memory callbacks.
+// CRITICAL FIX: Swallows SystemUI's broken ContextWrapper NullPointerExceptions
+// and provides a valid applicationContext fallback for Compose.
 internal class SafeContext(base: Context) : ContextWrapper(base) {
+    override fun getApplicationContext(): Context {
+        return super.getApplicationContext() ?: this
+    }
     override fun registerComponentCallbacks(callback: ComponentCallbacks?) {
         try { super.registerComponentCallbacks(callback) } catch (e: Throwable) {}
     }
@@ -45,12 +47,7 @@ internal object LiquidToggleHost {
     fun ensure(target: View) {
         if (target.width <= 0 || target.height <= 0) return
         if (!target.isAttachedToWindow) return
-
-        val existing = hosts[target]
-        if (existing != null) {
-            existing.refreshGeometry()
-            return
-        }
+        if (hosts.containsKey(target)) return
 
         val parent = target.parent as? ViewGroup ?: return
         val host = Host(target, parent)
@@ -64,8 +61,8 @@ internal object LiquidToggleHost {
     }
 
     @JvmStatic
-    fun syncVisibility(target: View) {
-        hosts[target]?.syncVisibility()
+    fun syncVisibility(target: View, isVisible: Boolean) {
+        hosts[target]?.setVisible(isVisible)
     }
 
     @JvmStatic
@@ -73,36 +70,17 @@ internal object LiquidToggleHost {
         hosts.remove(target)?.dispose()
     }
 
-    @JvmStatic
-    fun forwardTouchEvent(target: View, event: android.view.MotionEvent) {
-        val host = hosts[target] ?: return
-        val compose = host.composeView ?: return
-        val offsetEvent = android.view.MotionEvent.obtain(event)
-        
-        offsetEvent.offsetLocation(-host.composeLeftInTarget.toFloat(), -host.composeTopInTarget.toFloat())
-        compose.dispatchTouchEvent(offsetEvent)
-        offsetEvent.recycle()
-    }
-
     private class Host(private val target: View, private val parent: ViewGroup) {
-        private val captureSource: View = target.rootView
+        private val captureSource: View = findCaptureSource(target)
         private val backdrop = LiquidToggleViewBackdrop(captureSource)
 
-        var composeView: ComposeView? = null
+        private var composeView: ComposeView? = null
         private var checked by mutableStateOf((target as? CompoundButton)?.isChecked == true)
-        private var visible by mutableStateOf(true)
-        
-        var composeLeftInTarget by mutableIntStateOf(0)
-        var composeTopInTarget by mutableIntStateOf(0)
-
-        private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            refreshGeometry()
-        }
+        private var visible by mutableStateOf(target.visibility == View.VISIBLE)
 
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
-                refreshGeometry()
-                syncVisibility()
+                syncChecked()
             }
             override fun onViewDetachedFromWindow(v: View) {
                 LiquidToggleHost.remove(v)
@@ -110,12 +88,7 @@ internal object LiquidToggleHost {
         }
 
         fun attach() {
-            target.addOnLayoutChangeListener(layoutListener)
             target.addOnAttachStateChangeListener(attachListener)
-
-            // CRITICAL FIX #2: Dynamically strip clipping bounds from the parent tree
-            // so the overlay can bloom outside the toggle's physical dimensions freely.
-            disableClipping(target)
 
             val safeContext = SafeContext(target.context)
             val compose = ComposeView(safeContext).apply {
@@ -129,7 +102,10 @@ internal object LiquidToggleHost {
                         onSelect = { value ->
                             val button = target as? CompoundButton
                             if (button != null) {
-                                if (button.isChecked != value) button.performClick()
+                                if (button.isChecked != value) {
+                                    button.isChecked = value
+                                    button.performClick()
+                                }
                                 syncChecked()
                             }
                         },
@@ -137,94 +113,41 @@ internal object LiquidToggleHost {
                 }
             }
 
-            composeView = compose
+            // NUCLEAR REPLACEMENT STRATEGY
+            // 1. Copy exact layout constraints from the native toggle
+            target.layoutParams?.let { compose.layoutParams = it }
             
-            val overlay = parent.overlay as? ViewGroupOverlay
-            if (overlay != null) {
-                // CRITICAL FIX #3: The Dummy View Trick
-                // Force Android to instantiate the internal OverlayViewGroup so we can safely 
-                // attach Lifecycle tags to it BEFORE Compose initialization executes.
-                val dummy = View(safeContext)
-                overlay.add(dummy)
-                
-                val overlayViewGroup = dummy.parent as? View
-                if (overlayViewGroup != null) {
-                    installOwnersIfNeeded(target, overlayViewGroup)
-                }
-                
-                overlay.remove(dummy)
+            // 2. Hide native toggle entirely so ComposeView seamlessly occupies its space
+            val index = parent.indexOfChild(target)
+            target.visibility = View.GONE
+            
+            // 3. Inject Owners and Add to actual View Hierarchy (bypassing Overlay limits entirely)
+            installOwnersIfNeeded(parent)
+            installOwnersIfNeeded(compose)
+            
+            parent.addView(compose, index + 1)
+            composeView = compose
 
-                // The environment is now completely safe. Proceed with Compose injection.
-                installOwnersIfNeeded(target, compose)
-                overlay.add(compose)
-            }
-
-            refreshGeometry()
-            syncVisibility()
             target.post { backdrop.start() }
-        }
-
-        private fun disableClipping(view: View) {
-            view.clipToOutline = false
-            var p = view.parent
-            var depth = 0
-            while (p is View) {
-                p.clipToOutline = false
-                if (p is ViewGroup) {
-                    p.clipChildren = false
-                    p.clipToPadding = false
-                }
-                p = p.parent
-                depth++
-                if (depth > 4) break
-            }
-        }
-
-        fun refreshGeometry() {
-            val compose = composeView ?: return
-            val density = target.resources.displayMetrics.density
-            val overlayWidthPx = (80f * density).roundToInt()
-            val overlayHeightPx = (48f * density).roundToInt()
-
-            composeLeftInTarget = (target.width - overlayWidthPx) / 2
-            composeTopInTarget = (target.height - overlayHeightPx) / 2
-
-            val overlayLeftPx = target.left + composeLeftInTarget
-            val overlayTopPx = target.top + composeTopInTarget
-
-            compose.measure(
-                View.MeasureSpec.makeMeasureSpec(overlayWidthPx, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(overlayHeightPx, View.MeasureSpec.EXACTLY)
-            )
-            compose.layout(
-                overlayLeftPx,
-                overlayTopPx,
-                overlayLeftPx + overlayWidthPx,
-                overlayTopPx + overlayHeightPx
-            )
         }
 
         fun syncChecked() {
             checked = (target as? CompoundButton)?.isChecked == true
-            refreshGeometry()
         }
 
-        fun syncVisibility() {
-            visible = target.isAttachedToWindow &&
-                    target.visibility == View.VISIBLE &&
-                    target.windowVisibility == View.VISIBLE &&
-                    target.isShown
+        fun setVisible(isVisible: Boolean) {
+            visible = isVisible
+            composeView?.visibility = if (isVisible) View.VISIBLE else View.GONE
         }
 
         fun dispose() {
-            target.removeOnLayoutChangeListener(layoutListener)
             target.removeOnAttachStateChangeListener(attachListener)
             backdrop.release()
 
             val compose = composeView
             composeView = null
             compose?.setContent { }
-            compose?.let { (parent.overlay as? ViewGroupOverlay)?.remove(it) }
+            parent.removeView(compose)
         }
     }
 
@@ -265,14 +188,31 @@ internal object LiquidToggleHost {
         }
     }
 
+    private fun findCaptureSource(target: View): View {
+        // Ascend the tree to find the nearest scrollable container to use as a backdrop.
+        // This captures the row background completely, eliminating the deep black DecorView issue.
+        var p = target.parent
+        var candidate: View = target
+        while (p is View) {
+            val name = p.javaClass.simpleName
+            if (name.contains("RecyclerView") || name.contains("ListView") || name.contains("ScrollView")) {
+                return p
+            }
+            if (p.parent !is View) return candidate
+            candidate = p
+            p = p.parent
+        }
+        return candidate
+    }
+
     private val ownerMap = WeakHashMap<View, FakeLifecycleOwner>()
 
-    private fun installOwnersIfNeeded(target: View, attachTarget: View) {
-        val owner = ownerMap[target] ?: FakeLifecycleOwner().also {
+    private fun installOwnersIfNeeded(attachTarget: View) {
+        val owner = ownerMap[attachTarget] ?: FakeLifecycleOwner().also {
             it.registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
             it.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
             it.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-            ownerMap[target] = it
+            ownerMap[attachTarget] = it
         }
         attachTarget.setViewTreeLifecycleOwner(owner)
         attachTarget.setViewTreeSavedStateRegistryOwner(owner)

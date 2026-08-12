@@ -617,8 +617,13 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             try {
                 XposedHelpers.findAndHookMethod(clazz, "setVisibility", int.class, new XC_MethodHook() {
                     @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        LiquidToggleHost.syncVisibility((View) param.thisObject);
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        if (USE_LIQUID_GLASS_TOGGLE) {
+                            View view = (View) param.thisObject;
+                            int vis = (int) param.args[0];
+                            LiquidToggleHost.syncVisibility(view, vis == View.VISIBLE);
+                            param.args[0] = View.GONE; // Enforce Nuclear Replacement (keep native hidden)
+                        }
                     }
                 });
             } catch (Throwable t) {}
