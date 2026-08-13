@@ -93,36 +93,42 @@ internal object LiquidToggleHost {
             target.addOnLayoutChangeListener(layoutListener)
             disableClipping(target)
 
-            // THE FIX: Aggressively acquire the global Application Context to bypass broken MIUI plugins
-            val realAppContext = target.context.applicationContext ?: try {
+            // THE ULTIMATE FIX: Directly reflect the ActivityThread's global Application.
+            // We MUST NOT use target.context.applicationContext as a fallback preference because 
+            // MIUI returns a "zombie" plugin ApplicationContext that has a null mBase,
+            // which instantly throws an NPE when Jetpack Compose calls getContentResolver() on it.
+            val realAppContext = try {
                 val atClass = Class.forName("android.app.ActivityThread")
-                val at = atClass.getMethod("currentActivityThread").invoke(null)
-                atClass.getMethod("getApplication").invoke(at) as? Context
+                atClass.getMethod("currentApplication").invoke(null) as? Context
             } catch (e: Throwable) { null }
 
-            // We use realAppContext as the base context so ALL framework calls (getContentResolver, 
-            // registerComponentCallbacks) natively bypass the broken plugin.
-            val baseCtx = realAppContext ?: target.context
-
-            val safeContext = object : ContextWrapper(baseCtx) {
-                override fun getTheme(): android.content.res.Resources.Theme {
-                    return try { target.context.theme ?: super.getTheme() } catch(e: Throwable) { super.getTheme() }
-                }
-
-                override fun getResources(): android.content.res.Resources {
-                    return try { target.context.resources ?: super.getResources() } catch(e: Throwable) { super.getResources() }
-                }
-
-                override fun getClassLoader(): ClassLoader {
-                    return try { target.context.classLoader ?: super.getClassLoader() } catch(e: Throwable) { super.getClassLoader() }
-                }
-
-                override fun getSystemService(name: String): Any? {
-                    return try { target.context.getSystemService(name) ?: super.getSystemService(name) } catch(e: Throwable) { super.getSystemService(name) }
-                }
-
+            val safeContext = object : ContextWrapper(target.context) {
                 override fun getApplicationContext(): Context {
-                    return realAppContext ?: this
+                    // Pipe directly to the real application context
+                    return realAppContext ?: super.getApplicationContext()
+                }
+
+                override fun getContentResolver(): android.content.ContentResolver {
+                    // Route the resolver to the real application context to avoid the null mBase crash
+                    return try {
+                        realAppContext?.contentResolver ?: super.getContentResolver()
+                    } catch (e: Throwable) {
+                        super.getContentResolver()
+                    }
+                }
+
+                override fun registerComponentCallbacks(callback: ComponentCallbacks?) {
+                    try {
+                        realAppContext?.registerComponentCallbacks(callback)
+                            ?: super.registerComponentCallbacks(callback)
+                    } catch (_: Throwable) {}
+                }
+
+                override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {
+                    try {
+                        realAppContext?.unregisterComponentCallbacks(callback)
+                            ?: super.unregisterComponentCallbacks(callback)
+                    } catch (_: Throwable) {}
                 }
             }
 
