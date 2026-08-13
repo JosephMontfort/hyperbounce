@@ -17,7 +17,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
-import de.robv.android.xposed.AndroidAppHelper
+import de.robv.android.xposed.XposedHelpers
 import java.util.WeakHashMap
 
 internal object LiquidToggleHost {
@@ -92,14 +92,23 @@ internal object LiquidToggleHost {
             target.addOnLayoutChangeListener(layoutListener)
             disableClipping(target)
 
-            // THE UNWRAP-PROOF FIX:
-            // Grab the native Application context using Xposed. 
-            // We use ContextThemeWrapper with the global Application as the BASE context.
-            // When Jetpack Compose unwraps this wrapper, it finds the global Application 
-            // instead of the broken MIUI plugin, completely neutralizing the NPE crash.
-            val realAppCtx = AndroidAppHelper.currentApplication() ?: target.context.applicationContext
+            // THE COMPILER FIX:
+            // Revert to XposedHelpers reflection since it successfully compiles.
+            // We rip the global Application context to serve as our base context.
+            val baseCtx = try {
+                val atClass = XposedHelpers.findClass("android.app.ActivityThread", null)
+                XposedHelpers.callStaticMethod(atClass, "currentApplication") as? Context
+            } catch (e: Throwable) { null } ?: try {
+                // Failsafe: Generate a pure framework context
+                target.context.createPackageContext("android", 0)
+            } catch (e: Throwable) {
+                target.context 
+            }
 
-            val safeContext = object : android.view.ContextThemeWrapper(realAppCtx, 0) {
+            // THE UNWRAP-PROOF WRAPPER:
+            // By passing 'baseCtx' into ContextThemeWrapper, Jetpack Compose will unwrap 
+            // the wrapper and hit our healthy 'baseCtx' instead of the broken MIUI plugin context.
+            val safeContext = object : android.view.ContextThemeWrapper(baseCtx, 0) {
                 override fun getTheme(): android.content.res.Resources.Theme {
                     return try { target.context.theme ?: super.getTheme() } catch(e: Throwable) { super.getTheme() }
                 }
