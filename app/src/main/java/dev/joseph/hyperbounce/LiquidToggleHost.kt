@@ -19,7 +19,6 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
-import de.robv.android.xposed.XposedHelpers
 import java.util.WeakHashMap
 
 internal object LiquidToggleHost {
@@ -94,38 +93,36 @@ internal object LiquidToggleHost {
             target.addOnLayoutChangeListener(layoutListener)
             disableClipping(target)
 
-            // THE FIX: Grab the pure, global Application Context to bypass broken MIUI plugins
-            val realAppContext = try {
-                XposedHelpers.callStaticMethod(
-                    XposedHelpers.findClass("android.app.ActivityThread", null),
-                    "currentApplication"
-                ) as? Context
-            } catch (e: Throwable) {
-                null
-            } ?: target.context.applicationContext
+            // THE FIX: Aggressively acquire the global Application Context to bypass broken MIUI plugins
+            val realAppContext = target.context.applicationContext ?: try {
+                val atClass = Class.forName("android.app.ActivityThread")
+                val at = atClass.getMethod("currentActivityThread").invoke(null)
+                atClass.getMethod("getApplication").invoke(at) as? Context
+            } catch (e: Throwable) { null }
 
-            val safeContext = object : ContextWrapper(target.context) {
+            // We use realAppContext as the base context so ALL framework calls (getContentResolver, 
+            // registerComponentCallbacks) natively bypass the broken plugin.
+            val baseCtx = realAppContext ?: target.context
+
+            val safeContext = object : ContextWrapper(baseCtx) {
+                override fun getTheme(): android.content.res.Resources.Theme {
+                    return try { target.context.theme ?: super.getTheme() } catch(e: Throwable) { super.getTheme() }
+                }
+
+                override fun getResources(): android.content.res.Resources {
+                    return try { target.context.resources ?: super.getResources() } catch(e: Throwable) { super.getResources() }
+                }
+
+                override fun getClassLoader(): ClassLoader {
+                    return try { target.context.classLoader ?: super.getClassLoader() } catch(e: Throwable) { super.getClassLoader() }
+                }
+
+                override fun getSystemService(name: String): Any? {
+                    return try { target.context.getSystemService(name) ?: super.getSystemService(name) } catch(e: Throwable) { super.getSystemService(name) }
+                }
+
                 override fun getApplicationContext(): Context {
                     return realAppContext ?: this
-                }
-
-                override fun getContentResolver(): android.content.ContentResolver {
-                    // Shield Compose's animation scale listener from throwing NPE on null mBase
-                    return realAppContext?.contentResolver ?: super.getContentResolver()
-                }
-
-                override fun registerComponentCallbacks(callback: ComponentCallbacks?) {
-                    try {
-                        realAppContext?.registerComponentCallbacks(callback)
-                            ?: super.registerComponentCallbacks(callback)
-                    } catch (_: Throwable) {}
-                }
-
-                override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {
-                    try {
-                        realAppContext?.unregisterComponentCallbacks(callback)
-                            ?: super.unregisterComponentCallbacks(callback)
-                    } catch (_: Throwable) {}
                 }
             }
 
