@@ -2,10 +2,8 @@ package dev.joseph.hyperbounce
 
 import android.content.ComponentCallbacks
 import android.content.Context
-import android.content.ContextWrapper
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewGroupOverlay
 import android.widget.CompoundButton
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
@@ -27,17 +25,11 @@ import dev.joseph.hyperbounce.liquidglass.LiquidToggle
 import kotlin.math.roundToInt
 import java.util.WeakHashMap
 
-// Safely isolates Compose's application context lookup to prevent SystemUI NPEs
-internal class FakeApplication(base: Context) : android.app.Application() {
+// CRITICAL FIX 1: Inherit directly from Application. Compose unwraps contexts looking for this exact class.
+// This completely stops the SystemUI context unwrapping loop and prevents the NullPointerException.
+internal class SafeContext(base: Context) : android.app.Application() {
     init { attachBaseContext(base) }
     override fun getApplicationContext(): Context = this
-    override fun registerComponentCallbacks(callback: ComponentCallbacks?) {}
-    override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {}
-}
-
-internal class SafeContext(base: Context) : ContextWrapper(base) {
-    private val fakeApp by lazy { FakeApplication(base) }
-    override fun getApplicationContext(): Context = fakeApp
     override fun registerComponentCallbacks(callback: ComponentCallbacks?) {}
     override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {}
 }
@@ -63,8 +55,8 @@ internal object LiquidToggleHost {
     }
 
     @JvmStatic
-    fun syncVisibility(target: View, isVisible: Boolean) {
-        hosts[target]?.updateVisibility(isVisible)
+    fun syncVisibility(target: View) {
+        hosts[target]?.syncVisibility()
     }
 
     @JvmStatic
@@ -72,46 +64,25 @@ internal object LiquidToggleHost {
         hosts.remove(target)?.dispose()
     }
 
-    @JvmStatic
-    fun forwardTouchEvent(target: View, event: android.view.MotionEvent) {
-        val host = hosts[target] ?: return
-        val compose = host.composeView ?: return
-        val offsetEvent = android.view.MotionEvent.obtain(event)
-        
-        // Mathematically maps the native touch exactly into the overlay's coordinate space
-        offsetEvent.offsetLocation(-host.composeLeftInTarget.toFloat(), -host.composeTopInTarget.toFloat())
-        compose.dispatchTouchEvent(offsetEvent)
-        offsetEvent.recycle()
-    }
-
     private class Host(private val target: View, private val parent: ViewGroup) {
         private val captureSource: View = findCaptureSource(target)
         private val backdrop = LiquidToggleViewBackdrop(captureSource)
 
-        var composeView: ComposeView? = null
+        private var composeView: ComposeView? = null
         private var checked by mutableStateOf((target as? CompoundButton)?.isChecked == true)
-        private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
-        
-        var composeLeftInTarget by mutableIntStateOf(0)
-        var composeTopInTarget by mutableIntStateOf(0)
+        private var visible by mutableStateOf(target.visibility == View.VISIBLE)
 
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
                 syncChecked()
-                refreshGeometry()
             }
             override fun onViewDetachedFromWindow(v: View) {
                 LiquidToggleHost.remove(v)
             }
         }
 
-        private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            refreshGeometry()
-        }
-
         fun attach() {
             target.addOnAttachStateChangeListener(attachListener)
-            target.addOnLayoutChangeListener(layoutListener)
 
             disableClipping(target)
 
@@ -122,43 +93,40 @@ internal object LiquidToggleHost {
                 setContent {
                     LiquidToggleOverlay(
                         backdrop = backdrop,
-                        visible = isVisibleState,
+                        visible = visible,
                         selected = { checked },
                         onSelect = { value ->
                             val button = target as? CompoundButton
-                            if (button != null && button.isChecked != value) {
-                                // CRITICAL FIX: Only perform the click natively. Do NOT force the state manually. 
-                                // This lets the app's internal logic process the click naturally without snapping back.
-                                button.performClick()
+                            if (button != null) {
+                                if (button.isChecked != value) {
+                                    button.isChecked = value
+                                    button.performClick()
+                                }
+                                syncChecked()
                             }
                         },
                     )
                 }
             }
 
-            // CRITICAL FIX: Keep the native toggle perfectly in place to preserve ConstraintLayout relations,
-            // but make it an invisible hit-box for touches.
-            target.alpha = 0.0f
+            // NUCLEAR REPLACEMENT STRATEGY
+            // 1. Replicate native constraints perfectly
+            target.layoutParams?.let { compose.layoutParams = it }
             
-            val overlay = parent.overlay as? ViewGroupOverlay
-            if (overlay != null) {
-                // The Dummy View Trick: Forces Android to instantiate the OverlayViewGroup safely
-                val dummy = View(safeContext)
-                overlay.add(dummy)
-                
-                val overlayViewGroup = dummy.parent as? View
-                if (overlayViewGroup != null) {
-                    installOwnersIfNeeded(overlayViewGroup)
-                }
-                
-                overlay.remove(dummy)
-
-                installOwnersIfNeeded(compose)
-                overlay.add(compose)
-            }
-
+            // 2. Cloak the native toggle (alpha 0.0) but leave it in place to handle native touches
+            target.alpha = 0.001f
+            
+            // 3. Inject Owners globally to prevent Compose measure crashes
+            installOwnersIfNeeded(target.rootView)
+            installOwnersIfNeeded(parent)
+            installOwnersIfNeeded(compose)
+            
+            // 4. Inject as a physical sibling
+            val index = parent.indexOfChild(target)
+            parent.addView(compose, index + 1)
             composeView = compose
-            refreshGeometry()
+
+            backdrop.overlayViewToHide = compose // Fix ghosting
             target.post { backdrop.start() }
         }
 
@@ -174,49 +142,25 @@ internal object LiquidToggleHost {
             }
         }
 
-        fun refreshGeometry() {
-            val compose = composeView ?: return
-            val density = target.resources.displayMetrics.density
-            val overlayWidthPx = (80f * density).roundToInt()
-            val overlayHeightPx = (48f * density).roundToInt()
-
-            composeLeftInTarget = (target.width - overlayWidthPx) / 2
-            composeTopInTarget = (target.height - overlayHeightPx) / 2
-
-            val overlayLeftPx = target.left + composeLeftInTarget
-            val overlayTopPx = target.top + composeTopInTarget
-
-            compose.measure(
-                View.MeasureSpec.makeMeasureSpec(overlayWidthPx, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(overlayHeightPx, View.MeasureSpec.EXACTLY)
-            )
-            compose.layout(
-                overlayLeftPx,
-                overlayTopPx,
-                overlayLeftPx + overlayWidthPx,
-                overlayTopPx + overlayHeightPx
-            )
-        }
-
         fun syncChecked() {
             checked = (target as? CompoundButton)?.isChecked == true
         }
 
-        fun updateVisibility(isVisible: Boolean) {
-            isVisibleState = isVisible
+        fun syncVisibility() {
+            val isVisible = target.visibility == View.VISIBLE
+            visible = isVisible
             composeView?.visibility = if (isVisible) View.VISIBLE else View.GONE
         }
 
         fun dispose() {
             target.removeOnAttachStateChangeListener(attachListener)
-            target.removeOnLayoutChangeListener(layoutListener)
             backdrop.release()
             target.alpha = 1f 
 
             val compose = composeView
             composeView = null
             compose?.setContent { }
-            compose?.let { (parent.overlay as? ViewGroupOverlay)?.remove(it) }
+            parent.removeView(compose)
         }
     }
 
@@ -261,12 +205,17 @@ internal object LiquidToggleHost {
         var p: View? = target.parent as? View
         var candidate: View = target
         while (p != null) {
-            val name = p.javaClass.simpleName
-            if (name.contains("RecyclerView") || name.contains("ListView") || name.contains("ScrollView")) {
+            val name = p.javaClass.simpleName.lowercase()
+            
+            // CRITICAL FIX 2: Stop capturing the deep black DecorView. 
+            // Lock onto scrolling containers or opaque row backgrounds.
+            if (name.contains("recycler") || name.contains("list") || name.contains("scroll")) {
                 return p
             }
-            if (p.parent !is View) return candidate
-            candidate = p
+            if (p.background != null && name != "decorview") {
+                candidate = p
+            }
+            if (p.parent !is View) break
             p = p.parent as? View
         }
         return candidate
