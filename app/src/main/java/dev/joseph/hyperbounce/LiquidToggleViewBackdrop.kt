@@ -84,30 +84,36 @@ internal class LiquidToggleViewBackdrop(private val sourceView: View) : Backdrop
         try {
             ensureBuffers(currentRegion.width, currentRegion.height)
             val target = back ?: return
-            target.eraseColor(android.graphics.Color.TRANSPARENT)
+            
+            // 1. Base clear with theme color to guarantee opacity
+            val isNight = (sourceView.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+            target.eraseColor(if (isNight) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+
             val canvas = Canvas(target)
             canvas.save()
             canvas.clipRect(0, 0, currentRegion.width, currentRegion.height)
-            canvas.translate(-localLeft, -localTop)
+            canvas.translate(-localLeft.toFloat(), -localTop.toFloat())
 
-            // Fill underlying container background first to prevent bleed-through
-            var parentRunner = sourceView.parent as? View
-            while (parentRunner != null) {
-                val bg = parentRunner.background
-                if (bg != null) {
-                    bg.draw(canvas)
-                    break
+            // 2. Draw ancestor backgrounds back-to-front for accurate local context
+            val ancestors = java.util.ArrayList<View>()
+            var curr: View? = sourceView.parent as? View
+            while (curr != null) {
+                if (curr.background != null) {
+                    ancestors.add(curr)
                 }
-                parentRunner = parentRunner.parent as? View
+                curr = curr.parent as? View
+            }
+            for (i in ancestors.size - 1 downTo 0) {
+                val ancestor = ancestors[i]
+                val aLoc = IntArray(2)
+                ancestor.getLocationInWindow(aLoc)
+                canvas.save()
+                canvas.translate((aLoc[0] - location[0]).toFloat(), (aLoc[1] - location[1]).toFloat())
+                ancestor.background.draw(canvas)
+                canvas.restore()
             }
 
-            val canvas = Canvas(target)
-            canvas.save()
-            canvas.clipRect(0, 0, currentRegion.width, currentRegion.height)
-            canvas.translate(-localLeft, -localTop)
-
             // CRITICAL FIX: Temporarily cloak the ComposeView during capture.
-            // This prevents the infinite mirror ghosting effect and properly captures the container.
             val hideView = overlayViewToHide
             val oldAlpha = hideView?.alpha ?: 1f
             if (hideView != null) hideView.alpha = 0f
@@ -121,7 +127,7 @@ internal class LiquidToggleViewBackdrop(private val sourceView: View) : Backdrop
             val previousFront = front
             front = target
             back = previousFront
-            capturedFrame = LiquidToggleCapturedFrame(target, Offset(currentRegion.left, currentRegion.top))
+            capturedFrame = LiquidToggleCapturedFrame(target, Offset(currentRegion.left.toFloat(), currentRegion.top.toFloat()))
             lastCapturedFrame = frameNumber
             lastCaptureNanos = now
         } catch (_: Throwable) {}
