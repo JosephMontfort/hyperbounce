@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewGroupOverlay
 import android.widget.CompoundButton
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
@@ -19,7 +18,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.kyant.backdrop.backdrops.emptyBackdrop
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
 import java.util.WeakHashMap
 
@@ -95,7 +93,29 @@ internal object LiquidToggleHost {
             target.addOnLayoutChangeListener(layoutListener)
             disableClipping(target)
 
-            val safeContext = target.context
+            // THE FIX: Shield Compose from SystemUI's broken plugin contexts
+            val safeContext = object : ContextWrapper(target.context) {
+                override fun getApplicationContext(): Context {
+                    return baseContext.applicationContext ?: this
+                }
+
+                override fun registerComponentCallbacks(callback: ComponentCallbacks?) {
+                    try {
+                        baseContext.applicationContext?.registerComponentCallbacks(callback)
+                            ?: baseContext.registerComponentCallbacks(callback)
+                    } catch (_: Throwable) {
+                        // Silently catch framework anomalies in dynamic plugin contexts
+                    }
+                }
+
+                override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {
+                    try {
+                        baseContext.applicationContext?.unregisterComponentCallbacks(callback)
+                            ?: baseContext.unregisterComponentCallbacks(callback)
+                    } catch (_: Throwable) {}
+                }
+            }
+
             val compose = ComposeView(safeContext).apply {
                 tag = "HyperBounceLiquidToggle:${System.identityHashCode(target)}"
                 isClickable = true
