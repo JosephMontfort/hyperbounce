@@ -39,13 +39,6 @@ internal class SafeContext(private val base: Context) : ContextWrapper(base) {
     override fun getContentResolver(): android.content.ContentResolver = base.contentResolver
 }
 
-internal class SafeContext(base: Context) : ContextWrapper(base) {
-    private val fakeApp by lazy { FakeApplication(base) }
-    override fun getApplicationContext(): Context = fakeApp
-    override fun registerComponentCallbacks(callback: ComponentCallbacks?) {}
-    override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {}
-}
-
 internal object LiquidToggleHost {
     private val hosts = WeakHashMap<View, Host>()
 
