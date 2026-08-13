@@ -61,10 +61,9 @@ internal object LiquidToggleHost {
         hosts[target]?.syncChecked()
     }
 
-    // FIXED: The missing boolean argument is back!
     @JvmStatic
-    fun syncVisibility(target: View, isVisible: Boolean) {
-        hosts[target]?.updateVisibility(isVisible)
+    fun syncVisibility(target: View) {
+        hosts[target]?.syncVisibility()
     }
 
     @JvmStatic
@@ -194,7 +193,8 @@ internal object LiquidToggleHost {
             checked = (target as? CompoundButton)?.isChecked == true
         }
 
-        fun updateVisibility(isVisible: Boolean) {
+        fun syncVisibility() {
+            val isVisible = target.visibility == View.VISIBLE
             isVisibleState = isVisible
             composeView?.visibility = if (isVisible) View.VISIBLE else View.GONE
         }

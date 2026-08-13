@@ -77,21 +77,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "miuix.androidbasewidget.widget.SeekBar"
     };
 
-    /*
-     * ==========================================================================
-     * LIQUID GLASS TOGGLE MODE SWITCH
-     * --------------------------------------------------------------------------
-     * true  = render the imported AndroidLiquidGlass-kmp LiquidToggle through
-     *         LiquidToggleHost + the live View-backed Kyant Backdrop bridge.
-     * false = use the original HyperBounce Canvas/RenderNode/AGSL toggle below.
-     *
-     * Keep the legacy branch intact. A future Xposed UI can replace this constant
-     * with a persisted setting without having to reconstruct the old renderer.
-     * ==========================================================================
-     */
     private static final boolean USE_LIQUID_GLASS_TOGGLE = true;
 
-    private static final boolean USE_LIQUID_GLASS_TOGGLE = true;
     private static final HashSet<String> hookedDynamicClasses = new HashSet<>();
 
     private static int blendColors(int color1, int color2, float ratio) {
@@ -175,13 +162,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
     private static final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
     private static final WeakHashMap<Object, SliderState> sliderStateMap = new WeakHashMap<>();
 
-    /*
-     * Ported/adapted from Kyant's AndroidLiquidGlass-kmp LiquidToggle/backdrop
-     * refraction shader. HyperBounce intentionally keeps its existing Canvas /
-     * RenderNode / Xposed architecture; no Compose or backdrop dependency is used.
-     * Original project: https://github.com/Kyant0/AndroidLiquidGlass-kmp
-     * License: Apache License 2.0 (see LICENSE_AndroidLiquidGlass in module root).
-     */
     private static final String AGSL_SHADER_TOGGLE =
         "uniform shader content;\n" +
         "uniform float2 size;\n" +
@@ -327,17 +307,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             s.shader.setFloatUniform("depthEffect", 0.0f);
             s.shader.setFloatUniform("chromaticAberration", 1.0f);
 
-            /*
-             * LiquidToggle uses a combined backdrop:
-             *   1) the normal surrounding backdrop, and
-             *   2) a locally scaled copy of the toggle track backdrop.
-             *
-             * We do not have Compose's LayerBackdrop here, so the track bitmap is
-             * our exact local backdrop source. Crucially, do NOT draw an unscaled
-             * copy first: that would cancel the visible contraction. Instead the
-             * thumb sees only the copy whose scale moves from 1.0 at rest toward
-             * the library's 0.75x press-state scale.
-             */
             float backdropScaleX = lerpFloatToggle(1.0f, 0.75f, bloom);
             float backdropScaleY = lerpFloatToggle(1.0f, 0.75f, bloom);
             float centerX = (thumbL + thumbR) * 0.5f;
@@ -373,13 +342,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             canvas.drawRenderNode(s.glassNode);
             canvas.restore();
 
-            /*
-             * Reintroduce the fluid edge treatment from the library:
-             * - a soft ambient highlight that grows with press/bloom
-             * - a subtle inner-dark rim that makes the edge feel recessed
-             * - low-opacity white surface contamination, leaving the colored
-             *   backdrop visible through the liquid instead of covering it.
-             */
             float bubbleAmount = Math.max(0.0f, Math.min(1.0f, s.bubbleSquish / 0.70f));
 
             int ambientAlpha = (int) (38f * bloom + 18f * bubbleAmount);
@@ -413,7 +375,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 strokePaint.setStrokeWidth(1.0f);
             }
         } catch (Throwable ignored) {
-            // Preserve module fail-soft behavior.
         }
     }
 
@@ -474,35 +435,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, highlightPaint);
     }
 
-    /*
-     * ============================================================================
-     * TOGGLE PATH #2: NUCLEAR VIEW REPLACEMENT FOR PREFERENCE-BOUND SYSTEM APPS
-     * ============================================================================
-     * Some HyperOS settings screens bind a SlidingButton from XML with
-     * clickable=false/focusable=false. These are not ordinary CompoundButtons:
-     * their Preference framework can strip touchability during binding.
-     *
-     * The original working solution is intentionally preserved below. It creates
-     * a fresh, fully interactive native SlidingButton and reconnects it to the
-     * Preference change listener. The imported LiquidToggle host is then allowed
-     * to use that new button as its state/click authority. Do NOT replace this
-     * path with a generic View hook; Dialer/Mobile Network settings depend on it.
-     * ============================================================================
-     * BREAKTHROUGH: NUCLEAR VIEW REPLACEMENT
-     * Target: Dialer & Mobile Network Settings (com.android.phone)
-     * ============================================================================
-     * Problem: HyperOS's CustomCheckBoxPreference (via miuix_preference_widget_checkbox.xml)
-     * hardcodes the SlidingButton with clickable="false" and focusable="false".
-     * The framework forcefully strips touch events during layout binding, making standard
-     * onTouchEvent or dispatchTouchEvent hooks completely useless. The native toggle is dead.
-     * 
-     * Solution: Intercept PreferenceViewHolder.onBindViewHolder. We hide the dead native XML
-     * toggle (android.R.id.checkbox) so it stops stealing space. We then instantiate a completely
-     * fresh, unbound SlidingButton, force its touch parameters to true, wire its checked 
-     * listener directly back to the Preference framework, and inject it into the widget_frame.
-     * This restores full touch independence so our physics loop can attach normally.
-     * ============================================================================
-     */
     private void applyDialerToggleEngine(ClassLoader classLoader) {
         try {
             Class<?> customPrefClass = XposedHelpers.findClassIfExists("com.android.phone.custompreferences.CustomCheckBoxPreference", classLoader);
@@ -514,20 +446,17 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     Object preference = param.thisObject;
                     Object holder = param.args[0];
                     
-                    // 1. Grab the root view of the settings row
                     View itemView = (View) XposedHelpers.getObjectField(holder, "itemView");
                     if (itemView == null) return;
                     
                     ViewGroup widgetFrame = itemView.findViewById(android.R.id.widget_frame);
                     if (widgetFrame == null) return;
                     
-                    // 2. Hide the native, dead XML toggle so it stops stealing UI space
                     View oldToggle = itemView.findViewById(android.R.id.checkbox);
                     if (oldToggle != null) {
                         oldToggle.setVisibility(View.GONE); 
                     }
                     
-                    // 3. Inject a completely unbound, fresh SlidingButton instance
                     View customToggle = widgetFrame.findViewWithTag("hyperbounce_liberated");
                     if (customToggle == null) {
                         android.content.Context context = itemView.getContext();
@@ -535,12 +464,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         customToggle = (View) XposedHelpers.newInstance(sbClass, context);
                         customToggle.setTag("hyperbounce_liberated");
                         
-                        // Overwrite the dead XML rules - MAKE IT ALIVE
                         customToggle.setClickable(true);
                         customToggle.setFocusable(true);
                         customToggle.setLongClickable(true);
                         
-                        // 4. Wire our new toggle to tell the app when its value changes
                         final Object prefFinal = preference;
                         ((android.widget.CompoundButton) customToggle).setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
                             public void onCheckedChanged(android.widget.CompoundButton buttonView, boolean isChecked) {
@@ -551,18 +478,16 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                                         if (canChange) {
                                             XposedHelpers.callMethod(prefFinal, "setChecked", isChecked);
                                         } else {
-                                            buttonView.setChecked(!isChecked); // Revert UI if app rejects change
+                                            buttonView.setChecked(!isChecked); 
                                         }
                                     }
                                 } catch (Throwable t) {}
                             }
                         });
                         
-                        // Inject it into the UI
                         widgetFrame.addView(customToggle);
                     }
                     
-                    // 5. Keep the visual state in sync if the preference is changed externally
                     boolean isChecked = (boolean) XposedHelpers.callMethod(preference, "isChecked");
                     android.widget.CompoundButton btn = (android.widget.CompoundButton) customToggle;
                     if (btn.isChecked() != isChecked) {
@@ -594,9 +519,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     if (USE_LIQUID_GLASS_TOGGLE) {
                         LiquidToggleHost.syncChecked(view);
                     }
-                    if (USE_LIQUID_GLASS_TOGGLE) {
-                        dev.joseph.hyperbounce.LiquidToggleHost.syncChecked(view);
-                    }
                     ToggleState s = stateMap.get(view);
                     if (s != null) { view.postInvalidateOnAnimation(); }
                 }
@@ -617,30 +539,27 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             });
         } catch (Throwable t) {}
 
-        if (USE_LIQUID_GLASS_TOGGLE) {
-            try {
-                XposedHelpers.findAndHookMethod(clazz, "setVisibility", int.class, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        if (USE_LIQUID_GLASS_TOGGLE) {
-                            View view = (View) param.thisObject;
-                            int vis = (int) param.args[0];
-                            LiquidToggleHost.syncVisibility(view, vis == View.VISIBLE);
-                            param.args[0] = View.GONE; // Enforce Nuclear Replacement (keep native hidden)
-                        }
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "setVisibility", int.class, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (USE_LIQUID_GLASS_TOGGLE) {
+                        LiquidToggleHost.syncVisibility((View) param.thisObject);
                     }
-                });
-            } catch (Throwable t) {}
+                }
+            });
+        } catch (Throwable t) {}
 
-            try {
-                XposedHelpers.findAndHookMethod(clazz, "onDetachedFromWindow", new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "onDetachedFromWindow", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (USE_LIQUID_GLASS_TOGGLE) {
                         LiquidToggleHost.remove((View) param.thisObject);
                     }
-                });
-            } catch (Throwable t) {}
-        }
+                }
+            });
+        } catch (Throwable t) {}
 
         try {
             XposedHelpers.findAndHookMethod(clazz, "onTouchEvent", MotionEvent.class, new XC_MethodHook() {
@@ -652,13 +571,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     
                     MotionEvent event = (MotionEvent) param.args[0];
                     if (USE_LIQUID_GLASS_TOGGLE) {
-                        if (dev.joseph.hyperbounce.LiquidToggleHost.forwardTouchEvent(view, event)) {
+                        if (LiquidToggleHost.forwardTouchEvent(view, event)) {
                             param.setResult(true);
                         }
-                        return;
-                    }
-                    if (USE_LIQUID_GLASS_TOGGLE) {
-                        
                         return;
                     }
                     ToggleState s = stateMap.get(view);
@@ -694,26 +609,19 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     if (!view.isClickable()) view.setClickable(true);
                     if (!view.isLongClickable()) view.setLongClickable(true);
                     
-                    Canvas canvas = (Canvas) param.args[0];
                     int width = view.getWidth(), height = view.getHeight();
                     if (width <= 0 || height <= 0) return null;
-                    if (USE_LIQUID_GLASS_TOGGLE) {
-                        dev.joseph.hyperbounce.LiquidToggleHost.ensure(view);
-                        dev.joseph.hyperbounce.LiquidToggleHost.syncChecked(view);
-                        return null;
-                    }
 
                     if (USE_LIQUID_GLASS_TOGGLE) {
-                        // Do not execute or delete the legacy renderer. It remains
-                        // immediately below as the selectable fallback implementation.
-                        // The imported library toggle owns the visual surface in this mode.
                         LiquidToggleHost.ensure(view);
                         LiquidToggleHost.syncChecked(view);
                         return null;
                     }
 
+                    Canvas canvas = (Canvas) param.args[0];
                     disableClipping(view);
                     try { if (view.getButtonDrawable() != null) view.setButtonDrawable(null); } catch (Throwable t) {}
+
                     ToggleState s = stateMap.get(view);
                     if (s == null) {
                         s = new ToggleState();
@@ -722,7 +630,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         stateMap.put(view, s);
                     }
 
-                    // THE ROW SPY: Sync row clicks to the physics loop
                     if (!s.initializedObserver) {
                         ViewParent p = view.getParent();
                         View rowView = null;
@@ -760,11 +667,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float dt = Math.min((now - s.lastTime) / 1000.0f, 0.05f);
                     s.lastTime = now;
 
-                    // AndroidLiquidGlass-kmp LiquidToggle geometry, scaled to 95%:
-                    // track = 60.8dp x 26.6dp; thumb = 38dp x 22.8dp at rest.
-                    // This is intentionally intermediate between the original
-                    // HyperBounce toggle and the library's full 64dp x 28dp control.
-                    // Preserve the existing large-row/right-alignment workaround.
                     final float toggleScale = 0.95f;
                     float density = view.getResources().getDisplayMetrics().density;
                     s.density = density;
@@ -822,10 +724,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float trackBottom = trackTop + trackHeight;
                     float trackRadius = trackHeight / 2.0f;
 
-                    // Library pressedScale is 1.5x. Keep the entire control at
-                    // 95% scale, so the bloom reaches 57x34.2dp instead of the
-                    // library's full 60x36dp. The thumb also gets the original
-                    // velocity-driven liquid "bubble" deformation back.
                     float maxExpandedW = 60.0f * toggleScale * density;
                     float maxExpandedH = 36.0f * toggleScale * density;
                     float bubbleAmount = Math.max(0.0f, Math.min(1.0f, s.bubbleSquish / 0.70f));
@@ -835,9 +733,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     float currentThumbWidth = (restThumbWidth + (maxExpandedW - restThumbWidth) * s.bloom) * bubbleScaleX;
                     float thumbRadius = currentThumbHeight / 2.0f;
 
-                    // Match LiquidToggle's 2dp side inset, scaled with the rest
-                    // of the control. The bloomed thumb continues to scale around
-                    // these resting centers and is therefore allowed to overhang.
                     float thumbPadding = 2.0f * toggleScale * density;
                     float baseMinX = offsetX + thumbPadding + (restThumbWidth / 2.0f);
                     float baseMaxX = offsetX + drawW - thumbPadding - (restThumbWidth / 2.0f);
@@ -892,16 +787,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {}
     }
 
-    /*
-     * ==========================================================================
-     * LEGACY CUSTOM SLIDER — PRESERVED, NOT MODIFIED BY LIQUID TOGGLE MODE
-     * --------------------------------------------------------------------------
-     * This Canvas/RenderNode/AGSL slider is intentionally retained exactly as
-     * part of the old HyperBounce architecture. The current experiment enables
-     * only the imported Liquid Glass toggle; future work can add a separate
-     * slider-mode switch without deleting this proven fallback implementation.
-     * ==========================================================================
-     */
     private void applyUnifiedSliderEngine(String className, ClassLoader classLoader) {
         if (hookedDynamicClasses.contains(className)) return;
         Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
@@ -914,12 +799,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     View view = (View) param.thisObject;
                     MotionEvent event = (MotionEvent) param.args[0];
-                    if (USE_LIQUID_GLASS_TOGGLE) {
-                        if (dev.joseph.hyperbounce.LiquidToggleHost.forwardTouchEvent(view, event)) {
-                            param.setResult(true);
-                        }
-                        return;
-                    }
                     SliderState s = sliderStateMap.get(view);
                     if (s == null) { 
                         s = new SliderState(); 
@@ -1092,18 +971,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         }
                         if (isTarget && !USE_LIQUID_GLASS_TOGGLE) {
                             MotionEvent event = (MotionEvent) param.args[0];
-                    if (USE_LIQUID_GLASS_TOGGLE) {
-                        if (dev.joseph.hyperbounce.LiquidToggleHost.forwardTouchEvent(view, event)) {
-                            param.setResult(true);
-                        }
-                        return;
-                    }
                             if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
                                 android.view.ViewParent parent = view.getParent();
                                 if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
                             }
                             XposedHelpers.callMethod(view, "onTouchEvent", event);
-                            return true;
+                            return true; 
                         }
                         return XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args);
                     }
@@ -1118,14 +991,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             applyDialerToggleEngine(lpparam.classLoader);
         }
 
-        /*
-         * TOGGLE PATH #3: LATE-LOADED SYSTEMUI TOGGLES
-         * --------------------------------------------
-         * HyperOS SystemUI can load its SlidingButton class through a plugin
-         * ClassLoader after this module's initial package hook runs. Keep the
-         * ClassLoader interception intact so the exact same LiquidToggle mode
-         * reaches these dynamically loaded controls too.
-         */
         if (lpparam.packageName.equals("com.android.systemui") || lpparam.packageName.equals("miui.systemui.plugin")) {
             XposedHelpers.findAndHookMethod(ClassLoader.class, "loadClass", String.class, boolean.class, new XC_MethodHook() {
                 @Override
