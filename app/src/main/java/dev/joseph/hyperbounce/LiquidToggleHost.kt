@@ -72,23 +72,11 @@ internal object LiquidToggleHost {
         hosts.remove(target)?.dispose()
     }
 
-    @JvmStatic
-    fun forwardTouchEvent(target: View, event: android.view.MotionEvent) {
-        val host = hosts[target] ?: return
-        val compose = host.composeView ?: return
-        val offsetEvent = android.view.MotionEvent.obtain(event)
-        
-        // Mathematically maps the native touch exactly into the overlay's coordinate space
-        offsetEvent.offsetLocation(-host.composeLeftInTarget.toFloat(), -host.composeTopInTarget.toFloat())
-        compose.dispatchTouchEvent(offsetEvent)
-        offsetEvent.recycle()
-    }
-
     private class Host(private val target: View, private val parent: ViewGroup) {
         private val captureSource: View = findCaptureSource(target)
         private val backdrop = LiquidToggleViewBackdrop(captureSource)
 
-        var composeView: ComposeView? = null
+        private var composeView: ComposeView? = null
         private var checked by mutableStateOf((target as? CompoundButton)?.isChecked == true)
         private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
         
@@ -127,22 +115,32 @@ internal object LiquidToggleHost {
                         onSelect = { value ->
                             val button = target as? CompoundButton
                             if (button != null && button.isChecked != value) {
-                                // CRITICAL FIX: Only perform the click natively. Do NOT force the state manually. 
-                                // This lets the app's internal logic process the click naturally without snapping back.
-                                button.performClick()
+                                // CRITICAL FIX: Only change state via isChecked instead of performClick()
+                                // This prevents double-toggling and snapped-back state behaviors.
+                                button.isChecked = value
                             }
                         },
                     )
                 }
             }
 
-            // CRITICAL FIX: Keep the native toggle perfectly in place to preserve ConstraintLayout relations,
-            // but make it an invisible hit-box for touches.
+            // CRITICAL FIX: Local Touch Bridge
+            // Restores long-press, drag, and bloom animations by forwarding touches from the 
+            // invisible native toggle straight into the Compose overlay context.
+            target.setOnTouchListener { _, event ->
+                val cv = composeView ?: return@setOnTouchListener false
+                val offsetEvent = android.view.MotionEvent.obtain(event)
+                offsetEvent.offsetLocation(-composeLeftInTarget.toFloat(), -composeTopInTarget.toFloat())
+                cv.dispatchTouchEvent(offsetEvent)
+                offsetEvent.recycle()
+                true
+            }
+
+            // Make native toggle an invisible hit-box to preserve Layout dimensions cleanly
             target.alpha = 0.0f
             
             val overlay = parent.overlay as? ViewGroupOverlay
             if (overlay != null) {
-                // The Dummy View Trick: Forces Android to instantiate the OverlayViewGroup safely
                 val dummy = View(safeContext)
                 overlay.add(dummy)
                 
@@ -158,6 +156,7 @@ internal object LiquidToggleHost {
             }
 
             composeView = compose
+            backdrop.overlayViewToHide = compose // Link it to the backdrop engine
             refreshGeometry()
             target.post { backdrop.start() }
         }
@@ -210,6 +209,7 @@ internal object LiquidToggleHost {
         fun dispose() {
             target.removeOnAttachStateChangeListener(attachListener)
             target.removeOnLayoutChangeListener(layoutListener)
+            target.setOnTouchListener(null)
             backdrop.release()
             target.alpha = 1f 
 
