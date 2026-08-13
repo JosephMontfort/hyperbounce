@@ -2,6 +2,7 @@ package dev.joseph.hyperbounce
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.view.Choreographer
 import android.view.View
 import android.view.ViewTreeObserver
@@ -85,39 +86,22 @@ internal class LiquidToggleViewBackdrop(private val sourceView: View) : Backdrop
             ensureBuffers(currentRegion.width, currentRegion.height)
             val target = back ?: return
             
-            // 1. Base clear with theme color to guarantee opacity
-            val isNight = (sourceView.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-            target.eraseColor(if (isNight) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+            // FIX 1: Remove the logic that nulls out pure white/black.
+            // Leave the background pure transparent so we only capture the target layer.
+            target.eraseColor(Color.TRANSPARENT)
 
             val canvas = Canvas(target)
             canvas.save()
             canvas.clipRect(0, 0, currentRegion.width, currentRegion.height)
             canvas.translate(-localLeft.toFloat(), -localTop.toFloat())
 
-            // 2. Draw ancestor backgrounds back-to-front for accurate local context
-            val ancestors = java.util.ArrayList<View>()
-            var curr: View? = sourceView.parent as? View
-            while (curr != null) {
-                if (curr.background != null) {
-                    ancestors.add(curr)
-                }
-                curr = curr.parent as? View
-            }
-            for (i in ancestors.size - 1 downTo 0) {
-                val ancestor = ancestors[i]
-                val aLoc = IntArray(2)
-                ancestor.getLocationInWindow(aLoc)
-                canvas.save()
-                canvas.translate((aLoc[0] - location[0]).toFloat(), (aLoc[1] - location[1]).toFloat())
-                ancestor.background.draw(canvas)
-                canvas.restore()
-            }
-
             // CRITICAL FIX: Temporarily cloak the ComposeView during capture.
             val hideView = overlayViewToHide
             val oldAlpha = hideView?.alpha ?: 1f
             if (hideView != null) hideView.alpha = 0f
 
+            // FIX 2: sourceView is the parent (grey card). By drawing it directly 
+            // without looping through ancestors, we drop the deep black window background.
             sourceView.draw(canvas)
 
             if (hideView != null) hideView.alpha = oldAlpha
