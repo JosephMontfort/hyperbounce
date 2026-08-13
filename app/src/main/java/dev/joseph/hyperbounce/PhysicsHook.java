@@ -354,8 +354,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         }
                         disableClipping(view);
                         MotionEvent event = (MotionEvent) param.args[0];
-                        boolean handled = LiquidToggleHost.forwardTouchEvent(view, event);
-                        param.setResult(handled);
+                        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                            android.view.ViewParent parent = view.getParent();
+                            if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
+                        }
+                        LiquidToggleHost.forwardTouchEvent(view, event);
+                        param.setResult(true);
                     }
                 }
             });

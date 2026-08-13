@@ -88,6 +88,7 @@ internal object LiquidToggleHost {
         
         var composeLeftInTarget by mutableIntStateOf(0)
         var composeTopInTarget by mutableIntStateOf(0)
+        private val backdrop = LiquidToggleViewBackdrop(parent)
 
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
@@ -111,9 +112,12 @@ internal object LiquidToggleHost {
             val safeContext = SafeContext(target.context)
             val compose = ComposeView(safeContext).apply {
                 tag = "HyperBounceLiquidToggle:${System.identityHashCode(target)}"
+                isClickable = true
+                isFocusable = true
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
                     LiquidToggleOverlay(
+                        backdrop = backdrop,
                         visible = isVisibleState,
                         selected = { checked },
                         onSelect = { value ->
@@ -141,6 +145,8 @@ internal object LiquidToggleHost {
             }
 
             composeView = compose
+            backdrop.overlayViewToHide = compose
+            backdrop.start()
             refreshGeometry()
         }
 
@@ -178,6 +184,7 @@ internal object LiquidToggleHost {
                 overlayLeftPx + overlayWidthPx,
                 overlayTopPx + overlayHeightPx
             )
+            backdrop.setTargetBounds(left = target.left.toFloat(), top = target.top.toFloat(), width = target.width, height = target.height, paddingPx = (24f * density).toInt())
         }
 
         fun syncChecked() {
@@ -196,6 +203,7 @@ internal object LiquidToggleHost {
 
             val compose = composeView
             composeView = null
+            backdrop.release()
             compose?.setContent { }
             compose?.let { parent.overlay?.remove(it) }
         }
@@ -203,6 +211,7 @@ internal object LiquidToggleHost {
 
     @Composable
     private fun LiquidToggleOverlay(
+        backdrop: com.kyant.backdrop.Backdrop,
         visible: Boolean,
         selected: () -> Boolean,
         onSelect: (Boolean) -> Unit,
@@ -212,7 +221,7 @@ internal object LiquidToggleHost {
                 LiquidToggle(
                     selected = selected,
                     onSelect = onSelect,
-                    backdrop = emptyBackdrop(),
+                    backdrop = backdrop,
                     modifier = Modifier.graphicsLayer {
                         scaleX = 0.975f
                         scaleY = 0.975f
