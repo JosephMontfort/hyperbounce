@@ -13,18 +13,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.kyant.backdrop.backdrops.emptyBackdrop
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
 import kotlin.math.roundToInt
 import java.util.WeakHashMap
 
-// Safely isolates Compose's application context lookup to prevent SystemUI NPEs
 internal class FakeApplication(base: Context) : android.app.Application() {
     init { attachBaseContext(base) }
     override fun getApplicationContext(): Context = this
@@ -73,16 +75,16 @@ internal object LiquidToggleHost {
         val compose = host.composeView ?: return false
         val offsetEvent = android.view.MotionEvent.obtain(event)
         
-        // Translates native touch coordinates perfectly into the Compose overlay
         offsetEvent.offsetLocation(-host.composeLeftInTarget.toFloat(), -host.composeTopInTarget.toFloat())
-        compose.dispatchTouchEvent(offsetEvent)
+        val handled = compose.dispatchTouchEvent(offsetEvent)
         offsetEvent.recycle()
-        
-        // CRITICAL: Always return true to keep the event stream alive for drag/long-press gestures
-        return true 
+        return handled
     }
 
     private class Host(private val target: View, private val parent: ViewGroup) {
+        private val captureSource: View = findCaptureSource(target)
+        private val backdrop = LiquidToggleViewBackdrop(captureSource)
+
         var composeView: ComposeView? = null
         private var checked by mutableStateOf((target as? CompoundButton)?.isChecked == true)
         private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
@@ -125,12 +127,20 @@ internal object LiquidToggleHost {
                                         button.performClick()
                                     }
                                 },
-                                // CRITICAL: emptyBackdrop() forces the thumb to exclusively refract its own track
-                                // identically to the legacy implementation, instantly fixing the ghosting bugs.
-                                backdrop = emptyBackdrop(),
+                                // Link the backdrop object back to Compose so it can refract the captured frame!
+                                backdrop = backdrop,
                                 modifier = Modifier.graphicsLayer {
                                     scaleX = 0.975f
                                     scaleY = 0.975f
+                                }.onGloballyPositioned { coordinates ->
+                                    val padding = with(LocalDensity.current) { 24.dp.toPx().roundToInt() }
+                                    backdrop.setTargetBounds(
+                                        left = coordinates.positionInWindow().x,
+                                        top = coordinates.positionInWindow().y,
+                                        width = coordinates.size.width,
+                                        height = coordinates.size.height,
+                                        paddingPx = padding,
+                                    )
                                 }
                             )
                         }
@@ -151,7 +161,9 @@ internal object LiquidToggleHost {
             }
 
             composeView = compose
+            backdrop.overlayViewToHide = compose
             refreshGeometry()
+            target.post { backdrop.start() }
         }
 
         private fun disableClipping(view: View) {
@@ -199,11 +211,29 @@ internal object LiquidToggleHost {
         fun dispose() {
             target.removeOnAttachStateChangeListener(attachListener)
             target.removeOnLayoutChangeListener(layoutListener)
+            backdrop.release()
             val compose = composeView
             composeView = null
             compose?.setContent { }
             compose?.let { (parent.overlay as? ViewGroupOverlay)?.remove(it) }
         }
+    }
+
+    private fun findCaptureSource(target: View): View {
+        var p: View? = target.parent as? View
+        var candidate: View = target
+        while (p != null) {
+            val name = p.javaClass.simpleName.lowercase()
+            if (name.contains("recycler") || name.contains("list") || name.contains("scroll")) {
+                return p
+            }
+            if (p.background != null && name != "decorview") {
+                candidate = p
+            }
+            if (p.parent !is View) break
+            p = p.parent as? View
+        }
+        return candidate
     }
 
     private val ownerMap = WeakHashMap<View, FakeLifecycleOwner>()

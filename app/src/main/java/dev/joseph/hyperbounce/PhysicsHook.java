@@ -443,6 +443,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             XposedHelpers.findAndHookMethod(customPrefClass, "onBindViewHolder", "androidx.preference.PreferenceViewHolder", new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (USE_LIQUID_GLASS_TOGGLE) return;
                     Object preference = param.thisObject;
                     Object holder = param.args[0];
                     
@@ -515,6 +516,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             XposedHelpers.findAndHookMethod(clazz, "setChecked", boolean.class, new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (USE_LIQUID_GLASS_TOGGLE) return;
                     View view = (View) param.thisObject;
                     if (USE_LIQUID_GLASS_TOGGLE) {
                         LiquidToggleHost.syncChecked(view);
@@ -530,6 +532,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             XposedHelpers.findAndHookMethod(clazz, "setPressed", boolean.class, new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (USE_LIQUID_GLASS_TOGGLE) return;
                     View view = (View) param.thisObject;
                     ToggleState s = stateMap.get(view);
                     if (s != null) {
@@ -544,6 +547,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             XposedHelpers.findAndHookMethod(clazz, "setVisibility", int.class, new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (USE_LIQUID_GLASS_TOGGLE) return;
                     if (USE_LIQUID_GLASS_TOGGLE) {
                         LiquidToggleHost.syncVisibility((View) param.thisObject);
                     }
@@ -555,6 +559,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             XposedHelpers.findAndHookMethod(clazz, "onDetachedFromWindow", new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (USE_LIQUID_GLASS_TOGGLE) return;
                     if (USE_LIQUID_GLASS_TOGGLE) {
                         LiquidToggleHost.remove((View) param.thisObject);
                     }
@@ -564,19 +569,28 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
         try {
             XposedHelpers.findAndHookMethod(clazz, "onTouchEvent", MotionEvent.class, new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                if (USE_LIQUID_GLASS_TOGGLE) {
+                    View view = (View) param.thisObject;
+                    if (!view.isEnabled()) {
+                        param.setResult(false);
+                        return;
+                    }
+                    disableClipping(view);
+                    MotionEvent event = (MotionEvent) param.args[0];
+                    boolean handled = dev.joseph.hyperbounce.LiquidToggleHost.forwardTouchEvent(view, event);
+                    param.setResult(handled);
+                }
+            }
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (USE_LIQUID_GLASS_TOGGLE) return;
                     View view = (View) param.thisObject;
                     if (!view.isEnabled()) return;
                     disableClipping(view); 
                     
                     MotionEvent event = (MotionEvent) param.args[0];
-                    if (USE_LIQUID_GLASS_TOGGLE) {
-                        if (LiquidToggleHost.forwardTouchEvent(view, event)) {
-                            param.setResult(true);
-                        }
-                        return;
-                    }
                     ToggleState s = stateMap.get(view);
                     if (s == null) {
                         s = new ToggleState();
@@ -801,8 +815,23 @@ public class PhysicsHook implements IXposedHookLoadPackage {
 
         try {
             XposedHelpers.findAndHookMethod(clazz, "onTouchEvent", MotionEvent.class, new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                if (USE_LIQUID_GLASS_TOGGLE) {
+                    View view = (View) param.thisObject;
+                    if (!view.isEnabled()) {
+                        param.setResult(false);
+                        return;
+                    }
+                    disableClipping(view);
+                    MotionEvent event = (MotionEvent) param.args[0];
+                    boolean handled = dev.joseph.hyperbounce.LiquidToggleHost.forwardTouchEvent(view, event);
+                    param.setResult(handled);
+                }
+            }
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (USE_LIQUID_GLASS_TOGGLE) return;
                     View view = (View) param.thisObject;
                     MotionEvent event = (MotionEvent) param.args[0];
                     SliderState s = sliderStateMap.get(view);
@@ -1001,6 +1030,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             XposedHelpers.findAndHookMethod(ClassLoader.class, "loadClass", String.class, boolean.class, new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (USE_LIQUID_GLASS_TOGGLE) return;
                     if (param.hasThrowable()) return;
                     Class<?> clazz = (Class<?>) param.getResult();
                     if (clazz != null) {
@@ -1021,6 +1051,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     XposedBridge.hookAllConstructors(delegateClass, new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (USE_LIQUID_GLASS_TOGGLE) return;
                             Class<?> folmeEaseClass = XposedHelpers.findClass("miuix.animation.FolmeEase", lpparam.classLoader);
                             Object iosSpring = XposedHelpers.callStaticMethod(folmeEaseClass, "spring", 0.65f, 0.35f);
                             Object fastSpring = XposedHelpers.callStaticMethod(folmeEaseClass, "spring", 0.70f, 0.25f);
