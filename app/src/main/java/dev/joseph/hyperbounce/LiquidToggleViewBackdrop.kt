@@ -17,6 +17,23 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.Density
 import com.kyant.backdrop.Backdrop
 
+/**
+ * Live real-time backdrop bridge used by the imported Kyant LiquidToggle.
+ *
+ * This intentionally follows the same architecture as the working Liquid Glass
+ * floating navigation branch:
+ *
+ *   target app View hierarchy
+ *        -> small live software-rendered bitmap
+ *        -> Kyant Backdrop abstraction
+ *        -> library RenderEffect/AGSL lens + blur pipeline
+ *
+ * No PixelCopy is used.
+ *
+ * The source view is an ancestor inside the application's content hierarchy,
+ * deliberately kept OUTSIDE the injected Compose overlay at the window/decor
+ * level. That prevents the glass toggle from capturing itself.
+ */
 internal data class LiquidToggleCapturedFrame(
     val bitmap: Bitmap,
     val originInWindow: Offset,
@@ -27,8 +44,6 @@ internal class LiquidToggleViewBackdrop(
 ) : Backdrop {
 
     override val isCoordinatesDependent: Boolean = true
-
-    var overlayViewToHide: View? = null
 
     private var front: Bitmap? = null
     private var back: Bitmap? = null
@@ -41,6 +56,8 @@ internal class LiquidToggleViewBackdrop(
     private var lastCapturedFrame = -1
     private var lastCaptureNanos = 0L
 
+    // Same proven live cadence as the floating-nav implementation: real-time
+    // rendering while avoiding an unnecessary 120 Hz software Canvas capture.
     private val minCaptureIntervalNanos = 16_666_667L
 
     private val preDrawListener = ViewTreeObserver.OnPreDrawListener {
@@ -106,15 +123,10 @@ internal class LiquidToggleViewBackdrop(
             canvas.clipRect(0, 0, currentRegion.width, currentRegion.height)
             canvas.translate(-localLeft, -localTop)
 
-            // CRITICAL FIX: Hide the Compose toggle from the capturing sequence.
-            // This prevents the infinite mirror/ghosting effect where the thumb refracts its own track.
-            val hideView = overlayViewToHide
-            val wasVisible = hideView?.visibility == View.VISIBLE
-            if (wasVisible) hideView?.visibility = View.INVISIBLE
-
+            // PhysicsHook's Liquid Glass mode suppresses the native toggle's
+            // onDraw, so this live source contains the surrounding system-app
+            // content without recursively drawing the glass Compose overlay.
             sourceView.draw(canvas)
-
-            if (wasVisible) hideView?.visibility = View.VISIBLE
 
             canvas.restore()
 
@@ -128,7 +140,10 @@ internal class LiquidToggleViewBackdrop(
             )
             lastCapturedFrame = frameNumber
             lastCaptureNanos = now
-        } catch (_: Throwable) {}
+        } catch (_: Throwable) {
+            // Keep the last valid frame. Some HyperOS framework views reject
+            // software recording; failure must never crash the hooked process.
+        }
     }
 
     private fun ensureBuffers(width: Int, height: Int) {
@@ -150,7 +165,6 @@ internal class LiquidToggleViewBackdrop(
         region = null
         lastCapturedFrame = -1
         lastCaptureNanos = 0L
-        overlayViewToHide = null
     }
 
     override fun DrawScope.drawBackdrop(
