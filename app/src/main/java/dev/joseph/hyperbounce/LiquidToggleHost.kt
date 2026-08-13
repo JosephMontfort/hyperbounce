@@ -19,6 +19,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
+import de.robv.android.xposed.XposedHelpers
 import java.util.WeakHashMap
 
 internal object LiquidToggleHost {
@@ -93,41 +94,42 @@ internal object LiquidToggleHost {
             target.addOnLayoutChangeListener(layoutListener)
             disableClipping(target)
 
-            // THE ULTIMATE FIX: Directly reflect the ActivityThread's global Application.
-            // We MUST NOT use target.context.applicationContext as a fallback preference because 
-            // MIUI returns a "zombie" plugin ApplicationContext that has a null mBase,
-            // which instantly throws an NPE when Jetpack Compose calls getContentResolver() on it.
+            // THE ULTIMATE FIX: Bypass hidden API blocks natively using XposedHelpers
             val realAppContext = try {
-                val atClass = Class.forName("android.app.ActivityThread")
-                atClass.getMethod("currentApplication").invoke(null) as? Context
+                XposedHelpers.callStaticMethod(
+                    XposedHelpers.findClass("android.app.ActivityThread", null),
+                    "currentApplication"
+                ) as? Context
             } catch (e: Throwable) { null }
 
             val safeContext = object : ContextWrapper(target.context) {
                 override fun getApplicationContext(): Context {
-                    // Pipe directly to the real application context
-                    return realAppContext ?: super.getApplicationContext()
+                    // If realAppContext is null, return THIS WRAPPER.
+                    // DO NOT return baseContext.applicationContext (the zombie).
+                    // By returning 'this', Jetpack Compose will call 'this.getContentResolver()',
+                    // which we safely route to the working baseContext below.
+                    return realAppContext ?: this
                 }
 
                 override fun getContentResolver(): android.content.ContentResolver {
-                    // Route the resolver to the real application context to avoid the null mBase crash
                     return try {
-                        realAppContext?.contentResolver ?: super.getContentResolver()
+                        realAppContext?.contentResolver ?: baseContext.contentResolver
                     } catch (e: Throwable) {
-                        super.getContentResolver()
+                        baseContext.contentResolver
                     }
                 }
 
                 override fun registerComponentCallbacks(callback: ComponentCallbacks?) {
                     try {
                         realAppContext?.registerComponentCallbacks(callback)
-                            ?: super.registerComponentCallbacks(callback)
+                            ?: baseContext.registerComponentCallbacks(callback)
                     } catch (_: Throwable) {}
                 }
 
                 override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {
                     try {
                         realAppContext?.unregisterComponentCallbacks(callback)
-                            ?: super.unregisterComponentCallbacks(callback)
+                            ?: baseContext.unregisterComponentCallbacks(callback)
                     } catch (_: Throwable) {}
                 }
             }
