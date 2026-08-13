@@ -35,6 +35,7 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
@@ -64,7 +65,7 @@ fun LiquidToggle(
     var fraction by remember { mutableFloatStateOf(if (selected()) 1f else 0f) }
     
     val dampedDragAnimation = remember(animationScope) {
-        DampedDragAnimation(
+        dev.joseph.hyperbounce.liquidglass.DampedDragAnimation(
             animationScope = animationScope,
             initialValue = fraction,
             valueRange = 0f..1f,
