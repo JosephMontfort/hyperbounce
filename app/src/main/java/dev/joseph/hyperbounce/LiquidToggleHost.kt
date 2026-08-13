@@ -1,8 +1,6 @@
 package dev.joseph.hyperbounce
 
-import android.content.ComponentCallbacks
 import android.content.Context
-import android.content.ContextWrapper
 import android.view.View
 import android.view.ViewGroup
 import android.widget.CompoundButton
@@ -19,7 +17,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
-import de.robv.android.xposed.XposedHelpers
+import de.robv.android.xposed.AndroidAppHelper
 import java.util.WeakHashMap
 
 internal object LiquidToggleHost {
@@ -94,36 +92,28 @@ internal object LiquidToggleHost {
             target.addOnLayoutChangeListener(layoutListener)
             disableClipping(target)
 
-            // THE GUARANTEED BYPASS: Rip the SystemContext directly from the running OS thread.
-            // This bypasses the broken plugin Application entirely and provides a flawlessly working ContentResolver.
-            val fallbackCtx = try {
-                val atClass = XposedHelpers.findClass("android.app.ActivityThread", target.context.classLoader)
-                val at = XposedHelpers.callStaticMethod(atClass, "currentActivityThread")
-                (XposedHelpers.callMethod(at, "getApplication") as? Context) 
-                    ?: (XposedHelpers.callMethod(at, "getSystemContext") as? Context)
-            } catch (e: Throwable) { null }
+            // THE UNWRAP-PROOF FIX:
+            // Grab the native Application context using Xposed. 
+            // We use ContextThemeWrapper with the global Application as the BASE context.
+            // When Jetpack Compose unwraps this wrapper, it finds the global Application 
+            // instead of the broken MIUI plugin, completely neutralizing the NPE crash.
+            val realAppCtx = AndroidAppHelper.currentApplication() ?: target.context.applicationContext
 
-            val safeContext = object : ContextWrapper(target.context) {
-                override fun getApplicationContext(): Context {
-                    return fallbackCtx ?: this
+            val safeContext = object : android.view.ContextThemeWrapper(realAppCtx, 0) {
+                override fun getTheme(): android.content.res.Resources.Theme {
+                    return try { target.context.theme ?: super.getTheme() } catch(e: Throwable) { super.getTheme() }
                 }
 
-                override fun getContentResolver(): android.content.ContentResolver {
-                    // NEVER call super.getContentResolver() again. It hits the null mBase.
-                    // If all reflection fails (impossible), create an empty framework context.
-                    return fallbackCtx?.contentResolver ?: try {
-                        target.context.createPackageContext("android", 0).contentResolver
-                    } catch (e: Throwable) {
-                        throw RuntimeException("Fatal: MIUI Context completely shattered.")
-                    }
+                override fun getResources(): android.content.res.Resources {
+                    return try { target.context.resources ?: super.getResources() } catch(e: Throwable) { super.getResources() }
                 }
 
-                override fun registerComponentCallbacks(callback: ComponentCallbacks?) {
-                    try { fallbackCtx?.registerComponentCallbacks(callback) } catch (_: Throwable) {}
+                override fun getClassLoader(): ClassLoader {
+                    return try { target.context.classLoader ?: super.getClassLoader() } catch(e: Throwable) { super.getClassLoader() }
                 }
 
-                override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {
-                    try { fallbackCtx?.unregisterComponentCallbacks(callback) } catch (_: Throwable) {}
+                override fun getSystemService(name: String): Any? {
+                    return try { target.context.getSystemService(name) ?: super.getSystemService(name) } catch(e: Throwable) { super.getSystemService(name) }
                 }
             }
 
