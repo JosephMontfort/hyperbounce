@@ -23,22 +23,6 @@ import com.kyant.backdrop.backdrops.emptyBackdrop
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
 import java.util.WeakHashMap
 
-internal class FakeApplication(private val base: Context) : android.app.Application() {
-    init { attachBaseContext(base) }
-    override fun getApplicationContext(): Context = this
-    override fun registerComponentCallbacks(callback: ComponentCallbacks?) {}
-    override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {}
-    override fun getContentResolver(): android.content.ContentResolver = base.contentResolver
-}
-
-internal class SafeContext(private val base: Context) : ContextWrapper(base) {
-    private val fakeApp by lazy { FakeApplication(base) }
-    override fun getApplicationContext(): Context = fakeApp
-    override fun registerComponentCallbacks(callback: ComponentCallbacks?) {}
-    override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {}
-    override fun getContentResolver(): android.content.ContentResolver = base.contentResolver
-}
-
 internal object LiquidToggleHost {
     private val hosts = WeakHashMap<View, Host>()
 
@@ -111,7 +95,7 @@ internal object LiquidToggleHost {
             target.addOnLayoutChangeListener(layoutListener)
             disableClipping(target)
 
-            val safeContext = SafeContext(target.context)
+            val safeContext = target.context
             val compose = ComposeView(safeContext).apply {
                 tag = "HyperBounceLiquidToggle:${System.identityHashCode(target)}"
                 isClickable = true
@@ -136,7 +120,7 @@ internal object LiquidToggleHost {
             
             val overlay = parent.overlay
             if (overlay != null) {
-                val dummy = View(safeContext)
+                val dummy = View(target.context)
                 overlay.add(dummy)
                 val overlayViewGroup = dummy.parent as? View
                 if (overlayViewGroup != null) installOwnersIfNeeded(overlayViewGroup)

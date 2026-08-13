@@ -85,6 +85,21 @@ internal class LiquidToggleViewBackdrop(private val sourceView: View) : Backdrop
             ensureBuffers(currentRegion.width, currentRegion.height)
             val target = back ?: return
             target.eraseColor(android.graphics.Color.TRANSPARENT)
+            val canvas = Canvas(target)
+            canvas.save()
+            canvas.clipRect(0, 0, currentRegion.width, currentRegion.height)
+            canvas.translate(-localLeft, -localTop)
+
+            // Fill underlying container background first to prevent bleed-through
+            var parentRunner = sourceView.parent as? View
+            while (parentRunner != null) {
+                val bg = parentRunner.background
+                if (bg != null) {
+                    bg.draw(canvas)
+                    break
+                }
+                parentRunner = parentRunner.parent as? View
+            }
 
             val canvas = Canvas(target)
             canvas.save()
