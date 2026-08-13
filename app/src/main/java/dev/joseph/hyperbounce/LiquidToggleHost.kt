@@ -26,7 +26,7 @@ import dev.joseph.hyperbounce.liquidglass.LiquidToggle
 import kotlin.math.roundToInt
 import java.util.WeakHashMap
 
-// SafeContext and FakeApplication intercept SystemUI's broken context lookups, completely preventing NPEs.
+// CRITICAL FIX: Swallows SystemUI's broken ContextWrapper NullPointerExceptions
 internal class FakeApplication(base: Context) : android.app.Application() {
     init { attachBaseContext(base) }
     override fun getApplicationContext(): Context = this
@@ -116,7 +116,7 @@ internal object LiquidToggleHost {
                 }
             }
 
-            // NUCLEAR REPLACEMENT: Seamlessly replace the native toggle in the layout tree.
+            // NUCLEAR REPLACEMENT STRATEGY
             target.layoutParams?.let { compose.layoutParams = it }
             target.alpha = 0.001f
             
@@ -132,6 +132,7 @@ internal object LiquidToggleHost {
         }
 
         private fun disableClipping(view: View) {
+            // FIXED COMPILER ERROR: Explicit View? typing 
             var p: View? = view
             while (p != null) {
                 p.clipToOutline = false
@@ -202,11 +203,11 @@ internal object LiquidToggleHost {
     }
 
     private fun findCaptureSource(target: View): View {
-        var p = target.parent
+        // FIXED COMPILER ERROR: Explicit View? typing 
+        var p: View? = target.parent as? View
         var candidate: View = target
-        while (p is View) {
+        while (p != null) {
             val name = p.javaClass.simpleName
-            // Dynamically locate the scrolling list to eliminate the black DecorView background
             if (name.contains("RecyclerView") || name.contains("ListView") || name.contains("ScrollView")) {
                 return p
             }
