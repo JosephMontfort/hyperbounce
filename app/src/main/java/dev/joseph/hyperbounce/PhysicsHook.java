@@ -519,6 +519,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     if (USE_LIQUID_GLASS_TOGGLE) {
                         LiquidToggleHost.syncChecked(view);
                     }
+                    if (USE_LIQUID_GLASS_TOGGLE) dev.joseph.hyperbounce.LiquidToggleHost.syncChecked(view);
                     ToggleState s = stateMap.get(view);
                     if (s != null) { view.postInvalidateOnAnimation(); }
                 }
@@ -611,6 +612,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     
                     int width = view.getWidth(), height = view.getHeight();
                     if (width <= 0 || height <= 0) return null;
+                    if (USE_LIQUID_GLASS_TOGGLE) {
+                        dev.joseph.hyperbounce.LiquidToggleHost.ensure(view);
+                        dev.joseph.hyperbounce.LiquidToggleHost.syncChecked(view);
+                        return null;
+                    }
 
                     if (USE_LIQUID_GLASS_TOGGLE) {
                         LiquidToggleHost.ensure(view);
