@@ -61,13 +61,18 @@ internal object LiquidToggleHost {
         hosts[target]?.syncChecked()
     }
 
+    // FIXED: The missing boolean argument is back!
+    @JvmStatic
+    fun syncVisibility(target: View, isVisible: Boolean) {
+        hosts[target]?.updateVisibility(isVisible)
+    }
+
     @JvmStatic
     fun forwardTouchEvent(target: View, event: android.view.MotionEvent): Boolean {
         val host = hosts[target] ?: return false
         val compose = host.composeView ?: return false
         val offsetEvent = android.view.MotionEvent.obtain(event)
         
-        // Translates the native touch coordinates perfectly into the Compose overlay
         offsetEvent.offsetLocation(-host.composeLeftInTarget.toFloat(), -host.composeTopInTarget.toFloat())
         val handled = compose.dispatchTouchEvent(offsetEvent)
         offsetEvent.recycle()
@@ -85,6 +90,7 @@ internal object LiquidToggleHost {
 
         var composeView: ComposeView? = null
         private var checked by mutableStateOf((target as? CompoundButton)?.isChecked == true)
+        private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
         
         var composeLeftInTarget by mutableIntStateOf(0)
         var composeTopInTarget by mutableIntStateOf(0)
@@ -116,6 +122,7 @@ internal object LiquidToggleHost {
                 setContent {
                     LiquidToggleOverlay(
                         backdrop = backdrop,
+                        visible = isVisibleState,
                         selected = { checked },
                         onSelect = { value ->
                             val button = target as? CompoundButton
@@ -127,7 +134,6 @@ internal object LiquidToggleHost {
                 }
             }
 
-            // Make native toggle an invisible touch-sink to preserve perfect Layout constraints
             target.alpha = 0.0f
             
             val overlay = parent.overlay as? ViewGroupOverlay
@@ -143,7 +149,7 @@ internal object LiquidToggleHost {
             }
 
             composeView = compose
-            backdrop.overlayViewToHide = compose // Fixes the double ghosting issue
+            backdrop.overlayViewToHide = compose 
             refreshGeometry()
             target.post { backdrop.start() }
         }
@@ -188,6 +194,11 @@ internal object LiquidToggleHost {
             checked = (target as? CompoundButton)?.isChecked == true
         }
 
+        fun updateVisibility(isVisible: Boolean) {
+            isVisibleState = isVisible
+            composeView?.visibility = if (isVisible) View.VISIBLE else View.GONE
+        }
+
         fun dispose() {
             target.removeOnAttachStateChangeListener(attachListener)
             target.removeOnLayoutChangeListener(layoutListener)
@@ -204,31 +215,37 @@ internal object LiquidToggleHost {
     @Composable
     private fun LiquidToggleOverlay(
         backdrop: LiquidToggleViewBackdrop,
+        visible: Boolean,
         selected: () -> Boolean,
         onSelect: (Boolean) -> Unit,
     ) {
         val density = LocalDensity.current
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            LiquidToggle(
-                selected = selected,
-                onSelect = onSelect,
-                backdrop = backdrop,
-                modifier = Modifier
-                    .graphicsLayer {
-                        scaleX = 0.975f
-                        scaleY = 0.975f
-                    }
-                    .onGloballyPositioned { coordinates ->
-                        val padding = with(density) { 24.dp.toPx().roundToInt() }
-                        backdrop.setTargetBounds(
-                            left = coordinates.positionInWindow().x,
-                            top = coordinates.positionInWindow().y,
-                            width = coordinates.size.width,
-                            height = coordinates.size.height,
-                            paddingPx = padding,
-                        )
-                    },
-            )
+        Box(
+            Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (visible) {
+                LiquidToggle(
+                    selected = selected,
+                    onSelect = onSelect,
+                    backdrop = backdrop,
+                    modifier = Modifier
+                        .graphicsLayer {
+                            scaleX = LIQUID_TOGGLE_SCALE
+                            scaleY = LIQUID_TOGGLE_SCALE
+                        }
+                        .onGloballyPositioned { coordinates ->
+                            val padding = with(density) { 24.dp.toPx().roundToInt() }
+                            backdrop.setTargetBounds(
+                                left = coordinates.positionInWindow().x,
+                                top = coordinates.positionInWindow().y,
+                                width = coordinates.size.width,
+                                height = coordinates.size.height,
+                                paddingPx = padding,
+                            )
+                        },
+                )
+            }
         }
     }
 
@@ -262,4 +279,6 @@ internal object LiquidToggleHost {
         attachTarget.setViewTreeSavedStateRegistryOwner(owner)
         attachTarget.setViewTreeViewModelStoreOwner(owner)
     }
+
+    private const val LIQUID_TOGGLE_SCALE = 0.975f
 }
