@@ -91,6 +91,7 @@ public class PhysicsHook implements IXposedHookLoadPackage {
      */
     private static final boolean USE_LIQUID_GLASS_TOGGLE = true;
 
+    private static final boolean USE_LIQUID_GLASS_TOGGLE = true;
     private static final HashSet<String> hookedDynamicClasses = new HashSet<>();
 
     private static int blendColors(int color1, int color2, float ratio) {
@@ -593,6 +594,9 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     if (USE_LIQUID_GLASS_TOGGLE) {
                         LiquidToggleHost.syncChecked(view);
                     }
+                    if (USE_LIQUID_GLASS_TOGGLE) {
+                        dev.joseph.hyperbounce.LiquidToggleHost.syncChecked(view);
+                    }
                     ToggleState s = stateMap.get(view);
                     if (s != null) { view.postInvalidateOnAnimation(); }
                 }
@@ -648,6 +652,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     
                     MotionEvent event = (MotionEvent) param.args[0];
                     if (USE_LIQUID_GLASS_TOGGLE) {
+                        if (dev.joseph.hyperbounce.LiquidToggleHost.forwardTouchEvent(view, event)) {
+                            param.setResult(true);
+                        }
+                        return;
+                    }
+                    if (USE_LIQUID_GLASS_TOGGLE) {
                         
                         return;
                     }
@@ -687,6 +697,11 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                     Canvas canvas = (Canvas) param.args[0];
                     int width = view.getWidth(), height = view.getHeight();
                     if (width <= 0 || height <= 0) return null;
+                    if (USE_LIQUID_GLASS_TOGGLE) {
+                        dev.joseph.hyperbounce.LiquidToggleHost.ensure(view);
+                        dev.joseph.hyperbounce.LiquidToggleHost.syncChecked(view);
+                        return null;
+                    }
 
                     if (USE_LIQUID_GLASS_TOGGLE) {
                         // Do not execute or delete the legacy renderer. It remains
@@ -899,6 +914,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     View view = (View) param.thisObject;
                     MotionEvent event = (MotionEvent) param.args[0];
+                    if (USE_LIQUID_GLASS_TOGGLE) {
+                        if (dev.joseph.hyperbounce.LiquidToggleHost.forwardTouchEvent(view, event)) {
+                            param.setResult(true);
+                        }
+                        return;
+                    }
                     SliderState s = sliderStateMap.get(view);
                     if (s == null) { 
                         s = new SliderState(); 
@@ -1071,6 +1092,12 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                         }
                         if (isTarget && !USE_LIQUID_GLASS_TOGGLE) {
                             MotionEvent event = (MotionEvent) param.args[0];
+                    if (USE_LIQUID_GLASS_TOGGLE) {
+                        if (dev.joseph.hyperbounce.LiquidToggleHost.forwardTouchEvent(view, event)) {
+                            param.setResult(true);
+                        }
+                        return;
+                    }
                             if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
                                 android.view.ViewParent parent = view.getParent();
                                 if (parent != null) parent.requestDisallowInterceptTouchEvent(true);

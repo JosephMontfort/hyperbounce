@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewGroupOverlay
 import android.widget.CompoundButton
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
@@ -60,10 +61,17 @@ internal object LiquidToggleHost {
         hosts[target]?.syncChecked()
     }
 
-    // FIXED: Accept the boolean visibility state from the Java hook!
     @JvmStatic
-    fun syncVisibility(target: View, isVisible: Boolean) {
-        hosts[target]?.updateVisibility(isVisible)
+    fun forwardTouchEvent(target: View, event: android.view.MotionEvent): Boolean {
+        val host = hosts[target] ?: return false
+        val compose = host.composeView ?: return false
+        val offsetEvent = android.view.MotionEvent.obtain(event)
+        
+        // Translates the native touch coordinates perfectly into the Compose overlay
+        offsetEvent.offsetLocation(-host.composeLeftInTarget.toFloat(), -host.composeTopInTarget.toFloat())
+        val handled = compose.dispatchTouchEvent(offsetEvent)
+        offsetEvent.recycle()
+        return handled
     }
 
     @JvmStatic
@@ -75,21 +83,29 @@ internal object LiquidToggleHost {
         private val captureSource: View = findCaptureSource(target)
         private val backdrop = LiquidToggleViewBackdrop(captureSource)
 
-        private var composeView: ComposeView? = null
+        var composeView: ComposeView? = null
         private var checked by mutableStateOf((target as? CompoundButton)?.isChecked == true)
-        private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
+        
+        var composeLeftInTarget by mutableIntStateOf(0)
+        var composeTopInTarget by mutableIntStateOf(0)
 
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
                 syncChecked()
+                refreshGeometry()
             }
             override fun onViewDetachedFromWindow(v: View) {
                 LiquidToggleHost.remove(v)
             }
         }
 
+        private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            refreshGeometry()
+        }
+
         fun attach() {
             target.addOnAttachStateChangeListener(attachListener)
+            target.addOnLayoutChangeListener(layoutListener)
 
             disableClipping(target)
 
@@ -100,34 +116,35 @@ internal object LiquidToggleHost {
                 setContent {
                     LiquidToggleOverlay(
                         backdrop = backdrop,
-                        visible = isVisibleState,
                         selected = { checked },
                         onSelect = { value ->
                             val button = target as? CompoundButton
-                            if (button != null) {
-                                if (button.isChecked != value) {
-                                    button.isChecked = value
-                                    button.performClick()
-                                }
-                                syncChecked()
+                            if (button != null && button.isChecked != value) {
+                                button.performClick()
                             }
                         },
                     )
                 }
             }
 
-            target.layoutParams?.let { compose.layoutParams = it }
-            target.alpha = 0.001f
+            // Make native toggle an invisible touch-sink to preserve perfect Layout constraints
+            target.alpha = 0.0f
             
-            installOwnersIfNeeded(target.rootView)
-            installOwnersIfNeeded(parent)
-            installOwnersIfNeeded(compose)
-            
-            val index = parent.indexOfChild(target)
-            parent.addView(compose, index + 1)
-            composeView = compose
+            val overlay = parent.overlay as? ViewGroupOverlay
+            if (overlay != null) {
+                val dummy = View(safeContext)
+                overlay.add(dummy)
+                val overlayViewGroup = dummy.parent as? View
+                if (overlayViewGroup != null) installOwnersIfNeeded(overlayViewGroup)
+                overlay.remove(dummy)
 
-            backdrop.overlayViewToHide = compose
+                installOwnersIfNeeded(compose)
+                overlay.add(compose)
+            }
+
+            composeView = compose
+            backdrop.overlayViewToHide = compose // Fixes the double ghosting issue
+            refreshGeometry()
             target.post { backdrop.start() }
         }
 
@@ -143,61 +160,75 @@ internal object LiquidToggleHost {
             }
         }
 
+        fun refreshGeometry() {
+            val compose = composeView ?: return
+            val density = target.resources.displayMetrics.density
+            val overlayWidthPx = (80f * density).roundToInt()
+            val overlayHeightPx = (48f * density).roundToInt()
+
+            composeLeftInTarget = (target.width - overlayWidthPx) / 2
+            composeTopInTarget = (target.height - overlayHeightPx) / 2
+
+            val overlayLeftPx = target.left + composeLeftInTarget
+            val overlayTopPx = target.top + composeTopInTarget
+
+            compose.measure(
+                View.MeasureSpec.makeMeasureSpec(overlayWidthPx, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(overlayHeightPx, View.MeasureSpec.EXACTLY)
+            )
+            compose.layout(
+                overlayLeftPx,
+                overlayTopPx,
+                overlayLeftPx + overlayWidthPx,
+                overlayTopPx + overlayHeightPx
+            )
+        }
+
         fun syncChecked() {
             checked = (target as? CompoundButton)?.isChecked == true
         }
 
-        fun updateVisibility(isVisible: Boolean) {
-            isVisibleState = isVisible
-            composeView?.visibility = if (isVisible) View.VISIBLE else View.GONE
-        }
-
         fun dispose() {
             target.removeOnAttachStateChangeListener(attachListener)
+            target.removeOnLayoutChangeListener(layoutListener)
             backdrop.release()
             target.alpha = 1f 
 
             val compose = composeView
             composeView = null
             compose?.setContent { }
-            parent.removeView(compose)
+            compose?.let { (parent.overlay as? ViewGroupOverlay)?.remove(it) }
         }
     }
 
     @Composable
     private fun LiquidToggleOverlay(
         backdrop: LiquidToggleViewBackdrop,
-        visible: Boolean,
         selected: () -> Boolean,
         onSelect: (Boolean) -> Unit,
     ) {
         val density = LocalDensity.current
-        Box(
-            Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (visible) {
-                LiquidToggle(
-                    selected = selected,
-                    onSelect = onSelect,
-                    backdrop = backdrop,
-                    modifier = Modifier
-                        .graphicsLayer {
-                            scaleX = LIQUID_TOGGLE_SCALE
-                            scaleY = LIQUID_TOGGLE_SCALE
-                        }
-                        .onGloballyPositioned { coordinates ->
-                            val padding = with(density) { 24.dp.toPx().roundToInt() }
-                            backdrop.setTargetBounds(
-                                left = coordinates.positionInWindow().x,
-                                top = coordinates.positionInWindow().y,
-                                width = coordinates.size.width,
-                                height = coordinates.size.height,
-                                paddingPx = padding,
-                            )
-                        },
-                )
-            }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            LiquidToggle(
+                selected = selected,
+                onSelect = onSelect,
+                backdrop = backdrop,
+                modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = 0.975f
+                        scaleY = 0.975f
+                    }
+                    .onGloballyPositioned { coordinates ->
+                        val padding = with(density) { 24.dp.toPx().roundToInt() }
+                        backdrop.setTargetBounds(
+                            left = coordinates.positionInWindow().x,
+                            top = coordinates.positionInWindow().y,
+                            width = coordinates.size.width,
+                            height = coordinates.size.height,
+                            paddingPx = padding,
+                        )
+                    },
+            )
         }
     }
 
@@ -231,6 +262,4 @@ internal object LiquidToggleHost {
         attachTarget.setViewTreeSavedStateRegistryOwner(owner)
         attachTarget.setViewTreeViewModelStoreOwner(owner)
     }
-
-    private const val LIQUID_TOGGLE_SCALE = 0.975f
 }

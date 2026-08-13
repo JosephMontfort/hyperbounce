@@ -91,7 +91,6 @@ fun LiquidToggle(
         )
     }
 
-    // Surgical logic for exact haptics when thumb hits boundaries
     var lastHapticValue by remember { mutableFloatStateOf(dampedDragAnimation.value) }
     LaunchedEffect(dampedDragAnimation.value) {
         val value = dampedDragAnimation.value

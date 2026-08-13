@@ -22,17 +22,12 @@ internal data class LiquidToggleCapturedFrame(
     val originInWindow: Offset,
 )
 
-internal class LiquidToggleViewBackdrop(
-    private val sourceView: View,
-) : Backdrop {
-
+internal class LiquidToggleViewBackdrop(private val sourceView: View) : Backdrop {
     override val isCoordinatesDependent: Boolean = true
-
     var overlayViewToHide: View? = null
 
     private var front: Bitmap? = null
     private var back: Bitmap? = null
-
     var capturedFrame: LiquidToggleCapturedFrame? by mutableStateOf(null)
         private set
 
@@ -40,7 +35,6 @@ internal class LiquidToggleViewBackdrop(
     private var frameNumber = 0
     private var lastCapturedFrame = -1
     private var lastCaptureNanos = 0L
-
     private val minCaptureIntervalNanos = 16_666_667L
 
     private val preDrawListener = ViewTreeObserver.OnPreDrawListener {
@@ -55,13 +49,7 @@ internal class LiquidToggleViewBackdrop(
         }
     }
 
-    fun setTargetBounds(
-        left: Float,
-        top: Float,
-        width: Int,
-        height: Int,
-        paddingPx: Int,
-    ) {
+    fun setTargetBounds(left: Float, top: Float, width: Int, height: Int, paddingPx: Int) {
         region = CaptureRegion(
             left = left - paddingPx,
             top = top - paddingPx,
@@ -82,7 +70,6 @@ internal class LiquidToggleViewBackdrop(
 
     private fun captureOncePerFrame() {
         if (lastCapturedFrame == frameNumber) return
-
         val now = System.nanoTime()
         if (now - lastCaptureNanos < minCaptureIntervalNanos) return
 
@@ -91,13 +78,11 @@ internal class LiquidToggleViewBackdrop(
 
         val location = IntArray(2)
         sourceView.getLocationInWindow(location)
-
         val localLeft = currentRegion.left - location[0]
         val localTop = currentRegion.top - location[1]
 
         try {
             ensureBuffers(currentRegion.width, currentRegion.height)
-
             val target = back ?: return
             target.eraseColor(android.graphics.Color.TRANSPARENT)
 
@@ -106,29 +91,21 @@ internal class LiquidToggleViewBackdrop(
             canvas.clipRect(0, 0, currentRegion.width, currentRegion.height)
             canvas.translate(-localLeft, -localTop)
 
-            // FIXED WARNING: Use non-null assertion since wasVisible guarantees non-null
+            // Temporarily cloak the ComposeView during capture to stop the infinite mirror ghosting effect
             val hideView = overlayViewToHide
-            val wasVisible = hideView?.visibility == View.VISIBLE
-            if (wasVisible) {
-                hideView!!.visibility = View.INVISIBLE
-            }
+            val oldAlpha = hideView?.alpha ?: 1f
+            if (hideView != null) hideView.alpha = 0f
 
             sourceView.draw(canvas)
 
-            if (wasVisible) {
-                hideView!!.visibility = View.VISIBLE
-            }
+            if (hideView != null) hideView.alpha = oldAlpha
 
             canvas.restore()
 
             val previousFront = front
             front = target
             back = previousFront
-
-            capturedFrame = LiquidToggleCapturedFrame(
-                bitmap = target,
-                originInWindow = Offset(currentRegion.left, currentRegion.top),
-            )
+            capturedFrame = LiquidToggleCapturedFrame(target, Offset(currentRegion.left, currentRegion.top))
             lastCapturedFrame = frameNumber
             lastCaptureNanos = now
         } catch (_: Throwable) {}
@@ -163,9 +140,7 @@ internal class LiquidToggleViewBackdrop(
     ) {
         val frame = capturedFrame ?: return
         val coords = coordinates ?: return
-
-        val targetPosition = coords.positionInWindow()
-        val drawOffset = targetPosition - frame.originInWindow
+        val drawOffset = coords.positionInWindow() - frame.originInWindow
 
         drawImage(
             image = frame.bitmap.asImageBitmap(),
@@ -173,10 +148,5 @@ internal class LiquidToggleViewBackdrop(
         )
     }
 
-    private data class CaptureRegion(
-        val left: Float,
-        val top: Float,
-        val width: Int,
-        val height: Int,
-    )
+    private data class CaptureRegion(val left: Float, val top: Float, val width: Int, val height: Int)
 }
