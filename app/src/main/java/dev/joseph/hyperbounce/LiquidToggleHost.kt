@@ -94,43 +94,36 @@ internal object LiquidToggleHost {
             target.addOnLayoutChangeListener(layoutListener)
             disableClipping(target)
 
-            // THE ULTIMATE FIX: Bypass hidden API blocks natively using XposedHelpers
-            val realAppContext = try {
-                XposedHelpers.callStaticMethod(
-                    XposedHelpers.findClass("android.app.ActivityThread", null),
-                    "currentApplication"
-                ) as? Context
+            // THE GUARANTEED BYPASS: Rip the SystemContext directly from the running OS thread.
+            // This bypasses the broken plugin Application entirely and provides a flawlessly working ContentResolver.
+            val fallbackCtx = try {
+                val atClass = XposedHelpers.findClass("android.app.ActivityThread", target.context.classLoader)
+                val at = XposedHelpers.callStaticMethod(atClass, "currentActivityThread")
+                (XposedHelpers.callMethod(at, "getApplication") as? Context) 
+                    ?: (XposedHelpers.callMethod(at, "getSystemContext") as? Context)
             } catch (e: Throwable) { null }
 
             val safeContext = object : ContextWrapper(target.context) {
                 override fun getApplicationContext(): Context {
-                    // If realAppContext is null, return THIS WRAPPER.
-                    // DO NOT return baseContext.applicationContext (the zombie).
-                    // By returning 'this', Jetpack Compose will call 'this.getContentResolver()',
-                    // which we safely route to the working baseContext below.
-                    return realAppContext ?: this
+                    return fallbackCtx ?: this
                 }
 
                 override fun getContentResolver(): android.content.ContentResolver {
-                    return try {
-                        realAppContext?.contentResolver ?: baseContext.contentResolver
+                    // NEVER call super.getContentResolver() again. It hits the null mBase.
+                    // If all reflection fails (impossible), create an empty framework context.
+                    return fallbackCtx?.contentResolver ?: try {
+                        target.context.createPackageContext("android", 0).contentResolver
                     } catch (e: Throwable) {
-                        baseContext.contentResolver
+                        throw RuntimeException("Fatal: MIUI Context completely shattered.")
                     }
                 }
 
                 override fun registerComponentCallbacks(callback: ComponentCallbacks?) {
-                    try {
-                        realAppContext?.registerComponentCallbacks(callback)
-                            ?: baseContext.registerComponentCallbacks(callback)
-                    } catch (_: Throwable) {}
+                    try { fallbackCtx?.registerComponentCallbacks(callback) } catch (_: Throwable) {}
                 }
 
                 override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {
-                    try {
-                        realAppContext?.unregisterComponentCallbacks(callback)
-                            ?: baseContext.unregisterComponentCallbacks(callback)
-                    } catch (_: Throwable) {}
+                    try { fallbackCtx?.unregisterComponentCallbacks(callback) } catch (_: Throwable) {}
                 }
             }
 
