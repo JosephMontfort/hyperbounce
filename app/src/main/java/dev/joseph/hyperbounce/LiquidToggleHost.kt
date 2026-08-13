@@ -19,6 +19,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
+import de.robv.android.xposed.XposedHelpers
 import java.util.WeakHashMap
 
 internal object LiquidToggleHost {
@@ -93,25 +94,37 @@ internal object LiquidToggleHost {
             target.addOnLayoutChangeListener(layoutListener)
             disableClipping(target)
 
-            // THE FIX: Shield Compose from SystemUI's broken plugin contexts
+            // THE FIX: Grab the pure, global Application Context to bypass broken MIUI plugins
+            val realAppContext = try {
+                XposedHelpers.callStaticMethod(
+                    XposedHelpers.findClass("android.app.ActivityThread", null),
+                    "currentApplication"
+                ) as? Context
+            } catch (e: Throwable) {
+                null
+            } ?: target.context.applicationContext
+
             val safeContext = object : ContextWrapper(target.context) {
                 override fun getApplicationContext(): Context {
-                    return baseContext.applicationContext ?: this
+                    return realAppContext ?: this
+                }
+
+                override fun getContentResolver(): android.content.ContentResolver {
+                    // Shield Compose's animation scale listener from throwing NPE on null mBase
+                    return realAppContext?.contentResolver ?: super.getContentResolver()
                 }
 
                 override fun registerComponentCallbacks(callback: ComponentCallbacks?) {
                     try {
-                        baseContext.applicationContext?.registerComponentCallbacks(callback)
-                            ?: baseContext.registerComponentCallbacks(callback)
-                    } catch (_: Throwable) {
-                        // Silently catch framework anomalies in dynamic plugin contexts
-                    }
+                        realAppContext?.registerComponentCallbacks(callback)
+                            ?: super.registerComponentCallbacks(callback)
+                    } catch (_: Throwable) {}
                 }
 
                 override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {
                     try {
-                        baseContext.applicationContext?.unregisterComponentCallbacks(callback)
-                            ?: baseContext.unregisterComponentCallbacks(callback)
+                        realAppContext?.unregisterComponentCallbacks(callback)
+                            ?: super.unregisterComponentCallbacks(callback)
                     } catch (_: Throwable) {}
                 }
             }
