@@ -84,20 +84,7 @@ internal class LiquidToggleViewBackdrop(private val sourceView: View) : Backdrop
         try {
             ensureBuffers(currentRegion.width, currentRegion.height)
             val target = back ?: return
-            var currentBgView: View? = sourceView
-            var bgColor = android.graphics.Color.TRANSPARENT
-            while (currentBgView != null) {
-                val bg = currentBgView.background
-                if (bg is android.graphics.drawable.ColorDrawable && bg.alpha == 255) {
-                    bgColor = bg.color
-                    break
-                }
-                currentBgView = currentBgView.parent as? View
-            }
-            if (bgColor == android.graphics.Color.TRANSPARENT) {
-                bgColor = if ((sourceView.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES) android.graphics.Color.BLACK else android.graphics.Color.WHITE
-            }
-            target.eraseColor(bgColor)
+            target.eraseColor(android.graphics.Color.TRANSPARENT)
 
             val canvas = Canvas(target)
             canvas.save()

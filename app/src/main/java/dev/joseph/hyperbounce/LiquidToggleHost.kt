@@ -23,11 +23,20 @@ import com.kyant.backdrop.backdrops.emptyBackdrop
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
 import java.util.WeakHashMap
 
-internal class FakeApplication(base: Context) : android.app.Application() {
+internal class FakeApplication(private val base: Context) : android.app.Application() {
     init { attachBaseContext(base) }
     override fun getApplicationContext(): Context = this
     override fun registerComponentCallbacks(callback: ComponentCallbacks?) {}
     override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {}
+    override fun getContentResolver(): android.content.ContentResolver = base.contentResolver
+}
+
+internal class SafeContext(private val base: Context) : ContextWrapper(base) {
+    private val fakeApp by lazy { FakeApplication(base) }
+    override fun getApplicationContext(): Context = fakeApp
+    override fun registerComponentCallbacks(callback: ComponentCallbacks?) {}
+    override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {}
+    override fun getContentResolver(): android.content.ContentResolver = base.contentResolver
 }
 
 internal class SafeContext(base: Context) : ContextWrapper(base) {
