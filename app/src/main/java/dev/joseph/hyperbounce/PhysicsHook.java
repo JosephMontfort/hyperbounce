@@ -343,12 +343,15 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {}
 
         try {
-            XposedHelpers.findAndHookMethod(clazz, "dispatchTouchEvent", MotionEvent.class, new XC_MethodReplacement() {
+            XposedHelpers.findAndHookMethod(clazz, "onTouchEvent", MotionEvent.class, new XC_MethodHook() {
                 @Override
-                protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     if (USE_LIQUID_GLASS_TOGGLE) {
                         View view = (View) param.thisObject;
-                        if (!view.isEnabled()) return false;
+                        if (!view.isEnabled()) {
+                            param.setResult(false);
+                            return;
+                        }
                         disableClipping(view);
                         MotionEvent event = (MotionEvent) param.args[0];
                         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
@@ -356,9 +359,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
                             if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
                         }
                         LiquidToggleHost.forwardTouchEvent(view, event);
-                        return true;
+                        param.setResult(true);
                     }
-                    return XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args);
                 }
             });
         } catch (Throwable t) {}
