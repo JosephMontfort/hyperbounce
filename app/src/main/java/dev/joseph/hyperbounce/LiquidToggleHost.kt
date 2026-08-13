@@ -26,9 +26,7 @@ import dev.joseph.hyperbounce.liquidglass.LiquidToggle
 import kotlin.math.roundToInt
 import java.util.WeakHashMap
 
-// CRITICAL FIX 1: Provide a Fake Application context. 
-// Compose specifically unwraps ContextWrappers looking for an Application class.
-// This safely intercepts that lookup and prevents SystemUI's NPE.
+// SafeContext and FakeApplication intercept SystemUI's broken context lookups, completely preventing NPEs.
 internal class FakeApplication(base: Context) : android.app.Application() {
     init { attachBaseContext(base) }
     override fun getApplicationContext(): Context = this
@@ -64,8 +62,8 @@ internal object LiquidToggleHost {
     }
 
     @JvmStatic
-    fun syncVisibility(target: View) {
-        hosts[target]?.syncVisibility()
+    fun syncVisibility(target: View, isVisible: Boolean) {
+        hosts[target]?.updateVisibility(isVisible)
     }
 
     @JvmStatic
@@ -74,14 +72,12 @@ internal object LiquidToggleHost {
     }
 
     private class Host(private val target: View, private val parent: ViewGroup) {
-        // CRITICAL FIX 2: Stop capturing the black DecorView void. 
-        // Capture the scrolling list surface instead.
         private val captureSource: View = findCaptureSource(target)
         private val backdrop = LiquidToggleViewBackdrop(captureSource)
 
         private var composeView: ComposeView? = null
         private var checked by mutableStateOf((target as? CompoundButton)?.isChecked == true)
-        private var visible by mutableStateOf(target.visibility == View.VISIBLE)
+        private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
 
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
@@ -95,7 +91,6 @@ internal object LiquidToggleHost {
         fun attach() {
             target.addOnAttachStateChangeListener(attachListener)
 
-            // CRITICAL FIX 3: Universally strip layout clipping bounds
             disableClipping(target)
 
             val safeContext = SafeContext(target.context)
@@ -105,7 +100,7 @@ internal object LiquidToggleHost {
                 setContent {
                     LiquidToggleOverlay(
                         backdrop = backdrop,
-                        visible = visible,
+                        visible = isVisibleState,
                         selected = { checked },
                         onSelect = { value ->
                             val button = target as? CompoundButton
@@ -121,14 +116,10 @@ internal object LiquidToggleHost {
                 }
             }
 
-            // CRITICAL FIX 4: UNIVERSAL NUCLEAR REPLACEMENT
-            // Replaces the physical hierarchy slot exactly like the Dialer hack.
+            // NUCLEAR REPLACEMENT: Seamlessly replace the native toggle in the layout tree.
             target.layoutParams?.let { compose.layoutParams = it }
-            
-            // Keep target completely alive for native app touches, but visually cloaked.
             target.alpha = 0.001f
             
-            // Inject Owners directly into the real View hierarchy's roots
             installOwnersIfNeeded(target.rootView)
             installOwnersIfNeeded(parent)
             installOwnersIfNeeded(compose)
@@ -156,16 +147,15 @@ internal object LiquidToggleHost {
             checked = (target as? CompoundButton)?.isChecked == true
         }
 
-        fun syncVisibility() {
-            val isVisible = target.visibility == View.VISIBLE
-            visible = isVisible
+        fun updateVisibility(isVisible: Boolean) {
+            isVisibleState = isVisible
             composeView?.visibility = if (isVisible) View.VISIBLE else View.GONE
         }
 
         fun dispose() {
             target.removeOnAttachStateChangeListener(attachListener)
             backdrop.release()
-            target.alpha = 1f // Safely restore if module unhooks
+            target.alpha = 1f 
 
             val compose = composeView
             composeView = null
@@ -216,12 +206,13 @@ internal object LiquidToggleHost {
         var candidate: View = target
         while (p is View) {
             val name = p.javaClass.simpleName
+            // Dynamically locate the scrolling list to eliminate the black DecorView background
             if (name.contains("RecyclerView") || name.contains("ListView") || name.contains("ScrollView")) {
                 return p
             }
             if (p.parent !is View) return candidate
             candidate = p
-            p = p.parent
+            p = p.parent as? View
         }
         return candidate
     }
