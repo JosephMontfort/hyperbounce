@@ -2,6 +2,7 @@ package dev.joseph.hyperbounce
 
 import android.content.ComponentCallbacks
 import android.content.Context
+import android.content.ContextWrapper
 import android.view.View
 import android.view.ViewGroup
 import android.widget.CompoundButton
@@ -25,11 +26,16 @@ import dev.joseph.hyperbounce.liquidglass.LiquidToggle
 import kotlin.math.roundToInt
 import java.util.WeakHashMap
 
-// CRITICAL FIX 1: Inherit directly from Application. Compose unwraps contexts looking for this exact class.
-// This completely stops the SystemUI context unwrapping loop and prevents the NullPointerException.
-internal class SafeContext(base: Context) : android.app.Application() {
+internal class FakeApplication(base: Context) : android.app.Application() {
     init { attachBaseContext(base) }
     override fun getApplicationContext(): Context = this
+    override fun registerComponentCallbacks(callback: ComponentCallbacks?) {}
+    override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {}
+}
+
+internal class SafeContext(base: Context) : ContextWrapper(base) {
+    private val fakeApp by lazy { FakeApplication(base) }
+    override fun getApplicationContext(): Context = fakeApp
     override fun registerComponentCallbacks(callback: ComponentCallbacks?) {}
     override fun unregisterComponentCallbacks(callback: ComponentCallbacks?) {}
 }
@@ -54,9 +60,10 @@ internal object LiquidToggleHost {
         hosts[target]?.syncChecked()
     }
 
+    // FIXED: Accept the boolean visibility state from the Java hook!
     @JvmStatic
-    fun syncVisibility(target: View) {
-        hosts[target]?.syncVisibility()
+    fun syncVisibility(target: View, isVisible: Boolean) {
+        hosts[target]?.updateVisibility(isVisible)
     }
 
     @JvmStatic
@@ -70,7 +77,7 @@ internal object LiquidToggleHost {
 
         private var composeView: ComposeView? = null
         private var checked by mutableStateOf((target as? CompoundButton)?.isChecked == true)
-        private var visible by mutableStateOf(target.visibility == View.VISIBLE)
+        private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
 
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
@@ -93,7 +100,7 @@ internal object LiquidToggleHost {
                 setContent {
                     LiquidToggleOverlay(
                         backdrop = backdrop,
-                        visible = visible,
+                        visible = isVisibleState,
                         selected = { checked },
                         onSelect = { value ->
                             val button = target as? CompoundButton
@@ -109,24 +116,18 @@ internal object LiquidToggleHost {
                 }
             }
 
-            // NUCLEAR REPLACEMENT STRATEGY
-            // 1. Replicate native constraints perfectly
             target.layoutParams?.let { compose.layoutParams = it }
-            
-            // 2. Cloak the native toggle (alpha 0.0) but leave it in place to handle native touches
             target.alpha = 0.001f
             
-            // 3. Inject Owners globally to prevent Compose measure crashes
             installOwnersIfNeeded(target.rootView)
             installOwnersIfNeeded(parent)
             installOwnersIfNeeded(compose)
             
-            // 4. Inject as a physical sibling
             val index = parent.indexOfChild(target)
             parent.addView(compose, index + 1)
             composeView = compose
 
-            backdrop.overlayViewToHide = compose // Fix ghosting
+            backdrop.overlayViewToHide = compose
             target.post { backdrop.start() }
         }
 
@@ -146,9 +147,8 @@ internal object LiquidToggleHost {
             checked = (target as? CompoundButton)?.isChecked == true
         }
 
-        fun syncVisibility() {
-            val isVisible = target.visibility == View.VISIBLE
-            visible = isVisible
+        fun updateVisibility(isVisible: Boolean) {
+            isVisibleState = isVisible
             composeView?.visibility = if (isVisible) View.VISIBLE else View.GONE
         }
 
@@ -206,9 +206,6 @@ internal object LiquidToggleHost {
         var candidate: View = target
         while (p != null) {
             val name = p.javaClass.simpleName.lowercase()
-            
-            // CRITICAL FIX 2: Stop capturing the deep black DecorView. 
-            // Lock onto scrolling containers or opaque row backgrounds.
             if (name.contains("recycler") || name.contains("list") || name.contains("scroll")) {
                 return p
             }

@@ -106,14 +106,18 @@ internal class LiquidToggleViewBackdrop(
             canvas.clipRect(0, 0, currentRegion.width, currentRegion.height)
             canvas.translate(-localLeft, -localTop)
 
-            // CRITICAL FIX 3: Prevent infinite mirror effect
+            // FIXED WARNING: Use non-null assertion since wasVisible guarantees non-null
             val hideView = overlayViewToHide
             val wasVisible = hideView?.visibility == View.VISIBLE
-            if (wasVisible) hideView?.visibility = View.INVISIBLE
+            if (wasVisible) {
+                hideView!!.visibility = View.INVISIBLE
+            }
 
             sourceView.draw(canvas)
 
-            if (wasVisible) hideView?.visibility = View.VISIBLE
+            if (wasVisible) {
+                hideView!!.visibility = View.VISIBLE
+            }
 
             canvas.restore()
 
