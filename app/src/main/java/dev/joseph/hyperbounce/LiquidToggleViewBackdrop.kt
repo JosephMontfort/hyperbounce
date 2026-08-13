@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.view.Choreographer
 import android.view.View
+import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -86,8 +87,7 @@ internal class LiquidToggleViewBackdrop(private val sourceView: View) : Backdrop
             ensureBuffers(currentRegion.width, currentRegion.height)
             val target = back ?: return
             
-            // FIX 1: Remove the logic that nulls out pure white/black.
-            // Leave the background pure transparent so we only capture the target layer.
+            // Keep the bitmap transparent so we only capture the pure parent background
             target.eraseColor(Color.TRANSPARENT)
 
             val canvas = Canvas(target)
@@ -95,16 +95,32 @@ internal class LiquidToggleViewBackdrop(private val sourceView: View) : Backdrop
             canvas.clipRect(0, 0, currentRegion.width, currentRegion.height)
             canvas.translate(-localLeft.toFloat(), -localTop.toFloat())
 
-            // CRITICAL FIX: Temporarily cloak the ComposeView during capture.
-            val hideView = overlayViewToHide
-            val oldAlpha = hideView?.alpha ?: 1f
-            if (hideView != null) hideView.alpha = 0f
+            // --- THE GHOSTING FIX ---
+            // Forcefully hide the native toggle and the Compose overlay so they 
+            // aren't permanently baked into our background capture.
+            val hiddenStates = mutableListOf<Pair<View, Int>>()
+            
+            fun hideToggles(v: View) {
+                val name = v.javaClass.simpleName
+                if (v == overlayViewToHide || name.contains("SlidingButton") || name.contains("SlidingSwitch")) {
+                    hiddenStates.add(Pair(v, v.visibility))
+                    v.visibility = View.INVISIBLE // INVISIBLE totally bypasses View.draw()
+                } else if (v is ViewGroup) {
+                    for (i in 0 until v.childCount) {
+                        hideToggles(v.getChildAt(i))
+                    }
+                }
+            }
+            
+            hideToggles(sourceView)
 
-            // FIX 2: sourceView is the parent (grey card). By drawing it directly 
-            // without looping through ancestors, we drop the deep black window background.
+            // Draw the parent (the grey card & text). Toggles will be skipped entirely!
             sourceView.draw(canvas)
 
-            if (hideView != null) hideView.alpha = oldAlpha
+            // Synchronously restore visibility so they remain active on the actual screen
+            for ((child, oldVis) in hiddenStates) {
+                child.visibility = oldVis
+            }
 
             canvas.restore()
 
