@@ -60,7 +60,7 @@ dependencies {
     // from the view tree. Settings/Dialer Activities already provide one; SystemUI
     // windows added straight onto WindowManager (e.g. Control Center) usually don't,
     // so LiquidToggleHost installs a minimal fallback owner using these.
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.6")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.6")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.4")
     implementation("androidx.savedstate:savedstate-ktx:1.3.2")
 }
