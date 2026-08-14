@@ -972,33 +972,6 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         // using it as the only discovery point can silently fail with Xposed.
         // onDraw() is reliably reached once the real widget is actually rendered.
         try {
-            XposedHelpers.findAndHookMethod(clazz, "onTouchEvent", MotionEvent.class, new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    android.widget.CompoundButton view =
-                            (android.widget.CompoundButton) param.thisObject;
-
-                    if (!view.isEnabled()) {
-                        param.setResult(false);
-                        return;
-                    }
-
-                    MotionEvent event = (MotionEvent) param.args[0];
-
-                    if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                        ViewParent parent = view.getParent();
-                        if (parent != null) {
-                            parent.requestDisallowInterceptTouchEvent(true);
-                        }
-                    }
-
-                    LiquidToggleHost.forwardTouchEvent(view, event);
-                    param.setResult(true);
-                }
-            });
-        } catch (Throwable t) {}
-
-        try {
             XposedHelpers.findAndHookMethod(clazz, "onDraw", Canvas.class, new XC_MethodReplacement() {
                 @Override
                 protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
