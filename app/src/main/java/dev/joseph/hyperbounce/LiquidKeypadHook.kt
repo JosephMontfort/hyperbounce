@@ -3,6 +3,7 @@ package dev.joseph.hyperbounce
 import android.graphics.Color
 import android.graphics.Paint
 import android.util.Log
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -11,117 +12,165 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
+import java.lang.reflect.Method
 
 object LiquidKeypadHook {
     private const val TAG = "HyperBounce_Spacing"
 
+    private fun findMethod(clazz: Class<*>, name: String, vararg parameterTypes: Class<*>): Method {
+        var current: Class<*>? = clazz
+        while (current != null) {
+            try {
+                val method = current.getDeclaredMethod(name, *parameterTypes)
+                method.isAccessible = true
+                return method
+            } catch (e: NoSuchMethodException) {
+                current = current.superclass
+            }
+        }
+        throw NoSuchMethodException(name)
+    }
+
     fun apply(module: XposedModule, classLoader: ClassLoader) {
-        val clazz = try {
-            Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)
+        // =========================================================
+        // 1. Hook the Grid Container to Lock Spacing Permanently
+        // =========================================================
+        try {
+            val pinViewClass = Class.forName("com.android.keyguard.widget.MiuiKeyguardPINView", false, classLoader)
+            val onMeasureMethod = findMethod(pinViewClass, "onMeasure", Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!)
+            
+            module.hook(onMeasureMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val result = chain.proceed()
+                    val view = chain.thisObject as ViewGroup
+
+                    try {
+                        // Find the grid rows container
+                        var pinGrid: LinearLayout? = null
+                        for (i in 0 until view.childCount) {
+                            val c = view.getChildAt(i)
+                            if (c is LinearLayout && c.childCount >= 4) {
+                                pinGrid = c
+                                break
+                            }
+                        }
+
+                        pinGrid?.let { grid ->
+                            val density = view.resources.displayMetrics.density
+                            val vGapPx = (42f * density).toInt()  // Massive 42dp Row Spacing
+                            val hMarginPx = (22f * density).toInt() // Massive 22dp Key Margin
+
+                            for (r in 0 until grid.childCount) {
+                                val row = grid.getChildAt(r) as? LinearLayout ?: continue
+
+                                // Hijack Vertical Row Spacing
+                                val rowLp = row.layoutParams
+                                if (rowLp is ViewGroup.MarginLayoutParams) {
+                                    rowLp.bottomMargin = vGapPx
+                                    row.layoutParams = rowLp
+                                }
+
+                                // Hijack Horizontal Key Margins
+                                for (k in 0 until row.childCount) {
+                                    val key = row.getChildAt(k) ?: continue
+                                    val keyLp = key.layoutParams
+                                    if (keyLp is ViewGroup.MarginLayoutParams) {
+                                        keyLp.leftMargin = hMarginPx
+                                        keyLp.rightMargin = hMarginPx
+                                        key.layoutParams = keyLp
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e: Throwable) {
+                        Log.e(TAG, "Failed to apply spacing in onMeasure", e)
+                    }
+                    return result
+                }
+            })
         } catch (e: Throwable) {
-            // If it's not in this classloader (e.g. plugin vs systemui), exit silently
-            return 
+            Log.e(TAG, "Failed to hook MiuiKeyguardPINView", e)
         }
 
-        Log.e(TAG, "SUCCESS: Found MiuiNumPadKey class. Applying hooks...")
-
-        // 1. Hook Constructors directly to intercept View Creation
+        // =========================================================
+        // 2. Hook Individual Keys for Shapes, Text, and Physics
+        // =========================================================
         try {
-            val constructors = clazz.declaredConstructors
-            for (constructor in constructors) {
+            val keyClass = Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)
+            
+            // Hook Constructors to apply visual styling natively and safely
+            for (constructor in keyClass.declaredConstructors) {
                 constructor.isAccessible = true
                 module.hook(constructor).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
-                        val result = chain.proceed() // Execute original constructor
+                        val result = chain.proceed()
                         val view = chain.thisObject as View
-                        
-                        Log.e(TAG, "MiuiNumPadKey constructed. Injecting native LayoutListener.")
 
-                        // Kill native animations
-                        try {
-                            val setAnimMethod = view.javaClass.getMethod("setAnimationEnabled", Boolean::class.javaPrimitiveType)
-                            setAnimMethod.invoke(view, false)
-                        } catch (e: Throwable) {}
-
-                        // Apply Perfect Circles
-                        val circleBg = object : android.graphics.drawable.Drawable() {
-                            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                color = Color.parseColor("#40FFFFFF")
-                                style = Paint.Style.FILL
-                            }
-                            override fun draw(canvas: android.graphics.Canvas) {
-                                val size = minOf(bounds.width(), bounds.height()).toFloat()
-                                val radius = (size / 2f) * 0.85f 
-                                canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), radius, paint)
-                            }
-                            override fun setAlpha(alpha: Int) { paint.alpha = alpha }
-                            override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) { paint.colorFilter = colorFilter }
-                            @Deprecated("Deprecated in Java")
-                            override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
-                        }
-                        view.background = circleBg
-
-                        // Attach native Android layout listener to hijack the dimensions frame-by-frame
-                        view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-                            val parent = v.parent as? ViewGroup
-                            val lp = v.layoutParams
-
-                            // Hide the Klondike Letters safely
+                        view.post {
+                            // Hide Klondike Letters
                             try {
-                                var currentClass: Class<*>? = v.javaClass
+                                var cls: Class<*>? = view.javaClass
                                 var field: java.lang.reflect.Field? = null
-                                while (currentClass != null) {
+                                while (cls != null) {
                                     try {
-                                        field = currentClass.getDeclaredField("mKlondikeText")
+                                        field = cls.getDeclaredField("mKlondikeText")
                                         break
-                                    } catch (e: NoSuchFieldException) {
-                                        currentClass = currentClass.superclass
-                                    }
+                                    } catch (e: NoSuchFieldException) { cls = cls.superclass }
                                 }
                                 field?.isAccessible = true
-                                val klondikeText = field?.get(v) as? TextView
-                                if (klondikeText != null && klondikeText.visibility != View.GONE) {
-                                    klondikeText.visibility = View.GONE
-                                }
-                            } catch (e: Throwable) {
-                                Log.e(TAG, "Failed to hide klondike text", e)
-                            }
+                                (field?.get(view) as? TextView)?.visibility = View.GONE
+                            } catch (e: Throwable) {}
 
-                            // HIJACK 1: Push the Grandparent Rows Apart
-                            if (parent is LinearLayout) {
-                                val parentLp = parent.layoutParams
-                                if (parentLp is ViewGroup.MarginLayoutParams) {
-                                    if (parentLp.bottomMargin != 60) { // Force 60px gap between rows
-                                        Log.e(TAG, "=> HIJACKING SPACING: Pushing parent LinearLayout bottomMargin from ${parentLp.bottomMargin} to 60")
-                                        parentLp.bottomMargin = 60
-                                        parent.layoutParams = parentLp
-                                    }
+                            // Center Digits Perfectly
+                            try {
+                                var cls: Class<*>? = view.javaClass
+                                var field: java.lang.reflect.Field? = null
+                                while (cls != null) {
+                                    try {
+                                        field = cls.getDeclaredField("mDigitText")
+                                        break
+                                    } catch (e: NoSuchFieldException) { cls = cls.superclass }
                                 }
-                            }
+                                field?.isAccessible = true
+                                val digitText = field?.get(view) as? TextView
+                                digitText?.let {
+                                    it.gravity = Gravity.CENTER
+                                    it.setPadding(0, 0, 0, 0)
+                                }
+                            } catch (e: Throwable) {}
 
-                            // HIJACK 2: Strip vertical constraints off the child to allow perfect circular expansion
-                            if (lp is LinearLayout.LayoutParams) {
-                                if (lp.topMargin != 0 || lp.bottomMargin != 0) {
-                                    val density = v.resources.displayMetrics.density
-                                    val hMargin = (18f * density).toInt() 
-                                    lp.setMargins(hMargin, 0, hMargin, 0)
-                                    v.layoutParams = lp
+                            // Kill native animations
+                            try {
+                                val setAnimMethod = view.javaClass.getMethod("setAnimationEnabled", Boolean::class.javaPrimitiveType)
+                                setAnimMethod.invoke(view, false)
+                            } catch (e: Throwable) {}
+
+                            // Native Large Circle Background (No Frida crashes)
+                            view.setPadding(0, 0, 0, 0)
+                            val circleBg = object : android.graphics.drawable.Drawable() {
+                                val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                    color = Color.parseColor("#40FFFFFF")
+                                    style = Paint.Style.FILL
                                 }
+                                override fun draw(canvas: android.graphics.Canvas) {
+                                    val size = minOf(bounds.width(), bounds.height()).toFloat()
+                                    val radius = (size / 2f) * 0.98f // 98% scale for large centered circles
+                                    canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), radius, paint)
+                                }
+                                override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+                                override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) { paint.colorFilter = colorFilter }
+                                @Deprecated("Deprecated in Java")
+                                override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
                             }
+                            view.background = circleBg
                         }
                         return result
                     }
                 })
             }
-        } catch (e: Throwable) {
-            Log.e(TAG, "FATAL: Failed to hook constructors", e)
-        }
 
-        // 2. Touch Physics Hook
-        try {
-            // Using getDeclaredMethod to avoid crawling the parent tree
-            val onTouchMethod = clazz.getDeclaredMethod("onTouchEvent", MotionEvent::class.java)
-            onTouchMethod.isAccessible = true
+            // Hook Touch Event for iOS bouncy physics
+            val onTouchMethod = findMethod(keyClass, "onTouchEvent", MotionEvent::class.java)
             val spring = OvershootInterpolator(2.5f)
             
             module.hook(onTouchMethod).intercept(object : XposedInterface.Hooker {
@@ -142,7 +191,7 @@ object LiquidKeypadHook {
                 }
             })
         } catch (e: Throwable) {
-            Log.e(TAG, "FATAL: Failed to hook onTouchEvent", e)
+            Log.e(TAG, "Failed to hook MiuiNumPadKey", e)
         }
     }
 }
