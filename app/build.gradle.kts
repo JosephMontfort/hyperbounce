@@ -43,8 +43,7 @@ android {
 }
 
 dependencies {
-    compileOnly("de.robv.android.xposed:api:82")
-    compileOnly("de.robv.android.xposed:api:82:sources")
+    compileOnly(files("libs/api-102.0.0.aar"))
 
     // Compose versions match the AndroidLiquidGlass 2.0.0 toolchain used by
     // the already-working Liquid Glass floating-navigation experiment.

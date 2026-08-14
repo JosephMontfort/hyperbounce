@@ -17,7 +17,6 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
-import de.robv.android.xposed.XposedHelpers
 import java.util.WeakHashMap
 
 internal object LiquidToggleHost {
@@ -92,12 +91,12 @@ internal object LiquidToggleHost {
             target.addOnLayoutChangeListener(layoutListener)
             disableClipping(target)
 
-            // THE COMPILER FIX:
-            // Revert to XposedHelpers reflection since it successfully compiles.
-            // We rip the global Application context to serve as our base context.
+            // Obtain a safe application context without depending on the legacy Xposed helper API.
             val baseCtx = try {
-                val atClass = XposedHelpers.findClass("android.app.ActivityThread", null)
-                XposedHelpers.callStaticMethod(atClass, "currentApplication") as? Context
+                val atClass = Class.forName("android.app.ActivityThread")
+                val method = atClass.getDeclaredMethod("currentApplication")
+                method.isAccessible = true
+                method.invoke(null) as? Context
             } catch (e: Throwable) { null } ?: try {
                 // Failsafe: Generate a pure framework context
                 target.context.createPackageContext("android", 0)

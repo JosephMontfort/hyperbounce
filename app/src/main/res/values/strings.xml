@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">HyperBounce</string>
+    <string name="app_description">Liquid glass toggles and HyperOS animation physics.</string>
+</resources>
