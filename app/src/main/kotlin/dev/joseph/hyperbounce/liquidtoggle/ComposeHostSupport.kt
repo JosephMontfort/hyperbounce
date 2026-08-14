@@ -76,10 +76,16 @@ internal fun createOverlayWrapper(model: View): OverlayWrapper? {
     model.isClickable = false
     model.isFocusable = false
 
-    val hostOwner = ensureLifecycleOwner(parent, wrapper)
+    val hostOwner = HostOwner().also { it.start() }
 
     val composeView = ComposeView(context)
     composeView.installTouchPassthrough()
+
+    // ComposeView must have an explicit lifecycle environment when injected
+    // into MIUI/SystemUI hierarchies that do not expose normal Activity owners.
+    composeView.setViewTreeLifecycleOwner(hostOwner)
+    composeView.setViewTreeViewModelStoreOwner(hostOwner)
+    composeView.setViewTreeSavedStateRegistryOwner(hostOwner)
     val composeParams = FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT,
         FrameLayout.LayoutParams.MATCH_PARENT
