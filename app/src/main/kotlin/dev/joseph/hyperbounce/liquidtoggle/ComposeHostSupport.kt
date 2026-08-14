@@ -78,7 +78,8 @@ internal fun createOverlayWrapper(model: View): OverlayWrapper? {
 
     val hostOwner = ensureLifecycleOwner(parent, wrapper)
 
-    val composeView = ComposeView(context)\n    composeView.installTouchPassthrough()
+    val composeView = ComposeView(context)
+    composeView.installTouchPassthrough()
     val composeParams = FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT,
         FrameLayout.LayoutParams.MATCH_PARENT
