@@ -6,141 +6,122 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewTreeObserver
 import android.view.animation.OvershootInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
-import java.lang.reflect.Method
 
 object LiquidKeypadHook {
-    private const val TAG = "HyperBounce_Log"
-
-    private fun findMethod(clazz: Class<*>, name: String, vararg parameterTypes: Class<*>): Method {
-        var current: Class<*>? = clazz
-        while (current != null) {
-            try {
-                val method = current.getDeclaredMethod(name, *parameterTypes)
-                method.isAccessible = true
-                return method
-            } catch (e: NoSuchMethodException) {
-                current = current.superclass
-            }
-        }
-        throw NoSuchMethodException(name)
-    }
+    private const val TAG = "HyperBounce_Spacing"
 
     fun apply(module: XposedModule, classLoader: ClassLoader) {
         val clazz = try {
             Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)
         } catch (e: Throwable) {
+            // If it's not in this classloader (e.g. plugin vs systemui), exit silently
             return 
         }
 
-        // 1. Hook onMeasure to catch exact dimensional constraints assigned by MIUI
+        Log.e(TAG, "SUCCESS: Found MiuiNumPadKey class. Applying hooks...")
+
+        // 1. Hook Constructors directly to intercept View Creation
         try {
-            val onMeasureMethod = findMethod(clazz, "onMeasure", Int::class.java, Int::class.java)
-            module.hook(onMeasureMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val result = chain.proceed()
-                    val view = chain.thisObject as View
-                    Log.e(TAG, "[onMeasure] ${view.javaClass.simpleName} Measured: ${view.measuredWidth}x${view.measuredHeight}")
-                    return result
-                }
-            })
-        } catch (e: Throwable) {}
+            val constructors = clazz.declaredConstructors
+            for (constructor in constructors) {
+                constructor.isAccessible = true
+                module.hook(constructor).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        val result = chain.proceed() // Execute original constructor
+                        val view = chain.thisObject as View
+                        
+                        Log.e(TAG, "MiuiNumPadKey constructed. Injecting native LayoutListener.")
 
-        // 2. Hook onAttachedToWindow for Drawing and PreDraw Tree traversal
-        try {
-            val onAttachedMethod = findMethod(clazz, "onAttachedToWindow")
-            module.hook(onAttachedMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val result = chain.proceed()
-                    val view = chain.thisObject as View
-                    
-                    Log.e(TAG, "[onAttachedToWindow] Hooked view: ${view.javaClass.simpleName}")
+                        // Kill native animations
+                        try {
+                            val setAnimMethod = view.javaClass.getMethod("setAnimationEnabled", Boolean::class.javaPrimitiveType)
+                            setAnimMethod.invoke(view, false)
+                        } catch (e: Throwable) {}
 
-                    // Use PreDrawListener instead of post() to guarantee execution right before rendering
-                    view.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
-                        override fun onPreDraw(): Boolean {
-                            view.viewTreeObserver.removeOnPreDrawListener(this)
-                            
-                            var current: View? = view
-                            var depth = 0
-                            while (current != null && depth <= 3) {
-                                val lp = current.layoutParams
-                                var info = ""
-                                if (lp is ViewGroup.MarginLayoutParams) {
-                                    info += "Margins(L:${lp.leftMargin} T:${lp.topMargin} R:${lp.rightMargin} B:${lp.bottomMargin}) "
-                                }
-                                Log.e(TAG, "[PreDraw Depth $depth] ${current.javaClass.name} [${current.width}x${current.height}] $info")
+                        // Apply Perfect Circles
+                        val circleBg = object : android.graphics.drawable.Drawable() {
+                            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                color = Color.parseColor("#40FFFFFF")
+                                style = Paint.Style.FILL
+                            }
+                            override fun draw(canvas: android.graphics.Canvas) {
+                                val size = minOf(bounds.width(), bounds.height()).toFloat()
+                                val radius = (size / 2f) * 0.85f 
+                                canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), radius, paint)
+                            }
+                            override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+                            override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) { paint.colorFilter = colorFilter }
+                            @Deprecated("Deprecated in Java")
+                            override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+                        }
+                        view.background = circleBg
 
-                                // Hijack attempt inside PreDraw (before frame renders)
-                                if (depth == 1 && current is LinearLayout) {
-                                    if (lp is ViewGroup.MarginLayoutParams && lp.bottomMargin != 60) {
-                                        Log.e(TAG, "=> HIJACKING ROW SPACING: Changing bottomMargin to 60")
-                                        lp.bottomMargin = 60
-                                        current.layoutParams = lp
-                                        // We do not call requestLayout() here to avoid infinite PreDraw loops
+                        // Attach native Android layout listener to hijack the dimensions frame-by-frame
+                        view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                            val parent = v.parent as? ViewGroup
+                            val lp = v.layoutParams
+
+                            // Hide the Klondike Letters safely
+                            try {
+                                var currentClass: Class<*>? = v.javaClass
+                                var field: java.lang.reflect.Field? = null
+                                while (currentClass != null) {
+                                    try {
+                                        field = currentClass.getDeclaredField("mKlondikeText")
+                                        break
+                                    } catch (e: NoSuchFieldException) {
+                                        currentClass = currentClass.superclass
                                     }
                                 }
-                                current = current.parent as? View
-                                depth++
+                                field?.isAccessible = true
+                                val klondikeText = field?.get(v) as? TextView
+                                if (klondikeText != null && klondikeText.visibility != View.GONE) {
+                                    klondikeText.visibility = View.GONE
+                                }
+                            } catch (e: Throwable) {
+                                Log.e(TAG, "Failed to hide klondike text", e)
                             }
-                            return true
-                        }
-                    })
 
-                    // Hide Letters
-                    try {
-                        var currentClass: Class<*>? = view.javaClass
-                        var field: java.lang.reflect.Field? = null
-                        while (currentClass != null) {
-                            try {
-                                field = currentClass.getDeclaredField("mKlondikeText")
-                                break
-                            } catch (e: NoSuchFieldException) {
-                                currentClass = currentClass.superclass
+                            // HIJACK 1: Push the Grandparent Rows Apart
+                            if (parent is LinearLayout) {
+                                val parentLp = parent.layoutParams
+                                if (parentLp is ViewGroup.MarginLayoutParams) {
+                                    if (parentLp.bottomMargin != 60) { // Force 60px gap between rows
+                                        Log.e(TAG, "=> HIJACKING SPACING: Pushing parent LinearLayout bottomMargin from ${parentLp.bottomMargin} to 60")
+                                        parentLp.bottomMargin = 60
+                                        parent.layoutParams = parentLp
+                                    }
+                                }
+                            }
+
+                            // HIJACK 2: Strip vertical constraints off the child to allow perfect circular expansion
+                            if (lp is LinearLayout.LayoutParams) {
+                                if (lp.topMargin != 0 || lp.bottomMargin != 0) {
+                                    val density = v.resources.displayMetrics.density
+                                    val hMargin = (18f * density).toInt() 
+                                    lp.setMargins(hMargin, 0, hMargin, 0)
+                                    v.layoutParams = lp
+                                }
                             }
                         }
-                        field?.isAccessible = true
-                        val klondikeText = field?.get(view) as? TextView
-                        klondikeText?.visibility = View.GONE
-                    } catch (e: Throwable) {}
-
-                    // Kill MIUI Animations
-                    try {
-                        val setAnimMethod = findMethod(view.javaClass, "setAnimationEnabled", java.lang.Boolean.TYPE)
-                        setAnimMethod.invoke(view, false)
-                    } catch (e: Throwable) {}
-
-                    // Custom Circle Background
-                    val circleBg = object : android.graphics.drawable.Drawable() {
-                        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                            color = Color.parseColor("#40FFFFFF")
-                            style = Paint.Style.FILL
-                        }
-                        override fun draw(canvas: android.graphics.Canvas) {
-                            val size = minOf(bounds.width(), bounds.height()).toFloat()
-                            val radius = (size / 2f) * 0.85f 
-                            canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), radius, paint)
-                        }
-                        override fun setAlpha(alpha: Int) { paint.alpha = alpha }
-                        override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) { paint.colorFilter = colorFilter }
-                        @Deprecated("Deprecated in Java")
-                        override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+                        return result
                     }
-                    view.background = circleBg
-                    
-                    return result
-                }
-            })
-        } catch (e: Throwable) {}
+                })
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "FATAL: Failed to hook constructors", e)
+        }
 
-        // 3. Touch Event Physics
+        // 2. Touch Physics Hook
         try {
-            val onTouchMethod = findMethod(clazz, "onTouchEvent", MotionEvent::class.java)
+            // Using getDeclaredMethod to avoid crawling the parent tree
+            val onTouchMethod = clazz.getDeclaredMethod("onTouchEvent", MotionEvent::class.java)
+            onTouchMethod.isAccessible = true
             val spring = OvershootInterpolator(2.5f)
             
             module.hook(onTouchMethod).intercept(object : XposedInterface.Hooker {
@@ -160,6 +141,8 @@ object LiquidKeypadHook {
                     return result
                 }
             })
-        } catch (e: Throwable) {}
+        } catch (e: Throwable) {
+            Log.e(TAG, "FATAL: Failed to hook onTouchEvent", e)
+        }
     }
 }
