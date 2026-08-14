@@ -120,6 +120,20 @@ internal object LiquidToggleHost {
                     return try { target.context.classLoader ?: super.getClassLoader() } catch(e: Throwable) { super.getClassLoader() }
                 }
 
+                // Compose's WindowRecomposer reads context.applicationContext when an
+                // animation first starts. Some HyperOS/SystemUI plugin Contexts return
+                // null here. Modern Compose treats this as a non-null platform type and
+                // therefore crashes with an NPE inside getAnimationScaleFlowFor().
+                //
+                // Always provide a non-null application context for injected Compose.
+                override fun getApplicationContext(): Context {
+                    return try {
+                        baseCtx.applicationContext ?: baseCtx
+                    } catch (_: Throwable) {
+                        baseCtx
+                    }
+                }
+
                 override fun getSystemService(name: String): Any? {
                     return try { target.context.getSystemService(name) ?: super.getSystemService(name) } catch(e: Throwable) { super.getSystemService(name) }
                 }
