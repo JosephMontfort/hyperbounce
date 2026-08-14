@@ -27,6 +27,9 @@ import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
+import dev.joseph.hyperbounce.liquidtoggle.LiquidSliderHost;
+import dev.joseph.hyperbounce.liquidtoggle.LiquidToggleHost;
+
 public class PhysicsHook implements IXposedHookLoadPackage {
 
     private static final int TRACK_ON             = Color.parseColor("#30D158");
@@ -88,7 +91,10 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         return Color.argb((int) a, (int) r, (int) g, (int) b);
     }
 
-    private static void disableClipping(View view) {
+    /** Public so dev.joseph.hyperbounce.liquidtoggle.LiquidToggleHost / LiquidSliderHost
+     *  (the real-library Compose hosts) can reuse the exact same clip-children /
+     *  clip-to-outline / elevation workaround the Canvas engines used. */
+    public static void disableClipping(View view) {
         if (view == null) return;
         
         view.setLayerType(View.LAYER_TYPE_NONE, null);
@@ -119,6 +125,79 @@ public class PhysicsHook implements IXposedHookLoadPackage {
             parent = pView.getParent();
             depth++;
         }
+    }
+
+    /*
+     * Slider value/listener bridge for the new Compose-hosted engine
+     * (applyUnifiedSliderEngine + dev.joseph.hyperbounce.liquidtoggle.LiquidSliderHost).
+     *
+     * The legacy Canvas slider engine let the native widget's own onTouchEvent run
+     * completely normally (it only replaced onDraw), so the real getMax/getMin/
+     * getProgress/listener-firing all happened for free. The new engine puts a
+     * ComposeView on top and hides the native widget instead, so it has to push
+     * value changes back explicitly. setProgress(int) is a safe, always-available
+     * way to keep the data model correct; there is no equally standard public API
+     * to also fire the app's OnSeekBarChangeListener, so notifySliderListener()
+     * below best-effort reflects into whichever of a few common field names is
+     * actually present. miuix's SeekBar is assumed to reuse the standard
+     * android.widget.SeekBar.OnSeekBarChangeListener shape, a common OEM-widget
+     * pattern for staying compatible with platform Preference/framework code that
+     * wires listeners onto it -- if your own reverse-engineering notes show a
+     * different field name or listener interface, add it to SLIDER_LISTENER_FIELDS
+     * below (or replace findSliderChangeListener's body outright).
+     */
+    private static final String[] SLIDER_LISTENER_FIELDS = {
+        "mOnSeekBarChangeListener", "onSeekBarChangeListener", "mListener", "listener"
+    };
+
+    private static Object findSliderChangeListener(View view) {
+        for (String fieldName : SLIDER_LISTENER_FIELDS) {
+            try {
+                Object listener = XposedHelpers.getObjectField(view, fieldName);
+                if (listener != null) return listener;
+            } catch (Throwable t) {}
+        }
+        return null;
+    }
+
+    /** Normalizes the widget's current getProgress()/getMin()/getMax() to a 0f..1f
+     *  fraction. Used both to seed LiquidSliderHost.attach() and to re-sync it
+     *  whenever the app calls setProgress() itself. */
+    public static float readSliderFraction(View view) {
+        int max = 100, min = 0, progress = 0;
+        try { max = (int) XposedHelpers.callMethod(view, "getMax"); } catch (Throwable t) {}
+        try { min = (int) XposedHelpers.callMethod(view, "getMin"); } catch (Throwable t) {}
+        try { progress = (int) XposedHelpers.callMethod(view, "getProgress"); } catch (Throwable t) {}
+        float range = max - min;
+        float fraction = range > 0 ? (progress - min) / range : 0f;
+        return Math.max(0f, Math.min(1f, fraction));
+    }
+
+    /** Called from LiquidSliderHost's onValueChange while the user drags/taps the
+     *  real Compose slider: writes the new value back to the native widget and
+     *  best-effort notifies its OnSeekBarChangeListener (see class comment above). */
+    public static void applySliderFraction(View view, float fraction) {
+        int max = 100, min = 0;
+        try { max = (int) XposedHelpers.callMethod(view, "getMax"); } catch (Throwable t) {}
+        try { min = (int) XposedHelpers.callMethod(view, "getMin"); } catch (Throwable t) {}
+        int progress = Math.round(min + fraction * (max - min));
+        try { XposedHelpers.callMethod(view, "setProgress", progress); } catch (Throwable t) {}
+
+        Object listener = findSliderChangeListener(view);
+        if (listener == null) return;
+        try { XposedHelpers.callMethod(listener, "onProgressChanged", view, progress, true); } catch (Throwable t) {}
+    }
+
+    public static void notifySliderTrackingStart(View view) {
+        Object listener = findSliderChangeListener(view);
+        if (listener == null) return;
+        try { XposedHelpers.callMethod(listener, "onStartTrackingTouch", view); } catch (Throwable t) {}
+    }
+
+    public static void notifySliderTrackingStop(View view) {
+        Object listener = findSliderChangeListener(view);
+        if (listener == null) return;
+        try { XposedHelpers.callMethod(listener, "onStopTrackingTouch", view); } catch (Throwable t) {}
     }
 
     private static class GlassState {
@@ -157,13 +236,22 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         long lastTime = System.currentTimeMillis();
     }
 
+    // Both maps are populated only by the preserved legacy Canvas engines now;
+    // the active Compose-hosted engines keep their state in LiquidToggleHost /
+    // LiquidSliderHost instead (see dev.joseph.hyperbounce.liquidtoggle).
     private static final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
     private static final WeakHashMap<Object, SliderState> sliderStateMap = new WeakHashMap<>();
 
     /*
-     * Ported/adapted from Kyant's AndroidLiquidGlass-kmp LiquidToggle/backdrop
-     * refraction shader. HyperBounce intentionally keeps its existing Canvas /
-     * RenderNode / Xposed architecture; no Compose or backdrop dependency is used.
+     * PRESERVED LEGACY SHADERS. Ported/adapted from Kyant's AndroidLiquidGlass-kmp
+     * LiquidToggle/LiquidSlider refraction shaders for HyperBounce's original
+     * Canvas / RenderNode / Xposed rendering path (applyLegacyCanvasToggleEngine,
+     * applyLegacyCanvasSliderEngine, renderLiquidGlassToggleThumb,
+     * renderLiquidGlassThumb below). That path is no longer what's active --
+     * applyUnifiedToggleEngine / applyUnifiedSliderEngine now host the real
+     * com.kyant.backdrop library composables via a ComposeView instead (see
+     * dev.joseph.hyperbounce.liquidtoggle) -- but this is kept intact in case the
+     * hand-painted version is wanted again later.
      * Original project: https://github.com/Kyant0/AndroidLiquidGlass-kmp
      * License: Apache License 2.0 (see LICENSE_AndroidLiquidGlass in module root).
      */
@@ -277,6 +365,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         "    return color;\n" +
         "}";
 
+    // Used only by the preserved applyLegacyCanvasToggleEngine now (see the shader
+    // comment above) -- not called from the active applyUnifiedToggleEngine.
     private void renderLiquidGlassToggleThumb(Canvas canvas, ToggleState s, int w, int h,
                                               float thumbL, float thumbT, float thumbR, float thumbB,
                                               float thumbRadius) {
@@ -406,6 +496,8 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         return a + (b - a) * t;
     }
 
+    // Used only by the preserved applyLegacyCanvasSliderEngine now -- not called
+    // from the active applyUnifiedSliderEngine.
     private void renderLiquidGlassThumb(Canvas canvas, GlassState s, int w, int h, float thumbL, float thumbT, float thumbR, float thumbB, float thumbRadius, boolean isToggle) {
         if (!canvas.isHardwareAccelerated()) return;
         RectF roundRectF = new RectF(thumbL, thumbT, thumbR, thumbB);
@@ -546,7 +638,16 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {}
     }
 
-    private void applyUnifiedToggleEngine(String className, ClassLoader classLoader) {
+    /*
+     * PRESERVED LEGACY ENGINE -- not called from anywhere anymore (see the real
+     * applyUnifiedToggleEngine below). This is HyperBounce's original, hand-tuned
+     * Canvas/RenderNode toggle: it repaints the native SlidingButton's onDraw
+     * directly using AGSL_SHADER_TOGGLE / renderLiquidGlassToggleThumb further up
+     * in this file. Kept intact on request in case it's wanted again later --
+     * e.g. flip handleLoadPackage back to call this instead of the new one, or
+     * A/B them. Nothing here was touched.
+     */
+    private void applyLegacyCanvasToggleEngine(String className, ClassLoader classLoader) {
         if (hookedDynamicClasses.contains(className)) return;
         Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
         if (clazz == null) return;
@@ -811,7 +912,73 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {}
     }
 
-    private void applyUnifiedSliderEngine(String className, ClassLoader classLoader) {
+    /*
+     * ACTIVE ENGINE. The toggle is now the real com.kyant.backdrop LiquidToggle
+     * composable (see dev.joseph.hyperbounce.liquidtoggle), hosted in a ComposeView
+     * swapped in over the native widget at its exact layout slot by LiquidToggleHost.
+     * This method's job is reduced to: notice when an instance of the widget joins
+     * or leaves a window and hand it to LiquidToggleHost, and keep it in sync when
+     * the app itself changes the checked state programmatically. All three
+     * discovery paths from before -- the static TARGET_TOGGLE_CLASSES list, the
+     * dialer "nuclear replacement" instance created in applyDialerToggleEngine, and
+     * the SystemUI classes discovered dynamically via the ClassLoader.loadClass
+     * hook in handleLoadPackage -- still funnel through this same method, so they
+     * all get the real composable for free; nothing else needed to change for them.
+     */
+    private void applyUnifiedToggleEngine(String className, ClassLoader classLoader) {
+        if (hookedDynamicClasses.contains(className)) return;
+        Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
+        if (clazz == null) return;
+        hookedDynamicClasses.add(className);
+
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "jumpDrawablesToCurrentState", new XC_MethodReplacement() {
+                @Override
+                protected Object replaceHookedMethod(MethodHookParam param) throws Throwable { return null; }
+            });
+        } catch (Throwable t) {}
+
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "onAttachedToWindow", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    android.widget.CompoundButton view = (android.widget.CompoundButton) param.thisObject;
+                    LiquidToggleHost.attach(view);
+                }
+            });
+        } catch (Throwable t) {}
+
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "onDetachedFromWindow", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    android.widget.CompoundButton view = (android.widget.CompoundButton) param.thisObject;
+                    LiquidToggleHost.onModelDetached(view);
+                }
+            });
+        } catch (Throwable t) {}
+
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "setChecked", boolean.class, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    android.widget.CompoundButton view = (android.widget.CompoundButton) param.thisObject;
+                    LiquidToggleHost.syncChecked(view);
+                }
+            });
+        } catch (Throwable t) {}
+    }
+
+    /*
+     * PRESERVED LEGACY ENGINE -- not called from anywhere anymore (see the real
+     * applyUnifiedSliderEngine below). HyperBounce's original, hand-tuned
+     * Canvas/RenderNode slider: it lets the native widget handle touch/value
+     * changes completely normally (only onDraw is replaced), repainting on top
+     * using AGSL_SHADER_SLIDER / renderLiquidGlassThumb further up in this file.
+     * Kept intact on request in case it's wanted again later. Nothing here was
+     * touched.
+     */
+    private void applyLegacyCanvasSliderEngine(String className, ClassLoader classLoader) {
         if (hookedDynamicClasses.contains(className)) return;
         Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
         if (clazz == null) return;
@@ -979,34 +1146,71 @@ public class PhysicsHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {}
     }
 
+    /*
+     * ACTIVE ENGINE. The slider is now the real com.kyant.backdrop LiquidSlider
+     * composable (see dev.joseph.hyperbounce.liquidtoggle), hosted in a ComposeView
+     * swapped in over the native widget at its exact layout slot by
+     * LiquidSliderHost -- the exact same attach-point pattern as the toggle above.
+     * Unlike the legacy engine, this one takes over touch handling completely (the
+     * ComposeView sits on top and the native widget is hidden), so value changes
+     * have to be pushed back to the native widget explicitly instead of piggy-
+     * backing on its own onTouchEvent: applySliderFraction/notifySliderTracking*
+     * below do that, including a best-effort attempt at notifying whatever
+     * OnSeekBarChangeListener the app registered so live-updating settings
+     * (volume, brightness, etc.) keep working. See those methods' comments for
+     * the assumption they make about the listener field name.
+     */
+    private void applyUnifiedSliderEngine(String className, ClassLoader classLoader) {
+        if (hookedDynamicClasses.contains(className)) return;
+        Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
+        if (clazz == null) return;
+        hookedDynamicClasses.add(className);
+
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "onAttachedToWindow", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    View view = (View) param.thisObject;
+                    LiquidSliderHost.attach(view, readSliderFraction(view));
+                }
+            });
+        } catch (Throwable t) {}
+
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "onDetachedFromWindow", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    LiquidSliderHost.onModelDetached((View) param.thisObject);
+                }
+            });
+        } catch (Throwable t) {}
+
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "setProgress", int.class, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    View view = (View) param.thisObject;
+                    LiquidSliderHost.syncFraction(view, readSliderFraction(view));
+                }
+            });
+        } catch (Throwable t) {}
+    }
+
     @Override
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
-        try {
-            Class<?> viewClass = XposedHelpers.findClassIfExists("android.view.View", lpparam.classLoader);
-            if (viewClass != null) {
-                XposedHelpers.findAndHookMethod(viewClass, "dispatchTouchEvent", MotionEvent.class, new XC_MethodReplacement() {
-                    @Override
-                    protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-                        View view = (View) param.thisObject;
-                        String className = view.getClass().getName();
-                        boolean isTarget = false;
-                        for (String target : TARGET_TOGGLE_CLASSES) {
-                            if (className.equals(target)) { isTarget = true; break; }
-                        }
-                        if (isTarget) {
-                            MotionEvent event = (MotionEvent) param.args[0];
-                            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                                android.view.ViewParent parent = view.getParent();
-                                if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
-                            }
-                            XposedHelpers.callMethod(view, "onTouchEvent", event);
-                            return true; 
-                        }
-                        return XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args);
-                    }
-                });
-            }
-        } catch (Throwable t) {}
+        // The old global View.dispatchTouchEvent hijack that used to force
+        // TARGET_TOGGLE_CLASSES instances to swallow touches and call their own
+        // onTouchEvent (needed by applyLegacyCanvasToggleEngine's onTouchEvent-hook-
+        // only approach) has been removed: it served the Canvas engine specifically
+        // and is no longer relevant now that applyUnifiedToggleEngine hides the
+        // native widget and hosts a real ComposeView instead. That ComposeView
+        // handles its own touch dispatch and calls
+        // parent.requestDisallowInterceptTouchEvent(true) itself -- see
+        // TouchPassthroughComposeView in dev.joseph.hyperbounce.liquidtoggle's
+        // ComposeHostSupport.kt -- so the same "no scrolling issues" guarantee
+        // still holds without needing this hook. (If you switch back to
+        // applyLegacyCanvasToggleEngine, restore this hook too -- see git history
+        // or the previous revision of this method.)
 
         for (String className : TARGET_TOGGLE_CLASSES) applyUnifiedToggleEngine(className, lpparam.classLoader);
         for (String className : TARGET_SLIDER_CLASSES) applyUnifiedSliderEngine(className, lpparam.classLoader);
