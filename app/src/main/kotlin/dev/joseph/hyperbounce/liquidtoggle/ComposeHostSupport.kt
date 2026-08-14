@@ -78,7 +78,7 @@ internal fun createOverlayWrapper(model: View): OverlayWrapper? {
 
     val hostOwner = ensureLifecycleOwner(parent, wrapper)
 
-    val composeView = TouchPassthroughComposeView(context)
+    val composeView = ComposeView(context)\n    composeView.installTouchPassthrough()
     val composeParams = FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT,
         FrameLayout.LayoutParams.MATCH_PARENT
@@ -125,12 +125,12 @@ internal fun attachRowSpy(content: View, pressedState: MutableState<Boolean>) {
     }
 }
 
-internal class TouchPassthroughComposeView(context: Context) : ComposeView(context) {
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
-            parent?.requestDisallowInterceptTouchEvent(true)
+private fun ComposeView.installTouchPassthrough() {
+    setOnTouchListener { v, event ->
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            v.parent?.requestDisallowInterceptTouchEvent(true)
         }
-        return super.dispatchTouchEvent(ev)
+        false
     }
 }
 
