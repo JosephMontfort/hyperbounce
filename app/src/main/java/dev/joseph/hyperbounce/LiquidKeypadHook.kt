@@ -42,7 +42,7 @@ object LiquidKeypadHook {
             val onAttachedMethod = findMethod(clazz, "onAttachedToWindow")
             
             module.hook(onAttachedMethod).intercept(object : XposedInterface.Hooker {
-                override fun call(chain: XposedInterface.Chain): Any? {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
                     val result = chain.proceed()
                     val view = chain.thisObject as View
                     
@@ -105,7 +105,7 @@ object LiquidKeypadHook {
             val spring = OvershootInterpolator(2.5f)
             
             module.hook(onTouchMethod).intercept(object : XposedInterface.Hooker {
-                override fun call(chain: XposedInterface.Chain): Any? {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
                     val result = chain.proceed()
                     val view = chain.thisObject as View
                     val event = chain.args[0] as MotionEvent
