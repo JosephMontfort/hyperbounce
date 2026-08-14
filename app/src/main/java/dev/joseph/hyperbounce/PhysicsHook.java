@@ -744,6 +744,7 @@ public class PhysicsHook extends XposedModule {
 
         if (packageName.equals("miui.systemui.plugin") ||
                 packageName.equals("com.android.systemui")) {
+            dev.joseph.hyperbounce.LiquidKeypadHook.INSTANCE.apply(this, packageClassLoader);
             try {
                 Class<?> delegateClass = findClassIfExists(
                         "miui.systemui.dynamicisland.anim.DynamicIslandAnimationDelegate",
