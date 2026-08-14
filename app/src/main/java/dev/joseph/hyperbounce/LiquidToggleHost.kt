@@ -10,13 +10,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.MotionDurationScale
+import androidx.compose.runtime.Recomposer
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.liquidglass.LiquidToggle
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.util.WeakHashMap
 
 internal object LiquidToggleHost {
@@ -65,6 +72,8 @@ internal object LiquidToggleHost {
 
     private class Host(private val target: View, private val parent: ViewGroup) {
         var composeView: ComposeView? = null
+        private var recomposer: Recomposer? = null
+        private var recomposerScope: CoroutineScope? = null
         private var checked by mutableStateOf((target as? CompoundButton)?.isChecked == true)
         private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
         
@@ -139,11 +148,47 @@ internal object LiquidToggleHost {
                 }
             }
 
+            /*
+             * IMPORTANT: Do not let this injected ComposeView inherit SystemUI's
+             * window/tree Recomposer.
+             *
+             * HyperOS SystemUI can expose a Compose composition context whose
+             * MotionDurationScale implementation reaches a null applicationContext.
+             * Compose's Animatable then crashes at:
+             *   WindowRecomposer -> getAnimationScaleFlowFor ->
+             *   applicationContext.contentResolver
+             *
+             * setParentCompositionContext() is the supported Compose escape hatch:
+             * an explicit parent context wins over the ancestor/window Recomposer.
+             * We therefore own a tiny Recomposer for this injected view and supply
+             * a fixed MotionDurationScale. This keeps the LiquidToggle animation
+             * pipeline completely isolated from SystemUI's Recomposer.
+             */
+            val isolatedMotionScale = object : MotionDurationScale {
+                override val scaleFactor: Float = 1f
+            }
+            val isolatedRecomposer = Recomposer(
+                AndroidUiDispatcher.Main + isolatedMotionScale
+            )
+            val isolatedScope = CoroutineScope(
+                SupervisorJob() + AndroidUiDispatcher.Main
+            )
+            recomposer = isolatedRecomposer
+            recomposerScope = isolatedScope
+            isolatedScope.launch {
+                try {
+                    isolatedRecomposer.runRecomposeAndApplyChanges()
+                } catch (_: Throwable) {
+                    // The host owns this recomposer; cancellation during disposal is expected.
+                }
+            }
+
             val compose = ComposeView(safeContext).apply {
                 tag = "HyperBounceLiquidToggle:${System.identityHashCode(target)}"
                 isClickable = true
                 isFocusable = true
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+                setParentCompositionContext(isolatedRecomposer)
                 setContent {
                     LiquidToggleOverlay(
                         backdrop = backdrop,
@@ -235,6 +280,11 @@ internal object LiquidToggleHost {
             backdrop.release()
             compose?.setContent { }
             compose?.let { parent.overlay?.remove(it) }
+
+            recomposer?.cancel()
+            recomposer = null
+            recomposerScope?.cancel()
+            recomposerScope = null
         }
     }
 

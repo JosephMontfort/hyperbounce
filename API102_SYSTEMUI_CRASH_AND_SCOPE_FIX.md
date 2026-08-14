@@ -22,3 +22,19 @@ API 102 does **not** itself fix this NPE. Its `deoptimize()` feature is valuable
 The injected `ContextThemeWrapper` now overrides `getApplicationContext()` and falls back to the resolved framework application context.
 
 This fix is deliberately localized to the Compose injection boundary and does not modify the liquid-glass animation implementation.
+
+
+## Follow-up fix: isolate the injected Compose Recomposer
+
+The earlier `ContextThemeWrapper.getApplicationContext()` override was not sufficient.
+The crash can originate from Compose's *parent/window CompositionContext* rather than
+from the `ComposeView`'s raw `Context`. ComposeView normally resolves its composition
+parent from an ancestor CompositionContext or the window Recomposer.
+
+The port now explicitly installs a dedicated `Recomposer` on the injected ComposeView
+via `setParentCompositionContext()`. The dedicated Recomposer uses
+`AndroidUiDispatcher.Main` plus a fixed `MotionDurationScale(1f)`, so Compose animation
+code does not consult SystemUI's potentially broken WindowRecomposer/applicationContext.
+
+The dedicated Recomposer is cancelled together with the Host to avoid leaking a
+composition worker into SystemUI.
