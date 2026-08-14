@@ -2,7 +2,6 @@ package dev.joseph.hyperbounce
 
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.drawable.ShapeDrawable
 import android.graphics.drawable.shapes.OvalShape
 import android.util.Log
 import android.view.MotionEvent
@@ -34,10 +33,9 @@ object LiquidKeypadHook {
         val clazz = try {
             Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)
         } catch (e: Throwable) {
-            return // Target class not found in this classloader
+            return 
         }
 
-        // 1. Hook Initialization to Inject Spacing and Shapes
         try {
             val onAttachedMethod = findMethod(clazz, "onAttachedToWindow")
             
@@ -46,7 +44,7 @@ object LiquidKeypadHook {
                     val result = chain.proceed()
                     val view = chain.thisObject as View
                     
-                    // Hide the Klondike Text safely without collapsing the layout height
+                    // Collapse the Klondike Text layout space completely 
                     try {
                         var currentClass: Class<*>? = view.javaClass
                         var field: java.lang.reflect.Field? = null
@@ -60,10 +58,8 @@ object LiquidKeypadHook {
                         }
                         field?.isAccessible = true
                         val klondikeText = field?.get(view) as? TextView
-                        klondikeText?.visibility = View.INVISIBLE
-                    } catch (e: Throwable) {
-                        Log.e("HyperBounce", "LiquidKeypadHook: Failed to hide klondike text", e)
-                    }
+                        klondikeText?.visibility = View.GONE
+                    } catch (e: Throwable) {}
 
                     // Kill native MIUI animations
                     try {
@@ -71,35 +67,45 @@ object LiquidKeypadHook {
                         setAnimMethod.invoke(view, false)
                     } catch (e: Throwable) {}
 
-                    // Inject Custom Circular Background
-                    val ovalShape = ShapeDrawable(OvalShape()).apply {
-                        paint.color = Color.parseColor("#40FFFFFF")
-                        paint.style = Paint.Style.FILL
+                    // Custom Centered Circular Background
+                    val circleBg = object : android.graphics.drawable.Drawable() {
+                        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            color = Color.parseColor("#40FFFFFF")
+                            style = Paint.Style.FILL
+                        }
+                        override fun draw(canvas: android.graphics.Canvas) {
+                            val size = minOf(bounds.width(), bounds.height()).toFloat()
+                            val radius = (size / 2f) * 0.85f // 85% of available reclaimed square
+                            canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), radius, paint)
+                        }
+                        override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+                        override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) { paint.colorFilter = colorFilter }
+                        @Deprecated("Deprecated in Java")
+                        override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
                     }
-                    view.background = ovalShape
+                    view.background = circleBg
 
-                    // Post layout execution to guarantee margins override XML
-                    view.post {
-                        val lp = view.layoutParams
+                    // Aggressive Layout Listener to fight MIUI's margin overrides
+                    view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                        val lp = v.layoutParams
                         if (lp is LinearLayout.LayoutParams) {
-                            val density = view.resources.displayMetrics.density
-                            val hMargin = (16f * density).toInt() 
-                            val vMargin = (12f * density).toInt() 
-                            
-                            lp.setMargins(hMargin, vMargin, hMargin, vMargin)
-                            view.layoutParams = lp
-                            view.requestLayout()
+                            // If MIUI forces margins, instantly strip them to reclaim height
+                            if (lp.topMargin != 0 || lp.bottomMargin != 0) {
+                                val density = v.resources.displayMetrics.density
+                                val hMargin = (18f * density).toInt() 
+                                
+                                // 0 vertical margin forces view to expand to full row height
+                                lp.setMargins(hMargin, 0, hMargin, 0)
+                                v.layoutParams = lp
+                            }
                         }
                     }
                     
                     return result
                 }
             })
-        } catch (e: Throwable) {
-            Log.e("HyperBounce", "LiquidKeypadHook: Failed to hook onAttachedToWindow", e)
-        }
+        } catch (e: Throwable) {}
 
-        // 2. Hook Touch Events for iOS Physics
         try {
             val onTouchMethod = findMethod(clazz, "onTouchEvent", MotionEvent::class.java)
             val spring = OvershootInterpolator(2.5f)
@@ -121,8 +127,6 @@ object LiquidKeypadHook {
                     return result
                 }
             })
-        } catch (e: Throwable) {
-            Log.e("HyperBounce", "LiquidKeypadHook: Failed to hook onTouchEvent", e)
-        }
+        } catch (e: Throwable) {}
     }
 }
