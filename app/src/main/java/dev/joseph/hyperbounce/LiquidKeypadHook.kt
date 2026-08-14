@@ -2,10 +2,10 @@ package dev.joseph.hyperbounce
 
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.drawable.shapes.OvalShape
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.OvershootInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -14,6 +14,7 @@ import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Method
 
 object LiquidKeypadHook {
+    private const val TAG = "HyperBounce_Spacing"
 
     private fun findMethod(clazz: Class<*>, name: String, vararg parameterTypes: Class<*>): Method {
         var current: Class<*>? = clazz
@@ -44,7 +45,42 @@ object LiquidKeypadHook {
                     val result = chain.proceed()
                     val view = chain.thisObject as View
                     
-                    // Collapse the Klondike Text layout space completely 
+                    // 1. Heavy Logging & Parent Row Margin Hijacking
+                    view.post {
+                        var current: View? = view
+                        var depth = 0
+                        while (current != null) {
+                            val lp = current.layoutParams
+                            var info = ""
+                            if (lp is ViewGroup.MarginLayoutParams) {
+                                info += "Margins(L:${lp.leftMargin} T:${lp.topMargin} R:${lp.rightMargin} B:${lp.bottomMargin}) "
+                            }
+                            if (lp is LinearLayout.LayoutParams) {
+                                info += "Weight(${lp.weight})"
+                            }
+                            Log.i(TAG, "[Depth $depth] ${current.javaClass.name} [${current.width}x${current.height}] $info")
+
+                            // Depth 1 is the horizontal LinearLayout row holding 3 buttons.
+                            // We hijack this row to forcefully push the rows apart.
+                            if (depth == 1 && current is LinearLayout) {
+                                if (lp is ViewGroup.MarginLayoutParams) {
+                                    // If it's using the stock tight spacing (e.g., 11px)
+                                    if (lp.bottomMargin < 60) {
+                                        Log.i(TAG, "=> HIJACKING ROW SPACING: Changing bottomMargin from ${lp.bottomMargin} to 60")
+                                        lp.bottomMargin = 60
+                                        current.layoutParams = lp
+                                        current.requestLayout()
+                                    }
+                                }
+                            }
+                            
+                            current = current.parent as? View
+                            depth++
+                            if (depth > 4) break // Stop after grandparent to prevent log spam
+                        }
+                    }
+
+                    // 2. Hide Letters
                     try {
                         var currentClass: Class<*>? = view.javaClass
                         var field: java.lang.reflect.Field? = null
@@ -61,13 +97,13 @@ object LiquidKeypadHook {
                         klondikeText?.visibility = View.GONE
                     } catch (e: Throwable) {}
 
-                    // Kill native MIUI animations
+                    // 3. Kill MIUI Animations
                     try {
                         val setAnimMethod = findMethod(view.javaClass, "setAnimationEnabled", java.lang.Boolean.TYPE)
                         setAnimMethod.invoke(view, false)
                     } catch (e: Throwable) {}
 
-                    // Custom Centered Circular Background
+                    // 4. Custom Circle Background
                     val circleBg = object : android.graphics.drawable.Drawable() {
                         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                             color = Color.parseColor("#40FFFFFF")
@@ -75,7 +111,7 @@ object LiquidKeypadHook {
                         }
                         override fun draw(canvas: android.graphics.Canvas) {
                             val size = minOf(bounds.width(), bounds.height()).toFloat()
-                            val radius = (size / 2f) * 0.85f // 85% of available reclaimed square
+                            val radius = (size / 2f) * 0.85f 
                             canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), radius, paint)
                         }
                         override fun setAlpha(alpha: Int) { paint.alpha = alpha }
@@ -84,22 +120,6 @@ object LiquidKeypadHook {
                         override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
                     }
                     view.background = circleBg
-
-                    // Aggressive Layout Listener to fight MIUI's margin overrides
-                    view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-                        val lp = v.layoutParams
-                        if (lp is LinearLayout.LayoutParams) {
-                            // If MIUI forces margins, instantly strip them to reclaim height
-                            if (lp.topMargin != 0 || lp.bottomMargin != 0) {
-                                val density = v.resources.displayMetrics.density
-                                val hMargin = (18f * density).toInt() 
-                                
-                                // 0 vertical margin forces view to expand to full row height
-                                lp.setMargins(hMargin, 0, hMargin, 0)
-                                v.layoutParams = lp
-                            }
-                        }
-                    }
                     
                     return result
                 }
