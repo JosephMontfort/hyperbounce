@@ -6,6 +6,7 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.animation.OvershootInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -14,7 +15,7 @@ import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Method
 
 object LiquidKeypadHook {
-    private const val TAG = "HyperBounce_Spacing"
+    private const val TAG = "HyperBounce_Log"
 
     private fun findMethod(clazz: Class<*>, name: String, vararg parameterTypes: Class<*>): Method {
         var current: Class<*>? = clazz
@@ -37,50 +38,61 @@ object LiquidKeypadHook {
             return 
         }
 
+        // 1. Hook onMeasure to catch exact dimensional constraints assigned by MIUI
+        try {
+            val onMeasureMethod = findMethod(clazz, "onMeasure", Int::class.java, Int::class.java)
+            module.hook(onMeasureMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val result = chain.proceed()
+                    val view = chain.thisObject as View
+                    Log.e(TAG, "[onMeasure] ${view.javaClass.simpleName} Measured: ${view.measuredWidth}x${view.measuredHeight}")
+                    return result
+                }
+            })
+        } catch (e: Throwable) {}
+
+        // 2. Hook onAttachedToWindow for Drawing and PreDraw Tree traversal
         try {
             val onAttachedMethod = findMethod(clazz, "onAttachedToWindow")
-            
             module.hook(onAttachedMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val result = chain.proceed()
                     val view = chain.thisObject as View
                     
-                    // 1. Heavy Logging & Parent Row Margin Hijacking
-                    view.post {
-                        var current: View? = view
-                        var depth = 0
-                        while (current != null) {
-                            val lp = current.layoutParams
-                            var info = ""
-                            if (lp is ViewGroup.MarginLayoutParams) {
-                                info += "Margins(L:${lp.leftMargin} T:${lp.topMargin} R:${lp.rightMargin} B:${lp.bottomMargin}) "
-                            }
-                            if (lp is LinearLayout.LayoutParams) {
-                                info += "Weight(${lp.weight})"
-                            }
-                            Log.i(TAG, "[Depth $depth] ${current.javaClass.name} [${current.width}x${current.height}] $info")
+                    Log.e(TAG, "[onAttachedToWindow] Hooked view: ${view.javaClass.simpleName}")
 
-                            // Depth 1 is the horizontal LinearLayout row holding 3 buttons.
-                            // We hijack this row to forcefully push the rows apart.
-                            if (depth == 1 && current is LinearLayout) {
+                    // Use PreDrawListener instead of post() to guarantee execution right before rendering
+                    view.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+                        override fun onPreDraw(): Boolean {
+                            view.viewTreeObserver.removeOnPreDrawListener(this)
+                            
+                            var current: View? = view
+                            var depth = 0
+                            while (current != null && depth <= 3) {
+                                val lp = current.layoutParams
+                                var info = ""
                                 if (lp is ViewGroup.MarginLayoutParams) {
-                                    // If it's using the stock tight spacing (e.g., 11px)
-                                    if (lp.bottomMargin < 60) {
-                                        Log.i(TAG, "=> HIJACKING ROW SPACING: Changing bottomMargin from ${lp.bottomMargin} to 60")
+                                    info += "Margins(L:${lp.leftMargin} T:${lp.topMargin} R:${lp.rightMargin} B:${lp.bottomMargin}) "
+                                }
+                                Log.e(TAG, "[PreDraw Depth $depth] ${current.javaClass.name} [${current.width}x${current.height}] $info")
+
+                                // Hijack attempt inside PreDraw (before frame renders)
+                                if (depth == 1 && current is LinearLayout) {
+                                    if (lp is ViewGroup.MarginLayoutParams && lp.bottomMargin != 60) {
+                                        Log.e(TAG, "=> HIJACKING ROW SPACING: Changing bottomMargin to 60")
                                         lp.bottomMargin = 60
                                         current.layoutParams = lp
-                                        current.requestLayout()
+                                        // We do not call requestLayout() here to avoid infinite PreDraw loops
                                     }
                                 }
+                                current = current.parent as? View
+                                depth++
                             }
-                            
-                            current = current.parent as? View
-                            depth++
-                            if (depth > 4) break // Stop after grandparent to prevent log spam
+                            return true
                         }
-                    }
+                    })
 
-                    // 2. Hide Letters
+                    // Hide Letters
                     try {
                         var currentClass: Class<*>? = view.javaClass
                         var field: java.lang.reflect.Field? = null
@@ -97,13 +109,13 @@ object LiquidKeypadHook {
                         klondikeText?.visibility = View.GONE
                     } catch (e: Throwable) {}
 
-                    // 3. Kill MIUI Animations
+                    // Kill MIUI Animations
                     try {
                         val setAnimMethod = findMethod(view.javaClass, "setAnimationEnabled", java.lang.Boolean.TYPE)
                         setAnimMethod.invoke(view, false)
                     } catch (e: Throwable) {}
 
-                    // 4. Custom Circle Background
+                    // Custom Circle Background
                     val circleBg = object : android.graphics.drawable.Drawable() {
                         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                             color = Color.parseColor("#40FFFFFF")
@@ -126,6 +138,7 @@ object LiquidKeypadHook {
             })
         } catch (e: Throwable) {}
 
+        // 3. Touch Event Physics
         try {
             val onTouchMethod = findMethod(clazz, "onTouchEvent", MotionEvent::class.java)
             val spring = OvershootInterpolator(2.5f)
