@@ -32,10 +32,16 @@ object LiquidKeypadHook {
     }
 
     fun apply(module: XposedModule, classLoader: ClassLoader) {
-        try {
-            val pinViewClass = Class.forName("com.android.keyguard.widget.MiuiKeyguardPINView", false, classLoader)
-            val keyClass = Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)
+        // Silently abort if the lockscreen classes are not found in this process
+        val pinViewClass = try {
+            Class.forName("com.android.keyguard.widget.MiuiKeyguardPINView", false, classLoader)
+        } catch (e: ClassNotFoundException) { return }
+        
+        val keyClass = try {
+            Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)
+        } catch (e: ClassNotFoundException) { return }
 
+        try {
             // 1. Inject the Full-Screen Canvas Overlay
             val onAttachedRootMethod = findMethod(pinViewClass, "onAttachedToWindow")
             module.hook(onAttachedRootMethod).intercept(object : XposedInterface.Hooker {
@@ -96,7 +102,7 @@ object LiquidKeypadHook {
                             
                             view.background = null
 
-                            // Tuned Spacing XML Rewrite (Safe DP Conversion)
+                            // Tuned Spacing XML Rewrite
                             val keySizePx = (82f * density).toInt()     
                             val vMarginPx = (28f * density).toInt()     
                             val hMarginPx = (10f * density).toInt()     
@@ -145,7 +151,6 @@ object LiquidKeypadHook {
                             
                             // Map coordinates dynamically
                             view.addOnLayoutChangeListener { v, left, top, right, bottom, _, _, _, _ ->
-                                // Convert relative bounds to root container bounds
                                 val location = IntArray(2)
                                 v.getLocationInWindow(location)
                                 val rootLocation = IntArray(2)
