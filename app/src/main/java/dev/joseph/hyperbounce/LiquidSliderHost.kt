@@ -67,7 +67,7 @@ internal object LiquidSliderHost {
         host.parent.getLocationInWindow(parentLoc)
         
         val density = target.resources.displayMetrics.density
-        val paddingPx = (24f * density).toInt() // Account for the expanded Compose bounds
+        val paddingPx = (24f * density).toInt() 
         
         val overlayLeftPx = (targetLoc[0] - parentLoc[0]) - paddingPx
         val overlayTopPx = (targetLoc[1] - parentLoc[1]) - paddingPx
@@ -152,7 +152,6 @@ internal object LiquidSliderHost {
                 setParentCompositionContext(isolatedRecomposer)
                 setContent {
                     if (isVisibleState) {
-                        // CLIPPING FIX: We let ComposeView bleed, but restrict the inner slider to native dimensions
                         val targetWidthDp = with(LocalDensity.current) { target.width.toDp() }
                         val targetHeightDp = with(LocalDensity.current) { target.height.toDp() }
                         
@@ -169,7 +168,6 @@ internal object LiquidSliderHost {
                                         sliderValue = newValue
                                         val progressInt = newValue.toInt()
                                         
-                                        // WRITE BUG FIX: Force fromUser = true to trigger system listeners
                                         try {
                                             val setProgInt = android.widget.AbsSeekBar::class.java.getDeclaredMethod(
                                                 "setProgressInternal", 
@@ -229,13 +227,13 @@ internal object LiquidSliderHost {
             refreshGeometry()
         }
 
-        // SCROLL FIX: Stop the anti-clipping algorithm from destroying the top action bar
         private fun disableClipping(view: View) {
             var p: View? = view
             var depth = 0
             while (p != null && depth < 3) {
                 val className = p.javaClass.name
-                if (p is androidx.recyclerview.widget.RecyclerView ||
+                // COMPILE FIX: Replaced static class check with pure string match
+                if (className.contains("RecyclerView") ||
                     p is android.widget.AbsListView ||
                     p is android.widget.ScrollView ||
                     className.contains("Recycler") ||
@@ -260,7 +258,6 @@ internal object LiquidSliderHost {
             val density = target.resources.displayMetrics.density
             val paddingPx = (24f * density).toInt()
 
-            // CLIPPING FIX: Give ComposeView 24dp of breathing room in every direction escaping the 58px ceiling
             val overlayLeftPx = target.left - paddingPx
             val overlayTopPx = target.top - paddingPx
             val overlayWidthPx = target.width + (paddingPx * 2)
