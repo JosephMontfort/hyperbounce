@@ -1,13 +1,10 @@
 package dev.joseph.hyperbounce
 
-import android.graphics.Color
-import android.graphics.Paint
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.OvershootInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
 import io.github.libxposed.api.XposedInterface
@@ -45,15 +42,18 @@ object LiquidKeypadHook {
                         try {
                             val density = view.resources.displayMetrics.density
 
-                            // 1. Hide Klondike text, Center Digits, and Extract the Number
+                            // 1. Extract the digit and hide ALL native text securely
                             var digitStr = ""
-                            var digitText: TextView? = null
                             var cls: Class<*>? = view.javaClass
                             while (cls != null) {
                                 try {
                                     val mDigitText = cls.getDeclaredField("mDigitText")
                                     mDigitText.isAccessible = true
-                                    digitText = mDigitText.get(view) as? TextView
+                                    val digitTextView = mDigitText.get(view) as? TextView
+                                    if (digitTextView != null) {
+                                        digitStr = digitTextView.text.toString()
+                                        digitTextView.visibility = View.INVISIBLE // Hide native digit, Compose will draw it
+                                    }
 
                                     val mKlondikeText = cls.getDeclaredField("mKlondikeText")
                                     mKlondikeText.isAccessible = true
@@ -61,33 +61,29 @@ object LiquidKeypadHook {
                                     break
                                 } catch (e: NoSuchFieldException) { cls = cls.superclass }
                             }
-                            
-                            digitText?.let {
-                                it.gravity = Gravity.CENTER
-                                it.setPadding(0, 0, 0, 0)
-                                digitStr = it.text.toString()
-                            }
 
-                            // Kill native animations
+                            // 2. Kill native scaling animations
                             try {
                                 val setAnimMethod = view.javaClass.getMethod("setAnimationEnabled", Boolean::class.javaPrimitiveType)
                                 setAnimMethod.invoke(view, false)
                             } catch (e: Throwable) {}
+                            
+                            // Prevent native visual ripple/background to leave room for Compose
+                            view.background = null
 
                             // =========================================================
-                            // 2. THE XML REWRITE HACK (Tuned Vertical Positioning)
+                            // 3. THE TUNED XML REWRITE HACK
                             // =========================================================
-                            val keySizePx = (82f * density).toInt()     // Perfect square button bounds
-                            val vMarginPx = (32f * density).toInt()     // UNCHANGED: Vertical gap between rows
-                            val hMarginPx = (14f * density).toInt()     // UNCHANGED: Horizontal gap
+                            val keySizePx = (82f * density).toInt()     
+                            val vMarginPx = (28f * density).toInt()     // UNCHANGED
+                            val hMarginPx = (10f * density).toInt()     // SLIGHTLY REDUCED horizontal gap
                             
-                            val bottomLiftPx = (100f * density).toInt() // INCREASED: Lifts grid further up from fingerprint
-                            val topPullPx = (-25f * density).toInt()    // NEW: Pulls grid closer to the PIN dots above it
+                            val bottomLiftPx = (115f * density).toInt() // INCREASED: Lifts grid further up
+                            val topPullPx = (-50f * density).toInt()    // INCREASED: Pulls grid much closer to PIN dots
 
                             val row = view.parent as? LinearLayout
                             val grid = row?.parent as? LinearLayout
 
-                            // Grandparent Grid: Free it from fixed dimensions and pull it closer to dots
                             grid?.let {
                                 val gridLp = it.layoutParams as? ViewGroup.MarginLayoutParams
                                 if (gridLp != null) {
@@ -100,13 +96,10 @@ object LiquidKeypadHook {
                                         gridLp.topMargin = topPullPx
                                         changed = true
                                     }
-                                    if (changed) {
-                                        it.layoutParams = gridLp
-                                    }
+                                    if (changed) it.layoutParams = gridLp
                                 }
                             }
 
-                            // Parent Row: Strip weight, apply spacing margins
                             row?.let {
                                 it.gravity = Gravity.CENTER_HORIZONTAL
                                 val rowLp = it.layoutParams as? LinearLayout.LayoutParams
@@ -114,18 +107,15 @@ object LiquidKeypadHook {
                                     rowLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
                                     rowLp.weight = 0f
                                     
-                                    // Massive lift for 0 row, standard gap for everything else
                                     if (digitStr == "0") {
                                         rowLp.bottomMargin = bottomLiftPx
                                     } else {
                                         rowLp.bottomMargin = vMarginPx
                                     }
-                                    
                                     it.layoutParams = rowLp
                                 }
                             }
 
-                            // Self (Key): Fixed square, horizontal margins
                             val keyLp = view.layoutParams as? LinearLayout.LayoutParams
                             if (keyLp != null) {
                                 keyLp.width = keySizePx
@@ -140,24 +130,9 @@ object LiquidKeypadHook {
                             view.translationY = 0f
 
                             // =========================================================
-                            // 3. Perfect Circle Background
+                            // 4. Inject Compose Jelly Button Engine
                             // =========================================================
-                            view.setPadding(0, 0, 0, 0)
-                            val circleBg = object : android.graphics.drawable.Drawable() {
-                                val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                    color = Color.parseColor("#40FFFFFF")
-                                    style = Paint.Style.FILL
-                                }
-                                override fun draw(canvas: android.graphics.Canvas) {
-                                    val radius = (bounds.width() / 2f)
-                                    canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), radius, paint)
-                                }
-                                override fun setAlpha(alpha: Int) { paint.alpha = alpha }
-                                override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) { paint.colorFilter = colorFilter }
-                                @Deprecated("Deprecated in Java")
-                                override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
-                            }
-                            view.background = circleBg
+                            LiquidKeypadHost.ensure(view, digitStr)
 
                         } catch (e: Throwable) {
                             Log.e(TAG, "Error configuring key", e)
@@ -167,25 +142,15 @@ object LiquidKeypadHook {
                 }
             })
 
-            // Hook Touch Event for iOS bouncy physics
+            // Pipe native touch events into the Compose host to drive the jelly physics,
+            // while allowing the native view to process the actual PIN entry sequence.
             val onTouchMethod = findMethod(keyClass, "onTouchEvent", MotionEvent::class.java)
-            val spring = OvershootInterpolator(2.5f)
-
             module.hook(onTouchMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val result = chain.proceed()
                     val view = chain.thisObject as View
                     val event = chain.args[0] as MotionEvent
-
-                    when (event.actionMasked) {
-                        MotionEvent.ACTION_DOWN -> {
-                            view.animate().scaleX(0.78f).scaleY(0.78f).setDuration(120).setInterpolator(spring).start()
-                        }
-                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                            view.animate().scaleX(1.0f).scaleY(1.0f).setDuration(400).setInterpolator(spring).start()
-                        }
-                    }
-                    return result
+                    LiquidKeypadHost.forwardTouchEvent(view, event)
+                    return chain.proceed()
                 }
             })
 
