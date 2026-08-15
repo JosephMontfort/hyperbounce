@@ -3,7 +3,6 @@ package dev.joseph.hyperbounce
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.view.Choreographer
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -22,15 +21,16 @@ import com.kyant.backdrop.Backdrop
 /**
  * Backdrop capture used by the library LiquidSlider.
  *
- * The important difference from the toggle backdrop is that a slider is a
- * control embedded in a potentially scrolling parent. We capture the
- * immediate parent layer, not the slider itself, so the glass thumb sees the
- * actual content behind the control.
+ * The slider is embedded in a potentially scrolling parent, so the backdrop
+ * is captured from the immediate parent layer rather than from the slider
+ * itself. The important performance rule is that the parent is NOT redrawn
+ * every frame. A synchronous ViewGroup#draw() inside every SystemUI pre-draw
+ * was starving the UI thread and made the entire host app appear frozen.
  *
- * The capture region and the Compose overlay are both expressed in window
- * coordinates and refreshed on every target layout change. Consequently the
- * slider stays attached to its real ViewGroup coordinates while a parent
- * ScrollView/RecyclerView/SystemUI panel moves.
+ * We therefore capture only when the backdrop becomes dirty (initial attach,
+ * target/layout movement, or parent scrolling), with a small safety interval.
+ * The resulting bitmap remains valid while the slider animates because the
+ * slider itself is excluded from the capture.
  */
 internal class LiquidSliderViewBackdrop(
     private val sourceParent: ViewGroup,
@@ -42,25 +42,24 @@ internal class LiquidSliderViewBackdrop(
 
     private var front: Bitmap? = null
     private var back: Bitmap? = null
-    private var capturedFrame: CapturedFrame? by mutableStateOf(null)
+    var capturedFrame: CapturedFrame? by mutableStateOf(null)
         private set
 
     private var region: CaptureRegion? = null
-    private var frameNumber = 0
-    private var lastCapturedFrame = -1
+    private var captureDirty = true
     private var lastCaptureNanos = 0L
-    private val minCaptureIntervalNanos = 16_666_667L
+
+    // The parent is synchronously redrawn only when dirty. This interval is a
+    // guard against pathological scroll/layout callback storms in SystemUI.
+    private val minCaptureIntervalNanos = 50_000_000L // 20 captures/sec max
 
     private val preDrawListener = ViewTreeObserver.OnPreDrawListener {
-        captureOncePerFrame()
+        captureIfNeeded()
         true
     }
 
-    private val frameCallback = object : Choreographer.FrameCallback {
-        override fun doFrame(frameTimeNanos: Long) {
-            frameNumber++
-            Choreographer.getInstance().postFrameCallback(this)
-        }
+    private val scrollListener = ViewTreeObserver.OnScrollChangedListener {
+        requestCapture()
     }
 
     fun setTargetBounds(left: Float, top: Float, width: Int, height: Int, paddingPx: Int) {
@@ -70,34 +69,42 @@ internal class LiquidSliderViewBackdrop(
             width = width + paddingPx * 2,
             height = height + paddingPx * 2,
         )
+        requestCapture()
+    }
+
+    fun requestCapture() {
+        captureDirty = true
     }
 
     fun start() {
         sourceParent.viewTreeObserver.addOnPreDrawListener(preDrawListener)
-        Choreographer.getInstance().postFrameCallback(frameCallback)
+        sourceParent.viewTreeObserver.addOnScrollChangedListener(scrollListener)
+        requestCapture()
     }
 
     fun stop() {
         sourceParent.viewTreeObserver.removeOnPreDrawListener(preDrawListener)
-        Choreographer.getInstance().removeFrameCallback(frameCallback)
+        sourceParent.viewTreeObserver.removeOnScrollChangedListener(scrollListener)
     }
 
-    private fun captureOncePerFrame() {
-        if (lastCapturedFrame == frameNumber) return
+    private fun captureIfNeeded() {
+        if (!captureDirty) return
+
         val now = System.nanoTime()
         if (now - lastCaptureNanos < minCaptureIntervalNanos) return
 
         val currentRegion = region ?: return
         if (currentRegion.width <= 0 || currentRegion.height <= 0) return
+        if (!sourceParent.isAttachedToWindow) return
 
         val location = IntArray(2)
         sourceParent.getLocationInWindow(location)
         val localLeft = currentRegion.left - location[0]
         val localTop = currentRegion.top - location[1]
 
-        var targetVisibility = View.VISIBLE
         var overlayVisibility = View.VISIBLE
         var canvas: Canvas? = null
+
         try {
             ensureBuffers(currentRegion.width, currentRegion.height)
             val target = back ?: return
@@ -112,18 +119,15 @@ internal class LiquidSliderViewBackdrop(
             canvas.clipRect(0, 0, currentRegion.width, currentRegion.height)
             canvas.translate(-localLeft.toFloat(), -localTop.toFloat())
 
-            targetVisibility = targetView.visibility
+            // The native slider already has alpha=0, so changing its visibility
+            // here would cause extra layout/invalidation work. Only hide the
+            // Compose overlay so it cannot be captured into its own backdrop.
             overlayVisibility = overlayViewToHide?.visibility ?: View.VISIBLE
-
-            // The native slider must not be baked into its own backdrop. The
-            // overlay must be hidden as well, otherwise ViewGroup#draw can
-            // capture the Compose glass slider recursively.
-            targetView.visibility = View.INVISIBLE
             overlayViewToHide?.visibility = View.INVISIBLE
+
             sourceParent.draw(canvas)
 
             overlayViewToHide?.visibility = overlayVisibility
-            targetView.visibility = targetVisibility
             canvas.restore()
 
             val previousFront = front
@@ -133,17 +137,17 @@ internal class LiquidSliderViewBackdrop(
                 target,
                 Offset(currentRegion.left.toFloat(), currentRegion.top.toFloat())
             )
-            lastCapturedFrame = frameNumber
+
+            captureDirty = false
             lastCaptureNanos = now
         } catch (_: Throwable) {
             // Backdrop capture must never take down the host system app.
             try {
-                canvas?.restore()
+                overlayViewToHide?.visibility = overlayVisibility
             } catch (_: Throwable) {
             }
             try {
-                overlayViewToHide?.visibility = overlayVisibility
-                targetView.visibility = targetVisibility
+                canvas?.restore()
             } catch (_: Throwable) {
             }
         }
@@ -166,7 +170,7 @@ internal class LiquidSliderViewBackdrop(
         back = null
         capturedFrame = null
         region = null
-        lastCapturedFrame = -1
+        captureDirty = false
         lastCaptureNanos = 0L
         overlayViewToHide = null
     }
