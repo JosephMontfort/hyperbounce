@@ -45,7 +45,8 @@ object LiquidKeypadHook {
                         try {
                             val density = view.resources.displayMetrics.density
 
-                            // 1. Hide Klondike text & Center Digits
+                            // 1. Hide Klondike text, Center Digits, and Extract the Number
+                            var digitStr = ""
                             var digitText: TextView? = null
                             var cls: Class<*>? = view.javaClass
                             while (cls != null) {
@@ -60,8 +61,12 @@ object LiquidKeypadHook {
                                     break
                                 } catch (e: NoSuchFieldException) { cls = cls.superclass }
                             }
-                            digitText?.gravity = Gravity.CENTER
-                            digitText?.setPadding(0, 0, 0, 0)
+                            
+                            digitText?.let {
+                                it.gravity = Gravity.CENTER
+                                it.setPadding(0, 0, 0, 0)
+                                digitStr = it.text.toString()
+                            }
 
                             // Kill native animations
                             try {
@@ -70,11 +75,12 @@ object LiquidKeypadHook {
                             } catch (e: Throwable) {}
 
                             // =========================================================
-                            // 2. THE XML REWRITE HACK (Destroying the rigid layout)
+                            // 2. THE XML REWRITE HACK (Vertical Gap & Grid Lift)
                             // =========================================================
-                            val keySizePx = (82f * density).toInt()  // Perfect square button bounds
-                            val vMarginPx = (18f * density).toInt()  // Vertical gap between rows
-                            val hMarginPx = (14f * density).toInt()  // Horizontal gap between keys
+                            val keySizePx = (82f * density).toInt()    // Perfect square button bounds
+                            val vMarginPx = (32f * density).toInt()    // Increased vertical gap between rows
+                            val hMarginPx = (14f * density).toInt()    // Keep the horizontal gap as is
+                            val bottomLiftPx = (75f * density).toInt() // Massive lift for the 0 row
 
                             val row = view.parent as? LinearLayout
                             val grid = row?.parent as? LinearLayout
@@ -88,19 +94,26 @@ object LiquidKeypadHook {
                                 }
                             }
 
-                            // Parent Row: Strip weight, let it wrap content, add vertical margins
+                            // Parent Row: Strip weight, apply margins
                             row?.let {
                                 it.gravity = Gravity.CENTER_HORIZONTAL
                                 val rowLp = it.layoutParams as? LinearLayout.LayoutParams
                                 if (rowLp != null) {
                                     rowLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
                                     rowLp.weight = 0f
-                                    rowLp.bottomMargin = vMarginPx
+                                    
+                                    // If this is the row with the "0", apply the lift. Otherwise, normal gap.
+                                    if (digitStr == "0") {
+                                        rowLp.bottomMargin = bottomLiftPx
+                                    } else {
+                                        rowLp.bottomMargin = vMarginPx
+                                    }
+                                    
                                     it.layoutParams = rowLp
                                 }
                             }
 
-                            // Self (Key): Strip weight, set to fixed square, add horizontal margins
+                            // Self (Key): Fixed square, horizontal margins
                             val keyLp = view.layoutParams as? LinearLayout.LayoutParams
                             if (keyLp != null) {
                                 keyLp.width = keySizePx
@@ -111,7 +124,6 @@ object LiquidKeypadHook {
                                 view.layoutParams = keyLp
                             }
                             
-                            // Reset any lingering matrix translations from earlier builds
                             view.translationX = 0f
                             view.translationY = 0f
 
@@ -125,8 +137,6 @@ object LiquidKeypadHook {
                                     style = Paint.Style.FILL
                                 }
                                 override fun draw(canvas: android.graphics.Canvas) {
-                                    // Because bounds are now a perfect square (82dp x 82dp),
-                                    // we can draw exactly to the edge without stretching.
                                     val radius = (bounds.width() / 2f)
                                     canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), radius, paint)
                                 }
