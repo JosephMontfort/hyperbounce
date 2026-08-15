@@ -42,7 +42,7 @@ internal class LiquidSliderViewBackdrop(
 
     private var front: Bitmap? = null
     private var back: Bitmap? = null
-    private var capturedFrame: CapturedFrame? by mutableStateOf(null)
+    var capturedFrame: CapturedFrame? by mutableStateOf(null)
         private set
 
     private var region: CaptureRegion? = null
