@@ -17,7 +17,6 @@ import kotlin.math.tanh
 class JellyOverlayView(context: Context) : View(context) {
 
     private val circlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#35FFFFFF") // iOS 26 translucent glass base
         style = Paint.Style.FILL
     }
 
@@ -28,7 +27,7 @@ class JellyOverlayView(context: Context) : View(context) {
         textSize = 34f * context.resources.displayMetrics.scaledDensity
     }
 
-    // A lightweight physics spring class to eliminate the need for thread-heavy Animators
+    // A lightweight 60fps spring math class to eliminate thread-heavy Animators
     class Spring(var current: Float = 0f, var target: Float = 0f, var velocity: Float = 0f) {
         fun update(stiffness: Float, damping: Float): Boolean {
             val displacement = current - target
@@ -36,10 +35,9 @@ class JellyOverlayView(context: Context) : View(context) {
             val dampingForce = -damping * velocity
             val acceleration = springForce + dampingForce
             
-            velocity += acceleration * 0.016f // Assume ~60fps delta
+            velocity += acceleration * 0.016f 
             current += velocity * 0.016f
             
-            // Return true if still moving
             return abs(velocity) > 0.001f || abs(displacement) > 0.001f
         }
         fun snap(value: Float) {
@@ -49,71 +47,55 @@ class JellyOverlayView(context: Context) : View(context) {
         }
     }
 
-    class KeyNode(val digit: String) {
+    class KeyNode(val digit: String, delayMs: Long) {
         var bounds = Rect()
         
-        // Physics State
+        // Independent X/Y and Scale Physics State
         val tx = Spring()
         val ty = Spring()
-        val scaleX = Spring(1f, 1f)
-        val scaleY = Spring(1f, 1f)
-        val alpha = Spring()
+        val scaleX = Spring(0f, 1f) // Start at 0 for pop-in animation
+        val scaleY = Spring(0f, 1f)
+        val alpha = Spring(0f, 1f)
         
         var isPressed = false
         var startTouchX = 0f
         var startTouchY = 0f
+        
+        val enterTime = System.currentTimeMillis() + delayMs
+        var hasEntered = false
     }
 
     val nodes = mutableMapOf<String, KeyNode>()
-    private var isAnimating = false
+    private var isAnimating = true // Start instantly for entrance animation
 
     init {
-        // Ensure this view doesn't intercept touches meant for the invisible native grid below it
         isClickable = false
         isFocusable = false
     }
 
     fun registerNode(digit: String, bounds: Rect) {
         if (!nodes.containsKey(digit)) {
-            val node = KeyNode(digit)
+            val numericVal = digit.toIntOrNull() ?: 10
+            val delayMs = if (numericVal == 0) 315L else (numericVal - 1) * 35L
+            val node = KeyNode(digit, delayMs)
             node.bounds = bounds
             nodes[digit] = node
-            triggerEntrance(node)
         } else {
             nodes[digit]!!.bounds = bounds
         }
-        invalidate()
-    }
-
-    private fun triggerEntrance(node: KeyNode) {
-        // Staggered iOS 26 Entrance Delay
-        val numericVal = node.digit.toIntOrNull() ?: 10
-        val delayMs = if (numericVal == 0) 315L else (numericVal - 1) * 35L
-        
-        node.scaleX.snap(0f)
-        node.scaleY.snap(0f)
-        node.alpha.snap(0f)
-
-        postDelayed({
-            node.scaleX.target = 1f
-            node.scaleY.target = 1f
-            node.alpha.target = 1f
-            startAnimationLoop()
-        }, delayMs)
+        startAnimationLoop()
     }
 
     fun handleTouch(digit: String, action: Int, rawX: Float, rawY: Float) {
         val node = nodes[digit] ?: return
-        val maxOffset = node.bounds.width() * 1.2f
+        val maxOffset = node.bounds.width() * 0.8f // Drag limit
 
         when (action) {
             android.view.MotionEvent.ACTION_DOWN -> {
                 node.isPressed = true
                 node.startTouchX = rawX
                 node.startTouchY = rawY
-                
-                // Depth pop on press
-                node.scaleX.target = 0.88f
+                node.scaleX.target = 0.88f // Depth compression on touch
                 node.scaleY.target = 0.88f
             }
             android.view.MotionEvent.ACTION_MOVE -> {
@@ -128,9 +110,9 @@ class JellyOverlayView(context: Context) : View(context) {
                 node.tx.target = targetTx
                 node.ty.target = targetTy
 
-                // Jelly Squash and Stretch
+                // Jelly Squash and Stretch Mathematics
                 val dragDist = hypot(targetTx, targetTy)
-                val stretch = 0.35f * (dragDist / maxOffset).coerceAtMost(1f)
+                val stretch = 0.35f * (dragDist / maxOffset).coerceAtMost(1f) // 35% max stretch
                 val angle = atan2(targetTy, targetTx)
 
                 val baseScale = 0.88f
@@ -139,7 +121,6 @@ class JellyOverlayView(context: Context) : View(context) {
             }
             android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
                 node.isPressed = false
-                // Bouncy snap back to origin
                 node.tx.target = 0f
                 node.ty.target = 0f
                 node.scaleX.target = 1f
@@ -152,22 +133,30 @@ class JellyOverlayView(context: Context) : View(context) {
     private fun startAnimationLoop() {
         if (!isAnimating) {
             isAnimating = true
-            postInvalidateOnAnimation()
+            invalidate()
         }
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         var needsNextFrame = false
+        val now = System.currentTimeMillis()
 
         for (node in nodes.values) {
             if (node.bounds.isEmpty) continue
 
-            // Update Physics Springs
-            // Higher stiffness = faster snap. Higher damping = less wobble.
+            if (!node.hasEntered && now >= node.enterTime) {
+                node.hasEntered = true
+            }
+            if (!node.hasEntered) {
+                needsNextFrame = true
+                continue
+            }
+
+            // High stiffness = fast snap. High damping = low wobble.
             val s1 = node.tx.update(stiffness = 350f, damping = 25f)
             val s2 = node.ty.update(350f, 25f)
-            val s3 = node.scaleX.update(stiffness = 250f, damping = 15f)
+            val s3 = node.scaleX.update(250f, 15f)
             val s4 = node.scaleY.update(250f, 15f)
             val s5 = node.alpha.update(150f, 20f)
             if (s1 || s2 || s3 || s4 || s5) needsNextFrame = true
@@ -177,22 +166,21 @@ class JellyOverlayView(context: Context) : View(context) {
             val radius = (node.bounds.width() / 2f)
 
             canvas.save()
-            // Apply jelly scaling to the exact center of the pulled coordinate
             canvas.translate(cx, cy)
             canvas.scale(node.scaleX.current, node.scaleY.current)
 
-            // Draw Background
-            circlePaint.alpha = (255 * node.alpha.current.coerceIn(0f, 1f)).toInt()
+            // Draw Subtle Glass Background (Unclipped)
+            val alphaVal = (255 * node.alpha.current.coerceIn(0f, 1f)).toInt()
             if (node.isPressed) {
-                // Brighten on press
-                circlePaint.color = Color.parseColor("#45FFFFFF") 
+                circlePaint.color = Color.parseColor("#45FFFFFF") // Brighten slightly on press
             } else {
-                circlePaint.color = Color.parseColor("#35FFFFFF")
+                circlePaint.color = Color.parseColor("#28FFFFFF") // Subtle translucent glass
             }
+            circlePaint.alpha = alphaVal
             canvas.drawCircle(0f, 0f, radius, circlePaint)
 
-            // Draw Centered Text
-            textPaint.alpha = (255 * node.alpha.current.coerceIn(0f, 1f)).toInt()
+            // Draw Crisp Text
+            textPaint.alpha = alphaVal
             val textOffset = (textPaint.descent() + textPaint.ascent()) / 2f
             canvas.drawText(node.digit, 0f, -textOffset, textPaint)
 
@@ -200,7 +188,7 @@ class JellyOverlayView(context: Context) : View(context) {
         }
 
         if (needsNextFrame) {
-            postInvalidateOnAnimation()
+            invalidate()
         } else {
             isAnimating = false
         }
