@@ -88,7 +88,7 @@ internal class LiquidSliderViewBackdrop(private val sourceView: View) : Backdrop
             val target = back ?: return
             
             val isNight = (sourceView.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-            target.eraseColor(if (isNight) Color.BLACK else Color.WHITE)
+            target.eraseColor(if (isNight) Color.parseColor("#242424") else Color.WHITE)
 
             val canvas = Canvas(target)
             canvas.save()

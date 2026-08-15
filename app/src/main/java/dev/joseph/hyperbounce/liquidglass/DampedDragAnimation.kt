@@ -1,13 +1,3 @@
-/*
- * Ported verbatim from AndroidLiquidGlass-kmp 2.0.0.
- * Upstream: https://github.com/Kyant0/AndroidLiquidGlass-kmp
- * License: Apache License 2.0. Original LICENSE retained in module root.
- *
- * This file is intentionally kept structurally equivalent to the upstream
- * implementation so future maintainers can compare it directly against the
- * library source. Only the package name was changed for module integration.
- */
-
 package dev.joseph.hyperbounce.liquidglass
 
 import androidx.compose.animation.core.Animatable
@@ -39,8 +29,9 @@ class DampedDragAnimation(
     val onDrag: DampedDragAnimation.(size: IntSize, dragAmount: Offset) -> Unit,
 ) {
 
+    // TUNED PHYSICS: Extremely responsive to finger movement
     private val valueAnimationSpec =
-        spring(0.85f, 350f, visibilityThreshold)
+        spring(dampingRatio = 0.7f, stiffness = 800f, visibilityThreshold = visibilityThreshold)
     private val velocityAnimationSpec =
         spring(0.5f, 300f, visibilityThreshold * 10f)
     private val pressProgressAnimationSpec =
@@ -50,19 +41,13 @@ class DampedDragAnimation(
     private val scaleYAnimationSpec =
         spring(0.7f, 250f, 0.001f)
 
-    private val valueAnimation =
-        Animatable(initialValue, visibilityThreshold)
-    private val velocityAnimation =
-        Animatable(0f, 5f)
-    private val pressProgressAnimation =
-        Animatable(0f, 0.001f)
-    private val scaleXAnimation =
-        Animatable(initialScale, 0.001f)
-    private val scaleYAnimation =
-        Animatable(initialScale, 0.001f)
+    private val valueAnimation = Animatable(initialValue, visibilityThreshold)
+    private val velocityAnimation = Animatable(0f, 5f)
+    private val pressProgressAnimation = Animatable(0f, 0.001f)
+    private val scaleXAnimation = Animatable(initialScale, 0.001f)
+    private val scaleYAnimation = Animatable(initialScale, 0.001f)
 
     private val mutatorMutex = MutatorMutex()
-
     private val velocityTracker = VelocityTracker()
 
     val value: Float get() = valueAnimation.value

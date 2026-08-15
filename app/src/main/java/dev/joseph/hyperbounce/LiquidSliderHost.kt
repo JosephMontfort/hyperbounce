@@ -6,7 +6,6 @@ import android.view.ViewGroup
 import android.widget.ProgressBar
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -47,11 +46,6 @@ internal object LiquidSliderHost {
     }
 
     @JvmStatic
-    fun syncState(target: View) {
-        hosts[target]?.syncState()
-    }
-
-    @JvmStatic
     fun syncVisibility(target: View, isVisible: Boolean) {
         hosts[target]?.updateVisibility(isVisible)
     }
@@ -73,12 +67,18 @@ internal object LiquidSliderHost {
     }
 
     @JvmStatic
+    fun setTrackingTouch(target: View, tracking: Boolean) {
+        hosts[target]?.isTrackingTouch = tracking
+    }
+
+    @JvmStatic
     fun remove(target: View) {
         hosts.remove(target)?.dispose()
     }
 
     class Host(private val target: View, val parent: ViewGroup) {
         var composeView: ComposeView? = null
+        var isTrackingTouch = false
         private var recomposer: Recomposer? = null
         private var recomposerScope: CoroutineScope? = null
         
@@ -103,9 +103,20 @@ internal object LiquidSliderHost {
             refreshGeometry()
         }
 
+        private val frameCallback = object : android.view.Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+                // Instantly sync visual state if hardware keys change the volume externally
+                if (!isTrackingTouch) {
+                    syncState()
+                }
+                android.view.Choreographer.getInstance().postFrameCallback(this)
+            }
+        }
+
         fun attach() {
             target.addOnAttachStateChangeListener(attachListener)
             target.addOnLayoutChangeListener(layoutListener)
+            android.view.Choreographer.getInstance().postFrameCallback(frameCallback)
             
             disableClipping(target)
 
@@ -150,59 +161,15 @@ internal object LiquidSliderHost {
                         
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Box(
-                                modifier = Modifier
-                                    .size(width = targetWidthDp, height = targetHeightDp)
-                                    .padding(horizontal = 8.dp),
+                                // Removed hardcoded padding to perfectly map X coordinates 1:1
+                                modifier = Modifier.size(width = targetWidthDp, height = targetHeightDp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 LiquidSlider(
                                     value = { sliderValue },
                                     onValueChange = { newValue ->
+                                        // The native slider handles writing internally via PhysicsHook!
                                         sliderValue = newValue
-                                        val progressInt = newValue.toInt()
-                                        
-                                        // FINAL WRITE FIX: Correctly call the boolean-returning method
-                                        var success = false
-                                        try {
-                                            val setProgInt = android.widget.ProgressBar::class.java.getDeclaredMethod(
-                                                "setProgressInternal", 
-                                                Int::class.javaPrimitiveType, 
-                                                Boolean::class.javaPrimitiveType, 
-                                                Boolean::class.javaPrimitiveType
-                                            )
-                                            setProgInt.isAccessible = true
-                                            val result = setProgInt.invoke(target, progressInt, true, false)
-                                            success = (result as? Boolean) == true
-                                        } catch (e: Throwable) { }
-
-                                        // Fallback: manually trigger the listener if the internal method fails
-                                        if (!success) {
-                                            try {
-                                                var listener: Any? = null
-                                                var currentClass: Class<*>? = target.javaClass
-                                                while (currentClass != null) {
-                                                    try {
-                                                        val listenerField = currentClass.getDeclaredField("mOnSeekBarChangeListener")
-                                                        listenerField.isAccessible = true
-                                                        listener = listenerField.get(target)
-                                                        break
-                                                    } catch (e: NoSuchFieldException) {
-                                                        currentClass = currentClass.superclass
-                                                    }
-                                                }
-                                                
-                                                if (listener != null) {
-                                                    val onProg = listener.javaClass.getMethod(
-                                                        "onProgressChanged", 
-                                                        android.widget.SeekBar::class.java, 
-                                                        Int::class.javaPrimitiveType, 
-                                                        Boolean::class.javaPrimitiveType
-                                                    )
-                                                    onProg.invoke(listener, target, progressInt, true)
-                                                }
-                                            } catch (e2: Throwable) {}
-                                            (target as? ProgressBar)?.progress = progressInt
-                                        }
                                     },
                                     valueRange = sliderMin..sliderMax,
                                     visibilityThreshold = 0.01f,
@@ -313,6 +280,7 @@ internal object LiquidSliderHost {
         fun dispose() {
             target.removeOnAttachStateChangeListener(attachListener)
             target.removeOnLayoutChangeListener(layoutListener)
+            android.view.Choreographer.getInstance().removeFrameCallback(frameCallback)
             target.alpha = 1f 
 
             val compose = composeView

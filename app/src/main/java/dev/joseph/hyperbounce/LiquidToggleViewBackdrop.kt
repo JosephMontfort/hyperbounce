@@ -87,9 +87,8 @@ internal class LiquidToggleViewBackdrop(private val sourceView: View) : Backdrop
             ensureBuffers(currentRegion.width, currentRegion.height)
             val target = back ?: return
             
-            // Restoring the solid base color erasure to act as the window backdrop
             val isNight = (sourceView.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-            target.eraseColor(if (isNight) Color.BLACK else Color.WHITE)
+            target.eraseColor(if (isNight) Color.parseColor("#242424") else Color.WHITE)
 
             val canvas = Canvas(target)
             canvas.save()
@@ -98,8 +97,6 @@ internal class LiquidToggleViewBackdrop(private val sourceView: View) : Backdrop
 
             val hiddenStates = mutableListOf<Pair<View, Int>>()
             
-            // Recursively hide the native toggles and Compose view 
-            // so they don't get baked into the background capture.
             fun hideToggles(v: View) {
                 val name = v.javaClass.simpleName
                 if (v === overlayViewToHide || name.contains("SlidingButton") || name.contains("SlidingSwitch")) {
@@ -113,11 +110,8 @@ internal class LiquidToggleViewBackdrop(private val sourceView: View) : Backdrop
             }
             
             hideToggles(sourceView)
-
-            // Draw the grey card on top of the solid black/white layer
             sourceView.draw(canvas)
 
-            // Synchronously restore toggles to their active state
             for ((child, oldVis) in hiddenStates) {
                 child.visibility = oldVis
             }

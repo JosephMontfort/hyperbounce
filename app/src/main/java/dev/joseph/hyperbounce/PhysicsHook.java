@@ -498,11 +498,27 @@ public class PhysicsHook extends XposedModule {
                 if (!view.isEnabled()) return false;
                 disableClipping(view);
                 MotionEvent event = (MotionEvent) chain.getArg(0);
-                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                int action = event.getActionMasked();
+                
+                if (action == MotionEvent.ACTION_DOWN) {
                     ViewParent parent = view.getParent();
                     if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
+                    dev.joseph.hyperbounce.LiquidSliderHost.setTrackingTouch(view, true);
+                } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                    dev.joseph.hyperbounce.LiquidSliderHost.setTrackingTouch(view, false);
                 }
+                
+                // DUAL-TOUCH ARCHITECTURE:
+                // 1. Forward offset touch to Compose for liquid glass visual physics
                 dev.joseph.hyperbounce.LiquidSliderHost.forwardTouchEvent(view, event);
+                
+                // 2. Feed original touch into Native Slider to process audio / exact system values!
+                // Clamp Y to the exact center so the native SeekBar always tracks, even when touching the bloomed padding
+                float originalY = event.getY();
+                event.setLocation(event.getX(), view.getHeight() / 2.0f);
+                Object result = chain.proceed();
+                event.setLocation(event.getX(), originalY);
+                
                 return true;
             }
 
@@ -545,7 +561,6 @@ public class PhysicsHook extends XposedModule {
 
             if (USE_LIQUID_GLASS_SLIDER) {
                 dev.joseph.hyperbounce.LiquidSliderHost.ensure(view);
-                dev.joseph.hyperbounce.LiquidSliderHost.syncState(view);
                 return null;
             }
 
