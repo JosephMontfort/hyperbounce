@@ -8,6 +8,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.OvershootInterpolator
+import android.widget.LinearLayout
 import android.widget.TextView
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
@@ -34,7 +35,6 @@ object LiquidKeypadHook {
         try {
             val keyClass = Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)
 
-            // Hook onAttachedToWindow to apply permanent translations & styling
             val onAttachedMethod = findMethod(keyClass, "onAttachedToWindow")
             module.hook(onAttachedMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -43,63 +43,25 @@ object LiquidKeypadHook {
 
                     view.post {
                         try {
-                            // 1. Disable clipping so massive circles don't get chopped off vertically
-                            view.clipToOutline = false
-                            (view.parent as? ViewGroup)?.clipChildren = false
-                            (view.parent?.parent as? ViewGroup)?.clipChildren = false
+                            val density = view.resources.displayMetrics.density
 
-                            // 2. Extract Digit Text to determine exact keypad position
-                            var digitStr = ""
+                            // 1. Hide Klondike text & Center Digits
+                            var digitText: TextView? = null
                             var cls: Class<*>? = view.javaClass
-                            var field: java.lang.reflect.Field? = null
                             while (cls != null) {
                                 try {
-                                    field = cls.getDeclaredField("mDigitText")
+                                    val mDigitText = cls.getDeclaredField("mDigitText")
+                                    mDigitText.isAccessible = true
+                                    digitText = mDigitText.get(view) as? TextView
+
+                                    val mKlondikeText = cls.getDeclaredField("mKlondikeText")
+                                    mKlondikeText.isAccessible = true
+                                    (mKlondikeText.get(view) as? TextView)?.visibility = View.GONE
                                     break
                                 } catch (e: NoSuchFieldException) { cls = cls.superclass }
                             }
-                            field?.isAccessible = true
-                            val digitText = field?.get(view) as? TextView
-                            if (digitText != null) {
-                                digitText.gravity = Gravity.CENTER
-                                digitText.setPadding(0, 0, 0, 0)
-                                digitStr = digitText.text.toString()
-                            }
-
-                            // 3. Hide Klondike text
-                            var kCls: Class<*>? = view.javaClass
-                            var kField: java.lang.reflect.Field? = null
-                            while (kCls != null) {
-                                try {
-                                    kField = kCls.getDeclaredField("mKlondikeText")
-                                    break
-                                } catch (e: NoSuchFieldException) { kCls = kCls.superclass }
-                            }
-                            kField?.isAccessible = true
-                            (kField?.get(view) as? TextView)?.visibility = View.GONE
-
-                            // =========================================================
-                            // 4. THE MATRIX TRANSLATION HACK (Massive Spacing)
-                            // =========================================================
-                            val density = view.resources.displayMetrics.density
-                            val xOffset = 25f * density // Horizontal push outwards
-                            val yOffset = 30f * density // Vertical push apart
-
-                            when (digitStr) {
-                                "1" -> { view.translationX = -xOffset; view.translationY = -yOffset * 1.5f }
-                                "2" -> { view.translationX = 0f;       view.translationY = -yOffset * 1.5f }
-                                "3" -> { view.translationX = xOffset;  view.translationY = -yOffset * 1.5f }
-
-                                "4" -> { view.translationX = -xOffset; view.translationY = -yOffset * 0.5f }
-                                "5" -> { view.translationX = 0f;       view.translationY = -yOffset * 0.5f }
-                                "6" -> { view.translationX = xOffset;  view.translationY = -yOffset * 0.5f }
-
-                                "7" -> { view.translationX = -xOffset; view.translationY = yOffset * 0.5f }
-                                "8" -> { view.translationX = 0f;       view.translationY = yOffset * 0.5f }
-                                "9" -> { view.translationX = xOffset;  view.translationY = yOffset * 0.5f }
-
-                                "0" -> { view.translationX = 0f;       view.translationY = yOffset * 1.5f }
-                            }
+                            digitText?.gravity = Gravity.CENTER
+                            digitText?.setPadding(0, 0, 0, 0)
 
                             // Kill native animations
                             try {
@@ -107,7 +69,55 @@ object LiquidKeypadHook {
                                 setAnimMethod.invoke(view, false)
                             } catch (e: Throwable) {}
 
-                            // 5. Massive Circle Background
+                            // =========================================================
+                            // 2. THE XML REWRITE HACK (Destroying the rigid layout)
+                            // =========================================================
+                            val keySizePx = (82f * density).toInt()  // Perfect square button bounds
+                            val vMarginPx = (18f * density).toInt()  // Vertical gap between rows
+                            val hMarginPx = (14f * density).toInt()  // Horizontal gap between keys
+
+                            val row = view.parent as? LinearLayout
+                            val grid = row?.parent as? LinearLayout
+
+                            // Grandparent: Free it from fixed XML dimensions
+                            grid?.let {
+                                val gridLp = it.layoutParams
+                                if (gridLp.height != ViewGroup.LayoutParams.WRAP_CONTENT) {
+                                    gridLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    it.layoutParams = gridLp
+                                }
+                            }
+
+                            // Parent Row: Strip weight, let it wrap content, add vertical margins
+                            row?.let {
+                                it.gravity = Gravity.CENTER_HORIZONTAL
+                                val rowLp = it.layoutParams as? LinearLayout.LayoutParams
+                                if (rowLp != null) {
+                                    rowLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    rowLp.weight = 0f
+                                    rowLp.bottomMargin = vMarginPx
+                                    it.layoutParams = rowLp
+                                }
+                            }
+
+                            // Self (Key): Strip weight, set to fixed square, add horizontal margins
+                            val keyLp = view.layoutParams as? LinearLayout.LayoutParams
+                            if (keyLp != null) {
+                                keyLp.width = keySizePx
+                                keyLp.height = keySizePx
+                                keyLp.weight = 0f
+                                keyLp.leftMargin = hMarginPx
+                                keyLp.rightMargin = hMarginPx
+                                view.layoutParams = keyLp
+                            }
+                            
+                            // Reset any lingering matrix translations from earlier builds
+                            view.translationX = 0f
+                            view.translationY = 0f
+
+                            // =========================================================
+                            // 3. Perfect Circle Background
+                            // =========================================================
                             view.setPadding(0, 0, 0, 0)
                             val circleBg = object : android.graphics.drawable.Drawable() {
                                 val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -115,8 +125,9 @@ object LiquidKeypadHook {
                                     style = Paint.Style.FILL
                                 }
                                 override fun draw(canvas: android.graphics.Canvas) {
-                                    // By multiplying by 1.55, the radius expands way beyond the 99px height boundary.
-                                    val radius = (bounds.height() / 2f) * 1.55f
+                                    // Because bounds are now a perfect square (82dp x 82dp),
+                                    // we can draw exactly to the edge without stretching.
+                                    val radius = (bounds.width() / 2f)
                                     canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), radius, paint)
                                 }
                                 override fun setAlpha(alpha: Int) { paint.alpha = alpha }
