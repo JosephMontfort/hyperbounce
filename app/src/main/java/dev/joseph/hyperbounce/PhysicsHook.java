@@ -74,6 +74,7 @@ public class PhysicsHook extends XposedModule {
     };
 
     private static final boolean USE_LIQUID_GLASS_TOGGLE = true;
+    private static final boolean USE_LIQUID_GLASS_SLIDER = true;
 
     private final Set<Class<?>> hookedDynamicClasses =
             Collections.newSetFromMap(new WeakHashMap<Class<?>, Boolean>());
@@ -285,8 +286,6 @@ public class PhysicsHook extends XposedModule {
         try {
             installHook(findMethod(clazz, name, parameterTypes), hooker);
         } catch (Throwable t) {
-            // Equivalent to the old best-effort findAndHookMethod(...), which intentionally
-            // ignored absent/incompatible implementations in vendor builds.
         }
     }
 
@@ -476,7 +475,38 @@ public class PhysicsHook extends XposedModule {
             if (!hookedDynamicClasses.add(clazz)) return;
         }
 
+        hookMethod(clazz, "setVisibility", new Class<?>[]{int.class}, chain -> {
+            Object result = chain.proceed();
+            if (USE_LIQUID_GLASS_SLIDER) {
+                int vis = (Integer) chain.getArg(0);
+                dev.joseph.hyperbounce.LiquidSliderHost.syncVisibility((View) chain.getThisObject(), vis == View.VISIBLE);
+            }
+            return result;
+        });
+
+        hookMethod(clazz, "onDetachedFromWindow", new Class<?>[]{}, chain -> {
+            Object result = chain.proceed();
+            if (USE_LIQUID_GLASS_SLIDER) {
+                dev.joseph.hyperbounce.LiquidSliderHost.remove((View) chain.getThisObject());
+            }
+            return result;
+        });
+
         hookMethod(clazz, "onTouchEvent", new Class<?>[]{MotionEvent.class}, chain -> {
+            if (USE_LIQUID_GLASS_SLIDER) {
+                View view = (View) chain.getThisObject();
+                if (!view.isEnabled()) return false;
+                disableClipping(view);
+                MotionEvent event = (MotionEvent) chain.getArg(0);
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                    ViewParent parent = view.getParent();
+                    if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
+                }
+                dev.joseph.hyperbounce.LiquidSliderHost.forwardTouchEvent(view, event);
+                return true;
+            }
+
+            // FALLBACK TO THE FULLY CUSTOM SLIDER ENGINE
             Object result = chain.proceed();
             View view = (View) chain.getThisObject();
             MotionEvent event = (MotionEvent) chain.getArg(0);
@@ -513,6 +543,13 @@ public class PhysicsHook extends XposedModule {
             int w = view.getWidth(), h = view.getHeight();
             if (w <= 0 || h <= 0) return null;
 
+            if (USE_LIQUID_GLASS_SLIDER) {
+                dev.joseph.hyperbounce.LiquidSliderHost.ensure(view);
+                dev.joseph.hyperbounce.LiquidSliderHost.syncState(view);
+                return null;
+            }
+
+            // FALLBACK TO THE FULLY CUSTOM SLIDER ENGINE
             disableClipping(view);
 
             try {
@@ -676,8 +713,6 @@ public class PhysicsHook extends XposedModule {
         final ClassLoader packageClassLoader = classLoader;
 
         try {
-            // Legacy Xposed's dispatchTouchEvent replacement is retained exactly:
-            // only non-glass target toggles intercept through onTouchEvent.
             Method dispatch = View.class.getDeclaredMethod(
                     "dispatchTouchEvent", MotionEvent.class);
             dispatch.setAccessible(true);
