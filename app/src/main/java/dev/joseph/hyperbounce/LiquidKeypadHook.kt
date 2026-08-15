@@ -75,26 +75,38 @@ object LiquidKeypadHook {
                             } catch (e: Throwable) {}
 
                             // =========================================================
-                            // 2. THE XML REWRITE HACK (Vertical Gap & Grid Lift)
+                            // 2. THE XML REWRITE HACK (Tuned Vertical Positioning)
                             // =========================================================
-                            val keySizePx = (82f * density).toInt()    // Perfect square button bounds
-                            val vMarginPx = (32f * density).toInt()    // Increased vertical gap between rows
-                            val hMarginPx = (14f * density).toInt()    // Keep the horizontal gap as is
-                            val bottomLiftPx = (75f * density).toInt() // Massive lift for the 0 row
+                            val keySizePx = (82f * density).toInt()     // Perfect square button bounds
+                            val vMarginPx = (32f * density).toInt()     // UNCHANGED: Vertical gap between rows
+                            val hMarginPx = (14f * density).toInt()     // UNCHANGED: Horizontal gap
+                            
+                            val bottomLiftPx = (100f * density).toInt() // INCREASED: Lifts grid further up from fingerprint
+                            val topPullPx = (-25f * density).toInt()    // NEW: Pulls grid closer to the PIN dots above it
 
                             val row = view.parent as? LinearLayout
                             val grid = row?.parent as? LinearLayout
 
-                            // Grandparent: Free it from fixed XML dimensions
+                            // Grandparent Grid: Free it from fixed dimensions and pull it closer to dots
                             grid?.let {
-                                val gridLp = it.layoutParams
-                                if (gridLp.height != ViewGroup.LayoutParams.WRAP_CONTENT) {
-                                    gridLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                                    it.layoutParams = gridLp
+                                val gridLp = it.layoutParams as? ViewGroup.MarginLayoutParams
+                                if (gridLp != null) {
+                                    var changed = false
+                                    if (gridLp.height != ViewGroup.LayoutParams.WRAP_CONTENT) {
+                                        gridLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                        changed = true
+                                    }
+                                    if (gridLp.topMargin != topPullPx) {
+                                        gridLp.topMargin = topPullPx
+                                        changed = true
+                                    }
+                                    if (changed) {
+                                        it.layoutParams = gridLp
+                                    }
                                 }
                             }
 
-                            // Parent Row: Strip weight, apply margins
+                            // Parent Row: Strip weight, apply spacing margins
                             row?.let {
                                 it.gravity = Gravity.CENTER_HORIZONTAL
                                 val rowLp = it.layoutParams as? LinearLayout.LayoutParams
@@ -102,7 +114,7 @@ object LiquidKeypadHook {
                                     rowLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
                                     rowLp.weight = 0f
                                     
-                                    // If this is the row with the "0", apply the lift. Otherwise, normal gap.
+                                    // Massive lift for 0 row, standard gap for everything else
                                     if (digitStr == "0") {
                                         rowLp.bottomMargin = bottomLiftPx
                                     } else {
