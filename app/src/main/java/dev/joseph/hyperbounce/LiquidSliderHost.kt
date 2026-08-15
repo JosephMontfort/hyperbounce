@@ -61,19 +61,12 @@ internal object LiquidSliderHost {
         val host = hosts[target] ?: return false
         val compose = host.composeView ?: return false
         
-        val targetLoc = IntArray(2)
-        target.getLocationInWindow(targetLoc)
-        val parentLoc = IntArray(2)
-        host.parent.getLocationInWindow(parentLoc)
-        
         val density = target.resources.displayMetrics.density
         val paddingPx = (24f * density).toInt() 
         
-        val overlayLeftPx = (targetLoc[0] - parentLoc[0]) - paddingPx
-        val overlayTopPx = (targetLoc[1] - parentLoc[1]) - paddingPx
-        
         val offsetEvent = android.view.MotionEvent.obtain(event)
-        offsetEvent.offsetLocation(-overlayLeftPx.toFloat(), -overlayTopPx.toFloat())
+        offsetEvent.offsetLocation(paddingPx.toFloat(), paddingPx.toFloat())
+        
         val handled = compose.dispatchTouchEvent(offsetEvent)
         offsetEvent.recycle()
         return handled
@@ -168,24 +161,47 @@ internal object LiquidSliderHost {
                                         sliderValue = newValue
                                         val progressInt = newValue.toInt()
                                         
+                                        // FINAL WRITE FIX: Correctly call the boolean-returning method
+                                        var success = false
                                         try {
-                                            val setProgInt = android.widget.AbsSeekBar::class.java.getDeclaredMethod(
+                                            val setProgInt = android.widget.ProgressBar::class.java.getDeclaredMethod(
                                                 "setProgressInternal", 
                                                 Int::class.javaPrimitiveType, 
                                                 Boolean::class.javaPrimitiveType, 
                                                 Boolean::class.javaPrimitiveType
                                             )
                                             setProgInt.isAccessible = true
-                                            setProgInt.invoke(target, progressInt, true, false)
-                                        } catch (e: Throwable) {
+                                            val result = setProgInt.invoke(target, progressInt, true, false)
+                                            success = (result as? Boolean) == true
+                                        } catch (e: Throwable) { }
+
+                                        // Fallback: manually trigger the listener if the internal method fails
+                                        if (!success) {
                                             try {
-                                                val setProg = android.widget.ProgressBar::class.java.getDeclaredMethod(
-                                                    "setProgress", Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType
-                                                )
-                                                setProg.invoke(target, progressInt, true)
-                                            } catch (e2: Throwable) {
-                                                (target as? ProgressBar)?.progress = progressInt
-                                            }
+                                                var listener: Any? = null
+                                                var currentClass: Class<*>? = target.javaClass
+                                                while (currentClass != null) {
+                                                    try {
+                                                        val listenerField = currentClass.getDeclaredField("mOnSeekBarChangeListener")
+                                                        listenerField.isAccessible = true
+                                                        listener = listenerField.get(target)
+                                                        break
+                                                    } catch (e: NoSuchFieldException) {
+                                                        currentClass = currentClass.superclass
+                                                    }
+                                                }
+                                                
+                                                if (listener != null) {
+                                                    val onProg = listener.javaClass.getMethod(
+                                                        "onProgressChanged", 
+                                                        android.widget.SeekBar::class.java, 
+                                                        Int::class.javaPrimitiveType, 
+                                                        Boolean::class.javaPrimitiveType
+                                                    )
+                                                    onProg.invoke(listener, target, progressInt, true)
+                                                }
+                                            } catch (e2: Throwable) {}
+                                            (target as? ProgressBar)?.progress = progressInt
                                         }
                                     },
                                     valueRange = sliderMin..sliderMax,
@@ -232,7 +248,6 @@ internal object LiquidSliderHost {
             var depth = 0
             while (p != null && depth < 3) {
                 val className = p.javaClass.name
-                // COMPILE FIX: Replaced static class check with pure string match
                 if (className.contains("RecyclerView") ||
                     p is android.widget.AbsListView ||
                     p is android.widget.ScrollView ||
