@@ -96,6 +96,9 @@ internal object LiquidSliderHost {
         fun attach() {
             target.addOnAttachStateChangeListener(attachListener)
             target.addOnLayoutChangeListener(layoutListener)
+            
+            // EXACT TOGGLE CLIPPING FIX: recursively kill bounds up the tree
+            disableClipping(target)
 
             val baseCtx = try {
                 val atClass = Class.forName("android.app.ActivityThread")
@@ -159,7 +162,6 @@ internal object LiquidSliderHost {
             target.background = null
             target.alpha = 0.0f
             
-            // EXACT TOGGLE ARCHITECTURE: Attach directly to the parent view overlay
             val overlay = parent.overlay
             if (overlay != null) {
                 val dummy = View(target.context)
@@ -179,11 +181,23 @@ internal object LiquidSliderHost {
             refreshGeometry()
         }
 
+        // EXACT TOGGLE CLIPPING FIX: Ported directly from LiquidToggleHost.kt
+        private fun disableClipping(view: View) {
+            var p: View? = view
+            while (p != null) {
+                p.clipToOutline = false
+                if (p is ViewGroup) {
+                    p.clipChildren = false
+                    p.clipToPadding = false
+                }
+                p = p.parent as? View
+            }
+        }
+
         fun refreshGeometry() {
             val compose = composeView ?: return
             val density = target.resources.displayMetrics.density
 
-            // EXACT TOGGLE ARCHITECTURE: Position mathematically relative to the parent layout, not the screen
             val overlayLeftPx = target.left
             val overlayTopPx = target.top
 
