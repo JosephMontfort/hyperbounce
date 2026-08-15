@@ -42,9 +42,9 @@ fun JellyPinButton(
         enterAnim.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 250f))
     }
 
-    // Reuse AndroidLiquidGlass library's touch tracking, but we handle the deformation manually below
+    // Utilize our localized DampedDragAnimation
     val dampedDrag = remember(animationScope) {
-        com.kyant.backdrop.catalog.utils.DampedDragAnimation(
+        dev.joseph.hyperbounce.liquidglass.DampedDragAnimation(
             animationScope = animationScope,
             initialValue = 0f,
             valueRange = 0f..1f,
