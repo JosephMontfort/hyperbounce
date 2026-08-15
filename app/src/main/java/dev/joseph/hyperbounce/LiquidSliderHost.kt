@@ -7,11 +7,13 @@ import android.widget.ProgressBar
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.unit.dp
@@ -58,7 +60,22 @@ internal object LiquidSliderHost {
     fun forwardTouchEvent(target: View, event: android.view.MotionEvent): Boolean {
         val host = hosts[target] ?: return false
         val compose = host.composeView ?: return false
-        val handled = compose.dispatchTouchEvent(event)
+        
+        val targetLoc = IntArray(2)
+        target.getLocationInWindow(targetLoc)
+        val parentLoc = IntArray(2)
+        host.parent.getLocationInWindow(parentLoc)
+        
+        val density = target.resources.displayMetrics.density
+        val paddingPx = (24f * density).toInt() // Account for the expanded Compose bounds
+        
+        val overlayLeftPx = (targetLoc[0] - parentLoc[0]) - paddingPx
+        val overlayTopPx = (targetLoc[1] - parentLoc[1]) - paddingPx
+        
+        val offsetEvent = android.view.MotionEvent.obtain(event)
+        offsetEvent.offsetLocation(-overlayLeftPx.toFloat(), -overlayTopPx.toFloat())
+        val handled = compose.dispatchTouchEvent(offsetEvent)
+        offsetEvent.recycle()
         return handled
     }
 
@@ -97,7 +114,6 @@ internal object LiquidSliderHost {
             target.addOnAttachStateChangeListener(attachListener)
             target.addOnLayoutChangeListener(layoutListener)
             
-            // EXACT TOGGLE CLIPPING FIX: recursively kill bounds up the tree
             disableClipping(target)
 
             val baseCtx = try {
@@ -136,18 +152,50 @@ internal object LiquidSliderHost {
                 setParentCompositionContext(isolatedRecomposer)
                 setContent {
                     if (isVisibleState) {
-                        Box(Modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
-                            LiquidSlider(
-                                value = { sliderValue },
-                                onValueChange = { newValue ->
-                                    sliderValue = newValue
-                                    (target as? ProgressBar)?.progress = newValue.toInt()
-                                },
-                                valueRange = sliderMin..sliderMax,
-                                visibilityThreshold = 0.01f,
-                                backdrop = backdrop,
-                                modifier = Modifier.fillMaxSize()
-                            )
+                        // CLIPPING FIX: We let ComposeView bleed, but restrict the inner slider to native dimensions
+                        val targetWidthDp = with(LocalDensity.current) { target.width.toDp() }
+                        val targetHeightDp = with(LocalDensity.current) { target.height.toDp() }
+                        
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Box(
+                                modifier = Modifier
+                                    .size(width = targetWidthDp, height = targetHeightDp)
+                                    .padding(horizontal = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                LiquidSlider(
+                                    value = { sliderValue },
+                                    onValueChange = { newValue ->
+                                        sliderValue = newValue
+                                        val progressInt = newValue.toInt()
+                                        
+                                        // WRITE BUG FIX: Force fromUser = true to trigger system listeners
+                                        try {
+                                            val setProgInt = android.widget.AbsSeekBar::class.java.getDeclaredMethod(
+                                                "setProgressInternal", 
+                                                Int::class.javaPrimitiveType, 
+                                                Boolean::class.javaPrimitiveType, 
+                                                Boolean::class.javaPrimitiveType
+                                            )
+                                            setProgInt.isAccessible = true
+                                            setProgInt.invoke(target, progressInt, true, false)
+                                        } catch (e: Throwable) {
+                                            try {
+                                                val setProg = android.widget.ProgressBar::class.java.getDeclaredMethod(
+                                                    "setProgress", Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType
+                                                )
+                                                setProg.invoke(target, progressInt, true)
+                                            } catch (e2: Throwable) {
+                                                (target as? ProgressBar)?.progress = progressInt
+                                            }
+                                        }
+                                    },
+                                    valueRange = sliderMin..sliderMax,
+                                    visibilityThreshold = 0.01f,
+                                    backdrop = backdrop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                         }
                     }
                 }
@@ -181,35 +229,52 @@ internal object LiquidSliderHost {
             refreshGeometry()
         }
 
-        // EXACT TOGGLE CLIPPING FIX: Ported directly from LiquidToggleHost.kt
+        // SCROLL FIX: Stop the anti-clipping algorithm from destroying the top action bar
         private fun disableClipping(view: View) {
             var p: View? = view
-            while (p != null) {
+            var depth = 0
+            while (p != null && depth < 3) {
+                val className = p.javaClass.name
+                if (p is androidx.recyclerview.widget.RecyclerView ||
+                    p is android.widget.AbsListView ||
+                    p is android.widget.ScrollView ||
+                    className.contains("Recycler") ||
+                    className.contains("ActionBar") ||
+                    className.contains("DecorView")
+                ) {
+                    break
+                }
+                
                 p.clipToOutline = false
                 if (p is ViewGroup) {
                     p.clipChildren = false
                     p.clipToPadding = false
                 }
                 p = p.parent as? View
+                depth++
             }
         }
 
         fun refreshGeometry() {
             val compose = composeView ?: return
             val density = target.resources.displayMetrics.density
+            val paddingPx = (24f * density).toInt()
 
-            val overlayLeftPx = target.left
-            val overlayTopPx = target.top
+            // CLIPPING FIX: Give ComposeView 24dp of breathing room in every direction escaping the 58px ceiling
+            val overlayLeftPx = target.left - paddingPx
+            val overlayTopPx = target.top - paddingPx
+            val overlayWidthPx = target.width + (paddingPx * 2)
+            val overlayHeightPx = target.height + (paddingPx * 2)
 
             compose.measure(
-                View.MeasureSpec.makeMeasureSpec(target.width, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(target.height, View.MeasureSpec.EXACTLY)
+                View.MeasureSpec.makeMeasureSpec(overlayWidthPx, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(overlayHeightPx, View.MeasureSpec.EXACTLY)
             )
             compose.layout(
                 overlayLeftPx,
                 overlayTopPx,
-                overlayLeftPx + target.width,
-                overlayTopPx + target.height
+                overlayLeftPx + overlayWidthPx,
+                overlayTopPx + overlayHeightPx
             )
             
             backdrop.setTargetBounds(
@@ -217,7 +282,7 @@ internal object LiquidSliderHost {
                 top = target.top.toFloat(), 
                 width = target.width, 
                 height = target.height, 
-                paddingPx = (24f * density).toInt()
+                paddingPx = paddingPx
             )
         }
 
