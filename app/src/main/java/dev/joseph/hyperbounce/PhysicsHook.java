@@ -75,12 +75,6 @@ public class PhysicsHook extends XposedModule {
 
     private static final boolean USE_LIQUID_GLASS_TOGGLE = true;
 
-    // Library slider is the active visual implementation. The previous fully
-    // custom canvas/RuntimeShader slider remains below, intentionally preserved
-    // behind this switch for future experimentation.
-    private static final boolean USE_LIQUID_GLASS_SLIDER = true;
-    private static final boolean USE_CUSTOM_SLIDER = false;
-
     private final Set<Class<?>> hookedDynamicClasses =
             Collections.newSetFromMap(new WeakHashMap<Class<?>, Boolean>());
     private final WeakHashMap<Object, SliderState> sliderStateMap = new WeakHashMap<>();
@@ -475,55 +469,6 @@ public class PhysicsHook extends XposedModule {
         });
     }
 
-    /**
-     * Modern Liquid Glass slider renderer.
-     *
-     * This is deliberately separate from applyUnifiedSliderEngine(). The latter
-     * is the older fully-custom canvas/RuntimeShader implementation and must
-     * remain available for future tuning. The library renderer only replaces
-     * the active visual layer; native progress/min/max behavior remains owned by
-     * the original MIUI SeekBar through LiquidSliderHost.
-     */
-    private void applyLiquidGlassSliderEngine(String className, ClassLoader classLoader) {
-        Class<?> clazz = findClassIfExists(className, classLoader);
-        if (clazz == null) return;
-        synchronized (hookedDynamicClasses) {
-            // Toggle and slider classes can be loaded more than once through
-            // SystemUI's plugin ClassLoaders; never install duplicate hooks.
-            if (!hookedDynamicClasses.add(clazz)) return;
-        }
-
-        hookMethod(clazz, "onDraw", new Class<?>[]{android.graphics.Canvas.class}, chain -> {
-            View view = (View) chain.getThisObject();
-            if (view.getWidth() <= 0 || view.getHeight() <= 0) return null;
-
-            disableClipping(view);
-            LiquidSliderHost.ensure(view);
-            LiquidSliderHost.syncProgress(view);
-
-            // The Compose overlay is the sole visual representation. Native
-            // onDraw is intentionally suppressed, but the View itself remains
-            // alive so existing MIUI code/listeners continue to use it as the
-            // source of truth for progress.
-            return null;
-        });
-
-        hookMethod(clazz, "onSizeChanged", new Class<?>[]{int.class, int.class, int.class, int.class}, chain -> {
-            Object result = chain.proceed();
-            LiquidSliderHost.ensure((View) chain.getThisObject());
-            return result;
-        });
-
-        hookMethod(clazz, "setVisibility", new Class<?>[]{int.class}, chain -> {
-            Object result = chain.proceed();
-            View view = (View) chain.getThisObject();
-            LiquidSliderHost.ensure(view);
-            LiquidSliderHost.syncVisibility(view);
-            LiquidSliderHost.syncProgress(view);
-            return result;
-        });
-    }
-
     private void applyUnifiedSliderEngine(String className, ClassLoader classLoader) {
         Class<?> clazz = findClassIfExists(className, classLoader);
         if (clazz == null) return;
@@ -765,17 +710,8 @@ public class PhysicsHook extends XposedModule {
 
         for (String className : TARGET_TOGGLE_CLASSES)
             applyUnifiedToggleEngine(className, packageClassLoader);
-
-        // Keep the existing custom slider implementation intact. Only one
-        // slider renderer is activated at a time so the two implementations do
-        // not fight over the same View.
-        for (String className : TARGET_SLIDER_CLASSES) {
-            if (USE_LIQUID_GLASS_SLIDER) {
-                applyLiquidGlassSliderEngine(className, packageClassLoader);
-            } else if (USE_CUSTOM_SLIDER) {
-                applyUnifiedSliderEngine(className, packageClassLoader);
-            }
-        }
+        for (String className : TARGET_SLIDER_CLASSES)
+            applyUnifiedSliderEngine(className, packageClassLoader);
 
         if (packageName.equals("com.android.phone") ||
                 packageName.equals("com.android.contacts") ||
@@ -797,13 +733,6 @@ public class PhysicsHook extends XposedModule {
                         if (name.equals("miui.systemui.controlcenter.widget.SlidingButton") ||
                                 name.equals("com.miui.systemui.widget.SlidingButton")) {
                             applyUnifiedToggleEngine(name, clazz.getClassLoader());
-                        }
-                        if (name.equals("miuix.androidbasewidget.widget.SeekBar")) {
-                            if (USE_LIQUID_GLASS_SLIDER) {
-                                applyLiquidGlassSliderEngine(name, clazz.getClassLoader());
-                            } else if (USE_CUSTOM_SLIDER) {
-                                applyUnifiedSliderEngine(name, clazz.getClassLoader());
-                            }
                         }
                     }
                     return result;
