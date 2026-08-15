@@ -10,27 +10,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
-import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
 
 @Composable
 fun LiquidKeypadOverlay(
     nativeKeys: Map<String, View>,
     keyBounds: Map<String, Rect>
 ) {
-    // Safe translucent backdrop that mimics glass without capturing the view tree
-    val safeBackdrop = rememberCanvasBackdrop {
-        drawRect(androidx.compose.ui.graphics.Color.Transparent) 
-    }
-
     val density = LocalDensity.current
 
     Box(modifier = Modifier.fillMaxSize()) {
         keyBounds.forEach { (digit, bounds) ->
             if (bounds.width() > 0 && bounds.height() > 0) {
-                // Calculate staggered delay based on numeric value (1-9 then 0)
+                // Calculate staggered delay based on numeric value for cascade effect
                 val numericVal = digit.toIntOrNull() ?: 10
                 val delayMs = if (numericVal == 0) 315L else (numericVal - 1) * 35L
 
+                // Safely convert exact pixel bounds into Density-Independent Pixels (DP)
                 val widthDp = with(density) { bounds.width().toDp() }
                 val heightDp = with(density) { bounds.height().toDp() }
 
@@ -42,9 +37,8 @@ fun LiquidKeypadOverlay(
                     JellyPinButton(
                         digit = digit,
                         delayMs = delayMs,
-                        backdrop = safeBackdrop,
                         onClick = {
-                            nativeKeys[digit]?.performClick()
+                            nativeKeys[digit]?.performClick() // Forward hit to the native system
                         }
                     )
                 }

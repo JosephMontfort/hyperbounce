@@ -31,20 +31,19 @@ object LiquidKeypadHook {
             val pinViewClass = Class.forName("com.android.keyguard.widget.MiuiKeyguardPINView", false, classLoader)
             val keyClass = Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)
 
-            // Inject the Compose Fullscreen Overlay on root attach
             val onAttachedRootMethod = findMethod(pinViewClass, "onAttachedToWindow")
             module.hook(onAttachedRootMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val result = chain.proceed()
                     val view = chain.thisObject as View
-                    view.post {
-                        LiquidKeypadHost.ensure(view)
-                    }
+                    
+                    // Route to thread-safe Host ensuring initialization happens safely
+                    LiquidKeypadHost.ensure(view)
+                    
                     return result
                 }
             })
 
-            // Format native keys and structure
             val onAttachedKeyMethod = findMethod(keyClass, "onAttachedToWindow")
             module.hook(onAttachedKeyMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -63,7 +62,6 @@ object LiquidKeypadHook {
                                     mDigitText.isAccessible = true
                                     (mDigitText.get(view) as? TextView)?.let {
                                         digitStr = it.text.toString()
-                                        it.visibility = View.INVISIBLE // Handled by Compose
                                     }
 
                                     val mKlondikeText = cls.getDeclaredField("mKlondikeText")
@@ -78,7 +76,7 @@ object LiquidKeypadHook {
                                 setAnimMethod.invoke(view, false)
                             } catch (e: Throwable) {}
                             
-                            view.background = null // Strip native visual properties
+                            view.background = null
 
                             // Tuned Spacing XML Rewrite
                             val keySizePx = (82f * density).toInt()     
@@ -135,7 +133,6 @@ object LiquidKeypadHook {
                 }
             })
 
-            // Route all raw touches directly to Compose
             val dispatchTouchMethod = findMethod(pinViewClass, "dispatchTouchEvent", MotionEvent::class.java)
             module.hook(dispatchTouchMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {

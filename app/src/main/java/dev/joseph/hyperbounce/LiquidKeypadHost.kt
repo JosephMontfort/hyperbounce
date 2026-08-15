@@ -2,6 +2,8 @@ package dev.joseph.hyperbounce
 
 import android.content.Context
 import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
@@ -24,14 +26,18 @@ import java.util.WeakHashMap
 
 internal object LiquidKeypadHost {
     private val hosts = WeakHashMap<View, Host>()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     @JvmStatic
     fun ensure(target: View) {
-        if (hosts.containsKey(target)) return
-        val parent = target as? ViewGroup ?: return
-        val host = Host(parent)
-        hosts[target] = host
-        host.attach()
+        // Enforce Main UI Thread strictly to prevent Lifecycle wmshell.main crashes
+        mainHandler.post {
+            if (hosts.containsKey(target)) return@post
+            val parent = target as? ViewGroup ?: return@post
+            val host = Host(parent)
+            hosts[target] = host
+            host.attach()
+        }
     }
 
     @JvmStatic
@@ -50,7 +56,6 @@ internal object LiquidKeypadHost {
         private val keyBoundsState = mutableStateMapOf<String, Rect>()
 
         fun attach() {
-            // Find native keys and bind layout listeners to track their exact screen coordinates
             fun mapNativeKeys(view: View) {
                 if (view.javaClass.name.contains("MiuiNumPadKey")) {
                     var digit = ""
@@ -65,7 +70,7 @@ internal object LiquidKeypadHost {
                     }
                     if (digit.isNotEmpty()) {
                         nativeKeyMap[digit] = view
-                        view.alpha = 0f // Make native key perfectly invisible
+                        view.alpha = 0f // Make the native key perfectly invisible
                         
                         view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
                             val location = IntArray(2)
@@ -111,7 +116,6 @@ internal object LiquidKeypadHost {
                 installOwnersIfNeeded(compose)
                 overlay.add(compose)
             }
-
             composeView = compose
         }
     }

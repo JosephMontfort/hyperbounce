@@ -1,5 +1,8 @@
 package dev.joseph.hyperbounce.liquidglass
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.CircleShape
@@ -18,42 +21,36 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.drawBackdrop
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.abs
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.tanh
 
 @Composable
 fun JellyPinButton(
     digit: String,
     delayMs: Long,
-    backdrop: Backdrop,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val animationScope = rememberCoroutineScope()
     var isVisible by remember { mutableStateOf(false) }
+    val enterAnim = remember { Animatable(0f) }
 
-    // Staggered iOS 26 Entrance Animation
+    // Staggered iOS 26 Entrance Animation (Left to right, top to bottom cascade)
     LaunchedEffect(Unit) {
         delay(delayMs)
         isVisible = true
+        enterAnim.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 250f))
     }
 
-    // Utilize the DampedDragAnimation from AndroidLiquidGlass library
-    val dampedDragAnimation = remember(animationScope) {
-        DampedDragAnimation(
+    // Reuse AndroidLiquidGlass library's touch tracking, but we handle the deformation manually below
+    val dampedDrag = remember(animationScope) {
+        com.kyant.backdrop.catalog.utils.DampedDragAnimation(
             animationScope = animationScope,
             initialValue = 0f,
             valueRange = 0f..1f,
             visibilityThreshold = 0.001f,
             initialScale = 1f,
-            pressedScale = 0.9f, // Compress slightly down on press for depth
+            pressedScale = 0.88f, // Shrink inward on press for depth
             onDragStarted = {},
             onDragStopped = { onClick() },
             onDrag = { _, _ -> }
@@ -64,38 +61,22 @@ fun JellyPinButton(
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .then(dampedDragAnimation.modifier)
+                .then(dampedDrag.modifier)
                 .graphicsLayer {
-                    // Pinned Jelly Physics adapted from AndroidLiquidGlass LiquidButton
-                    val progress = dampedDragAnimation.pressProgress
-                    val scale = androidx.compose.ui.util.lerp(1f, 0.9f, progress)
+                    val progress = dampedDrag.pressProgress
+                    val depthScale = androidx.compose.ui.util.lerp(1f, 0.88f, progress)
                     
-                    // Clamp translation heavily so the button stays pinned to its origin
-                    val maxOffset = size.minDimension * 0.15f 
-                    val initialDerivative = 0.15f
+                    // Pinned Jelly Physics (Squash and Stretch without sliding out of bounds)
+                    val stretch = 0.25f * progress // Maximum 25% deformation
                     
-                    // Using velocityTracker offset from DampedDragAnimation via DragGestureInspector
-                    // Since DampedDragAnimation returns a 1D value, we approximate 2D drag via progress
-                    // For true 2D jelly, we map the scale deformation based on touch.
-                    val stretch = 0.35f * progress // 35% jelly stretch deformation
-                    
-                    // Simple uniform pop/jelly for stability
-                    scaleX = scale + stretch
-                    scaleY = scale - (stretch * 0.5f)
+                    // Combine entrance pop with the drag deformation
+                    scaleX = (depthScale + stretch) * enterAnim.value
+                    scaleY = (depthScale - (stretch * 0.5f)) * enterAnim.value
+                    alpha = enterAnim.value
                 }
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { CircleShape },
-                    effects = {}, // No heavy RenderEffects here to guarantee zero clipping
-                    onDrawSurface = {
-                        val progress = dampedDragAnimation.pressProgress
-                        // Subtle liquid glass translucent fill
-                        drawRect(Color.White.copy(alpha = 0.15f))
-                        if (progress > 0f) {
-                            // Brighten dynamically on press
-                            drawRect(Color.White.copy(alpha = 0.1f * progress))
-                        }
-                    }
+                .background(
+                    color = Color.White.copy(alpha = 0.15f + (0.12f * dampedDrag.pressProgress)), 
+                    shape = CircleShape
                 )
         ) {
             BasicText(
