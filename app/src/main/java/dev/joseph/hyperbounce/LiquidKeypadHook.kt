@@ -36,10 +36,7 @@ object LiquidKeypadHook {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val result = chain.proceed()
                     val view = chain.thisObject as View
-                    
-                    // Route to thread-safe Host ensuring initialization happens safely
-                    LiquidKeypadHost.ensure(view)
-                    
+                    view.post { LiquidKeypadHost.ensure(view) }
                     return result
                 }
             })
@@ -62,6 +59,7 @@ object LiquidKeypadHook {
                                     mDigitText.isAccessible = true
                                     (mDigitText.get(view) as? TextView)?.let {
                                         digitStr = it.text.toString()
+                                        it.visibility = View.INVISIBLE 
                                     }
 
                                     val mKlondikeText = cls.getDeclaredField("mKlondikeText")
@@ -78,7 +76,7 @@ object LiquidKeypadHook {
                             
                             view.background = null
 
-                            // Tuned Spacing XML Rewrite
+                            // Tuned Spacing XML Rewrite (Safe DP Conversion)
                             val keySizePx = (82f * density).toInt()     
                             val vMarginPx = (28f * density).toInt()     
                             val hMarginPx = (10f * density).toInt()     
@@ -125,15 +123,18 @@ object LiquidKeypadHook {
                                 view.layoutParams = keyLp
                             }
                             
+                            view.translationX = 0f
+                            view.translationY = 0f
+
                         } catch (e: Throwable) {
-                            Log.e(TAG, "Error configuring key", e)
+                            Log.e(TAG, "Error configuring key constraints", e)
                         }
                     }
                     return result
                 }
             })
 
-            val dispatchTouchMethod = findMethod(pinViewClass, "dispatchTouchEvent", MotionEvent::class.java)
+            val dispatchTouchMethod = findMethod(keyClass, "onTouchEvent", MotionEvent::class.java)
             module.hook(dispatchTouchMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val view = chain.thisObject as View
@@ -144,7 +145,7 @@ object LiquidKeypadHook {
             })
 
         } catch (e: Throwable) {
-            Log.e(TAG, "Failed to hook", e)
+            Log.e(TAG, "Failed to hook Keypad", e)
         }
     }
 }

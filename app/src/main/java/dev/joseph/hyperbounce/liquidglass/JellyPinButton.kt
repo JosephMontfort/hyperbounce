@@ -1,8 +1,11 @@
 package dev.joseph.hyperbounce.liquidglass
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.CircleShape
@@ -16,13 +19,20 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.sin
 
 @Composable
 fun JellyPinButton(
@@ -33,49 +43,72 @@ fun JellyPinButton(
 ) {
     val animationScope = rememberCoroutineScope()
     var isVisible by remember { mutableStateOf(false) }
+    
     val enterAnim = remember { Animatable(0f) }
+    val pressAnim = remember { Animatable(0f) }
+    val dragOffsetAnim = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
 
-    // Staggered iOS 26 Entrance Animation (Left to right, top to bottom cascade)
+    // Staggered iOS 26 Entrance Animation
     LaunchedEffect(Unit) {
         delay(delayMs)
         isVisible = true
-        enterAnim.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 250f))
+        enterAnim.animateTo(1f, spring(dampingRatio = 0.65f, stiffness = 250f))
     }
 
-    // Utilize our localized DampedDragAnimation
-    val dampedDrag = remember(animationScope) {
-        dev.joseph.hyperbounce.liquidglass.DampedDragAnimation(
-            animationScope = animationScope,
-            initialValue = 0f,
-            valueRange = 0f..1f,
-            visibilityThreshold = 0.001f,
-            initialScale = 1f,
-            pressedScale = 0.88f, // Shrink inward on press for depth
-            onDragStarted = {},
-            onDragStopped = { onClick() },
-            onDrag = { _, _ -> }
-        )
+    // Custom 2D Jelly Pointer Input
+    val jellyGestures = Modifier.pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            animationScope.launch { pressAnim.animateTo(1f, spring(0.5f, 300f)) }
+            
+            var dragOffset = Offset.Zero
+            do {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == down.id }
+                if (change != null && change.pressed) {
+                    dragOffset = change.position - down.position
+                    animationScope.launch { dragOffsetAnim.snapTo(dragOffset) }
+                }
+            } while (change != null && change.pressed)
+
+            // Trigger actual PIN click
+            if (hypot(dragOffset.x, dragOffset.y) < size.width * 0.6f) {
+                onClick()
+            }
+
+            // Bouncy snap back
+            animationScope.launch {
+                launch { pressAnim.animateTo(0f, spring(0.6f, 250f)) }
+                launch { dragOffsetAnim.animateTo(Offset.Zero, spring(0.4f, 350f)) }
+            }
+        }
     }
 
     if (isVisible) {
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .then(dampedDrag.modifier)
+                .then(jellyGestures)
                 .graphicsLayer {
-                    val progress = dampedDrag.pressProgress
-                    val depthScale = androidx.compose.ui.util.lerp(1f, 0.88f, progress)
+                    val progress = pressAnim.value
+                    val dragOffset = dragOffsetAnim.value
                     
-                    // Pinned Jelly Physics (Squash and Stretch without sliding out of bounds)
-                    val stretch = 0.25f * progress // Maximum 25% deformation
+                    // Depth compression on press
+                    val baseScale = androidx.compose.ui.util.lerp(1f, 0.88f, progress)
                     
-                    // Combine entrance pop with the drag deformation
-                    scaleX = (depthScale + stretch) * enterAnim.value
-                    scaleY = (depthScale - (stretch * 0.5f)) * enterAnim.value
+                    // Pinned Jelly Math: Zero translation, maximum stretching
+                    val dragDist = hypot(dragOffset.x, dragOffset.y)
+                    val maxOffset = size.minDimension * 0.8f
+                    val stretch = 0.35f * (dragDist / maxOffset).coerceAtMost(1f) // 35% max jelly stretch
+                    val angle = atan2(dragOffset.y, dragOffset.x)
+                    
+                    // Apply entrance pop + squash & stretch
+                    scaleX = (baseScale + stretch * abs(cos(angle)) - stretch * 0.5f * abs(sin(angle))) * enterAnim.value
+                    scaleY = (baseScale + stretch * abs(sin(angle)) - stretch * 0.5f * abs(cos(angle))) * enterAnim.value
                     alpha = enterAnim.value
                 }
                 .background(
-                    color = Color.White.copy(alpha = 0.15f + (0.12f * dampedDrag.pressProgress)), 
+                    color = Color.White.copy(alpha = 0.15f + (0.05f * pressAnim.value)), 
                     shape = CircleShape
                 )
         ) {

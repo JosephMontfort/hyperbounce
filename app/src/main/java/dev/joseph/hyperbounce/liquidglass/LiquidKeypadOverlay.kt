@@ -21,11 +21,10 @@ fun LiquidKeypadOverlay(
     Box(modifier = Modifier.fillMaxSize()) {
         keyBounds.forEach { (digit, bounds) ->
             if (bounds.width() > 0 && bounds.height() > 0) {
-                // Calculate staggered delay based on numeric value for cascade effect
+                // iOS 26 cascade entrance delay mapping
                 val numericVal = digit.toIntOrNull() ?: 10
                 val delayMs = if (numericVal == 0) 315L else (numericVal - 1) * 35L
 
-                // Safely convert exact pixel bounds into Density-Independent Pixels (DP)
                 val widthDp = with(density) { bounds.width().toDp() }
                 val heightDp = with(density) { bounds.height().toDp() }
 
@@ -38,7 +37,7 @@ fun LiquidKeypadOverlay(
                         digit = digit,
                         delayMs = delayMs,
                         onClick = {
-                            nativeKeys[digit]?.performClick() // Forward hit to the native system
+                            nativeKeys[digit]?.performClick() 
                         }
                     )
                 }

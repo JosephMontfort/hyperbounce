@@ -9,15 +9,9 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 
-/**
- * Synthetic owner used only when an Xposed-injected ComposeView is attached to
- * a target app view tree that does not already expose Lifecycle/SavedState owners.
- *
- * The existing app's owners are preferred whenever available; this owner exists
- * as a safe fallback for framework/system-app injection paths.
- */
 internal class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
-    val registry = LifecycleRegistry(this)
+    // CRITICAL FIX: createUnsafe bypasses main-thread enforcement and stops the wmshell.main crash
+    val registry = LifecycleRegistry.createUnsafe(this)
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
     private val store = ViewModelStore()
 
@@ -25,12 +19,7 @@ internal class FakeLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner, Vie
         savedStateRegistryController.performRestore(null)
     }
 
-    override val lifecycle: Lifecycle
-        get() = registry
-
-    override val savedStateRegistry: SavedStateRegistry
-        get() = savedStateRegistryController.savedStateRegistry
-
-    override val viewModelStore: ViewModelStore
-        get() = store
+    override val lifecycle: Lifecycle get() = registry
+    override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
+    override val viewModelStore: ViewModelStore get() = store
 }
