@@ -16,11 +16,6 @@ import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Method
 import java.util.WeakHashMap
 import kotlin.math.abs
-import kotlin.math.atan2
-import kotlin.math.hypot
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.tanh
 
 object LiquidKeypadHook {
     private const val TAG = "HyperBounce_Keypad"
@@ -44,14 +39,9 @@ object LiquidKeypadHook {
     }
 
     class KeyState(val digit: String) {
-        val rawDx = Spring()
-        val rawDy = Spring()
         val scale = Spring(0f, 1f) 
         val alpha = Spring(0f, 1f)
-        
         var isPressed = false
-        var startTouchX = 0f
-        var startTouchY = 0f
     }
 
     private val stateMap = WeakHashMap<View, KeyState>()
@@ -91,10 +81,14 @@ object LiquidKeypadHook {
                         view.alpha = 1f
                         val containerField = view.javaClass.getDeclaredField("mContainerConstraintLayout")
                         containerField.isAccessible = true
-                        (containerField.get(view) as? View)?.alpha = 1f
+                        (containerField.get(view) as? View)?.let { v ->
+                            v.alpha = 1f
+                            // FIX: Shift the entire container UP by 60dp to clear the fingerprint sensor
+                            v.translationY = -60f * view.resources.displayMetrics.density
+                        }
                         
-                        // Fade in auxiliary items cleanly
-                        arrayOf("mBouncerMessageAreaTitle", "mBouncerMessageArea", "mEmergencyCall", "mCancelButton").forEach { fieldName ->
+                        // FIX: Added "mRow0Container" to restore the 4 PIN indicator dots
+                        arrayOf("mRow0Container", "mBouncerMessageAreaTitle", "mBouncerMessageArea", "mEmergencyCall", "mCancelButton").forEach { fieldName ->
                             try {
                                 val field = view.javaClass.getDeclaredField(fieldName)
                                 field.isAccessible = true
@@ -107,7 +101,7 @@ object LiquidKeypadHook {
                         }
                     } catch (e: Throwable) { Log.e(TAG, "Failed to reflect SystemUI states", e) }
 
-                    // Trigger simultaneous, slow pop-in
+                    // Trigger simultaneous, snappy pop-in
                     stateMap.forEach { (keyView, state) ->
                         state.scale.snap(0.3f)
                         state.alpha.snap(0f)
@@ -189,7 +183,7 @@ object LiquidKeypadHook {
                                 setAnimMethod.invoke(view, false)
                             } catch (e: Throwable) {}
 
-                            // SURGICAL LAYOUT: Only modify the inner row and its children
+                            // SURGICAL LAYOUT
                             val keySizePx = (82f * density).toInt()     
                             val vMarginPx = (14f * density).toInt()     
                             val hMarginPx = (14f * density).toInt()     
@@ -201,13 +195,10 @@ object LiquidKeypadHook {
                                 if (rowLp != null) {
                                     rowLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
                                     rowLp.weight = 0f
-                                    // Row 4 gets extra bottom margin so it doesn't crowd the Emergency container
-                                    rowLp.bottomMargin = if (digitStr == "0") (32f * density).toInt() else vMarginPx
+                                    rowLp.bottomMargin = vMarginPx
                                     row.layoutParams = rowLp
                                 }
 
-                                // Apply exact bounds to ALL siblings (including Space and delete_container)
-                                // This ensures the '0' key remains perfectly dead-center in row4
                                 for (i in 0 until row.childCount) {
                                     val sibling = row.getChildAt(i)
                                     val sibLp = sibling.layoutParams as? LinearLayout.LayoutParams
@@ -230,7 +221,7 @@ object LiquidKeypadHook {
                 }
             })
 
-            // 3. TRUE TOUCH INTERCEPTION & SQUISH
+            // 3. TRUE TOUCH INTERCEPTION & SQUISH (NO JELLY)
             val onTouchMethod = findMethod(keyClass, "onTouchEvent", MotionEvent::class.java)
             module.hook(onTouchMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -240,7 +231,6 @@ object LiquidKeypadHook {
 
                     when (event.actionMasked) {
                         MotionEvent.ACTION_DOWN -> {
-                            // Recursively stop ALL ancestors from intercepting upward swipes
                             var p = view.parent
                             while (p != null) {
                                 p.requestDisallowInterceptTouchEvent(true)
@@ -248,29 +238,17 @@ object LiquidKeypadHook {
                             }
                             
                             state.isPressed = true
-                            state.startTouchX = event.rawX
-                            state.startTouchY = event.rawY
-                            state.scale.target = 1f 
+                            state.scale.target = 0.88f // Slight depth down on press
                             view.postInvalidateOnAnimation()
-                        }
-                        MotionEvent.ACTION_MOVE -> {
-                            if (state.isPressed) {
-                                state.rawDx.target = event.rawX - state.startTouchX
-                                state.rawDy.target = event.rawY - state.startTouchY
-                                view.postInvalidateOnAnimation()
-                            }
                         }
                         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                             state.isPressed = false
-                            val dist = hypot(state.rawDx.current.toDouble(), state.rawDy.current.toDouble()).toFloat()
                             
-                            // Deliberate Click Pop: Only shrink if tapped without heavy dragging
-                            if (event.actionMasked == MotionEvent.ACTION_UP && dist < view.width * 0.2f) {
-                                state.scale.current = 0.65f // Massive instant depth squish
+                            if (event.actionMasked == MotionEvent.ACTION_UP) {
+                                // Deliberate Click Pop
+                                state.scale.current = 0.75f // Compress down deeply
                             }
                             
-                            state.rawDx.target = 0f
-                            state.rawDy.target = 0f
                             state.scale.target = 1f
                             view.postInvalidateOnAnimation()
                         }
@@ -279,7 +257,7 @@ object LiquidKeypadHook {
                 }
             })
 
-            // 4. DRAW SPLIT PHYSICS (Volume-Preserving Circle + Static Text)
+            // 4. DRAW UNIFORM BOUNCE (NO JELLY STRETCH)
             val onDrawMethod = findMethod(keyClass, "onDraw", Canvas::class.java)
             module.hook(onDrawMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -287,62 +265,31 @@ object LiquidKeypadHook {
                     val canvas = chain.args[0] as Canvas
                     val state = stateMap[view] ?: return chain.proceed()
 
-                    // Slow, Squishy Wobble Physics
-                    val s1 = state.rawDx.update(60f, 4.5f) 
-                    val s2 = state.rawDy.update(60f, 4.5f)
-                    val s3 = state.scale.update(120f, 9f) // Smooth, bouncy entrance/click pop
+                    // Snappy, clean bounce (No wobble/jelly)
+                    val s3 = state.scale.update(200f, 12f) 
                     val s4 = state.alpha.update(100f, 15f)
-                    if (s1 || s2 || s3 || s4) {
+                    if (s3 || s4) {
                         view.postInvalidateOnAnimation()
                     }
 
                     val cx = view.width / 2f
                     val cy = view.height / 2f
                     val radius = view.width / 2f
-                    
-                    val maxOffset = view.width * 1.5f
-                    val boundedDx = maxOffset * tanh(state.rawDx.current / maxOffset).toFloat()
-                    val boundedDy = maxOffset * tanh(state.rawDy.current / maxOffset).toFloat()
-                    val dragDist = hypot(boundedDx.toDouble(), boundedDy.toDouble()).toFloat()
-                    
-                    // True Volume Preservation
-                    // Area = pi * r^2. If X stretches, Y must compress inversely.
-                    val stretchAmplitude = 0.35f * (dragDist / maxOffset).coerceAtMost(1f) // Capped at 35% max stretch
-                    val stretchFactor = 1.0f + stretchAmplitude
-                    
-                    val angleRadians = atan2(boundedDy.toDouble(), boundedDx.toDouble())
-                    val angleDegrees = Math.toDegrees(angleRadians).toFloat()
 
-                    // ==========================================
-                    // 1. DRAW DEFORMED BACKGROUND CIRCLE
-                    // ==========================================
                     canvas.save()
                     canvas.translate(cx, cy)
-                    if (dragDist > 1f) {
-                        canvas.rotate(angleDegrees) // Point canvas toward finger
-                    }
-                    
-                    // Scale X out, and Scale Y IN proportionately to maintain liquid volume
-                    val currentBaseScale = state.scale.current.coerceAtLeast(0.01f)
-                    canvas.scale(currentBaseScale * stretchFactor, currentBaseScale / stretchFactor)
+                    canvas.scale(state.scale.current, state.scale.current)
 
                     val baseAlpha = if (state.isPressed) 64 else 35 
                     circlePaint.color = Color.WHITE
                     circlePaint.alpha = (baseAlpha * state.alpha.current.coerceIn(0f, 1f)).toInt()
                     canvas.drawCircle(0f, 0f, radius, circlePaint)
-                    canvas.restore()
-
-                    // ==========================================
-                    // 2. DRAW STATIC TEXT (NO WARPING)
-                    // ==========================================
-                    canvas.save()
-                    canvas.translate(cx, cy)
-                    canvas.scale(currentBaseScale, currentBaseScale) // Text receives depth pop, but NEVER distorts
 
                     textPaint.textSize = 34f * view.resources.displayMetrics.scaledDensity
                     textPaint.alpha = (255 * state.alpha.current.coerceIn(0f, 1f)).toInt()
                     val textOffset = (textPaint.descent() + textPaint.ascent()) / 2f
                     canvas.drawText(state.digit, 0f, -textOffset, textPaint)
+                    
                     canvas.restore()
                     
                     return null 
