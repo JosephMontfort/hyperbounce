@@ -18,6 +18,8 @@ import java.util.WeakHashMap
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
+import kotlin.math.sin
+import kotlin.math.cos
 import kotlin.math.tanh
 
 object LiquidKeypadHook {
@@ -44,9 +46,13 @@ object LiquidKeypadHook {
     class KeyState(val digit: String) {
         val rawDx = Spring()
         val rawDy = Spring()
-        val scaleX = Spring(0f, 1f) 
-        val scaleY = Spring(0f, 1f)
+        val scale = Spring(0f, 1f) 
         val alpha = Spring(0f, 1f)
+        
+        val numericVal = digit.toIntOrNull() ?: 10
+        val row = if (numericVal == 0) 3 else (numericVal - 1) / 3
+        val col = if (numericVal == 0) 1 else (numericVal - 1) % 3
+        val delayMs = (row * 40L) + (col * 20L)
         
         var isPressed = false
         var startTouchX = 0f
@@ -68,11 +74,87 @@ object LiquidKeypadHook {
     }
 
     fun apply(module: XposedModule, classLoader: ClassLoader) {
+        val pinViewClass = try {
+            Class.forName("com.android.keyguard.widget.MiuiKeyguardPINView", false, classLoader)
+        } catch (e: ClassNotFoundException) { return }
+        
         val keyClass = try {
             Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)
         } catch (e: ClassNotFoundException) { return }
 
         try {
+            // 1. SURGICAL OVERRIDE: Kill stock animations and spoof state
+            val startAppearMethod = findMethod(pinViewClass, "startAppearAnimation")
+            module.hook(startAppearMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val view = chain.thisObject as View
+                    
+                    try {
+                        view.javaClass.getDeclaredField("initAppearAnimed").apply { isAccessible = true; setBoolean(view, true) }
+                        view.javaClass.getDeclaredField("mAppearAnimating").apply { isAccessible = true; setBoolean(view, false) }
+                        
+                        view.alpha = 1f
+                        val containerField = view.javaClass.getDeclaredField("mContainerConstraintLayout")
+                        containerField.isAccessible = true
+                        (containerField.get(view) as? View)?.alpha = 1f
+                        
+                        // Fade in auxiliary items cleanly
+                        arrayOf("mBouncerMessageAreaTitle", "mBouncerMessageArea", "mEmergencyCall", "mCancelButton").forEach { fieldName ->
+                            try {
+                                val field = view.javaClass.getDeclaredField(fieldName)
+                                field.isAccessible = true
+                                (field.get(view) as? View)?.let { v ->
+                                    v.alpha = 0f
+                                    v.translationY = 30f
+                                    v.animate().alpha(1f).translationY(0f).setDuration(400).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+                                }
+                            } catch (e: Throwable) {}
+                        }
+                    } catch (e: Throwable) { Log.e(TAG, "Failed to reflect SystemUI states", e) }
+
+                    // Trigger our custom iOS 26 cascade
+                    stateMap.forEach { (keyView, state) ->
+                        state.scale.snap(0.2f)
+                        state.alpha.snap(0f)
+                        keyView.postDelayed({
+                            state.scale.target = 1f
+                            state.alpha.target = 1f
+                            keyView.postInvalidateOnAnimation()
+                        }, state.delayMs)
+                    }
+                    return null // Kills stock Folme animation
+                }
+            })
+
+            val startBackMethod = findMethod(pinViewClass, "startBackAnimation", java.lang.Runnable::class.java)
+            module.hook(startBackMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val view = chain.thisObject as View
+                    val runnable = chain.args[0] as? java.lang.Runnable
+                    
+                    stateMap.forEach { (keyView, state) ->
+                        state.scale.target = 0.6f
+                        state.alpha.target = 0f
+                        keyView.postInvalidateOnAnimation()
+                    }
+                    view.postDelayed({ runnable?.run() }, 150)
+                    return null
+                }
+            })
+
+            val cancelAppearMethod = findMethod(pinViewClass, "cancelAppearAnim")
+            module.hook(cancelAppearMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    stateMap.forEach { (keyView, state) ->
+                        state.scale.target = 0.6f
+                        state.alpha.target = 0f
+                        keyView.postInvalidateOnAnimation()
+                    }
+                    return null
+                }
+            })
+
+            // 2. Setup Physics State per Key
             val onAttachedKeyMethod = findMethod(keyClass, "onAttachedToWindow")
             module.hook(onAttachedKeyMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -109,15 +191,6 @@ object LiquidKeypadHook {
                             
                             val state = KeyState(digitStr)
                             stateMap[view] = state
-
-                            val numericVal = digitStr.toIntOrNull() ?: 10
-                            val delayMs = if (numericVal == 0) 315L else (numericVal - 1) * 35L
-                            view.postDelayed({
-                                state.scaleX.target = 1f
-                                state.scaleY.target = 1f
-                                state.alpha.target = 1f
-                                view.postInvalidateOnAnimation()
-                            }, delayMs)
 
                             try {
                                 val setAnimMethod = view.javaClass.getMethod("setAnimationEnabled", Boolean::class.javaPrimitiveType)
@@ -178,6 +251,7 @@ object LiquidKeypadHook {
                 }
             })
 
+            // 3. True Touch Interception
             val onTouchMethod = findMethod(keyClass, "onTouchEvent", MotionEvent::class.java)
             module.hook(onTouchMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -187,53 +261,46 @@ object LiquidKeypadHook {
 
                     when (event.actionMasked) {
                         MotionEvent.ACTION_DOWN -> {
-                            // CRITICAL FIX: Stop MIUI from intercepting upward swipes
-                            view.parent?.requestDisallowInterceptTouchEvent(true)
+                            var p = view.parent
+                            while (p != null) {
+                                p.requestDisallowInterceptTouchEvent(true)
+                                p = p.parent
+                            }
                             
                             state.isPressed = true
                             state.startTouchX = event.rawX
                             state.startTouchY = event.rawY
                             
-                            // Do NOT shrink on drag. Leave target at 1f.
-                            state.scaleX.target = 1f 
-                            state.scaleY.target = 1f
+                            state.scale.target = 1f 
                             view.postInvalidateOnAnimation()
                         }
                         MotionEvent.ACTION_MOVE -> {
                             if (state.isPressed) {
-                                val dx = event.rawX - state.startTouchX
-                                val dy = event.rawY - state.startTouchY
-
-                                state.rawDx.target = dx
-                                state.rawDy.target = dy
+                                state.rawDx.target = event.rawX - state.startTouchX
+                                state.rawDy.target = event.rawY - state.startTouchY
                                 view.postInvalidateOnAnimation()
                             }
                         }
                         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                             state.isPressed = false
+                            val dist = hypot(state.rawDx.current.toDouble(), state.rawDy.current.toDouble()).toFloat()
                             
-                            val dx = state.rawDx.current
-                            val dy = state.rawDy.current
-                            
-                            // Click Shrink Logic: Only shrink if they tapped without dragging far
-                            if (hypot(dx.toDouble(), dy.toDouble()) < view.width * 0.2f) {
-                                // Instantly compress the current spring value to create a visual "pop"
-                                state.scaleX.current = 0.8f
-                                state.scaleY.current = 0.8f
+                            // Deliberate "pop" only if tapped without heavy dragging
+                            if (event.actionMasked == MotionEvent.ACTION_UP && dist < view.width * 0.2f) {
+                                state.scale.current = 0.8f 
                             }
                             
                             state.rawDx.target = 0f
                             state.rawDy.target = 0f
-                            state.scaleX.target = 1f
-                            state.scaleY.target = 1f
+                            state.scale.target = 1f
                             view.postInvalidateOnAnimation()
                         }
                     }
-                    
                     return chain.proceed() 
                 }
             })
 
+            // 4. Draw Split Physics (Volume-Preserving Circle + Static Text)
             val onDrawMethod = findMethod(keyClass, "onDraw", Canvas::class.java)
             module.hook(onDrawMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -241,13 +308,11 @@ object LiquidKeypadHook {
                     val canvas = chain.args[0] as Canvas
                     val state = stateMap[view] ?: return chain.proceed()
 
-                    // Wobble physics: Lower stiffness & damping for heavy, fluid jelly return
-                    val s1 = state.rawDx.update(120f, 10f)
-                    val s2 = state.rawDy.update(120f, 10f)
-                    val s3 = state.scaleX.update(250f, 15f)
-                    val s4 = state.scaleY.update(250f, 15f)
-                    val s5 = state.alpha.update(150f, 20f)
-                    if (s1 || s2 || s3 || s4 || s5) {
+                    val s1 = state.rawDx.update(60f, 4.5f)
+                    val s2 = state.rawDy.update(60f, 4.5f)
+                    val s3 = state.scale.update(300f, 18f) 
+                    val s4 = state.alpha.update(150f, 20f)
+                    if (s1 || s2 || s3 || s4) {
                         view.postInvalidateOnAnimation()
                     }
 
@@ -256,48 +321,41 @@ object LiquidKeypadHook {
                     val radius = view.width / 2f
                     
                     val maxOffset = view.width * 1.5f
-                    val dx = state.rawDx.current
-                    val dy = state.rawDy.current
-                    
-                    val boundedDx = maxOffset * tanh(dx / maxOffset).toFloat()
-                    val boundedDy = maxOffset * tanh(dy / maxOffset).toFloat()
-
+                    val boundedDx = maxOffset * tanh(state.rawDx.current / maxOffset).toFloat()
+                    val boundedDy = maxOffset * tanh(state.rawDy.current / maxOffset).toFloat()
                     val dragDist = hypot(boundedDx.toDouble(), boundedDy.toDouble()).toFloat()
                     
-                    // Asymmetric stretch mapping
-                    val stretch = 0.6f * (dragDist / maxOffset).coerceAtMost(1f)
+                    // True Volume Preservation: 35% max stretch amplitude
+                    val stretchAmplitude = 0.35f * (dragDist / maxOffset).coerceAtMost(1f)
+                    val stretchFactor = 1.0f + stretchAmplitude
+                    
                     val angleRadians = atan2(boundedDy.toDouble(), boundedDx.toDouble())
                     val angleDegrees = Math.toDegrees(angleRadians).toFloat()
 
-                    // Increase scale along the drag axis, squash the perpendicular axis
-                    val finalScaleX = state.scaleX.current + stretch
-                    val finalScaleY = state.scaleY.current - (stretch * 0.4f)
-
+                    // --- DRAW BACKGROUND CIRCLE ---
                     canvas.save()
                     canvas.translate(cx, cy)
+                    if (dragDist > 1f) canvas.rotate(angleDegrees)
                     
-                    // Physically rotate the canvas to point at your finger for true omnidirectional stretching
-                    if (dragDist > 1f) {
-                        canvas.rotate(angleDegrees)
-                    }
-                    
-                    canvas.scale(finalScaleX, finalScaleY)
+                    // Math: Scale X up, Scale Y down inversely to maintain mass
+                    val currentBaseScale = state.scale.current
+                    canvas.scale(currentBaseScale * stretchFactor, currentBaseScale / stretchFactor)
 
                     val baseAlpha = if (state.isPressed) 64 else 35 
                     circlePaint.color = Color.WHITE
                     circlePaint.alpha = (baseAlpha * state.alpha.current.coerceIn(0f, 1f)).toInt()
                     canvas.drawCircle(0f, 0f, radius, circlePaint)
+                    canvas.restore()
 
-                    // Un-rotate the canvas before drawing the text so the number stays upright
-                    if (dragDist > 1f) {
-                        canvas.rotate(-angleDegrees)
-                    }
+                    // --- DRAW STATIC TEXT ---
+                    canvas.save()
+                    canvas.translate(cx, cy)
+                    canvas.scale(currentBaseScale, currentBaseScale) // Text never distorts
 
                     textPaint.textSize = 34f * view.resources.displayMetrics.scaledDensity
                     textPaint.alpha = (255 * state.alpha.current.coerceIn(0f, 1f)).toInt()
                     val textOffset = (textPaint.descent() + textPaint.ascent()) / 2f
                     canvas.drawText(state.digit, 0f, -textOffset, textPaint)
-
                     canvas.restore()
                     
                     return null 
