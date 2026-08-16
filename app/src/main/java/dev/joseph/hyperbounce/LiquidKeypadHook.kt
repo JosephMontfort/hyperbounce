@@ -1,5 +1,7 @@
 package dev.joseph.hyperbounce
 
+import android.graphics.Canvas
+import android.graphics.Rect
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
@@ -7,7 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
-import dev.joseph.hyperbounce.liquidglass.JellyOverlayView
+import dev.joseph.hyperbounce.liquidglass.JellyPhysicsManager
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Method
@@ -15,7 +17,6 @@ import java.util.WeakHashMap
 
 object LiquidKeypadHook {
     private const val TAG = "HyperBounce_Keypad"
-    private var overlayView: JellyOverlayView? = null
     private val keyDigitMap = WeakHashMap<View, String>()
 
     private fun findMethod(clazz: Class<*>, name: String, vararg parameterTypes: Class<*>): Method {
@@ -40,35 +41,36 @@ object LiquidKeypadHook {
         } catch (e: ClassNotFoundException) { return }
 
         try {
-            // 1. Inject the Full-Screen Canvas safely into the Parent FrameLayout
+            // 1. Hook the Root PIN View to capture the Canvas and init physics
             val onAttachedRootMethod = findMethod(pinViewClass, "onAttachedToWindow")
             module.hook(onAttachedRootMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val result = chain.proceed()
-                    val container = chain.thisObject as ViewGroup
-                    
-                    container.post {
-                        val parent = container.parent as? ViewGroup
-                        if (parent != null) {
-                            if (overlayView == null || overlayView?.parent == null) {
-                                val overlay = JellyOverlayView(container.context)
-                                overlay.layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT, 
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                                // Clear existing to prevent duplicate stacking
-                                (overlay.parent as? ViewGroup)?.removeView(overlay)
-                                
-                                parent.addView(overlay)
-                                overlayView = overlay
-                            }
-                        }
-                    }
+                    JellyPhysicsManager.init(chain.thisObject as View)
                     return result
                 }
             })
 
-            // 2. Hide Native Visuals and Register Keys dynamically
+            val onDetachedRootMethod = findMethod(pinViewClass, "onDetachedFromWindow")
+            module.hook(onDetachedRootMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    JellyPhysicsManager.pinView = null
+                    return chain.proceed()
+                }
+            })
+
+            // THIS IS THE MAGIC: Draw directly onto the Native Full-Screen Canvas
+            val dispatchDrawMethod = findMethod(pinViewClass, "dispatchDraw", Canvas::class.java)
+            module.hook(dispatchDrawMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val result = chain.proceed() // Let native dots draw first
+                    val canvas = chain.args[0] as Canvas
+                    JellyPhysicsManager.onDraw(canvas) // Draw jelly buttons exactly on top
+                    return result
+                }
+            })
+
+            // 2. Hide Native Visuals and Register Keys
             val onAttachedKeyMethod = findMethod(keyClass, "onAttachedToWindow")
             module.hook(onAttachedKeyMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -98,7 +100,6 @@ object LiquidKeypadHook {
                             }
                             
                             keyDigitMap[view] = digitStr
-                            overlayView?.registerNode(digitStr, view) // Pass raw view for dynamic tracking
 
                             try {
                                 val setAnimMethod = view.javaClass.getMethod("setAnimationEnabled", Boolean::class.javaPrimitiveType)
@@ -153,6 +154,22 @@ object LiquidKeypadHook {
                                 keyLp.rightMargin = hMarginPx
                                 view.layoutParams = keyLp
                             }
+                            
+                            // Map exact coordinates to the MiuiKeyguardPINView Canvas
+                            view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                                val pinView = JellyPhysicsManager.pinView
+                                if (pinView != null) {
+                                    val locV = IntArray(2)
+                                    v.getLocationInWindow(locV)
+                                    val locPin = IntArray(2)
+                                    pinView.getLocationInWindow(locPin)
+                                    
+                                    val dx = locV[0] - locPin[0]
+                                    val dy = locV[1] - locPin[1]
+                                    
+                                    JellyPhysicsManager.registerNode(digitStr, Rect(dx, dy, dx + v.width, dy + v.height))
+                                }
+                            }
 
                         } catch (e: Throwable) {
                             Log.e(TAG, "Error configuring key constraints", e)
@@ -162,7 +179,7 @@ object LiquidKeypadHook {
                 }
             })
 
-            // 3. Forward Touch Events to Canvas Physics Engine
+            // 3. Pipe Touches to the Physics Engine
             val dispatchTouchMethod = findMethod(keyClass, "onTouchEvent", MotionEvent::class.java)
             module.hook(dispatchTouchMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -171,10 +188,10 @@ object LiquidKeypadHook {
                     val digit = keyDigitMap[view]
                     
                     if (digit != null) {
-                        overlayView?.handleTouch(digit, event.actionMasked, event.rawX, event.rawY)
+                        JellyPhysicsManager.handleTouch(digit, event.actionMasked, event.rawX, event.rawY)
                     }
                     
-                    return chain.proceed() // Always let the system process the actual PIN click
+                    return chain.proceed()
                 }
             })
 
