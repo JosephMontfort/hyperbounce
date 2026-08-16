@@ -1,7 +1,9 @@
 package dev.joseph.hyperbounce
 
 import android.graphics.Canvas
-import android.graphics.Rect
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
@@ -9,15 +11,51 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
-import dev.joseph.hyperbounce.liquidglass.JellyPhysicsManager
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Method
 import java.util.WeakHashMap
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.sin
+import kotlin.math.tanh
 
 object LiquidKeypadHook {
     private const val TAG = "HyperBounce_Keypad"
-    private val keyDigitMap = WeakHashMap<View, String>()
+
+    private val circlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+    }
+
+    class Spring(var current: Float = 0f, var target: Float = 0f, var velocity: Float = 0f) {
+        fun update(stiffness: Float, damping: Float): Boolean {
+            val displacement = current - target
+            val acceleration = (-stiffness * displacement) + (-damping * velocity)
+            velocity += acceleration * 0.016f 
+            current += velocity * 0.016f
+            return abs(velocity) > 0.001f || abs(displacement) > 0.001f
+        }
+        fun snap(value: Float) { current = value; target = value; velocity = 0f }
+    }
+
+    class KeyState(val digit: String) {
+        val tx = Spring()
+        val ty = Spring()
+        val scaleX = Spring(0f, 1f) // Start 0 for entrance pop
+        val scaleY = Spring(0f, 1f)
+        val alpha = Spring(0f, 1f)
+        
+        var isPressed = false
+        var startTouchX = 0f
+        var startTouchY = 0f
+    }
+
+    private val stateMap = WeakHashMap<View, KeyState>()
 
     private fun findMethod(clazz: Class<*>, name: String, vararg parameterTypes: Class<*>): Method {
         var current: Class<*>? = clazz
@@ -32,45 +70,12 @@ object LiquidKeypadHook {
     }
 
     fun apply(module: XposedModule, classLoader: ClassLoader) {
-        val pinViewClass = try {
-            Class.forName("com.android.keyguard.widget.MiuiKeyguardPINView", false, classLoader)
-        } catch (e: ClassNotFoundException) { return }
-        
         val keyClass = try {
             Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)
         } catch (e: ClassNotFoundException) { return }
 
         try {
-            // 1. Hook the Root PIN View to capture the Canvas and init physics
-            val onAttachedRootMethod = findMethod(pinViewClass, "onAttachedToWindow")
-            module.hook(onAttachedRootMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val result = chain.proceed()
-                    JellyPhysicsManager.init(chain.thisObject as View)
-                    return result
-                }
-            })
-
-            val onDetachedRootMethod = findMethod(pinViewClass, "onDetachedFromWindow")
-            module.hook(onDetachedRootMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    JellyPhysicsManager.pinView = null
-                    return chain.proceed()
-                }
-            })
-
-            // THIS IS THE MAGIC: Draw directly onto the Native Full-Screen Canvas
-            val dispatchDrawMethod = findMethod(pinViewClass, "dispatchDraw", Canvas::class.java)
-            module.hook(dispatchDrawMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val result = chain.proceed() // Let native dots draw first
-                    val canvas = chain.args[0] as Canvas
-                    JellyPhysicsManager.onDraw(canvas) // Draw jelly buttons exactly on top
-                    return result
-                }
-            })
-
-            // 2. Hide Native Visuals and Register Keys
+            // 1. Structure the Layout and Initialize Physics State
             val onAttachedKeyMethod = findMethod(keyClass, "onAttachedToWindow")
             module.hook(onAttachedKeyMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -81,6 +86,15 @@ object LiquidKeypadHook {
                         try {
                             val density = view.resources.displayMetrics.density
 
+                            // Strip clipping bounds so jelly can stretch outside the box safely
+                            view.clipToOutline = false
+                            (view.parent as? ViewGroup)?.clipChildren = false
+                            (view.parent?.parent as? ViewGroup)?.clipChildren = false
+
+                            // Force onDraw to be called even without a background
+                            view.setWillNotDraw(false)
+                            view.background = null
+
                             var digitStr = ""
                             var cls: Class<*>? = view.javaClass
                             while (cls != null) {
@@ -89,9 +103,8 @@ object LiquidKeypadHook {
                                     mDigitText.isAccessible = true
                                     (mDigitText.get(view) as? TextView)?.let {
                                         digitStr = it.text.toString()
-                                        it.alpha = 0f // Make perfectly invisible
+                                        it.visibility = View.INVISIBLE // Native text gone
                                     }
-
                                     val mKlondikeText = cls.getDeclaredField("mKlondikeText")
                                     mKlondikeText.isAccessible = true
                                     (mKlondikeText.get(view) as? TextView)?.visibility = View.GONE
@@ -99,14 +112,24 @@ object LiquidKeypadHook {
                                 } catch (e: NoSuchFieldException) { cls = cls.superclass }
                             }
                             
-                            keyDigitMap[view] = digitStr
+                            // Initialize physics state for this specific key
+                            val state = KeyState(digitStr)
+                            stateMap[view] = state
+
+                            // Staggered iOS 26 Entrance Animation
+                            val numericVal = digitStr.toIntOrNull() ?: 10
+                            val delayMs = if (numericVal == 0) 315L else (numericVal - 1) * 35L
+                            view.postDelayed({
+                                state.scaleX.target = 1f
+                                state.scaleY.target = 1f
+                                state.alpha.target = 1f
+                                view.postInvalidateOnAnimation()
+                            }, delayMs)
 
                             try {
                                 val setAnimMethod = view.javaClass.getMethod("setAnimationEnabled", Boolean::class.javaPrimitiveType)
                                 setAnimMethod.invoke(view, false)
                             } catch (e: Throwable) {}
-                            
-                            view.background = null
 
                             // Tuned Spacing XML Rewrite
                             val keySizePx = (82f * density).toInt()     
@@ -154,22 +177,6 @@ object LiquidKeypadHook {
                                 keyLp.rightMargin = hMarginPx
                                 view.layoutParams = keyLp
                             }
-                            
-                            // Map exact coordinates to the MiuiKeyguardPINView Canvas
-                            view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-                                val pinView = JellyPhysicsManager.pinView
-                                if (pinView != null) {
-                                    val locV = IntArray(2)
-                                    v.getLocationInWindow(locV)
-                                    val locPin = IntArray(2)
-                                    pinView.getLocationInWindow(locPin)
-                                    
-                                    val dx = locV[0] - locPin[0]
-                                    val dy = locV[1] - locPin[1]
-                                    
-                                    JellyPhysicsManager.registerNode(digitStr, Rect(dx, dy, dx + v.width, dy + v.height))
-                                }
-                            }
 
                         } catch (e: Throwable) {
                             Log.e(TAG, "Error configuring key constraints", e)
@@ -179,19 +186,101 @@ object LiquidKeypadHook {
                 }
             })
 
-            // 3. Pipe Touches to the Physics Engine
-            val dispatchTouchMethod = findMethod(keyClass, "onTouchEvent", MotionEvent::class.java)
-            module.hook(dispatchTouchMethod).intercept(object : XposedInterface.Hooker {
+            // 2. Track Localized Touches for Physics
+            val onTouchMethod = findMethod(keyClass, "onTouchEvent", MotionEvent::class.java)
+            module.hook(onTouchMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val view = chain.thisObject as View
                     val event = chain.args[0] as MotionEvent
-                    val digit = keyDigitMap[view]
+                    val state = stateMap[view] ?: return chain.proceed()
                     
-                    if (digit != null) {
-                        JellyPhysicsManager.handleTouch(digit, event.actionMasked, event.rawX, event.rawY)
+                    val maxOffset = view.width * 0.8f
+
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            state.isPressed = true
+                            state.startTouchX = event.rawX
+                            state.startTouchY = event.rawY
+                            state.scaleX.target = 0.88f // Depth pop
+                            state.scaleY.target = 0.88f
+                            view.postInvalidateOnAnimation()
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            if (state.isPressed) {
+                                val dx = event.rawX - state.startTouchX
+                                val dy = event.rawY - state.startTouchY
+
+                                val targetTx = maxOffset * tanh(dx / maxOffset).toFloat()
+                                val targetTy = maxOffset * tanh(dy / maxOffset).toFloat()
+                                
+                                state.tx.target = targetTx
+                                state.ty.target = targetTy
+
+                                val dragDist = hypot(targetTx.toDouble(), targetTy.toDouble()).toFloat()
+                                val stretch = 0.35f * (dragDist / maxOffset).coerceAtMost(1f)
+                                val angle = atan2(targetTy.toDouble(), targetTx.toDouble()).toFloat()
+
+                                val baseScale = 0.88f
+                                state.scaleX.target = baseScale + stretch * abs(cos(angle)) - stretch * 0.5f * abs(sin(angle))
+                                state.scaleY.target = baseScale + stretch * abs(sin(angle)) - stretch * 0.5f * abs(cos(angle))
+                                view.postInvalidateOnAnimation()
+                            }
+                        }
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                            state.isPressed = false
+                            state.tx.target = 0f
+                            state.ty.target = 0f
+                            state.scaleX.target = 1f
+                            state.scaleY.target = 1f
+                            view.postInvalidateOnAnimation()
+                        }
                     }
                     
-                    return chain.proceed()
+                    return chain.proceed() // Preserve native PIN input
+                }
+            })
+
+            // 3. Draw the Custom Jelly UI safely inside the native view
+            val onDrawMethod = findMethod(keyClass, "onDraw", Canvas::class.java)
+            module.hook(onDrawMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val view = chain.thisObject as View
+                    val canvas = chain.args[0] as Canvas
+                    val state = stateMap[view] ?: return chain.proceed()
+
+                    // Update local physics
+                    val s1 = state.tx.update(350f, 25f)
+                    val s2 = state.ty.update(350f, 25f)
+                    val s3 = state.scaleX.update(250f, 15f)
+                    val s4 = state.scaleY.update(250f, 15f)
+                    val s5 = state.alpha.update(150f, 20f)
+                    if (s1 || s2 || s3 || s4 || s5) {
+                        view.postInvalidateOnAnimation()
+                    }
+
+                    val cx = view.width / 2f
+                    val cy = view.height / 2f
+                    val radius = view.width / 2f
+
+                    canvas.save()
+                    canvas.translate(cx + state.tx.current, cy + state.ty.current)
+                    canvas.scale(state.scaleX.current, state.scaleY.current)
+
+                    // CORRECT ALPHA CALCULATION (No solid white bugs)
+                    // Base opacity: 12% resting, 25% pressed
+                    val baseAlpha = if (state.isPressed) 64 else 30 
+                    circlePaint.color = Color.WHITE
+                    circlePaint.alpha = (baseAlpha * state.alpha.current.coerceIn(0f, 1f)).toInt()
+                    canvas.drawCircle(0f, 0f, radius, circlePaint)
+
+                    textPaint.textSize = 34f * view.resources.displayMetrics.scaledDensity
+                    textPaint.alpha = (255 * state.alpha.current.coerceIn(0f, 1f)).toInt()
+                    val textOffset = (textPaint.descent() + textPaint.ascent()) / 2f
+                    canvas.drawText(state.digit, 0f, -textOffset, textPaint)
+
+                    canvas.restore()
+                    
+                    return null // Skip native drawing completely
                 }
             })
 
