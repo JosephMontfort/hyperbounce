@@ -17,9 +17,9 @@ import java.lang.reflect.Method
 import java.util.WeakHashMap
 import kotlin.math.abs
 import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
-import kotlin.math.cos
 import kotlin.math.tanh
 
 object LiquidKeypadHook {
@@ -46,17 +46,20 @@ object LiquidKeypadHook {
     class KeyState(val digit: String) {
         val rawDx = Spring()
         val rawDy = Spring()
-        val scale = Spring(0f, 1f) 
+        val scale = Spring(0.01f, 1f) 
         val alpha = Spring(0f, 1f)
         
         val numericVal = digit.toIntOrNull() ?: 10
-        val row = if (numericVal == 0) 3 else (numericVal - 1) / 3
+        // Isolate 0 to give it a distinct, heavier drop at the very end
+        val row = if (numericVal == 0) 4 else (numericVal - 1) / 3
         val col = if (numericVal == 0) 1 else (numericVal - 1) % 3
-        val delayMs = (row * 40L) + (col * 20L)
+        val delayMs = (row * 60L) + (col * 30L) + if (numericVal == 0) 50L else 0L
         
         var isPressed = false
         var startTouchX = 0f
         var startTouchY = 0f
+        
+        var entranceTime = 0L
     }
 
     private val stateMap = WeakHashMap<View, KeyState>()
@@ -83,7 +86,7 @@ object LiquidKeypadHook {
         } catch (e: ClassNotFoundException) { return }
 
         try {
-            // 1. SURGICAL OVERRIDE: Kill stock animations and spoof state
+            // 1. SURGICAL OVERRIDE: Kill stock animations
             val startAppearMethod = findMethod(pinViewClass, "startAppearAnimation")
             module.hook(startAppearMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -98,7 +101,6 @@ object LiquidKeypadHook {
                         containerField.isAccessible = true
                         (containerField.get(view) as? View)?.alpha = 1f
                         
-                        // Fade in auxiliary items cleanly
                         arrayOf("mBouncerMessageAreaTitle", "mBouncerMessageArea", "mEmergencyCall", "mCancelButton").forEach { fieldName ->
                             try {
                                 val field = view.javaClass.getDeclaredField(fieldName)
@@ -106,23 +108,22 @@ object LiquidKeypadHook {
                                 (field.get(view) as? View)?.let { v ->
                                     v.alpha = 0f
                                     v.translationY = 30f
-                                    v.animate().alpha(1f).translationY(0f).setDuration(400).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+                                    v.animate().alpha(1f).translationY(0f).setDuration(500).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
                                 }
                             } catch (e: Throwable) {}
                         }
                     } catch (e: Throwable) { Log.e(TAG, "Failed to reflect SystemUI states", e) }
 
-                    // Trigger our custom iOS 26 cascade
+                    val now = System.currentTimeMillis()
                     stateMap.forEach { (keyView, state) ->
-                        state.scale.snap(0.2f)
+                        state.scale.snap(0.01f)
                         state.alpha.snap(0f)
-                        keyView.postDelayed({
-                            state.scale.target = 1f
-                            state.alpha.target = 1f
-                            keyView.postInvalidateOnAnimation()
-                        }, state.delayMs)
+                        state.scale.target = 1f
+                        state.alpha.target = 1f
+                        state.entranceTime = now + state.delayMs
+                        keyView.postInvalidateOnAnimation()
                     }
-                    return null // Kills stock Folme animation
+                    return null 
                 }
             })
 
@@ -133,11 +134,11 @@ object LiquidKeypadHook {
                     val runnable = chain.args[0] as? java.lang.Runnable
                     
                     stateMap.forEach { (keyView, state) ->
-                        state.scale.target = 0.6f
+                        state.scale.target = 0.5f
                         state.alpha.target = 0f
                         keyView.postInvalidateOnAnimation()
                     }
-                    view.postDelayed({ runnable?.run() }, 150)
+                    view.postDelayed({ runnable?.run() }, 200)
                     return null
                 }
             })
@@ -146,7 +147,7 @@ object LiquidKeypadHook {
             module.hook(cancelAppearMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     stateMap.forEach { (keyView, state) ->
-                        state.scale.target = 0.6f
+                        state.scale.target = 0.5f
                         state.alpha.target = 0f
                         keyView.postInvalidateOnAnimation()
                     }
@@ -285,9 +286,9 @@ object LiquidKeypadHook {
                             state.isPressed = false
                             val dist = hypot(state.rawDx.current.toDouble(), state.rawDy.current.toDouble()).toFloat()
                             
-                            // Deliberate "pop" only if tapped without heavy dragging
+                            // Deliberate Deep Click Pop
                             if (event.actionMasked == MotionEvent.ACTION_UP && dist < view.width * 0.2f) {
-                                state.scale.current = 0.8f 
+                                state.scale.current = 0.65f // Massive instant depth squish
                             }
                             
                             state.rawDx.target = 0f
@@ -307,11 +308,21 @@ object LiquidKeypadHook {
                     val view = chain.thisObject as View
                     val canvas = chain.args[0] as Canvas
                     val state = stateMap[view] ?: return chain.proceed()
+                    val now = System.currentTimeMillis()
 
-                    val s1 = state.rawDx.update(60f, 4.5f)
-                    val s2 = state.rawDy.update(60f, 4.5f)
-                    val s3 = state.scale.update(300f, 18f) 
-                    val s4 = state.alpha.update(150f, 20f)
+                    // Internal clock handles delayed staggered appearance exactly
+                    if (now < state.entranceTime) {
+                        state.scale.snap(0.01f)
+                        state.alpha.snap(0f)
+                        view.postInvalidateOnAnimation()
+                        return null 
+                    }
+
+                    // Slow, Bouncy Spring Math Update
+                    val s1 = state.rawDx.update(50f, 4f) // Slower, heavier liquid drag
+                    val s2 = state.rawDy.update(50f, 4f)
+                    val s3 = state.scale.update(100f, 7f) // Slower entrance and massive bounce overshoot
+                    val s4 = state.alpha.update(80f, 12f) // Smooth, delayed fade
                     if (s1 || s2 || s3 || s4) {
                         view.postInvalidateOnAnimation()
                     }
@@ -325,8 +336,8 @@ object LiquidKeypadHook {
                     val boundedDy = maxOffset * tanh(state.rawDy.current / maxOffset).toFloat()
                     val dragDist = hypot(boundedDx.toDouble(), boundedDy.toDouble()).toFloat()
                     
-                    // True Volume Preservation: 35% max stretch amplitude
-                    val stretchAmplitude = 0.35f * (dragDist / maxOffset).coerceAtMost(1f)
+                    // True Volume Preservation
+                    val stretchAmplitude = 0.40f * (dragDist / maxOffset).coerceAtMost(1f)
                     val stretchFactor = 1.0f + stretchAmplitude
                     
                     val angleRadians = atan2(boundedDy.toDouble(), boundedDx.toDouble())
@@ -337,8 +348,7 @@ object LiquidKeypadHook {
                     canvas.translate(cx, cy)
                     if (dragDist > 1f) canvas.rotate(angleDegrees)
                     
-                    // Math: Scale X up, Scale Y down inversely to maintain mass
-                    val currentBaseScale = state.scale.current
+                    val currentBaseScale = state.scale.current.coerceAtLeast(0.01f)
                     canvas.scale(currentBaseScale * stretchFactor, currentBaseScale / stretchFactor)
 
                     val baseAlpha = if (state.isPressed) 64 else 35 
