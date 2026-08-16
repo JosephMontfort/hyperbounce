@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Insets
+import android.util.Log
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
@@ -23,12 +24,12 @@ import io.github.libxposed.api.XposedModuleInterface
 
 class YouTubeHook(
     private val module: XposedModule,
-    private val param: XposedModuleInterface.PackageLoadedParam
+    private val param: XposedModuleInterface.PackageReadyParam
 ) {
     private val isDarkState = mutableStateOf(false)
     private var cachedInsetTargets = intArrayOf()
 
-    fun onPackageLoaded() {
+    fun onPackageReady() {
         try {
             module.hook(
                 View::class.java.getDeclaredMethod("dispatchApplyWindowInsets", WindowInsets::class.java)
@@ -152,7 +153,7 @@ class YouTubeHook(
 
             if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            module.log("[HyperBounce] Injecting YouTube Liquid Bar...")
+            module.log(Log.INFO, "HyperBounce", "Injecting YouTube Liquid Bar...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -197,9 +198,9 @@ class YouTubeHook(
             } else {
                 decorView.addView(composeView)
             }
-            module.log("[HyperBounce] Overlay attached.")
+            module.log(Log.INFO, "HyperBounce", "Overlay attached.")
         } catch (e: Exception) {
-            module.log("[HyperBounce] Exception: ${e.message}")
+            module.log(Log.ERROR, "HyperBounce", "Exception: ${e.message ?: "Unknown"}")
         }
     }
 }

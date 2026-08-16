@@ -11,16 +11,15 @@ import java.util.WeakHashMap
 
 class InstagramHook(
     private val module: XposedModule,
-    private val param: XposedModuleInterface.PackageLoadedParam
+    private val param: XposedModuleInterface.PackageReadyParam
 ) {
     private val sOverlayParents = WeakHashMap<ViewGroup, Boolean>()
 
-    fun onPackageLoaded() {
+    fun onPackageReady() {
         log("==================================================")
         log("[INIT] HyperBounce: Ultimate Smart Shifter Final")
         log("==================================================")
 
-        // 1. DIMENSION SPOOFER: Force video to bottom & fix DM Layouts
         try {
             module.hook(
                 Resources::class.java.getDeclaredMethod("getDimensionPixelSize", Int::class.javaPrimitiveType)
@@ -36,7 +35,6 @@ class InstagramHook(
             }
         } catch (t: Throwable) {}
 
-        // 2. GHOST TAB BAR, INJECT UI, STRETCH VIDEO, & CACHE PARENTS
         try {
             module.hook(
                 View::class.java.getDeclaredMethod("onAttachedToWindow")
@@ -147,7 +145,6 @@ class InstagramHook(
             }
         } catch (t: Throwable) {}
 
-        // 3. THE MARGIN ASSASSIN
         try {
             module.hook(
                 ViewGroup::class.java.getDeclaredMethod(
@@ -196,7 +193,6 @@ class InstagramHook(
     }
 
     private fun log(msg: String) {
-        Log.e("HyperBounce-Tracer", msg)
-        module.log("[HyperBounce-Tracer] $msg")
+        module.log(Log.ERROR, "HyperBounce-Tracer", msg)
     }
 }

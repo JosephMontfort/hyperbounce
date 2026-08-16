@@ -1,6 +1,7 @@
 package dev.joseph.hyperbounce
 
 import android.content.res.Configuration
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -17,16 +18,16 @@ import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
+import java.lang.reflect.Constructor
 
 class WhatsAppHook(
     private val module: XposedModule,
-    private val param: XposedModuleInterface.PackageLoadedParam
+    private val param: XposedModuleInterface.PackageReadyParam
 ) {
     private var lastUiMode = -1
     private var externalTabState: MutableState<Int>? = null
 
-    fun onPackageLoaded() {
-        // 1. --- THE FAB SHIFTER ---
+    fun onPackageReady() {
         try {
             module.hook(
                 View::class.java.getDeclaredMethod("onAttachedToWindow")
@@ -53,10 +54,9 @@ class WhatsAppHook(
             }
         } catch (t: Throwable) {}
 
-        // 2. --- WDS BOTTOM BAR HOOK (GHOST TAB BAR & INJECT UI) ---
         try {
             val wdsClass = param.classLoader.loadClass("com.whatsapp.ui.wds.components.bottombar.WDSBottomBar")
-            wdsClass.declaredConstructors.forEach { constructor ->
+            wdsClass.declaredConstructors.forEach { constructor: Constructor<*> ->
                 module.hook(constructor).intercept { chain ->
                     val result = chain.proceed()
                     val stockBar = chain.thisObject as ViewGroup
@@ -138,7 +138,7 @@ class WhatsAppHook(
             if (rootView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
             val context = stockBar.context
-            module.log("[HyperBounce] Injecting overlay…")
+            module.log(Log.INFO, "HyperBounce", "Injecting overlay…")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -178,9 +178,9 @@ class WhatsAppHook(
             }
 
             rootGroup.addView(composeView)
-            module.log("[HyperBounce] Overlay attached.")
+            module.log(Log.INFO, "HyperBounce", "Overlay attached.")
         } catch (e: Exception) {
-            module.log("[HyperBounce] Exception in executeUIHeist: ${e.message}")
+            module.log(Log.ERROR, "HyperBounce", "Exception in executeUIHeist: ${e.message ?: "Unknown"}")
         }
     }
 }
