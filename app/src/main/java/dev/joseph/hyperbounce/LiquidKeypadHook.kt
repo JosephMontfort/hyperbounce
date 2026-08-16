@@ -81,24 +81,30 @@ object LiquidKeypadHook {
                         view.alpha = 1f
                         val containerField = view.javaClass.getDeclaredField("mContainerConstraintLayout")
                         containerField.isAccessible = true
-                        (containerField.get(view) as? View)?.let { v ->
-                            v.alpha = 1f
-                            // Shift the entire container UP by 60dp to clear the fingerprint sensor
-                            v.translationY = -60f * view.resources.displayMetrics.density
-                        }
+                        (containerField.get(view) as? View)?.alpha = 1f
                         
-                        // Fade in the PIN dots cleanly WITHOUT translating them to prevent clipping
+                        // FIX: Safely structure and translate the PIN dots WITHOUT breaking layout weights
                         try {
                             val row0Field = view.javaClass.getDeclaredField("mRow0Container")
                             row0Field.isAccessible = true
                             (row0Field.get(view) as? View)?.let { v ->
+                                val lp = v.layoutParams as? LinearLayout.LayoutParams
+                                if (lp != null) {
+                                    lp.weight = 0f
+                                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    v.layoutParams = lp
+                                }
+                                v.clipToOutline = false
+                                (v as? ViewGroup)?.clipChildren = false
+                                
                                 v.alpha = 0f
-                                v.translationY = 0f 
+                                // Follow the keys upward by 60dp
+                                v.translationY = -60f * view.resources.displayMetrics.density 
                                 v.animate().alpha(1f).setDuration(600).start()
                             }
                         } catch (e: Throwable) {}
 
-                        // Fade in auxiliary items cleanly
+                        // Fade in auxiliary items cleanly (leaving them at translationY = 0)
                         arrayOf("mBouncerMessageAreaTitle", "mBouncerMessageArea", "mEmergencyCall", "mCancelButton").forEach { fieldName ->
                             try {
                                 val field = view.javaClass.getDeclaredField(fieldName)
@@ -112,9 +118,9 @@ object LiquidKeypadHook {
                         }
                     } catch (e: Throwable) { Log.e(TAG, "Failed to reflect SystemUI states", e) }
 
-                    // Trigger simultaneous, SLOW pop-in
+                    // Trigger simultaneous, ultra-slow pop-in
                     stateMap.forEach { (keyView, state) ->
-                        state.scale.snap(0.3f)
+                        state.scale.snap(0.4f)
                         state.alpha.snap(0f)
                         state.scale.target = 1f
                         state.alpha.target = 1f
@@ -131,7 +137,7 @@ object LiquidKeypadHook {
                     val runnable = chain.args[0] as? java.lang.Runnable
                     
                     stateMap.forEach { (keyView, state) ->
-                        state.scale.target = 0.5f
+                        state.scale.target = 0.6f
                         state.alpha.target = 0f
                         keyView.postInvalidateOnAnimation()
                     }
@@ -144,7 +150,7 @@ object LiquidKeypadHook {
             module.hook(cancelAppearMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     stateMap.forEach { (keyView, state) ->
-                        state.scale.target = 0.5f
+                        state.scale.target = 0.6f
                         state.alpha.target = 0f
                         keyView.postInvalidateOnAnimation()
                     }
@@ -195,7 +201,7 @@ object LiquidKeypadHook {
                                 setAnimMethod.invoke(view, false)
                             } catch (e: Throwable) {}
 
-                            // SURGICAL LAYOUT
+                            // SURGICAL LAYOUT: Translate individual rows, preserve parent bounds
                             val keySizePx = (82f * density).toInt()     
                             val vMarginPx = (14f * density).toInt()     
                             val hMarginPx = (14f * density).toInt()     
@@ -207,12 +213,13 @@ object LiquidKeypadHook {
                                 if (rowLp != null) {
                                     rowLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
                                     rowLp.weight = 0f
-                                    
-                                    // Massive bottom margin on Row 4 pushes the Emergency/Back buttons down
-                                    // to perfectly counteract the -60dp shift of the main container.
-                                    rowLp.bottomMargin = if (digitStr == "0") (74f * density).toInt() else vMarginPx
+                                    rowLp.bottomMargin = vMarginPx // Standard margin restored!
                                     row.layoutParams = rowLp
                                 }
+                                
+                                // FIX: Move the row itself up to clear the fingerprint.
+                                // This moves the touch region securely without breaking container bounds.
+                                row.translationY = -60f * density
 
                                 for (i in 0 until row.childCount) {
                                     val sibling = row.getChildAt(i)
@@ -236,7 +243,7 @@ object LiquidKeypadHook {
                 }
             })
 
-            // 3. TRUE TOUCH INTERCEPTION & SQUISH
+            // 3. TOUCH INTERCEPTION
             val onTouchMethod = findMethod(keyClass, "onTouchEvent", MotionEvent::class.java)
             module.hook(onTouchMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -253,15 +260,14 @@ object LiquidKeypadHook {
                             }
                             
                             state.isPressed = true
-                            state.scale.target = 0.92f // Very soft dip on hold
+                            state.scale.target = 0.90f // Extremely soft dip on hold
                             view.postInvalidateOnAnimation()
                         }
                         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                             state.isPressed = false
                             
                             if (event.actionMasked == MotionEvent.ACTION_UP) {
-                                // Softer, slower click pop
-                                state.scale.current = 0.82f 
+                                state.scale.current = 0.85f // Very subtle, satisfying click pop
                             }
                             
                             state.scale.target = 1f
@@ -272,7 +278,7 @@ object LiquidKeypadHook {
                 }
             })
 
-            // 4. DRAW SLOW, FLUID BOUNCE
+            // 4. DRAW ULTRA-SLOW BOUNCE
             val onDrawMethod = findMethod(keyClass, "onDraw", Canvas::class.java)
             module.hook(onDrawMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -280,10 +286,10 @@ object LiquidKeypadHook {
                     val canvas = chain.args[0] as Canvas
                     val state = stateMap[view] ?: return chain.proceed()
 
-                    // Physics heavily slowed down for a lazy, fluid pop
-                    // Stiffness reduced from 200 to 80. Damping reduced to 7 for extra wobble.
-                    val s3 = state.scale.update(80f, 7f) 
-                    val s4 = state.alpha.update(60f, 10f)
+                    // Physics massively slowed down
+                    // Stiffness dropped to 60, Damping to 6 = heavy, lazy wobble
+                    val s3 = state.scale.update(60f, 6f) 
+                    val s4 = state.alpha.update(50f, 8f)
                     if (s3 || s4) {
                         view.postInvalidateOnAnimation()
                     }
