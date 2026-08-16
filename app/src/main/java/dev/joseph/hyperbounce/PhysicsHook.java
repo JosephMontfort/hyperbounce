@@ -70,7 +70,8 @@ public class PhysicsHook extends XposedModule {
     };
 
     private static final String[] TARGET_SLIDER_CLASSES = {
-            "miuix.androidbasewidget.widget.SeekBar"
+            "miuix.androidbasewidget.widget.SeekBar",
+            "fan.androidbase.widget.SeekBar"
     };
 
     private static final boolean USE_LIQUID_GLASS_TOGGLE = true;
