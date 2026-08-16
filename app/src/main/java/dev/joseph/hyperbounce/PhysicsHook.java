@@ -126,6 +126,8 @@ public class PhysicsHook extends XposedModule {
         int depth = 0;
         while (parent instanceof View) {
             View pView = (View) parent;
+            String className = pView.getClass().getName();
+            if (className.contains("ActionBar") || className.contains("RecyclerView") || className.contains("DecorView")) break;
             pView.setClipToOutline(false);
             if (pView instanceof ViewGroup) {
                 ViewGroup vg = (ViewGroup) pView;
@@ -437,7 +439,6 @@ public class PhysicsHook extends XposedModule {
             if (USE_LIQUID_GLASS_TOGGLE) {
                 View view = (View) chain.getThisObject();
                 if (!view.isEnabled()) return false;
-                disableClipping(view);
                 MotionEvent event = (MotionEvent) chain.getArg(0);
                 if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
                     ViewParent parent = view.getParent();
@@ -496,7 +497,6 @@ public class PhysicsHook extends XposedModule {
             if (USE_LIQUID_GLASS_SLIDER) {
                 View view = (View) chain.getThisObject();
                 if (!view.isEnabled()) return false;
-                disableClipping(view);
                 MotionEvent event = (MotionEvent) chain.getArg(0);
                 int action = event.getActionMasked();
                 
@@ -534,7 +534,6 @@ public class PhysicsHook extends XposedModule {
             int action = event.getActionMasked();
             float x = event.getX();
             if (action == MotionEvent.ACTION_DOWN) {
-                disableClipping(view);
                 s.isTouching = true;
                 s.isDragging = false;
                 s.touchX = x;
@@ -565,7 +564,6 @@ public class PhysicsHook extends XposedModule {
             }
 
             // FALLBACK TO THE FULLY CUSTOM SLIDER ENGINE
-            disableClipping(view);
 
             try {
                 Method getThumb = findMethod(view.getClass(), "getThumb");

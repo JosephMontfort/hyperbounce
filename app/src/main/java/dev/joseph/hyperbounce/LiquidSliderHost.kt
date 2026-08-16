@@ -212,26 +212,22 @@ internal object LiquidSliderHost {
 
         private fun disableClipping(view: View) {
             var p: View? = view
-            var depth = 0
-            while (p != null && depth < 3) {
+            while (p != null) {
                 val className = p.javaClass.name
-                if (className.contains("RecyclerView") ||
+                if (className.contains("ActionBar") ||
+                    className.contains("RecyclerView") ||
                     p is android.widget.AbsListView ||
                     p is android.widget.ScrollView ||
-                    className.contains("Recycler") ||
-                    className.contains("ActionBar") ||
                     className.contains("DecorView")
                 ) {
                     break
                 }
-                
                 p.clipToOutline = false
                 if (p is ViewGroup) {
                     p.clipChildren = false
                     p.clipToPadding = false
                 }
                 p = p.parent as? View
-                depth++
             }
         }
 

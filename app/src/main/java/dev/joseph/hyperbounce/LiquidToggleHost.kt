@@ -227,6 +227,15 @@ internal object LiquidToggleHost {
         private fun disableClipping(view: View) {
             var p: View? = view
             while (p != null) {
+                val className = p.javaClass.name
+                if (className.contains("ActionBar") ||
+                    className.contains("RecyclerView") ||
+                    p is android.widget.AbsListView ||
+                    p is android.widget.ScrollView ||
+                    className.contains("DecorView")
+                ) {
+                    break
+                }
                 p.clipToOutline = false
                 if (p is ViewGroup) {
                     p.clipChildren = false
