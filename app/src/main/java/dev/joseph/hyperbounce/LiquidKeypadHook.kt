@@ -40,12 +40,13 @@ object LiquidKeypadHook {
             current += velocity * 0.016f
             return abs(velocity) > 0.001f || abs(displacement) > 0.001f
         }
-        fun snap(value: Float) { current = value; target = value; velocity = 0f }
     }
 
     class KeyState(val digit: String) {
-        val tx = Spring()
-        val ty = Spring()
+        // We track the raw touch offset directly now, not the translation coordinates
+        val rawDx = Spring()
+        val rawDy = Spring()
+        
         val scaleX = Spring(0f, 1f) // Start 0 for entrance pop
         val scaleY = Spring(0f, 1f)
         val alpha = Spring(0f, 1f)
@@ -75,7 +76,6 @@ object LiquidKeypadHook {
         } catch (e: ClassNotFoundException) { return }
 
         try {
-            // 1. Structure the Layout and Initialize Physics State
             val onAttachedKeyMethod = findMethod(keyClass, "onAttachedToWindow")
             module.hook(onAttachedKeyMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -112,7 +112,6 @@ object LiquidKeypadHook {
                                 } catch (e: NoSuchFieldException) { cls = cls.superclass }
                             }
                             
-                            // Initialize physics state for this specific key
                             val state = KeyState(digitStr)
                             stateMap[view] = state
 
@@ -194,15 +193,17 @@ object LiquidKeypadHook {
                     val event = chain.args[0] as MotionEvent
                     val state = stateMap[view] ?: return chain.proceed()
                     
-                    val maxOffset = view.width * 0.8f
+                    val maxOffset = view.width * 1.5f // Increased drag influence radius
 
                     when (event.actionMasked) {
                         MotionEvent.ACTION_DOWN -> {
                             state.isPressed = true
                             state.startTouchX = event.rawX
                             state.startTouchY = event.rawY
-                            state.scaleX.target = 0.88f // Depth pop
-                            state.scaleY.target = 0.88f
+                            
+                            // Depth compression on touch
+                            state.scaleX.target = 0.85f 
+                            state.scaleY.target = 0.85f
                             view.postInvalidateOnAnimation()
                         }
                         MotionEvent.ACTION_MOVE -> {
@@ -210,37 +211,27 @@ object LiquidKeypadHook {
                                 val dx = event.rawX - state.startTouchX
                                 val dy = event.rawY - state.startTouchY
 
-                                val targetTx = maxOffset * tanh(dx / maxOffset).toFloat()
-                                val targetTy = maxOffset * tanh(dy / maxOffset).toFloat()
-                                
-                                state.tx.target = targetTx
-                                state.ty.target = targetTy
-
-                                val dragDist = hypot(targetTx.toDouble(), targetTy.toDouble()).toFloat()
-                                val stretch = 0.35f * (dragDist / maxOffset).coerceAtMost(1f)
-                                val angle = atan2(targetTy.toDouble(), targetTx.toDouble()).toFloat()
-
-                                val baseScale = 0.88f
-                                state.scaleX.target = baseScale + stretch * abs(cos(angle)) - stretch * 0.5f * abs(sin(angle))
-                                state.scaleY.target = baseScale + stretch * abs(sin(angle)) - stretch * 0.5f * abs(cos(angle))
+                                // Feed raw drag directly to the physics engine
+                                state.rawDx.target = dx
+                                state.rawDy.target = dy
                                 view.postInvalidateOnAnimation()
                             }
                         }
                         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                             state.isPressed = false
-                            state.tx.target = 0f
-                            state.ty.target = 0f
+                            state.rawDx.target = 0f
+                            state.rawDy.target = 0f
                             state.scaleX.target = 1f
                             state.scaleY.target = 1f
                             view.postInvalidateOnAnimation()
                         }
                     }
                     
-                    return chain.proceed() // Preserve native PIN input
+                    return chain.proceed() 
                 }
             })
 
-            // 3. Draw the Custom Jelly UI safely inside the native view
+            // 3. Draw the Custom Pinned Jelly UI
             val onDrawMethod = findMethod(keyClass, "onDraw", Canvas::class.java)
             module.hook(onDrawMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -248,26 +239,44 @@ object LiquidKeypadHook {
                     val canvas = chain.args[0] as Canvas
                     val state = stateMap[view] ?: return chain.proceed()
 
-                    // Update local physics
-                    val s1 = state.tx.update(350f, 25f)
-                    val s2 = state.ty.update(350f, 25f)
-                    val s3 = state.scaleX.update(250f, 15f)
-                    val s4 = state.scaleY.update(250f, 15f)
+                    // Ultra-Fluid Spring Physics Updates
+                    // Lower stiffness and damping = more elastic wobble and bounce
+                    val s1 = state.rawDx.update(180f, 15f)
+                    val s2 = state.rawDy.update(180f, 15f)
+                    val s3 = state.scaleX.update(150f, 12f)
+                    val s4 = state.scaleY.update(150f, 12f)
                     val s5 = state.alpha.update(150f, 20f)
                     if (s1 || s2 || s3 || s4 || s5) {
                         view.postInvalidateOnAnimation()
                     }
 
+                    // Strict Pinned Coordinate (Never Moves)
                     val cx = view.width / 2f
                     val cy = view.height / 2f
                     val radius = view.width / 2f
+                    
+                    // Massive Squash and Stretch Deformation Math
+                    val maxOffset = view.width * 1.5f
+                    val dx = state.rawDx.current
+                    val dy = state.rawDy.current
+                    
+                    val boundedDx = maxOffset * tanh(dx / maxOffset).toFloat()
+                    val boundedDy = maxOffset * tanh(dy / maxOffset).toFloat()
+
+                    val dragDist = hypot(boundedDx.toDouble(), boundedDy.toDouble()).toFloat()
+                    val stretch = 0.65f * (dragDist / maxOffset).coerceAtMost(1f) // Ultra-fluid 65% max stretch
+                    val angle = atan2(boundedDy.toDouble(), boundedDx.toDouble()).toFloat()
+
+                    val baseScale = state.scaleX.current // Use the spring state for smooth depth scaling
+                    val finalScaleX = baseScale + stretch * abs(cos(angle)) - stretch * 0.5f * abs(sin(angle))
+                    val finalScaleY = baseScale + stretch * abs(sin(angle)) - stretch * 0.5f * abs(cos(angle))
 
                     canvas.save()
-                    canvas.translate(cx + state.tx.current, cy + state.ty.current)
-                    canvas.scale(state.scaleX.current, state.scaleY.current)
+                    // Apply deformation purely to scale around the pinned center
+                    canvas.translate(cx, cy)
+                    canvas.scale(finalScaleX, finalScaleY)
 
-                    // CORRECT ALPHA CALCULATION (No solid white bugs)
-                    // Base opacity: 12% resting, 25% pressed
+                    // Draw Alpha
                     val baseAlpha = if (state.isPressed) 64 else 30 
                     circlePaint.color = Color.WHITE
                     circlePaint.alpha = (baseAlpha * state.alpha.current.coerceIn(0f, 1f)).toInt()
@@ -280,7 +289,7 @@ object LiquidKeypadHook {
 
                     canvas.restore()
                     
-                    return null // Skip native drawing completely
+                    return null 
                 }
             })
 
