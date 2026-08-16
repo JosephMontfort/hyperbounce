@@ -85,13 +85,13 @@ object LiquidKeypadHook {
                             v.translationY = 0f // Keep master container perfectly anchored
                         }
                         
-                        // Fade in the PIN dots cleanly WITHOUT translating them so they stay put
+                        // Shift the PIN dots UP by 115dp so they clear the shifted top row
                         try {
                             val row0Field = view.javaClass.getDeclaredField("mRow0Container")
                             row0Field.isAccessible = true
                             (row0Field.get(view) as? View)?.let { v ->
                                 v.alpha = 0f
-                                v.translationY = 0f 
+                                v.translationY = -115f * view.resources.displayMetrics.density 
                                 v.animate().alpha(1f).setDuration(600).start()
                             }
                         } catch (e: Throwable) {}
