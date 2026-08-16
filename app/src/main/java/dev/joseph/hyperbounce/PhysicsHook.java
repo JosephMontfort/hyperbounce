@@ -464,7 +464,6 @@ public class PhysicsHook extends XposedModule {
 
             if (USE_LIQUID_GLASS_TOGGLE) {
                 LiquidToggleHost.ensure(view);
-                LiquidToggleHost.syncChecked(view);
                 return null;
             }
             return chain.proceed();

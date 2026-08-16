@@ -34,7 +34,7 @@ internal object LiquidToggleHost {
         if (target.width <= 0 || target.height <= 0) return
         if (!target.isAttachedToWindow) return
         if (hosts.containsKey(target)) {
-            hosts[target]?.refreshGeometry()
+            // refreshGeometry() removed to prevent layout thrashing
             return
         }
 
@@ -98,10 +98,13 @@ internal object LiquidToggleHost {
             refreshGeometry()
         }
 
+        private val syncRunnable = object : java.lang.Runnable { override fun run() { syncChecked(); target.postDelayed(this, 500L) } }
+
         fun attach() {
             target.addOnAttachStateChangeListener(attachListener)
             target.addOnLayoutChangeListener(layoutListener)
             disableClipping(target)
+            target.postDelayed(syncRunnable, 500L)
 
             // Obtain a safe application context without depending on the legacy Xposed helper API.
             val baseCtx = try {
@@ -286,6 +289,7 @@ internal object LiquidToggleHost {
         fun dispose() {
             target.removeOnAttachStateChangeListener(attachListener)
             target.removeOnLayoutChangeListener(layoutListener)
+            target.removeCallbacks(syncRunnable)
             target.alpha = 1f 
 
             val compose = composeView

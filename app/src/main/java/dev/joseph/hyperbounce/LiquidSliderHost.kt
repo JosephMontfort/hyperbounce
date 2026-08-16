@@ -36,7 +36,7 @@ internal object LiquidSliderHost {
         if (target.width <= 0 || target.height <= 0) return
         if (!target.isAttachedToWindow) return
         if (hosts.containsKey(target)) {
-            hosts[target]?.refreshGeometry()
+            // refreshGeometry() removed to prevent layout thrashing
             return
         }
 
@@ -107,20 +107,20 @@ internal object LiquidSliderHost {
             refreshGeometry()
         }
 
-        private val frameCallback = object : android.view.Choreographer.FrameCallback {
-            override fun doFrame(frameTimeNanos: Long) {
+        private val syncRunnable = object : java.lang.Runnable {
+            override fun run() {
                 // Instantly sync visual state if hardware keys change the volume externally
                 if (!isTrackingTouch) {
                     syncState()
                 }
-                android.view.Choreographer.getInstance().postFrameCallback(this)
+                target.postDelayed(this, 500L)
             }
         }
 
         fun attach() {
             target.addOnAttachStateChangeListener(attachListener)
             target.addOnLayoutChangeListener(layoutListener)
-            android.view.Choreographer.getInstance().postFrameCallback(frameCallback)
+            target.postDelayed(syncRunnable, 500L)
             
             disableClipping(target)
 
@@ -282,7 +282,7 @@ internal object LiquidSliderHost {
         fun dispose() {
             target.removeOnAttachStateChangeListener(attachListener)
             target.removeOnLayoutChangeListener(layoutListener)
-            android.view.Choreographer.getInstance().removeFrameCallback(frameCallback)
+            target.removeCallbacks(syncRunnable)
             target.alpha = 1f 
 
             val compose = composeView
