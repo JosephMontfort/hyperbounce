@@ -15,111 +15,110 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
-import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import io.github.libxposed.api.XposedModule
+import io.github.libxposed.api.XposedModuleInterface
 
-/**
- * WhatsApp-specific hooking logic. Ported 1:1 from the original standalone
- * PhysicsHook.kt - every check, magic number, and view-tree walk preserved.
- */
-class WhatsAppHook {
-
+class WhatsAppHook(
+    private val module: XposedModule,
+    private val param: XposedModuleInterface.PackageLoadedParam
+) {
     private var lastUiMode = -1
     private var externalTabState: MutableState<Int>? = null
 
-    fun handleLoadPackage(lpparam: LoadPackageParam) {
+    fun onPackageLoaded() {
         // 1. --- THE FAB SHIFTER ---
-        // Hunts down the Meta AI and New Chat buttons to clear the Liquid Nav Bar
         try {
-            XposedHelpers.findAndHookMethod(View::class.java, "onAttachedToWindow", object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val view = param.thisObject as View
-                    if (view.id == View.NO_ID || view.resources == null) return
-                    try {
-                        val resName = view.resources.getResourceEntryName(view.id)
-                        if (resName == "fab" || resName == "extended_mini_fab") {
-                            // Using margin natively preserves WhatsApp's scroll-to-hide animations
-                            val lp = view.layoutParams
-                            if (lp is ViewGroup.MarginLayoutParams) {
-                                if (lp.bottomMargin < 200) {
-                                    lp.bottomMargin += 200
-                                    view.layoutParams = lp
-                                }
+            module.hook(
+                View::class.java.getDeclaredMethod("onAttachedToWindow")
+            ).intercept { chain ->
+                val result = chain.proceed()
+                val view = chain.thisObject as View
+                
+                if (view.id == View.NO_ID || view.resources == null) return@intercept result
+                
+                try {
+                    val resName = view.resources.getResourceEntryName(view.id)
+                    if (resName == "fab" || resName == "extended_mini_fab") {
+                        val lp = view.layoutParams
+                        if (lp is ViewGroup.MarginLayoutParams) {
+                            if (lp.bottomMargin < 200) {
+                                lp.bottomMargin += 200
+                                view.layoutParams = lp
                             }
                         }
-                    } catch (e: Exception) {}
-                }
-            })
+                    }
+                } catch (e: Exception) {}
+                
+                result
+            }
         } catch (t: Throwable) {}
 
         // 2. --- WDS BOTTOM BAR HOOK (GHOST TAB BAR & INJECT UI) ---
-        val wdsClass = XposedHelpers.findClassIfExists(
-            "com.whatsapp.ui.wds.components.bottombar.WDSBottomBar",
-            lpparam.classLoader,
-        ) ?: return
+        try {
+            val wdsClass = param.classLoader.loadClass("com.whatsapp.ui.wds.components.bottombar.WDSBottomBar")
+            wdsClass.declaredConstructors.forEach { constructor ->
+                module.hook(constructor).intercept { chain ->
+                    val result = chain.proceed()
+                    val stockBar = chain.thisObject as ViewGroup
+                    stockBar.alpha = 0f
 
-        XposedBridge.hookAllConstructors(wdsClass, object : XC_MethodHook() {
-            override fun afterHookedMethod(param: MethodHookParam) {
-                val stockBar = param.thisObject as ViewGroup
-                stockBar.alpha = 0f
+                    stockBar.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                        override fun onViewAttachedToWindow(v: View) {
+                            stockBar.post { executeUIHeist(stockBar) }
 
-                stockBar.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-                    override fun onViewAttachedToWindow(v: View) {
-                        stockBar.post { executeUIHeist(stockBar) }
+                            stockBar.viewTreeObserver.addOnPreDrawListener(
+                                object : ViewTreeObserver.OnPreDrawListener {
+                                    override fun onPreDraw(): Boolean {
+                                        val parentVis = (stockBar.parent as? View)?.visibility ?: -1
+                                        val injected = stockBar.rootView as ViewGroup
+                                        val customBar = injected.findViewWithTag<View>("HyperFloatingBar")
 
-                        stockBar.viewTreeObserver.addOnPreDrawListener(
-                            object : ViewTreeObserver.OnPreDrawListener {
-                                override fun onPreDraw(): Boolean {
-                                    val parentVis = (stockBar.parent as? View)?.visibility ?: -1
-                                    val injected = stockBar.rootView as ViewGroup
-                                    val customBar = injected.findViewWithTag<View>("HyperFloatingBar")
-
-                                    if (customBar != null) {
-                                        val hide =
-                                            stockBar.visibility == View.GONE ||
+                                        if (customBar != null) {
+                                            val hide =
+                                                stockBar.visibility == View.GONE ||
                                                 parentVis == View.GONE ||
                                                 stockBar.translationY > 50f
-                                        customBar.visibility = if (hide) View.GONE else View.VISIBLE
-                                    }
-
-                                    stockBar.alpha = 0f
-                                    stockBar.layoutParams?.let { lp ->
-                                        if (lp.height != 0) {
-                                            lp.height = 0
-                                            stockBar.requestLayout()
+                                            customBar.visibility = if (hide) View.GONE else View.VISIBLE
                                         }
-                                    }
 
-                                    detectWhatsAppTab(stockBar)?.let { idx ->
-                                        val state = externalTabState
-                                        if (state != null && state.value != idx) {
-                                            state.value = idx
+                                        stockBar.alpha = 0f
+                                        stockBar.layoutParams?.let { lp ->
+                                            if (lp.height != 0) {
+                                                lp.height = 0
+                                                stockBar.requestLayout()
+                                            }
                                         }
-                                    }
 
-                                    val ctx = stockBar.context
-                                    if (ctx != null) {
-                                        val nightMask = Configuration.UI_MODE_NIGHT_MASK
-                                        val cur = ctx.resources.configuration.uiMode and nightMask
-                                        if (lastUiMode != -1 && lastUiMode != cur) {
-                                            lastUiMode = cur
-                                            injected.removeView(customBar)
-                                            executeUIHeist(stockBar)
-                                        } else if (lastUiMode == -1) {
-                                            lastUiMode = cur
+                                        detectWhatsAppTab(stockBar)?.let { idx ->
+                                            val state = externalTabState
+                                            if (state != null && state.value != idx) {
+                                                state.value = idx
+                                            }
                                         }
+
+                                        val ctx = stockBar.context
+                                        if (ctx != null) {
+                                            val nightMask = Configuration.UI_MODE_NIGHT_MASK
+                                            val cur = ctx.resources.configuration.uiMode and nightMask
+                                            if (lastUiMode != -1 && lastUiMode != cur) {
+                                                lastUiMode = cur
+                                                injected.removeView(customBar)
+                                                executeUIHeist(stockBar)
+                                            } else if (lastUiMode == -1) {
+                                                lastUiMode = cur
+                                            }
+                                        }
+                                        return true
                                     }
-                                    return true
                                 }
-                            },
-                        )
-                    }
-                    override fun onViewDetachedFromWindow(v: View) {}
-                })
+                            )
+                        }
+                        override fun onViewDetachedFromWindow(v: View) {}
+                    })
+                    result
+                }
             }
-        })
+        } catch (t: Throwable) {}
     }
 
     private fun detectWhatsAppTab(stockBar: ViewGroup): Int? {
@@ -139,23 +138,18 @@ class WhatsAppHook {
             if (rootView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
             val context = stockBar.context
-            XposedBridge.log("[HyperBounce] Injecting overlay…")
+            module.log("[HyperBounce] Injecting overlay…")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
+            
             val rootGroup = rootView as ViewGroup
-            if (rootGroup.findViewTreeLifecycleOwner() == null) {
-                rootGroup.setViewTreeLifecycleOwner(lifecycleOwner)
-            }
-            if (rootGroup.findViewTreeSavedStateRegistryOwner() == null) {
-                rootGroup.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            }
-            if (rootGroup.findViewTreeViewModelStoreOwner() == null) {
-                rootGroup.setViewTreeViewModelStoreOwner(lifecycleOwner)
-            }
+            if (rootGroup.findViewTreeLifecycleOwner() == null) rootGroup.setViewTreeLifecycleOwner(lifecycleOwner)
+            if (rootGroup.findViewTreeSavedStateRegistryOwner() == null) rootGroup.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            if (rootGroup.findViewTreeViewModelStoreOwner() == null) rootGroup.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
             val tabState = mutableStateOf(0)
             externalTabState = tabState
@@ -184,9 +178,9 @@ class WhatsAppHook {
             }
 
             rootGroup.addView(composeView)
-            XposedBridge.log("[HyperBounce] Overlay attached.")
+            module.log("[HyperBounce] Overlay attached.")
         } catch (e: Exception) {
-            XposedBridge.log("[HyperBounce] Exception in executeUIHeist: ${e.message}")
+            module.log("[HyperBounce] Exception in executeUIHeist: ${e.message}")
         }
     }
 }

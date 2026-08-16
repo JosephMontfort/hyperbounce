@@ -43,7 +43,7 @@ android {
 }
 
 dependencies {
-    compileOnly("de.robv.android.xposed:api:82")
+    compileOnly("io.github.libxposed:api:102.0.0")
 
     // Match the liquid-glass library's published Compose Multiplatform Android line.
     implementation("org.jetbrains.compose.runtime:runtime:1.11.1")

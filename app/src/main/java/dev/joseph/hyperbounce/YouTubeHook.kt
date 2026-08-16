@@ -18,114 +18,116 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
-import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import io.github.libxposed.api.XposedModule
+import io.github.libxposed.api.XposedModuleInterface
 
-class YouTubeHook {
+class YouTubeHook(
+    private val module: XposedModule,
+    private val param: XposedModuleInterface.PackageLoadedParam
+) {
     private val isDarkState = mutableStateOf(false)
     private var cachedInsetTargets = intArrayOf()
 
-    fun handleLoadPackage(lpparam: LoadPackageParam) {
+    fun onPackageLoaded() {
         try {
-            XposedHelpers.findAndHookMethod(
-                View::class.java,
-                "dispatchApplyWindowInsets",
-                WindowInsets::class.java,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        val view = param.thisObject as View
-                        if (view.id == View.NO_ID || view.resources == null) return
-                        try {
-                            if (cachedInsetTargets.isEmpty()) {
-                                val res = view.resources
-                                cachedInsetTargets = intArrayOf(
-                                    res.getIdentifier("watch_while_layout_coordinator_layout", "id", "com.google.android.youtube"),
-                                    res.getIdentifier("pane_fragment_container", "id", "com.google.android.youtube"),
-                                    res.getIdentifier("reel_watch_fragment_root", "id", "com.google.android.youtube"),
-                                )
-                            }
-                            if (view.id in cachedInsetTargets) {
-                                val insets = param.args[0] as WindowInsets
-                                val type = WindowInsets.Type.systemBars()
-                                val current = insets.getInsets(type)
-                                if (current.bottom > 0) {
-                                    val fakeInsets = WindowInsets.Builder(insets)
-                                        .setInsets(type, Insets.of(current.left, current.top, current.right, 0))
-                                        .build()
-                                    param.args[0] = fakeInsets
-                                }
-                            }
-                        } catch (e: Exception) {}
-                    }
-                },
-            )
-        } catch (t: Throwable) {}
-
-        try {
-            XposedHelpers.findAndHookMethod(View::class.java, "onAttachedToWindow", object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val view = param.thisObject as View
-                    if (view.id == View.NO_ID || view.resources == null) return
-
+            module.hook(
+                View::class.java.getDeclaredMethod("dispatchApplyWindowInsets", WindowInsets::class.java)
+            ).intercept { chain ->
+                val view = chain.thisObject as View
+                if (view.id != View.NO_ID && view.resources != null) {
                     try {
-                        val resName = view.resources.getResourceEntryName(view.id)
-
-                        if (resName == "bottom_bar_container" || resName == "pivot_bar") {
-                            view.alpha = 0f
-                            view.translationY = 9999f
-                            val lp = view.layoutParams
-                            if (lp != null && lp.height != 0) {
-                                lp.height = 0
-                                view.layoutParams = lp
-                            }
+                        if (cachedInsetTargets.isEmpty()) {
+                            val res = view.resources
+                            cachedInsetTargets = intArrayOf(
+                                res.getIdentifier("watch_while_layout_coordinator_layout", "id", "com.google.android.youtube"),
+                                res.getIdentifier("pane_fragment_container", "id", "com.google.android.youtube"),
+                                res.getIdentifier("reel_watch_fragment_root", "id", "com.google.android.youtube"),
+                            )
                         }
-
-                        if (resName == "fab_container") {
-                            view.translationY = -190f
-                        }
-
-                        if (resName == "reel_player_footer_container" ||
-                            resName == "reel_player_delegated_overlay" ||
-                            resName == "reel_video_interactions"
-                        ) {
-                            view.translationY = -190f
-                        }
-
-                        if (resName == "watch_while_layout_coordinator_layout") {
-                            val activity = view.context as? Activity
-                            if (activity != null) {
-                                view.post {
-                                    val decorView = activity.window.decorView as ViewGroup
-                                    val pivotId = activity.resources.getIdentifier("pivot_bar", "id", activity.packageName)
-                                    val pivotBar = decorView.findViewById<ViewGroup>(pivotId)
-                                    if (pivotBar != null) {
-                                        executeUIHeist(activity, view as ViewGroup, pivotBar)
-
-                                        activity.window.decorView.viewTreeObserver.addOnPreDrawListener {
-                                            val customBar = activity.window.decorView.findViewWithTag<View>("HyperFloatingBar")
-                                            if (customBar != null) {
-                                                if (pivotBar.visibility != View.VISIBLE && pivotBar.translationY == 0f) {
-                                                    customBar.visibility = View.GONE
-                                                } else {
-                                                    customBar.visibility = View.VISIBLE
-                                                }
-                                            }
-
-                                            val currentDark = isYouTubeInDarkMode(activity)
-                                            if (isDarkState.value != currentDark) {
-                                                isDarkState.value = currentDark
-                                            }
-                                            true
-                                        }
-                                    }
-                                }
+                        if (view.id in cachedInsetTargets) {
+                            val insets = chain.args[0] as WindowInsets
+                            val type = WindowInsets.Type.systemBars()
+                            val current = insets.getInsets(type)
+                            if (current.bottom > 0) {
+                                val fakeInsets = WindowInsets.Builder(insets)
+                                    .setInsets(type, Insets.of(current.left, current.top, current.right, 0))
+                                    .build()
+                                chain.args[0] = fakeInsets
                             }
                         }
                     } catch (e: Exception) {}
                 }
-            })
+                chain.proceed()
+            }
+        } catch (t: Throwable) {}
+
+        try {
+            module.hook(
+                View::class.java.getDeclaredMethod("onAttachedToWindow")
+            ).intercept { chain ->
+                val result = chain.proceed()
+                val view = chain.thisObject as View
+                
+                if (view.id == View.NO_ID || view.resources == null) return@intercept result
+
+                try {
+                    val resName = view.resources.getResourceEntryName(view.id)
+
+                    if (resName == "bottom_bar_container" || resName == "pivot_bar") {
+                        view.alpha = 0f
+                        view.translationY = 9999f
+                        val lp = view.layoutParams
+                        if (lp != null && lp.height != 0) {
+                            lp.height = 0
+                            view.layoutParams = lp
+                        }
+                    }
+
+                    if (resName == "fab_container") {
+                        view.translationY = -190f
+                    }
+
+                    if (resName == "reel_player_footer_container" ||
+                        resName == "reel_player_delegated_overlay" ||
+                        resName == "reel_video_interactions"
+                    ) {
+                        view.translationY = -190f
+                    }
+
+                    if (resName == "watch_while_layout_coordinator_layout") {
+                        val activity = view.context as? Activity
+                        if (activity != null) {
+                            view.post {
+                                val decorView = activity.window.decorView as ViewGroup
+                                val pivotId = activity.resources.getIdentifier("pivot_bar", "id", activity.packageName)
+                                val pivotBar = decorView.findViewById<ViewGroup>(pivotId)
+                                if (pivotBar != null) {
+                                    executeUIHeist(activity, view as ViewGroup, pivotBar)
+
+                                    activity.window.decorView.viewTreeObserver.addOnPreDrawListener {
+                                        val customBar = activity.window.decorView.findViewWithTag<View>("HyperFloatingBar")
+                                        if (customBar != null) {
+                                            if (pivotBar.visibility != View.VISIBLE && pivotBar.translationY == 0f) {
+                                                customBar.visibility = View.GONE
+                                            } else {
+                                                customBar.visibility = View.VISIBLE
+                                            }
+                                        }
+
+                                        val currentDark = isYouTubeInDarkMode(activity)
+                                        if (isDarkState.value != currentDark) {
+                                            isDarkState.value = currentDark
+                                        }
+                                        true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {}
+                
+                result
+            }
         } catch (t: Throwable) {}
     }
 
@@ -150,7 +152,7 @@ class YouTubeHook {
 
             if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
 
-            XposedBridge.log("[HyperBounce] Injecting YouTube Liquid Bar...")
+            module.log("[HyperBounce] Injecting YouTube Liquid Bar...")
 
             val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -162,7 +164,6 @@ class YouTubeHook {
             if (decorView.findViewTreeSavedStateRegistryOwner() == null) decorView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             if (decorView.findViewTreeViewModelStoreOwner() == null) decorView.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
-            // Seed the Compose theme state before first composition.
             isDarkState.value = isYouTubeInDarkMode(activity)
 
             val tabState = mutableStateOf(0)
@@ -196,9 +197,9 @@ class YouTubeHook {
             } else {
                 decorView.addView(composeView)
             }
-            XposedBridge.log("[HyperBounce] Overlay attached.")
+            module.log("[HyperBounce] Overlay attached.")
         } catch (e: Exception) {
-            XposedBridge.log("[HyperBounce] Exception: ${e.message}")
+            module.log("[HyperBounce] Exception: ${e.message}")
         }
     }
 }
