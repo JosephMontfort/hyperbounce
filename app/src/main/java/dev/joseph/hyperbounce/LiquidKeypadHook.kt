@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.util.Log
-import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -68,7 +67,7 @@ object LiquidKeypadHook {
         } catch (e: ClassNotFoundException) { return }
 
         try {
-            // 1. KILL STOCK ANIMATIONS & TRIGGER SLOW SIMULTANEOUS ENTRANCE
+            // 1. KILL STOCK ANIMATIONS & SLOW ENTRANCE
             val startAppearMethod = findMethod(pinViewClass, "startAppearAnimation")
             module.hook(startAppearMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -83,44 +82,33 @@ object LiquidKeypadHook {
                         containerField.isAccessible = true
                         (containerField.get(view) as? View)?.alpha = 1f
                         
-                        // FIX: Safely structure and translate the PIN dots WITHOUT breaking layout weights
+                        // Shift the PIN dots up cleanly and fade them in
                         try {
                             val row0Field = view.javaClass.getDeclaredField("mRow0Container")
                             row0Field.isAccessible = true
                             (row0Field.get(view) as? View)?.let { v ->
-                                val lp = v.layoutParams as? LinearLayout.LayoutParams
-                                if (lp != null) {
-                                    lp.weight = 0f
-                                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                                    v.layoutParams = lp
-                                }
-                                v.clipToOutline = false
-                                (v as? ViewGroup)?.clipChildren = false
-                                
                                 v.alpha = 0f
-                                // Follow the keys upward by 60dp
-                                v.translationY = -60f * view.resources.displayMetrics.density 
+                                v.translationY = -35f * view.resources.displayMetrics.density 
                                 v.animate().alpha(1f).setDuration(600).start()
                             }
                         } catch (e: Throwable) {}
 
-                        // Fade in auxiliary items cleanly (leaving them at translationY = 0)
+                        // Fade in auxiliary items cleanly without translating them so they stay clickable
                         arrayOf("mBouncerMessageAreaTitle", "mBouncerMessageArea", "mEmergencyCall", "mCancelButton").forEach { fieldName ->
                             try {
                                 val field = view.javaClass.getDeclaredField(fieldName)
                                 field.isAccessible = true
                                 (field.get(view) as? View)?.let { v ->
                                     v.alpha = 0f
-                                    v.translationY = 20f
-                                    v.animate().alpha(1f).translationY(0f).setDuration(600).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+                                    v.translationY = 0f
+                                    v.animate().alpha(1f).setDuration(600).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
                                 }
                             } catch (e: Throwable) {}
                         }
                     } catch (e: Throwable) { Log.e(TAG, "Failed to reflect SystemUI states", e) }
 
-                    // Trigger simultaneous, ultra-slow pop-in
                     stateMap.forEach { (keyView, state) ->
-                        state.scale.snap(0.4f)
+                        state.scale.snap(0.3f)
                         state.alpha.snap(0f)
                         state.scale.target = 1f
                         state.alpha.target = 1f
@@ -137,7 +125,7 @@ object LiquidKeypadHook {
                     val runnable = chain.args[0] as? java.lang.Runnable
                     
                     stateMap.forEach { (keyView, state) ->
-                        state.scale.target = 0.6f
+                        state.scale.target = 0.5f
                         state.alpha.target = 0f
                         keyView.postInvalidateOnAnimation()
                     }
@@ -150,7 +138,7 @@ object LiquidKeypadHook {
             module.hook(cancelAppearMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     stateMap.forEach { (keyView, state) ->
-                        state.scale.target = 0.6f
+                        state.scale.target = 0.5f
                         state.alpha.target = 0f
                         keyView.postInvalidateOnAnimation()
                     }
@@ -158,7 +146,7 @@ object LiquidKeypadHook {
                 }
             })
 
-            // 2. SURGICAL LAYOUT HACK & HIDE TEXT
+            // 2. SAFE HARDWARE SHIFT & HIDE TEXT
             val onAttachedKeyMethod = findMethod(keyClass, "onAttachedToWindow")
             module.hook(onAttachedKeyMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -172,7 +160,6 @@ object LiquidKeypadHook {
                             view.clipToOutline = false
                             (view.parent as? ViewGroup)?.clipChildren = false
                             (view.parent?.parent as? ViewGroup)?.clipChildren = false
-                            (view.parent?.parent as? ViewGroup)?.clipToPadding = false
 
                             view.setWillNotDraw(false)
                             view.background = null
@@ -201,38 +188,11 @@ object LiquidKeypadHook {
                                 setAnimMethod.invoke(view, false)
                             } catch (e: Throwable) {}
 
-                            // SURGICAL LAYOUT: Translate individual rows, preserve parent bounds
-                            val keySizePx = (82f * density).toInt()     
-                            val vMarginPx = (14f * density).toInt()     
-                            val hMarginPx = (14f * density).toInt()     
-
+                            // NO MORE LAYOUT HACKS. Just hardware translate the rows up.
                             val row = view.parent as? LinearLayout
                             if (row != null) {
-                                row.gravity = Gravity.CENTER_HORIZONTAL
-                                val rowLp = row.layoutParams as? LinearLayout.LayoutParams
-                                if (rowLp != null) {
-                                    rowLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                                    rowLp.weight = 0f
-                                    rowLp.bottomMargin = vMarginPx // Standard margin restored!
-                                    row.layoutParams = rowLp
-                                }
-                                
-                                // FIX: Move the row itself up to clear the fingerprint.
-                                // This moves the touch region securely without breaking container bounds.
-                                row.translationY = -60f * density
-
-                                for (i in 0 until row.childCount) {
-                                    val sibling = row.getChildAt(i)
-                                    val sibLp = sibling.layoutParams as? LinearLayout.LayoutParams
-                                    if (sibLp != null) {
-                                        sibLp.width = keySizePx
-                                        sibLp.height = keySizePx
-                                        sibLp.weight = 0f
-                                        sibLp.leftMargin = hMarginPx
-                                        sibLp.rightMargin = hMarginPx
-                                        sibling.layoutParams = sibLp
-                                    }
-                                }
+                                // Safe, visual shift. Doesn't break flex weights or emergency buttons.
+                                row.translationY = -35f * density 
                             }
 
                         } catch (e: Throwable) {
@@ -243,7 +203,7 @@ object LiquidKeypadHook {
                 }
             })
 
-            // 3. TOUCH INTERCEPTION
+            // 3. TRUE TOUCH INTERCEPTION & SQUISH
             val onTouchMethod = findMethod(keyClass, "onTouchEvent", MotionEvent::class.java)
             module.hook(onTouchMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -285,9 +245,8 @@ object LiquidKeypadHook {
                     val view = chain.thisObject as View
                     val canvas = chain.args[0] as Canvas
                     val state = stateMap[view] ?: return chain.proceed()
+                    val density = view.resources.displayMetrics.density
 
-                    // Physics massively slowed down
-                    // Stiffness dropped to 60, Damping to 6 = heavy, lazy wobble
                     val s3 = state.scale.update(60f, 6f) 
                     val s4 = state.alpha.update(50f, 8f)
                     if (s3 || s4) {
@@ -296,7 +255,9 @@ object LiquidKeypadHook {
 
                     val cx = view.width / 2f
                     val cy = view.height / 2f
-                    val radius = view.width / 2f
+                    
+                    // Fixed iOS-sized radius (38dp) so they are always perfect circles regardless of row size
+                    val radius = 38f * density
 
                     canvas.save()
                     canvas.translate(cx, cy)
@@ -307,7 +268,7 @@ object LiquidKeypadHook {
                     circlePaint.alpha = (baseAlpha * state.alpha.current.coerceIn(0f, 1f)).toInt()
                     canvas.drawCircle(0f, 0f, radius, circlePaint)
 
-                    textPaint.textSize = 34f * view.resources.displayMetrics.scaledDensity
+                    textPaint.textSize = 34f * density
                     textPaint.alpha = (255 * state.alpha.current.coerceIn(0f, 1f)).toInt()
                     val textOffset = (textPaint.descent() + textPaint.ascent()) / 2f
                     canvas.drawText(state.digit, 0f, -textOffset, textPaint)
