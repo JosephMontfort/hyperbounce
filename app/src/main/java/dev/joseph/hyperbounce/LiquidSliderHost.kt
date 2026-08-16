@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
@@ -58,6 +59,8 @@ internal object LiquidSliderHost {
         val density = target.resources.displayMetrics.density
         val paddingPx = (24f * density).toInt() 
         
+        if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) host.backdrop.start()
+        if (event.actionMasked == android.view.MotionEvent.ACTION_UP || event.actionMasked == android.view.MotionEvent.ACTION_CANCEL) host.backdrop.stop()
         val offsetEvent = android.view.MotionEvent.obtain(event)
         offsetEvent.offsetLocation(paddingPx.toFloat(), paddingPx.toFloat())
         
@@ -87,7 +90,8 @@ internal object LiquidSliderHost {
         private var sliderMax by mutableFloatStateOf(100f)
         
         private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
-        private val backdrop = LiquidSliderViewBackdrop(parent)
+        private var isEnabledState by mutableStateOf(target.isEnabled)
+        internal val backdrop = LiquidSliderViewBackdrop(parent)
 
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
@@ -158,11 +162,13 @@ internal object LiquidSliderHost {
                     if (isVisibleState) {
                         val targetWidthDp = with(LocalDensity.current) { target.width.toDp() }
                         val targetHeightDp = with(LocalDensity.current) { target.height.toDp() }
+                        val isNight = androidx.compose.foundation.isSystemInDarkTheme()
+                        val alphaValue = if (isEnabledState) 1f else if (isNight) 0.3f else 0.5f
                         
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Box(
                                 // Removed hardcoded padding to perfectly map X coordinates 1:1
-                                modifier = Modifier.size(width = targetWidthDp, height = targetHeightDp),
+                                modifier = Modifier.size(width = targetWidthDp, height = targetHeightDp).graphicsLayer { alpha = alphaValue },
                                 contentAlignment = Alignment.Center
                             ) {
                                 LiquidSlider(
@@ -205,7 +211,6 @@ internal object LiquidSliderHost {
 
             composeView = compose
             backdrop.overlayViewToHide = compose
-            backdrop.start()
             syncState()
             refreshGeometry()
         }
@@ -266,6 +271,7 @@ internal object LiquidSliderHost {
             sliderMax = bar.max.toFloat()
             sliderMin = try { bar.min.toFloat() } catch (e: Throwable) { 0f }
             sliderValue = bar.progress.toFloat()
+            isEnabledState = target.isEnabled
         }
 
         fun updateVisibility(isVisible: Boolean) {

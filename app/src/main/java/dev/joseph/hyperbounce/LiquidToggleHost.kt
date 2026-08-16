@@ -58,6 +58,8 @@ internal object LiquidToggleHost {
     fun forwardTouchEvent(target: View, event: android.view.MotionEvent): Boolean {
         val host = hosts[target] ?: return false
         val compose = host.composeView ?: return false
+        if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) host.backdrop.start()
+        if (event.actionMasked == android.view.MotionEvent.ACTION_UP || event.actionMasked == android.view.MotionEvent.ACTION_CANCEL) host.backdrop.stop()
         val offsetEvent = android.view.MotionEvent.obtain(event)
         offsetEvent.offsetLocation(-host.composeLeftInTarget.toFloat(), -host.composeTopInTarget.toFloat())
         val handled = compose.dispatchTouchEvent(offsetEvent)
@@ -76,10 +78,11 @@ internal object LiquidToggleHost {
         private var recomposerScope: CoroutineScope? = null
         private var checked by mutableStateOf((target as? CompoundButton)?.isChecked == true)
         private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
+        private var isEnabledState by mutableStateOf(target.isEnabled)
         
         var composeLeftInTarget by mutableIntStateOf(0)
         var composeTopInTarget by mutableIntStateOf(0)
-        private val backdrop = LiquidToggleViewBackdrop(parent)
+        internal val backdrop = LiquidToggleViewBackdrop(parent)
 
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
@@ -193,6 +196,7 @@ internal object LiquidToggleHost {
                     LiquidToggleOverlay(
                         backdrop = backdrop,
                         visible = isVisibleState,
+                        enabled = isEnabledState,
                         selected = { checked },
                         onSelect = { value ->
                             val button = target as? CompoundButton
@@ -220,7 +224,6 @@ internal object LiquidToggleHost {
 
             composeView = compose
             backdrop.overlayViewToHide = compose
-            backdrop.start()
             refreshGeometry()
         }
 
@@ -272,6 +275,7 @@ internal object LiquidToggleHost {
 
         fun syncChecked() {
             checked = (target as? CompoundButton)?.isChecked == true
+            isEnabledState = target.isEnabled
         }
 
         fun updateVisibility(isVisible: Boolean) {
@@ -301,9 +305,12 @@ internal object LiquidToggleHost {
     private fun LiquidToggleOverlay(
         backdrop: com.kyant.backdrop.Backdrop,
         visible: Boolean,
+        enabled: Boolean,
         selected: () -> Boolean,
         onSelect: (Boolean) -> Unit,
     ) {
+        val isNight = androidx.compose.foundation.isSystemInDarkTheme()
+        val alphaValue = if (enabled) 1f else if (isNight) 0.3f else 0.5f
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (visible) {
                 LiquidToggle(
@@ -313,6 +320,7 @@ internal object LiquidToggleHost {
                     modifier = Modifier.graphicsLayer {
                         scaleX = 0.975f
                         scaleY = 0.975f
+                        alpha = alphaValue
                     }
                 )
             }
