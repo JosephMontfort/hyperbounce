@@ -67,7 +67,7 @@ object LiquidKeypadHook {
         } catch (e: ClassNotFoundException) { return }
 
         try {
-            // 1. KILL STOCK ANIMATIONS & SLOW ENTRANCE
+            // 1. KILL STOCK ANIMATIONS & TRIGGER SIMULTANEOUS ENTRANCE
             val startAppearMethod = findMethod(pinViewClass, "startAppearAnimation")
             module.hook(startAppearMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -80,20 +80,23 @@ object LiquidKeypadHook {
                         view.alpha = 1f
                         val containerField = view.javaClass.getDeclaredField("mContainerConstraintLayout")
                         containerField.isAccessible = true
-                        (containerField.get(view) as? View)?.alpha = 1f
+                        (containerField.get(view) as? View)?.let { v ->
+                            v.alpha = 1f
+                            v.translationY = 0f // Keep master container perfectly anchored
+                        }
                         
-                        // Shift the PIN dots up cleanly and fade them in
+                        // Fade in the PIN dots cleanly WITHOUT translating them so they stay put
                         try {
                             val row0Field = view.javaClass.getDeclaredField("mRow0Container")
                             row0Field.isAccessible = true
                             (row0Field.get(view) as? View)?.let { v ->
                                 v.alpha = 0f
-                                v.translationY = -35f * view.resources.displayMetrics.density 
+                                v.translationY = 0f 
                                 v.animate().alpha(1f).setDuration(600).start()
                             }
                         } catch (e: Throwable) {}
 
-                        // Fade in auxiliary items cleanly without translating them so they stay clickable
+                        // Fade in auxiliary items (Emergency/Back) in their stock positions
                         arrayOf("mBouncerMessageAreaTitle", "mBouncerMessageArea", "mEmergencyCall", "mCancelButton").forEach { fieldName ->
                             try {
                                 val field = view.javaClass.getDeclaredField(fieldName)
@@ -101,12 +104,13 @@ object LiquidKeypadHook {
                                 (field.get(view) as? View)?.let { v ->
                                     v.alpha = 0f
                                     v.translationY = 0f
-                                    v.animate().alpha(1f).setDuration(600).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+                                    v.animate().alpha(1f).setDuration(600).start()
                                 }
                             } catch (e: Throwable) {}
                         }
                     } catch (e: Throwable) { Log.e(TAG, "Failed to reflect SystemUI states", e) }
 
+                    // Trigger simultaneous, ultra-slow pop-in
                     stateMap.forEach { (keyView, state) ->
                         state.scale.snap(0.3f)
                         state.alpha.snap(0f)
@@ -146,7 +150,7 @@ object LiquidKeypadHook {
                 }
             })
 
-            // 2. SAFE HARDWARE SHIFT & HIDE TEXT
+            // 2. CASCADING VERTICAL SHIFT & HIDE TEXT
             val onAttachedKeyMethod = findMethod(keyClass, "onAttachedToWindow")
             module.hook(onAttachedKeyMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -188,11 +192,20 @@ object LiquidKeypadHook {
                                 setAnimMethod.invoke(view, false)
                             } catch (e: Throwable) {}
 
-                            // NO MORE LAYOUT HACKS. Just hardware translate the rows up.
+                            // CASCADING SHIFT: Physically spread the rows apart vertically
                             val row = view.parent as? LinearLayout
                             if (row != null) {
-                                // Safe, visual shift. Doesn't break flex weights or emergency buttons.
-                                row.translationY = -35f * density 
+                                val numericVal = digitStr.toIntOrNull()
+                                if (numericVal != null) {
+                                    val shiftDp = when (numericVal) {
+                                        1, 2, 3 -> -100f // Top row moves up the most
+                                        4, 5, 6 -> -70f  // Adds 30dp of breathing room
+                                        7, 8, 9 -> -40f  // Adds 30dp of breathing room
+                                        0 -> -10f        // Bottom row moves up slightly
+                                        else -> 0f
+                                    }
+                                    row.translationY = shiftDp * density
+                                }
                             }
 
                         } catch (e: Throwable) {
@@ -220,14 +233,14 @@ object LiquidKeypadHook {
                             }
                             
                             state.isPressed = true
-                            state.scale.target = 0.90f // Extremely soft dip on hold
+                            state.scale.target = 0.88f // Extremely soft dip on hold
                             view.postInvalidateOnAnimation()
                         }
                         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                             state.isPressed = false
                             
                             if (event.actionMasked == MotionEvent.ACTION_UP) {
-                                state.scale.current = 0.85f // Very subtle, satisfying click pop
+                                state.scale.current = 0.75f // Compress down deeply for the physical "pop"
                             }
                             
                             state.scale.target = 1f
@@ -238,7 +251,7 @@ object LiquidKeypadHook {
                 }
             })
 
-            // 4. DRAW ULTRA-SLOW BOUNCE
+            // 4. DRAW SLOW, FLUID BOUNCE
             val onDrawMethod = findMethod(keyClass, "onDraw", Canvas::class.java)
             module.hook(onDrawMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -247,17 +260,16 @@ object LiquidKeypadHook {
                     val state = stateMap[view] ?: return chain.proceed()
                     val density = view.resources.displayMetrics.density
 
-                    val s3 = state.scale.update(60f, 6f) 
-                    val s4 = state.alpha.update(50f, 8f)
+                    // Extremely slow, relaxed spring dynamics
+                    val s3 = state.scale.update(50f, 5.5f) 
+                    val s4 = state.alpha.update(40f, 7f)
                     if (s3 || s4) {
                         view.postInvalidateOnAnimation()
                     }
 
                     val cx = view.width / 2f
                     val cy = view.height / 2f
-                    
-                    // Fixed iOS-sized radius (38dp) so they are always perfect circles regardless of row size
-                    val radius = 38f * density
+                    val radius = 38f * density // Enforce strict 76dp diameter regardless of row deformation
 
                     canvas.save()
                     canvas.translate(cx, cy)
