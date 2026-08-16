@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Rect
 import android.graphics.Typeface
 import android.view.View
 import kotlin.math.abs
@@ -40,17 +39,13 @@ class JellyOverlayView(context: Context) : View(context) {
             
             return abs(velocity) > 0.001f || abs(displacement) > 0.001f
         }
-        fun snap(value: Float) {
-            current = value
-            target = value
-            velocity = 0f
-        }
     }
 
-    class KeyNode(val digit: String, delayMs: Long) {
-        var bounds = Rect()
+    // Holds the physics state AND a live reference to the native button
+    class KeyNode(val digit: String, val nativeView: View) {
+        val numericVal = digit.toIntOrNull() ?: 10
+        val delayMs = if (numericVal == 0) 315L else (numericVal - 1) * 35L
         
-        // Independent X/Y and Scale Physics State
         val tx = Spring()
         val ty = Spring()
         val scaleX = Spring(0f, 1f) // Start at 0 for pop-in animation
@@ -61,34 +56,29 @@ class JellyOverlayView(context: Context) : View(context) {
         var startTouchX = 0f
         var startTouchY = 0f
         
-        val enterTime = System.currentTimeMillis() + delayMs
         var hasEntered = false
     }
 
     val nodes = mutableMapOf<String, KeyNode>()
-    private var isAnimating = true // Start instantly for entrance animation
+    private var isAnimating = true
+    private var startTime = 0L
 
     init {
         isClickable = false
         isFocusable = false
     }
 
-    fun registerNode(digit: String, bounds: Rect) {
+    fun registerNode(digit: String, view: View) {
         if (!nodes.containsKey(digit)) {
-            val numericVal = digit.toIntOrNull() ?: 10
-            val delayMs = if (numericVal == 0) 315L else (numericVal - 1) * 35L
-            val node = KeyNode(digit, delayMs)
-            node.bounds = bounds
-            nodes[digit] = node
-        } else {
-            nodes[digit]!!.bounds = bounds
+            nodes[digit] = KeyNode(digit, view)
+            if (startTime == 0L) startTime = System.currentTimeMillis()
+            startAnimationLoop()
         }
-        startAnimationLoop()
     }
 
     fun handleTouch(digit: String, action: Int, rawX: Float, rawY: Float) {
         val node = nodes[digit] ?: return
-        val maxOffset = node.bounds.width() * 0.8f // Drag limit
+        val maxOffset = node.nativeView.width * 0.8f
 
         when (action) {
             android.view.MotionEvent.ACTION_DOWN -> {
@@ -112,7 +102,7 @@ class JellyOverlayView(context: Context) : View(context) {
 
                 // Jelly Squash and Stretch Mathematics
                 val dragDist = hypot(targetTx, targetTy)
-                val stretch = 0.35f * (dragDist / maxOffset).coerceAtMost(1f) // 35% max stretch
+                val stretch = 0.35f * (dragDist / maxOffset).coerceAtMost(1f)
                 val angle = atan2(targetTy, targetTx)
 
                 val baseScale = 0.88f
@@ -141,11 +131,17 @@ class JellyOverlayView(context: Context) : View(context) {
         super.onDraw(canvas)
         var needsNextFrame = false
         val now = System.currentTimeMillis()
+        
+        // Get the overlay's master coordinates
+        val locOverlay = IntArray(2)
+        this.getLocationInWindow(locOverlay)
 
         for (node in nodes.values) {
-            if (node.bounds.isEmpty) continue
+            val v = node.nativeView
+            if (v.width == 0 || v.height == 0) continue
 
-            if (!node.hasEntered && now >= node.enterTime) {
+            // Staggered iOS 26 Entrance check
+            if (!node.hasEntered && now - startTime >= node.delayMs) {
                 node.hasEntered = true
             }
             if (!node.hasEntered) {
@@ -161,20 +157,26 @@ class JellyOverlayView(context: Context) : View(context) {
             val s5 = node.alpha.update(150f, 20f)
             if (s1 || s2 || s3 || s4 || s5) needsNextFrame = true
 
-            val cx = node.bounds.exactCenterX() + node.tx.current
-            val cy = node.bounds.exactCenterY() + node.ty.current
-            val radius = (node.bounds.width() / 2f)
+            // Track live physical coordinates of the native button
+            val locV = IntArray(2)
+            v.getLocationInWindow(locV)
+            val dx = locV[0] - locOverlay[0]
+            val dy = locV[1] - locOverlay[1]
+
+            val cx = dx + (v.width / 2f) + node.tx.current
+            val cy = dy + (v.height / 2f) + node.ty.current
+            val radius = (v.width / 2f)
 
             canvas.save()
             canvas.translate(cx, cy)
             canvas.scale(node.scaleX.current, node.scaleY.current)
 
-            // Draw Subtle Glass Background (Unclipped)
+            // Draw Background Glass
             val alphaVal = (255 * node.alpha.current.coerceIn(0f, 1f)).toInt()
             if (node.isPressed) {
-                circlePaint.color = Color.parseColor("#45FFFFFF") // Brighten slightly on press
+                circlePaint.color = Color.parseColor("#45FFFFFF") // Brighten on press
             } else {
-                circlePaint.color = Color.parseColor("#28FFFFFF") // Subtle translucent glass
+                circlePaint.color = Color.parseColor("#28FFFFFF") // Translucent glass base
             }
             circlePaint.alpha = alphaVal
             canvas.drawCircle(0f, 0f, radius, circlePaint)

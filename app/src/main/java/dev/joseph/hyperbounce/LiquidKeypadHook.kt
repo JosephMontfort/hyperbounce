@@ -1,6 +1,5 @@
 package dev.joseph.hyperbounce
 
-import android.graphics.Rect
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
@@ -41,7 +40,7 @@ object LiquidKeypadHook {
         } catch (e: ClassNotFoundException) { return }
 
         try {
-            // 1. Inject the Full-Screen Canvas into the ViewOverlay
+            // 1. Inject the Full-Screen Canvas safely into the Parent FrameLayout
             val onAttachedRootMethod = findMethod(pinViewClass, "onAttachedToWindow")
             module.hook(onAttachedRootMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -49,26 +48,19 @@ object LiquidKeypadHook {
                     val container = chain.thisObject as ViewGroup
                     
                     container.post {
-                        if (overlayView == null || overlayView?.parent == null) {
-                            val overlay = JellyOverlayView(container.context)
-                            
-                            // ViewOverlay guarantees it draws flawlessly above all elements without boundaries
-                            container.overlay.add(overlay)
-                            overlayView = overlay
-                            
-                            // Map bounds directly to the container
-                            overlay.measure(
-                                View.MeasureSpec.makeMeasureSpec(container.width, View.MeasureSpec.EXACTLY),
-                                View.MeasureSpec.makeMeasureSpec(container.height, View.MeasureSpec.EXACTLY)
-                            )
-                            overlay.layout(0, 0, container.width, container.height)
-                            
-                            container.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-                                overlay.measure(
-                                    View.MeasureSpec.makeMeasureSpec(v.width, View.MeasureSpec.EXACTLY),
-                                    View.MeasureSpec.makeMeasureSpec(v.height, View.MeasureSpec.EXACTLY)
+                        val parent = container.parent as? ViewGroup
+                        if (parent != null) {
+                            if (overlayView == null || overlayView?.parent == null) {
+                                val overlay = JellyOverlayView(container.context)
+                                overlay.layoutParams = ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT, 
+                                    ViewGroup.LayoutParams.MATCH_PARENT
                                 )
-                                overlay.layout(0, 0, v.width, v.height)
+                                // Clear existing to prevent duplicate stacking
+                                (overlay.parent as? ViewGroup)?.removeView(overlay)
+                                
+                                parent.addView(overlay)
+                                overlayView = overlay
                             }
                         }
                     }
@@ -76,7 +68,7 @@ object LiquidKeypadHook {
                 }
             })
 
-            // 2. Hide Native Visuals and Map Bounds
+            // 2. Hide Native Visuals and Register Keys dynamically
             val onAttachedKeyMethod = findMethod(keyClass, "onAttachedToWindow")
             module.hook(onAttachedKeyMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -95,7 +87,7 @@ object LiquidKeypadHook {
                                     mDigitText.isAccessible = true
                                     (mDigitText.get(view) as? TextView)?.let {
                                         digitStr = it.text.toString()
-                                        it.alpha = 0f // Make perfectly invisible, but retain exact bounding box
+                                        it.alpha = 0f // Make perfectly invisible
                                     }
 
                                     val mKlondikeText = cls.getDeclaredField("mKlondikeText")
@@ -106,6 +98,7 @@ object LiquidKeypadHook {
                             }
                             
                             keyDigitMap[view] = digitStr
+                            overlayView?.registerNode(digitStr, view) // Pass raw view for dynamic tracking
 
                             try {
                                 val setAnimMethod = view.javaClass.getMethod("setAnimationEnabled", Boolean::class.javaPrimitiveType)
@@ -114,6 +107,7 @@ object LiquidKeypadHook {
                             
                             view.background = null
 
+                            // Tuned Spacing XML Rewrite
                             val keySizePx = (82f * density).toInt()     
                             val vMarginPx = (28f * density).toInt()     
                             val hMarginPx = (10f * density).toInt()     
@@ -159,25 +153,6 @@ object LiquidKeypadHook {
                                 keyLp.rightMargin = hMarginPx
                                 view.layoutParams = keyLp
                             }
-                            
-                            // Map coordinates to the ViewOverlay dynamically
-                            view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-                                var p = v.parent as? View
-                                while (p != null && !p.javaClass.name.contains("MiuiKeyguardPINView")) {
-                                    p = p.parent as? View
-                                }
-                                if (p != null) {
-                                    val locV = IntArray(2)
-                                    v.getLocationInWindow(locV)
-                                    val locP = IntArray(2)
-                                    p.getLocationInWindow(locP)
-                                    
-                                    val dx = locV[0] - locP[0]
-                                    val dy = locV[1] - locP[1]
-                                    
-                                    overlayView?.registerNode(digitStr, Rect(dx, dy, dx + v.width, dy + v.height))
-                                }
-                            }
 
                         } catch (e: Throwable) {
                             Log.e(TAG, "Error configuring key constraints", e)
@@ -187,7 +162,7 @@ object LiquidKeypadHook {
                 }
             })
 
-            // 3. Pipe Touches to the Canvas Math Engine
+            // 3. Forward Touch Events to Canvas Physics Engine
             val dispatchTouchMethod = findMethod(keyClass, "onTouchEvent", MotionEvent::class.java)
             module.hook(dispatchTouchMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
