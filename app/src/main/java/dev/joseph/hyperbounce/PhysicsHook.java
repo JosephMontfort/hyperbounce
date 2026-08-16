@@ -66,7 +66,8 @@ public class PhysicsHook extends XposedModule {
             "miui.slidingwidget.widget.SlidingButton",
             "miui.widget.SlidingButton",
             "com.miui.systemui.widget.SlidingButton",
-            "miui.systemui.widget.SlidingButton"
+            "miui.systemui.widget.SlidingButton",
+            "fan.slidingwidget.widget.SlidingButton"
     };
 
     private static final String[] TARGET_SLIDER_CLASSES = {
