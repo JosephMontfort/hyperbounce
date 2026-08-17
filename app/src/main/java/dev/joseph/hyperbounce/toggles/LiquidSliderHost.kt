@@ -3,6 +3,8 @@ package dev.joseph.hyperbounce.toggles
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
+import android.graphics.Rect
+import android.view.ViewTreeObserver
 import android.widget.ProgressBar
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -100,6 +102,18 @@ internal object LiquidSliderHost {
             refreshGeometry()
         }
 
+        /*
+         * ViewGroupOverlay does not automatically inherit RecyclerView/ScrollView clipping.
+         * Hide the replacement ComposeView when its native target is fully outside the viewport.
+         * The listener is attached to the native target, so there is no global host scan every
+         * frame.
+         */
+        private val visibleRect = Rect()
+        private val viewportPreDrawListener = ViewTreeObserver.OnPreDrawListener {
+            updateViewportVisibility()
+            true
+        }
+
         // Keep external/hardware slider changes synchronized. This is retained for
         // behavioral compatibility; the high-impact per-widget Recomposer overhead
         // is removed separately below.
@@ -115,6 +129,7 @@ internal object LiquidSliderHost {
         fun attach() {
             target.addOnAttachStateChangeListener(attachListener)
             target.addOnLayoutChangeListener(layoutListener)
+            target.viewTreeObserver.addOnPreDrawListener(viewportPreDrawListener)
             target.postDelayed(syncRunnable, 500L)
             disableClipping(target)
 
@@ -200,6 +215,7 @@ internal object LiquidSliderHost {
             backdrop.overlayViewToHide = compose
             syncState()
             refreshGeometry()
+            updateViewportVisibility()
         }
 
         private fun disableClipping(view: View) {
@@ -253,6 +269,24 @@ internal object LiquidSliderHost {
             )
         }
 
+        private fun updateViewportVisibility() {
+            val compose = composeView ?: return
+            if (!isVisibleState || !target.isShown) {
+                if (compose.visibility != View.GONE) compose.visibility = View.GONE
+                return
+            }
+
+            val visible = try {
+                target.getGlobalVisibleRect(visibleRect) && !visibleRect.isEmpty
+            } catch (_: Throwable) {
+                true
+            }
+            val desired = if (visible) View.VISIBLE else View.GONE
+            if (compose.visibility != desired) {
+                compose.visibility = desired
+            }
+        }
+
         fun syncState() {
             val bar = target as? ProgressBar ?: return
             sliderMax = bar.max.toFloat()
@@ -263,10 +297,13 @@ internal object LiquidSliderHost {
 
         fun updateVisibility(isVisible: Boolean) {
             isVisibleState = isVisible
-            composeView?.visibility = if (isVisible) View.VISIBLE else View.GONE
+            updateViewportVisibility()
         }
 
         fun dispose() {
+            if (target.viewTreeObserver.isAlive) {
+                target.viewTreeObserver.removeOnPreDrawListener(viewportPreDrawListener)
+            }
             target.removeOnAttachStateChangeListener(attachListener)
             target.removeOnLayoutChangeListener(layoutListener)
             target.removeCallbacks(syncRunnable)

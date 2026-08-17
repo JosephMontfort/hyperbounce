@@ -3,6 +3,8 @@ package dev.joseph.hyperbounce.toggles
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
+import android.graphics.Rect
+import android.view.ViewTreeObserver
 import android.widget.CompoundButton
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
@@ -90,9 +92,29 @@ internal object LiquidToggleHost {
             refreshGeometry()
         }
 
+        /*
+         * Keep the Compose overlay out of the render traversal when the native target is
+         * clipped completely out of the viewport (RecyclerView/ScrollView/etc.).
+         *
+         * The original Android widget is naturally culled by its parent. Our replacement
+         * lives in ViewGroupOverlay, so it does not automatically inherit that culling.
+         * Without this guard, off-screen liquid widgets continue to be rasterized while
+         * the list scrolls.
+         *
+         * A pre-draw listener is intentionally attached to the target itself: it runs only
+         * while the native target participates in drawing, avoiding a global per-frame host
+         * scan.
+         */
+        private val visibleRect = Rect()
+        private val viewportPreDrawListener = ViewTreeObserver.OnPreDrawListener {
+            updateViewportVisibility()
+            true
+        }
+
         fun attach() {
             target.addOnAttachStateChangeListener(attachListener)
             target.addOnLayoutChangeListener(layoutListener)
+            target.viewTreeObserver.addOnPreDrawListener(viewportPreDrawListener)
             disableClipping(target)
             // Obtain a safe application context without depending on the legacy Xposed helper API.
             val baseCtx = try {
@@ -199,6 +221,7 @@ internal object LiquidToggleHost {
             composeView = compose
             backdrop.overlayViewToHide = compose
             refreshGeometry()
+            updateViewportVisibility()
         }
 
         private fun disableClipping(view: View) {
@@ -247,6 +270,24 @@ internal object LiquidToggleHost {
             backdrop.setTargetBounds(left = target.left.toFloat(), top = target.top.toFloat(), width = target.width, height = target.height, paddingPx = (24f * density).toInt())
         }
 
+        private fun updateViewportVisibility() {
+            val compose = composeView ?: return
+            if (!isVisibleState || !target.isShown) {
+                if (compose.visibility != View.GONE) compose.visibility = View.GONE
+                return
+            }
+
+            val visible = try {
+                target.getGlobalVisibleRect(visibleRect) && !visibleRect.isEmpty
+            } catch (_: Throwable) {
+                true
+            }
+            val desired = if (visible) View.VISIBLE else View.GONE
+            if (compose.visibility != desired) {
+                compose.visibility = desired
+            }
+        }
+
         fun syncChecked() {
             checked = (target as? CompoundButton)?.isChecked == true
             isEnabledState = target.isEnabled
@@ -254,10 +295,13 @@ internal object LiquidToggleHost {
 
         fun updateVisibility(isVisible: Boolean) {
             isVisibleState = isVisible
-            composeView?.visibility = if (isVisible) View.VISIBLE else View.GONE
+            updateViewportVisibility()
         }
 
         fun dispose() {
+            if (target.viewTreeObserver.isAlive) {
+                target.viewTreeObserver.removeOnPreDrawListener(viewportPreDrawListener)
+            }
             target.removeOnAttachStateChangeListener(attachListener)
             target.removeOnLayoutChangeListener(layoutListener)
             target.alpha = 1f 

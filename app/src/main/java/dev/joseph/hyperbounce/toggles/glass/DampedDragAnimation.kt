@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.MutatorMutex
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
@@ -13,22 +14,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.coroutineScope
 import kotlin.math.abs
 import kotlin.time.Clock
 
-/**
- * Controls the toggle thumb's press, drag and settle animation.
- *
- * Performance notes:
- * - Drag targets are fed directly into the Animatable. The old LiquidToggle
- *   implementation mirrored every pointer-move into a Compose mutable state,
- *   forcing a recomposition for every touch sample.
- * - Deliberate state changes (tap/programmatic toggle) use a slower spring so
- *   the press/bloom has time to fully play instead of snapping immediately.
- * - Drag settling uses a softer spring to give the thumb a small, premium
- *   amount of inertia without becoming detached from the finger.
- */
 class DampedDragAnimation(
     private val animationScope: CoroutineScope,
     val initialValue: Float,
@@ -41,18 +29,15 @@ class DampedDragAnimation(
     val onDrag: DampedDragAnimation.(size: IntSize, dragAmount: Offset) -> Unit,
 ) {
 
+    // TUNED PHYSICS: Extremely responsive to finger movement
     private val valueAnimationSpec =
         spring(dampingRatio = 0.7f, stiffness = 800f, visibilityThreshold = visibilityThreshold)
-
     private val velocityAnimationSpec =
         spring(0.5f, 300f, visibilityThreshold * 10f)
-
     private val pressProgressAnimationSpec =
         spring(1f, 1000f, 0.001f)
-
     private val scaleXAnimationSpec =
         spring(0.6f, 250f, 0.001f)
-
     private val scaleYAnimationSpec =
         spring(0.7f, 250f, 0.001f)
 
@@ -103,6 +88,7 @@ class DampedDragAnimation(
 
     fun release() {
         animationScope.launch {
+            withFrameNanos { }
             if (value != targetValue) {
                 val threshold = (valueRange.endInclusive - valueRange.start) * 0.025f
                 snapshotFlow { valueAnimation.value }
@@ -115,17 +101,10 @@ class DampedDragAnimation(
         }
     }
 
-    /**
-     * Updates the drag target without introducing an intermediate Compose state.
-     * This is intentionally cheap because it can be called for every pointer
-     * move delivered by the platform.
-     */
     fun updateValue(value: Float) {
         val targetValue = value.coerceIn(valueRange)
         animationScope.launch {
-            valueAnimation.animateTo(targetValue, valueAnimationSpec) {
-                updateVelocity()
-            }
+            launch { valueAnimation.animateTo(targetValue, valueAnimationSpec) { updateVelocity() } }
         }
     }
 
@@ -134,15 +113,9 @@ class DampedDragAnimation(
             mutatorMutex.mutate {
                 press()
                 val targetValue = value.coerceIn(valueRange)
-                launch {
-                    valueAnimation.animateTo(targetValue, valueAnimationSpec) {
-                        updateVelocity()
-                    }
-                }
+                launch { valueAnimation.animateTo(targetValue, valueAnimationSpec) }
                 if (velocity != 0f) {
-                    launch {
-                        velocityAnimation.animateTo(0f, velocityAnimationSpec)
-                    }
+                    launch { velocityAnimation.animateTo(0f, velocityAnimationSpec) }
                 }
                 release()
             }
@@ -154,11 +127,7 @@ class DampedDragAnimation(
             Clock.System.now().toEpochMilliseconds(),
             Offset(value, 0f)
         )
-        val targetVelocity =
-            velocityTracker.calculateVelocity().x /
-                    (valueRange.endInclusive - valueRange.start)
-        animationScope.launch {
-            velocityAnimation.animateTo(targetVelocity, velocityAnimationSpec)
-        }
+        val targetVelocity = velocityTracker.calculateVelocity().x / (valueRange.endInclusive - valueRange.start)
+        animationScope.launch { velocityAnimation.animateTo(targetVelocity, velocityAnimationSpec) }
     }
 }
