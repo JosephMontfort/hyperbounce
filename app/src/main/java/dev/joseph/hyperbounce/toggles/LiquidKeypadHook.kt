@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.util.Log
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -73,6 +74,12 @@ object LiquidKeypadHook {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val view = chain.thisObject as View
                     
+                    // FIREWALL: Do absolutely nothing if this is the SIM or PUK lock view
+                    val className = view.javaClass.simpleName
+                    if (className.contains("Sim", ignoreCase = true) || className.contains("Puk", ignoreCase = true)) {
+                        return chain.proceed()
+                    }
+                    
                     try {
                         view.javaClass.getDeclaredField("initAppearAnimed").apply { isAccessible = true; setBoolean(view, true) }
                         view.javaClass.getDeclaredField("mAppearAnimating").apply { isAccessible = true; setBoolean(view, false) }
@@ -82,10 +89,9 @@ object LiquidKeypadHook {
                         containerField.isAccessible = true
                         (containerField.get(view) as? View)?.let { v ->
                             v.alpha = 1f
-                            v.translationY = 0f // Keep master container perfectly anchored
+                            v.translationY = 0f 
                         }
                         
-                        // Shift the PIN dots UP by 115dp so they clear the shifted top row
                         try {
                             val row0Field = view.javaClass.getDeclaredField("mRow0Container")
                             row0Field.isAccessible = true
@@ -96,7 +102,6 @@ object LiquidKeypadHook {
                             }
                         } catch (e: Throwable) {}
 
-                        // Fade in auxiliary items (Emergency/Back) in their stock positions
                         arrayOf("mBouncerMessageAreaTitle", "mBouncerMessageArea", "mEmergencyCall", "mCancelButton").forEach { fieldName ->
                             try {
                                 val field = view.javaClass.getDeclaredField(fieldName)
@@ -110,13 +115,22 @@ object LiquidKeypadHook {
                         }
                     } catch (e: Throwable) { Log.e(TAG, "Failed to reflect SystemUI states", e) }
 
-                    // Trigger simultaneous, ultra-slow pop-in
                     stateMap.forEach { (keyView, state) ->
-                        state.scale.snap(0.3f)
-                        state.alpha.snap(0f)
-                        state.scale.target = 1f
-                        state.alpha.target = 1f
-                        keyView.postInvalidateOnAnimation()
+                        // FIREWALL: Only animate keys that physically belong to this specific Lock Screen
+                        var p = keyView.parent
+                        var belongs = false
+                        while (p != null) {
+                            if (p === view) { belongs = true; break }
+                            p = p.parent
+                        }
+                        
+                        if (belongs && keyView.isAttachedToWindow) {
+                            state.scale.snap(0.3f)
+                            state.alpha.snap(0f)
+                            state.scale.target = 1f
+                            state.alpha.target = 1f
+                            keyView.postInvalidateOnAnimation()
+                        }
                     }
                     return null 
                 }
@@ -126,12 +140,26 @@ object LiquidKeypadHook {
             module.hook(startBackMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val view = chain.thisObject as View
+                    
+                    val className = view.javaClass.simpleName
+                    if (className.contains("Sim", ignoreCase = true) || className.contains("Puk", ignoreCase = true)) {
+                        return chain.proceed()
+                    }
+
                     val runnable = chain.args[0] as? java.lang.Runnable
                     
                     stateMap.forEach { (keyView, state) ->
-                        state.scale.target = 0.5f
-                        state.alpha.target = 0f
-                        keyView.postInvalidateOnAnimation()
+                        var p = keyView.parent
+                        var belongs = false
+                        while (p != null) {
+                            if (p === view) { belongs = true; break }
+                            p = p.parent
+                        }
+                        if (belongs && keyView.isAttachedToWindow) {
+                            state.scale.target = 0.5f
+                            state.alpha.target = 0f
+                            keyView.postInvalidateOnAnimation()
+                        }
                     }
                     view.postDelayed({ runnable?.run() }, 200)
                     return null
@@ -141,10 +169,25 @@ object LiquidKeypadHook {
             val cancelAppearMethod = findMethod(pinViewClass, "cancelAppearAnim")
             module.hook(cancelAppearMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val view = chain.thisObject as View
+                    
+                    val className = view.javaClass.simpleName
+                    if (className.contains("Sim", ignoreCase = true) || className.contains("Puk", ignoreCase = true)) {
+                        return chain.proceed()
+                    }
+
                     stateMap.forEach { (keyView, state) ->
-                        state.scale.target = 0.5f
-                        state.alpha.target = 0f
-                        keyView.postInvalidateOnAnimation()
+                        var p = keyView.parent
+                        var belongs = false
+                        while (p != null) {
+                            if (p === view) { belongs = true; break }
+                            p = p.parent
+                        }
+                        if (belongs && keyView.isAttachedToWindow) {
+                            state.scale.target = 0.5f
+                            state.alpha.target = 0f
+                            keyView.postInvalidateOnAnimation()
+                        }
                     }
                     return null
                 }
@@ -156,6 +199,21 @@ object LiquidKeypadHook {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val result = chain.proceed()
                     val view = chain.thisObject as View
+
+                    // FIREWALL: Walk up the tree to check if this key belongs to a SIM card lock screen
+                    var p = view.parent
+                    var isSimView = false
+                    while (p != null) {
+                        val parentName = p.javaClass.simpleName
+                        if (parentName.contains("Sim", ignoreCase = true) || parentName.contains("Puk", ignoreCase = true)) {
+                            isSimView = true
+                            break
+                        }
+                        p = p.parent
+                    }
+                    
+                    // Abort custom behavior so the SIM screen stays 100% stock
+                    if (isSimView) return result
 
                     view.post {
                         try {
@@ -185,6 +243,7 @@ object LiquidKeypadHook {
                                 } catch (e: NoSuchFieldException) { cls = cls.superclass }
                             }
                             
+                            // Safe to register since we verified it's the normal lock screen
                             stateMap[view] = KeyState(digitStr)
 
                             try {
@@ -192,16 +251,15 @@ object LiquidKeypadHook {
                                 setAnimMethod.invoke(view, false)
                             } catch (e: Throwable) {}
 
-                            // CASCADING SHIFT: Physically spread the rows apart vertically
                             val row = view.parent as? LinearLayout
                             if (row != null) {
                                 val numericVal = digitStr.toIntOrNull()
                                 if (numericVal != null) {
                                     val shiftDp = when (numericVal) {
-                                        1, 2, 3 -> -100f // Top row moves up the most
-                                        4, 5, 6 -> -70f  // Adds 30dp of breathing room
-                                        7, 8, 9 -> -40f  // Adds 30dp of breathing room
-                                        0 -> -10f        // Bottom row moves up slightly
+                                        1, 2, 3 -> -100f 
+                                        4, 5, 6 -> -70f  
+                                        7, 8, 9 -> -40f  
+                                        0 -> -10f        
                                         else -> 0f
                                     }
                                     row.translationY = shiftDp * density
@@ -222,6 +280,8 @@ object LiquidKeypadHook {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val view = chain.thisObject as View
                     val event = chain.args[0] as MotionEvent
+                    
+                    // If it's a SIM key, it won't be in the map. Fallback to stock behavior natively!
                     val state = stateMap[view] ?: return chain.proceed()
 
                     when (event.actionMasked) {
@@ -233,14 +293,14 @@ object LiquidKeypadHook {
                             }
                             
                             state.isPressed = true
-                            state.scale.target = 0.88f // Extremely soft dip on hold
+                            state.scale.target = 0.88f
                             view.postInvalidateOnAnimation()
                         }
                         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                             state.isPressed = false
                             
                             if (event.actionMasked == MotionEvent.ACTION_UP) {
-                                state.scale.current = 0.75f // Compress down deeply for the physical "pop"
+                                state.scale.current = 0.75f
                             }
                             
                             state.scale.target = 1f
@@ -257,10 +317,11 @@ object LiquidKeypadHook {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val view = chain.thisObject as View
                     val canvas = chain.args[0] as Canvas
+                    
+                    // If it's a SIM key, it won't be in the map. Let MIUI draw it!
                     val state = stateMap[view] ?: return chain.proceed()
                     val density = view.resources.displayMetrics.density
 
-                    // Extremely slow, relaxed spring dynamics
                     val s3 = state.scale.update(50f, 5.5f) 
                     val s4 = state.alpha.update(40f, 7f)
                     if (s3 || s4) {
@@ -269,7 +330,7 @@ object LiquidKeypadHook {
 
                     val cx = view.width / 2f
                     val cy = view.height / 2f
-                    val radius = 38f * density // Enforce strict 76dp diameter regardless of row deformation
+                    val radius = 38f * density 
 
                     canvas.save()
                     canvas.translate(cx, cy)
