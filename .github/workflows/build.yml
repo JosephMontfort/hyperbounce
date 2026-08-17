@@ -53,13 +53,9 @@ jobs:
           fi
 
       - name: Publish to GitHub Releases
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: HyperBounce Release #${{ github.run_number }}
-          body: "Automated HyperBounce LSPosed build - Unified Instagram + WhatsApp + YouTube floating nav, plus HyperOS liquid glass toggles/sliders/keypad"
-          files: app/build/outputs/apk/release/HyperBounce-v1.0.${{ github.run_number }}.apk
-          draft: false
-          prerelease: false
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: v1.0.${{ github.run_number }}
+          APK_FILE: app/build/outputs/apk/release/HyperBounce-v1.0.${{ github.run_number }}.apk
+        run: |
+          gh release create "$TAG_NAME" "$APK_FILE"             --verify-tag             --title "HyperBounce Release #${{ github.run_number }}"             --notes "Automated HyperBounce LSPosed build - Unified Instagram + WhatsApp + YouTube floating nav, plus HyperOS liquid glass toggles/sliders/keypad"
