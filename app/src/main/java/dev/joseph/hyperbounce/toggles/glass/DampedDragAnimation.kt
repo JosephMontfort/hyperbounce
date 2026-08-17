@@ -27,19 +27,32 @@ class DampedDragAnimation(
     val onDragStarted: DampedDragAnimation.(position: Offset) -> Unit,
     val onDragStopped: DampedDragAnimation.() -> Unit,
     val onDrag: DampedDragAnimation.(size: IntSize, dragAmount: Offset) -> Unit,
+    // Interaction tuning is supplied per control so sliders can retain their established feel.
+    private val valueSpringDamping: Float = 0.7f,
+    private val valueSpringStiffness: Float = 800f,
+    private val pressSpringDamping: Float = 1f,
+    private val pressSpringStiffness: Float = 1000f,
+    private val scaleXSpringDamping: Float = 0.6f,
+    private val scaleYSpringDamping: Float = 0.7f,
+    private val scaleSpringStiffness: Float = 250f,
 ) {
 
-    // TUNED PHYSICS: Extremely responsive to finger movement
+    // Per-control physics: the toggle can use a slightly softer, more deliberate response
+    // without changing the established slider behavior.
     private val valueAnimationSpec =
-        spring(dampingRatio = 0.7f, stiffness = 800f, visibilityThreshold = visibilityThreshold)
+        spring(
+            dampingRatio = valueSpringDamping,
+            stiffness = valueSpringStiffness,
+            visibilityThreshold = visibilityThreshold
+        )
     private val velocityAnimationSpec =
         spring(0.5f, 300f, visibilityThreshold * 10f)
     private val pressProgressAnimationSpec =
-        spring(1f, 1000f, 0.001f)
+        spring(pressSpringDamping, pressSpringStiffness, 0.001f)
     private val scaleXAnimationSpec =
-        spring(0.6f, 250f, 0.001f)
+        spring(scaleXSpringDamping, scaleSpringStiffness, 0.001f)
     private val scaleYAnimationSpec =
-        spring(0.7f, 250f, 0.001f)
+        spring(scaleYSpringDamping, scaleSpringStiffness, 0.001f)
 
     private val valueAnimation = Animatable(initialValue, visibilityThreshold)
     private val velocityAnimation = Animatable(0f, 5f)

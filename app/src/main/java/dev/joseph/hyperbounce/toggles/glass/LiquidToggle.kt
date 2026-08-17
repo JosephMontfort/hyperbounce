@@ -85,9 +85,25 @@ fun LiquidToggle(
             },
             onDrag = { _, dragAmount ->
                 if (!didDrag) didDrag = dragAmount.x != 0f
-                val delta = dragAmount.x / dragWidth
-                fraction = if (isLtr) (fraction + delta).fastCoerceIn(0f, 1f) else (fraction - delta).fastCoerceIn(0f, 1f)
-            }
+
+                // Deliberately reduce the direct finger-to-track mapping. The animation spring
+                // then eases the rendered thumb toward this softened target, creating a very
+                // small, premium-feeling follow delay even during fast pulls.
+                val dragSensitivity = 0.82f
+                val delta = (dragAmount.x / dragWidth) * dragSensitivity
+                fraction = if (isLtr) {
+                    (fraction + delta).fastCoerceIn(0f, 1f)
+                } else {
+                    (fraction - delta).fastCoerceIn(0f, 1f)
+                }
+            },
+            valueSpringDamping = 0.82f,
+            valueSpringStiffness = 520f,
+            pressSpringDamping = 1f,
+            pressSpringStiffness = 720f,
+            scaleXSpringDamping = 0.72f,
+            scaleYSpringDamping = 0.78f,
+            scaleSpringStiffness = 190f
         )
     }
 
