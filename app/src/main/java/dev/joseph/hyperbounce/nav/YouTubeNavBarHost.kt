@@ -115,10 +115,15 @@ fun YouTubeNavBarHost(
     var selectedIndex by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(pivotBar, isDark) {
+        var cachedTabs: List<YouTubeTabData>? = null
+        var lastChildCount = -1
         while (true) {
-            val extracted = extractYouTubeTabs(pivotBar, isDark)
-            if (extracted.isNotEmpty() && extracted.size != tabs.size) {
-                tabs = extracted
+            val wrapper = pivotBar.getChildAt(0) as? ViewGroup
+            val currentCount = wrapper?.childCount ?: -1
+            if (cachedTabs == null || currentCount != lastChildCount) {
+                cachedTabs = extractYouTubeTabs(pivotBar, isDark)
+                tabs = cachedTabs
+                lastChildCount = currentCount
             }
             if (tabs.isNotEmpty()) {
                 for (i in tabs.indices) {
@@ -128,7 +133,7 @@ fun YouTubeNavBarHost(
                     }
                 }
             }
-            delay(500)
+            delay(200)
         }
     }
     

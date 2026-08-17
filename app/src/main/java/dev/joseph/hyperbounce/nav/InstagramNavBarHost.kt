@@ -86,9 +86,16 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View) {
     var tabs by remember { mutableStateOf(emptyList<InstagramTabData>()) }
 
     LaunchedEffect(stockBar, isDark) {
+        var cachedTabs: List<InstagramTabData>? = null
+        var lastChildCount = -1
         while (true) {
             if (stockBar != null) {
-                tabs = extractInstagramTabs(stockBar, instagramOrderedTabNames, isDark)
+                val currentCount = stockBar.childCount
+                if (cachedTabs == null || currentCount != lastChildCount) {
+                    cachedTabs = extractInstagramTabs(stockBar, instagramOrderedTabNames, isDark)
+                    tabs = cachedTabs
+                    lastChildCount = currentCount
+                }
                 for (i in tabs.indices) {
                     val view = stockBar.findViewById<View>(tabs[i].resId)
                     if (view != null && (view.isSelected || view.isActivated)) {
@@ -99,7 +106,7 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View) {
                     }
                 }
             }
-            delay(500)
+            delay(200)
         }
     }
 

@@ -60,6 +60,7 @@ data class LiquidNavGlassConfig(
     val lensRefractionAmount: Dp = 11.dp,
     val chromaticAberration: Boolean = true,
     val depthEffect: Boolean = false,
+    val blurRadius: Dp = 8.dp,
     val highlight: Highlight = Highlight.Default,
     val shadow: Shadow = Shadow.Default,
     val innerShadow: InnerShadow = InnerShadow(radius = 8.dp),
@@ -68,6 +69,7 @@ data class LiquidNavGlassConfig(
 data class LiquidNavConfig(
     val containerMode: LiquidNavContainerMode = LiquidNavContainerMode.FullBackdrop,
     val containerAlpha: Float = 0.4f,
+    val containerBlur: Dp = 0.dp,
     val lightContainerColor: Color = Color(0xFFFAFAFA),
     val darkContainerColor: Color = Color(0xFF121212),
     val restingIndicatorColorLight: Color = Color.Black.copy(alpha = 0.1f),
@@ -80,31 +82,35 @@ data class LiquidNavConfig(
 
         val Instagram = LiquidNavConfig(
             containerMode = LiquidNavContainerMode.Translucent,
-            containerAlpha = 0.88f,
-            lightContainerColor = Color(0xFFF9F9F9),
+            containerBlur = 16.dp, 
+            containerAlpha = 0.65f, 
+            lightContainerColor = Color(0xFFFFFFFF),
             darkContainerColor = Color(0xFF121212),
-            restingIndicatorColorLight = Color.Black.copy(alpha = 0.07f),
-            restingIndicatorColorDark = Color.White.copy(alpha = 0.14f),
+            restingIndicatorColorLight = Color.Black.copy(alpha = 0.08f),
+            restingIndicatorColorDark = Color.White.copy(alpha = 0.15f),
             activeGlassConfig = LiquidNavGlassConfig(
-                lensRefractionHeight = 8.dp,
-                lensRefractionAmount = 11.dp,
-                chromaticAberration = true,
-                innerShadow = InnerShadow(radius = 6.dp, alpha = 0.75f)
+                lensRefractionHeight = 2.dp, 
+                lensRefractionAmount = 4.dp, 
+                chromaticAberration = false, 
+                blurRadius = 0.dp, 
+                innerShadow = InnerShadow(radius = 4.dp, alpha = 0.4f)
             )
         )
 
         val YouTube = LiquidNavConfig(
             containerMode = LiquidNavContainerMode.Translucent,
-            containerAlpha = 0.88f,
-            lightContainerColor = Color(0xFFF9F9F9),
+            containerBlur = 16.dp, 
+            containerAlpha = 0.65f,
+            lightContainerColor = Color(0xFFFFFFFF),
             darkContainerColor = Color(0xFF121212),
-            restingIndicatorColorLight = Color.Black.copy(alpha = 0.07f),
-            restingIndicatorColorDark = Color.White.copy(alpha = 0.14f),
+            restingIndicatorColorLight = Color.Black.copy(alpha = 0.08f),
+            restingIndicatorColorDark = Color.White.copy(alpha = 0.15f),
             activeGlassConfig = LiquidNavGlassConfig(
-                lensRefractionHeight = 8.dp,
-                lensRefractionAmount = 11.dp,
-                chromaticAberration = true,
-                innerShadow = InnerShadow(radius = 6.dp, alpha = 0.75f)
+                lensRefractionHeight = 2.dp,
+                lensRefractionAmount = 4.dp,
+                chromaticAberration = false,
+                blurRadius = 0.dp,
+                innerShadow = InnerShadow(radius = 4.dp, alpha = 0.4f)
             )
         )
     }
@@ -263,11 +269,10 @@ fun LiquidNavigationBar(
                 }
 
                 val navShape = RoundedCornerShape(cornerRadius)
+                val borderOverlay = if (isLightTheme) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
 
                 val containerModifier = Modifier
-                    .graphicsLayer {
-                        translationX = panelOffset
-                    }
+                    .graphicsLayer { translationX = panelOffset }
                     .onGloballyPositioned { coordinates ->
                         val position = coordinates.positionInWindow()
                         liveBackdrop.setTargetBounds(
@@ -290,27 +295,28 @@ fun LiquidNavigationBar(
                                 },
                                 layerBlock = {
                                     val progress = dampedDragAnimation.pressProgress
-                                    val scale = lerp(
-                                        1f,
-                                        1f + 16f.dp.toPx() / size.width,
-                                        progress,
-                                    )
+                                    val scale = lerp(1f, 1f + 16f.dp.toPx() / size.width, progress)
                                     scaleX = scale
                                     scaleY = scale
                                 },
-                                onDrawSurface = {
-                                    drawRect(containerColor)
-                                },
+                                onDrawSurface = { drawRect(containerColor) },
                             )
+                        } else if (config.containerBlur > 0.dp) {
+                            Modifier
+                                .drawBackdrop(
+                                    backdrop = liveBackdrop,
+                                    shape = { navShape },
+                                    effects = {
+                                        blur(config.containerBlur.toPx() * effectMultiplier)
+                                    },
+                                    onDrawSurface = { drawRect(containerColor) }
+                                )
+                                .border(0.5.dp, borderOverlay, navShape)
                         } else {
                             Modifier
                                 .clip(navShape)
                                 .background(containerColor)
-                                .border(
-                                    0.5.dp,
-                                    if (isLightTheme) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f),
-                                    navShape
-                                )
+                                .border(0.5.dp, borderOverlay, navShape)
                         }
                     )
                     .then(interactiveHighlight.modifier)
@@ -348,9 +354,7 @@ fun LiquidNavigationBar(
                             .clearAndSetSemantics {}
                             .alpha(0f)
                             .layerBackdrop(tabsBackdrop)
-                            .graphicsLayer {
-                                translationX = panelOffset
-                            }
+                            .graphicsLayer { translationX = panelOffset }
                             .then(
                                 if (config.containerMode == LiquidNavContainerMode.FullBackdrop) {
                                     Modifier.drawBackdrop(
@@ -371,9 +375,7 @@ fun LiquidNavigationBar(
                                         },
                                         onDrawSurface = { /* Empty Surface */ }
                                     )
-                                } else {
-                                    Modifier
-                                }
+                                } else Modifier
                             )
                             .height(barHeight - 8.dp)
                             .fillMaxWidth()
@@ -404,32 +406,29 @@ fun LiquidNavigationBar(
                         .padding(horizontal = 4.dp)
                         .graphicsLayer {
                             translationX =
-                                if (isLtr) {
-                                    dampedDragAnimation.value * tabWidthPx + panelOffset
-                                } else {
-                                    size.width -
-                                        (dampedDragAnimation.value + 1f) * tabWidthPx +
-                                        panelOffset
-                                }
+                                if (isLtr) dampedDragAnimation.value * tabWidthPx + panelOffset
+                                else size.width - (dampedDragAnimation.value + 1f) * tabWidthPx + panelOffset
                         }
                         .then(interactiveHighlight.gestureModifier)
                         .then(dampedDragAnimation.modifier)
                         .then(
                             if (useBackdrop) {
                                 Modifier.drawBackdrop(
-                                    backdrop = rememberCombinedBackdrop(
-                                        liveBackdrop,
-                                        tabsBackdrop,
-                                    ),
+                                    backdrop = rememberCombinedBackdrop(liveBackdrop, tabsBackdrop),
                                     shape = { navShape },
                                     effects = {
                                         val glassCfg = config.activeGlassConfig
-                                        lens(
-                                            glassCfg.lensRefractionHeight.toPx() * pressProgress * effectMultiplier,
-                                            glassCfg.lensRefractionAmount.toPx() * pressProgress * effectMultiplier,
-                                            chromaticAberration = glassCfg.chromaticAberration,
-                                            depthEffect = glassCfg.depthEffect
-                                        )
+                                        if (glassCfg.blurRadius > 0.dp) {
+                                            blur(glassCfg.blurRadius.toPx() * pressProgress * effectMultiplier)
+                                        }
+                                        if (glassCfg.lensRefractionHeight > 0.dp) {
+                                            lens(
+                                                glassCfg.lensRefractionHeight.toPx() * pressProgress * effectMultiplier,
+                                                glassCfg.lensRefractionAmount.toPx() * pressProgress * effectMultiplier,
+                                                chromaticAberration = glassCfg.chromaticAberration,
+                                                depthEffect = glassCfg.depthEffect
+                                            )
+                                        }
                                     },
                                     highlight = {
                                         val glassCfg = config.activeGlassConfig
@@ -449,25 +448,16 @@ fun LiquidNavigationBar(
                                     layerBlock = {
                                         scaleX = dampedDragAnimation.scaleX
                                         scaleY = dampedDragAnimation.scaleY
-
                                         val velocity = dampedDragAnimation.velocity / 10f
-                                        scaleX /= 1f -
-                                            (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
-                                        scaleY *= 1f -
-                                            (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+                                        scaleX /= 1f - (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
+                                        scaleY *= 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
                                     },
                                     onDrawSurface = {
                                         drawRect(
-                                            if (isLightTheme) {
-                                                Color.Black.copy(0.1f)
-                                            } else {
-                                                Color.White.copy(0.1f)
-                                            },
+                                            if (isLightTheme) Color.Black.copy(0.1f) else Color.White.copy(0.1f),
                                             alpha = 1f - pressProgress,
                                         )
-                                        drawRect(
-                                            Color.Black.copy(alpha = 0.03f * pressProgress)
-                                        )
+                                        drawRect(Color.Black.copy(alpha = 0.03f * pressProgress))
                                     },
                                 )
                             } else {
@@ -498,11 +488,7 @@ private fun RowScope.LiquidBottomTab(
     val scale = LocalLiquidBottomTabScale.current
     Column(
         Modifier
-            .clickable(
-                interactionSource = null,
-                indication = null,
-                onClick = onClick,
-            )
+            .clickable(interactionSource = null, indication = null, onClick = onClick)
             .fillMaxHeight()
             .weight(1f)
             .graphicsLayer {
@@ -520,9 +506,7 @@ private fun RowScope.LiquidBottomTab(
                 colorFilter = if (isCircular || accentColor == null) null else ColorFilter.tint(accentColor),
                 modifier = Modifier
                     .size(if (label.isNullOrEmpty()) 28.dp else 24.dp)
-                    .then(
-                        if (isCircular) Modifier.clip(CircleShape) else Modifier
-                    ),
+                    .then(if (isCircular) Modifier.clip(CircleShape) else Modifier),
             )
             if (!label.isNullOrEmpty()) {
                 Spacer(modifier = Modifier.height(2.dp))
