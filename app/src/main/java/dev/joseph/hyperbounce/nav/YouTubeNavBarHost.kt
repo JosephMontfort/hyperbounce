@@ -53,6 +53,9 @@ private fun extractYouTubeTabs(pivotBar: ViewGroup, isDark: Boolean): List<YouTu
             val isProfile = i == wrapper.childCount - 1
 
             if (isProfile && img != null) {
+                // YouTube's profile avatar is a real image, not a tintable nav drawable.
+                // Drawing the ImageView itself can produce a blank bitmap before layout has
+                // assigned its measured size, so prefer the drawable's intrinsic content.
                 val drawable = img.drawable?.constantState?.newDrawable()?.mutate()
                 if (drawable != null) {
                     val w = drawable.intrinsicWidth.coerceAtLeast(1)
@@ -115,15 +118,10 @@ fun YouTubeNavBarHost(
     var selectedIndex by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(pivotBar, isDark) {
-        var cachedTabs: List<YouTubeTabData>? = null
-        var lastChildCount = -1
         while (true) {
-            val wrapper = pivotBar.getChildAt(0) as? ViewGroup
-            val currentCount = wrapper?.childCount ?: -1
-            if (cachedTabs == null || currentCount != lastChildCount) {
-                cachedTabs = extractYouTubeTabs(pivotBar, isDark)
-                tabs = cachedTabs
-                lastChildCount = currentCount
+            val extracted = extractYouTubeTabs(pivotBar, isDark)
+            if (extracted.isNotEmpty() && extracted.size != tabs.size) {
+                tabs = extracted
             }
             if (tabs.isNotEmpty()) {
                 for (i in tabs.indices) {
@@ -133,7 +131,7 @@ fun YouTubeNavBarHost(
                     }
                 }
             }
-            delay(200)
+            delay(500)
         }
     }
     
@@ -154,6 +152,5 @@ fun YouTubeNavBarHost(
         sourceView = backdropSource,
         forceLightTheme = !isDark,
         forceDarkTheme = isDark,
-        config = LiquidNavConfig.YouTube,
     )
 }
