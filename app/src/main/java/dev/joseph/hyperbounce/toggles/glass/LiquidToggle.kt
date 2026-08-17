@@ -89,7 +89,7 @@ fun LiquidToggle(
                 // Deliberately reduce the direct finger-to-track mapping. The animation spring
                 // then eases the rendered thumb toward this softened target, creating a very
                 // small, premium-feeling follow delay even during fast pulls.
-                val dragSensitivity = 0.82f
+                val dragSensitivity = 0.72f
                 val delta = (dragAmount.x / dragWidth) * dragSensitivity
                 fraction = if (isLtr) {
                     (fraction + delta).fastCoerceIn(0f, 1f)
@@ -98,7 +98,7 @@ fun LiquidToggle(
                 }
             },
             valueSpringDamping = 0.82f,
-            valueSpringStiffness = 520f,
+            valueSpringStiffness = 400f,
             pressSpringDamping = 1f,
             pressSpringStiffness = 720f,
             scaleXSpringDamping = 0.72f,
