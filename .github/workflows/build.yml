@@ -38,15 +38,28 @@ jobs:
         run: |
           mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/HyperBounce-v1.0.${{ github.run_number }}.apk
 
+      - name: Create release tag
+        env:
+          TAG_NAME: v1.0.${{ github.run_number }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+            echo "Tag $TAG_NAME already exists — keeping existing tag"
+          else
+            git tag "$TAG_NAME" "$GITHUB_SHA"
+            git push origin "refs/tags/$TAG_NAME"
+          fi
+
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v1.0.${{ github.run_number }}
-          target_commitish: ${{ github.sha }}
           name: HyperBounce Release #${{ github.run_number }}
           body: "Automated HyperBounce LSPosed build - Unified Instagram + WhatsApp + YouTube floating nav, plus HyperOS liquid glass toggles/sliders/keypad"
           files: app/build/outputs/apk/release/HyperBounce-v1.0.${{ github.run_number }}.apk
           draft: false
           prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
