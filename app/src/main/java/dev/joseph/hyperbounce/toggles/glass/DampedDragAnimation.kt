@@ -11,8 +11,9 @@ import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.first
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
 import kotlin.math.abs
 import kotlin.time.Clock
 
@@ -133,14 +134,16 @@ class DampedDragAnimation(
                 .filter { abs(it - valueAnimation.targetValue) < threshold }
                 .first()
         }
-        launch {
-            pressProgressAnimation.animateTo(0f, pressSpec)
-        }
-        launch {
-            scaleXAnimation.animateTo(initialScale, scaleXAnimationSpec)
-        }
-        launch {
-            scaleYAnimation.animateTo(initialScale, scaleYAnimationSpec)
+        coroutineScope {
+            launch {
+                pressProgressAnimation.animateTo(0f, pressSpec)
+            }
+            launch {
+                scaleXAnimation.animateTo(initialScale, scaleXAnimationSpec)
+            }
+            launch {
+                scaleYAnimation.animateTo(initialScale, scaleYAnimationSpec)
+            }
         }
     }
 

@@ -34,3 +34,10 @@ This patch is intentionally limited to the active Compose liquid-toggle path.
 - Kotlin source brace/parenthesis balance checked.
 - Standalone `kotlinc` parsing was attempted; it cannot resolve AndroidX/Compose dependencies outside the project build.
 - Full Gradle compilation could not be run in this environment because Gradle 9.6.0 is not cached and network access to services.gradle.org is unavailable.
+
+## Build-fix follow-up (2026-08-17)
+Corrected Kotlin API/import issues introduced by the animation/performance patch:
+- `snapshotFlow(...).first()` now imports `kotlinx.coroutines.flow.first`.
+- Parallel settle animations now run inside `coroutineScope { ... }`.
+- Added `androidx.compose.ui.graphics.drawscope.scale` for the existing backdrop transform.
+No animation constants or visual behavior were changed in this correction.
