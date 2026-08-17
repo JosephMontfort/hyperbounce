@@ -10,21 +10,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.MotionDurationScale
-import androidx.compose.runtime.Recomposer
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.FakeLifecycleOwner
 import dev.joseph.hyperbounce.toggles.glass.LiquidToggle
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import java.util.WeakHashMap
 
 internal object LiquidToggleHost {
@@ -75,8 +68,6 @@ internal object LiquidToggleHost {
 
     private class Host(private val target: View, private val parent: ViewGroup) {
         var composeView: ComposeView? = null
-        private var recomposer: Recomposer? = null
-        private var recomposerScope: CoroutineScope? = null
         private var checked by mutableStateOf((target as? CompoundButton)?.isChecked == true)
         private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
         private var isEnabledState by mutableStateOf(target.isEnabled)
@@ -99,14 +90,10 @@ internal object LiquidToggleHost {
             refreshGeometry()
         }
 
-        private val syncRunnable = object : java.lang.Runnable { override fun run() { syncChecked(); target.postDelayed(this, 500L) } }
-
         fun attach() {
             target.addOnAttachStateChangeListener(attachListener)
             target.addOnLayoutChangeListener(layoutListener)
             disableClipping(target)
-            target.postDelayed(syncRunnable, 500L)
-
             // Obtain a safe application context without depending on the legacy Xposed helper API.
             val baseCtx = try {
                 val atClass = Class.forName("android.app.ActivityThread")
@@ -167,35 +154,18 @@ internal object LiquidToggleHost {
              *
              * setParentCompositionContext() is the supported Compose escape hatch:
              * an explicit parent context wins over the ancestor/window Recomposer.
-             * We therefore own a tiny Recomposer for this injected view and supply
-             * a fixed MotionDurationScale. This keeps the LiquidToggle animation
-             * pipeline completely isolated from SystemUI's Recomposer.
+             * We therefore use a shared injected Recomposer with the same fixed
+             * MotionDurationScale. This keeps the LiquidToggle animation pipeline
+             * isolated from SystemUI's Recomposer without creating one scheduler per widget.
              */
-            val isolatedMotionScale = object : MotionDurationScale {
-                override val scaleFactor: Float = 1f
-            }
-            val isolatedRecomposer = Recomposer(
-                AndroidUiDispatcher.Main + isolatedMotionScale
-            )
-            val isolatedScope = CoroutineScope(
-                SupervisorJob() + AndroidUiDispatcher.Main
-            )
-            recomposer = isolatedRecomposer
-            recomposerScope = isolatedScope
-            isolatedScope.launch {
-                try {
-                    isolatedRecomposer.runRecomposeAndApplyChanges()
-                } catch (_: Throwable) {
-                    // The host owns this recomposer; cancellation during disposal is expected.
-                }
-            }
+            val sharedRecomposer = InjectedComposeRecomposer.get()
 
             val compose = ComposeView(safeContext).apply {
                 tag = "HyperBounceLiquidToggle:${System.identityHashCode(target)}"
                 isClickable = true
                 isFocusable = true
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-                setParentCompositionContext(isolatedRecomposer)
+                setParentCompositionContext(sharedRecomposer)
                 setContent {
                     LiquidToggleOverlay(
                         backdrop = backdrop,
@@ -290,7 +260,6 @@ internal object LiquidToggleHost {
         fun dispose() {
             target.removeOnAttachStateChangeListener(attachListener)
             target.removeOnLayoutChangeListener(layoutListener)
-            target.removeCallbacks(syncRunnable)
             target.alpha = 1f 
 
             val compose = composeView
@@ -299,10 +268,6 @@ internal object LiquidToggleHost {
             compose?.setContent { }
             compose?.let { parent.overlay?.remove(it) }
 
-            recomposer?.cancel()
-            recomposer = null
-            recomposerScope?.cancel()
-            recomposerScope = null
         }
     }
 

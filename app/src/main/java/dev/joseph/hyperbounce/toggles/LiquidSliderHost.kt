@@ -11,11 +11,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -23,10 +21,6 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.FakeLifecycleOwner
 import dev.joseph.hyperbounce.toggles.glass.LiquidSlider
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import java.util.WeakHashMap
 
 internal object LiquidSliderHost {
@@ -83,8 +77,6 @@ internal object LiquidSliderHost {
     class Host(private val target: View, val parent: ViewGroup) {
         var composeView: ComposeView? = null
         var isTrackingTouch = false
-        private var recomposer: Recomposer? = null
-        private var recomposerScope: CoroutineScope? = null
         
         private var sliderValue by mutableFloatStateOf(0f)
         private var sliderMin by mutableFloatStateOf(0f)
@@ -108,9 +100,11 @@ internal object LiquidSliderHost {
             refreshGeometry()
         }
 
+        // Keep external/hardware slider changes synchronized. This is retained for
+        // behavioral compatibility; the high-impact per-widget Recomposer overhead
+        // is removed separately below.
         private val syncRunnable = object : java.lang.Runnable {
             override fun run() {
-                // Instantly sync visual state if hardware keys change the volume externally
                 if (!isTrackingTouch) {
                     syncState()
                 }
@@ -122,7 +116,6 @@ internal object LiquidSliderHost {
             target.addOnAttachStateChangeListener(attachListener)
             target.addOnLayoutChangeListener(layoutListener)
             target.postDelayed(syncRunnable, 500L)
-            
             disableClipping(target)
 
             val baseCtx = try {
@@ -144,21 +137,14 @@ internal object LiquidSliderHost {
                 override fun getSystemService(name: String): Any? = try { target.context.getSystemService(name) ?: super.getSystemService(name) } catch(e: Throwable) { super.getSystemService(name) }
             }
 
-            val isolatedMotionScale = object : MotionDurationScale { override val scaleFactor: Float = 1f }
-            val isolatedRecomposer = Recomposer(AndroidUiDispatcher.Main + isolatedMotionScale)
-            val isolatedScope = CoroutineScope(SupervisorJob() + AndroidUiDispatcher.Main)
-            recomposer = isolatedRecomposer
-            recomposerScope = isolatedScope
-            isolatedScope.launch {
-                try { isolatedRecomposer.runRecomposeAndApplyChanges() } catch (_: Throwable) {}
-            }
+            val sharedRecomposer = InjectedComposeRecomposer.get()
 
             val compose = ComposeView(safeContext).apply {
                 tag = "HyperBounceLiquidSlider:${System.identityHashCode(target)}"
                 isClickable = true
                 isFocusable = true
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-                setParentCompositionContext(isolatedRecomposer)
+                setParentCompositionContext(sharedRecomposer)
                 setContent {
                     if (isVisibleState) {
                         val targetWidthDp = with(LocalDensity.current) { target.width.toDp() }
@@ -292,10 +278,6 @@ internal object LiquidSliderHost {
             compose?.setContent { }
             compose?.let { parent.overlay?.remove(it) }
 
-            recomposer?.cancel()
-            recomposer = null
-            recomposerScope?.cancel()
-            recomposerScope = null
         }
     }
 

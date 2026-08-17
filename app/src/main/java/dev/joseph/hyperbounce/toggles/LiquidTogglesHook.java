@@ -726,35 +726,41 @@ public class LiquidTogglesHook extends XposedModule {
         if (classLoader == null) classLoader = param.getDefaultClassLoader();
         final ClassLoader packageClassLoader = classLoader;
 
-        try {
-            Method dispatch = View.class.getDeclaredMethod(
-                    "dispatchTouchEvent", MotionEvent.class);
-            dispatch.setAccessible(true);
-            installHook(dispatch, chain -> {
-                View view = (View) chain.getThisObject();
-                String className = view.getClass().getName();
-                boolean isTarget = false;
-                for (String target : TARGET_TOGGLE_CLASSES) {
-                    if (className.equals(target)) {
-                        isTarget = true;
-                        break;
+        // The active liquid implementation handles target touches through each
+        // widget's onTouchEvent hook. The old global dispatchTouchEvent hook is only
+        // needed by the legacy non-liquid path; installing it globally otherwise adds
+        // an interception to every View touch dispatch in the hooked process.
+        if (!USE_LIQUID_GLASS_TOGGLE) {
+            try {
+                Method dispatch = View.class.getDeclaredMethod(
+                        "dispatchTouchEvent", MotionEvent.class);
+                dispatch.setAccessible(true);
+                installHook(dispatch, chain -> {
+                    View view = (View) chain.getThisObject();
+                    String className = view.getClass().getName();
+                    boolean isTarget = false;
+                    for (String target : TARGET_TOGGLE_CLASSES) {
+                        if (className.equals(target)) {
+                            isTarget = true;
+                            break;
+                        }
                     }
-                }
-                if (isTarget && !USE_LIQUID_GLASS_TOGGLE) {
-                    MotionEvent event = (MotionEvent) chain.getArg(0);
-                    if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                        ViewParent parent = view.getParent();
-                        if (parent != null)
-                            parent.requestDisallowInterceptTouchEvent(true);
+                    if (isTarget) {
+                        MotionEvent event = (MotionEvent) chain.getArg(0);
+                        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                            ViewParent parent = view.getParent();
+                            if (parent != null)
+                                parent.requestDisallowInterceptTouchEvent(true);
+                        }
+                        invoke(findMethod(view.getClass(), "onTouchEvent", MotionEvent.class),
+                                view, event);
+                        return true;
                     }
-                    invoke(findMethod(view.getClass(), "onTouchEvent", MotionEvent.class),
-                            view, event);
-                    return true;
-                }
-                return chain.proceed();
-            });
-        } catch (Throwable t) {
-            log(4, "HyperBounce", "dispatchTouchEvent hook failed", t);
+                    return chain.proceed();
+                });
+            } catch (Throwable t) {
+                log(4, "HyperBounce", "dispatchTouchEvent hook failed", t);
+            }
         }
 
         for (String className : TARGET_TOGGLE_CLASSES)
