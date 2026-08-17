@@ -53,9 +53,6 @@ private fun extractYouTubeTabs(pivotBar: ViewGroup, isDark: Boolean): List<YouTu
             val isProfile = i == wrapper.childCount - 1
 
             if (isProfile && img != null) {
-                // YouTube's profile avatar is a real image, not a tintable nav drawable.
-                // Drawing the ImageView itself can produce a blank bitmap before layout has
-                // assigned its measured size, so prefer the drawable's intrinsic content.
                 val drawable = img.drawable?.constantState?.newDrawable()?.mutate()
                 if (drawable != null) {
                     val w = drawable.intrinsicWidth.coerceAtLeast(1)
@@ -152,5 +149,6 @@ fun YouTubeNavBarHost(
         sourceView = backdropSource,
         forceLightTheme = !isDark,
         forceDarkTheme = isDark,
+        config = LiquidNavConfig.YouTube,
     )
 }

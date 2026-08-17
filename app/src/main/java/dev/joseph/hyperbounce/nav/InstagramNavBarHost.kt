@@ -120,6 +120,7 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View) {
         },
         circularIndices = if (profileIndex >= 0) setOf(profileIndex) else emptySet(),
         sourceView = backdropSource,
+        config = LiquidNavConfig.Instagram,
     )
 }
 
