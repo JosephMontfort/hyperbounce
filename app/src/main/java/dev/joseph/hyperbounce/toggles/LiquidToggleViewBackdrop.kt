@@ -1,4 +1,4 @@
-package dev.joseph.hyperbounce
+package dev.joseph.hyperbounce.toggles
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -19,18 +19,18 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.Density
 import com.kyant.backdrop.Backdrop
 
-internal data class LiquidSliderCapturedFrame(
+internal data class LiquidToggleCapturedFrame(
     val bitmap: Bitmap,
     val originInWindow: Offset,
 )
 
-internal class LiquidSliderViewBackdrop(private val sourceView: View) : Backdrop {
+internal class LiquidToggleViewBackdrop(private val sourceView: View) : Backdrop {
     override val isCoordinatesDependent: Boolean = true
     var overlayViewToHide: View? = null
 
     private var front: Bitmap? = null
     private var back: Bitmap? = null
-    var capturedFrame: LiquidSliderCapturedFrame? by mutableStateOf(null)
+    var capturedFrame: LiquidToggleCapturedFrame? by mutableStateOf(null)
         private set
 
     private var region: CaptureRegion? = null
@@ -97,19 +97,19 @@ internal class LiquidSliderViewBackdrop(private val sourceView: View) : Backdrop
 
             val hiddenStates = mutableListOf<Pair<View, Int>>()
             
-            fun hideSliders(v: View) {
+            fun hideToggles(v: View) {
                 val name = v.javaClass.simpleName
-                if (v === overlayViewToHide || name.contains("SeekBar") || name.contains("ProgressBar")) {
+                if (v === overlayViewToHide || name.contains("SlidingButton") || name.contains("SlidingSwitch")) {
                     hiddenStates.add(Pair(v, v.visibility))
                     v.visibility = View.INVISIBLE
                 } else if (v is ViewGroup) {
                     for (i in 0 until v.childCount) {
-                        hideSliders(v.getChildAt(i))
+                        hideToggles(v.getChildAt(i))
                     }
                 }
             }
             
-            hideSliders(sourceView)
+            hideToggles(sourceView)
             sourceView.draw(canvas)
 
             for ((child, oldVis) in hiddenStates) {
@@ -121,7 +121,7 @@ internal class LiquidSliderViewBackdrop(private val sourceView: View) : Backdrop
             val previousFront = front
             front = target
             back = previousFront
-            capturedFrame = LiquidSliderCapturedFrame(target, Offset(currentRegion.left.toFloat(), currentRegion.top.toFloat()))
+            capturedFrame = LiquidToggleCapturedFrame(target, Offset(currentRegion.left.toFloat(), currentRegion.top.toFloat()))
             lastCapturedFrame = frameNumber
             lastCaptureNanos = now
         } catch (_: Throwable) {}

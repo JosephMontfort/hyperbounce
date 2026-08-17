@@ -1,4 +1,4 @@
-package dev.joseph.hyperbounce.liquidglass
+package dev.joseph.hyperbounce.toggles.glass
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures

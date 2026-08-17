@@ -1,4 +1,4 @@
-package dev.joseph.hyperbounce;
+package dev.joseph.hyperbounce.toggles;
 
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -30,7 +30,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.WeakHashMap;
 
-public class PhysicsHook extends XposedModule {
+public class LiquidTogglesHook extends XposedModule {
 
     private static final int TRACK_ON = Color.parseColor("#30D158");
     private static final int TRACK_OFF_DARK = Color.parseColor("#39393D");
@@ -481,7 +481,7 @@ public class PhysicsHook extends XposedModule {
             Object result = chain.proceed();
             if (USE_LIQUID_GLASS_SLIDER) {
                 int vis = (Integer) chain.getArg(0);
-                dev.joseph.hyperbounce.LiquidSliderHost.syncVisibility((View) chain.getThisObject(), vis == View.VISIBLE);
+                dev.joseph.hyperbounce.toggles.LiquidSliderHost.syncVisibility((View) chain.getThisObject(), vis == View.VISIBLE);
             }
             return result;
         });
@@ -489,7 +489,7 @@ public class PhysicsHook extends XposedModule {
         hookMethod(clazz, "onDetachedFromWindow", new Class<?>[]{}, chain -> {
             Object result = chain.proceed();
             if (USE_LIQUID_GLASS_SLIDER) {
-                dev.joseph.hyperbounce.LiquidSliderHost.remove((View) chain.getThisObject());
+                dev.joseph.hyperbounce.toggles.LiquidSliderHost.remove((View) chain.getThisObject());
             }
             return result;
         });
@@ -504,14 +504,14 @@ public class PhysicsHook extends XposedModule {
                 if (action == MotionEvent.ACTION_DOWN) {
                     ViewParent parent = view.getParent();
                     if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
-                    dev.joseph.hyperbounce.LiquidSliderHost.setTrackingTouch(view, true);
+                    dev.joseph.hyperbounce.toggles.LiquidSliderHost.setTrackingTouch(view, true);
                 } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-                    dev.joseph.hyperbounce.LiquidSliderHost.setTrackingTouch(view, false);
+                    dev.joseph.hyperbounce.toggles.LiquidSliderHost.setTrackingTouch(view, false);
                 }
                 
                 // DUAL-TOUCH ARCHITECTURE:
                 // 1. Forward offset touch to Compose for liquid glass visual physics
-                dev.joseph.hyperbounce.LiquidSliderHost.forwardTouchEvent(view, event);
+                dev.joseph.hyperbounce.toggles.LiquidSliderHost.forwardTouchEvent(view, event);
                 
                 // 2. Feed original touch into Native Slider to process audio / exact system values!
                 // Clamp Y to the exact center so the native SeekBar always tracks, even when touching the bloomed padding
@@ -560,7 +560,7 @@ public class PhysicsHook extends XposedModule {
             if (w <= 0 || h <= 0) return null;
 
             if (USE_LIQUID_GLASS_SLIDER) {
-                dev.joseph.hyperbounce.LiquidSliderHost.ensure(view);
+                dev.joseph.hyperbounce.toggles.LiquidSliderHost.ensure(view);
                 return null;
             }
 
@@ -793,7 +793,7 @@ public class PhysicsHook extends XposedModule {
 
         if (packageName.equals("miui.systemui.plugin") ||
                 packageName.equals("com.android.systemui")) {
-            dev.joseph.hyperbounce.LiquidKeypadHook.INSTANCE.apply(this, packageClassLoader);
+            dev.joseph.hyperbounce.toggles.LiquidKeypadHook.INSTANCE.apply(this, packageClassLoader);
             try {
                 Class<?> delegateClass = findClassIfExists(
                         "miui.systemui.dynamicisland.anim.DynamicIslandAnimationDelegate",

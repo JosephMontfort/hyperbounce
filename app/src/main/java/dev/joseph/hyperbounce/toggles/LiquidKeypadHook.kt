@@ -1,4 +1,4 @@
-package dev.joseph.hyperbounce
+package dev.joseph.hyperbounce.toggles
 
 import android.graphics.Canvas
 import android.graphics.Color

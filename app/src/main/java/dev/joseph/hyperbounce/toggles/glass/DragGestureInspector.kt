@@ -8,7 +8,7 @@
  * library source. Only the package name was changed for module integration.
  */
 
-package dev.joseph.hyperbounce.liquidglass
+package dev.joseph.hyperbounce.toggles.glass
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown

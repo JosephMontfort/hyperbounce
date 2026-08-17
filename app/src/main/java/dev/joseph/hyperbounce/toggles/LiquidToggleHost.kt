@@ -1,4 +1,4 @@
-package dev.joseph.hyperbounce
+package dev.joseph.hyperbounce.toggles
 
 import android.content.Context
 import android.view.View
@@ -19,7 +19,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import dev.joseph.hyperbounce.liquidglass.LiquidToggle
+import dev.joseph.hyperbounce.FakeLifecycleOwner
+import dev.joseph.hyperbounce.toggles.glass.LiquidToggle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel

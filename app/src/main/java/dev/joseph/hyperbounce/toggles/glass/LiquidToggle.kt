@@ -1,4 +1,4 @@
-package dev.joseph.hyperbounce.liquidglass
+package dev.joseph.hyperbounce.toggles.glass
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -65,7 +65,7 @@ fun LiquidToggle(
     var fraction by remember { mutableFloatStateOf(if (selected()) 1f else 0f) }
     
     val dampedDragAnimation = remember(animationScope) {
-        dev.joseph.hyperbounce.liquidglass.DampedDragAnimation(
+        dev.joseph.hyperbounce.toggles.glass.DampedDragAnimation(
             animationScope = animationScope,
             initialValue = fraction,
             valueRange = 0f..1f,
