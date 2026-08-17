@@ -41,38 +41,20 @@ class DampedDragAnimation(
     val onDrag: DampedDragAnimation.(size: IntSize, dragAmount: Offset) -> Unit,
 ) {
 
-    // Deliberately softer than the original 800 stiffness: the thumb follows
-    // the finger with a very small visual delay instead of looking 1:1 rigid.
     private val valueAnimationSpec =
-        spring(dampingRatio = 0.88f, stiffness = 520f, visibilityThreshold = visibilityThreshold)
-
-    // Intentional click/programmatic-toggle motion. This is separate from drag
-    // motion so taps do not reuse the extremely fast drag spring.
-    private val clickValueAnimationSpec =
-        spring(dampingRatio = 0.92f, stiffness = 260f, visibilityThreshold = visibilityThreshold)
+        spring(dampingRatio = 0.7f, stiffness = 800f, visibilityThreshold = visibilityThreshold)
 
     private val velocityAnimationSpec =
-        spring(dampingRatio = 0.5f, stiffness = 300f, visibilityThreshold * 10f)
-
-    // Slower press bloom for tap interactions so the bloom has time to reach
-    // its full state before the thumb settles.
-    private val clickPressProgressAnimationSpec =
-        spring(dampingRatio = 0.92f, stiffness = 420f, visibilityThreshold = 0.001f)
+        spring(0.5f, 300f, visibilityThreshold * 10f)
 
     private val pressProgressAnimationSpec =
-        spring(dampingRatio = 1f, stiffness = 1000f, visibilityThreshold = 0.001f)
+        spring(1f, 1000f, 0.001f)
 
     private val scaleXAnimationSpec =
-        spring(dampingRatio = 0.6f, stiffness = 250f, visibilityThreshold = 0.001f)
+        spring(0.6f, 250f, 0.001f)
 
     private val scaleYAnimationSpec =
-        spring(dampingRatio = 0.7f, stiffness = 250f, visibilityThreshold = 0.001f)
-
-    private val clickScaleXAnimationSpec =
-        spring(dampingRatio = 0.8f, stiffness = 240f, visibilityThreshold = 0.001f)
-
-    private val clickScaleYAnimationSpec =
-        spring(dampingRatio = 0.85f, stiffness = 240f, visibilityThreshold = 0.001f)
+        spring(0.7f, 250f, 0.001f)
 
     private val valueAnimation = Animatable(initialValue, visibilityThreshold)
     private val velocityAnimation = Animatable(0f, 5f)
@@ -121,29 +103,15 @@ class DampedDragAnimation(
 
     fun release() {
         animationScope.launch {
-            releaseInternal(pressProgressAnimationSpec)
-        }
-    }
-
-    private suspend fun releaseInternal(
-        pressSpec: androidx.compose.animation.core.AnimationSpec<Float> = pressProgressAnimationSpec,
-    ) {
-        if (value != targetValue) {
-            val threshold = (valueRange.endInclusive - valueRange.start) * 0.025f
-            snapshotFlow { valueAnimation.value }
-                .filter { abs(it - valueAnimation.targetValue) < threshold }
-                .first()
-        }
-        coroutineScope {
-            launch {
-                pressProgressAnimation.animateTo(0f, pressSpec)
+            if (value != targetValue) {
+                val threshold = (valueRange.endInclusive - valueRange.start) * 0.025f
+                snapshotFlow { valueAnimation.value }
+                    .filter { abs(it - valueAnimation.targetValue) < threshold }
+                    .first()
             }
-            launch {
-                scaleXAnimation.animateTo(initialScale, scaleXAnimationSpec)
-            }
-            launch {
-                scaleYAnimation.animateTo(initialScale, scaleYAnimationSpec)
-            }
+            launch { pressProgressAnimation.animateTo(0f, pressProgressAnimationSpec) }
+            launch { scaleXAnimation.animateTo(initialScale, scaleXAnimationSpec) }
+            launch { scaleYAnimation.animateTo(initialScale, scaleYAnimationSpec) }
         }
     }
 
@@ -161,47 +129,22 @@ class DampedDragAnimation(
         }
     }
 
-    /**
-     * Used by tap/programmatic state changes. The press bloom is allowed to reach
-     * its full state first, then the thumb settles, then the press state returns.
-     * This deliberately produces a slower, more premium transition than dragging.
-     */
     fun animateToValue(value: Float) {
         animationScope.launch {
             mutatorMutex.mutate {
+                press()
                 val targetValue = value.coerceIn(valueRange)
-
                 launch {
-                    scaleXAnimation.animateTo(pressedScale, clickScaleXAnimationSpec)
+                    valueAnimation.animateTo(targetValue, valueAnimationSpec) {
+                        updateVelocity()
+                    }
                 }
-                launch {
-                    scaleYAnimation.animateTo(pressedScale, clickScaleYAnimationSpec)
+                if (velocity != 0f) {
+                    launch {
+                        velocityAnimation.animateTo(0f, velocityAnimationSpec)
+                    }
                 }
-
-                // Wait for the bloom to develop instead of immediately starting
-                // and cancelling it again on the same frame.
-                pressProgressAnimation.animateTo(
-                    1f,
-                    clickPressProgressAnimationSpec
-                )
-
-                valueAnimation.animateTo(targetValue, clickValueAnimationSpec)
-
-                launch {
-                    velocityAnimation.animateTo(0f, clickValueAnimationSpec)
-                }
-
-                // Give the release animation its own deliberate tail.
-                pressProgressAnimation.animateTo(
-                    0f,
-                    clickPressProgressAnimationSpec
-                )
-                launch {
-                    scaleXAnimation.animateTo(initialScale, clickScaleXAnimationSpec)
-                }
-                launch {
-                    scaleYAnimation.animateTo(initialScale, clickScaleYAnimationSpec)
-                }
+                release()
             }
         }
     }

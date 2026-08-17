@@ -50,16 +50,6 @@ import kotlinx.coroutines.flow.collectLatest
 private class ToggleDragState {
     var didDrag: Boolean = false
 
-    /**
-     * Signed amount by which the finger has travelled beyond an edge.
-     * Negative = beyond the off/left edge, positive = beyond the on/right edge.
-     *
-     * While this value is non-zero the thumb remains pinned to the edge. The
-     * finger must travel back through the same out-of-bounds distance before
-     * the thumb starts moving again. This gives the desired iOS-style
-     * edge-pinning/elastic feel.
-     */
-    var edgeOverscroll: Float = 0f
 }
 
 private class ToggleHapticState(initial: Float) {
@@ -99,88 +89,30 @@ fun LiquidToggle(
             pressedScale = 1.5f,
             onDragStarted = {
                 dragState.didDrag = false
-                dragState.edgeOverscroll = 0f
             },
             onDragStopped = {
                 if (dragState.didDrag) {
                     val target = if (targetValue >= 0.5f) 1f else 0f
-                    dragState.edgeOverscroll = 0f
                     onSelect(target == 1f)
                 } else {
-                    // Tap: the state update is immediate, but the selected-state
-                    // effect below animates the visible thumb deliberately slowly.
-                    dragState.edgeOverscroll = 0f
                     onSelect(!selected())
                 }
                 dragState.didDrag = false
             },
             onDrag = { _, dragAmount ->
-                val delta =
-                    (if (isLtr) dragAmount.x else -dragAmount.x) / dragWidth
+                if (!dragState.didDrag) {
+                    dragState.didDrag = dragAmount.x != 0f
+                }
 
-                if (delta != 0f) {
-                    if (dragState.edgeOverscroll < 0f) {
-                    // Finger is still outside the left edge: consume rightward
-                    // movement until the entire overscroll has been cancelled.
-                    if (delta > 0f) {
-                        val remaining = dragState.edgeOverscroll + delta
-                        if (remaining < 0f) {
-                            dragState.edgeOverscroll = remaining
-                            updateValue(0f)
-                        } else {
-                            dragState.edgeOverscroll = 0f
-                            if (remaining > 0f) {
-                                updateValue((value + remaining).fastCoerceIn(0f, 1f))
-                            } else {
-                                updateValue(0f)
-                            }
-                        }
-                    } else {
-                        dragState.edgeOverscroll += delta
-                        updateValue(0f)
-                    }
-                } else if (dragState.edgeOverscroll > 0f) {
-                    // Finger is still outside the right edge: consume leftward
-                    // movement until the entire overscroll has been cancelled.
-                    if (delta < 0f) {
-                        val remaining = dragState.edgeOverscroll + delta
-                        if (remaining > 0f) {
-                            dragState.edgeOverscroll = remaining
-                            updateValue(1f)
-                        } else {
-                            dragState.edgeOverscroll = 0f
-                            if (remaining < 0f) {
-                                updateValue((value + remaining).fastCoerceIn(0f, 1f))
-                            } else {
-                                updateValue(1f)
-                            }
-                        }
-                    } else {
-                        dragState.edgeOverscroll += delta
-                        updateValue(1f)
-                    }
+                val delta = dragAmount.x / dragWidth
+                val next = if (isLtr) {
+                    value + delta
                 } else {
-                    val rawTarget = value + delta
-
-                    when {
-                        rawTarget < 0f -> {
-                            dragState.edgeOverscroll = rawTarget
-                            updateValue(0f)
-                        }
-                        rawTarget > 1f -> {
-                            dragState.edgeOverscroll = rawTarget - 1f
-                            updateValue(1f)
-                        }
-                        else -> {
-                            updateValue(rawTarget)
-                        }
-                    }
+                    value - delta
                 }
 
-                    if (!dragState.didDrag) {
-                        dragState.didDrag = true
-                    }
-                }
+                updateValue(next.fastCoerceIn(0f, 1f))
+            }
             }
         )
     }
