@@ -1,0 +1,573 @@
+package com.kyant.backdrop.catalog.destinations
+
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.paint
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.isUnspecified
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.toSize
+import androidx.compose.ui.util.fastCoerceAtMost
+import androidx.compose.ui.util.lerp
+import androidx.compose.ui.window.Dialog
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.catalog.components.LiquidButton
+import com.kyant.backdrop.catalog.components.LiquidSlider
+import com.kyant.backdrop.catalog.components.LiquidToggle
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.InnerShadow
+import com.kyant.backdrop.shadow.Shadow
+import com.kyant.shapes.RoundedRectangle
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sin
+import kotlin.math.tanh
+
+enum class MenuAlignment(val label: String) {
+    TopLeading("T-Left"), TopTrailing("T-Right"), BottomLeading("B-Left"), BottomTrailing("B-Right");
+
+    val composeAlignment: Alignment
+        get() = when (this) {
+            TopLeading -> Alignment.TopStart
+            TopTrailing -> Alignment.TopEnd
+            BottomLeading -> Alignment.BottomStart
+            BottomTrailing -> Alignment.BottomEnd
+        }
+
+    val transformOrigin: TransformOrigin
+        get() = when (this) {
+            TopLeading -> TransformOrigin(0f, 0f)
+            TopTrailing -> TransformOrigin(1f, 0f)
+            BottomLeading -> TransformOrigin(0f, 1f)
+            BottomTrailing -> TransformOrigin(1f, 1f)
+        }
+
+    fun calculateOffsetY(blurProgress: Float, maxOffsetPx: Float): Float {
+        return when (this) {
+            TopLeading, TopTrailing -> maxOffsetPx * blurProgress
+            BottomLeading, BottomTrailing -> -maxOffsetPx * blurProgress
+        }
+    }
+}
+
+enum class MenuAnimationPreset(val label: String) {
+    Bouncy("Bouncy"), Smooth("Smooth"), Snappy("Snappy");
+
+    fun getSpec(isClosing: Boolean = false, speedMultiplier: Float = 1f): AnimationSpec<Float> = when (this) {
+        // Ultra-soft settling via lower stiffness and precise threshold
+        Bouncy -> if (isClosing) spring(dampingRatio = 0.8f, stiffness = 200f * (speedMultiplier * speedMultiplier), visibilityThreshold = 0.001f) 
+                  else spring(dampingRatio = 0.55f, stiffness = 120f * (speedMultiplier * speedMultiplier), visibilityThreshold = 0.001f)
+        Smooth -> tween(durationMillis = (650f / speedMultiplier).toInt(), easing = FastOutSlowInEasing)
+        Snappy -> spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow * (speedMultiplier * speedMultiplier))
+    }
+}
+
+// Universal Tuning Component for exposing Physics & Values to the UI
+@Composable
+fun TuningControl(
+    name: String,
+    description: String? = null,
+    value: Float,
+    defaultValue: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    formatValue: (Float) -> String,
+    backdrop: Backdrop,
+    contentColor: Color,
+    secondaryColor: Color
+) {
+    var showCustomInputDialog by remember { mutableStateOf(false) }
+    var customInputValue by remember { mutableStateOf("") }
+    
+    val isLightTheme = !isSystemInDarkTheme()
+    val dialogBg = if (isLightTheme) Color(0xFFF0F0F0) else Color(0xFF222222)
+    val fieldBg = if (isLightTheme) Color.White else Color.Black.copy(alpha = 0.3f)
+
+    if (showCustomInputDialog) {
+        Dialog(onDismissRequest = { showCustomInputDialog = false }) {
+            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(dialogBg).padding(20.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    BasicText("Set value for $name", style = TextStyle(contentColor, 16.sp, FontWeight.SemiBold))
+                    BasicTextField(
+                        value = customInputValue,
+                        onValueChange = { customInputValue = it },
+                        textStyle = TextStyle(contentColor, 16.sp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        cursorBrush = SolidColor(contentColor),
+                        modifier = Modifier.fillMaxWidth().background(fieldBg, RoundedCornerShape(8.dp)).padding(12.dp)
+                    )
+                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                        BasicText("Cancel", modifier = Modifier.clickable { showCustomInputDialog = false }.padding(8.dp), style = TextStyle(secondaryColor, 14.sp))
+                        Spacer(Modifier.width(16.dp))
+                        BasicText("Apply", modifier = Modifier.clickable {
+                            customInputValue.toFloatOrNull()?.let { onValueChange(it) }
+                            showCustomInputDialog = false
+                        }.padding(8.dp), style = TextStyle(Color(0xFF0088FF), 14.sp, FontWeight.Bold))
+                    }
+                }
+            }
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            BasicText(name, style = TextStyle(contentColor, 14.sp, FontWeight.SemiBold))
+            
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (abs(value - defaultValue) > 0.001f) {
+                    BasicText("Reset", modifier = Modifier.clickable { onValueChange(defaultValue) }, style = TextStyle(Color(0xFF0088FF), 12.sp, FontWeight.Medium))
+                }
+                Box(modifier = Modifier.pointerInput(Unit) {
+                    detectTapGestures(onLongPress = {
+                        customInputValue = value.toString()
+                        showCustomInputDialog = true
+                    })
+                }) {
+                    BasicText(formatValue(value), style = TextStyle(secondaryColor, 13.sp, FontWeight.Medium))
+                }
+            }
+        }
+        if (description != null) {
+            BasicText(description, style = TextStyle(secondaryColor, 12.sp, lineHeight = 16.sp), modifier = Modifier.padding(bottom = 2.dp))
+        }
+        LiquidSlider(value = { value }, onValueChange = onValueChange, valueRange = valueRange, visibilityThreshold = 0.001f, backdrop = backdrop)
+    }
+}
+
+@Composable
+fun ExpandableGlassMenu(
+    animatableProgress: Animatable<Float, *>,
+    animationPreset: MenuAnimationPreset,
+    animationSpeedMultiplier: Float = 1f,
+    containerBulgeMultiplier: Float = 0.395f,
+    contentBulgeMultiplier: Float = 0.15f,
+    contentPopX: Float = 0.03f,
+    contentPopY: Float = 0.01f,
+    dragJellyTension: Float = 0.05f,
+    motionBlurAmount: Float = 25f,
+    arcYOffsetDp: Float = 75f,
+    alignment: MenuAlignment,
+    backdrop: Backdrop,
+    isGlassEnabled: Boolean,
+    isHapticsEnabled: Boolean,
+    cornerRadius: Dp,
+    blurRadius: Float,
+    refractionHeight: Float,
+    refractionAmount: Float,
+    chromaticAberration: Boolean,
+    horizontalOffset: Float,
+    verticalOffset: Float,
+    modifier: Modifier = Modifier,
+    labelSize: Size = Size(55f, 55f),
+    label: @Composable () -> Unit,
+    content: @Composable (globalTouchPosition: Offset, closeMenu: () -> Unit, hoveredIndex: Int?, setHovered: (Int?) -> Unit) -> Unit
+) {
+    val density = LocalDensity.current
+    val viewConfiguration = LocalViewConfiguration.current
+    val haptic = LocalHapticFeedback.current
+    val animationScope = rememberCoroutineScope()
+    
+    var contentMeasuredSize by remember { mutableStateOf(Size.Zero) }
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    var isPressed by remember { mutableStateOf(false) }
+    var isDragging by remember { mutableStateOf(false) }
+    var globalTouchPosition by remember { mutableStateOf(Offset.Unspecified) }
+    var labelCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    
+    var hoveredIndex by remember { mutableStateOf<Int?>(null) }
+    val setHovered: (Int?) -> Unit = { hoveredIndex = it }
+
+    val labelSizePx = with(density) { Size(labelSize.width.dp.toPx(), labelSize.height.dp.toPx()) }
+
+    LaunchedEffect(hoveredIndex) {
+        if (isHapticsEnabled && isDragging && hoveredIndex != null) {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
+
+    val closeMenu: () -> Unit = {
+        hoveredIndex = null
+        animationScope.launch { animatableProgress.animateTo(0f, animationPreset.getSpec(isClosing = true, speedMultiplier = animationSpeedMultiplier)) }
+    }
+
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = alignment.composeAlignment) {
+        GlassEffectContainer(
+            animatableProgress = animatableProgress,
+            dragOffset = dragOffset,
+            isPressed = isPressed,
+            containerBulgeMultiplier = containerBulgeMultiplier,
+            contentBulgeMultiplier = contentBulgeMultiplier,
+            contentPopX = contentPopX,
+            contentPopY = contentPopY,
+            dragJellyTension = dragJellyTension,
+            motionBlurAmount = motionBlurAmount,
+            arcYOffsetDp = arcYOffsetDp,
+            alignment = alignment,
+            backdrop = backdrop,
+            isGlassEnabled = isGlassEnabled,
+            cornerRadius = cornerRadius,
+            blurRadius = blurRadius,
+            refractionHeight = refractionHeight,
+            refractionAmount = refractionAmount,
+            chromaticAberration = chromaticAberration,
+            horizontalOffset = horizontalOffset,
+            verticalOffset = verticalOffset,
+            labelSize = labelSizePx,
+            contentSize = contentMeasuredSize,
+            label = {
+                Box(
+                    modifier = Modifier.size(with(density) { labelSizePx.width.toDp() }).onGloballyPositioned { labelCoordinates = it }
+                        .pointerInput(animationPreset, animationSpeedMultiplier) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                isPressed = true
+                                val downPos = down.position
+                                val tapTimeout = viewConfiguration.longPressTimeoutMillis
+                                
+                                var isLongPress = false
+                                var isSimpleDrag = false
+                                var upEvent: androidx.compose.ui.input.pointer.PointerInputChange? = null
+                                
+                                val isExpanded = animatableProgress.value > 0.5f
+                                
+                                val timeoutResult = withTimeoutOrNull(tapTimeout) {
+                                    while (true) {
+                                        val event = awaitPointerEvent(PointerEventPass.Main)
+                                        val change = event.changes.firstOrNull()
+                                        if (change != null) {
+                                            if (!change.pressed) {
+                                                upEvent = change
+                                                break
+                                            } else if ((change.position - downPos).getDistance() > viewConfiguration.touchSlop) {
+                                                isSimpleDrag = true
+                                                break
+                                            }
+                                        }
+                                    }
+                                    true
+                                }
+
+                                if (timeoutResult == null && !isExpanded) {
+                                    isLongPress = true
+                                    animationScope.launch { animatableProgress.animateTo(1f, animationPreset.getSpec(isClosing = false, speedMultiplier = animationSpeedMultiplier)) }
+                                }
+
+                                var tracking = upEvent == null
+                                isDragging = true
+                                while (tracking) {
+                                    val event = awaitPointerEvent(PointerEventPass.Main)
+                                    val change = event.changes.firstOrNull()
+                                    if (change == null || !change.pressed) {
+                                        tracking = false
+                                    } else {
+                                        dragOffset = change.position - downPos
+                                        if (isLongPress || isExpanded) {
+                                            globalTouchPosition = labelCoordinates?.localToWindow(change.position) ?: Offset.Unspecified
+                                        }
+                                        change.consume()
+                                    }
+                                }
+
+                                isPressed = false
+                                isDragging = false
+                                val finalHoveredIndex = hoveredIndex
+
+                                if (upEvent != null && !isSimpleDrag && !isLongPress && timeoutResult != null) {
+                                    upEvent.consume()
+                                    val target = if (isExpanded) 0f else 1f
+                                    animationScope.launch { animatableProgress.animateTo(target, animationPreset.getSpec(isClosing = target == 0f, speedMultiplier = animationSpeedMultiplier)) }
+                                } else if ((isSimpleDrag || isLongPress) && isExpanded) {
+                                    if (finalHoveredIndex != null || dragOffset.getDistance() > 20f) {
+                                        closeMenu()
+                                    }
+                                }
+                                
+                                dragOffset = Offset.Zero
+                                globalTouchPosition = Offset.Unspecified
+                                if (animatableProgress.targetValue == 0f) hoveredIndex = null
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) { label() }
+            },
+            content = {
+                Column(
+                    modifier = Modifier.width(IntrinsicSize.Max).onSizeChanged { if (it.width > 0 && it.height > 0) contentMeasuredSize = it.toSize() }.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    content(globalTouchPosition, closeMenu, hoveredIndex, setHovered)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun GlassEffectContainer(
+    animatableProgress: Animatable<Float, *>,
+    dragOffset: Offset,
+    isPressed: Boolean,
+    containerBulgeMultiplier: Float,
+    contentBulgeMultiplier: Float,
+    contentPopX: Float,
+    contentPopY: Float,
+    dragJellyTension: Float,
+    motionBlurAmount: Float,
+    arcYOffsetDp: Float,
+    alignment: MenuAlignment,
+    backdrop: Backdrop,
+    isGlassEnabled: Boolean,
+    cornerRadius: Dp,
+    blurRadius: Float,
+    refractionHeight: Float,
+    refractionAmount: Float,
+    chromaticAberration: Boolean,
+    horizontalOffset: Float,
+    verticalOffset: Float,
+    labelSize: Size,
+    contentSize: Size,
+    label: @Composable () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val density = LocalDensity.current
+    val isLightTheme = !isSystemInDarkTheme()
+
+    val animatedDragX by animateFloatAsState(dragOffset.x, spring(stiffness = 400f, dampingRatio = 0.6f))
+    val animatedDragY by animateFloatAsState(dragOffset.y, spring(stiffness = 400f, dampingRatio = 0.6f))
+    
+    // Press illumination progress
+    val isPressing = isPressed && animatableProgress.targetValue == 0f
+    val buttonPressProgress by animateFloatAsState(if (isPressing) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 400f))
+
+    Box(
+        modifier = Modifier
+            // ZERO-RECOMPOSITION LAYOUT (Executes measuring natively without calling recompose)
+            .layout { measurable, constraints ->
+                val p = animatableProgress.value
+                val widthDiff = (contentSize.width - labelSize.width).coerceAtLeast(0f)
+                val heightDiff = (contentSize.height - labelSize.height).coerceAtLeast(0f)
+
+                // Vertical Pill Morph (Height pops instantly, width follows softly)
+                val widthProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else (p * p)
+                val heightProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else sin(p * (PI / 2f)).toFloat()
+
+                val currentWidthPx = labelSize.width + widthDiff * widthProgress
+                val currentHeightPx = labelSize.height + heightDiff * heightProgress
+
+                val placeable = measurable.measure(
+                    constraints.copy(
+                        minWidth = currentWidthPx.toInt(),
+                        maxWidth = currentWidthPx.toInt(),
+                        minHeight = currentHeightPx.toInt(),
+                        maxHeight = currentHeightPx.toInt()
+                    )
+                )
+                layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+            }
+            .graphicsLayer {
+                val progress = animatableProgress.value
+                val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
+                val squishScale = 1f - (blurProgress.coerceIn(0f, 1f) * 0.05f)
+
+                val maxOffsetPx = with(density) { arcYOffsetDp.dp.toPx() }
+                val offsetY = alignment.calculateOffsetY(blurProgress, maxOffsetPx)
+
+                val w = size.width
+                val h = size.height
+                val minDim = min(w, h)
+                val maxDim = max(w, h)
+
+                val maxJellyOffset = minDim
+                val initialDerivative = dragJellyTension
+                val jellyTx = if (maxJellyOffset > 0f) maxJellyOffset * tanh(initialDerivative * animatedDragX / maxJellyOffset) else 0f
+                val jellyTy = if (maxJellyOffset > 0f) maxJellyOffset * tanh(initialDerivative * animatedDragY / maxJellyOffset) else 0f
+                
+                val baseScale = lerp(1f, 1f + with(density) { 4f.dp.toPx() } / h, buttonPressProgress)
+                val maxDragScale = with(density) { 4f.dp.toPx() / h }
+                val offsetAngle = atan2(animatedDragY, animatedDragX)
+                
+                val jellySx = baseScale + maxDragScale * abs(cos(offsetAngle) * animatedDragX / maxDim) * (w / h).coerceAtMost(1f)
+                val jellySy = baseScale + maxDragScale * abs(sin(offsetAngle) * animatedDragY / maxDim) * (h / w).coerceAtMost(1f)
+
+                val expandedTx = -animatedDragX * 0.03f
+                val expandedTy = -animatedDragY * 0.03f
+                val expandedStretchX = (1f + abs(animatedDragX) * 0.00005f - abs(animatedDragY) * 0.00005f).coerceIn(0.99f, 1.01f)
+                val expandedStretchY = (1f + abs(animatedDragY) * 0.00005f - abs(animatedDragX) * 0.00005f).coerceIn(0.99f, 1.01f)
+
+                translationX = lerp(jellyTx, expandedTx, progress) + with(density) { horizontalOffset.dp.toPx() * progress }
+                translationY = offsetY + lerp(jellyTy, expandedTy, progress) + with(density) { verticalOffset.dp.toPx() * progress }
+                scaleX = squishScale * lerp(jellySx, expandedStretchX, progress)
+                scaleY = squishScale * lerp(jellySy, expandedStretchY, progress)
+                this.transformOrigin = alignment.transformOrigin
+            }
+            .drawBackdrop(
+                backdrop = backdrop,
+                shape = { RoundedCornerShape(cornerRadius) },
+                effects = {
+                    val progress = animatableProgress.value
+                    if (isGlassEnabled) {
+                        val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
+                        val motionBlur = motionBlurAmount * sin(progress.coerceIn(0f, 1f) * PI).toFloat()
+                        vibrancy()
+                        blur((2f + blurRadius * blurProgress.coerceIn(0f, 1f) + motionBlur).dp.toPx())
+                        lens(refractionHeight.dp.toPx(), refractionAmount.dp.toPx(), depthEffect = true, chromaticAberration = chromaticAberration)
+                    }
+                },
+                highlight = { if (isGlassEnabled) Highlight.Default.copy(alpha = 0.65f) else null },
+                shadow = { Shadow(radius = 18.dp, color = Color.Black.copy(alpha = 0.12f)) },
+                innerShadow = { if (isGlassEnabled) InnerShadow(radius = 10.dp, color = Color.White.copy(alpha = 0.25f)) else null },
+                onDrawSurface = {
+                    val progress = animatableProgress.value
+                    val cr = cornerRadius.toPx()
+                    drawRoundRect(
+                        color = if (isLightTheme) Color.White.copy(alpha = 0.28f + 0.12f * progress) else Color(0xFF1E1E1E).copy(alpha = 0.35f + 0.15f * progress),
+                        cornerRadius = CornerRadius(cr, cr)
+                    )
+                    if (progress == 0f && buttonPressProgress > 0f) {
+                        drawRoundRect(color = Color.White.copy(alpha = 0.15f * buttonPressProgress), cornerRadius = CornerRadius(cr, cr), blendMode = BlendMode.Plus)
+                    }
+                }
+            )
+            .clip(RoundedCornerShape(cornerRadius)),
+        contentAlignment = alignment.composeAlignment
+    ) {
+        Box(
+            modifier = Modifier
+                .wrapContentSize(unbounded = true, align = alignment.composeAlignment) 
+                .graphicsLayer {
+                    val progress = animatableProgress.value
+                    val rawContentProgress = if (progress > 1f) 1f + (progress - 1f) * contentBulgeMultiplier else (progress - 0.35f) / 0.65f
+                    val minAspectScale = if (contentSize.width > 0f && contentSize.height > 0f) { min(labelSize.width / contentSize.width, labelSize.height / contentSize.height) } else 1f
+                    val baseScale = minAspectScale + (1f - minAspectScale) * rawContentProgress
+                    
+                    // iOS Squish stretching from the absolute center
+                    val pop = sin(progress.coerceIn(0f, 1f) * PI).toFloat()
+                    
+                    alpha = rawContentProgress.coerceIn(0f, 1f)
+                    scaleX = baseScale + pop * contentPopX
+                    scaleY = baseScale + pop * contentPopY
+                    this.transformOrigin = TransformOrigin.Center
+                }
+        ) {
+            content()
+        }
+
+        Box(
+            modifier = Modifier.graphicsLayer { 
+                val progress = animatableProgress.value
+                val labelOpacity = (progress / 0.35f).coerceIn(0f, 1f)
+                alpha = 1f - labelOpacity 
+            }
+        ) {
+            label()
+        }
+    }
+}
+
+@Composable
+fun MenuRow(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    contentColor: Color,
+    secondaryColor: Color,
+    isHovered: Boolean,
+    onHoverChange: (Boolean) -> Unit,
+    globalTouchPosition: Offset,
+    onClick: () -> Unit
+) {
+    var rowCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    
+    val contains = remember(globalTouchPosition, rowCoords) {
+        if (globalTouchPosition.isUnspecified || rowCoords == null) false
+        else rowCoords!!.boundsInWindow().contains(globalTouchPosition)
+    }
+    
+    LaunchedEffect(contains) { onHoverChange(contains) }
+
+    val hoverAlpha by animateFloatAsState(if (isHovered) 0.1f else 0f, tween(150))
+
+    Row(
+        modifier = Modifier.fillMaxWidth().onGloballyPositioned { rowCoords = it }.clip(RoundedCornerShape(14.dp)).clickable { onClick() }.background(contentColor.copy(alpha = hoverAlpha)).padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(modifier = Modifier.size(24.dp).paint(rememberVectorPainter(icon), colorFilter = ColorFilter.tint(contentColor)))
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            BasicText(title, style = TextStyle(contentColor, 15.sp, FontWeight.SemiBold))
+            BasicText(description, style = TextStyle(secondaryColor, 12.sp), maxLines = 1)
+        }
+    }
+}
