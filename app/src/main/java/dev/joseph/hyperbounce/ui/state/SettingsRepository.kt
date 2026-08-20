@@ -16,6 +16,7 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlin.jvm.JvmName
 import kotlin.reflect.KProperty
 
 private const val PREFS_NAME = "hyperbounce_settings"
@@ -50,18 +51,22 @@ class SettingsRepository(context: Context) {
 
     val globalGlass = GlobalGlassHolder()
 
+    @JvmName("setModuleEnabledExplicit")
     fun setModuleEnabled(value: Boolean) {
         moduleEnabled = value
     }
 
+    @JvmName("setToggleEngineExplicit")
     fun setToggleEngine(value: RenderEngine) {
         toggleEngine = value
     }
 
+    @JvmName("setSliderEngineExplicit")
     fun setSliderEngine(value: RenderEngine) {
         sliderEngine = value
     }
 
+    @JvmName("setKeypadEnabledExplicit")
     fun setKeypadEnabled(value: Boolean) {
         keypadEnabled = value
     }
@@ -108,13 +113,21 @@ class SettingsRepository(context: Context) {
             enabled, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, themeMode, accent
         )
 
+        @JvmName("setEnabledExplicit")
         fun setEnabled(v: Boolean) { enabled = v }
+        @JvmName("setGlassIntensityExplicit")
         fun setGlassIntensity(v: Float) { glassIntensity = v }
+        @JvmName("setContainerOpacityExplicit")
         fun setContainerOpacity(v: Float) { containerOpacity = v }
+        @JvmName("setCornerRadiusExplicit")
         fun setCornerRadius(v: Float) { cornerRadius = v }
+        @JvmName("setBarHeightExplicit")
         fun setBarHeight(v: Float) { barHeight = v }
+        @JvmName("setTabWidthExplicit")
         fun setTabWidth(v: Float) { tabWidth = v }
+        @JvmName("setThemeModeExplicit")
         fun setThemeMode(v: ThemeMode) { themeMode = v }
+        @JvmName("setAccentExplicit")
         fun setAccent(v: AccentPreset) { accent = v }
 
         fun reloadFromDefaults() {
@@ -154,13 +167,21 @@ class SettingsRepository(context: Context) {
             dragSensitivity, springDamping, springStiffness
         )
 
+        @JvmName("setBlurDpExplicit")
         fun setBlurDp(v: Float) { blurDp = v }
+        @JvmName("setLensSizeDpExplicit")
         fun setLensSizeDp(v: Float) { lensSizeDp = v }
+        @JvmName("setLensDepthDpExplicit")
         fun setLensDepthDp(v: Float) { lensDepthDp = v }
+        @JvmName("setHighlightStrengthExplicit")
         fun setHighlightStrength(v: Float) { highlightStrength = v }
+        @JvmName("setShadowRadiusDpExplicit")
         fun setShadowRadiusDp(v: Float) { shadowRadiusDp = v }
+        @JvmName("setDragSensitivityExplicit")
         fun setDragSensitivity(v: Float) { dragSensitivity = v }
+        @JvmName("setSpringDampingExplicit")
         fun setSpringDamping(v: Float) { springDamping = v }
+        @JvmName("setSpringStiffnessExplicit")
         fun setSpringStiffness(v: Float) { springStiffness = v }
 
         fun reloadFromDefaults() {
@@ -197,11 +218,17 @@ class SettingsRepository(context: Context) {
             enabled, blurDp, refractionHeightDp, refractionAmountDp, chromaticAberration, hapticsEnabled
         )
 
+        @JvmName("setEnabledExplicit")
         fun setEnabled(v: Boolean) { enabled = v }
+        @JvmName("setBlurDpExplicit")
         fun setBlurDp(v: Float) { blurDp = v }
+        @JvmName("setRefractionHeightDpExplicit")
         fun setRefractionHeightDp(v: Float) { refractionHeightDp = v }
+        @JvmName("setRefractionAmountDpExplicit")
         fun setRefractionAmountDp(v: Float) { refractionAmountDp = v }
+        @JvmName("setChromaticAberrationExplicit")
         fun setChromaticAberration(v: Boolean) { chromaticAberration = v }
+        @JvmName("setHapticsEnabledExplicit")
         fun setHapticsEnabled(v: Boolean) { hapticsEnabled = v }
 
         fun reloadFromDefaults() {
