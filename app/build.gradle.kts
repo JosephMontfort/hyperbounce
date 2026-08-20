@@ -62,6 +62,12 @@ dependencies {
     implementation("org.jetbrains.compose.ui:ui:1.11.1")
     implementation("org.jetbrains.compose.ui:ui-graphics:1.11.1")
     implementation("org.jetbrains.compose.material:material-ripple:1.11.1")
+    // Added for the settings UI (Phase 1): screen-to-screen push/pop transitions
+    // (AnimatedContent). The rest of the app's animation (springs, Animatable) already
+    // came transitively via compose.foundation, same as every other file in this repo,
+    // but AnimatedContent lives in the separate "animation" artifact, so it's declared
+    // explicitly here rather than assumed transitive.
+    implementation("org.jetbrains.compose.animation:animation:1.11.1")
 
     // Kyant's actual Liquid Glass backdrop engine. Shared by the nav-bar engine
     // (dev.joseph.hyperbounce.nav.glass) and the toggle/slider engine

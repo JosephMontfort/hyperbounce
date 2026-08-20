@@ -1,4 +1,11 @@
-package com.kyant.backdrop.catalog.components
+package dev.joseph.hyperbounce.ui.glass
+
+/*
+ * Faithful port of com.kyant.backdrop.catalog.components.LiquidButton from the
+ * AndroidLiquidGlass 2.0.0 demo catalog (backdrop library by Kyant0). Unmodified logic —
+ * only the package changed. This is the base "jelly, touch-and-pulled" interactive glass
+ * surface: CircularGlassBackButton and the picker rows in this app build on top of it.
+ */
 
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
@@ -20,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.catalog.utils.InteractiveHighlight
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens

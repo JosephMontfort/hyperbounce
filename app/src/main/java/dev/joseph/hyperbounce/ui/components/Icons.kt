@@ -1,0 +1,252 @@
+package dev.joseph.hyperbounce.ui.components
+
+/*
+ * This project has no icon-font/vector-icon dependency (only backdrop/shapes + Compose
+ * foundation are on the classpath), so the handful of glyphs the settings UI needs are
+ * hand-drawn here with Canvas/Path — sized and stroked to read as SF Symbols-style thin/
+ * medium-weight line icons, matching iOS 26's system iconography as closely as a hand-
+ * drawn path reasonably can without shipping Apple's actual glyphs.
+ */
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import kotlin.math.cos
+import kotlin.math.sin
+
+@Composable
+fun ChevronIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 14.dp,
+    strokeWidth: Dp = 2f.dp,
+    pointingLeft: Boolean = true
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val path = Path().apply {
+            if (pointingLeft) {
+                moveTo(w * 0.68f, h * 0.08f)
+                lineTo(w * 0.28f, h * 0.5f)
+                lineTo(w * 0.68f, h * 0.92f)
+            } else {
+                moveTo(w * 0.32f, h * 0.08f)
+                lineTo(w * 0.72f, h * 0.5f)
+                lineTo(w * 0.32f, h * 0.92f)
+            }
+        }
+        drawPath(
+            path,
+            color = color,
+            style = Stroke(
+                width = strokeWidth.toPx(),
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round
+            )
+        )
+    }
+}
+
+@Composable
+fun CheckmarkIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 16.dp,
+    strokeWidth: Dp = 2.2f.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val path = Path().apply {
+            moveTo(w * 0.18f, h * 0.54f)
+            lineTo(w * 0.42f, h * 0.78f)
+            lineTo(w * 0.84f, h * 0.26f)
+        }
+        drawPath(
+            path,
+            color = color,
+            style = Stroke(
+                width = strokeWidth.toPx(),
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round
+            )
+        )
+    }
+}
+
+@Composable
+fun ResetArrowIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 18.dp,
+    strokeWidth: Dp = 2f.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val cx = w / 2f
+        val cy = h / 2f
+        val r = w * 0.34f
+        val path = Path().apply {
+            addArc(
+                androidx.compose.ui.geometry.Rect(cx - r, cy - r, cx + r, cy + r),
+                startAngleDegrees = -50f,
+                sweepAngleDegrees = 270f
+            )
+        }
+        drawPath(
+            path,
+            color = color,
+            style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
+        )
+        // arrowhead at the open end (angle -50deg on the circle)
+        val angle = Math.toRadians(-50.0)
+        val tipX = cx + r * cos(angle).toFloat()
+        val tipY = cy + r * sin(angle).toFloat()
+        val headPath = Path().apply {
+            moveTo(tipX - w * 0.14f, tipY - h * 0.05f)
+            lineTo(tipX, tipY)
+            lineTo(tipX - w * 0.02f, tipY + h * 0.16f)
+        }
+        drawPath(
+            headPath,
+            color = color,
+            style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+    }
+}
+
+@Composable
+fun InfoIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 18.dp,
+    strokeWidth: Dp = 2f.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        drawCircle(
+            color = color,
+            radius = w * 0.04f,
+            center = Offset(w / 2f, h * 0.28f)
+        )
+        val path = Path().apply {
+            moveTo(w * 0.5f, h * 0.44f)
+            lineTo(w * 0.5f, h * 0.82f)
+        }
+        drawPath(
+            path,
+            color = color,
+            style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
+        )
+    }
+}
+
+@Composable
+fun SlidersIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 18.dp,
+    strokeWidth: Dp = 1.8f.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val rows = listOf(0.28f, 0.5f, 0.72f)
+        val knobs = listOf(0.32f, 0.66f, 0.46f)
+        rows.forEachIndexed { i, yFrac ->
+            val y = h * yFrac
+            drawLine(
+                color = color.copy(alpha = 0.45f),
+                start = Offset(w * 0.08f, y),
+                end = Offset(w * 0.92f, y),
+                strokeWidth = strokeWidth.toPx(),
+                cap = StrokeCap.Round
+            )
+            drawCircle(
+                color = color,
+                radius = w * 0.07f,
+                center = Offset(w * knobs[i], y)
+            )
+        }
+    }
+}
+
+@Composable
+fun AppGridIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 18.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val cell = w * 0.34f
+        val gap = w * 0.1f
+        val radius = CornerRadius(w * 0.12f, h * 0.12f)
+        for (row in 0..1) {
+            for (col in 0..1) {
+                val x = col * (cell + gap)
+                val y = row * (cell + gap)
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(x, y),
+                    size = Size(cell, cell),
+                    cornerRadius = radius
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PowerIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 18.dp,
+    strokeWidth: Dp = 2f.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val cx = w / 2f
+        val cy = h / 2f
+        val r = w * 0.32f
+        val arc = Path().apply {
+            addArc(
+                androidx.compose.ui.geometry.Rect(cx - r, cy - r, cx + r, cy + r),
+                startAngleDegrees = -240f,
+                sweepAngleDegrees = 300f
+            )
+        }
+        drawPath(arc, color = color, style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round))
+        drawLine(
+            color = color,
+            start = Offset(cx, h * 0.12f),
+            end = Offset(cx, cy),
+            strokeWidth = strokeWidth.toPx(),
+            cap = StrokeCap.Round
+        )
+    }
+}
+
+/** A faint dashed baseline used behind some preview strips. */
+fun dashedStroke(width: Dp, dp: Dp = 6f.dp, gap: Dp = 6f.dp) = Stroke(
+    width = width.value,
+    cap = StrokeCap.Round,
+    pathEffect = PathEffect.dashPathEffect(floatArrayOf(dp.value, gap.value))
+)

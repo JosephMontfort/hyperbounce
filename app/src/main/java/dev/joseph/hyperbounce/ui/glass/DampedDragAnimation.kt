@@ -1,4 +1,11 @@
-package com.kyant.backdrop.catalog.utils
+package dev.joseph.hyperbounce.ui.glass
+
+/*
+ * Faithful port of com.kyant.backdrop.catalog.utils.DampedDragAnimation from the
+ * AndroidLiquidGlass 2.0.0 demo catalog (backdrop library by Kyant0). Drives the
+ * spring-damped value/press/scale state behind LiquidToggle and LiquidSlider.
+ * Unmodified logic — only the package changed.
+ */
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring

@@ -1,4 +1,12 @@
-package com.kyant.backdrop.catalog.utils
+package dev.joseph.hyperbounce.ui.glass
+
+/*
+ * Faithful port of com.kyant.backdrop.catalog.utils.InteractiveHighlight from the
+ * AndroidLiquidGlass 2.0.0 demo catalog (backdrop library by Kyant0). This is the "jelly"
+ * driver: a radial highlight that follows the touch point plus a press-progress value,
+ * both of which LiquidButton/CircularGlassButton read to translate+scale the glass layer
+ * toward the finger while pressed. Unmodified logic — only the package changed.
+ */
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter

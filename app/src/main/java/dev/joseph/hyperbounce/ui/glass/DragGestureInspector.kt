@@ -1,14 +1,12 @@
-/*
- * Ported verbatim from AndroidLiquidGlass-kmp 2.0.0.
- * Upstream: https://github.com/Kyant0/AndroidLiquidGlass-kmp
- * License: Apache License 2.0. Original LICENSE retained in module root.
- *
- * This file is intentionally kept structurally equivalent to the upstream
- * implementation so future maintainers can compare it directly against the
- * library source. Only the package name was changed for module integration.
- */
+package dev.joseph.hyperbounce.ui.glass
 
-package com.kyant.backdrop.catalog.utils
+/*
+ * Faithful port of com.kyant.backdrop.catalog.utils.DragGestureInspector from the
+ * AndroidLiquidGlass 2.0.0 demo catalog (backdrop library by Kyant0), used here for the
+ * HyperBounce settings UI. Unmodified logic — only the package changed. See
+ * docs/UI_DESIGN_NOTES.md for why the UI keeps its own copy of these primitives instead
+ * of sharing dev.joseph.hyperbounce.nav.glass / dev.joseph.hyperbounce.toggles.glass.
+ */
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown

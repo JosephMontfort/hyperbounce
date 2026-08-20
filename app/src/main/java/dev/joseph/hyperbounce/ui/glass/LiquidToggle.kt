@@ -1,4 +1,10 @@
-package com.kyant.backdrop.catalog.components
+package dev.joseph.hyperbounce.ui.glass
+
+/*
+ * Faithful port of com.kyant.backdrop.catalog.components.LiquidToggle from the
+ * AndroidLiquidGlass 2.0.0 demo catalog (backdrop library by Kyant0). Unmodified logic —
+ * only the package changed. Used for every on/off switch in the HyperBounce settings UI.
+ */
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -34,7 +40,6 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.catalog.utils.DampedDragAnimation
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
