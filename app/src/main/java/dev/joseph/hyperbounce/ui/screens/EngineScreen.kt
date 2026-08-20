@@ -37,7 +37,7 @@ fun EngineScreen(
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             BasicText(
                 "Toggle Switches",
-                modifier = Modifier.padding(horizontal = 4.dp, bottom = 8.dp),
+                modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 8.dp),
                 style = HyperBounceType.footnote.copy(color = colors.secondaryLabel)
             )
             SegmentedGlassPicker(
@@ -50,7 +50,7 @@ fun EngineScreen(
 
             BasicText(
                 "Sliders",
-                modifier = Modifier.padding(horizontal = 4.dp, top = 18.dp, bottom = 8.dp),
+                modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 18.dp, bottom = 8.dp),
                 style = HyperBounceType.footnote.copy(color = colors.secondaryLabel)
             )
             SegmentedGlassPicker(

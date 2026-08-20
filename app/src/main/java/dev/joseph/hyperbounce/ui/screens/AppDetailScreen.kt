@@ -163,7 +163,7 @@ fun AppDetailScreen(
 
             BasicText(
                 "Accent Color",
-                modifier = Modifier.padding(horizontal = 4.dp, top = 18.dp, bottom = 10.dp),
+                modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 18.dp, bottom = 10.dp),
                 style = HyperBounceType.footnote.copy(color = colors.secondaryLabel)
             )
             Row(

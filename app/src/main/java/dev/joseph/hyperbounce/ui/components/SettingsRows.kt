@@ -40,7 +40,7 @@ fun SectionHeader(text: String, colors: HyperBounceColors, modifier: Modifier = 
         modifier = modifier.padding(start = 20.dp, top = 20.dp, bottom = 6.dp),
         style = HyperBounceType.caption.copy(
             color = colors.secondaryLabel,
-            letterSpacing = 0.6.sp()
+            letterSpacing = 0.6f.sp()
         )
     )
 }
