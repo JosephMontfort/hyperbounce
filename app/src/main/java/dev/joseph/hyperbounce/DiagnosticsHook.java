@@ -4,6 +4,7 @@ import android.util.Log;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 
 public class DiagnosticsHook extends XposedModule {
     private static final String TAG = "HyperBounce-Trace";
@@ -14,43 +15,50 @@ public class DiagnosticsHook extends XposedModule {
         
         if (!param.getPackageName().equals("com.miui.home")) return;
 
-        Log.e(TAG, "[*] Injecting MIUI Home Unlock Tracer...");
+        // Using LibXposed's native logger to bypass MIUI log suppression
+        log(Log.ERROR, TAG, "[*] Injecting MIUI Home Unlock Tracer...");
 
-        String[][] targets = {
-            {"com.miui.home.launcher.anim.UnlockAnimationManager", "startUnlockAnimation"},
-            {"com.miui.home.launcher.anim.UnlockAnimationManager", "playUnlockAnimation"},
-            {"com.miui.home.launcher.anim.LaunchAndExitAnimator", "startUnlockAnimation"},
-            {"com.miui.home.recents.util.UnlockAnimationPlugin", "startUnlockAnimation"},
-            {"com.miui.home.launcher.Workspace", "onUnlockAnimationStart"},
-            {"com.miui.home.launcher.Workspace", "startUnlockAnimation"}
+        String[] targetClasses = {
+            "com.miui.home.launcher.anim.UnlockAnimationManager",
+            "com.miui.home.launcher.anim.LaunchAndExitAnimator",
+            "com.miui.home.recents.util.UnlockAnimationPlugin",
+            "com.miui.home.launcher.Workspace"
         };
 
-        for (String[] target : targets) {
+        for (String className : targetClasses) {
             try {
-                Class<?> clazz = Class.forName(target[0], false, param.getClassLoader());
+                Class<?> clazz = Class.forName(className, false, param.getClassLoader());
                 for (Method m : clazz.getDeclaredMethods()) {
-                    if (m.getName().equals(target[1])) {
+                    int modifiers = m.getModifiers();
+                    // Skip abstract, native, or synthetic methods to prevent ART Thread crashes
+                    if (Modifier.isAbstract(modifiers) || Modifier.isNative(modifiers) || (modifiers & 0x1000) != 0) {
+                        continue;
+                    }
+
+                    String name = m.getName();
+                    // Hook ANY method containing "unlock" (ignoring generic getters/setters)
+                    if (name.toLowerCase().contains("unlock") && !name.startsWith("get") && !name.startsWith("set")) {
                         try {
                             hook(m).intercept(chain -> {
-                                Log.e(TAG, "\n[+] TRIGGERED: " + target[0] + "." + target[1]);
+                                log(Log.ERROR, TAG, "\n[+] TRIGGERED: " + className + "." + name);
                                 String stack = Log.getStackTraceString(new Exception("UnlockTrace"));
                                 String[] lines = stack.split("\n");
                                 StringBuilder sb = new StringBuilder();
-                                // Print the first 8 lines of the stack trace to see the caller
-                                for(int i = 0; i < Math.min(8, lines.length); i++) {
+                                // Print the first 6 lines of the stack trace to see the caller
+                                for(int i = 0; i < Math.min(6, lines.length); i++) {
                                     sb.append(lines[i]).append("\n");
                                 }
-                                Log.e(TAG, sb.toString());
+                                log(Log.ERROR, TAG, sb.toString());
                                 return chain.proceed();
                             });
-                            Log.e(TAG, "[+] Successfully hooked: " + target[1] + " in " + target[0]);
+                            log(Log.ERROR, TAG, "[+] Hooked: " + name + " in " + className);
                         } catch (Throwable t) {
-                            Log.e(TAG, "[-] Failed to hook " + target[1], t);
+                            // Silently skip if method mapping fails
                         }
                     }
                 }
             } catch (Throwable t) {
-                // Silently skip if class doesn't exist on this MIUI version
+                log(Log.ERROR, TAG, "[-] Class not found on this firmware: " + className);
             }
         }
     }

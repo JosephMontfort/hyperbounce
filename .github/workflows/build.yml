@@ -2,7 +2,7 @@ name: Build HyperBounce Release
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: [ "master", "main", "diagnostics-tracer" ]
   workflow_dispatch:
 
 permissions:
