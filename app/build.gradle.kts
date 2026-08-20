@@ -36,6 +36,6 @@ android {
 }
 
 dependencies {
-    compileOnly("de.robv.android.xposed:api:82")
-    compileOnly("de.robv.android.xposed:api:82:sources")
+    // Swapped from legacy api:82 to modern libxposed api:102
+    compileOnly("io.github.libxposed:api:102.0.0")
 }
