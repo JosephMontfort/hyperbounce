@@ -68,11 +68,14 @@ private fun HyperBounceApp(repository: SettingsRepository) {
 
     CompositionLocalProvider(LocalGlassSettings provides repository.globalGlass.snapshot()) {
     Box(
-        Modifier
-            .fillMaxSize()
-            .layerBackdrop(backdrop)
+        Modifier.fillMaxSize()
     ) {
-        HyperBounceWallpaper(colors, Modifier.fillMaxSize())
+        HyperBounceWallpaper(
+            colors,
+            Modifier
+                .fillMaxSize()
+                .layerBackdrop(backdrop)
+        )
 
         AnimatedContent(
             targetState = current,
