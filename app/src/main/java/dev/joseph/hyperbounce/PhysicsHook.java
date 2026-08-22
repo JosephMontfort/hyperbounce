@@ -60,8 +60,12 @@ public class PhysicsHook extends XposedModule {
             // Hook 1: Map the grid distances seamlessly without recursive calls
             Method showMethod = userPresentClass.getDeclaredMethod("showUserPresentAnimation", View.class, int.class, boolean.class);
             hook(showMethod).intercept(chain -> {
-                View view = (View) chain.args[0];
-                boolean arg2 = (boolean) chain.args[2];
+                // API 102 Compatibility: Safely extract arguments 
+                Object rawArgs = chain.getArgs();
+                Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                
+                View view = (View) args[0];
+                boolean arg2 = (boolean) args[2];
                 if (view != null) {
                     try {
                         int[] loc = new int[2];
@@ -118,8 +122,17 @@ public class PhysicsHook extends XposedModule {
             hook(constructor).intercept(chain -> {
                 if (isAnimating.get()) {
                     loadConfig();
-                    float startVal = (float) chain.args[2];
-                    chain.args[2] = startVal * config.zDepthMultiplier;
+                    
+                    Object rawArgs = chain.getArgs();
+                    
+                    // API 102 Strict Compliance: Arguments are immutable. We must clone them.
+                    Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : ((Object[]) rawArgs).clone();
+                    
+                    float startVal = (float) args[2];
+                    args[2] = startVal * config.zDepthMultiplier;
+                    
+                    // Proceed with our newly modified arguments array
+                    return chain.proceed(args);
                 }
                 return chain.proceed();
             });
