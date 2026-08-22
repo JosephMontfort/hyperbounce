@@ -9,10 +9,7 @@ import java.io.File;
 import java.io.FileInputStream;
 
 public class ConfigProvider extends ContentProvider {
-    @Override
-    public boolean onCreate() {
-        return true;
-    }
+    @Override public boolean onCreate() { return true; }
 
     @Override
     public Bundle call(String method, String arg, Bundle extras) {

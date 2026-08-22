@@ -49,22 +49,15 @@ public class MainActivity extends Activity {
         appTitle.setPadding(0, 0, 0, 20);
         rootLayout.addView(appTitle);
 
-        TextView modeTitle = new TextView(this);
-        modeTitle.setText("Select Animation Engine Mode:");
-        modeTitle.setTextSize(14);
-        modeTitle.setTextColor(Color.DKGRAY);
-        rootLayout.addView(modeTitle);
-
         Spinner modeSpinner = new Spinner(this);
         String[] modes = {
-            "Mode 0: iOS Radial Dispersion (Original Classic)",
-            "Mode 1: Kinetic Y-Axis Cascade (Velocity Dependent)"
+            "Mode 0: iOS Radial Dispersion (Original Favorite)",
+            "Mode 1: Kinetic Y-Axis Cascade (Velocity Engine)"
         };
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, modes);
         modeSpinner.setAdapter(adapter);
         modeSpinner.setSelection(currentConfig.optInt("animMode", 1));
         modeSpinner.setPadding(0, 10, 0, 30);
-
         rootLayout.addView(modeSpinner);
 
         slidersLayout = new LinearLayout(this);
@@ -86,7 +79,6 @@ public class MainActivity extends Activity {
 
     private void renderSliders(int mode) {
         slidersLayout.removeAllViews();
-
         if (mode == 0) {
             addSlider("centerDamping", "Center Damping", "Bounce of center apps. Lower = more bounce.", 0.1f, 1.0f, 0.58f);
             addSlider("centerResponse", "Center Response (s)", "Time for center apps to settle.", 0.1f, 1.5f, 0.48f);
@@ -100,13 +92,13 @@ public class MainActivity extends Activity {
             addSlider("dockResponse", "Dock Response (s)", "Speed for dock icons.", 0.1f, 1.5f, 0.40f);
             addSlider("zDepthMultiplier", "3D Z-Depth Scale", "Multiplies initial 3D spawn distance.", 1.0f, 4.0f, 1.60f);
         } else {
-            addSlider("durationScale", "Overall Animation Speed Multiplier", "Scales the entire animation speed (1.0 = Default, 1.5 = Slow Motion).", 0.1f, 3.0f, 1.0f);
-            addSlider("velocityInfluence", "Velocity Impact Multiplier", "How heavily swipe speed alters the baseline tuning parameters.", 0.0f, 2.0f, 1.0f);
-            addSlider("zDepthPunch", "Base Z-Depth Scale", "Multiplies how deep icons spawn in the Z-axis.", 1.0f, 5.0f, 2.0f);
-            addSlider("cascadeDamping", "Base Cascade Damping", "Critically damped resting friction before velocity modifiers.", 0.5f, 1.0f, 0.92f);
-            addSlider("cascadeBaseResponse", "Base Cascade Response (s)", "Speed of upper rows before velocity modifiers.", 0.2f, 1.5f, 0.50f);
-            addSlider("cascadeRowStagger", "Row Stagger Delay Step", "Mathematical delay gap between each row.", 0.0f, 0.10f, 0.035f);
-            addSlider("maxVelocity", "Max Measured Swipe Velocity", "SystemUI normalizer for physical swipe speeds.", 5000.0f, 30000.0f, 16000.0f);
+            addSlider("durationScale", "Overall Animation Duration Multiplier", "Scales the entire animation speed globally.", 0.1f, 3.0f, 1.0f);
+            addSlider("velocityInfluence", "Velocity Impact Multiplier", "Scales how violently swipe speed affects the physics.", 0.0f, 2.0f, 1.0f);
+            addSlider("zDepthPunch", "Base Z-Depth Multiplier", "Forces bottom rows to have deep 3D travel distance.", 1.0f, 5.0f, 1.5f);
+            addSlider("cascadeDamping", "Base Cascade Damping", "Resting friction before velocity modifiers.", 0.5f, 1.0f, 0.95f);
+            addSlider("cascadeBaseResponse", "Base Cascade Response (s)", "Baseline speed of settling.", 0.2f, 1.5f, 0.62f);
+            addSlider("cascadeRowStagger", "Row Stagger Delay Step", "Mathematical delay gap between each row.", 0.0f, 0.10f, 0.040f);
+            addSlider("maxVelocity", "Max Swipe Velocity", "Normalization limit for swipe momentum.", 5000.0f, 30000.0f, 16000.0f);
         }
     }
 
@@ -139,14 +131,12 @@ public class MainActivity extends Activity {
 
     private void addSlider(String key, String label, String desc, float min, float max, float defVal) {
         float savedVal = (float) currentConfig.optDouble(key, defVal);
-
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.VERTICAL);
         row.setPadding(0, 10, 0, 30);
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
-
         TextView title = new TextView(this);
         title.setText(label);
         title.setTextSize(15);
@@ -171,18 +161,16 @@ public class MainActivity extends Activity {
 
         LinearLayout controls = new LinearLayout(this);
         controls.setOrientation(LinearLayout.HORIZONTAL);
-
         SeekBar seekBar = new SeekBar(this);
         seekBar.setMax(1000);
         seekBar.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-
+        
         if (savedVal > max) seekBar.setProgress(1000);
         else if (savedVal < min) seekBar.setProgress(0);
         else seekBar.setProgress((int) (((savedVal - min) / (max - min)) * 1000));
 
         Button resetBtn = new Button(this);
         resetBtn.setText("Reset");
-
         controls.addView(seekBar);
         controls.addView(resetBtn);
         row.addView(controls);
@@ -213,8 +201,7 @@ public class MainActivity extends Activity {
             builder.setTitle("Enter custom " + label);
             final EditText input = new EditText(MainActivity.this);
             input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL | InputType.TYPE_NUMBER_FLAG_SIGNED);
-            float cv = (float) currentConfig.optDouble(key, defVal);
-            input.setText(String.valueOf(cv));
+            input.setText(String.valueOf((float) currentConfig.optDouble(key, defVal)));
             builder.setView(input);
             builder.setPositiveButton("Set", (dialog, which) -> {
                 try {
@@ -222,12 +209,8 @@ public class MainActivity extends Activity {
                     currentConfig.put(key, newVal);
                     saveConfig();
                     valText.setText(String.format("%.3f", newVal));
-                    if (newVal > max) seekBar.setProgress(1000);
-                    else if (newVal < min) seekBar.setProgress(0);
-                    else seekBar.setProgress((int) (((newVal - min) / (max - min)) * 1000));
-                } catch (Exception e) {
-                    Toast.makeText(MainActivity.this, "Invalid number", Toast.LENGTH_SHORT).show();
-                }
+                    seekBar.setProgress((int) (((newVal - min) / (max - min)) * 1000));
+                } catch (Exception e) {}
             });
             builder.setNegativeButton("Cancel", null);
             builder.show();
@@ -236,13 +219,12 @@ public class MainActivity extends Activity {
 
         row.setOnLongClickListener(manualInput);
         valText.setOnLongClickListener(manualInput);
-
         slidersLayout.addView(row);
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        menu.add(0, 1, 0, "Restart Launcher").setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+        menu.add(0, 1, 0, "Restart Launcher & UI").setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
         return true;
     }
 
@@ -251,10 +233,9 @@ public class MainActivity extends Activity {
         if (item.getItemId() == 1) {
             try {
                 Runtime.getRuntime().exec("su -c killall com.miui.home");
-                Toast.makeText(this, "Launcher Restarted", Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
-                Toast.makeText(this, "Failed to restart (Root missing?)", Toast.LENGTH_SHORT).show();
-            }
+                Runtime.getRuntime().exec("su -c killall com.android.systemui");
+                Toast.makeText(this, "Restarted successfully", Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {}
             return true;
         }
         return super.onOptionsItemSelected(item);
