@@ -84,7 +84,11 @@ public class PhysicsHook extends XposedModule {
                 Method dispatchTouch = shadeViewClass.getDeclaredMethod("dispatchTouchEvent", android.view.MotionEvent.class);
                 hook(dispatchTouch).intercept(chain -> {
                     try {
-                        android.view.MotionEvent event = (android.view.MotionEvent) chain.getArgs()[0];
+                        // FIX: Safely convert List to Array for libxposed compatibility
+                        Object rawArgs = chain.getArgs();
+                        Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                        android.view.MotionEvent event = (android.view.MotionEvent) args[0];
+                        
                         int action = event.getActionMasked();
                         
                         if (action == android.view.MotionEvent.ACTION_DOWN) {
