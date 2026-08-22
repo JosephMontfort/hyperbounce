@@ -38,11 +38,11 @@ fun EngineScreen(
         onBack = onBack
     ) {
         SectionHeader("Rendering Engine", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { cardBackdrop ->
             EngineRow(
                 title = "Toggle Switches",
                 colors = colors,
-                backdrop = backdrop,
+                backdrop = cardBackdrop,
                 selected = repository.toggleEngine,
                 onSelect = repository::setToggleEngine
             )
@@ -50,7 +50,7 @@ fun EngineScreen(
             EngineRow(
                 title = "Sliders",
                 colors = colors,
-                backdrop = backdrop,
+                backdrop = cardBackdrop,
                 selected = repository.sliderEngine,
                 onSelect = repository::setSliderEngine
             )
@@ -62,13 +62,13 @@ fun EngineScreen(
             colors
         )
 
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
             SettingsToggleRow(
                 title = "Liquid Glass Keypad",
                 subtitle = "Dialer & lock screen keypad glass effect",
                 colors = colors,
                 iconTint = colors.accentBlue.copy(alpha = 0.85f),
-                backdrop = backdrop,
+                backdrop = cardBackdrop,
                 checked = repository.keypadEnabled,
                 onCheckedChange = repository::setKeypadEnabled,
                 icon = { SlidersIcon(color = Color.White, size = 14.dp) }

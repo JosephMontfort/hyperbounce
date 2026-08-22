@@ -56,7 +56,7 @@ fun AboutScreen(
         }
 
         SectionHeader("Status", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
             AboutRow(
                 "This build",
                 "Settings UI only — every screen you've just used reads and writes real preferences, but the Xposed hooks don't read them yet.",
@@ -71,7 +71,7 @@ fun AboutScreen(
         }
 
         SectionHeader("Built With", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
             AboutRow(
                 "AndroidLiquidGlass 2.0.0",
                 "Every toggle, slider, and the dropdown menu in this app is built on Kyant0's backdrop + shapes libraries.",

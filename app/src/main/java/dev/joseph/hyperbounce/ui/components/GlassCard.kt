@@ -12,9 +12,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
@@ -29,8 +31,9 @@ fun GlassCard(
     backdrop: Backdrop,
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 18.dp,
-    content: @Composable ColumnScope.() -> Unit
+    content: @Composable ColumnScope.(Backdrop) -> Unit
 ) {
+    val contentBackdrop = rememberLayerBackdrop()
     Column(
         modifier
             .fillMaxWidth()
@@ -45,6 +48,7 @@ fun GlassCard(
                 highlight = { Highlight.Default.copy(alpha = 0.34f) },
                 shadow = { Shadow(radius = 14.dp, color = Color.Black.copy(alpha = 0.10f)) },
                 innerShadow = { InnerShadow(radius = 7.dp, color = Color.White.copy(alpha = 0.11f)) },
+                exportedBackdrop = contentBackdrop,
                 onDrawSurface = {
                     drawRoundRect(
                         color = Color.White.copy(alpha = 0.055f),
@@ -52,7 +56,7 @@ fun GlassCard(
                     )
                 }
             ),
-        content = content
+        content = { content(contentBackdrop) }
     )
 }
 

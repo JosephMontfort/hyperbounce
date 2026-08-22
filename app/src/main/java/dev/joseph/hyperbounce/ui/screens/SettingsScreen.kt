@@ -40,13 +40,13 @@ fun SettingsScreen(
         onReset = repository::resetToDefaults,
         onAbout = { onNavigate(Destination.About) }
     ) {
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
             SettingsToggleRow(
                 title = "HyperBounce Enabled",
                 subtitle = if (repository.moduleEnabled) "All liquid glass effects are active" else "Effects paused everywhere",
                 colors = colors,
                 iconTint = colors.accentGreen.copy(alpha = 0.85f),
-                backdrop = backdrop,
+                backdrop = cardBackdrop,
                 checked = repository.moduleEnabled,
                 onCheckedChange = repository::setModuleEnabled,
                 icon = { PowerIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
@@ -54,13 +54,13 @@ fun SettingsScreen(
         }
 
         SectionHeader("Appearance", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
             SettingsToggleRow(
                 title = "Liquid Glass Effects",
                 subtitle = if (glass.enabled) "Real blur & refraction everywhere" else "Flat translucent surfaces",
                 colors = colors,
                 iconTint = colors.accentBlue.copy(alpha = 0.85f),
-                backdrop = backdrop,
+                backdrop = cardBackdrop,
                 checked = glass.enabled,
                 onCheckedChange = repository.globalGlass::setEnabled,
                 icon = { SlidersIcon(color = Color.White, size = 14.dp) }
@@ -69,7 +69,7 @@ fun SettingsScreen(
             SettingsSliderRow(
                 title = "Blur",
                 colors = colors,
-                backdrop = backdrop,
+                backdrop = cardBackdrop,
                 value = glass.blurDp,
                 onValueChange = repository.globalGlass::setBlurDp,
                 valueRange = 0f..16f,
@@ -80,7 +80,7 @@ fun SettingsScreen(
             SettingsSliderRow(
                 title = "Refraction Height",
                 colors = colors,
-                backdrop = backdrop,
+                backdrop = cardBackdrop,
                 value = glass.refractionHeightDp,
                 onValueChange = repository.globalGlass::setRefractionHeightDp,
                 valueRange = 0f..24f,
@@ -91,7 +91,7 @@ fun SettingsScreen(
             SettingsSliderRow(
                 title = "Refraction Amount",
                 colors = colors,
-                backdrop = backdrop,
+                backdrop = cardBackdrop,
                 value = glass.refractionAmountDp,
                 onValueChange = repository.globalGlass::setRefractionAmountDp,
                 valueRange = 0f..30f,
@@ -103,7 +103,7 @@ fun SettingsScreen(
                 title = "Chromatic Aberration",
                 colors = colors,
                 iconTint = colors.accentOrange.copy(alpha = 0.85f),
-                backdrop = backdrop,
+                backdrop = cardBackdrop,
                 checked = glass.chromaticAberration,
                 onCheckedChange = repository.globalGlass::setChromaticAberration,
                 icon = { SlidersIcon(color = Color.White, size = 14.dp) }
@@ -114,7 +114,7 @@ fun SettingsScreen(
                 subtitle = "Felt when dragging over the menu",
                 colors = colors,
                 iconTint = colors.accentGreen.copy(alpha = 0.85f),
-                backdrop = backdrop,
+                backdrop = cardBackdrop,
                 checked = glass.hapticsEnabled,
                 onCheckedChange = repository.globalGlass::setHapticsEnabled,
                 icon = { PowerIcon(color = Color.White, size = 14.dp) }
@@ -126,7 +126,7 @@ fun SettingsScreen(
         )
 
         SectionHeader("About", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
             SettingsNavRow(
                 title = "About HyperBounce",
                 subtitle = "Version, credits",

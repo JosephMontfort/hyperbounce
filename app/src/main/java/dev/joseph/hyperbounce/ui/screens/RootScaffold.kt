@@ -45,8 +45,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceIn
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dev.joseph.hyperbounce.ui.components.AppGridIcon
 import dev.joseph.hyperbounce.ui.components.CopyIcon
 import dev.joseph.hyperbounce.ui.components.InfoIcon
@@ -81,7 +79,6 @@ fun RootScaffold(
 
     val scrollState = rememberScrollState()
     val collapseProgress = (scrollState.value / 160f).fastCoerceIn(0f, 1f)
-    val contentBackdrop = rememberLayerBackdrop()
 
     fun closeMenu() {
         menuAnimationScope.launch {
@@ -104,7 +101,6 @@ fun RootScaffold(
         Column(
             Modifier
                 .fillMaxSize()
-                .layerBackdrop(contentBackdrop)
                 .safeDrawingPadding()
                 .verticalScroll(scrollState)
         ) {
@@ -137,7 +133,7 @@ fun RootScaffold(
         }
 
         ProgressiveBlurHeader(
-            backdrop = contentBackdrop,
+            backdrop = backdrop,
             tintColor = colors.background,
             modifier = Modifier
                 .fillMaxWidth()

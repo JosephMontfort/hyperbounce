@@ -30,8 +30,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceIn
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dev.joseph.hyperbounce.ui.components.CircularGlassBackButton
 import dev.joseph.hyperbounce.ui.glass.ProgressiveBlurHeader
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
@@ -52,13 +50,11 @@ fun ScreenScaffold(
     // from the app-wide `backdrop` (which the toggles/sliders/menus sample) so the
     // progressive blur below reflects the actual list content passing underneath it, not
     // the plain wallpaper.
-    val contentBackdrop = rememberLayerBackdrop()
 
     Box(Modifier.fillMaxSize()) {
         Column(
             Modifier
                 .fillMaxSize()
-                .layerBackdrop(contentBackdrop)
                 .safeDrawingPadding()
                 .verticalScroll(scrollState)
         ) {
@@ -88,7 +84,7 @@ fun ScreenScaffold(
         }
 
         ProgressiveBlurHeader(
-            backdrop = contentBackdrop,
+            backdrop = backdrop,
             tintColor = colors.background,
             modifier = Modifier
                 .fillMaxWidth()

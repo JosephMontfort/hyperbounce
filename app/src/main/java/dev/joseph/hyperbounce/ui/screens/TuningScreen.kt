@@ -43,7 +43,7 @@ fun TuningScreen(
         onAbout = { onNavigate(Destination.About) }
     ) {
         SectionHeader("Apps", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
             NavApp.entries.forEachIndexed { index, app ->
                 SettingsNavRow(
                     title = app.displayName,
@@ -65,7 +65,7 @@ fun TuningScreen(
         )
 
         SectionHeader("Engine", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
             SettingsNavRow(
                 title = "Toggles & Sliders",
                 subtitle = engineSummary(repository),
