@@ -86,22 +86,29 @@ public class MainActivity extends Activity {
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(30, 20, 30, 0);
+        
+        // Button to view original source code
+        Button viewSourceBtn = new Button(this);
+        viewSourceBtn.setText("View Original Source Code");
+        viewSourceBtn.setOnClickListener(v -> showOriginalCodeDialog());
+        layout.addView(viewSourceBtn);
 
         Switch enableSwitch = new Switch(this);
         enableSwitch.setText("Enable Dynamic Script Injection");
         enableSwitch.setChecked(currentConfig.optBoolean("useCustomScript", false));
+        enableSwitch.setPadding(0, 20, 0, 10);
         layout.addView(enableSwitch);
 
         TextView info = new TextView(this);
-        info.setText("Write raw JavaScript. Returns [damping, response].\nVars: isDockView, dist, vx, vy, screenW, screenH");
+        info.setText("Write raw JavaScript. Must return [damping, response].\nVars: isDockView, dist, vx, vy, screenW, screenH");
         info.setPadding(0, 10, 0, 10);
         info.setTextColor(Color.GRAY);
         layout.addView(info);
 
         final EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setTypeface(Typeface.MONOSPACE);
-        input.setLines(12);
+        input.setLines(14);
         input.setGravity(android.view.Gravity.TOP | android.view.Gravity.LEFT);
         
         String defScript = "// Available Variables:\n// isDockView (boolean), dist (float 0.0 to 1.0)\n// vx, vy (absolute icon coordinates)\n// screenW, screenH (screen dimensions)\n\nfunction getPhysics() {\n    if (isDockView) {\n        return [0.70, 0.40];\n    }\n    var damping = 0.52 - (dist * 0.10);\n    var response = 0.48 + (dist * 0.22);\n    return [damping, response];\n}\ngetPhysics();";
@@ -127,6 +134,60 @@ public class MainActivity extends Activity {
             }
         });
         builder.setNegativeButton("Cancel", null);
+        builder.show();
+    }
+
+    private void showOriginalCodeDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Original MIUI Decompiled Source");
+        
+        ScrollView scroll = new ScrollView(this);
+        TextView codeView = new TextView(this);
+        codeView.setTextIsSelectable(true);
+        codeView.setTypeface(Typeface.MONOSPACE);
+        codeView.setTextSize(11);
+        codeView.setPadding(30, 30, 30, 30);
+        
+        String sourceCode = "/* ==========================================\n" +
+            " * TARGET: com.miui.home.launcher.compat.UserPresentAnimationCompatPhone\n" +
+            " * ========================================== */\n\n" +
+            "private float[] getDampingResponse() {\n" +
+            "    if (DeviceConfigs.isInFoldDeviceLargeScreen(Application.getInstance())) {\n" +
+            "        if (DeviceLevelUtils.isHighAnimationRate()) {\n" +
+            "            return new float[]{0.85f, 0.55f};\n" +
+            "        }\n" +
+            "        return new float[]{0.9f, 0.4f};\n" +
+            "    }\n" +
+            "    if (DeviceLevelUtils.isHighAnimationRate()) {\n" +
+            "        return new float[]{0.85f, 0.6f};\n" +
+            "    }\n" +
+            "    return new float[]{0.9f, 0.45f};\n" +
+            "}\n\n" +
+            "void showUserPresentAnimation(final View view, int i, boolean z) {\n" +
+            "    if (view == null) return;\n" +
+            "    processViewLayerType(view);\n" +
+            "    float[] dampingResponse = getDampingResponse();\n" +
+            "    this.mAllAnimationViewNum++;\n\n" +
+            "    final int iIntValue = ((Integer) getTagAndClear(view, R$id.user_present_animation_child_to_pivot_x, 0)).intValue();\n" +
+            "    final int iIntValue2 = ((Integer) getTagAndClear(view, R$id.user_present_animation_child_to_pivot_y, 0)).intValue();\n" +
+            "    float fFloatValue = ((Float) getTagAndClear(view, R$id.user_present_animation_child_to_pivot_z, Float.valueOf(0.0f))).floatValue();\n" +
+            "    view.setPivotX(view.getWidth() / 2.0f);\n" +
+            "    view.setPivotY(view.getHeight() / 2.0f);\n" +
+            "    float f = fFloatValue + UserPresentAnimationCompatComplex.minDis;\n" +
+            "    view.setTag(R$id.user_present_animation_alpha_playing, Boolean.FALSE);\n\n" +
+            "    final boolean zIsBlurSupported = isBlurSupported();\n" +
+            "    final float fDp2px = DimenUtils.dp2px(10.0f);\n" +
+            "    SpringAnimator springAnimator = new SpringAnimator(dampingResponse[0], dampingResponse[1], f, 0.0f);\n" +
+            "    springAnimator.setUpdateListener(...);\n" +
+            "    springAnimator.setAnimatorListenerAdapter(this.mAnimatorListener);\n" +
+            "    springAnimator.lambda$new$1();\n" +
+            "    view.setTag(R$id.view_animation_z, springAnimator);\n" +
+            "}\n";
+            
+        codeView.setText(sourceCode);
+        scroll.addView(codeView);
+        builder.setView(scroll);
+        builder.setPositiveButton("Close", null);
         builder.show();
     }
 
