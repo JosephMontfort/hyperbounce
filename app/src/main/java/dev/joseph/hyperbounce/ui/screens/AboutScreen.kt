@@ -1,5 +1,7 @@
 package dev.joseph.hyperbounce.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,12 +16,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.shadow.Shadow
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
@@ -32,6 +28,7 @@ fun AboutScreen(
     backdrop: Backdrop,
     onBack: () -> Unit
 ) {
+    val isDark = isSystemInDarkTheme()
     ScreenScaffold(
         title = "About",
         colors = colors,
@@ -39,23 +36,12 @@ fun AboutScreen(
         onBack = onBack
     ) {
         Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-            val shape = RoundedCornerShape(28.dp)
             Box(
                 Modifier
                     .size(88.dp)
-                    .drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { shape },
-                        effects = {
-                            vibrancy()
-                            blur(3f.dp.toPx())
-                            lens(14f.dp.toPx(), 26f.dp.toPx())
-                        },
-                        highlight = { Highlight.Ambient },
-                        shadow = { Shadow(radius = 14f.dp, color = Color.Black.copy(alpha = 0.2f)) },
-                        onDrawSurface = { drawRect(colors.accentBlue.copy(alpha = 0.16f)) }
-                    )
-                    .clip(shape)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
+                    .background(colors.accentBlue.copy(alpha = 0.18f))
             )
         }
 
@@ -88,7 +74,7 @@ fun AboutScreen(
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             AboutRow(
                 "AndroidLiquidGlass 2.0.0",
-                "Every glass surface in this app — buttons, toggles, sliders, cards, this expandable menu — is built on Kyant0's backdrop + shapes libraries.",
+                "Every toggle, slider, and the dropdown menu in this app is built on Kyant0's backdrop + shapes libraries.",
                 colors
             )
             RowDivider(colors.separator, insetStart = 16.dp)

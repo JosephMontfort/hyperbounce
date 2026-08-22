@@ -1,17 +1,13 @@
 package dev.joseph.hyperbounce.ui.components
 
 /*
- * The floating circular back button every subpage in this app uses, built the same way
- * the library's own LiquidButton is: an InteractiveHighlight drives a radial highlight
- * plus press/drag-driven translation and squish on the backdrop's own graphicsLayer, so
- * touching and dragging the button in any direction makes the glass itself stretch toward
- * your finger like a soft, jelly-like blob before springing back — exactly the "jelly
- * effect when touched and pulled" behavior already baked into this library.
- *
- * Reads LocalGlassSettings for blur/refraction/chromatic-aberration and the master switch
- * (Home screen's "Liquid Glass Effects" toggle): when off, this renders as a flat
- * translucent circle instead of real backdrop blur — the jelly press/drag motion still
- * works either way, only the material changes. See GlobalGlassSettings' kdoc.
+ * The floating circular back button every subpage in this app uses. Per the app's
+ * aesthetic direction, glass/backdrop is reserved for toggles, sliders, and the dropdown/
+ * popup menus only — everything else (this button included) is flat. The "jelly" touch-
+ * and-drag interaction stays: InteractiveHighlight still drives a radial touch glow plus
+ * press/drag-driven translation and squish on a plain graphicsLayer, so the button still
+ * stretches toward your finger and springs back — that's a motion/interaction quality, not
+ * a rendering one, so it doesn't need a backdrop to work.
  */
 
 import androidx.compose.foundation.LocalIndication
@@ -35,15 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.shadow.Shadow
-import com.kyant.shapes.Capsule
 import dev.joseph.hyperbounce.ui.glass.InteractiveHighlight
-import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -53,63 +41,41 @@ import kotlin.math.tanh
 @Composable
 fun CircularGlassBackButton(
     onClick: () -> Unit,
+    // Kept for call-site compatibility with the rest of the app (every screen already
+    // passes its shared backdrop here) even though this button no longer draws glass —
+    // harmless to keep threading it in case that changes again.
     backdrop: Backdrop,
     modifier: Modifier = Modifier,
     size: Dp = 40.dp
 ) {
-    val glass = LocalGlassSettings.current
     val isDark = isSystemInDarkTheme()
     val animationScope = rememberCoroutineScope()
     val interactiveHighlight = remember(animationScope) {
         InteractiveHighlight(animationScope = animationScope)
     }
 
-    val jellyLayerBlock: androidx.compose.ui.graphics.GraphicsLayerScope.() -> Unit = {
-        val progress = interactiveHighlight.pressProgress
-        val scale = lerp(1f, 1f + 4f.dp.toPx() / this.size.height, progress)
-
-        val maxOffset = this.size.minDimension
-        val initialDerivative = 0.06f
-        val offset = interactiveHighlight.offset
-        translationX = maxOffset * tanh(initialDerivative * offset.x / maxOffset)
-        translationY = maxOffset * tanh(initialDerivative * offset.y / maxOffset)
-
-        val maxDragScale = 5f.dp.toPx() / this.size.height
-        val offsetAngle = atan2(offset.y, offset.x)
-        scaleX = scale + maxDragScale * abs(cos(offsetAngle) * offset.x / this.size.maxDimension)
-            .fastCoerceAtMost(1f)
-        scaleY = scale + maxDragScale * abs(sin(offsetAngle) * offset.y / this.size.maxDimension)
-            .fastCoerceAtMost(1f)
-    }
-
     Box(
         modifier
             .size(size)
-            .then(
-                if (glass.enabled) {
-                    Modifier.drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { Capsule() },
-                        effects = {
-                            vibrancy()
-                            blur(glass.blurDp.dp.toPx() / 3f)
-                            lens(
-                                glass.refractionHeightDp.dp.toPx(),
-                                glass.refractionAmountDp.dp.toPx(),
-                                chromaticAberration = glass.chromaticAberration
-                            )
-                        },
-                        highlight = { Highlight.Ambient },
-                        shadow = { Shadow(radius = 8f.dp, color = Color.Black.copy(alpha = 0.16f)) },
-                        layerBlock = jellyLayerBlock
-                    )
-                } else {
-                    Modifier
-                        .clip(CircleShape)
-                        .background(if (isDark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.1f))
-                        .graphicsLayer(block = jellyLayerBlock)
-                }
-            )
+            .clip(CircleShape)
+            .background(if (isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f))
+            .graphicsLayer {
+                val progress = interactiveHighlight.pressProgress
+                val scale = lerp(1f, 1f + 4f.dp.toPx() / this.size.height, progress)
+
+                val maxOffset = this.size.minDimension
+                val initialDerivative = 0.06f
+                val offset = interactiveHighlight.offset
+                translationX = maxOffset * tanh(initialDerivative * offset.x / maxOffset)
+                translationY = maxOffset * tanh(initialDerivative * offset.y / maxOffset)
+
+                val maxDragScale = 5f.dp.toPx() / this.size.height
+                val offsetAngle = atan2(offset.y, offset.x)
+                scaleX = scale + maxDragScale * abs(cos(offsetAngle) * offset.x / this.size.maxDimension)
+                    .fastCoerceAtMost(1f)
+                scaleY = scale + maxDragScale * abs(sin(offsetAngle) * offset.y / this.size.maxDimension)
+                    .fastCoerceAtMost(1f)
+            }
             .clickable(
                 interactionSource = null,
                 indication = LocalIndication.current,
@@ -120,6 +86,11 @@ fun CircularGlassBackButton(
             .then(interactiveHighlight.gestureModifier),
         contentAlignment = Alignment.Center
     ) {
-        ChevronIcon(color = Color.White, size = 13.dp, strokeWidth = 2.4.dp, pointingLeft = true)
+        ChevronIcon(
+            color = if (isDark) Color.White else Color.Black.copy(alpha = 0.82f),
+            size = 13.dp,
+            strokeWidth = 2.4.dp,
+            pointingLeft = true
+        )
     }
 }

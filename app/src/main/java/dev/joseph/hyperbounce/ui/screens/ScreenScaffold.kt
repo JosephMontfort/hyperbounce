@@ -2,10 +2,10 @@ package dev.joseph.hyperbounce.ui.screens
 
 /*
  * Every subpage in this app (AppDetail x3, Engine, About) shares this scaffold: a
- * floating circular glass back button (jelly touch-and-drag, see
- * ui/components/CircularGlassBackButton.kt) pinned to the top-start corner, and a large
- * iOS-style title that collapses into the top bar as the user scrolls — mirroring
- * UINavigationBar's large-title behavior.
+ * floating circular back button (jelly touch-and-drag) pinned to the top-start corner, a
+ * large iOS-style title that collapses into the top bar as the user scrolls, and a
+ * progressive blur (ui/glass/ProgressiveBlurHeader.kt) behind that top bar so scrolling
+ * content dissolves into the blur rather than being hard-clipped by it.
  */
 
 import androidx.compose.foundation.layout.Box
@@ -30,7 +30,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceIn
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dev.joseph.hyperbounce.ui.components.CircularGlassBackButton
+import dev.joseph.hyperbounce.ui.glass.ProgressiveBlurHeader
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 
@@ -45,11 +48,17 @@ fun ScreenScaffold(
 ) {
     val scrollState = rememberScrollState()
     val collapseProgress = (scrollState.value / 220f).fastCoerceIn(0f, 1f)
+    // A separate, local backdrop tagging just this screen's scrolling content — kept apart
+    // from the app-wide `backdrop` (which the toggles/sliders/menus sample) so the
+    // progressive blur below reflects the actual list content passing underneath it, not
+    // the plain wallpaper.
+    val contentBackdrop = rememberLayerBackdrop()
 
     Box(Modifier.fillMaxSize()) {
         Column(
             Modifier
                 .fillMaxSize()
+                .layerBackdrop(contentBackdrop)
                 .safeDrawingPadding()
                 .verticalScroll(scrollState)
         ) {
@@ -77,6 +86,14 @@ fun ScreenScaffold(
             content()
             Spacer(Modifier.height(56.dp))
         }
+
+        ProgressiveBlurHeader(
+            backdrop = contentBackdrop,
+            tintColor = colors.background,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(130.dp)
+        )
 
         Row(
             Modifier

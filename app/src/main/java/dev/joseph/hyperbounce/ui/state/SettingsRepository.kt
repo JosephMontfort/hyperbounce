@@ -3,12 +3,23 @@ package dev.joseph.hyperbounce.ui.state
 /*
  * Persists every setting from SettingsModels.kt to a plain SharedPreferences file
  * ("hyperbounce_settings"). This file is the natural handoff point for Phase 2: the
- * Xposed hooks will read the same file via XSharedPreferences once wiring begins (see
- * docs/UI_DESIGN_NOTES.md). Nothing on the hook side reads it yet in this Phase 1 build.
+ * Xposed hooks read the same file via a small XSharedPreferences-based reader (see
+ * dev.joseph.hyperbounce.prefs.HyperBouncePrefs) once wiring begins — see
+ * docs/UI_DESIGN_NOTES.md and docs/PHASE2_BACKEND_WIRING.md.
  *
  * One primitive SharedPreferences entry per field (no JSON/serialization dependency
  * needed — none is present in this project, and this keeps every value independently
  * readable/writable, which matters once XSharedPreferences reads it from another process).
+ *
+ * Every property below is `var x by ... private set` PLUS an explicit `fun setX(...)`
+ * (so callers can pass a bound method reference like `repository::setModuleEnabled`
+ * instead of a property-setter reference, which Kotlin doesn't let you take for a
+ * private-set property from outside the class). Kotlin compiles a private-set property's
+ * setter to a JVM method with the same erased signature as the explicit `setX(...)`
+ * function, which the JVM rejects as a duplicate method ("platform declaration clash")
+ * regardless of the property setter's Kotlin-level visibility. Every explicit setter here
+ * carries `@JvmName(...)` to give it a distinct JVM-level symbol while keeping the Kotlin
+ * source name (and therefore every call site) unchanged.
  */
 
 import android.content.Context
@@ -51,22 +62,22 @@ class SettingsRepository(context: Context) {
 
     val globalGlass = GlobalGlassHolder()
 
-    @JvmName("setModuleEnabledExplicit")
+    @JvmName("setModuleEnabledPref")
     fun setModuleEnabled(value: Boolean) {
         moduleEnabled = value
     }
 
-    @JvmName("setToggleEngineExplicit")
+    @JvmName("setToggleEnginePref")
     fun setToggleEngine(value: RenderEngine) {
         toggleEngine = value
     }
 
-    @JvmName("setSliderEngineExplicit")
+    @JvmName("setSliderEnginePref")
     fun setSliderEngine(value: RenderEngine) {
         sliderEngine = value
     }
 
-    @JvmName("setKeypadEnabledExplicit")
+    @JvmName("setKeypadEnabledPref")
     fun setKeypadEnabled(value: Boolean) {
         keypadEnabled = value
     }
@@ -113,21 +124,21 @@ class SettingsRepository(context: Context) {
             enabled, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, themeMode, accent
         )
 
-        @JvmName("setEnabledExplicit")
+        @JvmName("setEnabledPref")
         fun setEnabled(v: Boolean) { enabled = v }
-        @JvmName("setGlassIntensityExplicit")
+        @JvmName("setGlassIntensityPref")
         fun setGlassIntensity(v: Float) { glassIntensity = v }
-        @JvmName("setContainerOpacityExplicit")
+        @JvmName("setContainerOpacityPref")
         fun setContainerOpacity(v: Float) { containerOpacity = v }
-        @JvmName("setCornerRadiusExplicit")
+        @JvmName("setCornerRadiusPref")
         fun setCornerRadius(v: Float) { cornerRadius = v }
-        @JvmName("setBarHeightExplicit")
+        @JvmName("setBarHeightPref")
         fun setBarHeight(v: Float) { barHeight = v }
-        @JvmName("setTabWidthExplicit")
+        @JvmName("setTabWidthPref")
         fun setTabWidth(v: Float) { tabWidth = v }
-        @JvmName("setThemeModeExplicit")
+        @JvmName("setThemeModePref")
         fun setThemeMode(v: ThemeMode) { themeMode = v }
-        @JvmName("setAccentExplicit")
+        @JvmName("setAccentPref")
         fun setAccent(v: AccentPreset) { accent = v }
 
         fun reloadFromDefaults() {
@@ -167,21 +178,21 @@ class SettingsRepository(context: Context) {
             dragSensitivity, springDamping, springStiffness
         )
 
-        @JvmName("setBlurDpExplicit")
+        @JvmName("setBlurDpPref")
         fun setBlurDp(v: Float) { blurDp = v }
-        @JvmName("setLensSizeDpExplicit")
+        @JvmName("setLensSizeDpPref")
         fun setLensSizeDp(v: Float) { lensSizeDp = v }
-        @JvmName("setLensDepthDpExplicit")
+        @JvmName("setLensDepthDpPref")
         fun setLensDepthDp(v: Float) { lensDepthDp = v }
-        @JvmName("setHighlightStrengthExplicit")
+        @JvmName("setHighlightStrengthPref")
         fun setHighlightStrength(v: Float) { highlightStrength = v }
-        @JvmName("setShadowRadiusDpExplicit")
+        @JvmName("setShadowRadiusDpPref")
         fun setShadowRadiusDp(v: Float) { shadowRadiusDp = v }
-        @JvmName("setDragSensitivityExplicit")
+        @JvmName("setDragSensitivityPref")
         fun setDragSensitivity(v: Float) { dragSensitivity = v }
-        @JvmName("setSpringDampingExplicit")
+        @JvmName("setSpringDampingPref")
         fun setSpringDamping(v: Float) { springDamping = v }
-        @JvmName("setSpringStiffnessExplicit")
+        @JvmName("setSpringStiffnessPref")
         fun setSpringStiffness(v: Float) { springStiffness = v }
 
         fun reloadFromDefaults() {
@@ -218,17 +229,17 @@ class SettingsRepository(context: Context) {
             enabled, blurDp, refractionHeightDp, refractionAmountDp, chromaticAberration, hapticsEnabled
         )
 
-        @JvmName("setEnabledExplicit")
+        @JvmName("setEnabledPref")
         fun setEnabled(v: Boolean) { enabled = v }
-        @JvmName("setBlurDpExplicit")
+        @JvmName("setBlurDpPref")
         fun setBlurDp(v: Float) { blurDp = v }
-        @JvmName("setRefractionHeightDpExplicit")
+        @JvmName("setRefractionHeightDpPref")
         fun setRefractionHeightDp(v: Float) { refractionHeightDp = v }
-        @JvmName("setRefractionAmountDpExplicit")
+        @JvmName("setRefractionAmountDpPref")
         fun setRefractionAmountDp(v: Float) { refractionAmountDp = v }
-        @JvmName("setChromaticAberrationExplicit")
+        @JvmName("setChromaticAberrationPref")
         fun setChromaticAberration(v: Boolean) { chromaticAberration = v }
-        @JvmName("setHapticsEnabledExplicit")
+        @JvmName("setHapticsEnabledPref")
         fun setHapticsEnabled(v: Boolean) { hapticsEnabled = v }
 
         fun reloadFromDefaults() {

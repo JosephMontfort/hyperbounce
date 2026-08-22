@@ -1,17 +1,21 @@
 package dev.joseph.hyperbounce.ui.screens
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.joseph.hyperbounce.ui.components.DropdownPicker
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
-import dev.joseph.hyperbounce.ui.components.SegmentedGlassPicker
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
 import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.state.RenderEngine
@@ -34,31 +38,21 @@ fun EngineScreen(
         onBack = onBack
     ) {
         SectionHeader("Rendering Engine", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-            BasicText(
-                "Toggle Switches",
-                modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 8.dp),
-                style = HyperBounceType.footnote.copy(color = colors.secondaryLabel)
-            )
-            SegmentedGlassPicker(
-                options = RenderEngine.entries.map { it.label },
-                selectedIndex = RenderEngine.entries.indexOf(repository.toggleEngine),
-                onSelect = { repository.setToggleEngine(RenderEngine.entries[it]) },
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            EngineRow(
+                title = "Toggle Switches",
+                colors = colors,
                 backdrop = backdrop,
-                colors = colors
+                selected = repository.toggleEngine,
+                onSelect = repository::setToggleEngine
             )
-
-            BasicText(
-                "Sliders",
-                modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 18.dp, bottom = 8.dp),
-                style = HyperBounceType.footnote.copy(color = colors.secondaryLabel)
-            )
-            SegmentedGlassPicker(
-                options = RenderEngine.entries.map { it.label },
-                selectedIndex = RenderEngine.entries.indexOf(repository.sliderEngine),
-                onSelect = { repository.setSliderEngine(RenderEngine.entries[it]) },
+            RowDivider(colors.separator, insetStart = 16.dp)
+            EngineRow(
+                title = "Sliders",
+                colors = colors,
                 backdrop = backdrop,
-                colors = colors
+                selected = repository.sliderEngine,
+                onSelect = repository::setSliderEngine
             )
         }
         SectionFooter(
@@ -99,6 +93,29 @@ fun EngineScreen(
             colors = colors,
             backdrop = backdrop,
             enabled = repository.sliderEngine == RenderEngine.LiquidGlass
+        )
+    }
+}
+
+@Composable
+private fun EngineRow(
+    title: String,
+    colors: HyperBounceColors,
+    backdrop: Backdrop,
+    selected: RenderEngine,
+    onSelect: (RenderEngine) -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        BasicText(title, style = HyperBounceType.body.copy(color = colors.label))
+        DropdownPicker(
+            options = RenderEngine.entries.map { it.label },
+            selectedIndex = RenderEngine.entries.indexOf(selected),
+            onSelect = { onSelect(RenderEngine.entries[it]) },
+            backdrop = backdrop
         )
     }
 }

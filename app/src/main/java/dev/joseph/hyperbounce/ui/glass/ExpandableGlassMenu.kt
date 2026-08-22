@@ -16,7 +16,7 @@ package dev.joseph.hyperbounce.ui.glass
  * Only the package changed, plus the demo-only "Properties"/"Advanced Physics Tuning"
  * editor screen (ExpandableGlassMenuContent, TuningControl) was not ported — this app
  * doesn't need a UI for live-tuning the menu's own parameters, it just calls
- * ExpandableGlassMenu directly (see ui/screens/HomeScreen.kt) with isGlassEnabled/
+ * ExpandableGlassMenu directly (see ui/screens/RootScaffold.kt) with isGlassEnabled/
  * blurRadius/refractionHeight/refractionAmount/chromaticAberration/isHapticsEnabled
  * sourced from LocalGlassSettings — the component already exposes exactly those as hoisted
  * parameters, so no internal change was needed to wire it to this app's global glass
@@ -159,6 +159,11 @@ fun ExpandableGlassMenu(
     dragJellyTension: Float = 0.05f,
     motionBlurAmount: Float = 25f,
     arcYOffsetDp: Float = 75f,
+    // Fires when the finger is released while hovering a row during a long-press-drag
+    // gesture (not a plain tap on the row — that's handled by MenuRow's own onClick).
+    // Called just before the menu closes, with the hovered row's index. Default no-op so
+    // existing callers that only want tap-to-select keep compiling unchanged.
+    onRowSelected: (index: Int) -> Unit = {},
     label: @Composable () -> Unit,
     content: @Composable (globalTouchPosition: Offset, closeMenu: () -> Unit, hoveredIndex: Int?, setHovered: (Int?) -> Unit) -> Unit
 ) {
@@ -276,8 +281,16 @@ fun ExpandableGlassMenu(
                                     upEvent.consume()
                                     val target = if (isExpanded) 0f else 1f
                                     animationScope.launch { animatableProgress.animateTo(target, animationPreset.getSpec(isClosing = target == 0f, speedMultiplier = animationSpeedMultiplier)) }
-                                } else if ((isSimpleDrag || isLongPress) && isExpanded) {
-                                    if (finalHoveredIndex != null || dragOffset.getDistance() > 20f) {
+                                } else if (isSimpleDrag || isLongPress) {
+                                    // Deliberately not gated on the pre-gesture `isExpanded` value: a
+                                    // single continuous long-press-then-drag-then-release starting from
+                                    // the closed state must still be able to select whatever row the
+                                    // finger was over when it lifted, not just a drag that started on an
+                                    // already-open menu.
+                                    if (finalHoveredIndex != null) {
+                                        onRowSelected(finalHoveredIndex)
+                                        closeMenu()
+                                    } else if (dragOffset.getDistance() > 20f) {
                                         closeMenu()
                                     }
                                 }

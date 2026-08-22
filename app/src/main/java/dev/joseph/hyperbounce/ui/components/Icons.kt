@@ -244,6 +244,76 @@ fun PowerIcon(
     }
 }
 
+@Composable
+fun GearIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 18.dp,
+    strokeWidth: Dp = 1.8.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val cx = w / 2f
+        val cy = h / 2f
+        val outerR = w * 0.38f
+        val innerR = w * 0.16f
+        val toothLen = w * 0.1f
+        val teeth = 8
+        for (i in 0 until teeth) {
+            val angle = Math.toRadians((360.0 / teeth) * i)
+            val cos = kotlin.math.cos(angle).toFloat()
+            val sin = kotlin.math.sin(angle).toFloat()
+            drawLine(
+                color = color,
+                start = Offset(cx + outerR * cos, cy + outerR * sin),
+                end = Offset(cx + (outerR + toothLen) * cos, cy + (outerR + toothLen) * sin),
+                strokeWidth = strokeWidth.toPx() * 1.4f,
+                cap = StrokeCap.Round
+            )
+        }
+        drawCircle(
+            color = color,
+            radius = outerR,
+            center = Offset(cx, cy),
+            style = Stroke(width = strokeWidth.toPx())
+        )
+        drawCircle(
+            color = color,
+            radius = innerR,
+            center = Offset(cx, cy),
+            style = Stroke(width = strokeWidth.toPx())
+        )
+    }
+}
+
+@Composable
+fun CopyIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 16.dp,
+    strokeWidth: Dp = 1.6.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(w * 0.06f, h * 0.06f),
+            size = Size(w * 0.62f, h * 0.62f),
+            cornerRadius = CornerRadius(w * 0.1f, h * 0.1f),
+            style = Stroke(width = strokeWidth.toPx())
+        )
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(w * 0.32f, h * 0.32f),
+            size = Size(w * 0.62f, h * 0.62f),
+            cornerRadius = CornerRadius(w * 0.1f, h * 0.1f),
+            style = Stroke(width = strokeWidth.toPx())
+        )
+    }
+}
+
 /** A faint dashed baseline used behind some preview strips. */
 fun dashedStroke(width: Dp, dp: Dp = 6f.dp, gap: Dp = 6f.dp) = Stroke(
     width = width.value,
