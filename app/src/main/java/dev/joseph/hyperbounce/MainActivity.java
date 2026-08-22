@@ -50,7 +50,7 @@ public class MainActivity extends Activity {
         scroll.addView(rootLayout);
         setContentView(scroll);
 
-        // TOP BUTTONS
+        // TOP RESTART BUTTONS
         LinearLayout topButtons = new LinearLayout(this);
         topButtons.setOrientation(LinearLayout.HORIZONTAL);
         topButtons.setPadding(0, 0, 0, 40);
@@ -81,7 +81,7 @@ public class MainActivity extends Activity {
         appTitle.setPadding(0, 0, 0, 20);
         rootLayout.addView(appTitle);
 
-        // GRID INPUT SYSTEM
+        // GRID CONFIG
         LinearLayout gridLayout = new LinearLayout(this);
         gridLayout.setOrientation(LinearLayout.HORIZONTAL);
         gridLayout.setPadding(0, 0, 0, 40);
@@ -109,7 +109,7 @@ public class MainActivity extends Activity {
         gridLayout.addView(updateGridBtn);
         rootLayout.addView(gridLayout);
 
-        // PRESET SYSTEM
+        // PRESET MANAGEMENT
         LinearLayout presetLayout = new LinearLayout(this);
         presetLayout.setOrientation(LinearLayout.HORIZONTAL);
         presetLayout.setPadding(0, 0, 0, 40);
@@ -200,40 +200,42 @@ public class MainActivity extends Activity {
         
         if (mode == 0) {
             addSectionHeader("CLASSIC SETTINGS");
-            addSlider("centerDamping", "Center Damping", "", 0.1f, 1.0f, 0.58f);
-            addSlider("centerResponse", "Center Response", "", 0.1f, 1.5f, 0.48f);
-            addSlider("edgeDampingDrop", "Edge Damping Drop", "", 0.0f, 0.5f, 0.10f);
-            addSlider("edgeResponseDelay", "Edge Response Delay", "", 0.0f, 1.0f, 0.22f);
-            addSlider("minDamping", "Min Damping Bound", "", 0.1f, 1.0f, 0.42f);
-            addSlider("maxDamping", "Max Damping Bound", "", 0.1f, 1.0f, 0.65f);
-            addSlider("zDepthMultiplier", "Z-Depth Scale", "", 1.0f, 4.0f, 1.60f);
+            addSlider("centerDamping", "Center Damping", "(Lower = Rubber-band bouncy | Higher = Stiff/Zero bounce)", 0.1f, 1.0f, 0.58f);
+            addSlider("centerResponse", "Center Response", "(Lower = Snaps fast | Higher = Floats slowly)", 0.1f, 1.5f, 0.48f);
+            addSlider("edgeDampingDrop", "Edge Damping Drop", "(Higher = Edges are noticeably bouncier than center)", 0.0f, 0.5f, 0.10f);
+            addSlider("edgeResponseDelay", "Edge Response Delay", "(Higher = Outer edges lag behind center more)", 0.0f, 1.0f, 0.22f);
+            addSlider("minDamping", "Min Damping Bound", "(Safety limit for maximum allowable bounce)", 0.1f, 1.0f, 0.42f);
+            addSlider("maxDamping", "Max Damping Bound", "(Safety limit for maximum allowable stiffness)", 0.1f, 1.0f, 0.65f);
+            addSlider("zDepthMultiplier", "Z-Depth Scale", "(Higher = Icons spawn deeper in 3D perspective)", 1.0f, 4.0f, 1.60f);
         } else {
             addSectionHeader("GLOBAL MULTIPLIERS");
-            addSlider("durationScale", "Global Anim Duration", "", 0.1f, 3.0f, 1.0f);
-            addSlider("velocityInfluence", "Velocity Impact", "", 0.0f, 2.0f, 1.0f);
-            addSlider("maxVelocity", "Max Swipe Normalizer", "", 5000.0f, 30000.0f, 16000.0f);
-            addSlider("cascadeDamping", "Resting Damping", "", 0.5f, 1.0f, 0.95f);
+            addSlider("durationScale", "Global Anim Duration", "(Lower = Faster animation | Higher = Slow motion settling)", 0.1f, 3.0f, 1.0f);
+            addSlider("velocityInfluence", "Velocity Impact", "(Lower = Ignores swipe speed | Higher = Extreme reaction to flick velocity)", 0.0f, 2.0f, 1.0f);
+            addSlider("maxVelocity", "Max Swipe Normalizer", "(Lower = Reaches max velocity easily | Higher = Requires harder swipe)", 5000.0f, 30000.0f, 16000.0f);
+            addSlider("cascadeDamping", "Resting Damping", "(Lower = Always loose/bouncy | Higher = Critically damped iOS resting state)", 0.5f, 1.0f, 0.95f);
 
             addSectionHeader("DOCK ISOLATION");
-            addSlider("kineticDockDamping", "Dock Damping", "", 0.1f, 1.0f, 0.85f);
-            addSlider("kineticDockResponse", "Dock Response", "", 0.1f, 1.5f, 0.38f);
-            addSlider("kineticDockZDepth", "Dock Z-Depth", "", 0.0f, 4000.0f, 800.0f);
+            addSlider("kineticDockDamping", "Dock Damping", "(Lower = Bouncier dock icons | Higher = Solid, stiff dock)", 0.1f, 1.0f, 0.85f);
+            addSlider("kineticDockResponse", "Dock Response", "(Lower = Dock snaps into place faster | Higher = Dock floats in slower)", 0.1f, 1.5f, 0.38f);
+            addSlider("kineticDockZDepth", "Dock Z-Depth", "(Higher = Dock travels from deeper Z position)", 0.0f, 4000.0f, 800.0f);
 
             int rows = currentConfig.optInt("gridRows", 7);
             
-            addSectionHeader("DYNAMIC ROW-BY-ROW Z-DEPTH");
-            for (int i = 0; i < rows; i++) addSlider("r" + i + "_z", "Row " + i + " Z-Depth", "", 100.0f, 4000.0f, 2000.0f - (i * 200));
+            addSectionHeader("ROW-BY-ROW Z-DEPTH (PERSPECTIVE TRAVEL)");
+            for (int i = 0; i < rows; i++) {
+                addSlider("r" + i + "_z", "Row " + i + " Z-Depth", "(Lower = Starts close to screen | Higher = Starts deep in 3D space)", 100.0f, 4000.0f, 2000.0f - (i * 200));
+            }
 
             addSectionHeader("DYNAMIC VELOCITY BOUNCE (CENTER VS OUTER)");
             for (int i = 0; i < rows; i++) {
-                addSlider("r" + i + "_center_bounce", "Row " + i + " Center Bounce", "", 0.0f, 1.0f, 0.45f - (i * 0.05f));
-                addSlider("r" + i + "_outer_bounce", "Row " + i + " Outer Bounce", "", 0.0f, 1.0f, 0.45f - (i * 0.05f));
+                addSlider("r" + i + "_center_bounce", "Row " + i + " Center Bounce", "(Lower = Stays rigid on flick | Higher = High rubber-band center overshoot)", 0.0f, 1.0f, 0.45f - (i * 0.05f));
+                addSlider("r" + i + "_outer_bounce", "Row " + i + " Outer Bounce", "(Lower = Stays rigid on flick | Higher = High rubber-band outer edge overshoot)", 0.0f, 1.0f, 0.45f - (i * 0.05f));
             }
 
-            addSectionHeader("DYNAMIC SETTLING TIME / RESPONSE (CENTER VS OUTER)");
+            addSectionHeader("DYNAMIC SETTLING TIME (CENTER VS OUTER)");
             for (int i = 0; i < rows; i++) {
-                addSlider("r" + i + "_center_settle", "Row " + i + " Center Settling Time", "", 0.1f, 1.5f, 0.55f + (i * 0.04f));
-                addSlider("r" + i + "_outer_settle", "Row " + i + " Outer Settling Time", "", 0.1f, 1.5f, 0.55f + (i * 0.04f));
+                addSlider("r" + i + "_center_settle", "Row " + i + " Center Settling Time", "(Lower = Inner icons lock in fast | Higher = Inner icons float and settle late)", 0.1f, 1.5f, 0.55f + (i * 0.04f));
+                addSlider("r" + i + "_outer_settle", "Row " + i + " Outer Settling Time", "(Lower = Outer icons lock in fast | Higher = Outer icons float and settle late)", 0.1f, 1.5f, 0.55f + (i * 0.04f));
             }
         }
     }

@@ -136,20 +136,27 @@ public class PhysicsHook extends XposedModule {
                             int cols = Math.max(1, config.gridColumns);
                             int rows = Math.max(1, config.gridRows);
 
-                            // Calculate Column (Determine Center vs Outer)
-                            float cellWidth = screenW / (float) cols;
-                            int colIndex = (int) (vx / cellWidth);
-                            colIndex = Math.max(0, Math.min(cols - 1, colIndex));
-                            isOuterColumn.set(colIndex == 0 || colIndex == cols - 1);
-
-                            // Calculate Row
+                            int cellX = -1;
                             int cellY = -1;
                             long container = 0;
                             Object tag = view.getTag();
                             if (tag != null) {
+                                try { cellX = tag.getClass().getField("cellX").getInt(tag); } catch (Throwable t) {}
                                 try { cellY = tag.getClass().getField("cellY").getInt(tag); } catch (Throwable t) {}
                                 try { container = tag.getClass().getField("container").getLong(tag); } catch (Throwable t) {}
                             }
+
+                            // Precise Column Identification
+                            int colIndex;
+                            if (cellX != -1) {
+                                colIndex = Math.max(0, Math.min(cols - 1, cellX));
+                            } else {
+                                float cellWidth = screenW / (float) cols;
+                                colIndex = Math.max(0, Math.min(cols - 1, (int) (vx / cellWidth)));
+                            }
+                            isOuterColumn.set(colIndex == 0 || colIndex == cols - 1);
+
+                            // Precise Row Identification
                             int rowIndex = cellY != -1 ? cellY : (int) Math.floor((vy / screenH) * rows);
                             rowIndex = Math.max(0, Math.min(rows - 1, rowIndex));
                             
@@ -201,11 +208,9 @@ public class PhysicsHook extends XposedModule {
                         int safeRow = Math.max(0, Math.min(config.gridRows - 1, currentRow.get()));
                         boolean outer = isOuterColumn.get();
                         
-                        // Pull specific coordinates
                         float customBounce = outer ? config.getDyn("r" + safeRow + "_outer_bounce", 0.2f) : config.getDyn("r" + safeRow + "_center_bounce", 0.2f);
                         float customSettle = outer ? config.getDyn("r" + safeRow + "_outer_settle", 0.5f) : config.getDyn("r" + safeRow + "_center_settle", 0.5f);
 
-                        // Direct mapped settling time replaces standard response cascade
                         float response = customSettle * config.durationScale;
                         response *= (1.0f - (0.30f * kF * vInf));
 
