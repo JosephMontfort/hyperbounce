@@ -18,8 +18,11 @@ public class PhysicsHook extends XposedModule {
     private static final Config config = new Config();
     private static boolean receiverRegistered = false;
 
+    // Bulletproof Telemetry State
     private static float latestVelocity = 0.0f;
     private static long lastVelocityTime = 0;
+    private static float shadeTouchDownY = 0.0f;
+    private static long shadeTouchDownTime = 0;
 
     private static final ThreadLocal<Float> normalizedDistance = ThreadLocal.withInitial(() -> 0.5f);
     private static final ThreadLocal<Integer> currentRow = ThreadLocal.withInitial(() -> 0);
@@ -74,27 +77,42 @@ public class PhysicsHook extends XposedModule {
     public void onPackageReady(XposedModuleInterface.PackageReadyParam param) {
         super.onPackageReady(param);
 
-        // --- SYSTEMUI HOOK ---
+        // --- SYSTEMUI HOOK (Bulletproof Math Tracker) ---
         if (param.getPackageName().equals("com.android.systemui")) {
             try {
-                Class<?> vtClass = Class.forName("android.view.VelocityTracker", false, param.getClassLoader());
-                for (Method m : vtClass.getDeclaredMethods()) {
-                    if (m.getName().equals("getYVelocity")) {
-                        hook(m).intercept(chain -> {
-                            Float vel = (Float) chain.proceed();
-                            if (vel != null && vel < -1000.0f) {
-                                Context ctx = getAppContext();
-                                if (ctx != null) {
-                                    Intent intent = new Intent("dev.joseph.hyperbounce.ACTION_VELOCITY_UPDATE");
-                                    intent.putExtra("velocity", (float) vel);
-                                    intent.setPackage("com.miui.home");
-                                    ctx.sendBroadcast(intent);
+                Class<?> shadeViewClass = Class.forName("com.android.systemui.shade.NotificationShadeWindowView", false, param.getClassLoader());
+                Method dispatchTouch = shadeViewClass.getDeclaredMethod("dispatchTouchEvent", android.view.MotionEvent.class);
+                hook(dispatchTouch).intercept(chain -> {
+                    try {
+                        android.view.MotionEvent event = (android.view.MotionEvent) chain.getArgs()[0];
+                        int action = event.getActionMasked();
+                        
+                        if (action == android.view.MotionEvent.ACTION_DOWN) {
+                            shadeTouchDownY = event.getRawY();
+                            shadeTouchDownTime = System.currentTimeMillis();
+                        } else if (action == android.view.MotionEvent.ACTION_UP) {
+                            float dy = event.getRawY() - shadeTouchDownY;
+                            long dt = System.currentTimeMillis() - shadeTouchDownTime;
+                            
+                            // Only process meaningful upward swipes (avoids taps)
+                            if (dt > 10 && dy < -150) { 
+                                // Raw Math: distance / time(seconds)
+                                float rawVelocity = dy / (dt / 1000.0f); 
+                                
+                                if (rawVelocity < -1000.0f) {
+                                    Context ctx = getAppContext();
+                                    if (ctx != null) {
+                                        Intent intent = new Intent("dev.joseph.hyperbounce.ACTION_VELOCITY_UPDATE");
+                                        intent.putExtra("velocity", rawVelocity);
+                                        intent.setPackage("com.miui.home");
+                                        ctx.sendBroadcast(intent);
+                                    }
                                 }
                             }
-                            return vel;
-                        });
-                    }
-                }
+                        }
+                    } catch (Throwable ignore) {}
+                    return chain.proceed();
+                });
             } catch (Throwable t) {}
             return;
         }
@@ -168,7 +186,6 @@ public class PhysicsHook extends XposedModule {
                         damping = Math.min(Math.max(damping, config.minDamping), config.maxDamping);
                         return new float[]{damping, response};
                     } else {
-                        // MODE 1: PROGRESSIVE KINETIC CASCADE
                         if (isDockView.get() || isIndicator.get()) {
                             activeResponse.set(config.kineticDockResponse * config.durationScale);
                             activeDamping.set(config.kineticDockDamping);
@@ -179,18 +196,13 @@ public class PhysicsHook extends XposedModule {
                         float vInf = config.velocityInfluence;
                         int row = currentRow.get();
 
-                        // Progressive Math: Top row (0) gets multiplier of 1.0. Bottom row gets ~0.37.
-                        float rowFactor = Math.max(0.0f, (8.0f - row) / 8.0f);
+                        // UI Configurable Gradient Math
+                        float rowFactor = Math.max(0.0f, (config.velocityDepthRows - row) / config.velocityDepthRows);
 
-                        // Cascade Timing: Bottom row is BaseResponse. Upper rows add stagger delay.
-                        // (Assuming max grid row is roughly 6 for math baseline)
                         float response = config.cascadeBaseResponse + (Math.max(0, 6 - row) * config.cascadeRowStagger);
-                        
-                        // Velocity speeds up the response slightly
                         response *= (1.0f - (0.30f * kF * vInf * rowFactor));
                         response *= config.durationScale;
 
-                        // Gradient Bounce: Top row loses the most damping, generating the most bounce.
                         float bounceDrop = config.velocityBounceIntensity * kF * vInf * rowFactor;
                         float damping = config.cascadeDamping * (1.0f - bounceDrop);
 
@@ -218,21 +230,22 @@ public class PhysicsHook extends XposedModule {
                             float kF = currentKineticFactor.get();
                             float vInf = config.velocityInfluence;
                             int row = currentRow.get();
-                            float rowFactor = Math.max(0.0f, (8.0f - row) / 8.0f);
+                            
+                            // Apply custom depth gradient
+                            float rowFactor = Math.max(0.0f, (config.velocityDepthRows - row) / config.velocityDepthRows);
 
-                            if (startVal == 0.0f && endVal == 1.0f) { // Opacity
+                            if (startVal == 0.0f && endVal == 1.0f) { 
                                 args[0] = 1.0f;
                                 args[1] = 0.15f * config.durationScale; 
-                            } else if (startVal > 0.5f && startVal < 1.0f && endVal == 1.0f) { // Scale Pop
+                            } else if (startVal > 0.5f && startVal < 1.0f && endVal == 1.0f) { 
                                 args[2] = 0.85f - (0.20f * kF * vInf); 
                                 args[0] = activeDamping.get();
                                 args[1] = activeResponse.get();
-                            } else if (endVal == 0.0f && startVal > 5.0f) { // Z-Translation
+                            } else if (endVal == 0.0f && startVal > 5.0f) { 
                                 if (isDockView.get() || isIndicator.get()) {
-                                    args[2] = 350.0f * config.kineticDockZDepth; // Independent Dock Z-Depth
+                                    args[2] = 350.0f * config.kineticDockZDepth; 
                                 } else {
                                     float safeStart = Math.max(startVal, 350.0f * config.zDepthPunch);
-                                    // Gradient Z-Punch: Top rows get sucked much deeper than bottom rows
                                     float zMult = 1.0f + (config.zDepthGradient * kF * vInf * rowFactor);
                                     args[2] = safeStart * zMult;
                                 }

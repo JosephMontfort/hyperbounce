@@ -22,6 +22,7 @@ public class Config {
     public float durationScale = 1.0f;
     public float velocityInfluence = 1.0f;
     public float velocityBounceIntensity = 0.40f;
+    public float velocityDepthRows = 4.0f; // NEW: Controls how many rows get the bounce
     
     public float cascadeDamping = 0.95f;
     public float cascadeBaseResponse = 0.55f; 
@@ -55,6 +56,7 @@ public class Config {
             durationScale = (float) json.optDouble("durationScale", durationScale);
             velocityInfluence = (float) json.optDouble("velocityInfluence", velocityInfluence);
             velocityBounceIntensity = (float) json.optDouble("velocityBounceIntensity", velocityBounceIntensity);
+            velocityDepthRows = (float) json.optDouble("velocityDepthRows", velocityDepthRows);
             
             cascadeDamping = (float) json.optDouble("cascadeDamping", cascadeDamping);
             cascadeBaseResponse = (float) json.optDouble("cascadeBaseResponse", cascadeBaseResponse);

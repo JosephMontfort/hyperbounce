@@ -38,7 +38,6 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         rootLayout = new LinearLayout(this);
         rootLayout.setOrientation(LinearLayout.VERTICAL);
-        // Added heavy top padding (120) to clear the action bar
         rootLayout.setPadding(40, 120, 40, 40);
         scroll.addView(rootLayout);
         setContentView(scroll);
@@ -96,6 +95,7 @@ public class MainActivity extends Activity {
             addSlider("durationScale", "Overall Animation Duration", "Scales the entire animation speed globally.", 0.1f, 3.0f, 1.0f);
             addSlider("velocityInfluence", "Velocity Impact Multiplier", "Scales how violently swipe speed affects the physics.", 0.0f, 2.0f, 1.0f);
             addSlider("velocityBounceIntensity", "Gradient Bounce Intensity", "Controls the progressive rubber-band bounce on fast swipes (strongest at top row).", 0.0f, 1.0f, 0.40f);
+            addSlider("velocityDepthRows", "Velocity Gradient Depth (Rows)", "How many rows absorb the extreme velocity bounce. (1 = Top Row Only, 6 = Full Grid).", 1.0f, 7.0f, 4.0f);
             addSlider("zDepthPunch", "Base Z-Depth Floor", "Forces bottom rows to have deep 3D travel distance.", 1.0f, 5.0f, 1.5f);
             addSlider("zDepthGradient", "Z-Depth Top-Row Gradient", "How much deeper the top rows get sucked into 3D space on fast swipes.", 0.0f, 3.0f, 1.2f);
             addSlider("cascadeDamping", "Base Cascade Damping", "Resting friction before velocity modifiers.", 0.5f, 1.0f, 0.95f);
@@ -230,7 +230,6 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        // Splitting into separate buttons inside the three-dot dropdown
         menu.add(0, 1, 0, "Restart Launcher").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         menu.add(0, 2, 0, "Restart System UI").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         return true;
