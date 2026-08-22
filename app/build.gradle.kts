@@ -36,6 +36,7 @@ android {
 }
 
 dependencies {
-    // Swapped from legacy api:82 to modern libxposed api:102
     compileOnly("io.github.libxposed:api:102.0.0")
+    // Include Rhino for dynamic Runtime Scripting (Frida-like execution)
+    implementation("org.mozilla:rhino:1.7.14")
 }

@@ -1,7 +1,10 @@
 package dev.joseph.hyperbounce;
 
+import android.content.Context;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowManager;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface;
 import java.io.File;
@@ -9,18 +12,26 @@ import java.io.FileInputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import org.json.JSONObject;
+import org.mozilla.javascript.Scriptable;
+import org.mozilla.javascript.ScriptableObject;
 
 public class PhysicsHook extends XposedModule {
     private static final String TAG = "HyperBounce-Physics";
     private static final ThreadLocal<Float> normalizedDistance = ThreadLocal.withInitial(() -> 0.5f);
     private static final ThreadLocal<Boolean> isDockView = ThreadLocal.withInitial(() -> false);
     private static final ThreadLocal<Boolean> isAnimating = ThreadLocal.withInitial(() -> false);
+    
+    // ThreadLocals for Script Context
+    private static final ThreadLocal<Float> currentVx = ThreadLocal.withInitial(() -> 0.0f);
+    private static final ThreadLocal<Float> currentVy = ThreadLocal.withInitial(() -> 0.0f);
+    private static final ThreadLocal<Float> currentScreenW = ThreadLocal.withInitial(() -> 1080.0f);
+    private static final ThreadLocal<Float> currentScreenH = ThreadLocal.withInitial(() -> 2400.0f);
 
     private static long configLastModified = 0;
     private static final Config config = new Config();
+    private static org.mozilla.javascript.Script compiledScript = null;
 
     private void loadConfig() {
-        // Read from globally accessible tmp directory to bypass SELinux restrictions
         File file = new File("/data/local/tmp/hyperbounce.json");
         if (file.exists() && file.lastModified() > configLastModified) {
             try {
@@ -31,6 +42,8 @@ public class PhysicsHook extends XposedModule {
                 String jsonStr = new String(data, "UTF-8");
                 JSONObject json = new JSONObject(jsonStr);
 
+                config.animationDuration = (float) json.optDouble("animationDuration", 1.0);
+                config.gridDeadzoneX = (float) json.optDouble("gridDeadzoneX", 0.125);
                 config.dockDamping = (float) json.optDouble("dockDamping", 0.70);
                 config.dockResponse = (float) json.optDouble("dockResponse", 0.40);
                 config.centerResponse = (float) json.optDouble("centerResponse", 0.48);
@@ -42,12 +55,25 @@ public class PhysicsHook extends XposedModule {
                 config.minDamping = (float) json.optDouble("minDamping", 0.40);
                 config.maxDamping = (float) json.optDouble("maxDamping", 0.55);
                 config.zDepthMultiplier = (float) json.optDouble("zDepthMultiplier", 1.6);
-                config.durationScale = (float) json.optDouble("durationScale", 1.0);
-                config.gridDeadzoneX = (float) json.optDouble("gridDeadzoneX", 0.125);
+                config.useCustomScript = json.optBoolean("useCustomScript", false);
+                
+                String newScript = json.optString("customScript", config.customScript);
+                if (!newScript.equals(config.customScript) || compiledScript == null) {
+                    config.customScript = newScript;
+                    if (config.useCustomScript) {
+                        try {
+                            org.mozilla.javascript.Context rhino = org.mozilla.javascript.Context.enter();
+                            rhino.setOptimizationLevel(-1); // Required for Android (no Dalvik generation)
+                            compiledScript = rhino.compileString(config.customScript, "HyperScript", 1, null);
+                        } finally {
+                            org.mozilla.javascript.Context.exit();
+                        }
+                    }
+                }
                 
                 configLastModified = file.lastModified();
             } catch (Exception e) {
-                Log.e(TAG, "Failed to load config", e);
+                Log.e(TAG, "Failed to load config/script", e);
             }
         }
     }
@@ -76,25 +102,36 @@ public class PhysicsHook extends XposedModule {
                         float vx = loc[0] + (view.getWidth() / 2.0f);
                         float vy = loc[1] + (view.getHeight() / 2.0f);
 
-                        // Use RootView to guarantee exact screen boundaries
-                        float screenW = view.getRootView().getWidth();
-                        float screenH = view.getRootView().getHeight();
-                        if (screenW == 0) screenW = view.getContext().getResources().getDisplayMetrics().widthPixels;
-                        if (screenH == 0) screenH = view.getContext().getResources().getDisplayMetrics().heightPixels;
+                        // Use RealMetrics for perfect physical pixel symmetry
+                        WindowManager wm = (WindowManager) view.getContext().getSystemService(Context.WINDOW_SERVICE);
+                        DisplayMetrics metrics = new DisplayMetrics();
+                        wm.getDefaultDisplay().getRealMetrics(metrics);
+                        
+                        float screenW = metrics.widthPixels;
+                        float screenH = metrics.heightPixels;
+
+                        currentVx.set(vx);
+                        currentVy.set(vy);
+                        currentScreenW.set(screenW);
+                        currentScreenH.set(screenH);
 
                         float centerX = screenW / 2.0f;
-                        float centerY = screenH * 0.42f;
+                        float centerY = screenH * 0.45f;
 
                         isDockView.set(vy > (screenH * 0.84f) || arg2);
 
-                        // Enforce absolute symmetry with Math.abs and configurable deadzone
-                        float absDx = Math.abs(vx - centerX);
+                        // Enforce PERFECT symmetry with Math.abs on both axes
                         float deadzonePx = screenW * config.gridDeadzoneX;
+                        float absDx = Math.abs(vx - centerX);
+                        float dx = Math.max(0.0f, absDx - deadzonePx);
+                        float dy = Math.abs(vy - centerY);
                         
-                        float dx = Math.max(0.0f, absDx - deadzonePx) / ((screenW / 2.0f) - deadzonePx);
-                        float dy = (vy - centerY) / (screenH / 2.0f);
+                        float maxDx = (screenW / 2.0f) - deadzonePx;
+                        float maxDy = Math.max(centerY, screenH - centerY);
+                        float maxDist = (float) Math.sqrt((maxDx * maxDx) + (maxDy * maxDy));
                         
-                        normalizedDistance.set((float) Math.sqrt(dx * dx + dy * dy));
+                        float dist = (float) Math.sqrt((dx * dx) + (dy * dy));
+                        normalizedDistance.set(Math.min(dist / maxDist, 1.0f));
                     } catch (Exception e) {
                         normalizedDistance.set(0.5f);
                         isDockView.set(false);
@@ -109,21 +146,54 @@ public class PhysicsHook extends XposedModule {
             Method getDR = userPresentClass.getDeclaredMethod("getDampingResponse");
             hook(getDR).intercept(chain -> {
                 if (!isAnimating.get()) return chain.proceed();
-
                 loadConfig();
-                if (isDockView.get()) {
-                    return new float[]{config.dockDamping, config.dockResponse * config.durationScale};
+
+                float damping = config.centerDamping;
+                float response = config.centerResponse;
+
+                if (config.useCustomScript && compiledScript != null) {
+                    // DYNAMIC CODE EXECUTION via Rhino JS
+                    try {
+                        org.mozilla.javascript.Context rhino = org.mozilla.javascript.Context.enter();
+                        rhino.setOptimizationLevel(-1);
+                        Scriptable scope = rhino.initStandardObjects();
+                        
+                        ScriptableObject.putProperty(scope, "isDockView", isDockView.get());
+                        ScriptableObject.putProperty(scope, "dist", normalizedDistance.get());
+                        ScriptableObject.putProperty(scope, "vx", currentVx.get());
+                        ScriptableObject.putProperty(scope, "vy", currentVy.get());
+                        ScriptableObject.putProperty(scope, "screenW", currentScreenW.get());
+                        ScriptableObject.putProperty(scope, "screenH", currentScreenH.get());
+
+                        Object result = compiledScript.exec(rhino, scope);
+                        if (result instanceof org.mozilla.javascript.NativeArray) {
+                            org.mozilla.javascript.NativeArray arr = (org.mozilla.javascript.NativeArray) result;
+                            damping = (float) ((Number) arr.get(0, scope)).doubleValue();
+                            response = (float) ((Number) arr.get(1, scope)).doubleValue();
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Custom Script crashed, falling back to sliders.", e);
+                        config.useCustomScript = false; 
+                    } finally {
+                        org.mozilla.javascript.Context.exit();
+                    }
+                } else {
+                    // SLIDER LOGIC
+                    if (isDockView.get()) {
+                        damping = config.dockDamping;
+                        response = config.dockResponse;
+                    } else {
+                        float dist = normalizedDistance.get();
+                        response = config.centerResponse + (dist * config.edgeResponseDelay);
+                        damping = config.centerDamping - (dist * config.edgeDampingDrop);
+
+                        response = Math.min(Math.max(response, config.minResponse), config.maxResponse);
+                        damping = Math.min(Math.max(damping, config.minDamping), config.maxDamping);
+                    }
                 }
 
-                float dist = normalizedDistance.get();
-                float response = config.centerResponse + (dist * config.edgeResponseDelay);
-                float damping = config.centerDamping - (dist * config.edgeDampingDrop);
-
-                response = Math.min(Math.max(response, config.minResponse), config.maxResponse);
-                damping = Math.min(Math.max(damping, config.minDamping), config.maxDamping);
-
-                // Apply overall duration scalar
-                response *= config.durationScale;
+                // Apply Global Animation Duration Slider
+                response *= config.animationDuration;
 
                 return new float[]{damping, response};
             });
