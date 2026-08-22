@@ -3,7 +3,7 @@ package dev.joseph.hyperbounce;
 import org.json.JSONObject;
 
 public class Config {
-    public int animMode = 1; // 0 = Radial Classic, 1 = Kinetic Y-Axis Cascade
+    public int animMode = 1; 
     
     // Mode 0: Radial Dispersion (Original Classic)
     public float dockDamping = 0.70f;
@@ -22,6 +22,9 @@ public class Config {
     public float cascadeDamping = 0.92f;
     public float cascadeBaseResponse = 0.50f;
     public float cascadeRowStagger = 0.035f;
+    public float durationScale = 1.0f;
+    public float velocityInfluence = 1.0f;
+    public float zDepthPunch = 2.0f;
     public float maxVelocity = 16000.0f;
 
     public void loadFromJson(String jsonStr) {
@@ -43,6 +46,9 @@ public class Config {
             cascadeDamping = (float) json.optDouble("cascadeDamping", cascadeDamping);
             cascadeBaseResponse = (float) json.optDouble("cascadeBaseResponse", cascadeBaseResponse);
             cascadeRowStagger = (float) json.optDouble("cascadeRowStagger", cascadeRowStagger);
+            durationScale = (float) json.optDouble("durationScale", durationScale);
+            velocityInfluence = (float) json.optDouble("velocityInfluence", velocityInfluence);
+            zDepthPunch = (float) json.optDouble("zDepthPunch", zDepthPunch);
             maxVelocity = (float) json.optDouble("maxVelocity", maxVelocity);
         } catch (Exception e) {}
     }

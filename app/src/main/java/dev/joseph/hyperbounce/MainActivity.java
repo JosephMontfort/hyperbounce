@@ -42,7 +42,6 @@ public class MainActivity extends Activity {
         scroll.addView(rootLayout);
         setContentView(scroll);
 
-        // App Title
         TextView appTitle = new TextView(this);
         appTitle.setText("HyperBounce Physics Engine");
         appTitle.setTextSize(22);
@@ -50,7 +49,6 @@ public class MainActivity extends Activity {
         appTitle.setPadding(0, 0, 0, 20);
         rootLayout.addView(appTitle);
 
-        // Animation Mode Dropdown
         TextView modeTitle = new TextView(this);
         modeTitle.setText("Select Animation Engine Mode:");
         modeTitle.setTextSize(14);
@@ -90,7 +88,6 @@ public class MainActivity extends Activity {
         slidersLayout.removeAllViews();
 
         if (mode == 0) {
-            // Mode 0 Sliders (Radial Classic)
             addSlider("centerDamping", "Center Damping", "Bounce of center apps. Lower = more bounce.", 0.1f, 1.0f, 0.58f);
             addSlider("centerResponse", "Center Response (s)", "Time for center apps to settle.", 0.1f, 1.5f, 0.48f);
             addSlider("edgeDampingDrop", "Edge Damping Reduction", "Extra bounce on screen edges.", 0.0f, 0.5f, 0.10f);
@@ -103,10 +100,12 @@ public class MainActivity extends Activity {
             addSlider("dockResponse", "Dock Response (s)", "Speed for dock icons.", 0.1f, 1.5f, 0.40f);
             addSlider("zDepthMultiplier", "3D Z-Depth Scale", "Multiplies initial 3D spawn distance.", 1.0f, 4.0f, 1.60f);
         } else {
-            // Mode 1 Sliders (Kinetic Cascade)
-            addSlider("cascadeDamping", "Cascade Base Damping", "Critically damped resting friction.", 0.5f, 1.0f, 0.92f);
-            addSlider("cascadeBaseResponse", "Cascade Base Response (s)", "Speed of upper rows settling.", 0.2f, 1.0f, 0.50f);
-            addSlider("cascadeRowStagger", "Row Stagger Delay Step (s)", "Delay gap between each row from bottom to top.", 0.01f, 0.10f, 0.035f);
+            addSlider("durationScale", "Overall Animation Speed Multiplier", "Scales the entire animation speed (1.0 = Default, 1.5 = Slow Motion).", 0.1f, 3.0f, 1.0f);
+            addSlider("velocityInfluence", "Velocity Impact Multiplier", "How heavily swipe speed alters the baseline tuning parameters.", 0.0f, 2.0f, 1.0f);
+            addSlider("zDepthPunch", "Base Z-Depth Scale", "Multiplies how deep icons spawn in the Z-axis.", 1.0f, 5.0f, 2.0f);
+            addSlider("cascadeDamping", "Base Cascade Damping", "Critically damped resting friction before velocity modifiers.", 0.5f, 1.0f, 0.92f);
+            addSlider("cascadeBaseResponse", "Base Cascade Response (s)", "Speed of upper rows before velocity modifiers.", 0.2f, 1.5f, 0.50f);
+            addSlider("cascadeRowStagger", "Row Stagger Delay Step", "Mathematical delay gap between each row.", 0.0f, 0.10f, 0.035f);
             addSlider("maxVelocity", "Max Measured Swipe Velocity", "SystemUI normalizer for physical swipe speeds.", 5000.0f, 30000.0f, 16000.0f);
         }
     }
@@ -132,7 +131,6 @@ public class MainActivity extends Activity {
             fos.flush();
             fos.close();
 
-            // Broadcast in-memory config update to Launcher
             Intent intent = new Intent("dev.joseph.hyperbounce.ACTION_CONFIG_CHANGED");
             intent.putExtra("config_json", currentConfig.toString());
             sendBroadcast(intent);
