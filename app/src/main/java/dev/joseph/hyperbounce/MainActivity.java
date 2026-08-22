@@ -29,12 +29,6 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // Grant launcher read access to this app's local files via root
-        try {
-            Runtime.getRuntime().exec("su -c chmod 777 /data/data/dev.joseph.hyperbounce").waitFor();
-            Runtime.getRuntime().exec("su -c chmod 777 /data/data/dev.joseph.hyperbounce/files").waitFor();
-        } catch (Exception e) {}
-
         loadConfig();
 
         ScrollView scroll = new ScrollView(this);
@@ -44,15 +38,20 @@ public class MainActivity extends Activity {
         scroll.addView(rootLayout);
         setContentView(scroll);
 
-        // UI Sliders (Key, Name, Min, Max, Default)
+        // Core UI Sliders
+        addSlider("durationScale", "Overall Animation Speed Scalar", 0.1f, 3.0f, 1.0f);
+        addSlider("gridDeadzoneX", "Horizontal Center Deadzone (%)", 0.0f, 0.4f, 0.125f);
+        
         addSlider("centerDamping", "Center Damping", 0.1f, 1.0f, 0.52f);
         addSlider("centerResponse", "Center Response (s)", 0.1f, 1.5f, 0.48f);
         addSlider("edgeDampingDrop", "Edge Damping Reduction", 0.0f, 0.5f, 0.10f);
         addSlider("edgeResponseDelay", "Edge Response Delay (s)", 0.0f, 1.0f, 0.22f);
+        
         addSlider("minDamping", "Minimum Damping Bound", 0.1f, 1.0f, 0.40f);
         addSlider("maxDamping", "Maximum Damping Bound", 0.1f, 1.0f, 0.55f);
         addSlider("minResponse", "Minimum Response Bound", 0.1f, 1.5f, 0.45f);
         addSlider("maxResponse", "Maximum Response Bound", 0.1f, 1.5f, 0.75f);
+        
         addSlider("dockDamping", "Dock Damping", 0.1f, 1.0f, 0.70f);
         addSlider("dockResponse", "Dock Response (s)", 0.1f, 1.5f, 0.40f);
         addSlider("zDepthMultiplier", "3D Z-Depth Scale", 1.0f, 4.0f, 1.60f);
@@ -72,14 +71,20 @@ public class MainActivity extends Activity {
     }
 
     private void saveConfig() {
-        try {
-            File file = new File(getFilesDir(), "config.json");
-            FileOutputStream fos = new FileOutputStream(file);
-            fos.write(currentConfig.toString().getBytes("UTF-8"));
-            fos.flush();
-            fos.close();
-            file.setReadable(true, false); 
-        } catch (Exception e) {}
+        new Thread(() -> {
+            try {
+                // Save locally
+                File file = new File(getFilesDir(), "config.json");
+                FileOutputStream fos = new FileOutputStream(file);
+                fos.write(currentConfig.toString().getBytes("UTF-8"));
+                fos.flush();
+                fos.close();
+                
+                // Copy to public /data/local/tmp and grant global read access
+                Runtime.getRuntime().exec("su -c cp " + file.getAbsolutePath() + " /data/local/tmp/hyperbounce.json").waitFor();
+                Runtime.getRuntime().exec("su -c chmod 777 /data/local/tmp/hyperbounce.json").waitFor();
+            } catch (Exception e) {}
+        }).start();
     }
 
     private void addSlider(String key, String label, float min, float max, float defVal) {
@@ -112,7 +117,6 @@ public class MainActivity extends Activity {
         seekBar.setMax(1000);
         seekBar.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         
-        // Setup initial position (clamping purely for the UI thumb)
         if (savedVal > max) seekBar.setProgress(1000);
         else if (savedVal < min) seekBar.setProgress(0);
         else seekBar.setProgress((int) (((savedVal - min) / (max - min)) * 1000));
@@ -126,7 +130,6 @@ public class MainActivity extends Activity {
         row.addView(header);
         row.addView(controls);
 
-        // Handlers
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
@@ -148,7 +151,6 @@ public class MainActivity extends Activity {
             seekBar.setProgress((int) (((defVal - min) / (max - min)) * 1000));
         });
 
-        // Long press manual override
         View.OnLongClickListener manualInput = v -> {
             AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
             builder.setTitle("Enter custom " + label);

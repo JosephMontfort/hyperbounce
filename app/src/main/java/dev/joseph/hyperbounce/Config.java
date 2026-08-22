@@ -12,4 +12,6 @@ public class Config {
     public float minDamping = 0.40f;
     public float maxDamping = 0.55f;
     public float zDepthMultiplier = 1.6f;
+    public float durationScale = 1.0f;
+    public float gridDeadzoneX = 0.125f;
 }

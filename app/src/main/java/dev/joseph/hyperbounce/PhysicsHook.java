@@ -20,7 +20,8 @@ public class PhysicsHook extends XposedModule {
     private static final Config config = new Config();
 
     private void loadConfig() {
-        File file = new File("/data/data/dev.joseph.hyperbounce/files/config.json");
+        // Read from globally accessible tmp directory to bypass SELinux restrictions
+        File file = new File("/data/local/tmp/hyperbounce.json");
         if (file.exists() && file.lastModified() > configLastModified) {
             try {
                 FileInputStream fis = new FileInputStream(file);
@@ -41,6 +42,8 @@ public class PhysicsHook extends XposedModule {
                 config.minDamping = (float) json.optDouble("minDamping", 0.40);
                 config.maxDamping = (float) json.optDouble("maxDamping", 0.55);
                 config.zDepthMultiplier = (float) json.optDouble("zDepthMultiplier", 1.6);
+                config.durationScale = (float) json.optDouble("durationScale", 1.0);
+                config.gridDeadzoneX = (float) json.optDouble("gridDeadzoneX", 0.125);
                 
                 configLastModified = file.lastModified();
             } catch (Exception e) {
@@ -57,10 +60,8 @@ public class PhysicsHook extends XposedModule {
         try {
             Class<?> userPresentClass = Class.forName("com.miui.home.launcher.compat.UserPresentAnimationCompatPhone", false, param.getClassLoader());
             
-            // Hook 1: Map the grid distances seamlessly without recursive calls
             Method showMethod = userPresentClass.getDeclaredMethod("showUserPresentAnimation", View.class, int.class, boolean.class);
             hook(showMethod).intercept(chain -> {
-                // API 102 Compatibility: Safely extract arguments 
                 Object rawArgs = chain.getArgs();
                 Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : (Object[]) rawArgs;
                 
@@ -68,22 +69,31 @@ public class PhysicsHook extends XposedModule {
                 boolean arg2 = (boolean) args[2];
                 if (view != null) {
                     try {
+                        loadConfig();
+                        
                         int[] loc = new int[2];
                         view.getLocationOnScreen(loc);
                         float vx = loc[0] + (view.getWidth() / 2.0f);
                         float vy = loc[1] + (view.getHeight() / 2.0f);
 
-                        android.util.DisplayMetrics metrics = view.getContext().getResources().getDisplayMetrics();
-                        float screenW = metrics.widthPixels;
-                        float screenH = metrics.heightPixels;
+                        // Use RootView to guarantee exact screen boundaries
+                        float screenW = view.getRootView().getWidth();
+                        float screenH = view.getRootView().getHeight();
+                        if (screenW == 0) screenW = view.getContext().getResources().getDisplayMetrics().widthPixels;
+                        if (screenH == 0) screenH = view.getContext().getResources().getDisplayMetrics().heightPixels;
 
                         float centerX = screenW / 2.0f;
                         float centerY = screenH * 0.42f;
 
                         isDockView.set(vy > (screenH * 0.84f) || arg2);
 
-                        float dx = (vx - centerX) / (screenW / 2.0f);
+                        // Enforce absolute symmetry with Math.abs and configurable deadzone
+                        float absDx = Math.abs(vx - centerX);
+                        float deadzonePx = screenW * config.gridDeadzoneX;
+                        
+                        float dx = Math.max(0.0f, absDx - deadzonePx) / ((screenW / 2.0f) - deadzonePx);
                         float dy = (vy - centerY) / (screenH / 2.0f);
+                        
                         normalizedDistance.set((float) Math.sqrt(dx * dx + dy * dy));
                     } catch (Exception e) {
                         normalizedDistance.set(0.5f);
@@ -96,14 +106,13 @@ public class PhysicsHook extends XposedModule {
                 return result;
             });
 
-            // Hook 2: Dynamic Spring Override
             Method getDR = userPresentClass.getDeclaredMethod("getDampingResponse");
             hook(getDR).intercept(chain -> {
                 if (!isAnimating.get()) return chain.proceed();
 
                 loadConfig();
                 if (isDockView.get()) {
-                    return new float[]{config.dockDamping, config.dockResponse};
+                    return new float[]{config.dockDamping, config.dockResponse * config.durationScale};
                 }
 
                 float dist = normalizedDistance.get();
@@ -113,25 +122,22 @@ public class PhysicsHook extends XposedModule {
                 response = Math.min(Math.max(response, config.minResponse), config.maxResponse);
                 damping = Math.min(Math.max(damping, config.minDamping), config.maxDamping);
 
+                // Apply overall duration scalar
+                response *= config.durationScale;
+
                 return new float[]{damping, response};
             });
 
-            // Hook 3: Z-Depth Injection
             Class<?> springAnimClass = Class.forName("com.miui.home.common.animate.SpringAnimator", false, param.getClassLoader());
             Constructor<?> constructor = springAnimClass.getDeclaredConstructor(float.class, float.class, float.class, float.class);
             hook(constructor).intercept(chain -> {
                 if (isAnimating.get()) {
                     loadConfig();
-                    
                     Object rawArgs = chain.getArgs();
-                    
-                    // API 102 Strict Compliance: Arguments are immutable. We must clone them.
                     Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : ((Object[]) rawArgs).clone();
                     
                     float startVal = (float) args[2];
                     args[2] = startVal * config.zDepthMultiplier;
-                    
-                    // Proceed with our newly modified arguments array
                     return chain.proceed(args);
                 }
                 return chain.proceed();
