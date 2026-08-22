@@ -38,21 +38,22 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         rootLayout = new LinearLayout(this);
         rootLayout.setOrientation(LinearLayout.VERTICAL);
-        rootLayout.setPadding(40, 40, 40, 40);
+        // Added heavy top padding (120) to clear the action bar
+        rootLayout.setPadding(40, 120, 40, 40);
         scroll.addView(rootLayout);
         setContentView(scroll);
 
         TextView appTitle = new TextView(this);
-        appTitle.setText("HyperBounce Physics Engine");
-        appTitle.setTextSize(22);
+        appTitle.setText("HyperBounce Engine");
+        appTitle.setTextSize(24);
         appTitle.setTextColor(Color.BLACK);
         appTitle.setPadding(0, 0, 0, 20);
         rootLayout.addView(appTitle);
 
         Spinner modeSpinner = new Spinner(this);
         String[] modes = {
-            "Mode 0: iOS Radial Dispersion (Original Favorite)",
-            "Mode 1: Kinetic Y-Axis Cascade (Velocity Engine)"
+            "Mode 0: iOS Radial Dispersion (Original)",
+            "Mode 1: Kinetic Y-Axis Cascade (Advanced)"
         };
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, modes);
         modeSpinner.setAdapter(adapter);
@@ -92,12 +93,17 @@ public class MainActivity extends Activity {
             addSlider("dockResponse", "Dock Response (s)", "Speed for dock icons.", 0.1f, 1.5f, 0.40f);
             addSlider("zDepthMultiplier", "3D Z-Depth Scale", "Multiplies initial 3D spawn distance.", 1.0f, 4.0f, 1.60f);
         } else {
-            addSlider("durationScale", "Overall Animation Duration Multiplier", "Scales the entire animation speed globally.", 0.1f, 3.0f, 1.0f);
+            addSlider("durationScale", "Overall Animation Duration", "Scales the entire animation speed globally.", 0.1f, 3.0f, 1.0f);
             addSlider("velocityInfluence", "Velocity Impact Multiplier", "Scales how violently swipe speed affects the physics.", 0.0f, 2.0f, 1.0f);
-            addSlider("zDepthPunch", "Base Z-Depth Multiplier", "Forces bottom rows to have deep 3D travel distance.", 1.0f, 5.0f, 1.5f);
+            addSlider("velocityBounceIntensity", "Gradient Bounce Intensity", "Controls the progressive rubber-band bounce on fast swipes (strongest at top row).", 0.0f, 1.0f, 0.40f);
+            addSlider("zDepthPunch", "Base Z-Depth Floor", "Forces bottom rows to have deep 3D travel distance.", 1.0f, 5.0f, 1.5f);
+            addSlider("zDepthGradient", "Z-Depth Top-Row Gradient", "How much deeper the top rows get sucked into 3D space on fast swipes.", 0.0f, 3.0f, 1.2f);
             addSlider("cascadeDamping", "Base Cascade Damping", "Resting friction before velocity modifiers.", 0.5f, 1.0f, 0.95f);
-            addSlider("cascadeBaseResponse", "Base Cascade Response (s)", "Baseline speed of settling.", 0.2f, 1.5f, 0.62f);
-            addSlider("cascadeRowStagger", "Row Stagger Delay Step", "Mathematical delay gap between each row.", 0.0f, 0.10f, 0.040f);
+            addSlider("cascadeBaseResponse", "Bottom Row Base Response (s)", "Speed of the BOTTOM row. Controls the entire grid speed.", 0.2f, 1.5f, 0.55f);
+            addSlider("cascadeRowStagger", "Row Stagger Delay Step (s)", "Mathematical delay added progressively to each row above the bottom.", 0.0f, 0.10f, 0.040f);
+            addSlider("kineticDockDamping", "Independent Dock Damping", "Dedicated bounce control for the Dock/Hotseat.", 0.1f, 1.0f, 0.85f);
+            addSlider("kineticDockResponse", "Independent Dock Response (s)", "Dedicated speed control for the Dock/Hotseat.", 0.1f, 1.5f, 0.38f);
+            addSlider("kineticDockZDepth", "Independent Dock Z-Depth", "Dedicated 3D depth multiplier for the Dock.", 0.1f, 3.0f, 0.8f);
             addSlider("maxVelocity", "Max Swipe Velocity", "Normalization limit for swipe momentum.", 5000.0f, 30000.0f, 16000.0f);
         }
     }
@@ -224,7 +230,9 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        menu.add(0, 1, 0, "Restart Launcher & UI").setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+        // Splitting into separate buttons inside the three-dot dropdown
+        menu.add(0, 1, 0, "Restart Launcher").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        menu.add(0, 2, 0, "Restart System UI").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         return true;
     }
 
@@ -233,8 +241,13 @@ public class MainActivity extends Activity {
         if (item.getItemId() == 1) {
             try {
                 Runtime.getRuntime().exec("su -c killall com.miui.home");
+                Toast.makeText(this, "Launcher Restarted", Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {}
+            return true;
+        } else if (item.getItemId() == 2) {
+            try {
                 Runtime.getRuntime().exec("su -c killall com.android.systemui");
-                Toast.makeText(this, "Restarted successfully", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "System UI Restarted", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {}
             return true;
         }

@@ -3,9 +3,9 @@ package dev.joseph.hyperbounce;
 import org.json.JSONObject;
 
 public class Config {
-    public int animMode = 1; // 0 = Classic Radial, 1 = Kinetic Cascade
+    public int animMode = 1; 
     
-    // Mode 0: Classic Radial Dispersion (No forced symmetry)
+    // Mode 0: Classic Radial Dispersion
     public float dockDamping = 0.70f;
     public float dockResponse = 0.40f;
     public float centerResponse = 0.48f;
@@ -19,12 +19,21 @@ public class Config {
     public float zDepthMultiplier = 1.6f;
 
     // Mode 1: Kinetic Y-Axis Cascade
-    public float cascadeDamping = 0.95f;
-    public float cascadeBaseResponse = 0.62f;
-    public float cascadeRowStagger = 0.040f;
     public float durationScale = 1.0f;
     public float velocityInfluence = 1.0f;
+    public float velocityBounceIntensity = 0.40f;
+    
+    public float cascadeDamping = 0.95f;
+    public float cascadeBaseResponse = 0.55f; 
+    public float cascadeRowStagger = 0.040f;
+    
     public float zDepthPunch = 1.5f;
+    public float zDepthGradient = 1.2f;
+    
+    public float kineticDockDamping = 0.85f;
+    public float kineticDockResponse = 0.38f;
+    public float kineticDockZDepth = 0.8f;
+    
     public float maxVelocity = 16000.0f;
 
     public void loadFromJson(String jsonStr) {
@@ -43,12 +52,21 @@ public class Config {
             maxDamping = (float) json.optDouble("maxDamping", maxDamping);
             zDepthMultiplier = (float) json.optDouble("zDepthMultiplier", zDepthMultiplier);
 
+            durationScale = (float) json.optDouble("durationScale", durationScale);
+            velocityInfluence = (float) json.optDouble("velocityInfluence", velocityInfluence);
+            velocityBounceIntensity = (float) json.optDouble("velocityBounceIntensity", velocityBounceIntensity);
+            
             cascadeDamping = (float) json.optDouble("cascadeDamping", cascadeDamping);
             cascadeBaseResponse = (float) json.optDouble("cascadeBaseResponse", cascadeBaseResponse);
             cascadeRowStagger = (float) json.optDouble("cascadeRowStagger", cascadeRowStagger);
-            durationScale = (float) json.optDouble("durationScale", durationScale);
-            velocityInfluence = (float) json.optDouble("velocityInfluence", velocityInfluence);
+            
             zDepthPunch = (float) json.optDouble("zDepthPunch", zDepthPunch);
+            zDepthGradient = (float) json.optDouble("zDepthGradient", zDepthGradient);
+            
+            kineticDockDamping = (float) json.optDouble("kineticDockDamping", kineticDockDamping);
+            kineticDockResponse = (float) json.optDouble("kineticDockResponse", kineticDockResponse);
+            kineticDockZDepth = (float) json.optDouble("kineticDockZDepth", kineticDockZDepth);
+            
             maxVelocity = (float) json.optDouble("maxVelocity", maxVelocity);
         } catch (Exception e) {}
     }

@@ -8,7 +8,6 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.DisplayMetrics;
-import android.util.Log;
 import android.view.View;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface;
@@ -16,15 +15,12 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 
 public class PhysicsHook extends XposedModule {
-    private static final String TAG = "HyperBounce";
     private static final Config config = new Config();
     private static boolean receiverRegistered = false;
 
-    // High-Speed In-Memory Telemetry
     private static float latestVelocity = 0.0f;
     private static long lastVelocityTime = 0;
 
-    // Per-Frame State Matrix
     private static final ThreadLocal<Float> normalizedDistance = ThreadLocal.withInitial(() -> 0.5f);
     private static final ThreadLocal<Integer> currentRow = ThreadLocal.withInitial(() -> 0);
     private static final ThreadLocal<Boolean> isDockView = ThreadLocal.withInitial(() -> false);
@@ -37,8 +33,7 @@ public class PhysicsHook extends XposedModule {
     private static Context getAppContext() {
         try {
             Class<?> atClass = Class.forName("android.app.ActivityThread");
-            Method currentAppMethod = atClass.getDeclaredMethod("currentApplication");
-            return (Context) currentAppMethod.invoke(null);
+            return (Context) atClass.getDeclaredMethod("currentApplication").invoke(null);
         } catch (Throwable t) { return null; }
     }
 
@@ -79,9 +74,7 @@ public class PhysicsHook extends XposedModule {
     public void onPackageReady(XposedModuleInterface.PackageReadyParam param) {
         super.onPackageReady(param);
 
-        // ===============================================
-        // PROCESS 1: SYSTEMUI (Lock Screen Swipe Intercept)
-        // ===============================================
+        // --- SYSTEMUI HOOK ---
         if (param.getPackageName().equals("com.android.systemui")) {
             try {
                 Class<?> vtClass = Class.forName("android.view.VelocityTracker", false, param.getClassLoader());
@@ -94,7 +87,7 @@ public class PhysicsHook extends XposedModule {
                                 if (ctx != null) {
                                     Intent intent = new Intent("dev.joseph.hyperbounce.ACTION_VELOCITY_UPDATE");
                                     intent.putExtra("velocity", (float) vel);
-                                    intent.setPackage("com.miui.home"); // Explicit direct memory blast to Launcher
+                                    intent.setPackage("com.miui.home");
                                     ctx.sendBroadcast(intent);
                                 }
                             }
@@ -106,9 +99,7 @@ public class PhysicsHook extends XposedModule {
             return;
         }
 
-        // ===============================================
-        // PROCESS 2: MIUI LAUNCHER (Physics Engine Override)
-        // ===============================================
+        // --- MIUI LAUNCHER HOOK ---
         if (param.getPackageName().equals("com.miui.home")) {
             try {
                 Class<?> userPresentClass = Class.forName("com.miui.home.launcher.compat.UserPresentAnimationCompatPhone", false, param.getClassLoader());
@@ -120,7 +111,6 @@ public class PhysicsHook extends XposedModule {
                     Object rawArgs = chain.getArgs();
                     Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : (Object[]) rawArgs;
                     View view = (View) args[0];
-                    boolean isIndicatorArg = (boolean) args[2];
 
                     if (view != null) {
                         try {
@@ -131,7 +121,6 @@ public class PhysicsHook extends XposedModule {
                             float screenW = view.getContext().getResources().getDisplayMetrics().widthPixels;
                             float screenH = view.getContext().getResources().getDisplayMetrics().heightPixels;
 
-                            // 1. Grid Intelligent Mapping
                             int cellY = -1;
                             long container = 0;
                             Object tag = view.getTag();
@@ -140,25 +129,22 @@ public class PhysicsHook extends XposedModule {
                                 try { container = tag.getClass().getField("container").getLong(tag); } catch (Throwable t) {}
                             }
 
-                            // Identify Dock vs Indicator vs Grid
-                            isIndicator.set(isIndicatorArg);
+                            isIndicator.set((boolean) args[2]);
                             isDockView.set(container == -101L);
                             currentRow.set(cellY != -1 ? cellY : (int) Math.floor((vy / screenH) * 6.0f));
 
-                            // 2. Telemetry Normalizer (Fades out 2.5s after unlock)
                             if (System.currentTimeMillis() - lastVelocityTime < 2500) {
                                 currentKineticFactor.set(Math.min(1.0f, Math.abs(latestVelocity) / config.maxVelocity));
                             } else {
                                 currentKineticFactor.set(0.0f);
                             }
 
-                            // 3. Classic Radial Dispersion Math
                             if (config.animMode == 0) {
                                 float centerX = screenW / 2.0f;
                                 float centerY = screenH * 0.42f;
                                 float dx = (vx - centerX) / (screenW / 2.0f);
                                 float dy = (vy - centerY) / (screenH / 2.0f);
-                                normalizedDistance.set((float) Math.sqrt(dx * dx + dy * dy)); // Asymmetric, organic
+                                normalizedDistance.set((float) Math.sqrt(dx * dx + dy * dy));
                             }
                         } catch (Exception e) {}
                     }
@@ -174,39 +160,39 @@ public class PhysicsHook extends XposedModule {
                     if (!isAnimating.get()) return chain.proceed();
 
                     if (config.animMode == 0) {
-                        // MODE 0: ORIGINAL RADIAL LOGIC
                         if (isDockView.get() || isIndicator.get()) return new float[]{config.dockDamping, config.dockResponse};
-                        
                         float dist = normalizedDistance.get();
                         float response = config.centerResponse + (dist * config.edgeResponseDelay);
                         float damping = config.centerDamping - (dist * config.edgeDampingDrop);
-                        
                         response = Math.min(Math.max(response, config.minResponse), config.maxResponse);
                         damping = Math.min(Math.max(damping, config.minDamping), config.maxDamping);
                         return new float[]{damping, response};
                     } else {
-                        // MODE 1: KINETIC VELOCITY ENGINE
+                        // MODE 1: PROGRESSIVE KINETIC CASCADE
+                        if (isDockView.get() || isIndicator.get()) {
+                            activeResponse.set(config.kineticDockResponse * config.durationScale);
+                            activeDamping.set(config.kineticDockDamping);
+                            return new float[]{config.kineticDockDamping, config.kineticDockResponse * config.durationScale};
+                        }
+
                         float kF = currentKineticFactor.get();
                         float vInf = config.velocityInfluence;
                         int row = currentRow.get();
 
-                        // Cascade Timing: Base - (Row * Stagger)
-                        float response = config.cascadeBaseResponse - (row * config.cascadeRowStagger);
-                        
-                        // Dock must arrive absolutely first (simulate as Row 8)
-                        if (isDockView.get() || isIndicator.get()) {
-                            response = config.cascadeBaseResponse - (8 * config.cascadeRowStagger);
-                        }
+                        // Progressive Math: Top row (0) gets multiplier of 1.0. Bottom row gets ~0.37.
+                        float rowFactor = Math.max(0.0f, (8.0f - row) / 8.0f);
 
-                        // Apply Master Animation Duration Slider
+                        // Cascade Timing: Bottom row is BaseResponse. Upper rows add stagger delay.
+                        // (Assuming max grid row is roughly 6 for math baseline)
+                        float response = config.cascadeBaseResponse + (Math.max(0, 6 - row) * config.cascadeRowStagger);
+                        
+                        // Velocity speeds up the response slightly
+                        response *= (1.0f - (0.30f * kF * vInf * rowFactor));
                         response *= config.durationScale;
 
-                        // Velocity Multiplier: Fast flick = ~30% faster response, ~25% lower damping (more bounce)
-                        response *= (1.0f - (0.30f * kF * vInf));
-                        float damping = config.cascadeDamping * (1.0f - (0.25f * kF * vInf));
-
-                        // Top Rows (0, 1) get significantly more rubber-band bounce on fast swipes
-                        if (row <= 1 && !isDockView.get()) damping *= (1.0f - (0.35f * kF * vInf));
+                        // Gradient Bounce: Top row loses the most damping, generating the most bounce.
+                        float bounceDrop = config.velocityBounceIntensity * kF * vInf * rowFactor;
+                        float damping = config.cascadeDamping * (1.0f - bounceDrop);
 
                         response = Math.max(0.15f, Math.min(response, 1.5f));
                         damping = Math.max(0.20f, Math.min(damping, 1.0f));
@@ -225,14 +211,14 @@ public class PhysicsHook extends XposedModule {
                         Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : ((Object[]) rawArgs).clone();
 
                         if (config.animMode == 0) {
-                            // MODE 0: ORIGINAL Z-PUNCH
                             args[2] = ((float) args[2]) * config.zDepthMultiplier;
                         } else {
-                            // MODE 1: MICRO-ANIMATIONS & Z-AXIS
                             float startVal = (float) args[2];
                             float endVal = (float) args[3];
                             float kF = currentKineticFactor.get();
                             float vInf = config.velocityInfluence;
+                            int row = currentRow.get();
+                            float rowFactor = Math.max(0.0f, (8.0f - row) / 8.0f);
 
                             if (startVal == 0.0f && endVal == 1.0f) { // Opacity
                                 args[0] = 1.0f;
@@ -241,20 +227,13 @@ public class PhysicsHook extends XposedModule {
                                 args[2] = 0.85f - (0.20f * kF * vInf); 
                                 args[0] = activeDamping.get();
                                 args[1] = activeResponse.get();
-                            } else if (endVal == 0.0f && startVal > 5.0f) { // Z-Axis Movement
-                                // Floor the bottom rows so they don't look flat!
-                                float safeStart = Math.max(startVal, 350.0f);
-                                
+                            } else if (endVal == 0.0f && startVal > 5.0f) { // Z-Translation
                                 if (isDockView.get() || isIndicator.get()) {
-                                    args[2] = safeStart; // Dock is immune to extreme velocity punch
+                                    args[2] = 350.0f * config.kineticDockZDepth; // Independent Dock Z-Depth
                                 } else {
-                                    // Moderate Z-punch for all rows
-                                    float zMult = config.zDepthPunch * (1.0f + (0.5f * kF * vInf));
-                                    
-                                    // Extreme Z-punch for top rows (sucked deep into the axis)
-                                    if (currentRow.get() <= 2 && kF > 0.4f) {
-                                        zMult *= (1.0f + (1.2f * kF * vInf)); 
-                                    }
+                                    float safeStart = Math.max(startVal, 350.0f * config.zDepthPunch);
+                                    // Gradient Z-Punch: Top rows get sucked much deeper than bottom rows
+                                    float zMult = 1.0f + (config.zDepthGradient * kF * vInf * rowFactor);
                                     args[2] = safeStart * zMult;
                                 }
                             }
