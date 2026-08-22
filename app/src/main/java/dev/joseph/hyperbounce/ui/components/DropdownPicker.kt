@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -52,7 +55,7 @@ fun DropdownPicker(
         scope.launch { progress.animateTo(0f, MenuAnimationPreset.Bouncy.getSpec(isClosing = true)) }
     }
 
-    Box(modifier) {
+    Box(Modifier.width(120.dp).height(36.dp).zIndex(if (expanded) 100f else 0f).then(modifier)) {
         if (expanded) {
             Box(
                 Modifier

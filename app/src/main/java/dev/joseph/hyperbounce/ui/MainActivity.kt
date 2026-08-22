@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
@@ -111,13 +114,42 @@ private fun HyperBounceApp(repository: SettingsRepository) {
             Box(
                 Modifier
                     .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                colors.background,
+                                colors.wallpaperTop.copy(alpha = if (colors.isDark) 0.28f else 0.16f),
+                                colors.background,
+                                colors.wallpaperBottom.copy(alpha = if (colors.isDark) 0.20f else 0.12f)
+                            )
+                        )
+                    )
                     .layerBackdrop(backdrop)
-                    .background(colors.background)
             )
 
             AnimatedContent(
                 targetState = current,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(rootTabIndex, atRoot) {
+                        var totalDx = 0f
+                        var totalDy = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { totalDx = 0f; totalDy = 0f },
+                            onHorizontalDrag = { change, dragAmount ->
+                                totalDx += dragAmount
+                                totalDy += kotlin.math.abs(change.position.y - change.previousPosition.y)
+                            },
+                            onDragEnd = {
+                                if (atRoot && kotlin.math.abs(totalDx) > 80f && kotlin.math.abs(totalDx) > totalDy * 1.25f) {
+                                    when {
+                                        totalDx < 0f && rootTabIndex == 0 -> selectRootTab(1)
+                                        totalDx > 0f && rootTabIndex == 1 -> selectRootTab(0)
+                                    }
+                                }
+                            }
+                        )
+                    },
                 transitionSpec = {
                     val forwardSpring = spring<androidx.compose.ui.unit.IntOffset>(
                         dampingRatio = 0.88f,
@@ -180,25 +212,25 @@ private fun HyperBounceApp(repository: SettingsRepository) {
             AnimatedVisibility(
                 visible = atRoot,
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
+                    .align(Alignment.BottomCenter)
                     .safeDrawingPadding()
-                    .padding(start = 16.dp, bottom = 16.dp),
+                    .padding(bottom = 16.dp),
                 enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = 380f)) { it / 2 } + fadeIn(),
                 exit = slideOutVertically(spring(dampingRatio = 0.8f, stiffness = 380f)) { it / 2 } + fadeOut()
             ) {
                 Box(Modifier.width(184.dp)) {
                     LiquidBottomTabs(
-                        selectedTabIndex = { rootTabIndex },
+                        selectedTabIndex = rootTabIndex,
                         onTabSelected = selectRootTab,
                         backdrop = backdrop,
                         tabsCount = 2
                     ) {
                         LiquidBottomTab(onClick = { selectRootTab(0) }) {
-                            SlidersIcon(color = Color.White, size = 18.dp)
+                            SlidersIcon(color = Color.White, size = 22.dp)
                             BasicText("Tuning", style = HyperBounceType.caption.copy(color = Color.White))
                         }
                         LiquidBottomTab(onClick = { selectRootTab(1) }) {
-                            GearIcon(color = Color.White, size = 18.dp)
+                            GearIcon(color = Color.White, size = 22.dp)
                             BasicText("Settings", style = HyperBounceType.caption.copy(color = Color.White))
                         }
                     }
