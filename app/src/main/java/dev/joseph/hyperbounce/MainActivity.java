@@ -2,20 +2,22 @@ package dev.joseph.hyperbounce;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.graphics.Color;
-import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
-import android.widget.Switch;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.io.File;
@@ -26,6 +28,7 @@ import org.json.JSONObject;
 public class MainActivity extends Activity {
     private JSONObject currentConfig = new JSONObject();
     private LinearLayout rootLayout;
+    private LinearLayout slidersLayout;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,156 +42,73 @@ public class MainActivity extends Activity {
         scroll.addView(rootLayout);
         setContentView(scroll);
 
-        // Core App Title
+        // App Title
         TextView appTitle = new TextView(this);
         appTitle.setText("HyperBounce Physics Engine");
-        appTitle.setTextSize(24);
+        appTitle.setTextSize(22);
         appTitle.setTextColor(Color.BLACK);
-        appTitle.setPadding(0, 0, 0, 40);
+        appTitle.setPadding(0, 0, 0, 20);
         rootLayout.addView(appTitle);
 
-        // Advanced Scripting Button
-        Button scriptBtn = new Button(this);
-        scriptBtn.setText("Advanced: Inject Custom Physics Script");
-        scriptBtn.setTextColor(Color.parseColor("#D81B60"));
-        scriptBtn.setOnClickListener(v -> openScriptEditor());
-        rootLayout.addView(scriptBtn);
-        
-        TextView spacer = new TextView(this);
-        spacer.setPadding(0,0,0,40);
-        rootLayout.addView(spacer);
+        // Animation Mode Dropdown
+        TextView modeTitle = new TextView(this);
+        modeTitle.setText("Select Animation Engine Mode:");
+        modeTitle.setTextSize(14);
+        modeTitle.setTextColor(Color.DKGRAY);
+        rootLayout.addView(modeTitle);
 
-        // UI Sliders with Detailed Descriptions
-        addSlider("animationDuration", "Animation Duration", "Scales the overall speed of the animation. 1.0 is default. 1.5 is slow motion.", 0.1f, 3.0f, 1.0f);
-        addSlider("gridDeadzoneX", "Center Deadzone (%)", "Forces perfect symmetry. 0.125 treats both middle columns of a 4-column grid as dead center.", 0.0f, 0.4f, 0.125f);
-        
-        addSlider("centerDamping", "Center Damping", "Controls the bounce of the apps near the center. Lower value = More aggressive bouncing.", 0.1f, 1.0f, 0.52f);
-        addSlider("centerResponse", "Center Response (s)", "Controls how long center apps take to settle into place.", 0.1f, 1.5f, 0.48f);
-        
-        addSlider("edgeDampingDrop", "Edge Damping Reduction", "How much bouncier the outer edges are compared to the center. Creates the iOS ripple effect.", 0.0f, 0.5f, 0.10f);
-        addSlider("edgeResponseDelay", "Edge Response Delay (s)", "How much slower the outer edges settle compared to the center.", 0.0f, 1.0f, 0.22f);
-        
-        addSlider("minDamping", "Minimum Damping Bound", "Safety clamp to prevent infinite physics glitching.", 0.1f, 1.0f, 0.40f);
-        addSlider("maxDamping", "Maximum Damping Bound", "Safety clamp.", 0.1f, 1.0f, 0.55f);
-        addSlider("minResponse", "Minimum Response Bound", "Safety clamp.", 0.1f, 1.5f, 0.45f);
-        addSlider("maxResponse", "Maximum Response Bound", "Safety clamp.", 0.1f, 1.5f, 0.75f);
-        
-        addSlider("dockDamping", "Dock Damping", "Bounce parameter exclusively for the bottom dock icons.", 0.1f, 1.0f, 0.70f);
-        addSlider("dockResponse", "Dock Response (s)", "Speed parameter exclusively for the bottom dock icons.", 0.1f, 1.5f, 0.40f);
-        
-        addSlider("zDepthMultiplier", "3D Z-Depth Scale", "Multiplies the deep 3D pop-out effect when unlocking the device.", 1.0f, 4.0f, 1.60f);
-    }
+        Spinner modeSpinner = new Spinner(this);
+        String[] modes = {
+            "Mode 0: iOS Radial Dispersion (Original Classic)",
+            "Mode 1: Kinetic Y-Axis Cascade (Velocity Dependent)"
+        };
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, modes);
+        modeSpinner.setAdapter(adapter);
+        modeSpinner.setSelection(currentConfig.optInt("animMode", 1));
+        modeSpinner.setPadding(0, 10, 0, 30);
 
-    private void openScriptEditor() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("JavaScript Physics Override");
+        rootLayout.addView(modeSpinner);
 
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(30, 20, 30, 0);
-        
-        // Button to view original source code
-        Button viewSourceBtn = new Button(this);
-        viewSourceBtn.setText("View Original Source Code");
-        viewSourceBtn.setOnClickListener(v -> showOriginalCodeDialog());
-        layout.addView(viewSourceBtn);
+        slidersLayout = new LinearLayout(this);
+        slidersLayout.setOrientation(LinearLayout.VERTICAL);
+        rootLayout.addView(slidersLayout);
 
-        Switch enableSwitch = new Switch(this);
-        enableSwitch.setText("Enable Dynamic Script Injection");
-        enableSwitch.setChecked(currentConfig.optBoolean("useCustomScript", false));
-        enableSwitch.setPadding(0, 20, 0, 10);
-        layout.addView(enableSwitch);
-
-        TextView info = new TextView(this);
-        info.setText("Write raw JavaScript. Must return [damping, response].\nVars: isDockView, dist, vx, vy, screenW, screenH");
-        info.setPadding(0, 10, 0, 10);
-        info.setTextColor(Color.GRAY);
-        layout.addView(info);
-
-        final EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        input.setTypeface(Typeface.MONOSPACE);
-        input.setLines(14);
-        input.setGravity(android.view.Gravity.TOP | android.view.Gravity.LEFT);
-        
-        String defScript = "// Available Variables:\n// isDockView (boolean), dist (float 0.0 to 1.0)\n// vx, vy (absolute icon coordinates)\n// screenW, screenH (screen dimensions)\n\nfunction getPhysics() {\n    if (isDockView) {\n        return [0.70, 0.40];\n    }\n    var damping = 0.52 - (dist * 0.10);\n    var response = 0.48 + (dist * 0.22);\n    return [damping, response];\n}\ngetPhysics();";
-        input.setText(currentConfig.optString("customScript", defScript));
-        layout.addView(input);
-
-        builder.setView(layout);
-        builder.setPositiveButton("Validate & Save", (dialog, which) -> {
-            try {
-                // Try validating via Rhino Engine
-                org.mozilla.javascript.Context rhino = org.mozilla.javascript.Context.enter();
-                rhino.setOptimizationLevel(-1);
-                rhino.compileString(input.getText().toString(), "TestScript", 1, null);
-                
-                currentConfig.put("useCustomScript", enableSwitch.isChecked());
-                currentConfig.put("customScript", input.getText().toString());
-                saveConfig();
-                Toast.makeText(this, "Script Validated & Injected!", Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
-                Toast.makeText(this, "Syntax Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            } finally {
-                org.mozilla.javascript.Context.exit();
+        modeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                try {
+                    currentConfig.put("animMode", position);
+                    saveConfig();
+                    renderSliders(position);
+                } catch (Exception e) {}
             }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
         });
-        builder.setNegativeButton("Cancel", null);
-        builder.show();
     }
 
-    private void showOriginalCodeDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Original MIUI Decompiled Source");
-        
-        ScrollView scroll = new ScrollView(this);
-        TextView codeView = new TextView(this);
-        codeView.setTextIsSelectable(true);
-        codeView.setTypeface(Typeface.MONOSPACE);
-        codeView.setTextSize(11);
-        codeView.setPadding(30, 30, 30, 30);
-        
-        String sourceCode = "/* ==========================================\n" +
-            " * TARGET: com.miui.home.launcher.compat.UserPresentAnimationCompatPhone\n" +
-            " * ========================================== */\n\n" +
-            "private float[] getDampingResponse() {\n" +
-            "    if (DeviceConfigs.isInFoldDeviceLargeScreen(Application.getInstance())) {\n" +
-            "        if (DeviceLevelUtils.isHighAnimationRate()) {\n" +
-            "            return new float[]{0.85f, 0.55f};\n" +
-            "        }\n" +
-            "        return new float[]{0.9f, 0.4f};\n" +
-            "    }\n" +
-            "    if (DeviceLevelUtils.isHighAnimationRate()) {\n" +
-            "        return new float[]{0.85f, 0.6f};\n" +
-            "    }\n" +
-            "    return new float[]{0.9f, 0.45f};\n" +
-            "}\n\n" +
-            "void showUserPresentAnimation(final View view, int i, boolean z) {\n" +
-            "    if (view == null) return;\n" +
-            "    processViewLayerType(view);\n" +
-            "    float[] dampingResponse = getDampingResponse();\n" +
-            "    this.mAllAnimationViewNum++;\n\n" +
-            "    final int iIntValue = ((Integer) getTagAndClear(view, R$id.user_present_animation_child_to_pivot_x, 0)).intValue();\n" +
-            "    final int iIntValue2 = ((Integer) getTagAndClear(view, R$id.user_present_animation_child_to_pivot_y, 0)).intValue();\n" +
-            "    float fFloatValue = ((Float) getTagAndClear(view, R$id.user_present_animation_child_to_pivot_z, Float.valueOf(0.0f))).floatValue();\n" +
-            "    view.setPivotX(view.getWidth() / 2.0f);\n" +
-            "    view.setPivotY(view.getHeight() / 2.0f);\n" +
-            "    float f = fFloatValue + UserPresentAnimationCompatComplex.minDis;\n" +
-            "    view.setTag(R$id.user_present_animation_alpha_playing, Boolean.FALSE);\n\n" +
-            "    final boolean zIsBlurSupported = isBlurSupported();\n" +
-            "    final float fDp2px = DimenUtils.dp2px(10.0f);\n" +
-            "    SpringAnimator springAnimator = new SpringAnimator(dampingResponse[0], dampingResponse[1], f, 0.0f);\n" +
-            "    springAnimator.setUpdateListener(...);\n" +
-            "    springAnimator.setAnimatorListenerAdapter(this.mAnimatorListener);\n" +
-            "    springAnimator.lambda$new$1();\n" +
-            "    view.setTag(R$id.view_animation_z, springAnimator);\n" +
-            "}\n";
-            
-        codeView.setText(sourceCode);
-        scroll.addView(codeView);
-        builder.setView(scroll);
-        builder.setPositiveButton("Close", null);
-        builder.show();
+    private void renderSliders(int mode) {
+        slidersLayout.removeAllViews();
+
+        if (mode == 0) {
+            // Mode 0 Sliders (Radial Classic)
+            addSlider("centerDamping", "Center Damping", "Bounce of center apps. Lower = more bounce.", 0.1f, 1.0f, 0.58f);
+            addSlider("centerResponse", "Center Response (s)", "Time for center apps to settle.", 0.1f, 1.5f, 0.48f);
+            addSlider("edgeDampingDrop", "Edge Damping Reduction", "Extra bounce on screen edges.", 0.0f, 0.5f, 0.10f);
+            addSlider("edgeResponseDelay", "Edge Response Delay (s)", "Lag delay for outer icons.", 0.0f, 1.0f, 0.22f);
+            addSlider("minDamping", "Minimum Damping Bound", "Safety bound.", 0.1f, 1.0f, 0.42f);
+            addSlider("maxDamping", "Maximum Damping Bound", "Safety bound.", 0.1f, 1.0f, 0.65f);
+            addSlider("minResponse", "Minimum Response Bound", "Safety bound.", 0.1f, 1.5f, 0.45f);
+            addSlider("maxResponse", "Maximum Response Bound", "Safety bound.", 0.1f, 1.5f, 0.75f);
+            addSlider("dockDamping", "Dock Damping", "Bounce for dock icons.", 0.1f, 1.0f, 0.70f);
+            addSlider("dockResponse", "Dock Response (s)", "Speed for dock icons.", 0.1f, 1.5f, 0.40f);
+            addSlider("zDepthMultiplier", "3D Z-Depth Scale", "Multiplies initial 3D spawn distance.", 1.0f, 4.0f, 1.60f);
+        } else {
+            // Mode 1 Sliders (Kinetic Cascade)
+            addSlider("cascadeDamping", "Cascade Base Damping", "Critically damped resting friction.", 0.5f, 1.0f, 0.92f);
+            addSlider("cascadeBaseResponse", "Cascade Base Response (s)", "Speed of upper rows settling.", 0.2f, 1.0f, 0.50f);
+            addSlider("cascadeRowStagger", "Row Stagger Delay Step (s)", "Delay gap between each row from bottom to top.", 0.01f, 0.10f, 0.035f);
+            addSlider("maxVelocity", "Max Measured Swipe Velocity", "SystemUI normalizer for physical swipe speeds.", 5000.0f, 30000.0f, 16000.0f);
+        }
     }
 
     private void loadConfig() {
@@ -205,49 +125,48 @@ public class MainActivity extends Activity {
     }
 
     private void saveConfig() {
-        new Thread(() -> {
-            try {
-                File file = new File(getFilesDir(), "config.json");
-                FileOutputStream fos = new FileOutputStream(file);
-                fos.write(currentConfig.toString().getBytes("UTF-8"));
-                fos.flush();
-                fos.close();
-                
-                Runtime.getRuntime().exec("su -c cp " + file.getAbsolutePath() + " /data/local/tmp/hyperbounce.json").waitFor();
-                Runtime.getRuntime().exec("su -c chmod 777 /data/local/tmp/hyperbounce.json").waitFor();
-            } catch (Exception e) {}
-        }).start();
+        try {
+            File file = new File(getFilesDir(), "config.json");
+            FileOutputStream fos = new FileOutputStream(file);
+            fos.write(currentConfig.toString().getBytes("UTF-8"));
+            fos.flush();
+            fos.close();
+
+            // Broadcast in-memory config update to Launcher
+            Intent intent = new Intent("dev.joseph.hyperbounce.ACTION_CONFIG_CHANGED");
+            intent.putExtra("config_json", currentConfig.toString());
+            sendBroadcast(intent);
+        } catch (Exception e) {}
     }
 
     private void addSlider(String key, String label, String desc, float min, float max, float defVal) {
         float savedVal = (float) currentConfig.optDouble(key, defVal);
-        
+
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.VERTICAL);
-        row.setPadding(0, 10, 0, 40);
+        row.setPadding(0, 10, 0, 30);
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
-        
+
         TextView title = new TextView(this);
         title.setText(label);
-        title.setTextSize(16);
+        title.setTextSize(15);
         title.setTextColor(Color.BLACK);
         title.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        
+
         TextView valText = new TextView(this);
         valText.setText(String.format("%.3f", savedVal));
         valText.setTextColor(Color.parseColor("#007AFF"));
-        valText.setTextSize(16);
+        valText.setTextSize(15);
 
         header.addView(title);
         header.addView(valText);
         row.addView(header);
 
-        // Add info description
         TextView descText = new TextView(this);
         descText.setText(desc);
-        descText.setTextSize(12);
+        descText.setTextSize(11);
         descText.setTextColor(Color.DKGRAY);
         descText.setPadding(0, 0, 0, 10);
         row.addView(descText);
@@ -258,14 +177,14 @@ public class MainActivity extends Activity {
         SeekBar seekBar = new SeekBar(this);
         seekBar.setMax(1000);
         seekBar.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        
+
         if (savedVal > max) seekBar.setProgress(1000);
         else if (savedVal < min) seekBar.setProgress(0);
         else seekBar.setProgress((int) (((savedVal - min) / (max - min)) * 1000));
 
         Button resetBtn = new Button(this);
         resetBtn.setText("Reset");
-        
+
         controls.addView(seekBar);
         controls.addView(resetBtn);
         row.addView(controls);
@@ -320,7 +239,7 @@ public class MainActivity extends Activity {
         row.setOnLongClickListener(manualInput);
         valText.setOnLongClickListener(manualInput);
 
-        rootLayout.addView(row);
+        slidersLayout.addView(row);
     }
 
     @Override
