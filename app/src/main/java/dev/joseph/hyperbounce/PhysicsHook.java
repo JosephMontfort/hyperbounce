@@ -24,6 +24,7 @@ public class PhysicsHook extends XposedModule {
 
     private static final ThreadLocal<Float> normalizedDistance = ThreadLocal.withInitial(() -> 0.5f);
     private static final ThreadLocal<Integer> currentRow = ThreadLocal.withInitial(() -> 0);
+    private static final ThreadLocal<Boolean> isOuterColumn = ThreadLocal.withInitial(() -> false);
     private static final ThreadLocal<Boolean> isDockView = ThreadLocal.withInitial(() -> false);
     private static final ThreadLocal<Boolean> isIndicator = ThreadLocal.withInitial(() -> false);
     private static final ThreadLocal<Boolean> isAnimating = ThreadLocal.withInitial(() -> false);
@@ -132,6 +133,16 @@ public class PhysicsHook extends XposedModule {
                             float screenW = view.getContext().getResources().getDisplayMetrics().widthPixels;
                             float screenH = view.getContext().getResources().getDisplayMetrics().heightPixels;
 
+                            int cols = Math.max(1, config.gridColumns);
+                            int rows = Math.max(1, config.gridRows);
+
+                            // Calculate Column (Determine Center vs Outer)
+                            float cellWidth = screenW / (float) cols;
+                            int colIndex = (int) (vx / cellWidth);
+                            colIndex = Math.max(0, Math.min(cols - 1, colIndex));
+                            isOuterColumn.set(colIndex == 0 || colIndex == cols - 1);
+
+                            // Calculate Row
                             int cellY = -1;
                             long container = 0;
                             Object tag = view.getTag();
@@ -139,10 +150,12 @@ public class PhysicsHook extends XposedModule {
                                 try { cellY = tag.getClass().getField("cellY").getInt(tag); } catch (Throwable t) {}
                                 try { container = tag.getClass().getField("container").getLong(tag); } catch (Throwable t) {}
                             }
-
+                            int rowIndex = cellY != -1 ? cellY : (int) Math.floor((vy / screenH) * rows);
+                            rowIndex = Math.max(0, Math.min(rows - 1, rowIndex));
+                            
                             isIndicator.set((boolean) args[2]);
                             isDockView.set(container == -101L);
-                            currentRow.set(cellY != -1 ? cellY : (int) Math.floor((vy / screenH) * 6.0f));
+                            currentRow.set(rowIndex);
 
                             if (System.currentTimeMillis() - lastVelocityTime < 2500) {
                                 currentKineticFactor.set(Math.min(1.0f, Math.abs(latestVelocity) / config.maxVelocity));
@@ -185,21 +198,18 @@ public class PhysicsHook extends XposedModule {
 
                         float kF = currentKineticFactor.get();
                         float vInf = config.velocityInfluence;
-                        int rawRow = currentRow.get();
-                        int safeRow = Math.max(0, Math.min(6, rawRow)); // Clamp between 0 and 6
+                        int safeRow = Math.max(0, Math.min(config.gridRows - 1, currentRow.get()));
+                        boolean outer = isOuterColumn.get();
                         
-                        float[] rowBounces = {config.r0Bounce, config.r1Bounce, config.r2Bounce, config.r3Bounce, config.r4Bounce, config.r5Bounce, config.r6Bounce};
-                        float customRowBounce = rowBounces[safeRow];
+                        // Pull specific coordinates
+                        float customBounce = outer ? config.getDyn("r" + safeRow + "_outer_bounce", 0.2f) : config.getDyn("r" + safeRow + "_center_bounce", 0.2f);
+                        float customSettle = outer ? config.getDyn("r" + safeRow + "_outer_settle", 0.5f) : config.getDyn("r" + safeRow + "_center_settle", 0.5f);
 
-                        // Cascade Timing: Bottom row (usually 5 or 6) settles last
-                        float response = config.cascadeBaseResponse + (Math.max(0, 6 - safeRow) * config.cascadeRowStagger);
-                        
-                        // Velocity speeds up response slightly
+                        // Direct mapped settling time replaces standard response cascade
+                        float response = customSettle * config.durationScale;
                         response *= (1.0f - (0.30f * kF * vInf));
-                        response *= config.durationScale;
 
-                        // Explicit Row-by-Row Damping Drop
-                        float bounceDrop = customRowBounce * kF * vInf;
+                        float bounceDrop = customBounce * kF * vInf;
                         float damping = config.cascadeDamping * (1.0f - bounceDrop);
 
                         response = Math.max(0.15f, Math.min(response, 1.5f));
@@ -225,9 +235,7 @@ public class PhysicsHook extends XposedModule {
                             float endVal = (float) args[3];
                             float kF = currentKineticFactor.get();
                             float vInf = config.velocityInfluence;
-                            int safeRow = Math.max(0, Math.min(6, currentRow.get()));
-
-                            float[] rowZDepths = {config.r0Z, config.r1Z, config.r2Z, config.r3Z, config.r4Z, config.r5Z, config.r6Z};
+                            int safeRow = Math.max(0, Math.min(config.gridRows - 1, currentRow.get()));
 
                             if (startVal == 0.0f && endVal == 1.0f) { 
                                 args[0] = 1.0f;
@@ -240,8 +248,7 @@ public class PhysicsHook extends XposedModule {
                                 if (isDockView.get() || isIndicator.get()) {
                                     args[2] = config.kineticDockZDepth; 
                                 } else {
-                                    // Use explicit Row Z-Depth and multiply it slightly by velocity
-                                    float baseZ = rowZDepths[safeRow];
+                                    float baseZ = config.getDyn("r" + safeRow + "_z", 1000.0f);
                                     float zMult = 1.0f + (kF * vInf * 0.4f);
                                     args[2] = Math.max(startVal, baseZ * zMult);
                                 }
@@ -251,7 +258,6 @@ public class PhysicsHook extends XposedModule {
                     }
                     return chain.proceed();
                 });
-
             } catch (Throwable t) {}
         }
     }

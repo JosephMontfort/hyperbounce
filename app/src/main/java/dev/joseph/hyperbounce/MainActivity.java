@@ -24,20 +24,23 @@ import android.widget.Toast;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.util.ArrayList;
+import java.util.List;
 import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     private JSONObject currentConfig = new JSONObject();
     private LinearLayout rootLayout;
     private LinearLayout slidersLayout;
+    private Spinner presetSpinner;
+    private Runnable refreshPresets;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        // HIDE ANDROID ACTION BAR FOR CLEAN LOOK
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         
+        initializeOptimizedPreset();
         loadConfig();
 
         ScrollView scroll = new ScrollView(this);
@@ -47,7 +50,7 @@ public class MainActivity extends Activity {
         scroll.addView(rootLayout);
         setContentView(scroll);
 
-        // TOP RESTART BUTTONS (Split as requested)
+        // TOP BUTTONS
         LinearLayout topButtons = new LinearLayout(this);
         topButtons.setOrientation(LinearLayout.HORIZONTAL);
         topButtons.setPadding(0, 0, 0, 40);
@@ -78,11 +81,102 @@ public class MainActivity extends Activity {
         appTitle.setPadding(0, 0, 0, 20);
         rootLayout.addView(appTitle);
 
-        Spinner modeSpinner = new Spinner(this);
-        String[] modes = {
-            "Mode 0: iOS Radial Dispersion (Original)",
-            "Mode 1: Kinetic Y-Axis Cascade (Granular)"
+        // GRID INPUT SYSTEM
+        LinearLayout gridLayout = new LinearLayout(this);
+        gridLayout.setOrientation(LinearLayout.HORIZONTAL);
+        gridLayout.setPadding(0, 0, 0, 40);
+
+        EditText gridInput = new EditText(this);
+        gridInput.setHint("Grid e.g. 4x7");
+        gridInput.setText(currentConfig.optInt("gridColumns", 4) + "x" + currentConfig.optInt("gridRows", 7));
+        gridInput.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+        Button updateGridBtn = new Button(this);
+        updateGridBtn.setText("Apply Grid");
+        updateGridBtn.setOnClickListener(v -> {
+            String[] parts = gridInput.getText().toString().toLowerCase().split("x");
+            if (parts.length == 2) {
+                try {
+                    currentConfig.put("gridColumns", Integer.parseInt(parts[0].trim()));
+                    currentConfig.put("gridRows", Integer.parseInt(parts[1].trim()));
+                    saveConfig();
+                    renderSliders(currentConfig.optInt("animMode", 1));
+                    Toast.makeText(this, "Grid Updated", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) { Toast.makeText(this, "Invalid format", Toast.LENGTH_SHORT).show(); }
+            }
+        });
+        gridLayout.addView(gridInput);
+        gridLayout.addView(updateGridBtn);
+        rootLayout.addView(gridLayout);
+
+        // PRESET SYSTEM
+        LinearLayout presetLayout = new LinearLayout(this);
+        presetLayout.setOrientation(LinearLayout.HORIZONTAL);
+        presetLayout.setPadding(0, 0, 0, 40);
+
+        presetSpinner = new Spinner(this);
+        presetSpinner.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+        Button loadPresetBtn = new Button(this);
+        loadPresetBtn.setText("Load");
+
+        Button savePresetBtn = new Button(this);
+        savePresetBtn.setText("Save");
+
+        presetLayout.addView(presetSpinner);
+        presetLayout.addView(loadPresetBtn);
+        presetLayout.addView(savePresetBtn);
+        rootLayout.addView(presetLayout);
+
+        refreshPresets = () -> {
+            File dir = new File(getFilesDir(), "presets");
+            if (!dir.exists()) dir.mkdirs();
+            File[] files = dir.listFiles();
+            List<String> names = new ArrayList<>();
+            if (files != null) for (File f : files) if (f.getName().endsWith(".json")) names.add(f.getName().replace(".json", ""));
+            ArrayAdapter<String> presetAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, names);
+            presetSpinner.setAdapter(presetAdapter);
         };
+        refreshPresets.run();
+
+        savePresetBtn.setOnClickListener(v -> {
+            AlertDialog.Builder b = new AlertDialog.Builder(this);
+            b.setTitle("Save Preset As");
+            final EditText input = new EditText(this);
+            b.setView(input);
+            b.setPositiveButton("Save", (dialog, which) -> {
+                try {
+                    File f = new File(getFilesDir() + "/presets", input.getText().toString() + ".json");
+                    FileOutputStream fos = new FileOutputStream(f);
+                    fos.write(currentConfig.toString().getBytes("UTF-8"));
+                    fos.close();
+                    refreshPresets.run();
+                    Toast.makeText(this, "Preset Saved", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {}
+            });
+            b.setNegativeButton("Cancel", null);
+            b.show();
+        });
+
+        loadPresetBtn.setOnClickListener(v -> {
+            if (presetSpinner.getSelectedItem() != null) {
+                try {
+                    File f = new File(getFilesDir() + "/presets", presetSpinner.getSelectedItem().toString() + ".json");
+                    FileInputStream fis = new FileInputStream(f);
+                    byte[] data = new byte[(int) f.length()];
+                    fis.read(data);
+                    fis.close();
+                    currentConfig = new JSONObject(new String(data, "UTF-8"));
+                    gridInput.setText(currentConfig.optInt("gridColumns", 4) + "x" + currentConfig.optInt("gridRows", 7));
+                    saveConfig();
+                    renderSliders(currentConfig.optInt("animMode", 1));
+                    Toast.makeText(this, "Preset Loaded", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {}
+            }
+        });
+
+        Spinner modeSpinner = new Spinner(this);
+        String[] modes = { "Mode 0: iOS Radial Dispersion", "Mode 1: Kinetic Y-Axis Cascade (Granular)" };
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, modes);
         modeSpinner.setAdapter(adapter);
         modeSpinner.setSelection(currentConfig.optInt("animMode", 1));
@@ -94,13 +188,8 @@ public class MainActivity extends Activity {
         rootLayout.addView(slidersLayout);
 
         modeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                try {
-                    currentConfig.put("animMode", position);
-                    saveConfig();
-                    renderSliders(position);
-                } catch (Exception e) {}
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                try { currentConfig.put("animMode", position); saveConfig(); renderSliders(position); } catch (Exception e) {}
             }
             @Override public void onNothingSelected(AdapterView<?> parent) {}
         });
@@ -111,59 +200,78 @@ public class MainActivity extends Activity {
         
         if (mode == 0) {
             addSectionHeader("CLASSIC SETTINGS");
-            addSlider("centerDamping", "Center Damping", "(Lower = Rubber-band bouncy | Higher = Stiff/No bounce)", 0.1f, 1.0f, 0.58f);
-            addSlider("centerResponse", "Center Response", "(Lower = Snaps fast | Higher = Floats slowly)", 0.1f, 1.5f, 0.48f);
-            addSlider("edgeDampingDrop", "Edge Damping Drop", "(Higher = Edges are bouncier than center)", 0.0f, 0.5f, 0.10f);
-            addSlider("edgeResponseDelay", "Edge Response Delay", "(Higher = Edges lag behind center more)", 0.0f, 1.0f, 0.22f);
-            addSlider("minDamping", "Min Damping Bound", "(Safety limit for extreme bouncing)", 0.1f, 1.0f, 0.42f);
-            addSlider("maxDamping", "Max Damping Bound", "(Safety limit for extreme stiffness)", 0.1f, 1.0f, 0.65f);
-            addSlider("zDepthMultiplier", "Z-Depth Scale", "(Higher = Apps fly in from deeper 3D space)", 1.0f, 4.0f, 1.60f);
+            addSlider("centerDamping", "Center Damping", "", 0.1f, 1.0f, 0.58f);
+            addSlider("centerResponse", "Center Response", "", 0.1f, 1.5f, 0.48f);
+            addSlider("edgeDampingDrop", "Edge Damping Drop", "", 0.0f, 0.5f, 0.10f);
+            addSlider("edgeResponseDelay", "Edge Response Delay", "", 0.0f, 1.0f, 0.22f);
+            addSlider("minDamping", "Min Damping Bound", "", 0.1f, 1.0f, 0.42f);
+            addSlider("maxDamping", "Max Damping Bound", "", 0.1f, 1.0f, 0.65f);
+            addSlider("zDepthMultiplier", "Z-Depth Scale", "", 1.0f, 4.0f, 1.60f);
         } else {
             addSectionHeader("GLOBAL MULTIPLIERS");
-            addSlider("durationScale", "Global Anim Duration", "(Lower = Fast | 1.0 = Normal | Higher = Slow Motion)", 0.1f, 3.0f, 1.0f);
-            addSlider("velocityInfluence", "Velocity Impact", "(Lower = Ignores swipe speed | Higher = Extreme speed reaction)", 0.0f, 2.0f, 1.0f);
-            addSlider("maxVelocity", "Max Swipe Normalizer", "(Lower = Easily triggers max bounce | Higher = Requires violent flick)", 5000.0f, 30000.0f, 16000.0f);
-
-            addSectionHeader("CASCADE TIMING (THE WAVE)");
-            addSlider("cascadeDamping", "Resting Damping", "(Lower = Always bouncy | Higher = Solid iOS resting state)", 0.5f, 1.0f, 0.95f);
-            addSlider("cascadeBaseResponse", "Bottom Row Base Speed", "(Lower = Bottom row settles fast | Higher = Bottom row settles slow)", 0.2f, 1.5f, 0.55f);
-            addSlider("cascadeRowStagger", "Row Stagger Delay", "(Higher = More delay between rows. Creates the Y-Axis wave)", 0.0f, 0.10f, 0.040f);
+            addSlider("durationScale", "Global Anim Duration", "", 0.1f, 3.0f, 1.0f);
+            addSlider("velocityInfluence", "Velocity Impact", "", 0.0f, 2.0f, 1.0f);
+            addSlider("maxVelocity", "Max Swipe Normalizer", "", 5000.0f, 30000.0f, 16000.0f);
+            addSlider("cascadeDamping", "Resting Damping", "", 0.5f, 1.0f, 0.95f);
 
             addSectionHeader("DOCK ISOLATION");
-            addSlider("kineticDockDamping", "Dock Damping", "(Lower = Bouncy Dock | Higher = Stiff Dock)", 0.1f, 1.0f, 0.85f);
-            addSlider("kineticDockResponse", "Dock Response", "(Lower = Snaps fast | Higher = Settles slow)", 0.1f, 1.5f, 0.38f);
-            addSlider("kineticDockZDepth", "Dock Z-Depth", "(Higher = Dock flies in from deeper 3D space)", 100.0f, 2000.0f, 800.0f);
+            addSlider("kineticDockDamping", "Dock Damping", "", 0.1f, 1.0f, 0.85f);
+            addSlider("kineticDockResponse", "Dock Response", "", 0.1f, 1.5f, 0.38f);
+            addSlider("kineticDockZDepth", "Dock Z-Depth", "", 0.0f, 4000.0f, 800.0f);
 
-            addSectionHeader("ROW-BY-ROW Z-DEPTH (FLATNESS FIX)");
-            TextView zInfo = new TextView(this);
-            zInfo.setText("Higher Value = Icon spawns deeper in the screen. If bottom rows look 'flat', crank their Z-Depth up to 1500+.");
-            zInfo.setTextColor(Color.DKGRAY);
-            zInfo.setPadding(0, 0, 0, 20);
-            slidersLayout.addView(zInfo);
+            int rows = currentConfig.optInt("gridRows", 7);
+            
+            addSectionHeader("DYNAMIC ROW-BY-ROW Z-DEPTH");
+            for (int i = 0; i < rows; i++) addSlider("r" + i + "_z", "Row " + i + " Z-Depth", "", 100.0f, 4000.0f, 2000.0f - (i * 200));
 
-            addSlider("r0Z", "Row 0 (Top) Z-Depth", "", 100.0f, 4000.0f, 2000.0f);
-            addSlider("r1Z", "Row 1 Z-Depth", "", 100.0f, 4000.0f, 1600.0f);
-            addSlider("r2Z", "Row 2 Z-Depth", "", 100.0f, 4000.0f, 1200.0f);
-            addSlider("r3Z", "Row 3 Z-Depth", "", 100.0f, 4000.0f, 900.0f);
-            addSlider("r4Z", "Row 4 Z-Depth", "", 100.0f, 4000.0f, 600.0f);
-            addSlider("r5Z", "Row 5 Z-Depth", "", 100.0f, 4000.0f, 450.0f);
-            addSlider("r6Z", "Row 6 (Bottom) Z-Depth", "", 100.0f, 4000.0f, 450.0f);
+            addSectionHeader("DYNAMIC VELOCITY BOUNCE (CENTER VS OUTER)");
+            for (int i = 0; i < rows; i++) {
+                addSlider("r" + i + "_center_bounce", "Row " + i + " Center Bounce", "", 0.0f, 1.0f, 0.45f - (i * 0.05f));
+                addSlider("r" + i + "_outer_bounce", "Row " + i + " Outer Bounce", "", 0.0f, 1.0f, 0.45f - (i * 0.05f));
+            }
 
-            addSectionHeader("ROW-BY-ROW VELOCITY BOUNCE");
-            TextView bounceInfo = new TextView(this);
-            bounceInfo.setText("Higher Value = More rubber-band bounce when you flick hard. Lower Value = Stays stiff even on fast flicks.");
-            bounceInfo.setTextColor(Color.DKGRAY);
-            bounceInfo.setPadding(0, 0, 0, 20);
-            slidersLayout.addView(bounceInfo);
-
-            addSlider("r0Bounce", "Row 0 (Top) Velocity Bounce", "", 0.0f, 1.0f, 0.45f);
-            addSlider("r1Bounce", "Row 1 Velocity Bounce", "", 0.0f, 1.0f, 0.35f);
-            addSlider("r2Bounce", "Row 2 Velocity Bounce", "", 0.0f, 1.0f, 0.25f);
-            addSlider("r3Bounce", "Row 3 Velocity Bounce", "", 0.0f, 1.0f, 0.15f);
-            addSlider("r4Bounce", "Row 4 Velocity Bounce", "", 0.0f, 1.0f, 0.10f);
-            addSlider("r5Bounce", "Row 5 Velocity Bounce", "", 0.0f, 1.0f, 0.05f);
-            addSlider("r6Bounce", "Row 6 (Bottom) Velocity Bounce", "", 0.0f, 1.0f, 0.05f);
+            addSectionHeader("DYNAMIC SETTLING TIME / RESPONSE (CENTER VS OUTER)");
+            for (int i = 0; i < rows; i++) {
+                addSlider("r" + i + "_center_settle", "Row " + i + " Center Settling Time", "", 0.1f, 1.5f, 0.55f + (i * 0.04f));
+                addSlider("r" + i + "_outer_settle", "Row " + i + " Outer Settling Time", "", 0.1f, 1.5f, 0.55f + (i * 0.04f));
+            }
         }
+    }
+
+    private void initializeOptimizedPreset() {
+        try {
+            File dir = new File(getFilesDir(), "presets");
+            if (!dir.exists()) dir.mkdirs();
+            File opt = new File(dir, "Optimized.json");
+            if (!opt.exists()) {
+                JSONObject json = new JSONObject();
+                json.put("animMode", 1);
+                json.put("gridColumns", 4);
+                json.put("gridRows", 7);
+                json.put("durationScale", 0.782);
+                json.put("velocityInfluence", 1.526);
+                json.put("maxVelocity", 14850.0);
+                json.put("cascadeDamping", 0.920);
+                json.put("kineticDockDamping", 0.850);
+                json.put("kineticDockResponse", 0.281);
+                json.put("kineticDockZDepth", 0.985); 
+
+                json.put("r0_z", 3157.6); json.put("r1_z", 3032.8); json.put("r2_z", 2849.5);
+                json.put("r3_z", 2599.9); json.put("r4_z", 2350.3); json.put("r5_z", 2170.9); json.put("r6_z", 2057.8);
+
+                double[] bounces = {0.450, 0.473, 0.474, 0.469, 0.471, 0.459, 0.463};
+                for (int i = 0; i < 7; i++) {
+                    json.put("r" + i + "_center_bounce", bounces[i]);
+                    json.put("r" + i + "_outer_bounce", bounces[i]);
+                    double settle = 0.531 + ((6 - i) * 0.075);
+                    json.put("r" + i + "_center_settle", settle);
+                    json.put("r" + i + "_outer_settle", settle);
+                }
+                FileOutputStream fos = new FileOutputStream(opt);
+                fos.write(json.toString().getBytes("UTF-8"));
+                fos.close();
+            }
+        } catch (Exception e) {}
     }
 
     private void addSectionHeader(String titleText) {
@@ -174,11 +282,9 @@ public class MainActivity extends Activity {
         header.setTextColor(Color.WHITE);
         header.setBackgroundColor(Color.parseColor("#1E88E5"));
         header.setPadding(20, 15, 20, 15);
-        
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         params.setMargins(0, 40, 0, 20);
         header.setLayoutParams(params);
-        
         slidersLayout.addView(header);
     }
 
@@ -202,7 +308,6 @@ public class MainActivity extends Activity {
             fos.write(currentConfig.toString().getBytes("UTF-8"));
             fos.flush();
             fos.close();
-
             Intent intent = new Intent("dev.joseph.hyperbounce.ACTION_CONFIG_CHANGED");
             intent.putExtra("config_json", currentConfig.toString());
             sendBroadcast(intent);
@@ -260,8 +365,7 @@ public class MainActivity extends Activity {
         row.addView(controls);
 
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
+            @Override public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
                 if (fromUser) {
                     float newVal = min + ((progress / 1000f) * (max - min));
                     valText.setText(String.format("%.3f", newVal));
