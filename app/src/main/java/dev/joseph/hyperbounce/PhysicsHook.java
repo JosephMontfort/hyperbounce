@@ -60,8 +60,8 @@ public class PhysicsHook extends XposedModule {
             // Hook 1: Map the grid distances seamlessly without recursive calls
             Method showMethod = userPresentClass.getDeclaredMethod("showUserPresentAnimation", View.class, int.class, boolean.class);
             hook(showMethod).intercept(chain -> {
-                View view = (View) chain.args()[0];
-                boolean arg2 = (boolean) chain.args()[2];
+                View view = (View) chain.args[0];
+                boolean arg2 = (boolean) chain.args[2];
                 if (view != null) {
                     try {
                         int[] loc = new int[2];
@@ -118,8 +118,8 @@ public class PhysicsHook extends XposedModule {
             hook(constructor).intercept(chain -> {
                 if (isAnimating.get()) {
                     loadConfig();
-                    float startVal = (float) chain.args()[2];
-                    chain.args()[2] = startVal * config.zDepthMultiplier;
+                    float startVal = (float) chain.args[2];
+                    chain.args[2] = startVal * config.zDepthMultiplier;
                 }
                 return chain.proceed();
             });
