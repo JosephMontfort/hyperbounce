@@ -74,40 +74,12 @@ public class MainActivity extends Activity {
         rootLayout.addView(topButtons);
 
         TextView appTitle = new TextView(this);
-        appTitle.setText("HyperBounce Engine V2");
+        appTitle.setText("HyperBounce Physics Engine");
         appTitle.setTextSize(26);
         appTitle.setTypeface(null, Typeface.BOLD);
         appTitle.setTextColor(Color.BLACK);
         appTitle.setPadding(0, 0, 0, 20);
         rootLayout.addView(appTitle);
-
-        // GRID CONFIG
-        LinearLayout gridLayout = new LinearLayout(this);
-        gridLayout.setOrientation(LinearLayout.HORIZONTAL);
-        gridLayout.setPadding(0, 0, 0, 40);
-
-        EditText gridInput = new EditText(this);
-        gridInput.setHint("Grid e.g. 4x7");
-        gridInput.setText(currentConfig.optInt("gridColumns", 4) + "x" + currentConfig.optInt("gridRows", 7));
-        gridInput.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-
-        Button updateGridBtn = new Button(this);
-        updateGridBtn.setText("Apply Grid");
-        updateGridBtn.setOnClickListener(v -> {
-            String[] parts = gridInput.getText().toString().toLowerCase().split("x");
-            if (parts.length == 2) {
-                try {
-                    currentConfig.put("gridColumns", Integer.parseInt(parts[0].trim()));
-                    currentConfig.put("gridRows", Integer.parseInt(parts[1].trim()));
-                    saveConfig();
-                    renderSliders(currentConfig.optInt("animMode", 1));
-                    Toast.makeText(this, "Grid Updated", Toast.LENGTH_SHORT).show();
-                } catch (Exception e) { Toast.makeText(this, "Invalid format", Toast.LENGTH_SHORT).show(); }
-            }
-        });
-        gridLayout.addView(gridInput);
-        gridLayout.addView(updateGridBtn);
-        rootLayout.addView(gridLayout);
 
         // PRESET MANAGEMENT
         LinearLayout presetLayout = new LinearLayout(this);
@@ -167,19 +139,22 @@ public class MainActivity extends Activity {
                     fis.read(data);
                     fis.close();
                     currentConfig = new JSONObject(new String(data, "UTF-8"));
-                    gridInput.setText(currentConfig.optInt("gridColumns", 4) + "x" + currentConfig.optInt("gridRows", 7));
                     saveConfig();
-                    renderSliders(currentConfig.optInt("animMode", 1));
+                    renderSliders(currentConfig.optInt("animMode", 2));
                     Toast.makeText(this, "Preset Loaded", Toast.LENGTH_SHORT).show();
                 } catch (Exception e) {}
             }
         });
 
         Spinner modeSpinner = new Spinner(this);
-        String[] modes = { "Mode 0: iOS Radial Dispersion", "Mode 1: Kinetic Y-Axis Cascade (Granular)" };
+        String[] modes = { 
+            "Mode 0: Unlock - iOS Radial Dispersion", 
+            "Mode 1: Unlock - Kinetic Y-Axis Cascade",
+            "Mode 2: App Transitions & 3D Spatial Trajectory" 
+        };
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, modes);
         modeSpinner.setAdapter(adapter);
-        modeSpinner.setSelection(currentConfig.optInt("animMode", 1));
+        modeSpinner.setSelection(currentConfig.optInt("animMode", 2));
         modeSpinner.setPadding(0, 10, 0, 40);
         rootLayout.addView(modeSpinner);
 
@@ -199,44 +174,50 @@ public class MainActivity extends Activity {
         slidersLayout.removeAllViews();
         
         if (mode == 0) {
-            addSectionHeader("CLASSIC SETTINGS");
-            addSlider("centerDamping", "Center Damping", "(Lower = Rubber-band bouncy | Higher = Stiff/Zero bounce)", 0.1f, 1.0f, 0.58f);
-            addSlider("centerResponse", "Center Response", "(Lower = Snaps fast | Higher = Floats slowly)", 0.1f, 1.5f, 0.48f);
-            addSlider("edgeDampingDrop", "Edge Damping Drop", "(Higher = Edges are noticeably bouncier than center)", 0.0f, 0.5f, 0.10f);
-            addSlider("edgeResponseDelay", "Edge Response Delay", "(Higher = Outer edges lag behind center more)", 0.0f, 1.0f, 0.22f);
-            addSlider("minDamping", "Min Damping Bound", "(Safety limit for maximum allowable bounce)", 0.1f, 1.0f, 0.42f);
-            addSlider("maxDamping", "Max Damping Bound", "(Safety limit for maximum allowable stiffness)", 0.1f, 1.0f, 0.65f);
-            addSlider("zDepthMultiplier", "Z-Depth Scale", "(Higher = Icons spawn deeper in 3D perspective)", 1.0f, 4.0f, 1.60f);
-        } else {
-            addSectionHeader("GLOBAL MULTIPLIERS");
-            addSlider("durationScale", "Global Anim Duration", "(Lower = Faster animation | Higher = Slow motion settling)", 0.1f, 3.0f, 1.0f);
-            addSlider("velocityInfluence", "Velocity Impact", "(Lower = Ignores swipe speed | Higher = Extreme reaction to flick velocity)", 0.0f, 2.0f, 1.0f);
-            addSlider("maxVelocity", "Max Swipe Normalizer", "(Lower = Reaches max velocity easily | Higher = Requires harder swipe)", 5000.0f, 30000.0f, 16000.0f);
-            addSlider("cascadeDamping", "Resting Damping", "(Lower = Always loose/bouncy | Higher = Critically damped iOS resting state)", 0.5f, 1.0f, 0.95f);
+            addSectionHeader("CLASSIC RADIAL UNLOCK");
+            addSlider("centerDamping", "Center Damping", "(Lower = High rubber-band bounce | Higher = Stiff snap)", 0.1f, 1.0f, 0.58f);
+            addSlider("centerResponse", "Center Response", "(Lower = Fast snap | Higher = Slow float)", 0.1f, 1.5f, 0.48f);
+            addSlider("edgeDampingDrop", "Edge Damping Drop", "(Higher = Edges significantly bouncier than center)", 0.0f, 0.5f, 0.10f);
+            addSlider("edgeResponseDelay", "Edge Response Delay", "(Higher = Outer edges lag behind center)", 0.0f, 1.0f, 0.22f);
+            addSlider("zDepthMultiplier", "Z-Depth Scale", "(Higher = Icons spawn deeper in 3D space)", 1.0f, 4.0f, 1.60f);
+        } else if (mode == 1) {
+            addSectionHeader("KINETIC Y-AXIS UNLOCK GLOBALS");
+            addSlider("durationScale", "Global Anim Duration", "(Lower = Fast action | Higher = Cinematic slow-motion)", 0.1f, 3.0f, 1.0f);
+            addSlider("velocityInfluence", "Velocity Impact", "(Lower = Ignores swipe flick | Higher = Massive kinetic bounce)", 0.0f, 2.0f, 1.0f);
+            addSlider("cascadeDamping", "Resting Damping", "(Lower = Loose bounce | Higher = Rigid iOS stop)", 0.5f, 1.0f, 0.95f);
 
             addSectionHeader("DOCK ISOLATION");
-            addSlider("kineticDockDamping", "Dock Damping", "(Lower = Bouncier dock icons | Higher = Solid, stiff dock)", 0.1f, 1.0f, 0.85f);
-            addSlider("kineticDockResponse", "Dock Response", "(Lower = Dock snaps into place faster | Higher = Dock floats in slower)", 0.1f, 1.5f, 0.38f);
-            addSlider("kineticDockZDepth", "Dock Z-Depth", "(Higher = Dock travels from deeper Z position)", 0.0f, 4000.0f, 800.0f);
+            addSlider("kineticDockDamping", "Dock Damping", "(Lower = Bouncy dock | Higher = Solid dock)", 0.1f, 1.0f, 0.85f);
+            addSlider("kineticDockResponse", "Dock Response", "(Lower = Faster snap | Higher = Slower float)", 0.1f, 1.5f, 0.38f);
+            addSlider("kineticDockZDepth", "Dock Z-Depth", "(Higher = Dock travels from deeper Z)", 0.0f, 4000.0f, 800.0f);
 
             int rows = currentConfig.optInt("gridRows", 7);
-            
-            addSectionHeader("ROW-BY-ROW Z-DEPTH (PERSPECTIVE TRAVEL)");
+            addSectionHeader("ROW Z-DEPTH (PERSPECTIVE TRAVEL)");
             for (int i = 0; i < rows; i++) {
-                addSlider("r" + i + "_z", "Row " + i + " Z-Depth", "(Lower = Starts close to screen | Higher = Starts deep in 3D space)", 100.0f, 4000.0f, 2000.0f - (i * 200));
+                addSlider("r" + i + "_z", "Row " + i + " Z-Depth", "(Lower = Flat | Higher = Deep 3D origin)", 100.0f, 4000.0f, 2000.0f - (i * 200));
             }
+        } else {
+            // MODE 2: APP OPEN, CLOSE & 3D SPATIAL TRAJECTORY
+            addSectionHeader("SPATIAL TRAJECTORY & 3D DEPTH");
+            addSlider("appYArc", "Vertical Parabolic Arc", "(Higher = App floats upward into air before diving into icon | Zero = Straight line)", -200.0f, 300.0f, 120.0f);
+            addSlider("appBottomZWarp", "3D Bottom-Edge Compression", "(Higher = Bottom card compresses fast, creating 3D backward tilt | Zero = Flat 2D)", 0.0f, 0.70f, 0.28f);
+            addSlider("appXSway", "Horizontal Sway Curve", "(Non-zero = App arcs laterally towards center during flight)", -150.0f, 150.0f, 0.0f);
+            addSlider("appInterruptSmooth", "Gesture Interrupt Stabilizer", "(Lower = Hard cutoff | Higher = Smooth recovery on fast flicks / reversals)", 0.1f, 1.5f, 0.85f);
 
-            addSectionHeader("DYNAMIC VELOCITY BOUNCE (CENTER VS OUTER)");
-            for (int i = 0; i < rows; i++) {
-                addSlider("r" + i + "_center_bounce", "Row " + i + " Center Bounce", "(Lower = Stays rigid on flick | Higher = High rubber-band center overshoot)", 0.0f, 1.0f, 0.45f - (i * 0.05f));
-                addSlider("r" + i + "_outer_bounce", "Row " + i + " Outer Bounce", "(Lower = Stays rigid on flick | Higher = High rubber-band outer edge overshoot)", 0.0f, 1.0f, 0.45f - (i * 0.05f));
-            }
+            addSectionHeader("SPATIAL FLIGHT & MASS DYNAMICS");
+            addSlider("appTravelDamping", "Flight Path Damping", "(Lower = Window overshoots landing spot and bounces | Higher = Solid snap)", 0.30f, 1.0f, 0.60f);
+            addSlider("appTravelStiffness", "Flight Path Stiffness", "(Lower = Heavy, fluid, floating mass | Higher = High-velocity snap)", 40.0f, 600.0f, 140.0f);
 
-            addSectionHeader("DYNAMIC SETTLING TIME (CENTER VS OUTER)");
-            for (int i = 0; i < rows; i++) {
-                addSlider("r" + i + "_center_settle", "Row " + i + " Center Settling Time", "(Lower = Inner icons lock in fast | Higher = Inner icons float and settle late)", 0.1f, 1.5f, 0.55f + (i * 0.04f));
-                addSlider("r" + i + "_outer_settle", "Row " + i + " Outer Settling Time", "(Lower = Outer icons lock in fast | Higher = Outer icons float and settle late)", 0.1f, 1.5f, 0.55f + (i * 0.04f));
-            }
+            addSectionHeader("WINDOW SIZE & EXPANSION BOUNCE");
+            addSlider("appSizeDamping", "Window Scale Damping", "(Lower = App over-expands past screen on open & bounces back | Higher = Rigid)", 0.30f, 1.0f, 0.58f);
+            addSlider("appSizeStiffness", "Window Scale Stiffness", "(Lower = Slow, heavy expansion | Higher = Instant resize)", 40.0f, 600.0f, 150.0f);
+
+            addSectionHeader("SURFACE MORPH & 3D PITCH");
+            addSlider("appCornerDamping", "Corner Morph Damping", "(Lower = Corner radius rubber-bands | Higher = Clean squircle morph)", 0.30f, 1.0f, 0.75f);
+            addSlider("appCornerStiffness", "Corner Morph Stiffness", "(Lower = Corners round slowly | Higher = Snaps instantly)", 50.0f, 800.0f, 200.0f);
+            addSlider("appIconPitchDeg", "Ghost Icon 3D Tilt Angle", "(Higher = Icon card physically tilts along X-axis during transit | Zero = Flat)", 0.0f, 45.0f, 18.0f);
+            addSlider("appIconCameraDist", "3D Camera Distance", "(Lower = Dramatic fish-eye perspective | Higher = Subtle orthographic tilt)", 2000.0f, 15000.0f, 8000.0f);
+            addSlider("appAlphaDamping", "Surface Fade Damping", "(Lower = Icon ghost visible longer | Higher = Fast crossfade)", 0.40f, 1.0f, 0.92f);
         }
     }
 
@@ -247,39 +228,32 @@ public class MainActivity extends Activity {
             File opt = new File(dir, "Optimized.json");
             if (!opt.exists()) {
                 JSONObject json = new JSONObject();
-                json.put("animMode", 1);
-                json.put("gridColumns", 4);
-                json.put("gridRows", 7);
-                json.put("durationScale", 0.782);
-                json.put("velocityInfluence", 1.526);
-                json.put("maxVelocity", 14850.0);
-                json.put("cascadeDamping", 0.920);
-                json.put("kineticDockDamping", 0.850);
-                json.put("kineticDockResponse", 0.281);
-                json.put("kineticDockZDepth", 0.985); 
+                json.put("animMode", 2);
+                json.put("appYArc", 120.0);
+                json.put("appBottomZWarp", 0.28);
+                json.put("appXSway", 0.0);
+                json.put("appInterruptSmooth", 0.85);
+                json.put("appTravelDamping", 0.60);
+                json.put("appTravelStiffness", 140.0);
+                json.put("appSizeDamping", 0.58);
+                json.put("appSizeStiffness", 150.0);
+                json.put("appCornerDamping", 0.75);
+                json.put("appCornerStiffness", 200.0);
+                json.put("appIconPitchDeg", 18.0);
+                json.put("appIconCameraDist", 8000.0);
+                json.put("appAlphaDamping", 0.92);
 
-                json.put("r0_z", 3157.6); json.put("r1_z", 3032.8); json.put("r2_z", 2849.5);
-                json.put("r3_z", 2599.9); json.put("r4_z", 2350.3); json.put("r5_z", 2170.9); json.put("r6_z", 2057.8);
-
-                double[] bounces = {0.450, 0.473, 0.474, 0.469, 0.471, 0.459, 0.463};
-                for (int i = 0; i < 7; i++) {
-                    json.put("r" + i + "_center_bounce", bounces[i]);
-                    json.put("r" + i + "_outer_bounce", bounces[i]);
-                    double settle = 0.531 + ((6 - i) * 0.075);
-                    json.put("r" + i + "_center_settle", settle);
-                    json.put("r" + i + "_outer_settle", settle);
-                }
                 FileOutputStream fos = new FileOutputStream(opt);
                 fos.write(json.toString().getBytes("UTF-8"));
                 fos.close();
             }
-        } catch (Exception e) {}
+        } catch (Exception ignored) {}
     }
 
     private void addSectionHeader(String titleText) {
         TextView header = new TextView(this);
         header.setText(titleText);
-        header.setTextSize(14);
+        header.setTextSize(13);
         header.setTypeface(null, Typeface.BOLD);
         header.setTextColor(Color.WHITE);
         header.setBackgroundColor(Color.parseColor("#1E88E5"));
@@ -300,7 +274,7 @@ public class MainActivity extends Activity {
                 fis.close();
                 currentConfig = new JSONObject(new String(data, "UTF-8"));
             }
-        } catch (Exception e) {}
+        } catch (Exception ignored) {}
     }
 
     private void saveConfig() {
@@ -313,7 +287,7 @@ public class MainActivity extends Activity {
             Intent intent = new Intent("dev.joseph.hyperbounce.ACTION_CONFIG_CHANGED");
             intent.putExtra("config_json", currentConfig.toString());
             sendBroadcast(intent);
-        } catch (Exception e) {}
+        } catch (Exception ignored) {}
     }
 
     private void addSlider(String key, String label, String desc, float min, float max, float defVal) {
@@ -371,7 +345,7 @@ public class MainActivity extends Activity {
                 if (fromUser) {
                     float newVal = min + ((progress / 1000f) * (max - min));
                     valText.setText(String.format("%.3f", newVal));
-                    try { currentConfig.put(key, newVal); } catch (Exception e) {}
+                    try { currentConfig.put(key, newVal); } catch (Exception ignored) {}
                     saveConfig();
                 }
             }
@@ -380,7 +354,7 @@ public class MainActivity extends Activity {
         });
 
         resetBtn.setOnClickListener(v -> {
-            try { currentConfig.put(key, defVal); } catch (Exception e) {}
+            try { currentConfig.put(key, defVal); } catch (Exception ignored) {}
             saveConfig();
             valText.setText(String.format("%.3f", defVal));
             seekBar.setProgress((int) (((defVal - min) / (max - min)) * 1000));
@@ -400,7 +374,7 @@ public class MainActivity extends Activity {
                     saveConfig();
                     valText.setText(String.format("%.3f", newVal));
                     seekBar.setProgress((int) (((newVal - min) / (max - min)) * 1000));
-                } catch (Exception e) {}
+                } catch (Exception ignored) {}
             });
             builder.setNegativeButton("Cancel", null);
             builder.show();

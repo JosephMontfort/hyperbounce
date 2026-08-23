@@ -113,6 +113,12 @@ public class PhysicsHook extends XposedModule {
 
         // --- MIUI LAUNCHER HOOK ---
         if (param.getPackageName().equals("com.miui.home")) {
+            syncMemory();
+
+            // 1. Initialize App Open/Close, 3D Trajectory & Recents Hooks
+            AppTransitionHook.init(this, param.getClassLoader(), config);
+
+            // 2. Initialize Screen Unlock Cascade Hooks
             try {
                 Class<?> userPresentClass = Class.forName("com.miui.home.launcher.compat.UserPresentAnimationCompatPhone", false, param.getClassLoader());
 
@@ -146,7 +152,6 @@ public class PhysicsHook extends XposedModule {
                                 try { container = tag.getClass().getField("container").getLong(tag); } catch (Throwable t) {}
                             }
 
-                            // Precise Column Identification
                             int colIndex;
                             if (cellX != -1) {
                                 colIndex = Math.max(0, Math.min(cols - 1, cellX));
@@ -156,7 +161,6 @@ public class PhysicsHook extends XposedModule {
                             }
                             isOuterColumn.set(colIndex == 0 || colIndex == cols - 1);
 
-                            // Precise Row Identification
                             int rowIndex = cellY != -1 ? cellY : (int) Math.floor((vy / screenH) * rows);
                             rowIndex = Math.max(0, Math.min(rows - 1, rowIndex));
                             
