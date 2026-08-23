@@ -197,6 +197,8 @@ public class PhysicsHook extends XposedModule {
                         float dist = normalizedDistance.get();
                         float response = config.centerResponse + (dist * config.edgeResponseDelay);
                         float damping = config.centerDamping - (dist * config.edgeDampingDrop);
+                        response = Math.max(Math.min(config.minResponse, config.maxResponse), Math.min(Math.max(config.minResponse, config.maxResponse), response));
+                        damping = Math.max(Math.min(config.minDamping, config.maxDamping), Math.min(Math.max(config.minDamping, config.maxDamping), damping));
                         return new float[]{damping, response};
                     } else {
                         if (isDockView.get() || isIndicator.get()) {
@@ -257,7 +259,9 @@ public class PhysicsHook extends XposedModule {
                                 } else {
                                     float baseZ = config.getDyn("r" + safeRow + "_z", 1000.0f);
                                     float zMult = 1.0f + (kF * vInf * 0.4f);
-                                    args[2] = Math.max(startVal, baseZ * zMult);
+                                    // Row depth is user-controlled; do not let the original
+                                    // constructor Z silently override a valid configured value.
+                                    args[2] = Math.max(1.0f, baseZ * zMult);
                                 }
                             }
                         }

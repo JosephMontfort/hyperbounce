@@ -4,6 +4,7 @@ import android.graphics.RectF;
 import android.view.View;
 import java.lang.reflect.Method;
 import java.lang.reflect.Field;
+import java.util.Locale;
 
 public class AppTransitionHook {
 
@@ -114,33 +115,23 @@ public class AppTransitionHook {
                         boolean enabled = config.appAnimEnabled;
                         float damping = 0.8f;      // HyperOS Stock Damping
                         float stiffness = 200.0f;  // HyperOS Stock Stiffness
+                        String channel = key.replace("_", "").toLowerCase(Locale.ROOT);
 
-                        switch (key) {
-                            case "centerX":
-                            case "centerY":
-                                damping = enabled ? config.appTravelDamping : 0.8f;
-                                stiffness = enabled ? config.appTravelStiffness : 200.0f;
-                                break;
-                            case "Width":
-                            case "Height":
-                                damping = enabled ? config.appSizeDamping : 0.8f;
-                                stiffness = enabled ? config.appSizeStiffness : 200.0f;
-                                break;
-                            case "Ratio":
-                                damping = enabled ? config.appRatioDamping : 0.8f;
-                                stiffness = enabled ? config.appRatioStiffness : 400.0f; // Stock is 400!
-                                break;
-                            case "Radius":
-                            case "RadiusRatio":
-                                damping = enabled ? config.appCornerDamping : 0.8f;
-                                stiffness = enabled ? config.appCornerStiffness : 200.0f;
-                                break;
-                            case "Alpha":
-                            case "SurfaceExtAlpha":
-                            case "appLeashBlurRadius":
-                                damping = enabled ? config.appAlphaDamping : 0.99f;
-                                stiffness = enabled ? config.appAlphaStiffness : 400.0f; // Stock is 400!
-                                break;
+                        if (channel.equals("centerx") || channel.equals("centery")) {
+                            damping = enabled ? config.appTravelDamping : 0.8f;
+                            stiffness = enabled ? config.appTravelStiffness : 200.0f;
+                        } else if (channel.equals("width") || channel.equals("height")) {
+                            damping = enabled ? config.appSizeDamping : 0.8f;
+                            stiffness = enabled ? config.appSizeStiffness : 200.0f;
+                        } else if (channel.equals("ratio")) {
+                            damping = enabled ? config.appRatioDamping : 0.8f;
+                            stiffness = enabled ? config.appRatioStiffness : 400.0f;
+                        } else if (channel.equals("radius") || channel.equals("radiusratio")) {
+                            damping = enabled ? config.appCornerDamping : 0.8f;
+                            stiffness = enabled ? config.appCornerStiffness : 200.0f;
+                        } else if (channel.equals("alpha") || channel.equals("surfaceextalpha") || channel.equals("appleashblurradius")) {
+                            damping = enabled ? config.appAlphaDamping : 0.99f;
+                            stiffness = enabled ? config.appAlphaStiffness : 400.0f;
                         }
 
                         // Apply determined values (either tuned or forced back to stock)

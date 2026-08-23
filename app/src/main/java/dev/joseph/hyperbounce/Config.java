@@ -22,6 +22,10 @@ public class Config {
     public float edgeResponseDelay = 0.22f;
     public float edgeDampingDrop = 0.10f;
     public float zDepthMultiplier = 1.6f;
+    public float minResponse = 0.45f;
+    public float maxResponse = 0.75f;
+    public float minDamping = 0.42f;
+    public float maxDamping = 0.65f;
 
     public float durationScale = 1.0f;
     public float velocityInfluence = 1.0f;
@@ -62,8 +66,53 @@ public class Config {
         return dyn.containsKey(key) ? dyn.get(key) : defVal;
     }
 
+    private void resetDefaults() {
+        Config d = new Config();
+        unlockEnabled = d.unlockEnabled;
+        appAnimEnabled = d.appAnimEnabled;
+        animMode = d.animMode;
+        gridColumns = d.gridColumns;
+        gridRows = d.gridRows;
+        dockDamping = d.dockDamping;
+        dockResponse = d.dockResponse;
+        centerResponse = d.centerResponse;
+        centerDamping = d.centerDamping;
+        edgeResponseDelay = d.edgeResponseDelay;
+        edgeDampingDrop = d.edgeDampingDrop;
+        zDepthMultiplier = d.zDepthMultiplier;
+        minResponse = d.minResponse;
+        maxResponse = d.maxResponse;
+        minDamping = d.minDamping;
+        maxDamping = d.maxDamping;
+        durationScale = d.durationScale;
+        velocityInfluence = d.velocityInfluence;
+        cascadeDamping = d.cascadeDamping;
+        kineticDockDamping = d.kineticDockDamping;
+        kineticDockResponse = d.kineticDockResponse;
+        kineticDockZDepth = d.kineticDockZDepth;
+        maxVelocity = d.maxVelocity;
+        appYArc = d.appYArc;
+        appBottomZWarp = d.appBottomZWarp;
+        appXSway = d.appXSway;
+        appInterruptSmooth = d.appInterruptSmooth;
+        appTravelDamping = d.appTravelDamping;
+        appTravelStiffness = d.appTravelStiffness;
+        appSizeDamping = d.appSizeDamping;
+        appSizeStiffness = d.appSizeStiffness;
+        appRatioDamping = d.appRatioDamping;
+        appRatioStiffness = d.appRatioStiffness;
+        appCornerDamping = d.appCornerDamping;
+        appCornerStiffness = d.appCornerStiffness;
+        appAlphaDamping = d.appAlphaDamping;
+        appAlphaStiffness = d.appAlphaStiffness;
+        appIconPitchDeg = d.appIconPitchDeg;
+        appIconCameraDist = d.appIconCameraDist;
+        dyn.clear();
+    }
+
     public void loadFromJson(String jsonStr) {
         try {
+            resetDefaults();
             JSONObject json = new JSONObject(jsonStr);
             unlockEnabled = json.optBoolean("unlockEnabled", unlockEnabled);
             appAnimEnabled = json.optBoolean("appAnimEnabled", appAnimEnabled);
@@ -78,6 +127,10 @@ public class Config {
             edgeResponseDelay = (float) json.optDouble("edgeResponseDelay", edgeResponseDelay);
             edgeDampingDrop = (float) json.optDouble("edgeDampingDrop", edgeDampingDrop);
             zDepthMultiplier = (float) json.optDouble("zDepthMultiplier", zDepthMultiplier);
+            minResponse = (float) json.optDouble("minResponse", minResponse);
+            maxResponse = (float) json.optDouble("maxResponse", maxResponse);
+            minDamping = (float) json.optDouble("minDamping", minDamping);
+            maxDamping = (float) json.optDouble("maxDamping", maxDamping);
 
             durationScale = (float) json.optDouble("durationScale", durationScale);
             velocityInfluence = (float) json.optDouble("velocityInfluence", velocityInfluence);
