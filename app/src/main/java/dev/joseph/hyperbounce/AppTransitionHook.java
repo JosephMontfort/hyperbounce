@@ -3,6 +3,7 @@ package dev.joseph.hyperbounce;
 import android.graphics.RectF;
 import android.view.View;
 import java.lang.reflect.Method;
+import java.lang.reflect.Field;
 
 public class AppTransitionHook {
 
@@ -19,9 +20,7 @@ public class AppTransitionHook {
                 // Execute native layout calculation first
                 Object result = chain.proceed();
 
-                if (!config.appAnimEnabled) {
-                    return result;
-                }
+                if (!config.appAnimEnabled) return result;
 
                 try {
                     Object rawArgs = chain.getArgs();
@@ -29,18 +28,22 @@ public class AppTransitionHook {
                     RectF rectF = (RectF) args[0];
                     Object thisObj = chain.getThisObject();
 
-                    if (rectF == null || thisObj == null) {
-                        return result;
+                    if (rectF == null || thisObj == null) return result;
+
+                    // BUG FIX: Ignore trajectory warping on App Open to prevent overshoots
+                    Method isOpenAnimMethod = rectFAnimClass.getMethod("isOpenAnim");
+                    boolean isOpen = (boolean) isOpenAnimMethod.invoke(thisObj);
+                    if (isOpen) {
+                        return result; 
                     }
 
-                    // Interrupt Safety Guard: If canceled or requesting end, do not warp
+                    // Interrupt Safety Guard
                     Method isCancelMethod = rectFAnimClass.getMethod("isRequestCancel");
                     Method isEndMethod = rectFAnimClass.getMethod("isRequestEnd");
                     if ((boolean) isCancelMethod.invoke(thisObj) || (boolean) isEndMethod.invoke(thisObj)) {
                         return result;
                     }
 
-                    // Retrieve Start and Target Rectangles
                     Method getStartRectMethod = rectFAnimClass.getMethod("getStartRect");
                     Method getTargetRectMethod = rectFAnimClass.getMethod("getTargetRect");
                     RectF startRect = (RectF) getStartRectMethod.invoke(thisObj);
@@ -52,19 +55,14 @@ public class AppTransitionHook {
                     float targetW = targetRect.width();
                     float totalDelta = Math.abs(targetW - startW);
 
-                    // If totalDelta is negligible (interrupted state / micro-jump), skip warp
-                    if (totalDelta < 10.0f) {
-                        return result;
-                    }
+                    // BUG FIX: Ensure delta is significant to prevent dividing by 0
+                    if (totalDelta < 20.0f) return result;
 
                     float curW = rectF.width();
                     float progress = Math.abs(curW - startW) / totalDelta;
                     progress = Math.max(0.0f, Math.min(1.0f, progress));
 
-                    // Bell Curve Envelope: 0.0 at start -> 1.0 at midpoint -> 0.0 at landing
                     float curve = (float) Math.sin(progress * Math.PI);
-
-                    // Smooth edge roll-off for interrupt stabilization
                     float smoothEnvelope = (float) Math.pow(curve, 1.0f / Math.max(0.1f, config.appInterruptSmooth));
 
                     float curL = rectF.left;
@@ -74,7 +72,9 @@ public class AppTransitionHook {
                     float curH = curB - curT;
 
                     // A. 3D Bottom-Edge Z-Depth Compression
-                    float bottomCompression = smoothEnvelope * (curH * config.appBottomZWarp);
+                    // BUG FIX: Clamp compression so it never exceeds the actual height (prevents shrinking to 0 height)
+                    float maxCompression = curH * 0.8f; 
+                    float bottomCompression = Math.min(smoothEnvelope * (curH * config.appBottomZWarp), maxCompression);
                     float newBottom = curB - bottomCompression;
 
                     // B. Parabolic Vertical Y-Arc (Upward Float)
@@ -87,7 +87,6 @@ public class AppTransitionHook {
                     float newLeft = curL + xSway;
                     float newRight = curR + xSway;
 
-                    // Apply warped coordinates directly
                     rectF.set(newLeft, newTop, newRight, newBottom);
 
                 } catch (Throwable ignored) {}
@@ -106,9 +105,7 @@ public class AppTransitionHook {
             module.hook(getSpringForceMethod).intercept(chain -> {
                 Object springForce = chain.proceed();
 
-                if (!config.appAnimEnabled || springForce == null) {
-                    return springForce;
-                }
+                if (!config.appAnimEnabled || springForce == null) return springForce;
 
                 try {
                     Object thisObj = chain.getThisObject();
@@ -116,6 +113,12 @@ public class AppTransitionHook {
                     String key = (String) getKeyMethod.invoke(thisObj);
 
                     if (key != null) {
+                        // BUG FIX: DO NOT HOOK "Alpha" or "SurfaceExtAlpha". 
+                        // This allows the system to crossfade instantly and prevents the dual icon + content overlap bug.
+                        if (key.equals("Alpha") || key.equals("SurfaceExtAlpha") || key.equals("appLeashBlurRadius")) {
+                            return springForce; 
+                        }
+
                         Class<?> sfClass = springForce.getClass();
                         Method setDamping = sfClass.getMethod("setDampingRatio", float.class);
                         Method setStiffness = sfClass.getMethod("setStiffness", float.class);
@@ -139,11 +142,6 @@ public class AppTransitionHook {
                             case "RadiusRatio":
                                 setDamping.invoke(springForce, config.appCornerDamping);
                                 if (currentStiff > 100.0f) setStiffness.invoke(springForce, config.appCornerStiffness);
-                                break;
-                            case "Alpha":
-                            case "SurfaceExtAlpha":
-                                setDamping.invoke(springForce, config.appAlphaDamping);
-                                if (currentStiff > 100.0f) setStiffness.invoke(springForce, config.appAlphaStiffness);
                                 break;
                         }
                     }
@@ -169,10 +167,18 @@ public class AppTransitionHook {
 
                         try {
                             View view = (View) chain.getThisObject();
+                            
+                            // BUG FIX: Only apply 3D tilt on Close Animation
+                            Field isOpeningField = floatingIconClass.getDeclaredField("mIsOpening");
+                            isOpeningField.setAccessible(true);
+                            boolean isOpening = isOpeningField.getBoolean(view);
+                            if (isOpening) {
+                                return result;
+                            }
+
                             Object rawArgs = chain.getArgs();
                             Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : (Object[]) rawArgs;
 
-                            // Float progress parameter
                             float progress = 0.0f;
                             if (args.length > 3 && args[3] instanceof Float) {
                                 progress = (Float) args[3];
@@ -180,7 +186,7 @@ public class AppTransitionHook {
 
                             if (progress > 0.0f && progress < 1.0f && config.appIconPitchDeg > 0.1f) {
                                 view.setCameraDistance(config.appIconCameraDist);
-                                view.setPivotY(view.getHeight() * 0.95f); // Pivot at bottom edge
+                                view.setPivotY(view.getHeight() * 0.95f); 
 
                                 float tilt = (float) Math.sin(progress * Math.PI) * config.appIconPitchDeg;
                                 view.setRotationX(tilt);

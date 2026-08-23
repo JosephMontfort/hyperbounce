@@ -73,7 +73,6 @@ public class PhysicsHook extends XposedModule {
     public void onPackageReady(XposedModuleInterface.PackageReadyParam param) {
         super.onPackageReady(param);
 
-        // --- SYSTEMUI HOOK ---
         if (param.getPackageName().equals("com.android.systemui")) {
             try {
                 Class<?> shadeViewClass = Class.forName("com.android.systemui.shade.NotificationShadeWindowView", false, param.getClassLoader());
@@ -111,20 +110,19 @@ public class PhysicsHook extends XposedModule {
             return;
         }
 
-        // --- MIUI LAUNCHER HOOK ---
         if (param.getPackageName().equals("com.miui.home")) {
             syncMemory();
 
-            // 1. Initialize App Open/Close, 3D Trajectory & Recents Hooks
             AppTransitionHook.init(this, param.getClassLoader(), config);
 
-            // 2. Initialize Screen Unlock Cascade Hooks
             try {
                 Class<?> userPresentClass = Class.forName("com.miui.home.launcher.compat.UserPresentAnimationCompatPhone", false, param.getClassLoader());
 
                 Method showMethod = userPresentClass.getDeclaredMethod("showUserPresentAnimation", View.class, int.class, boolean.class);
                 hook(showMethod).intercept(chain -> {
                     syncMemory();
+                    
+                    if (!config.unlockEnabled) return chain.proceed();
 
                     Object rawArgs = chain.getArgs();
                     Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : (Object[]) rawArgs;
@@ -192,7 +190,7 @@ public class PhysicsHook extends XposedModule {
 
                 Method getDR = userPresentClass.getDeclaredMethod("getDampingResponse");
                 hook(getDR).intercept(chain -> {
-                    if (!isAnimating.get()) return chain.proceed();
+                    if (!isAnimating.get() || !config.unlockEnabled) return chain.proceed();
 
                     if (config.animMode == 0) {
                         if (isDockView.get() || isIndicator.get()) return new float[]{config.dockDamping, config.dockResponse};
@@ -233,7 +231,7 @@ public class PhysicsHook extends XposedModule {
                 Class<?> springAnimClass = Class.forName("com.miui.home.common.animate.SpringAnimator", false, param.getClassLoader());
                 Constructor<?> constructor = springAnimClass.getDeclaredConstructor(float.class, float.class, float.class, float.class);
                 hook(constructor).intercept(chain -> {
-                    if (isAnimating.get()) {
+                    if (isAnimating.get() && config.unlockEnabled) {
                         Object rawArgs = chain.getArgs();
                         Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : ((Object[]) rawArgs).clone();
 
