@@ -15,7 +15,6 @@ public class Config {
     public int gridRows = 7;
     public HashMap<String, Float> dyn = new HashMap<>();
     
-    // Mode 0: Classic Radial Dispersion
     public float dockDamping = 0.70f;
     public float dockResponse = 0.40f;
     public float centerResponse = 0.48f;
@@ -24,7 +23,6 @@ public class Config {
     public float edgeDampingDrop = 0.10f;
     public float zDepthMultiplier = 1.6f;
 
-    // Mode 1: Kinetic Y-Axis Cascade Globals
     public float durationScale = 1.0f;
     public float velocityInfluence = 1.0f;
     public float cascadeDamping = 0.95f;
@@ -33,18 +31,31 @@ public class Config {
     public float kineticDockZDepth = 800.0f;
     public float maxVelocity = 16000.0f;
 
-    // App Open/Close Configurations
-    public float appYArc = 120.0f;              
-    public float appBottomZWarp = 0.28f;        
+    // ==========================================
+    // APP OPEN / CLOSE & RECENTS ENGINE CONFIG
+    // All defaults below match HyperOS pure stock.
+    // ==========================================
+    public float appYArc = 0.0f;              
+    public float appBottomZWarp = 0.0f;        
     public float appXSway = 0.0f;               
-    public float appInterruptSmooth = 0.85f;    
-    public float appTravelDamping = 0.60f;      
-    public float appTravelStiffness = 140.0f;   
-    public float appSizeDamping = 0.58f;        
-    public float appSizeStiffness = 150.0f;     
-    public float appCornerDamping = 0.75f;      
+    public float appInterruptSmooth = 1.0f;    
+
+    public float appTravelDamping = 0.80f;      
+    public float appTravelStiffness = 200.0f;   
+    
+    public float appSizeDamping = 0.80f;        
+    public float appSizeStiffness = 200.0f;     
+    
+    public float appRatioDamping = 0.80f;        
+    public float appRatioStiffness = 400.0f;     
+
+    public float appCornerDamping = 0.80f;      
     public float appCornerStiffness = 200.0f;   
-    public float appIconPitchDeg = 18.0f;       
+    
+    public float appAlphaDamping = 0.99f;       
+    public float appAlphaStiffness = 400.0f;    
+    
+    public float appIconPitchDeg = 0.0f;       
     public float appIconCameraDist = 8000.0f;   
 
     public float getDyn(String key, float defVal) {
@@ -84,8 +95,12 @@ public class Config {
             appTravelStiffness = (float) json.optDouble("appTravelStiffness", appTravelStiffness);
             appSizeDamping = (float) json.optDouble("appSizeDamping", appSizeDamping);
             appSizeStiffness = (float) json.optDouble("appSizeStiffness", appSizeStiffness);
+            appRatioDamping = (float) json.optDouble("appRatioDamping", appRatioDamping);
+            appRatioStiffness = (float) json.optDouble("appRatioStiffness", appRatioStiffness);
             appCornerDamping = (float) json.optDouble("appCornerDamping", appCornerDamping);
             appCornerStiffness = (float) json.optDouble("appCornerStiffness", appCornerStiffness);
+            appAlphaDamping = (float) json.optDouble("appAlphaDamping", appAlphaDamping);
+            appAlphaStiffness = (float) json.optDouble("appAlphaStiffness", appAlphaStiffness);
             appIconPitchDeg = (float) json.optDouble("appIconPitchDeg", appIconPitchDeg);
             appIconCameraDist = (float) json.optDouble("appIconCameraDist", appIconCameraDist);
 

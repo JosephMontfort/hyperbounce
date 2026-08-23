@@ -32,7 +32,6 @@ import org.json.JSONObject;
 public class MainActivity extends Activity {
     private JSONObject currentConfig = new JSONObject();
     
-    // View Hierarchies
     private LinearLayout rootLayout;
     private LinearLayout menuLayout;
     private LinearLayout unlockPageLayout;
@@ -54,10 +53,8 @@ public class MainActivity extends Activity {
         scroll.addView(rootLayout);
         setContentView(scroll);
 
-        // Header & Quick Actions Dropdown
         setupHeader();
 
-        // Initialize the 3 main views
         menuLayout = new LinearLayout(this);
         menuLayout.setOrientation(LinearLayout.VERTICAL);
         
@@ -104,7 +101,7 @@ public class MainActivity extends Activity {
                 } else if (position == 4) {
                     loadPresetDialog();
                 }
-                actionSpinner.setSelection(0); // Reset
+                actionSpinner.setSelection(0); 
             }
             @Override public void onNothingSelected(AdapterView<?> parent) {}
         });
@@ -155,7 +152,11 @@ public class MainActivity extends Activity {
         String[] modes = { "Mode 0: iOS Radial Dispersion", "Mode 1: Kinetic Y-Axis Cascade" };
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, modes);
         modeSpinner.setAdapter(adapter);
-        modeSpinner.setSelection(currentConfig.optInt("animMode", 1));
+        
+        // BUG FIX: Clamp selection to prevent OutOfBounds crash
+        int savedMode = currentConfig.optInt("animMode", 1);
+        int safeMode = Math.max(0, Math.min(modes.length - 1, savedMode));
+        modeSpinner.setSelection(safeMode);
         modeSpinner.setPadding(0, 10, 0, 40);
         unlockPageLayout.addView(modeSpinner);
 
@@ -170,7 +171,7 @@ public class MainActivity extends Activity {
             @Override public void onNothingSelected(AdapterView<?> parent) {}
         });
 
-        renderUnlockSliders(currentConfig.optInt("animMode", 1));
+        renderUnlockSliders(safeMode);
     }
 
     private void setupAppAnimPage() {
@@ -196,21 +197,21 @@ public class MainActivity extends Activity {
         unlockSlidersContainer.removeAllViews();
         if (mode == 0) {
             addSectionHeader(unlockSlidersContainer, "CLASSIC RADIAL UNLOCK");
-            addSlider(unlockSlidersContainer, "centerDamping", "Center Damping", "(Lower = High rubber-band bounce | Higher = Stiff snap)", 0.1f, 1.0f, 0.58f);
-            addSlider(unlockSlidersContainer, "centerResponse", "Center Response", "(Lower = Fast snap | Higher = Slow float)", 0.1f, 1.5f, 0.48f);
-            addSlider(unlockSlidersContainer, "edgeDampingDrop", "Edge Damping Drop", "(Higher = Edges significantly bouncier than center)", 0.0f, 0.5f, 0.10f);
-            addSlider(unlockSlidersContainer, "edgeResponseDelay", "Edge Response Delay", "(Higher = Outer edges lag behind center)", 0.0f, 1.0f, 0.22f);
-            addSlider(unlockSlidersContainer, "zDepthMultiplier", "Z-Depth Scale", "(Higher = Icons spawn deeper in 3D space)", 1.0f, 4.0f, 1.60f);
+            addSlider(unlockSlidersContainer, "centerDamping", "Center Damping", "(Stock = 0.58)", 0.1f, 1.0f, 0.58f);
+            addSlider(unlockSlidersContainer, "centerResponse", "Center Response", "(Stock = 0.48)", 0.1f, 1.5f, 0.48f);
+            addSlider(unlockSlidersContainer, "edgeDampingDrop", "Edge Damping Drop", "(Stock = 0.10)", 0.0f, 0.5f, 0.10f);
+            addSlider(unlockSlidersContainer, "edgeResponseDelay", "Edge Response Delay", "(Stock = 0.22)", 0.0f, 1.0f, 0.22f);
+            addSlider(unlockSlidersContainer, "zDepthMultiplier", "Z-Depth Scale", "(Stock = 1.60)", 1.0f, 4.0f, 1.60f);
         } else {
             addSectionHeader(unlockSlidersContainer, "KINETIC Y-AXIS UNLOCK GLOBALS");
-            addSlider(unlockSlidersContainer, "durationScale", "Global Anim Duration", "(Lower = Fast action | Higher = Cinematic slow-motion)", 0.1f, 3.0f, 1.0f);
-            addSlider(unlockSlidersContainer, "velocityInfluence", "Velocity Impact", "(Lower = Ignores swipe flick | Higher = Massive kinetic bounce)", 0.0f, 2.0f, 1.0f);
-            addSlider(unlockSlidersContainer, "cascadeDamping", "Resting Damping", "(Lower = Loose bounce | Higher = Rigid iOS stop)", 0.5f, 1.0f, 0.95f);
+            addSlider(unlockSlidersContainer, "durationScale", "Global Anim Duration", "(Stock = 1.0)", 0.1f, 3.0f, 1.0f);
+            addSlider(unlockSlidersContainer, "velocityInfluence", "Velocity Impact", "(Stock = 1.0)", 0.0f, 2.0f, 1.0f);
+            addSlider(unlockSlidersContainer, "cascadeDamping", "Resting Damping", "(Stock = 0.95)", 0.5f, 1.0f, 0.95f);
 
             addSectionHeader(unlockSlidersContainer, "DOCK ISOLATION");
-            addSlider(unlockSlidersContainer, "kineticDockDamping", "Dock Damping", "(Lower = Bouncy dock | Higher = Solid dock)", 0.1f, 1.0f, 0.85f);
-            addSlider(unlockSlidersContainer, "kineticDockResponse", "Dock Response", "(Lower = Faster snap | Higher = Slower float)", 0.1f, 1.5f, 0.38f);
-            addSlider(unlockSlidersContainer, "kineticDockZDepth", "Dock Z-Depth", "(Higher = Dock travels from deeper Z)", 0.0f, 4000.0f, 800.0f);
+            addSlider(unlockSlidersContainer, "kineticDockDamping", "Dock Damping", "(Stock = 0.85)", 0.1f, 1.0f, 0.85f);
+            addSlider(unlockSlidersContainer, "kineticDockResponse", "Dock Response", "(Stock = 0.38)", 0.1f, 1.5f, 0.38f);
+            addSlider(unlockSlidersContainer, "kineticDockZDepth", "Dock Z-Depth", "(Stock = 800.0)", 0.0f, 4000.0f, 800.0f);
 
             int rows = currentConfig.optInt("gridRows", 7);
             addSectionHeader(unlockSlidersContainer, "ROW Z-DEPTH (PERSPECTIVE TRAVEL)");
@@ -223,24 +224,29 @@ public class MainActivity extends Activity {
     private void renderAppAnimSliders() {
         appAnimSlidersContainer.removeAllViews();
         addSectionHeader(appAnimSlidersContainer, "SPATIAL TRAJECTORY & 3D DEPTH");
-        addSlider(appAnimSlidersContainer, "appYArc", "Vertical Parabolic Arc", "(Higher = App floats upward into air before diving into icon | Zero = Straight line)", -200.0f, 300.0f, 120.0f);
-        addSlider(appAnimSlidersContainer, "appBottomZWarp", "3D Bottom-Edge Compression", "(Higher = Bottom card compresses fast, creating 3D backward tilt | Zero = Flat 2D)", 0.0f, 0.70f, 0.28f);
-        addSlider(appAnimSlidersContainer, "appXSway", "Horizontal Sway Curve", "(Non-zero = App arcs laterally towards center during flight)", -150.0f, 150.0f, 0.0f);
-        addSlider(appAnimSlidersContainer, "appInterruptSmooth", "Gesture Interrupt Stabilizer", "(Lower = Hard cutoff | Higher = Smooth recovery on fast flicks / reversals)", 0.1f, 1.5f, 0.85f);
+        addSlider(appAnimSlidersContainer, "appYArc", "Vertical Parabolic Arc", "(Stock = 0.0)", -200.0f, 300.0f, 0.0f);
+        addSlider(appAnimSlidersContainer, "appBottomZWarp", "3D Bottom-Edge Compression", "(Stock = 0.0)", 0.0f, 0.70f, 0.0f);
+        addSlider(appAnimSlidersContainer, "appXSway", "Horizontal Sway Curve", "(Stock = 0.0)", -150.0f, 150.0f, 0.0f);
+        addSlider(appAnimSlidersContainer, "appInterruptSmooth", "Gesture Interrupt Stabilizer", "(Stock = 1.0)", 0.1f, 1.5f, 1.0f);
 
         addSectionHeader(appAnimSlidersContainer, "SPATIAL FLIGHT & MASS DYNAMICS");
-        addSlider(appAnimSlidersContainer, "appTravelDamping", "Flight Path Damping", "(Lower = Window overshoots landing spot and bounces | Higher = Solid snap)", 0.30f, 1.0f, 0.60f);
-        addSlider(appAnimSlidersContainer, "appTravelStiffness", "Flight Path Stiffness", "(Lower = Heavy, fluid, floating mass | Higher = High-velocity snap)", 40.0f, 600.0f, 140.0f);
+        addSlider(appAnimSlidersContainer, "appTravelDamping", "Flight Path Damping", "(HyperOS Stock = 0.80)", 0.30f, 1.0f, 0.80f);
+        addSlider(appAnimSlidersContainer, "appTravelStiffness", "Flight Path Stiffness", "(HyperOS Stock = 200.0)", 40.0f, 600.0f, 200.0f);
 
-        addSectionHeader(appAnimSlidersContainer, "WINDOW SIZE & EXPANSION BOUNCE");
-        addSlider(appAnimSlidersContainer, "appSizeDamping", "Window Scale Damping", "(Lower = App over-expands past screen on open & bounces back | Higher = Rigid)", 0.30f, 1.0f, 0.58f);
-        addSlider(appAnimSlidersContainer, "appSizeStiffness", "Window Scale Stiffness", "(Lower = Slow, heavy expansion | Higher = Instant resize)", 40.0f, 600.0f, 150.0f);
+        addSectionHeader(appAnimSlidersContainer, "WINDOW SIZE EXPANSION");
+        addSlider(appAnimSlidersContainer, "appSizeDamping", "Window Width/Height Damping", "(HyperOS Stock = 0.80)", 0.30f, 1.0f, 0.80f);
+        addSlider(appAnimSlidersContainer, "appSizeStiffness", "Window Width/Height Stiffness", "(HyperOS Stock = 200.0)", 40.0f, 600.0f, 200.0f);
+        addSlider(appAnimSlidersContainer, "appRatioDamping", "Aspect Ratio Damping", "(HyperOS Stock = 0.80)", 0.30f, 1.0f, 0.80f);
+        addSlider(appAnimSlidersContainer, "appRatioStiffness", "Aspect Ratio Stiffness", "(HyperOS Stock = 400.0 - Prevents tearing)", 40.0f, 800.0f, 400.0f);
 
         addSectionHeader(appAnimSlidersContainer, "SURFACE MORPH & 3D PITCH");
-        addSlider(appAnimSlidersContainer, "appCornerDamping", "Corner Morph Damping", "(Lower = Corner radius rubber-bands | Higher = Clean squircle morph)", 0.30f, 1.0f, 0.75f);
-        addSlider(appAnimSlidersContainer, "appCornerStiffness", "Corner Morph Stiffness", "(Lower = Corners round slowly | Higher = Snaps instantly)", 50.0f, 800.0f, 200.0f);
-        addSlider(appAnimSlidersContainer, "appIconPitchDeg", "Ghost Icon 3D Tilt Angle", "(Higher = Icon card physically tilts along X-axis during transit | Zero = Flat)", 0.0f, 45.0f, 18.0f);
-        addSlider(appAnimSlidersContainer, "appIconCameraDist", "3D Camera Distance", "(Lower = Dramatic fish-eye perspective | Higher = Subtle orthographic tilt)", 2000.0f, 15000.0f, 8000.0f);
+        addSlider(appAnimSlidersContainer, "appCornerDamping", "Corner Morph Damping", "(HyperOS Stock = 0.80)", 0.30f, 1.0f, 0.80f);
+        addSlider(appAnimSlidersContainer, "appCornerStiffness", "Corner Morph Stiffness", "(HyperOS Stock = 200.0)", 50.0f, 800.0f, 200.0f);
+        addSlider(appAnimSlidersContainer, "appAlphaDamping", "Surface Fade Damping", "(HyperOS Stock = 0.99)", 0.40f, 1.0f, 0.99f);
+        addSlider(appAnimSlidersContainer, "appAlphaStiffness", "Surface Fade Stiffness", "(HyperOS Stock = 400.0 - Prevents tearing)", 50.0f, 800.0f, 400.0f);
+        
+        addSlider(appAnimSlidersContainer, "appIconPitchDeg", "Ghost Icon 3D Tilt Angle", "(Stock = 0.0. Warning: High values may separate surface from icon)", 0.0f, 45.0f, 0.0f);
+        addSlider(appAnimSlidersContainer, "appIconCameraDist", "3D Camera Distance", "(Stock = 8000.0)", 2000.0f, 15000.0f, 8000.0f);
     }
 
     @Override
@@ -254,7 +260,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // Boilerplate config loading and save methods
     private void savePresetDialog() {
         AlertDialog.Builder b = new AlertDialog.Builder(this); b.setTitle("Save Preset As");
         final EditText input = new EditText(this); b.setView(input);
@@ -280,7 +285,11 @@ public class MainActivity extends Activity {
                 File f = new File(dir, names.get(which) + ".json");
                 FileInputStream fis = new FileInputStream(f); byte[] data = new byte[(int) f.length()]; fis.read(data); fis.close();
                 currentConfig = new JSONObject(new String(data, "UTF-8")); saveConfig();
-                renderUnlockSliders(currentConfig.optInt("animMode", 1)); renderAppAnimSliders();
+                
+                int savedMode = currentConfig.optInt("animMode", 1);
+                int safeMode = Math.max(0, Math.min(1, savedMode));
+                renderUnlockSliders(safeMode); 
+                renderAppAnimSliders();
                 Toast.makeText(this, "Preset Loaded", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {}
         }); b.show();
@@ -332,6 +341,25 @@ public class MainActivity extends Activity {
             @Override public void onStartTrackingTouch(SeekBar sb) {} @Override public void onStopTrackingTouch(SeekBar sb) {}
         });
         resetBtn.setOnClickListener(v -> { try { currentConfig.put(key, defVal); } catch (Exception e) {} saveConfig(); valText.setText(String.format("%.3f", defVal)); seekBar.setProgress((int) (((defVal - min) / (max - min)) * 1000)); });
-        parent.addView(row);
+        
+        View.OnLongClickListener manualInput = v -> {
+            AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+            builder.setTitle("Enter custom value");
+            final EditText input = new EditText(MainActivity.this);
+            input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL | InputType.TYPE_NUMBER_FLAG_SIGNED);
+            input.setText(String.valueOf((float) currentConfig.optDouble(key, defVal)));
+            builder.setView(input);
+            builder.setPositiveButton("Set", (dialog, which) -> {
+                try {
+                    float newVal = Float.parseFloat(input.getText().toString());
+                    currentConfig.put(key, newVal); saveConfig();
+                    valText.setText(String.format("%.3f", newVal));
+                    seekBar.setProgress((int) (((newVal - min) / (max - min)) * 1000));
+                } catch (Exception ignored) {}
+            });
+            builder.setNegativeButton("Cancel", null); builder.show();
+            return true;
+        };
+        row.setOnLongClickListener(manualInput); valText.setOnLongClickListener(manualInput); parent.addView(row);
     }
 }
