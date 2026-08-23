@@ -1,4 +1,3 @@
-cat << 'EOF' > app/src/main/java/dev/joseph/hyperbounce/AppTransitionHook.java
 package dev.joseph.hyperbounce;
 
 import android.graphics.RectF;
@@ -208,4 +207,3 @@ public class AppTransitionHook {
         } catch (Throwable t) {}
     }
 }
-EOF
