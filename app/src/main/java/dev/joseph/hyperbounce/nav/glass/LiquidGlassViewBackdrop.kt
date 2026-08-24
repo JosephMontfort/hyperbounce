@@ -55,6 +55,7 @@ internal class LiquidGlassViewBackdrop(
     private var surfaceFronts = mutableMapOf<View, SurfaceFrame>()
     private val pendingSurfaceCopies = mutableSetOf<View>()
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var textureViewBuffer: Bitmap? = null
 
     var capturedFrame: LiquidGlassCapturedFrame? by mutableStateOf(null)
         private set
@@ -191,6 +192,8 @@ internal class LiquidGlassViewBackdrop(
             )
         }
 
+        val activeSurfaces = mutableSetOf<View>()
+
         for (surface in uniqueSurfaces) {
             if (!surface.isShown || surface.width <= 0 || surface.height <= 0) continue
 
@@ -207,8 +210,6 @@ internal class LiquidGlassViewBackdrop(
             val overlapBottom = minOf(currentRegion.top + currentRegion.height, bottom)
             if (overlapRight <= overlapLeft || overlapBottom <= overlapTop) continue
 
-            if (pendingSurfaceCopies.contains(surface)) continue
-
             val srcLeft = (overlapLeft - left).toInt().coerceAtLeast(0)
             val srcTop = (overlapTop - top).toInt().coerceAtLeast(0)
             val srcRight = (overlapRight - left).toInt().coerceAtMost(surface.width)
@@ -216,6 +217,10 @@ internal class LiquidGlassViewBackdrop(
             val srcWidth = srcRight - srcLeft
             val srcHeight = srcBottom - srcTop
             if (srcWidth <= 0 || srcHeight <= 0) continue
+
+            activeSurfaces.add(surface)
+
+            if (pendingSurfaceCopies.contains(surface)) continue
 
             val destWidth = (srcWidth * scale).toInt().coerceAtLeast(1)
             val destHeight = (srcHeight * scale).toInt().coerceAtLeast(1)
@@ -254,9 +259,23 @@ internal class LiquidGlassViewBackdrop(
 
                 is TextureView -> {
                     try {
-                        // TextureView#getBitmap(bitmap) copies the texture content
-                        // without requiring a software View.draw() pass.
-                        surface.getBitmap(dest)
+                        var buffer = textureViewBuffer
+                        if (buffer == null || buffer.width != surface.width || buffer.height != surface.height) {
+                            buffer?.recycle()
+                            buffer = Bitmap.createBitmap(surface.width, surface.height, Bitmap.Config.ARGB_8888)
+                            textureViewBuffer = buffer
+                        }
+                        
+                        if (surface.getBitmap(buffer) != null) {
+                            val canvas = Canvas(dest)
+                            canvas.drawBitmap(
+                                buffer,
+                                Rect(srcLeft, srcTop, srcRight, srcBottom),
+                                Rect(0, 0, destWidth, destHeight),
+                                null
+                            )
+                        }
+
                         pendingSurfaceCopies.remove(surface)
                         replaceSurfaceFrame(
                             surface,
@@ -271,6 +290,17 @@ internal class LiquidGlassViewBackdrop(
                         dest.recycle()
                     }
                 }
+            }
+        }
+
+        val iter = surfaceFronts.iterator()
+        while (iter.hasNext()) {
+            val entry = iter.next()
+            if (entry.key !in activeSurfaces) {
+                if (!entry.value.bitmap.isRecycled) {
+                    entry.value.bitmap.recycle()
+                }
+                iter.remove()
             }
         }
     }
@@ -336,6 +366,8 @@ internal class LiquidGlassViewBackdrop(
         pendingSurfaceCopies.clear()
         front?.recycle()
         back?.recycle()
+        textureViewBuffer?.recycle()
+        textureViewBuffer = null
         front = null
         back = null
         capturedFrame = null
