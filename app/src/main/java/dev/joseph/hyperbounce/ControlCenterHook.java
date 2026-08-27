@@ -856,20 +856,26 @@ public class ControlCenterHook {
     private static void applyGroupContainerStyle(View view, ClassLoader classLoader) {
         if (view == null) return;
         try {
-            float density = view.getContext().getResources().getDisplayMetrics().density;
-            final float cornerRadius = 20f * density;
+            Context ctx = view.getContext();
+            int radiusResId = ctx.getResources().getIdentifier("control_center_universal_corner_radius", "dimen", ctx.getPackageName());
+            final float cornerRadius = radiusResId != 0 ? ctx.getResources().getDimension(radiusResId) : 20f * ctx.getResources().getDisplayMetrics().density;
 
-            // 1. Ensure background is null so blur shines through without opaque drawable
-            view.setBackground(null);
+            // Check if Background Blur / Advanced Textures is enabled in system
+            boolean blurEnabled = false;
+            try {
+                Class<?> ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader);
+                Method getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context.class);
+                blurEnabled = (boolean) getBlurM.invoke(null, ctx);
+            } catch (Throwable ignore) {}
 
-            // 2. Set _cornerRadius field on QSCardItemView
+            // Set _cornerRadius field on QSCardItemView
             try {
                 Field crField = view.getClass().getDeclaredField("_cornerRadius");
                 crField.setAccessible(true);
                 crField.setFloat(view, cornerRadius);
             } catch (Throwable ignore) {}
 
-            // 3. Set custom ViewOutlineProvider with 20dp smooth corners
+            // Set OutlineProvider with universal corner radius
             view.setOutlineProvider(new android.view.ViewOutlineProvider() {
                 @Override
                 public void getOutline(View v, android.graphics.Outline outline) {
@@ -882,21 +888,66 @@ public class ControlCenterHook {
             }
             view.invalidateOutline();
 
-            // 4. Set Xiaomi Blur Mode = 1 (BLUR_OPEN)
-            try {
-                Class<?> miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader);
-                Method setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View.class, int.class);
-                setModeMethod.invoke(null, view, 1);
+            if (blurEnabled) {
+                // Advanced Textures ON: Native Hardware Blur & Blend Colors
+                view.setBackground(null);
+                try {
+                    Class<?> miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader);
+                    try {
+                        Method setPassWindowBlur = miBlurClass.getMethod("setPassWindowBlurEnabledCompat", View.class, boolean.class);
+                        setPassWindowBlur.invoke(null, view, true);
+                    } catch (Throwable ignore) {}
 
-                // 5. Set CC_EDIT_BUTTON_BLEND_COLORS
-                Class<?> tokenClass = Class.forName("miui.systemui.util.MiuiColorBlendToken", false, classLoader);
-                Object tokenInst = tokenClass.getDeclaredField("INSTANCE").get(null);
-                Method getBlendMethod = tokenClass.getMethod("getCC_EDIT_BUTTON_BLEND_COLORS");
-                Object blendColors = getBlendMethod.invoke(tokenInst);
-                Method setBlendMethod = miBlurClass.getMethod("setMiBackgroundBlendColors", View.class, blendColors.getClass());
-                setBlendMethod.invoke(null, view, blendColors);
-            } catch (Throwable t) {
-                android.util.Log.e(TAG, "applyGroupContainerStyle MiBlur error", t);
+                    Method setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View.class, int.class);
+                    setModeMethod.invoke(null, view, 1);
+
+                    Class<?> tokenClass = Class.forName("miui.systemui.util.MiuiColorBlendToken", false, classLoader);
+                    Object tokenInst = tokenClass.getDeclaredField("INSTANCE").get(null);
+                    Method getBlendMethod = tokenClass.getMethod("getCC_TILE_DEFAULT_BLEND_COLORS");
+                    Object blendColors = getBlendMethod.invoke(tokenInst);
+
+                    Method setBlendMethod = miBlurClass.getMethod("setMiBackgroundBlendColors", View.class, blendColors.getClass());
+                    setBlendMethod.invoke(null, view, blendColors);
+                } catch (Throwable t) {
+                    android.util.Log.e(TAG, "applyGroupContainerStyle MiBlur error", t);
+                }
+            } else {
+                // Advanced Textures OFF: Clear Blur & Apply Stock Card Drawable
+                try {
+                    Class<?> miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader);
+                    Method setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View.class, int.class);
+                    setModeMethod.invoke(null, view, 0);
+
+                    Method clearBlendMethod = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View.class);
+                    clearBlendMethod.invoke(null, view);
+                } catch (Throwable ignore) {}
+
+                try {
+                    Class<?> commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader);
+                    Object commonUtils = commonUtilsClass.getDeclaredField("INSTANCE").get(null);
+                    Method clearEffect = commonUtilsClass.getMethod("clearMiBlurBlendEffect", View.class);
+                    clearEffect.invoke(commonUtils, view);
+                } catch (Throwable ignore) {}
+
+                // Load stock card background disabled drawable
+                Drawable cardBg = null;
+                int bgResId = ctx.getResources().getIdentifier("qs_card_background_disabled", "drawable", ctx.getPackageName());
+                if (bgResId == 0) {
+                    bgResId = ctx.getResources().getIdentifier("qs_background_disabled", "drawable", ctx.getPackageName());
+                }
+                if (bgResId != 0) {
+                    try {
+                        cardBg = ctx.getTheme().getDrawable(bgResId).mutate();
+                    } catch (Throwable ignore) {}
+                }
+                if (cardBg != null) {
+                    view.setBackground(cardBg);
+                } else {
+                    android.graphics.drawable.GradientDrawable fallbackBg = new android.graphics.drawable.GradientDrawable();
+                    fallbackBg.setCornerRadius(cornerRadius);
+                    fallbackBg.setColor(Color.parseColor("#26808080"));
+                    view.setBackground(fallbackBg);
+                }
             }
         } catch (Throwable t) {
             android.util.Log.e(TAG, "applyGroupContainerStyle error", t);
@@ -1031,14 +1082,7 @@ public class ControlCenterHook {
                 Method initMethod = childTile.getClass().getMethod("init", tileIconViewClass);
                 initMethod.invoke(childTile, iconView);
 
-                int iconFrameId = ctx.getResources().getIdentifier("icon_frame", "id", ctx.getPackageName());
-                View iconFrame = childTile.findViewById(iconFrameId);
-                if (iconFrame != null) {
-                    android.graphics.drawable.GradientDrawable discBg = new android.graphics.drawable.GradientDrawable();
-                    discBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-                    discBg.setColor(Color.parseColor("#26FFFFFF")); // 15% white translucent circular disc
-                    iconFrame.setBackground(discBg);
-                }
+                // Let child QSTileItemView manage its own native icon background
 
                 if (mainPanelController != null) {
                     try {
@@ -2455,15 +2499,11 @@ public class ControlCenterHook {
                                                                 }
                                                             } catch (Throwable ignore) {}
 
-                                                            // 5. Ensure circular disc outline is present on icon_frame
-                                                            int iconFrameId = ctx.getResources().getIdentifier("icon_frame", "id", ctx.getPackageName());
-                                                            View iconFrame = childView.findViewById(iconFrameId);
-                                                            if (iconFrame != null) {
-                                                                android.graphics.drawable.GradientDrawable discBg = new android.graphics.drawable.GradientDrawable();
-                                                                discBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-                                                                discBg.setColor(Color.parseColor("#26FFFFFF"));
-                                                                iconFrame.setBackground(discBg);
-                                                            }
+                                                            // 7. Forward updateBlendBlur to child holder
+                                                            try {
+                                                                Method ubb = subHolder.getClass().getMethod("updateBlendBlur");
+                                                                ubb.invoke(subHolder);
+                                                            } catch (Throwable ignore) {}
                                                         } catch (Throwable t) {
                                                             android.util.Log.e(TAG, "Grouped card sub-tile native binding error: " + childSpec, t);
                                                         }
