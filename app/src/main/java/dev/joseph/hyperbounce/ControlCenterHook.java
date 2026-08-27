@@ -61,6 +61,8 @@ public class ControlCenterHook {
     public static volatile boolean sIsDisassembleMode = false;
     public static final Set<String> sSelectedDisassembleGroups = new HashSet<>();
     public static volatile Object sQSListController = null;
+    public static volatile Object sMainPanelAdapter = null;
+    public static volatile Object sFrameCallback = null;
     private static final ThreadLocal<Set<Object>> sBindingRecords = ThreadLocal.withInitial(HashSet::new);
 
     // Dynamic Component Priority Map for Real-Time & Persistent Reordering
@@ -1018,22 +1020,33 @@ public class ControlCenterHook {
                 mainPanelController = getMethod.invoke(mainPanelCtrlLazy);
             } catch (Throwable ignore) {}
 
+            // Check if Background Blur / Advanced Textures is enabled
+            boolean blurEnabled = false;
+            try {
+                Class<?> ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader);
+                Method getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context.class);
+                blurEnabled = (boolean) getBlurM.invoke(null, ctx);
+            } catch (Throwable ignore) {}
+
             // Add 2-Row Vertical Container inside QSCardItemView
             android.widget.LinearLayout container = new android.widget.LinearLayout(ctx);
             container.setId(0x7f099995);
             container.setOrientation(android.widget.LinearLayout.VERTICAL);
+            container.setGravity(Gravity.CENTER);
             android.widget.LinearLayout.LayoutParams clp = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-            int pad = (int) (4 * density);
+            int pad = (int) (6 * density);
             container.setPadding(pad, pad, pad, pad);
             root.addView(container, clp);
 
             android.widget.LinearLayout rowTop = new android.widget.LinearLayout(ctx);
             rowTop.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            rowTop.setGravity(Gravity.CENTER);
             android.widget.LinearLayout.LayoutParams rlp1 = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f);
             container.addView(rowTop, rlp1);
 
             android.widget.LinearLayout rowBottom = new android.widget.LinearLayout(ctx);
             rowBottom.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            rowBottom.setGravity(Gravity.CENTER);
             android.widget.LinearLayout.LayoutParams rlp2 = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f);
             container.addView(rowBottom, rlp2);
 
@@ -1082,7 +1095,28 @@ public class ControlCenterHook {
                 Method initMethod = childTile.getClass().getMethod("init", tileIconViewClass);
                 initMethod.invoke(childTile, iconView);
 
-                // Let child QSTileItemView manage its own native icon background
+                // Center icon_frame within childTile to ensure equal top/bottom and row spacing
+                int iconFrameId = ctx.getResources().getIdentifier("icon_frame", "id", ctx.getPackageName());
+                View iconFrame = childTile.findViewById(iconFrameId);
+                if (iconFrame != null) {
+                    ViewGroup.LayoutParams iflp = iconFrame.getLayoutParams();
+                    if (iflp instanceof android.widget.FrameLayout.LayoutParams) {
+                        android.widget.FrameLayout.LayoutParams flp = (android.widget.FrameLayout.LayoutParams) iflp;
+                        flp.gravity = Gravity.CENTER;
+                        flp.topMargin = 0;
+                        flp.bottomMargin = 0;
+                        iconFrame.setLayoutParams(flp);
+                    }
+                    if (blurEnabled) {
+                        android.graphics.drawable.GradientDrawable discBg = new android.graphics.drawable.GradientDrawable();
+                        discBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                        discBg.setColor(Color.parseColor("#33FFFFFF")); // 20% translucent white plate
+                        discBg.setStroke((int) (0.8f * density), Color.parseColor("#26FFFFFF")); // subtle border
+                        iconFrame.setBackground(discBg);
+                    } else {
+                        iconFrame.setBackground(null);
+                    }
+                }
 
                 if (mainPanelController != null) {
                     try {
@@ -1100,6 +1134,33 @@ public class ControlCenterHook {
                         }
                     } catch (Throwable t) {
                         android.util.Log.e(TAG, "Failed creating QSItemViewHolder for subTile " + i, t);
+                    }
+                }
+
+                // Initialize mainPanelAdapter & frameCallback on subHolder to prevent lateinit crash
+                if (subHolders[i] != null) {
+                    Class<?> sc = subHolders[i].getClass();
+                    while (sc != null) {
+                        try {
+                            Field af = sc.getDeclaredField("attached");
+                            af.setAccessible(true);
+                            af.setBoolean(subHolders[i], true);
+                        } catch (Throwable ignore) {}
+                        try {
+                            Field mpaField = sc.getDeclaredField("mainPanelAdapter");
+                            mpaField.setAccessible(true);
+                            if (sMainPanelAdapter != null) {
+                                mpaField.set(subHolders[i], sMainPanelAdapter);
+                            }
+                        } catch (Throwable ignore) {}
+                        try {
+                            Field fcField = sc.getDeclaredField("frameCallback");
+                            fcField.setAccessible(true);
+                            if (sFrameCallback != null) {
+                                fcField.set(subHolders[i], sFrameCallback);
+                            }
+                        } catch (Throwable ignore) {}
+                        sc = sc.getSuperclass();
                     }
                 }
 
@@ -1485,7 +1546,12 @@ public class ControlCenterHook {
                     if (m.getName().equals("prepareLocation")) {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
-                            Object result = chain.proceed();
+                            Object result = null;
+                            try {
+                                result = chain.proceed();
+                            } catch (Throwable t) {
+                                return null;
+                            }
                             if (config.ccLowEndAnim || !config.ccAnimEnabled) return result;
 
                             try {
@@ -2024,6 +2090,7 @@ public class ControlCenterHook {
                             if (args != null && args.length >= 2 && ((Integer) args[1]) == 2274) {
                                 try {
                                     Object adapterObj = chain.getThisObject();
+                                    sMainPanelAdapter = adapterObj;
                                     Field qsListField = mainAdapterClass.getDeclaredField("qsListController");
                                     qsListField.setAccessible(true);
                                     Object qsListCtrl = qsListField.get(adapterObj);
@@ -2499,7 +2566,39 @@ public class ControlCenterHook {
                                                                 }
                                                             } catch (Throwable ignore) {}
 
-                                                            // 7. Forward updateBlendBlur to child holder
+                                                            // 7. Center icon_frame and apply blur disc highlight if Advanced Textures is on
+                                                            try {
+                                                                boolean blurEnabled = false;
+                                                                try {
+                                                                    Class<?> ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader);
+                                                                    Method getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context.class);
+                                                                    blurEnabled = (boolean) getBlurM.invoke(null, ctx);
+                                                                } catch (Throwable ignore) {}
+
+                                                                int iconFrameId = ctx.getResources().getIdentifier("icon_frame", "id", ctx.getPackageName());
+                                                                View iconFrame = childView.findViewById(iconFrameId);
+                                                                if (iconFrame != null) {
+                                                                    ViewGroup.LayoutParams iflp = iconFrame.getLayoutParams();
+                                                                    if (iflp instanceof android.widget.FrameLayout.LayoutParams) {
+                                                                        android.widget.FrameLayout.LayoutParams flp = (android.widget.FrameLayout.LayoutParams) iflp;
+                                                                        flp.gravity = Gravity.CENTER;
+                                                                        flp.topMargin = 0;
+                                                                        flp.bottomMargin = 0;
+                                                                        iconFrame.setLayoutParams(flp);
+                                                                    }
+                                                                    if (blurEnabled) {
+                                                                        android.graphics.drawable.GradientDrawable discBg = new android.graphics.drawable.GradientDrawable();
+                                                                        discBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                                                                        discBg.setColor(Color.parseColor("#33FFFFFF"));
+                                                                        discBg.setStroke((int) (0.8f * density), Color.parseColor("#26FFFFFF"));
+                                                                        iconFrame.setBackground(discBg);
+                                                                    } else {
+                                                                        iconFrame.setBackground(null);
+                                                                    }
+                                                                }
+                                                            } catch (Throwable ignore) {}
+
+                                                            // 8. Forward updateBlendBlur to child holder
                                                             try {
                                                                 Method ubb = subHolder.getClass().getMethod("updateBlendBlur");
                                                                 ubb.invoke(subHolder);
@@ -2815,6 +2914,10 @@ public class ControlCenterHook {
                                 Object cardHolder = chain.getThisObject();
                                 Object rawArgs = chain.getArgs();
                                 Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                                if (args != null && args.length >= 2) {
+                                    sMainPanelAdapter = args[0];
+                                    sFrameCallback = args[1];
+                                }
                                 View itemView = getViewHolderItemView(cardHolder);
                                 if (itemView != null) {
                                     Object[] subHolders = (Object[]) itemView.getTag(0x7f099993);
