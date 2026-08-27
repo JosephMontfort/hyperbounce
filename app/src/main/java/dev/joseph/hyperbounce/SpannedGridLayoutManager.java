@@ -87,6 +87,10 @@ public class SpannedGridLayoutManager extends GridLayoutManager {
             if (viewType == 3484339) {
                 return new int[]{1, 2};
             }
+            // 2274: Grouped 4-Tile Card Container -> 2x2
+            if (viewType == 2274) {
+                return new int[]{2, 2};
+            }
             // 2273: Wi-Fi / Cell / Expanded Card -> 2x1
             if (viewType == 2273) {
                 return new int[]{2, 1};

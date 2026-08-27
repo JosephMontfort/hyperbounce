@@ -38,6 +38,7 @@ android {
 dependencies {
     compileOnly("io.github.libxposed:api:102.0.0")
     compileOnly("androidx.recyclerview:recyclerview:1.3.2")
+    compileOnly("androidx.constraintlayout:constraintlayout:2.1.4")
     // Include Rhino for dynamic Runtime Scripting (Frida-like execution)
     implementation("org.mozilla:rhino:1.7.14")
 }

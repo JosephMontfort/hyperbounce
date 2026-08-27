@@ -45,6 +45,24 @@ public class ControlCenterHook {
     // Edit Mode Tracking
     private static volatile boolean sIsEditMode = false;
 
+    // Tile Grouping Model & State
+    public static class TileGroup {
+        public String id;
+        public List<String> specs = new ArrayList<>();
+        public TileGroup(String id, List<String> specs) {
+            this.id = id;
+            this.specs = specs != null ? specs : new ArrayList<>();
+        }
+    }
+
+    public static final List<TileGroup> sTileGroups = new ArrayList<>();
+    public static volatile boolean sIsGroupSelectMode = false;
+    public static final Set<String> sSelectedTileSpecs = new HashSet<>();
+    public static volatile boolean sIsDisassembleMode = false;
+    public static final Set<String> sSelectedDisassembleGroups = new HashSet<>();
+    public static volatile Object sQSListController = null;
+    private static final ThreadLocal<Set<Object>> sBindingRecords = ThreadLocal.withInitial(HashSet::new);
+
     // Dynamic Component Priority Map for Real-Time & Persistent Reordering
     private static final Map<String, Integer> sComponentPriorities = new HashMap<>();
     private static final Set<String> sExpandedTileSpecs = new HashSet<>();
@@ -97,6 +115,25 @@ public class ControlCenterHook {
                         sExpandedTileSpecs.add("cell");
                     }
                 }
+
+                // Load Tile Groups
+                String groupsStr = sPrefs.getString("tile_groups_v1", "");
+                sTileGroups.clear();
+                if (!TextUtils.isEmpty(groupsStr)) {
+                    for (String gEntry : groupsStr.split(";")) {
+                        String[] parts = gEntry.split(":");
+                        if (parts.length == 2) {
+                            String gId = parts[0];
+                            List<String> gSpecs = new ArrayList<>();
+                            for (String sp : parts[1].split(",")) {
+                                if (!sp.trim().isEmpty()) gSpecs.add(sp.trim());
+                            }
+                            if (gSpecs.size() == 4) {
+                                sTileGroups.add(new TileGroup(gId, gSpecs));
+                            }
+                        }
+                    }
+                }
             }
         } catch (Throwable ignore) {}
     }
@@ -120,6 +157,21 @@ public class ControlCenterHook {
                     sb.append(spec);
                 }
                 editor.putString("expanded_tile_specs", sb.toString());
+
+                // Save Tile Groups
+                StringBuilder groupsSb = new StringBuilder();
+                for (TileGroup g : sTileGroups) {
+                    if (g.specs.size() == 4) {
+                        if (groupsSb.length() > 0) groupsSb.append(";");
+                        groupsSb.append(g.id).append(":");
+                        for (int i = 0; i < g.specs.size(); i++) {
+                            if (i > 0) groupsSb.append(",");
+                            groupsSb.append(g.specs.get(i));
+                        }
+                    }
+                }
+                editor.putString("tile_groups_v1", groupsSb.toString());
+
                 editor.apply();
             }
         } catch (Throwable ignore) {}
@@ -202,6 +254,949 @@ public class ControlCenterHook {
         @Override public void setAlpha(int alpha) { paint.setAlpha(alpha); }
         @Override public void setColorFilter(ColorFilter colorFilter) { paint.setColorFilter(colorFilter); }
         @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
+    }
+
+    // Custom Anti-Aliased Selection Circle Badge Drawable (Hollow vs Checked)
+    private static class SelectCircleDrawable extends Drawable {
+        private final Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint checkPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private boolean isChecked = false;
+
+        public SelectCircleDrawable() {
+            ringPaint.setColor(Color.parseColor("#E6FFFFFF"));
+            ringPaint.setStyle(Paint.Style.STROKE);
+            ringPaint.setStrokeWidth(3.0f);
+
+            bgPaint.setColor(Color.parseColor("#0D84FF"));
+            bgPaint.setStyle(Paint.Style.FILL);
+
+            checkPaint.setColor(Color.WHITE);
+            checkPaint.setStyle(Paint.Style.STROKE);
+            checkPaint.setStrokeWidth(3.5f);
+            checkPaint.setStrokeCap(Paint.Cap.ROUND);
+            checkPaint.setStrokeJoin(Paint.Join.ROUND);
+        }
+
+        public void setChecked(boolean checked) {
+            this.isChecked = checked;
+            invalidateSelf();
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            int w = getBounds().width();
+            int h = getBounds().height();
+            if (w <= 0 || h <= 0) return;
+
+            float cx = w / 2.0f;
+            float cy = h / 2.0f;
+            float radius = Math.min(w, h) / 2.0f - 2.0f;
+
+            if (isChecked) {
+                canvas.drawCircle(cx, cy, radius, bgPaint);
+                // Draw checkmark
+                Path checkPath = new Path();
+                checkPath.moveTo(cx - radius * 0.45f, cy);
+                checkPath.lineTo(cx - radius * 0.10f, cy + radius * 0.40f);
+                checkPath.lineTo(cx + radius * 0.50f, cy - radius * 0.35f);
+                canvas.drawPath(checkPath, checkPaint);
+            } else {
+                Paint darkBg = new Paint(Paint.ANTI_ALIAS_FLAG);
+                darkBg.setColor(Color.parseColor("#80000000"));
+                darkBg.setStyle(Paint.Style.FILL);
+                canvas.drawCircle(cx, cy, radius, darkBg);
+                canvas.drawCircle(cx, cy, radius, ringPaint);
+            }
+        }
+
+        @Override public void setAlpha(int alpha) { ringPaint.setAlpha(alpha); bgPaint.setAlpha(alpha); }
+        @Override public void setColorFilter(ColorFilter colorFilter) {}
+        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
+    }
+
+    // Custom Anti-Aliased 4-Squares Group Vector Drawable for Header Button
+    private static class GroupGridDrawable extends Drawable {
+        private final Paint boxPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        public GroupGridDrawable(boolean active) {
+            boxPaint.setColor(active ? Color.parseColor("#0D84FF") : Color.WHITE);
+            boxPaint.setStyle(Paint.Style.FILL);
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            int w = getBounds().width();
+            int h = getBounds().height();
+            if (w <= 0 || h <= 0) return;
+
+            float pad = w * 0.22f;
+            float size = (w - pad * 2.0f - w * 0.12f) / 2.0f;
+            float gap = w * 0.12f;
+            float corner = size * 0.28f;
+
+            // Box 1 (top-left)
+            canvas.drawRoundRect(pad, pad, pad + size, pad + size, corner, corner, boxPaint);
+            // Box 2 (top-right)
+            canvas.drawRoundRect(pad + size + gap, pad, pad + size + gap + size, pad + size, corner, corner, boxPaint);
+            // Box 3 (bottom-left)
+            canvas.drawRoundRect(pad, pad + size + gap, pad + size, pad + size + gap + size, corner, corner, boxPaint);
+            // Box 4 (bottom-right)
+            canvas.drawRoundRect(pad + size + gap, pad + size + gap, pad + size + gap + size, pad + size + gap + size, corner, corner, boxPaint);
+        }
+
+        @Override public void setAlpha(int alpha) { boxPaint.setAlpha(alpha); }
+        @Override public void setColorFilter(ColorFilter colorFilter) {}
+        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
+    }
+
+    // Custom Anti-Aliased Ungroup / Split Badge Drawable
+    private static class UngroupBadgeDrawable extends Drawable {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        public UngroupBadgeDrawable() {
+            paint.setColor(Color.WHITE);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(3.0f);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeJoin(Paint.Join.ROUND);
+
+            bgPaint.setColor(Color.parseColor("#B3E53935")); // Subtle translucent red accent
+            bgPaint.setStyle(Paint.Style.FILL);
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            int w = getBounds().width();
+            int h = getBounds().height();
+            if (w <= 0 || h <= 0) return;
+
+            canvas.drawCircle(w / 2.0f, h / 2.0f, Math.min(w, h) / 2.0f, bgPaint);
+
+            float cx = w * 0.50f;
+            float cy = h * 0.50f;
+            float off = w * 0.22f;
+
+            // Draw X mark
+            canvas.drawLine(cx - off, cy - off, cx + off, cy + off, paint);
+            canvas.drawLine(cx + off, cy - off, cx - off, cy + off, paint);
+        }
+
+        @Override public void setAlpha(int alpha) { paint.setAlpha(alpha); }
+        @Override public void setColorFilter(ColorFilter colorFilter) {}
+        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
+    }
+
+    // Custom Anti-Aliased Disassemble / Ungroup Header Vector Drawable
+    private static class UngroupHeaderDrawable extends Drawable {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        public UngroupHeaderDrawable(boolean active) {
+            paint.setColor(active ? Color.parseColor("#FF453A") : Color.WHITE);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(3.0f);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            int w = getBounds().width();
+            int h = getBounds().height();
+            if (w <= 0 || h <= 0) return;
+
+            float cx = w * 0.5f;
+            float cy = h * 0.5f;
+            float off = w * 0.22f;
+            float d = w * 0.08f;
+
+            // 4 outward corners mark
+            canvas.drawLine(cx - off, cy - d, cx - off, cy - off, paint);
+            canvas.drawLine(cx - off, cy - off, cx - d, cy - off, paint);
+
+            canvas.drawLine(cx + d, cy - off, cx + off, cy - off, paint);
+            canvas.drawLine(cx + off, cy - off, cx + off, cy - d, paint);
+
+            canvas.drawLine(cx - off, cy + d, cx - off, cy + off, paint);
+            canvas.drawLine(cx - off, cy + off, cx - d, cy + off, paint);
+
+            canvas.drawLine(cx + d, cy + off, cx + off, cy + off, paint);
+            canvas.drawLine(cx + off, cy + off, cx + off, cy + d, paint);
+        }
+
+        @Override public void setAlpha(int alpha) { paint.setAlpha(alpha); }
+        @Override public void setColorFilter(ColorFilter colorFilter) {}
+        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
+    }
+
+    private static void refreshAdapter(View root, Context ctx) {
+        try {
+            View decor = root.getRootView();
+            int rvId = ctx.getResources().getIdentifier("main_panel", "id", ctx.getPackageName());
+            View rv = decor.findViewById(rvId);
+            if (rv != null) {
+                Method getAdapterMethod = rv.getClass().getMethod("getAdapter");
+                Object adp = getAdapterMethod.invoke(rv);
+                if (adp != null) {
+                    Method notifyDataSetChangedMethod = adp.getClass().getMethod("notifyDataSetChanged");
+                    notifyDataSetChangedMethod.invoke(adp);
+                }
+            }
+        } catch (Throwable ignore) {}
+    }
+
+    private static void triggerTileToggle(Object tile, Object record, View childView, ClassLoader classLoader) {
+        try {
+            if (tile != null) {
+                try {
+                    Method m = tile.getClass().getMethod("click");
+                    m.invoke(tile);
+                } catch (NoSuchMethodException e) {
+                    try {
+                        Method m = tile.getClass().getMethod("click", View.class);
+                        m.invoke(tile, childView);
+                    } catch (Throwable ignore) {}
+                }
+            }
+            if (record != null) {
+                try {
+                    Method getClickActionMethod = record.getClass().getMethod("getClickAction");
+                    Object clickAction = getClickActionMethod.invoke(record);
+                    if (clickAction != null) {
+                        for (Method cm : clickAction.getClass().getMethods()) {
+                            if (cm.getName().equals("invoke") && cm.getParameterTypes().length == 1) {
+                                cm.invoke(clickAction, childView);
+                                break;
+                            } else if (cm.getName().equals("invoke") && cm.getParameterTypes().length == 0) {
+                                cm.invoke(clickAction);
+                                break;
+                            }
+                        }
+                    }
+                } catch (Throwable ignore) {}
+            }
+            if (childView != null && tile != null) {
+                childView.postDelayed(() -> {
+                    try {
+                        Method getStateMethod = tile.getClass().getMethod("getState");
+                        Object tileState = getStateMethod.invoke(tile);
+                        boolean isConn = false;
+                        try {
+                            Method isConnMethod = tile.getClass().getMethod("isConnected");
+                            isConn = (boolean) isConnMethod.invoke(tile);
+                        } catch (Throwable ignore) {}
+                        Method updateStateMethod = childView.getClass().getMethod("updateState", Class.forName("com.android.systemui.plugins.qs.QSTile$State", false, classLoader), boolean.class, boolean.class);
+                        updateStateMethod.invoke(childView, tileState, isConn, true);
+                    } catch (Throwable ignore) {}
+                }, 120);
+            }
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "triggerTileToggle error", t);
+        }
+    }
+
+    private static void triggerTileSecondaryClick(Object tile, Object record, View childView) {
+        try {
+            if (tile != null) {
+                try {
+                    Method m = tile.getClass().getMethod("secondaryClick");
+                    m.invoke(tile);
+                    return;
+                } catch (NoSuchMethodException e) {
+                    try {
+                        Method m = tile.getClass().getMethod("secondaryClick", View.class);
+                        m.invoke(tile, childView);
+                        return;
+                    } catch (NoSuchMethodException e2) {
+                        try {
+                            Method m2 = tile.getClass().getMethod("longClick");
+                            m2.invoke(tile);
+                            return;
+                        } catch (Throwable ignore) {}
+                    }
+                }
+            }
+            if (record != null) {
+                try {
+                    Method getLongClickActionMethod = record.getClass().getMethod("getLongClickAction");
+                    Object longClickAction = getLongClickActionMethod.invoke(record);
+                    if (longClickAction != null) {
+                        for (Method lm : longClickAction.getClass().getMethods()) {
+                            if (lm.getName().equals("invoke") && lm.getParameterTypes().length == 1) {
+                                lm.invoke(longClickAction, childView);
+                                return;
+                            } else if (lm.getName().equals("invoke") && lm.getParameterTypes().length == 0) {
+                                lm.invoke(longClickAction);
+                                return;
+                            }
+                        }
+                    }
+                } catch (Throwable ignore) {}
+            }
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "triggerTileSecondaryClick error", t);
+        }
+    }
+
+    private static void ensureGroupButtonInjected(Object controller, ClassLoader classLoader) {
+        if (controller == null) return;
+        try {
+            Method getViewMethod = controller.getClass().getMethod("getView");
+            View root = (View) getViewMethod.invoke(controller);
+            if (root == null) return;
+
+            Context ctx = root.getContext();
+            float density = ctx.getResources().getDisplayMetrics().density;
+
+            int headerId = ctx.getResources().getIdentifier("customize_header", "id", ctx.getPackageName());
+            int completeBtnId = ctx.getResources().getIdentifier("complete_button", "id", ctx.getPackageName());
+            int titleId = ctx.getResources().getIdentifier("customize_title", "id", ctx.getPackageName());
+
+            ViewGroup customizeHeader = root.findViewById(headerId);
+            View completeButton = root.findViewById(completeBtnId);
+            View customizeTitle = root.findViewById(titleId);
+
+            if (customizeHeader == null || completeButton == null) return;
+
+            int groupTag = 0x7f099997;
+            int disassembleTag = 0x7f099994;
+
+            ImageView groupButton = customizeHeader.findViewById(groupTag);
+            ImageView disassembleButton = customizeHeader.findViewById(disassembleTag);
+
+            int btnSize = (completeButton.getLayoutParams() != null && completeButton.getLayoutParams().height > 0)
+                ? completeButton.getLayoutParams().height : (int) (40 * density);
+            if (btnSize <= 0) btnSize = (int) (40 * density);
+
+            if (groupButton == null) {
+                groupButton = new ImageView(ctx);
+                groupButton.setId(groupTag);
+                groupButton.setImageDrawable(new GroupGridDrawable(sIsGroupSelectMode));
+
+                ViewGroup.LayoutParams clp = null;
+                try {
+                    Method genMethod = customizeHeader.getClass().getMethod("generateDefaultLayoutParams");
+                    genMethod.setAccessible(true);
+                    clp = (ViewGroup.LayoutParams) genMethod.invoke(customizeHeader);
+                } catch (Throwable t) {
+                    try {
+                        Class<?> lpClass = Class.forName("androidx.constraintlayout.widget.ConstraintLayout$LayoutParams", false, classLoader);
+                        clp = (ViewGroup.LayoutParams) lpClass.getConstructor(int.class, int.class).newInstance(btnSize, btnSize);
+                    } catch (Throwable t2) {
+                        clp = new ViewGroup.MarginLayoutParams(btnSize, btnSize);
+                    }
+                }
+
+                if (clp != null) {
+                    clp.width = btnSize;
+                    clp.height = btnSize;
+                    try {
+                        clp.getClass().getField("endToStart").setInt(clp, completeButton.getId());
+                        clp.getClass().getField("topToTop").setInt(clp, completeButton.getId());
+                        clp.getClass().getField("bottomToBottom").setInt(clp, completeButton.getId());
+                        clp.getClass().getField("rightMargin").setInt(clp, (int) (8 * density));
+                    } catch (Throwable ignore) {}
+                }
+
+                try {
+                    Class<?> miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader);
+                    Method setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View.class, int.class);
+                    setModeMethod.invoke(null, groupButton, 1);
+
+                    Class<?> tokenClass = Class.forName("miui.systemui.util.MiuiColorBlendToken", false, classLoader);
+                    Object tokenInst = tokenClass.getDeclaredField("INSTANCE").get(null);
+                    Method getBlendMethod = tokenClass.getMethod("getCC_EDIT_BUTTON_BLEND_COLORS");
+                    Object blendColors = getBlendMethod.invoke(tokenInst);
+                    Method setBlendMethod = miBlurClass.getMethod("setMiBackgroundBlendColors", View.class, blendColors.getClass());
+                    setBlendMethod.invoke(null, groupButton, blendColors);
+
+                    Class<?> outlineClass = Class.forName("miui.systemui.util.ViewOutlineProviderExt", false, classLoader);
+                    Object outlineInst = outlineClass.getDeclaredField("INSTANCE").get(null);
+                    Method getOutlineMethod = outlineClass.getMethod("getOutlineProvider", int.class);
+                    Object outlineProvider = getOutlineMethod.invoke(outlineInst, (int) (20 * density));
+                    groupButton.setOutlineProvider((android.view.ViewOutlineProvider) outlineProvider);
+                    groupButton.setClipToOutline(true);
+                } catch (Throwable ignore) {}
+
+                try {
+                    Method attachTouchMethod = controller.getClass().getMethod("attachTouchTarget", View.class);
+                    attachTouchMethod.invoke(controller, groupButton);
+                } catch (Throwable ignore) {}
+
+                customizeHeader.addView(groupButton, clp);
+            }
+
+            if (disassembleButton == null) {
+                disassembleButton = new ImageView(ctx);
+                disassembleButton.setId(disassembleTag);
+                disassembleButton.setImageDrawable(new UngroupHeaderDrawable(sIsDisassembleMode));
+
+                ViewGroup.LayoutParams dlp = null;
+                try {
+                    Method genMethod = customizeHeader.getClass().getMethod("generateDefaultLayoutParams");
+                    genMethod.setAccessible(true);
+                    dlp = (ViewGroup.LayoutParams) genMethod.invoke(customizeHeader);
+                } catch (Throwable t) {
+                    try {
+                        Class<?> lpClass = Class.forName("androidx.constraintlayout.widget.ConstraintLayout$LayoutParams", false, classLoader);
+                        dlp = (ViewGroup.LayoutParams) lpClass.getConstructor(int.class, int.class).newInstance(btnSize, btnSize);
+                    } catch (Throwable t2) {
+                        dlp = new ViewGroup.MarginLayoutParams(btnSize, btnSize);
+                    }
+                }
+
+                if (dlp != null) {
+                    dlp.width = btnSize;
+                    dlp.height = btnSize;
+                    try {
+                        dlp.getClass().getField("endToStart").setInt(dlp, groupButton.getId());
+                        dlp.getClass().getField("topToTop").setInt(dlp, completeButton.getId());
+                        dlp.getClass().getField("bottomToBottom").setInt(dlp, completeButton.getId());
+                        dlp.getClass().getField("rightMargin").setInt(dlp, (int) (8 * density));
+                    } catch (Throwable ignore) {}
+                }
+
+                if (customizeTitle != null && customizeTitle.getLayoutParams() != null) {
+                    try {
+                        customizeTitle.getLayoutParams().getClass().getField("endToStart").setInt(customizeTitle.getLayoutParams(), disassembleButton.getId());
+                    } catch (Throwable ignore) {}
+                }
+
+                try {
+                    Class<?> miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader);
+                    Method setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View.class, int.class);
+                    setModeMethod.invoke(null, disassembleButton, 1);
+
+                    Class<?> tokenClass = Class.forName("miui.systemui.util.MiuiColorBlendToken", false, classLoader);
+                    Object tokenInst = tokenClass.getDeclaredField("INSTANCE").get(null);
+                    Method getBlendMethod = tokenClass.getMethod("getCC_EDIT_BUTTON_BLEND_COLORS");
+                    Object blendColors = getBlendMethod.invoke(tokenInst);
+                    Method setBlendMethod = miBlurClass.getMethod("setMiBackgroundBlendColors", View.class, blendColors.getClass());
+                    setBlendMethod.invoke(null, disassembleButton, blendColors);
+
+                    Class<?> outlineClass = Class.forName("miui.systemui.util.ViewOutlineProviderExt", false, classLoader);
+                    Object outlineInst = outlineClass.getDeclaredField("INSTANCE").get(null);
+                    Method getOutlineMethod = outlineClass.getMethod("getOutlineProvider", int.class);
+                    Object outlineProvider = getOutlineMethod.invoke(outlineInst, (int) (20 * density));
+                    disassembleButton.setOutlineProvider((android.view.ViewOutlineProvider) outlineProvider);
+                    disassembleButton.setClipToOutline(true);
+                } catch (Throwable ignore) {}
+
+                try {
+                    Method attachTouchMethod = controller.getClass().getMethod("attachTouchTarget", View.class);
+                    attachTouchMethod.invoke(controller, disassembleButton);
+                } catch (Throwable ignore) {}
+
+                customizeHeader.addView(disassembleButton, dlp);
+            }
+
+            final ImageView finalGroupBtn = groupButton;
+            final ImageView finalDisassembleBtn = disassembleButton;
+
+            groupButton.setImageDrawable(new GroupGridDrawable(sIsGroupSelectMode));
+            groupButton.setVisibility(View.VISIBLE);
+            groupButton.bringToFront();
+
+            disassembleButton.setImageDrawable(new UngroupHeaderDrawable(sIsDisassembleMode));
+            disassembleButton.setVisibility(View.VISIBLE);
+            disassembleButton.bringToFront();
+
+            groupButton.setOnClickListener(v -> {
+                try {
+                    if (!sIsGroupSelectMode) {
+                        sIsGroupSelectMode = true;
+                        sIsDisassembleMode = false;
+                        sSelectedDisassembleGroups.clear();
+                        sSelectedTileSpecs.clear();
+                        finalGroupBtn.setImageDrawable(new GroupGridDrawable(true));
+                        if (finalDisassembleBtn != null) finalDisassembleBtn.setImageDrawable(new UngroupHeaderDrawable(false));
+                    } else {
+                        if (sSelectedTileSpecs.size() == 4) {
+                            String groupId = "group_" + System.currentTimeMillis();
+                            for (String spec : sSelectedTileSpecs) {
+                                sExpandedTileSpecs.remove(spec);
+                            }
+                            sTileGroups.add(new TileGroup(groupId, new ArrayList<>(sSelectedTileSpecs)));
+                            sIsGroupSelectMode = false;
+                            sSelectedTileSpecs.clear();
+                            finalGroupBtn.setImageDrawable(new GroupGridDrawable(false));
+                            savePriorities(ctx);
+                        } else {
+                            sIsGroupSelectMode = false;
+                            sSelectedTileSpecs.clear();
+                            finalGroupBtn.setImageDrawable(new GroupGridDrawable(false));
+                        }
+                    }
+                    refreshAdapter(root, ctx);
+                } catch (Throwable t) {
+                    tripSafeMode(ctx, t);
+                }
+            });
+
+            disassembleButton.setOnClickListener(v -> {
+                try {
+                    if (!sIsDisassembleMode) {
+                        sIsDisassembleMode = true;
+                        sIsGroupSelectMode = false;
+                        sSelectedTileSpecs.clear();
+                        sSelectedDisassembleGroups.clear();
+                        finalDisassembleBtn.setImageDrawable(new UngroupHeaderDrawable(true));
+                        if (finalGroupBtn != null) finalGroupBtn.setImageDrawable(new GroupGridDrawable(false));
+                    } else {
+                        if (!sSelectedDisassembleGroups.isEmpty()) {
+                            java.util.Iterator<TileGroup> it = sTileGroups.iterator();
+                            while (it.hasNext()) {
+                                TileGroup g = it.next();
+                                if (sSelectedDisassembleGroups.contains(g.id)) {
+                                    it.remove();
+                                }
+                            }
+                            sSelectedDisassembleGroups.clear();
+                            sIsDisassembleMode = false;
+                            finalDisassembleBtn.setImageDrawable(new UngroupHeaderDrawable(false));
+                            savePriorities(ctx);
+                        } else {
+                            sIsDisassembleMode = false;
+                            finalDisassembleBtn.setImageDrawable(new UngroupHeaderDrawable(false));
+                        }
+                    }
+                    refreshAdapter(root, ctx);
+                } catch (Throwable t) {
+                    tripSafeMode(ctx, t);
+                }
+            });
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "ensureGroupButtonInjected error", t);
+        }
+    }
+
+    public static TileGroup isGroupAnchor(String spec) {
+        if (spec == null) return null;
+        for (TileGroup g : sTileGroups) {
+            if (g.specs.size() == 4 && spec.equals(g.specs.get(0))) {
+                return g;
+            }
+        }
+        return null;
+    }
+
+    public static boolean isGroupChild(String spec) {
+        if (spec == null) return false;
+        for (TileGroup g : sTileGroups) {
+            if (g.specs.size() == 4) {
+                for (int i = 1; i < g.specs.size(); i++) {
+                    if (spec.equals(g.specs.get(i))) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public static TileGroup getTileGroupBySpec(String spec) {
+        if (spec == null) return null;
+        for (TileGroup g : sTileGroups) {
+            if (g.specs.contains(spec)) return g;
+        }
+        return null;
+    }
+
+    private static void ungroupTileGroup(Context ctx, TileGroup group, View view) {
+        if (group == null) return;
+        if (sQSListController != null) {
+            try {
+                Method getAddedMethod = sQSListController.getClass().getMethod("getAddedTiles");
+                List addedList = (List) getAddedMethod.invoke(sQSListController);
+                if (addedList != null) {
+                    for (Object r : addedList) {
+                        if (r != null) {
+                            try {
+                                Field sF = r.getClass().getDeclaredField("spec");
+                                sF.setAccessible(true);
+                                String s = (String) sF.get(r);
+                                if (group.specs.contains(s)) {
+                                    try {
+                                        Method remCb = r.getClass().getMethod("removeCallback");
+                                        remCb.invoke(r);
+                                    } catch (Throwable ignore) {}
+                                    try {
+                                        Method setLis = r.getClass().getMethod("setListening", boolean.class);
+                                        setLis.invoke(r, false);
+                                    } catch (Throwable ignore) {}
+                                }
+                            } catch (Throwable ignore) {}
+                        }
+                    }
+                }
+            } catch (Throwable ignore) {}
+        }
+        sTileGroups.remove(group);
+        savePriorities(ctx);
+
+        View parent = view;
+        while (parent != null && !(parent.getClass().getName().contains("RecyclerView"))) {
+            if (parent.getParent() instanceof View) {
+                parent = (View) parent.getParent();
+            } else break;
+        }
+        if (parent != null) {
+            final View rv = parent;
+            rv.post(() -> {
+                try {
+                    Method getAdapterMethod = rv.getClass().getMethod("getAdapter");
+                    Object adapter = getAdapterMethod.invoke(rv);
+                    if (adapter != null) {
+                        Method notifyChanged = adapter.getClass().getMethod("notifyDataSetChanged");
+                        notifyChanged.invoke(adapter);
+                    }
+                } catch (Throwable ignore) {}
+            });
+        }
+    }
+
+    private static void applyGroupContainerStyle(View view, ClassLoader classLoader) {
+        if (view == null) return;
+        try {
+            float density = view.getContext().getResources().getDisplayMetrics().density;
+            final float cornerRadius = 20f * density;
+
+            // 1. Ensure background is null so blur shines through without opaque drawable
+            view.setBackground(null);
+
+            // 2. Set _cornerRadius field on QSCardItemView
+            try {
+                Field crField = view.getClass().getDeclaredField("_cornerRadius");
+                crField.setAccessible(true);
+                crField.setFloat(view, cornerRadius);
+            } catch (Throwable ignore) {}
+
+            // 3. Set custom ViewOutlineProvider with 20dp smooth corners
+            view.setOutlineProvider(new android.view.ViewOutlineProvider() {
+                @Override
+                public void getOutline(View v, android.graphics.Outline outline) {
+                    outline.setRoundRect(0, 0, v.getWidth(), v.getHeight(), cornerRadius);
+                }
+            });
+            view.setClipToOutline(true);
+            if (view instanceof ViewGroup) {
+                ((ViewGroup) view).setClipChildren(true);
+            }
+            view.invalidateOutline();
+
+            // 4. Set Xiaomi Blur Mode = 1 (BLUR_OPEN)
+            try {
+                Class<?> miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader);
+                Method setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View.class, int.class);
+                setModeMethod.invoke(null, view, 1);
+
+                // 5. Set CC_EDIT_BUTTON_BLEND_COLORS
+                Class<?> tokenClass = Class.forName("miui.systemui.util.MiuiColorBlendToken", false, classLoader);
+                Object tokenInst = tokenClass.getDeclaredField("INSTANCE").get(null);
+                Method getBlendMethod = tokenClass.getMethod("getCC_EDIT_BUTTON_BLEND_COLORS");
+                Object blendColors = getBlendMethod.invoke(tokenInst);
+                Method setBlendMethod = miBlurClass.getMethod("setMiBackgroundBlendColors", View.class, blendColors.getClass());
+                setBlendMethod.invoke(null, view, blendColors);
+            } catch (Throwable t) {
+                android.util.Log.e(TAG, "applyGroupContainerStyle MiBlur error", t);
+            }
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "applyGroupContainerStyle error", t);
+        }
+    }
+
+    private static Object createGroupedCardViewHolder(ViewGroup parent, Object qsListCtrl, ClassLoader classLoader) {
+        if (parent == null || qsListCtrl == null || classLoader == null) return null;
+        try {
+            Context ctx = parent.getContext();
+            float density = ctx.getResources().getDisplayMetrics().density;
+
+            Field sysUIContextField = qsListCtrl.getClass().getDeclaredField("sysUIContext");
+            sysUIContextField.setAccessible(true);
+            Context sysUIContext = (Context) sysUIContextField.get(qsListCtrl);
+
+            // Inflate genuine QSCardItemView as root
+            Class<?> cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader);
+            Method inflateMethod = cardBindingClass.getMethod("inflate", LayoutInflater.class, ViewGroup.class, boolean.class);
+            Object binding = inflateMethod.invoke(null, LayoutInflater.from(ctx), parent, false);
+
+            Method getRootMethod = cardBindingClass.getMethod("getRoot");
+            ViewGroup root = (ViewGroup) getRootMethod.invoke(binding);
+
+            // Initialize QSCardItemView with QSCardItemIconView so lateinit property icon is properly set!
+            try {
+                Class<?> cardIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemIconView", false, classLoader);
+                Constructor<?> cardIconCtor = null;
+                for (Constructor<?> c : cardIconViewClass.getDeclaredConstructors()) {
+                    if (c.getParameterTypes().length == 5) {
+                        cardIconCtor = c;
+                        break;
+                    }
+                }
+                if (cardIconCtor == null) {
+                    cardIconCtor = cardIconViewClass.getDeclaredConstructors()[0];
+                }
+                cardIconCtor.setAccessible(true);
+                Object cardIconView = (cardIconCtor.getParameterTypes().length == 5)
+                    ? cardIconCtor.newInstance(root.getContext(), sysUIContext, null, 4, null)
+                    : cardIconCtor.newInstance(root.getContext(), sysUIContext);
+
+                Method initCardMethod = root.getClass().getMethod("init", cardIconViewClass);
+                initCardMethod.invoke(root, cardIconView);
+            } catch (Throwable t) {
+                android.util.Log.e(TAG, "QSCardItemView init error", t);
+            }
+
+            // Remove default card children (title, subtext, chevron, switch)
+            root.removeAllViews();
+
+            int cardH = (int) (162 * density);
+            ViewGroup.LayoutParams rlp = root.getLayoutParams();
+            if (rlp != null) {
+                rlp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                rlp.height = cardH;
+                root.setLayoutParams(rlp);
+            } else {
+                root.setLayoutParams(new ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, cardH));
+            }
+
+            Object mainPanelController = null;
+            try {
+                Field mainPanelControllerField = qsListCtrl.getClass().getDeclaredField("mainPanelController");
+                mainPanelControllerField.setAccessible(true);
+                Object mainPanelCtrlLazy = mainPanelControllerField.get(qsListCtrl);
+                Method getMethod = mainPanelCtrlLazy.getClass().getMethod("get");
+                mainPanelController = getMethod.invoke(mainPanelCtrlLazy);
+            } catch (Throwable ignore) {}
+
+            // Add 2-Row Vertical Container inside QSCardItemView
+            android.widget.LinearLayout container = new android.widget.LinearLayout(ctx);
+            container.setId(0x7f099995);
+            container.setOrientation(android.widget.LinearLayout.VERTICAL);
+            android.widget.LinearLayout.LayoutParams clp = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            int pad = (int) (4 * density);
+            container.setPadding(pad, pad, pad, pad);
+            root.addView(container, clp);
+
+            android.widget.LinearLayout rowTop = new android.widget.LinearLayout(ctx);
+            rowTop.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            android.widget.LinearLayout.LayoutParams rlp1 = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f);
+            container.addView(rowTop, rlp1);
+
+            android.widget.LinearLayout rowBottom = new android.widget.LinearLayout(ctx);
+            rowBottom.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            android.widget.LinearLayout.LayoutParams rlp2 = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f);
+            container.addView(rowBottom, rlp2);
+
+            // Inflate 4 circular child tiles
+            int tileLayoutId = ctx.getResources().getIdentifier("qs_tile_item_view", "layout", ctx.getPackageName());
+            Class<?> tileIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemIconView", false, classLoader);
+            Constructor<?> iconCtor = null;
+            for (Constructor<?> c : tileIconViewClass.getDeclaredConstructors()) {
+                if (c.getParameterTypes().length == 5) {
+                    iconCtor = c;
+                    break;
+                }
+            }
+            if (iconCtor == null) iconCtor = tileIconViewClass.getDeclaredConstructors()[0];
+            iconCtor.setAccessible(true);
+
+            container.setClickable(false);
+            container.setFocusable(false);
+            root.setClickable(false);
+            root.setFocusable(false);
+
+            Object[] subHolders = new Object[4];
+            Class<?> subHolderClass = null;
+            Constructor<?> subHolderCtor = null;
+            try {
+                subHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSItemViewHolder", false, classLoader);
+                for (Constructor<?> c : subHolderClass.getDeclaredConstructors()) {
+                    if (c.getParameterTypes().length == 2) {
+                        subHolderCtor = c;
+                        break;
+                    }
+                }
+                if (subHolderCtor == null && subHolderClass.getDeclaredConstructors().length > 0) {
+                    subHolderCtor = subHolderClass.getDeclaredConstructors()[0];
+                }
+                if (subHolderCtor != null) subHolderCtor.setAccessible(true);
+            } catch (Throwable ignore) {}
+
+            for (int i = 0; i < 4; i++) {
+                ViewGroup targetRow = (i < 2) ? rowTop : rowBottom;
+                View childTile = LayoutInflater.from(ctx).inflate(tileLayoutId, targetRow, false);
+                Object iconView = (iconCtor.getParameterTypes().length == 5)
+                    ? iconCtor.newInstance(ctx, sysUIContext, false, 4, null)
+                    : iconCtor.newInstance(ctx, sysUIContext, false);
+
+                Method initMethod = childTile.getClass().getMethod("init", tileIconViewClass);
+                initMethod.invoke(childTile, iconView);
+
+                int iconFrameId = ctx.getResources().getIdentifier("icon_frame", "id", ctx.getPackageName());
+                View iconFrame = childTile.findViewById(iconFrameId);
+                if (iconFrame != null) {
+                    android.graphics.drawable.GradientDrawable discBg = new android.graphics.drawable.GradientDrawable();
+                    discBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                    discBg.setColor(Color.parseColor("#26FFFFFF")); // 15% white translucent circular disc
+                    iconFrame.setBackground(discBg);
+                }
+
+                if (mainPanelController != null) {
+                    try {
+                        Method setMainCtrlMethod = childTile.getClass().getMethod("setMainPanelController", Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController", false, classLoader));
+                        setMainCtrlMethod.invoke(childTile, mainPanelController);
+                    } catch (Throwable ignore) {}
+                }
+
+                if (subHolderCtor != null) {
+                    try {
+                        if (subHolderCtor.getParameterTypes().length == 2) {
+                            subHolders[i] = subHolderCtor.newInstance(childTile, mainPanelController);
+                        } else {
+                            subHolders[i] = subHolderCtor.newInstance(childTile);
+                        }
+                    } catch (Throwable t) {
+                        android.util.Log.e(TAG, "Failed creating QSItemViewHolder for subTile " + i, t);
+                    }
+                }
+
+                android.widget.LinearLayout.LayoutParams tlp = new android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f);
+                tlp.gravity = Gravity.CENTER;
+                targetRow.addView(childTile, tlp);
+            }
+
+            root.setTag(0x7f099993, subHolders);
+
+            // Apply Xiaomi Blur & Rounded Corners
+            applyGroupContainerStyle(root, classLoader);
+            root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+                applyGroupContainerStyle(v, classLoader);
+            });
+
+            // Construct genuine QSCardViewHolder
+            Class<?> cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader);
+            Class<?> qsItemViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSItemView", false, classLoader);
+            Constructor<?> holderCtor = cardHolderClass.getConstructor(qsItemViewClass);
+            return holderCtor.newInstance(root);
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "createGroupedCardViewHolder error", t);
+        }
+        return null;
+    }
+
+    private static View getViewHolderItemView(Object holder) {
+        if (holder == null) return null;
+        Class<?> clazz = holder.getClass();
+        while (clazz != null) {
+            try {
+                Field f = clazz.getDeclaredField("itemView");
+                f.setAccessible(true);
+                return (View) f.get(holder);
+            } catch (Throwable ignore) {}
+            clazz = clazz.getSuperclass();
+        }
+        return null;
+    }
+
+    private static void updateChildHolderFrame(Object parentHolder, Object childHolder) {
+        if (parentHolder == null || childHolder == null) return;
+        try {
+            Class<?> parentClass = parentHolder.getClass();
+            Class<?> childClass = childHolder.getClass();
+
+            try {
+                Method getScale = parentClass.getMethod("getHolderScale");
+                Method setScale = childClass.getMethod("setHolderScale", float.class);
+                setScale.invoke(childHolder, getScale.invoke(parentHolder));
+            } catch (Throwable ignore) {}
+
+            try {
+                Method getAlpha = parentClass.getMethod("getHolderAlpha");
+                Method setAlpha = childClass.getMethod("setHolderAlpha", float.class);
+                setAlpha.invoke(childHolder, getAlpha.invoke(parentHolder));
+            } catch (Throwable ignore) {}
+
+            try {
+                Method getTransX = parentClass.getMethod("getHolderTransX");
+                Method setTransX = childClass.getMethod("setHolderTransX", float.class);
+                setTransX.invoke(childHolder, getTransX.invoke(parentHolder));
+            } catch (Throwable ignore) {}
+
+            try {
+                Method getTransY = parentClass.getMethod("getHolderTransY");
+                Method setTransY = childClass.getMethod("setHolderTransY", float.class);
+                setTransY.invoke(childHolder, getTransY.invoke(parentHolder));
+            } catch (Throwable ignore) {}
+
+            try {
+                Method getExpandAlpha = parentClass.getMethod("getExpandAlpha");
+                Method setExpandAlpha = childClass.getMethod("setExpandAlpha", float.class);
+                setExpandAlpha.invoke(childHolder, getExpandAlpha.invoke(parentHolder));
+            } catch (Throwable ignore) {}
+
+            try {
+                Method getExpandScaleRatio = parentClass.getMethod("getExpandScaleRatio");
+                Method setExpandScaleRatio = childClass.getMethod("setExpandScaleRatio", float.class);
+                setExpandScaleRatio.invoke(childHolder, getExpandScaleRatio.invoke(parentHolder));
+            } catch (Throwable ignore) {}
+
+            try {
+                Method getSpreadScale = parentClass.getMethod("getSpreadScale");
+                Method setSpreadScale = childClass.getMethod("setSpreadScale", float.class);
+                setSpreadScale.invoke(childHolder, getSpreadScale.invoke(parentHolder));
+            } catch (Throwable ignore) {}
+
+            try {
+                Method getShrinkX = parentClass.getMethod("getShrinkX");
+                Method setShrinkX = childClass.getMethod("setShrinkX", float.class);
+                setShrinkX.invoke(childHolder, getShrinkX.invoke(parentHolder));
+            } catch (Throwable ignore) {}
+
+            try {
+                Method getShrinkY = parentClass.getMethod("getShrinkY");
+                Method setShrinkY = childClass.getMethod("setShrinkY", float.class);
+                setShrinkY.invoke(childHolder, getShrinkY.invoke(parentHolder));
+            } catch (Throwable ignore) {}
+
+            try {
+                Method getCenterX = parentClass.getMethod("getCenterX$miui_controlcenter_release");
+                Method setCenterX = childClass.getMethod("setCenterX$miui_controlcenter_release", float.class);
+                setCenterX.invoke(childHolder, getCenterX.invoke(parentHolder));
+            } catch (Throwable ignore) {}
+
+            try {
+                Method getCenterY = parentClass.getMethod("getCenterY$miui_controlcenter_release");
+                Method setCenterY = childClass.getMethod("setCenterY$miui_controlcenter_release", float.class);
+                setCenterY.invoke(childHolder, getCenterY.invoke(parentHolder));
+            } catch (Throwable ignore) {}
+
+            try {
+                Method getShrinkCenterY = parentClass.getMethod("getShrinkCenterY$miui_controlcenter_release");
+                Method setShrinkCenterY = childClass.getMethod("setShrinkCenterY$miui_controlcenter_release", float.class);
+                setShrinkCenterY.invoke(childHolder, getShrinkCenterY.invoke(parentHolder));
+            } catch (Throwable ignore) {}
+
+            try {
+                Method getShrinkExpandTransY = parentClass.getMethod("getShrinkExpandTransY");
+                Method setShrinkExpandTransY = childClass.getMethod("setShrinkExpandTransY", float.class);
+                setShrinkExpandTransY.invoke(childHolder, getShrinkExpandTransY.invoke(parentHolder));
+            } catch (Throwable ignore) {}
+
+            Method onFrame = childClass.getMethod("onFrameCallback");
+            onFrame.invoke(childHolder);
+        } catch (Throwable ignore) {}
+    }
+
+    private static View getChildTileAt(ViewGroup container, int index) {
+        if (container == null) return null;
+        int rowIndex = index / 2;
+        int colIndex = index % 2;
+        if (rowIndex < container.getChildCount()) {
+            View row = container.getChildAt(rowIndex);
+            if (row instanceof ViewGroup && colIndex < ((ViewGroup) row).getChildCount()) {
+                return ((ViewGroup) row).getChildAt(colIndex);
+            }
+        }
+        return null;
     }
 
     private static void toggleTileSize(Context ctx, String spec, View tileView) {
@@ -489,7 +1484,12 @@ public class ControlCenterHook {
                     if (m.getName().equals("updateEases")) {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
-                            Object result = chain.proceed();
+                            Object result = null;
+                            try {
+                                result = chain.proceed();
+                            } catch (Throwable ignore) {
+                                return null;
+                            }
                             try {
                                 Object holder = chain.getThisObject();
 
@@ -829,6 +1829,7 @@ public class ControlCenterHook {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
                             try {
+                                sQSListController = chain.getThisObject();
                                 Object qsListCtrl = chain.getThisObject();
                                 Field addedField = qsListClass.getDeclaredField("addedTiles");
                                 addedField.setAccessible(true);
@@ -839,9 +1840,17 @@ public class ControlCenterHook {
                                     while (it.hasNext()) {
                                         Object rec = it.next();
                                         if (rec != null) {
-                                            Field specF = rec.getClass().getDeclaredField("spec");
-                                            specF.setAccessible(true);
-                                            String sp = (String) specF.get(rec);
+                                            String sp = null;
+                                            try {
+                                                Method getSpecMethod = rec.getClass().getMethod("getSpec");
+                                                sp = (String) getSpecMethod.invoke(rec);
+                                            } catch (Throwable ignore) {
+                                                try {
+                                                    Field specF = rec.getClass().getDeclaredField("spec");
+                                                    specF.setAccessible(true);
+                                                    sp = (String) specF.get(rec);
+                                                } catch (Throwable ignore2) {}
+                                            }
                                             if (sp != null) {
                                                 if (seen.contains(sp)) {
                                                     it.remove();
@@ -857,6 +1866,42 @@ public class ControlCenterHook {
                         });
                     }
 
+                    if (m.getName().equals("getListItems")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            sQSListController = chain.getThisObject();
+                            List originalList = (List) chain.proceed();
+                            if (originalList == null || sTileGroups.isEmpty()) return originalList;
+                            try {
+                                ArrayList filtered = new ArrayList();
+                                for (Object item : originalList) {
+                                    if (item != null) {
+                                        String spec = null;
+                                        try {
+                                            Method getSpecMethod = item.getClass().getMethod("getSpec");
+                                            spec = (String) getSpecMethod.invoke(item);
+                                        } catch (Throwable ignore) {
+                                            try {
+                                                Field specField = item.getClass().getDeclaredField("spec");
+                                                specField.setAccessible(true);
+                                                spec = (String) specField.get(item);
+                                            } catch (Throwable ignore2) {}
+                                        }
+
+                                        if (spec != null && isGroupChild(spec)) {
+                                            continue;
+                                        }
+                                    }
+                                    filtered.add(item);
+                                }
+                                return filtered;
+                            } catch (Throwable t) {
+                                android.util.Log.e(TAG, "QSListController getListItems filter error", t);
+                            }
+                            return originalList;
+                        });
+                    }
+
                     if (m.getName().equals("createViewHolder")) {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
@@ -865,49 +1910,87 @@ public class ControlCenterHook {
                                 try {
                                     Object rawArgs = chain.getArgs();
                                     Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
-                                    if (args != null && args.length >= 2 && ((Integer) args[1]) == 2273) {
+                                    if (args != null && args.length >= 2) {
+                                        int viewType = ((Integer) args[1]);
                                         ViewGroup parent = (ViewGroup) args[0];
                                         Object qsListCtrl = chain.getThisObject();
-
-                                        Class<?> cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader);
-                                        Method inflateMethod = cardBindingClass.getMethod("inflate", LayoutInflater.class, ViewGroup.class, boolean.class);
-                                        Object binding = inflateMethod.invoke(null, LayoutInflater.from(parent.getContext()), parent, false);
-
-                                        Method getRootMethod = cardBindingClass.getMethod("getRoot");
-                                        View root = (View) getRootMethod.invoke(binding);
+                                        Context ctx = parent.getContext();
+                                        float density = ctx.getResources().getDisplayMetrics().density;
 
                                         Field sysUIContextField = qsListCtrl.getClass().getDeclaredField("sysUIContext");
                                         sysUIContextField.setAccessible(true);
                                         Context sysUIContext = (Context) sysUIContextField.get(qsListCtrl);
 
-                                        Class<?> cardIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemIconView", false, classLoader);
-                                        Constructor<?> iconCtor = null;
-                                        for (Constructor<?> c : cardIconViewClass.getDeclaredConstructors()) {
-                                            if (c.getParameterTypes().length == 5) {
-                                                iconCtor = c;
-                                                break;
+                                        if (viewType == 2274) {
+                                            Object holder = createGroupedCardViewHolder(parent, qsListCtrl, classLoader);
+                                            if (holder != null) return holder;
+                                        }
+
+                                        if (viewType == 2273) {
+                                            Class<?> cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader);
+                                            Method inflateMethod = cardBindingClass.getMethod("inflate", LayoutInflater.class, ViewGroup.class, boolean.class);
+                                            Object binding = inflateMethod.invoke(null, LayoutInflater.from(parent.getContext()), parent, false);
+
+                                            Method getRootMethod = cardBindingClass.getMethod("getRoot");
+                                            View root = (View) getRootMethod.invoke(binding);
+
+                                            Class<?> cardIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemIconView", false, classLoader);
+                                            Constructor<?> iconCtor = null;
+                                            for (Constructor<?> c : cardIconViewClass.getDeclaredConstructors()) {
+                                                if (c.getParameterTypes().length == 5) {
+                                                    iconCtor = c;
+                                                    break;
+                                                }
                                             }
-                                        }
-                                        if (iconCtor == null) {
-                                            iconCtor = cardIconViewClass.getDeclaredConstructors()[0];
-                                        }
-                                        iconCtor.setAccessible(true);
-                                        Object iconView = (iconCtor.getParameterTypes().length == 5) 
-                                            ? iconCtor.newInstance(root.getContext(), sysUIContext, null, 4, null)
-                                            : iconCtor.newInstance(root.getContext(), sysUIContext);
+                                            if (iconCtor == null) {
+                                                iconCtor = cardIconViewClass.getDeclaredConstructors()[0];
+                                            }
+                                            iconCtor.setAccessible(true);
+                                            Object iconView = (iconCtor.getParameterTypes().length == 5) 
+                                                ? iconCtor.newInstance(root.getContext(), sysUIContext, null, 4, null)
+                                                : iconCtor.newInstance(root.getContext(), sysUIContext);
 
-                                        Method initMethod = root.getClass().getMethod("init", cardIconViewClass);
-                                        initMethod.invoke(root, iconView);
+                                            Method initMethod = root.getClass().getMethod("init", cardIconViewClass);
+                                            initMethod.invoke(root, iconView);
 
-                                        Class<?> cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader);
-                                        Constructor<?> holderCtor = cardHolderClass.getConstructor(Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemView", false, classLoader));
-                                        return holderCtor.newInstance(root);
+                                            Class<?> cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader);
+                                            Constructor<?> holderCtor = cardHolderClass.getConstructor(Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemView", false, classLoader));
+                                            return holderCtor.newInstance(root);
+                                        }
                                     }
                                 } catch (Throwable t) {
-                                    android.util.Log.e(TAG, "QSListController.createViewHolder 2273 inflation error", t);
+                                    android.util.Log.e(TAG, "QSListController.createViewHolder inflation error", t);
                                 }
                             }
                             return result;
+                        });
+                    }
+                }
+            } catch (Throwable ignore) {}
+
+            // 10b. Hook MainPanelAdapter.onCreateViewHolder to catch 2274 and return GroupedCardViewHolder
+            try {
+                Class<?> mainAdapterClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelAdapter", false, classLoader);
+                for (Method m : mainAdapterClass.getDeclaredMethods()) {
+                    if (m.getName().equals("onCreateViewHolder") && m.getParameterTypes().length == 2 && m.getParameterTypes()[1] == int.class) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object rawArgs = chain.getArgs();
+                            Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                            if (args != null && args.length >= 2 && ((Integer) args[1]) == 2274) {
+                                try {
+                                    Object adapterObj = chain.getThisObject();
+                                    Field qsListField = mainAdapterClass.getDeclaredField("qsListController");
+                                    qsListField.setAccessible(true);
+                                    Object qsListCtrl = qsListField.get(adapterObj);
+                                    ViewGroup parent = (ViewGroup) args[0];
+                                    Object holder = createGroupedCardViewHolder(parent, qsListCtrl, classLoader);
+                                    if (holder != null) return holder;
+                                } catch (Throwable t) {
+                                    android.util.Log.e(TAG, "MainPanelAdapter.onCreateViewHolder 2274 intercept error", t);
+                                }
+                            }
+                            return chain.proceed();
                         });
                     }
                 }
@@ -990,8 +2073,13 @@ public class ControlCenterHook {
                                 Field specField = qsRecordClass.getDeclaredField("spec");
                                 specField.setAccessible(true);
                                 String spec = (String) specField.get(record);
-                                if (spec != null && sExpandedTileSpecs.contains(spec)) {
-                                    return 2273; // Genuine 2273 Card View Type!
+                                if (spec != null) {
+                                    if (isGroupAnchor(spec) != null) {
+                                        return 2274; // Grouped 2x2 Card Container!
+                                    }
+                                    if (sExpandedTileSpecs.contains(spec)) {
+                                        return 2273; // Genuine 2273 Card View Type!
+                                    }
                                 }
                             } catch (Throwable ignore) {}
                             return chain.proceed();
@@ -1006,8 +2094,13 @@ public class ControlCenterHook {
                                 Field specField = qsRecordClass.getDeclaredField("spec");
                                 specField.setAccessible(true);
                                 String spec = (String) specField.get(record);
-                                if (spec != null && sExpandedTileSpecs.contains(spec)) {
-                                    return 2; // Genuine 2-Column Span!
+                                if (spec != null) {
+                                    if (isGroupAnchor(spec) != null) {
+                                        return 2; // 2-Column Span!
+                                    }
+                                    if (sExpandedTileSpecs.contains(spec)) {
+                                        return 2; // Genuine 2-Column Span!
+                                    }
                                 }
                             } catch (Throwable ignore) {}
                             return chain.proceed();
@@ -1043,6 +2136,60 @@ public class ControlCenterHook {
                                 }
                             } catch (Throwable ignore) {}
                             return chain.proceed();
+                        });
+                    }
+
+                    if (m.getName().equals("setListening") && m.getParameterTypes().length == 1 && m.getParameterTypes()[0] == boolean.class) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                Object record = chain.getThisObject();
+                                Field specField = qsRecordClass.getDeclaredField("spec");
+                                specField.setAccessible(true);
+                                String spec = (String) specField.get(record);
+                                TileGroup group = isGroupAnchor(spec);
+                                if (group != null) {
+                                    Object rawArgs = chain.getArgs();
+                                    Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                                    boolean listening = args != null && args.length > 0 && (boolean) args[0];
+                                    List addedList = null;
+                                    if (sQSListController != null) {
+                                        try {
+                                            Method getAddedMethod = sQSListController.getClass().getMethod("getAddedTiles");
+                                            addedList = (List) getAddedMethod.invoke(sQSListController);
+                                        } catch (Throwable ignore) {}
+                                    }
+                                    if (addedList != null) {
+                                        for (Object r : addedList) {
+                                            if (r != null) {
+                                                try {
+                                                    Field sF = r.getClass().getDeclaredField("spec");
+                                                    sF.setAccessible(true);
+                                                    String s = (String) sF.get(r);
+                                                    if (group.specs.contains(s)) {
+                                                        try {
+                                                            Method getTileM = r.getClass().getMethod("getTile");
+                                                            Object tileObj = getTileM.invoke(r);
+                                                            if (tileObj != null) {
+                                                                Method setLisM = tileObj.getClass().getMethod("setListening", Object.class, boolean.class);
+                                                                setLisM.invoke(tileObj, r, listening);
+                                                                if (listening) {
+                                                                    Method addCb = r.getClass().getMethod("addCallback");
+                                                                    addCb.invoke(r);
+                                                                    Method refM = tileObj.getClass().getMethod("refreshState");
+                                                                    refM.invoke(tileObj);
+                                                                }
+                                                            }
+                                                        } catch (Throwable ignore) {}
+                                                    }
+                                                } catch (Throwable ignore) {}
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return result;
                         });
                     }
                 }
@@ -1118,16 +2265,20 @@ public class ControlCenterHook {
                 }
             } catch (Throwable ignore) {}
 
-            // 14. Inject Dedicated Resize Handle Badge on QSRecord View Binding
+            // 14. Inject Dedicated Resize Handle Badge & Grouped Card Binding on QSRecord View Binding
             try {
                 Class<?> qsRecordClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSRecord", false, classLoader);
                 for (Method m : qsRecordClass.getDeclaredMethods()) {
                     if (m.getName().equals("onBindViewHolder")) {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
+                            Object record = chain.getThisObject();
+                            if (sBindingRecords.get().contains(record)) {
+                                return chain.proceed();
+                            }
                             Object result = chain.proceed();
                             try {
-                                Object record = chain.getThisObject();
+                                sBindingRecords.get().add(record);
                                 Field specField = qsRecordClass.getDeclaredField("spec");
                                 specField.setAccessible(true);
                                 String spec = (String) specField.get(record);
@@ -1147,10 +2298,297 @@ public class ControlCenterHook {
                                     View itemView = (View) tileViewObj;
                                     Context ctx = itemView.getContext();
                                     float density = ctx.getResources().getDisplayMetrics().density;
+
+                                    // Grouped 2x2 Card Binding & Ungroup Badge
+                                    TileGroup group = isGroupAnchor(spec);
+                                    if (group != null) {
+                                        ViewGroup container = itemView.findViewById(0x7f099995);
+                                        if (container != null) {
+                                            try {
+                                                List addedList = null;
+                                                if (sQSListController != null) {
+                                                    try {
+                                                        Method getAddedMethod = sQSListController.getClass().getMethod("getAddedTiles");
+                                                        addedList = (List) getAddedMethod.invoke(sQSListController);
+                                                    } catch (Throwable ignore) {}
+                                                }
+                                                if (addedList == null) {
+                                                    try {
+                                                        Field qsControllerField = qsRecordClass.getDeclaredField("qsController");
+                                                        qsControllerField.setAccessible(true);
+                                                        Object qsCtrl = qsControllerField.get(record);
+                                                        if (qsCtrl != null) {
+                                                            Method getQsListCtrlMethod = qsCtrl.getClass().getMethod("getQsListController");
+                                                            Object lazyQsList = getQsListCtrlMethod.invoke(qsCtrl);
+                                                            Method getMethod = lazyQsList.getClass().getMethod("get");
+                                                            Object qsListCtrl = getMethod.invoke(lazyQsList);
+                                                            Method getAddedMethod = qsListCtrl.getClass().getMethod("getAddedTiles");
+                                                            addedList = (List) getAddedMethod.invoke(qsListCtrl);
+                                                        }
+                                                    } catch (Throwable ignore) {}
+                                                }
+
+                                                Map<String, Object> recordMap = new HashMap<>();
+                                                if (addedList != null) {
+                                                    for (Object r : addedList) {
+                                                        if (r != null) {
+                                                            String s = null;
+                                                            try {
+                                                                Method getSpecMethod = r.getClass().getMethod("getSpec");
+                                                                s = (String) getSpecMethod.invoke(r);
+                                                            } catch (Throwable ignore) {
+                                                                try {
+                                                                    Field sF = r.getClass().getDeclaredField("spec");
+                                                                    sF.setAccessible(true);
+                                                                    s = (String) sF.get(r);
+                                                                } catch (Throwable ignore2) {}
+                                                            }
+                                                            if (s != null) recordMap.put(s, r);
+                                                        }
+                                                    }
+                                                }
+
+                                                // Ensure grouped container permanently maintains dark translucent blur & 20dp smooth corners
+                                                applyGroupContainerStyle(itemView, classLoader);
+
+                                                Object[] subHolders = (Object[]) itemView.getTag(0x7f099993);
+                                                if (subHolders == null) {
+                                                    subHolders = new Object[4];
+                                                    Class<?> subHolderClass = null;
+                                                    Constructor<?> subHolderCtor = null;
+                                                    try {
+                                                        subHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSItemViewHolder", false, classLoader);
+                                                        for (Constructor<?> c : subHolderClass.getDeclaredConstructors()) {
+                                                            if (c.getParameterTypes().length == 2) {
+                                                                subHolderCtor = c;
+                                                                break;
+                                                            }
+                                                        }
+                                                        if (subHolderCtor == null && subHolderClass.getDeclaredConstructors().length > 0) {
+                                                            subHolderCtor = subHolderClass.getDeclaredConstructors()[0];
+                                                        }
+                                                        if (subHolderCtor != null) subHolderCtor.setAccessible(true);
+                                                    } catch (Throwable ignore) {}
+
+                                                    Object mainPanelController = null;
+                                                    try {
+                                                        Field mainPanelControllerField = record.getClass().getDeclaredField("mainPanelController");
+                                                        mainPanelControllerField.setAccessible(true);
+                                                        Object mainPanelCtrlLazy = mainPanelControllerField.get(record);
+                                                        Method getMethod = mainPanelCtrlLazy.getClass().getMethod("get");
+                                                        mainPanelController = getMethod.invoke(mainPanelCtrlLazy);
+                                                    } catch (Throwable ignore) {}
+
+                                                    for (int i = 0; i < 4; i++) {
+                                                        View childTile = getChildTileAt(container, i);
+                                                        if (childTile != null && subHolderCtor != null) {
+                                                            try {
+                                                                if (subHolderCtor.getParameterTypes().length == 2) {
+                                                                    subHolders[i] = subHolderCtor.newInstance(childTile, mainPanelController);
+                                                                } else {
+                                                                    subHolders[i] = subHolderCtor.newInstance(childTile);
+                                                                }
+                                                            } catch (Throwable ignore) {}
+                                                        }
+                                                    }
+                                                    itemView.setTag(0x7f099993, subHolders);
+                                                }
+
+                                                for (int i = 0; i < 4 && i < group.specs.size(); i++) {
+                                                    String childSpec = group.specs.get(i);
+                                                    View childView = getChildTileAt(container, i);
+                                                    Object childRecord = recordMap.get(childSpec);
+                                                    Object subHolder = (subHolders != null && i < subHolders.length) ? subHolders[i] : null;
+
+                                                    if (childRecord != null && subHolder != null && childView != null) {
+                                                        try {
+                                                            // 1. Wire subHolder to childRecord
+                                                            try {
+                                                                for (Method shM : subHolder.getClass().getMethods()) {
+                                                                    if (shM.getName().startsWith("setItem")) {
+                                                                        shM.invoke(subHolder, childRecord);
+                                                                        break;
+                                                                    }
+                                                                }
+                                                            } catch (Throwable ignore) {}
+
+                                                            // 2. Wire childRecord to subHolder
+                                                            Method setHolderMethod = childRecord.getClass().getMethod("setHolder", Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader));
+                                                            setHolderMethod.invoke(childRecord, subHolder);
+
+                                                            // 3. Delegate to native onBindViewHolder of QSRecord!
+                                                            Method onBindMethod = childRecord.getClass().getMethod("onBindViewHolder");
+                                                            onBindMethod.invoke(childRecord);
+
+                                                            // 4. Set attached flag on subHolder
+                                                            Class<?> vhCls = subHolder.getClass();
+                                                            while (vhCls != null) {
+                                                                try {
+                                                                    Field af = vhCls.getDeclaredField("attached");
+                                                                    af.setAccessible(true);
+                                                                    af.setBoolean(subHolder, true);
+                                                                    break;
+                                                                } catch (Throwable ignore) { vhCls = vhCls.getSuperclass(); }
+                                                            }
+
+                                                            // 5. Update mode to NORMAL
+                                                            try {
+                                                                Class<?> modeClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController$Mode", false, classLoader);
+                                                                Object normalMode = Enum.valueOf((Class<Enum>) modeClass, "NORMAL");
+                                                                Method updateModeMethod = childRecord.getClass().getMethod("updateMode", modeClass, boolean.class);
+                                                                updateModeMethod.invoke(childRecord, normalMode, false);
+                                                            } catch (Throwable ignore) {}
+
+                                                            // 6. Direct QSTile listening registration & refreshState
+                                                            try {
+                                                                Method addCb = childRecord.getClass().getMethod("addCallback");
+                                                                addCb.invoke(childRecord);
+                                                            } catch (Throwable ignore) {}
+                                                            try {
+                                                                Method getTileM = childRecord.getClass().getMethod("getTile");
+                                                                Object tileObj = getTileM.invoke(childRecord);
+                                                                if (tileObj != null) {
+                                                                    Method setLisM = tileObj.getClass().getMethod("setListening", Object.class, boolean.class);
+                                                                    setLisM.invoke(tileObj, childRecord, true);
+                                                                    Method refM = tileObj.getClass().getMethod("refreshState");
+                                                                    refM.invoke(tileObj);
+                                                                }
+                                                            } catch (Throwable ignore) {}
+
+                                                            // 5. Ensure circular disc outline is present on icon_frame
+                                                            int iconFrameId = ctx.getResources().getIdentifier("icon_frame", "id", ctx.getPackageName());
+                                                            View iconFrame = childView.findViewById(iconFrameId);
+                                                            if (iconFrame != null) {
+                                                                android.graphics.drawable.GradientDrawable discBg = new android.graphics.drawable.GradientDrawable();
+                                                                discBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                                                                discBg.setColor(Color.parseColor("#26FFFFFF"));
+                                                                iconFrame.setBackground(discBg);
+                                                            }
+                                                        } catch (Throwable t) {
+                                                            android.util.Log.e(TAG, "Grouped card sub-tile native binding error: " + childSpec, t);
+                                                        }
+                                                    }
+                                                }
+                                            } catch (Throwable t) {
+                                                android.util.Log.e(TAG, "Grouped card sub-tiles binding error", t);
+                                            }
+                                        }
+
+                                        // Disassemble Selection Indicator or Ungroup Badge in Edit Mode
+                                        int selectTag = 0x7f099996;
+                                        ImageView indicatorBadge = itemView.findViewById(selectTag);
+
+                                        if (sIsDisassembleMode) {
+                                            if (indicatorBadge == null && itemView instanceof ViewGroup) {
+                                                indicatorBadge = new ImageView(ctx);
+                                                indicatorBadge.setId(selectTag);
+                                                int badgeSize = (int) (22 * density);
+                                                FrameLayout.LayoutParams slp = new FrameLayout.LayoutParams(badgeSize, badgeSize);
+                                                slp.gravity = Gravity.TOP | Gravity.START;
+                                                slp.leftMargin = (int) (8 * density);
+                                                slp.topMargin = (int) (8 * density);
+                                                ((ViewGroup) itemView).addView(indicatorBadge, slp);
+                                            }
+                                            if (indicatorBadge != null) {
+                                                SelectCircleDrawable scd = (indicatorBadge.getDrawable() instanceof SelectCircleDrawable)
+                                                    ? (SelectCircleDrawable) indicatorBadge.getDrawable() : new SelectCircleDrawable();
+                                                scd.setChecked(sSelectedDisassembleGroups.contains(group.id));
+                                                indicatorBadge.setImageDrawable(scd);
+                                                indicatorBadge.setVisibility(View.VISIBLE);
+                                                indicatorBadge.bringToFront();
+
+                                                final ImageView finalBadge = indicatorBadge;
+                                                itemView.setOnClickListener(v -> {
+                                                    if (sSelectedDisassembleGroups.contains(group.id)) {
+                                                        sSelectedDisassembleGroups.remove(group.id);
+                                                    } else {
+                                                        sSelectedDisassembleGroups.add(group.id);
+                                                    }
+                                                    SelectCircleDrawable curScd = (SelectCircleDrawable) finalBadge.getDrawable();
+                                                    if (curScd != null) curScd.setChecked(sSelectedDisassembleGroups.contains(group.id));
+                                                });
+                                            }
+                                        } else {
+                                            itemView.setOnClickListener(null);
+                                            itemView.setClickable(false);
+                                            itemView.setFocusable(false);
+                                            if (isEdit) {
+                                                if (indicatorBadge == null && itemView instanceof ViewGroup) {
+                                                    indicatorBadge = new ImageView(ctx);
+                                                    indicatorBadge.setId(selectTag);
+                                                    int badgeSize = (int) (24 * density);
+                                                    FrameLayout.LayoutParams ulp = new FrameLayout.LayoutParams(badgeSize, badgeSize);
+                                                    ulp.gravity = Gravity.TOP | Gravity.END;
+                                                    ulp.rightMargin = (int) (8 * density);
+                                                    ulp.topMargin = (int) (8 * density);
+                                                    ((ViewGroup) itemView).addView(indicatorBadge, ulp);
+                                                }
+                                                if (indicatorBadge != null) {
+                                                    indicatorBadge.setImageDrawable(new UngroupBadgeDrawable());
+                                                    indicatorBadge.setVisibility(View.VISIBLE);
+                                                    indicatorBadge.bringToFront();
+                                                    indicatorBadge.setOnClickListener(v -> ungroupTileGroup(ctx, group, itemView));
+                                                }
+                                            } else if (indicatorBadge != null) {
+                                                indicatorBadge.setVisibility(View.GONE);
+                                            }
+                                        }
+                                    }
+
                                     int resizeTag = 0x7f099999;
                                     ImageView resizeHandle = itemView.findViewById(resizeTag);
+                                    int selectTag = 0x7f099998;
+                                    ImageView selectBadge = itemView.findViewById(selectTag);
 
-                                    if (isEdit && added && spec != null && !itemView.getClass().getName().contains("Wordless")) {
+                                    // Top-Left Selection Circle for Tile Grouping
+                                    if (isEdit && added && spec != null && sIsGroupSelectMode && group == null) {
+                                        final String finalSpec = spec;
+                                        if (selectBadge == null && itemView instanceof ViewGroup) {
+                                            selectBadge = new ImageView(ctx);
+                                            selectBadge.setId(selectTag);
+                                            SelectCircleDrawable scd = new SelectCircleDrawable();
+                                            scd.setChecked(sSelectedTileSpecs.contains(finalSpec));
+                                            selectBadge.setImageDrawable(scd);
+
+                                            int badgeSize = (int) (22 * density);
+                                            if (itemView instanceof FrameLayout) {
+                                                FrameLayout.LayoutParams slp = new FrameLayout.LayoutParams(badgeSize, badgeSize);
+                                                slp.gravity = Gravity.TOP | Gravity.START;
+                                                slp.leftMargin = (int) (8 * density);
+                                                slp.topMargin = (int) (8 * density);
+                                                ((ViewGroup) itemView).addView(selectBadge, slp);
+                                            } else {
+                                                ViewGroup.LayoutParams lp = new ViewGroup.LayoutParams(badgeSize, badgeSize);
+                                                ((ViewGroup) itemView).addView(selectBadge, lp);
+                                            }
+                                        }
+                                        if (selectBadge != null) {
+                                            SelectCircleDrawable scd = (SelectCircleDrawable) selectBadge.getDrawable();
+                                            if (scd != null) scd.setChecked(sSelectedTileSpecs.contains(finalSpec));
+                                            selectBadge.setVisibility(View.VISIBLE);
+                                            selectBadge.bringToFront();
+
+                                            final ImageView finalSelectBadge = selectBadge;
+                                            selectBadge.setOnClickListener(v -> {
+                                                try {
+                                                    if (sSelectedTileSpecs.contains(finalSpec)) {
+                                                        sSelectedTileSpecs.remove(finalSpec);
+                                                    } else {
+                                                        if (sSelectedTileSpecs.size() < 4) {
+                                                            sSelectedTileSpecs.add(finalSpec);
+                                                        }
+                                                    }
+                                                    SelectCircleDrawable curScd = (SelectCircleDrawable) finalSelectBadge.getDrawable();
+                                                    if (curScd != null) curScd.setChecked(sSelectedTileSpecs.contains(finalSpec));
+                                                } catch (Throwable ignore) {}
+                                            });
+                                        }
+                                    } else if (selectBadge != null) {
+                                        selectBadge.setVisibility(View.GONE);
+                                    }
+
+                                    // Resize Handle
+                                    if (isEdit && added && spec != null && !sIsGroupSelectMode && group == null && !itemView.getClass().getName().contains("Wordless")) {
                                         final String finalSpec = spec;
                                         if (resizeHandle == null && itemView instanceof ViewGroup) {
                                             resizeHandle = new ImageView(ctx);
@@ -1179,7 +2617,9 @@ public class ControlCenterHook {
                                     }
                                 }
                             } catch (Throwable t) {
-                                android.util.Log.e(TAG, "QSRecord onBindViewHolder resize handle error", t);
+                                android.util.Log.e(TAG, "QSRecord onBindViewHolder binding error", t);
+                            } finally {
+                                sBindingRecords.get().remove(record);
                             }
                             return result;
                         });
@@ -1215,6 +2655,223 @@ public class ControlCenterHook {
                                 return result;
                             });
                         }
+                    }
+                }
+            } catch (Throwable ignore) {}
+
+            // 14c. Keep Grouped 2x2 Container in Dark Realtime Blur & 20dp Rounded Outlines (Never Solid White, Never Sharp)
+            try {
+                Class<?> cardViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemView", false, classLoader);
+                for (Method m : cardViewClass.getDeclaredMethods()) {
+                    if (m.getName().equals("updateBlurBlendBackground") || m.getName().equals("updateDrawableBackground") || m.getName().equals("updateBackground") || m.getName().equals("updateClip")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            View itemView = (View) chain.getThisObject();
+                            if (itemView != null && itemView.findViewById(0x7f099995) != null) {
+                                applyGroupContainerStyle(itemView, classLoader);
+                                return null;
+                            }
+                            return chain.proceed();
+                        });
+                    }
+                    if (m.getName().equals("onTouchEvent") || m.getName().equals("onInterceptTouchEvent")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            View itemView = (View) chain.getThisObject();
+                            if (itemView != null && itemView.findViewById(0x7f099995) != null) {
+                                if (sIsDisassembleMode) {
+                                    return chain.proceed();
+                                }
+                                return false;
+                            }
+                            return chain.proceed();
+                        });
+                    }
+                }
+            } catch (Throwable ignore) {}
+
+            // 14d. Forward QSCardViewHolder Animations, Attachments & Frame Callbacks to all Sub-Holders
+            try {
+                Class<?> cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader);
+                for (Method m : cardHolderClass.getDeclaredMethods()) {
+                    if (m.getName().equals("onFrameCallback")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                Object cardHolder = chain.getThisObject();
+                                View itemView = getViewHolderItemView(cardHolder);
+                                if (itemView != null) {
+                                    Object[] subHolders = (Object[]) itemView.getTag(0x7f099993);
+                                    if (subHolders != null) {
+                                        for (Object subHolder : subHolders) {
+                                            if (subHolder != null) {
+                                                updateChildHolderFrame(cardHolder, subHolder);
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return result;
+                        });
+                    }
+                    if (m.getName().equals("onModeChanged")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                Object cardHolder = chain.getThisObject();
+                                Object rawArgs = chain.getArgs();
+                                Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                                View itemView = getViewHolderItemView(cardHolder);
+                                if (itemView != null && args != null && args.length >= 2) {
+                                    Object[] subHolders = (Object[]) itemView.getTag(0x7f099993);
+                                    if (subHolders != null) {
+                                        for (Object subHolder : subHolders) {
+                                            if (subHolder != null) {
+                                                try {
+                                                    Method childOnMode = subHolder.getClass().getMethod("onModeChanged", args[0].getClass(), boolean.class);
+                                                    childOnMode.invoke(subHolder, args[0], args[1]);
+                                                } catch (Throwable ignore) {}
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return result;
+                        });
+                    }
+                    if (m.getName().equals("onConfigurationChanged")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                Object cardHolder = chain.getThisObject();
+                                Object rawArgs = chain.getArgs();
+                                Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                                View itemView = getViewHolderItemView(cardHolder);
+                                if (itemView != null && args != null && args.length >= 1) {
+                                    Object[] subHolders = (Object[]) itemView.getTag(0x7f099993);
+                                    if (subHolders != null) {
+                                        for (Object subHolder : subHolders) {
+                                            if (subHolder != null) {
+                                                try {
+                                                    Method childOnConfig = subHolder.getClass().getMethod("onConfigurationChanged", int.class);
+                                                    childOnConfig.invoke(subHolder, args[0]);
+                                                } catch (Throwable ignore) {}
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return result;
+                        });
+                    }
+                    if (m.getName().equals("onViewAttachedToWindow")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                Object cardHolder = chain.getThisObject();
+                                Object rawArgs = chain.getArgs();
+                                Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                                View itemView = getViewHolderItemView(cardHolder);
+                                if (itemView != null) {
+                                    Object[] subHolders = (Object[]) itemView.getTag(0x7f099993);
+                                    if (subHolders != null) {
+                                        for (Object subHolder : subHolders) {
+                                            if (subHolder != null) {
+                                                Class<?> vhCls = subHolder.getClass();
+                                                while (vhCls != null) {
+                                                    try {
+                                                        Field af = vhCls.getDeclaredField("attached");
+                                                        af.setAccessible(true);
+                                                        af.setBoolean(subHolder, true);
+                                                        break;
+                                                    } catch (Throwable ignore) { vhCls = vhCls.getSuperclass(); }
+                                                }
+                                                try {
+                                                    if (args != null && args.length >= 2) {
+                                                        Method childOnAttach = subHolder.getClass().getMethod("onViewAttachedToWindow", args[0].getClass(), args[1].getClass());
+                                                        childOnAttach.invoke(subHolder, args[0], args[1]);
+                                                    } else {
+                                                        Method childOnAttach = subHolder.getClass().getMethod("onViewAttachedToWindow");
+                                                        childOnAttach.invoke(subHolder);
+                                                    }
+                                                } catch (Throwable ignore) {}
+                                                try {
+                                                    for (Method im : subHolder.getClass().getMethods()) {
+                                                        if (im.getName().startsWith("getItem") && im.getParameterTypes().length == 0) {
+                                                            Object childRec = im.invoke(subHolder);
+                                                            if (childRec != null) {
+                                                                try {
+                                                                    Method addCb = childRec.getClass().getMethod("addCallback");
+                                                                    addCb.invoke(childRec);
+                                                                } catch (Throwable ignore) {}
+                                                                try {
+                                                                    Method getTileM = childRec.getClass().getMethod("getTile");
+                                                                    Object tileObj = getTileM.invoke(childRec);
+                                                                    if (tileObj != null) {
+                                                                        Method setLisM = tileObj.getClass().getMethod("setListening", Object.class, boolean.class);
+                                                                        setLisM.invoke(tileObj, childRec, true);
+                                                                        Method refM = tileObj.getClass().getMethod("refreshState");
+                                                                        refM.invoke(tileObj);
+                                                                    }
+                                                                } catch (Throwable ignore) {}
+                                                            }
+                                                            break;
+                                                        }
+                                                    }
+                                                } catch (Throwable ignore) {}
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return result;
+                        });
+                    }
+                    if (m.getName().equals("onViewDetachedFromWindow")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                Object cardHolder = chain.getThisObject();
+                                View itemView = getViewHolderItemView(cardHolder);
+                                if (itemView != null) {
+                                    Object[] subHolders = (Object[]) itemView.getTag(0x7f099993);
+                                    if (subHolders != null) {
+                                        for (Object subHolder : subHolders) {
+                                            if (subHolder != null) {
+                                                try {
+                                                    Method childOnDetach = subHolder.getClass().getMethod("onViewDetachedFromWindow");
+                                                    childOnDetach.invoke(subHolder);
+                                                } catch (Throwable ignore) {}
+                                                try {
+                                                    for (Method im : subHolder.getClass().getMethods()) {
+                                                        if (im.getName().startsWith("getItem") && im.getParameterTypes().length == 0) {
+                                                            Object childRec = im.invoke(subHolder);
+                                                            if (childRec != null) {
+                                                                try {
+                                                                    Method remCb = childRec.getClass().getMethod("removeCallback");
+                                                                    remCb.invoke(childRec);
+                                                                } catch (Throwable ignore) {}
+                                                                try {
+                                                                    Method setLis = childRec.getClass().getMethod("setListening", boolean.class);
+                                                                    setLis.invoke(childRec, false);
+                                                                } catch (Throwable ignore) {}
+                                                            }
+                                                            break;
+                                                        }
+                                                    }
+                                                } catch (Throwable ignore) {}
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return result;
+                        });
                     }
                 }
             } catch (Throwable ignore) {}
@@ -1423,6 +3080,36 @@ public class ControlCenterHook {
                                     setEaseMethod.setAccessible(true);
                                     setEaseMethod.invoke(animConfig, customEase);
                                 }
+                            } catch (Throwable ignore) {}
+                            return result;
+                        });
+                    }
+                }
+            } catch (Throwable ignore) {}
+
+            // 18. Inject "Group / Select" Button in CustomizeHeaderController across all lifecycle points
+            try {
+                Class<?> customizeHeaderClass = Class.forName("miui.systemui.controlcenter.panel.main.header.CustomizeHeaderController", false, classLoader);
+                
+                for (java.lang.reflect.Constructor<?> c : customizeHeaderClass.getDeclaredConstructors()) {
+                    c.setAccessible(true);
+                    module.hook(c).intercept(chain -> {
+                        Object result = chain.proceed();
+                        try {
+                            ensureGroupButtonInjected(chain.getThisObject(), classLoader);
+                        } catch (Throwable ignore) {}
+                        return result;
+                    });
+                }
+
+                for (Method m : customizeHeaderClass.getDeclaredMethods()) {
+                    String mName = m.getName();
+                    if (mName.equals("onCreate") || mName.equals("transitionFrom") || mName.equals("updateResources") || mName.equals("updateBlendStyle")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                ensureGroupButtonInjected(chain.getThisObject(), classLoader);
                             } catch (Throwable ignore) {}
                             return result;
                         });

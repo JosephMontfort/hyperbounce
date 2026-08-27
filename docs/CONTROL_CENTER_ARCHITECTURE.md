@@ -127,3 +127,68 @@ flowchart TD
   - `available(boolean)`: Strict check against settings availability.
 - `com.miui.home.recents.util.SpringParamsProvider$Companion`:
   - `generateSpringBundlesByAnimType`: Statically cached physics injection.
+
+---
+
+## 6. Grouped 4-Tile Dynamic Container Architecture & Synchronization Blueprint
+
+### 6.1 Overview & Objective
+Hyperbounce allows arbitrary circular Quick Settings tiles to be grouped into a unified $2\times 2$ container occupying a single 2-column card slot (`viewType = 2274`, `spanSize = 2`). Each child tile inside the container retains 100% of its native behaviors:
+- Direct tap toggle (e.g., Bluetooth, Flashlight, Sync, Lock Orientation).
+- Long-press detail popups and expanded dialogs (e.g., Bluetooth device picker).
+- Fluid Folme touch press scaling and ripple animation.
+- Real-time bidirectional state synchronization with Android OS and Settings app.
+
+### 6.2 Architectural Evolution & The Desynchronization Bottlenecks
+During early implementations, several subtle HyperOS SystemUI lifecycle barriers caused child tiles to freeze or lose state synchronization (e.g., Bluetooth turning on on first tap, but refusing to toggle off on subsequent taps or remaining visually highlighted even after being turned off in Settings):
+
+1. **The `subHolder.attached` Barrier:**
+   - In HyperOS `QSRecord.startListening()`, state listening is strictly guarded:
+     ```java
+     if (holder != null && holder.getAttached() && this.mode == Mode.NORMAL) {
+         setListening(true);
+     }
+     ```
+   - Because `RecyclerView` only interacts with the parent container `QSCardViewHolder`, the 4 internal `QSItemViewHolder` instances (`subHolders`) never received direct `onViewAttachedToWindow` callbacks from the adapter, leaving `attached == false`.
+   - Consequently, `startListening()` silently failed, causing the tile backend (`QSTileImpl` / `BluetoothTile`) to unregister from Android's `BluetoothController`.
+
+2. **The `QSTileImpl` Frozen State Bug:**
+   - When a tile backend has 0 active listeners (`mListeners.isEmpty()`), it enters dormant mode and stops polling the OS.
+   - When tapped a second time, `mState.state` inside `BluetoothTile` remained frozen at its initial state (`1` / OFF), causing `handleClick()` to continuously execute `setBluetoothEnabled(true)` instead of toggling to `false`.
+
+3. **The Mode Filtering Guard:**
+   - In `QSRecord$callback$2.onStateChanged(state)`, incoming state changes from the OS are discarded if `qSRecord.mode != Mode.NORMAL`. Uninitialized child records dropped incoming state updates.
+
+### 6.3 The 5 Pillars of the High-Precision Synchronization Solution
+
+```mermaid
+flowchart TD
+    A[Group Container onBind / onAttach] --> B[1. subHolder.attached = true via Reflection]
+    A --> C[2. childRecord.updateMode NORMAL]
+    A --> D[3. Direct tile.setListening childRecord, true]
+    A --> E[4. Direct tile.refreshState]
+    A --> F[5. Child Holder onViewAttachedToWindow Forwarding]
+
+    D --> G[QSTileImpl mListeners > 0]
+    G --> H[OS Controller Callbacks Active]
+    H --> I[Real-time State Change Event]
+    I --> J[QSRecord Callback 78283]
+    J --> K[QSTileItemView.updateState]
+    K --> L[Native Folme Tint & Icon Animation]
+```
+
+1. **Explicit `subHolder.attached = true` Initialization:**
+   - Both in `onBindViewHolder` and in `onViewAttachedToWindow`, the private `attached` field across all 4 `QSItemViewHolder` instances is set to `true` via reflection.
+
+2. **Direct `QSTile.setListening(childRecord, true)` Registration:**
+   - Bypasses intermediate caching checks and directly adds `childRecord` to `QSTileImpl.mListeners`, ensuring the tile backend never unregisters from OS controllers while the panel is active.
+
+3. **Forced `tile.refreshState()` on View Presentation:**
+   - Explicitly triggers `tile.refreshState()` whenever the container is bound or attached, ensuring instantaneous synchronization with current OS toggle status.
+
+4. **Guaranteed `Mode.NORMAL` Propagation:**
+   - Calls `childRecord.updateMode(Mode.NORMAL, false)` during sub-tile binding so that state callbacks from `QSRecord$callback$2` are processed and dispatched to `uiHandler` with message code `78283`.
+
+5. **Complete Frame Animation Forwarding:**
+   - The parent container `QSCardViewHolder` forwards all 12 transformation and animation properties (`setShrinkX`, `setShrinkY`, `setCenterX`, `setCenterY`, `setShrinkCenterY`, `setShrinkExpandTransY`, `setHolderScale`, `setHolderAlpha`, `setHolderTransX`, `setHolderTransY`, `setExpandAlpha`, `setExpandScaleRatio`) to all 4 child `QSItemViewHolder` instances inside `onFrameCallback`.
+

@@ -33,7 +33,7 @@ public class ConfigProvider extends ContentProvider {
         } else if ("systemUiStartup".equals(method)) {
             Bundle b = new Bundle();
             long now = System.currentTimeMillis();
-            if (now - lastStartupTime < 15000) {
+            if (now - lastStartupTime < 25000) {
                 crashLoopCounter++;
                 if (crashLoopCounter >= 2) {
                     try {
