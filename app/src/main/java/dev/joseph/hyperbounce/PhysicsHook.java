@@ -8,12 +8,139 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 
 public class PhysicsHook extends XposedModule {
+        public static class CircleGlassDrawable extends android.graphics.drawable.Drawable {
+        private final android.graphics.Paint fillPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private final android.graphics.Paint strokePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private final android.graphics.Paint glowPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private final float density;
+        public float highlightAlpha = 0f;
+
+        public CircleGlassDrawable(float density) {
+            this.density = density;
+            fillPaint.setStyle(android.graphics.Paint.Style.FILL);
+            strokePaint.setStyle(android.graphics.Paint.Style.STROKE);
+            glowPaint.setStyle(android.graphics.Paint.Style.FILL);
+        }
+
+        @Override
+        public void draw(android.graphics.Canvas canvas) {
+            android.graphics.Rect bounds = getBounds();
+            float cx = bounds.exactCenterX();
+            float cy = bounds.exactCenterY();
+            
+            float radius = (config.pinCircleDiameter / 2.0f) * density;
+            if (radius <= 0f) radius = 41f * density;
+
+            float baseFill = Math.max(0f, Math.min(1f, config.pinCircleFillAlpha));
+            float boost = Math.max(0f, Math.min(1f, config.pinPressGlowAlpha)) * highlightAlpha;
+            float totalFill = Math.min(1.0f, baseFill + boost);
+
+            int fillA = (int) (totalFill * 255);
+            fillPaint.setColor(0x00FFFFFF | (fillA << 24));
+            
+            int strokeA = (int) (Math.max(0f, Math.min(1f, config.pinCircleStrokeAlpha)) * 255);
+            strokePaint.setColor(0x00FFFFFF | (strokeA << 24));
+            strokePaint.setStrokeWidth(Math.max(0.5f, config.pinCircleStrokeWidth) * density);
+
+            canvas.drawCircle(cx, cy, radius, fillPaint);
+            canvas.drawCircle(cx, cy, radius, strokePaint);
+
+            if (highlightAlpha > 0.01f && config.pinPressGlowAlpha > 0.01f) {
+                int glowA = (int) (Math.max(0f, Math.min(1f, config.pinPressGlowAlpha * highlightAlpha * 0.75f)) * 255);
+                glowPaint.setColor(0x00FFFFFF | (glowA << 24));
+                canvas.drawCircle(cx, cy, radius, glowPaint);
+            }
+        }
+
+        @Override public void setAlpha(int alpha) {}
+        @Override public void setColorFilter(android.graphics.ColorFilter colorFilter) {
+            fillPaint.setColorFilter(colorFilter);
+            strokePaint.setColorFilter(colorFilter);
+            glowPaint.setColorFilter(colorFilter);
+        }
+        @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
+    }
+
+    public static class Spring {
+        public float current = 1f;
+        public float target = 1f;
+        public float velocity = 0f;
+
+        public Spring(float cur, float tgt) {
+            this.current = cur;
+            this.target = tgt;
+        }
+
+        public boolean update(float stiffness, float damping) {
+            float displacement = current - target;
+            float acceleration = (-stiffness * displacement) + (-damping * velocity);
+            velocity += acceleration * 0.016f;
+            current += velocity * 0.016f;
+            return Math.abs(velocity) > 0.001f || Math.abs(displacement) > 0.001f;
+        }
+
+        public void snap(float value) {
+            current = value;
+            target = value;
+            velocity = 0f;
+        }
+    }
+
+    public static class KeyState {
+        public final Spring scale = new Spring(1f, 1f);
+        public final Spring highlight = new Spring(0f, 0f);
+        public boolean isPressed = false;
+        public boolean isRunning = false;
+    }
+
+    private static final java.util.WeakHashMap<View, KeyState> keyStateMap = new java.util.WeakHashMap<>();
+
+    private static void startSpringAnimation(View view, KeyState state) {
+        if (state.isRunning) return;
+        state.isRunning = true;
+
+        final Runnable springStep = new Runnable() {
+            @Override
+            public void run() {
+                float stiffness = Math.max(5f, config.pinSpringStiffness);
+                float damping = Math.max(0.5f, config.pinSpringDamping);
+
+                boolean activeScale = state.scale.update(stiffness, damping);
+                boolean activeHighlight = state.highlight.update(stiffness * 1.5f, damping * 1.2f);
+
+                view.setScaleX(state.scale.current);
+                view.setScaleY(state.scale.current);
+
+                if (view.getBackground() instanceof CircleGlassDrawable) {
+                    CircleGlassDrawable d = (CircleGlassDrawable) view.getBackground();
+                    d.highlightAlpha = Math.max(0f, Math.min(1f, state.highlight.current));
+                    view.invalidate();
+                }
+
+                if (activeScale || activeHighlight) {
+                    view.postOnAnimation(this);
+                } else {
+                    view.setScaleX(state.scale.target);
+                    view.setScaleY(state.scale.target);
+                    if (view.getBackground() instanceof CircleGlassDrawable) {
+                        CircleGlassDrawable d = (CircleGlassDrawable) view.getBackground();
+                        d.highlightAlpha = state.highlight.target;
+                        view.invalidate();
+                    }
+                    state.isRunning = false;
+                }
+            }
+        };
+        view.postOnAnimation(springStep);
+    }
+
     private static final Config config = new Config();
     private static boolean receiverRegistered = false;
 
@@ -31,6 +158,11 @@ public class PhysicsHook extends XposedModule {
     private static final ThreadLocal<Float> currentKineticFactor = ThreadLocal.withInitial(() -> 0.0f);
     private static final ThreadLocal<Float> activeResponse = ThreadLocal.withInitial(() -> 0.50f);
     private static final ThreadLocal<Float> activeDamping = ThreadLocal.withInitial(() -> 0.92f);
+
+    private static java.lang.reflect.Field sCellXField = null;
+    private static java.lang.reflect.Field sCellYField = null;
+    private static java.lang.reflect.Field sContainerField = null;
+    private static boolean sTagFieldsCached = false;
 
     private static Context getAppContext() {
         try {
@@ -74,39 +206,687 @@ public class PhysicsHook extends XposedModule {
         super.onPackageReady(param);
 
         if (param.getPackageName().equals("com.android.systemui")) {
-            try {
-                Class<?> shadeViewClass = Class.forName("com.android.systemui.shade.NotificationShadeWindowView", false, param.getClassLoader());
-                Method dispatchTouch = shadeViewClass.getDeclaredMethod("dispatchTouchEvent", android.view.MotionEvent.class);
-                hook(dispatchTouch).intercept(chain -> {
+            // Global Unconditional Crash Handler to ensure Safe Mode is always tripped
+            final Thread.UncaughtExceptionHandler defHandler = Thread.getDefaultUncaughtExceptionHandler();
+            Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+                @Override
+                public void uncaughtException(Thread t, Throwable e) {
                     try {
-                        Object rawArgs = chain.getArgs();
-                        Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : (Object[]) rawArgs;
-                        android.view.MotionEvent event = (android.view.MotionEvent) args[0];
-                        
-                        int action = event.getActionMasked();
-                        if (action == android.view.MotionEvent.ACTION_DOWN) {
-                            shadeTouchDownY = event.getRawY();
-                            shadeTouchDownTime = System.currentTimeMillis();
-                        } else if (action == android.view.MotionEvent.ACTION_UP) {
-                            float dy = event.getRawY() - shadeTouchDownY;
-                            long dt = System.currentTimeMillis() - shadeTouchDownTime;
-                            if (dt > 10 && dy < -150) { 
-                                float rawVelocity = dy / (dt / 1000.0f); 
-                                if (rawVelocity < -1000.0f) {
-                                    Context ctx = getAppContext();
-                                    if (ctx != null) {
-                                        Intent intent = new Intent("dev.joseph.hyperbounce.ACTION_VELOCITY_UPDATE");
-                                        intent.putExtra("velocity", rawVelocity);
-                                        intent.setPackage("com.miui.home");
-                                        ctx.sendBroadcast(intent);
-                                    }
-                                }
-                            }
+                        Context ctx = getAppContext();
+                        if (ctx != null) {
+                            ctx.getContentResolver().call(
+                                android.net.Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                                "setSafeMode", "true", null
+                            );
                         }
                     } catch (Throwable ignore) {}
-                    return chain.proceed();
-                });
+                    if (defHandler != null) {
+                        defHandler.uncaughtException(t, e);
+                    }
+                }
+            });
+
+            // Pre-check Safe Mode at module load
+            try {
+                Context ctx = getAppContext();
+                if (ctx != null) {
+                    android.os.Bundle res = ctx.getContentResolver().call(
+                        android.net.Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                        "isSafeMode", null, null
+                    );
+                    if (res != null && res.getBoolean("safeMode", false)) {
+                        return; // SAFE MODE ACTIVE: ABORT HOOKS
+                    }
+                }
+            } catch (Throwable ignore) {}
+
+            syncMemory();
+
+            // 1. Hook KeyguardPanelViewController (HyperOS Lockscreen Controller)
+            try {
+                Class<?> kpvcClass = Class.forName("com.android.keyguard.panel.KeyguardPanelViewController", false, param.getClassLoader());
+                for (Method m : kpvcClass.getDeclaredMethods()) {
+                    // Hook updateKeyguardElementsExpansionInternal(float)
+                    if (m.getName().startsWith("updateKeyguardElementsExpansionInternal") && m.getParameterTypes().length == 1 && m.getParameterTypes()[0] == float.class) {
+                        hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                Object rawArgs = chain.getArgs();
+                                Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                                float f = ((Number) args[0]).floatValue();
+                                Object kpvc = chain.getThisObject();
+                                
+                                java.lang.reflect.Field rootViewField = kpvc.getClass().getDeclaredField("keyguardRootView");
+                                rootViewField.setAccessible(true);
+                                View rootView = (View) rootViewField.get(kpvc);
+                                
+                                View notifView = null;
+                                try {
+                                    java.lang.reflect.Field nsslField = kpvc.getClass().getDeclaredField("notificationStackScrollLayout");
+                                    nsslField.setAccessible(true);
+                                    notifView = (View) nsslField.get(kpvc);
+                                } catch (Throwable ignore) {}
+                                if (notifView == null) {
+                                    try {
+                                        java.lang.reflect.Field ncpField = kpvc.getClass().getDeclaredField("notificationContainerParent");
+                                        ncpField.setAccessible(true);
+                                        notifView = (View) ncpField.get(kpvc);
+                                    } catch (Throwable ignore) {}
+                                }
+                                
+                                final View finalNotifView = notifView;
+                                
+                                if (rootView != null) {
+                                    float fraction = Math.max(0.0f, Math.min(1.0f, f));
+                                    float viewHeight = (float) rootView.getHeight();
+                                    if (viewHeight == 0) viewHeight = 2400f;
+                                    final float upwardOffset = (1.0f - fraction) * -viewHeight;
+                                    
+                                    Runnable updateUI = () -> {
+                                        // 1. Move root lockscreen layer upward smoothly (120Hz native performance, zero lag)
+                                        rootView.setTranslationY(upwardOffset);
+                                        rootView.setScaleX(1.0f);
+                                        rootView.setScaleY(1.0f);
+                                        
+                                        // 2. Move notification container upward in sync
+                                        if (finalNotifView != null) {
+                                            finalNotifView.setTranslationY(upwardOffset);
+                                            finalNotifView.setScaleX(1.0f);
+                                            finalNotifView.setScaleY(1.0f);
+                                        }
+                                        
+                                        // 3. Inject Full Container Sheet Outline with Dynamic Config Width & Alpha
+                                        if (rootView instanceof ViewGroup) {
+                                            ViewGroup rootGroup = (ViewGroup) rootView;
+                                            View fullFrame = rootGroup.findViewWithTag("hyperbounce_full_sheet_frame");
+                                            if (fullFrame == null) {
+                                                Context context = rootGroup.getContext();
+                                                fullFrame = new View(context);
+                                                fullFrame.setId(View.generateViewId());
+                                                fullFrame.setTag("hyperbounce_full_sheet_frame");
+                                                
+                                                float density = context.getResources().getDisplayMetrics().density;
+                                                int cornerR = (int) (28 * density);
+                                                
+                                                int strokeA = (int) (Math.max(0f, Math.min(1f, config.lockCardBorderAlpha)) * 255);
+                                                int strokeColor = 0x00FFFFFF | (strokeA << 24);
+                                                int strokeW = (int) (Math.max(0.5f, config.lockCardBorderWidth) * density);
+                                                
+                                                android.graphics.drawable.GradientDrawable frameDrawable = new android.graphics.drawable.GradientDrawable();
+                                                frameDrawable.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+                                                frameDrawable.setColor(0x04FFFFFF);
+                                                frameDrawable.setCornerRadii(new float[]{ 0, 0, 0, 0, cornerR, cornerR, cornerR, cornerR });
+                                                frameDrawable.setStroke(strokeW, strokeColor);
+                                                
+                                                fullFrame.setBackground(frameDrawable);
+                                                
+                                                boolean added = false;
+                                                try {
+                                                    Class<?> clpClass = Class.forName("androidx.constraintlayout.widget.ConstraintLayout$LayoutParams", false, rootGroup.getContext().getClassLoader());
+                                                    java.lang.reflect.Constructor<?> clpCons = clpClass.getConstructor(int.class, int.class);
+                                                    ViewGroup.MarginLayoutParams clp = (ViewGroup.MarginLayoutParams) clpCons.newInstance(
+                                                        ViewGroup.LayoutParams.MATCH_PARENT, 
+                                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                                    );
+                                                    clpClass.getField("topToTop").set(clp, 0);
+                                                    clpClass.getField("bottomToBottom").set(clp, 0);
+                                                    clpClass.getField("startToStart").set(clp, 0);
+                                                    clpClass.getField("endToEnd").set(clp, 0);
+                                                    rootGroup.addView(fullFrame, 0, clp);
+                                                    added = true;
+                                                } catch (Throwable ignore) {}
+                                                
+                                                if (!added) {
+                                                    try {
+                                                        android.widget.FrameLayout.LayoutParams flp = 
+                                                            new android.widget.FrameLayout.LayoutParams(
+                                                                ViewGroup.LayoutParams.MATCH_PARENT, 
+                                                                ViewGroup.LayoutParams.MATCH_PARENT
+                                                            );
+                                                        rootGroup.addView(fullFrame, 0, flp);
+                                                    } catch (Throwable ignore) {}
+                                                }
+                                            }
+                                        }
+                                        
+                                        // 4. Inject Bottom Glass Lip & Dynamic Pill into KeyguardBottomAreaView
+                                        try {
+                                            java.lang.reflect.Field bottomAreaField = kpvc.getClass().getDeclaredField("keyguardBottomAreaInjector");
+                                            bottomAreaField.setAccessible(true);
+                                            Object bottomAreaInjector = bottomAreaField.get(kpvc);
+                                            if (bottomAreaInjector != null) {
+                                                java.lang.reflect.Field bViewField = bottomAreaInjector.getClass().getDeclaredField("mKeyguardBottomAreaView");
+                                                bViewField.setAccessible(true);
+                                                ViewGroup bottomAreaView = (ViewGroup) bViewField.get(bottomAreaInjector);
+                                                if (bottomAreaView != null) {
+                                                    Context context = bottomAreaView.getContext();
+                                                    float density = context.getResources().getDisplayMetrics().density;
+                                                    
+                                                    // A. Bottom Specular Glass Lip
+                                                    View glassRim = bottomAreaView.findViewWithTag("hyperbounce_glass_rim");
+                                                    if (glassRim == null) {
+                                                        glassRim = new View(context);
+                                                        glassRim.setId(View.generateViewId());
+                                                        glassRim.setTag("hyperbounce_glass_rim");
+                                                        
+                                                        int rimHeight = (int) (Math.max(10f, config.lockLipHeight) * density);
+                                                        int cornerR = (int) (28 * density);
+                                                        int strokeA = (int) (Math.max(0f, Math.min(1f, config.lockCardBorderAlpha)) * 255);
+                                                        int strokeColor = 0x00FFFFFF | (strokeA << 24);
+                                                        int strokeW = (int) (Math.max(0.5f, config.lockCardBorderWidth) * density);
+                                                        
+                                                        android.graphics.drawable.GradientDrawable rimDrawable = new android.graphics.drawable.GradientDrawable();
+                                                        rimDrawable.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+                                                        rimDrawable.setColors(new int[]{ 0x03FFFFFF, 0x25FFFFFF });
+                                                        rimDrawable.setOrientation(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM);
+                                                        rimDrawable.setCornerRadii(new float[]{ 0, 0, 0, 0, cornerR, cornerR, cornerR, cornerR });
+                                                        rimDrawable.setStroke(strokeW, strokeColor);
+                                                        
+                                                        glassRim.setBackground(rimDrawable);
+                                                        glassRim.setElevation(4 * density);
+                                                        
+                                                        android.widget.FrameLayout.LayoutParams rlp = 
+                                                            new android.widget.FrameLayout.LayoutParams(
+                                                                ViewGroup.LayoutParams.MATCH_PARENT, 
+                                                                rimHeight, 
+                                                                android.view.Gravity.BOTTOM
+                                                            );
+                                                        bottomAreaView.addView(glassRim, 0, rlp);
+                                                    }
+                                                    
+                                                    // B. Dynamic iOS Home Indicator Bar
+                                                    View pill = bottomAreaView.findViewWithTag("hyperbounce_home_pill");
+                                                    if (pill == null) {
+                                                        pill = new View(context);
+                                                        pill.setId(View.generateViewId());
+                                                        pill.setTag("hyperbounce_home_pill");
+                                                        
+                                                        int pillW = (int) (Math.max(40f, config.lockPillWidth) * density);
+                                                        int pillH = (int) (Math.max(2f, config.lockPillHeight) * density);
+                                                        int radius = pillH / 2;
+                                                        int bMargin = (int) (config.lockPillBottomMargin * density);
+                                                        
+                                                        android.graphics.drawable.GradientDrawable pillDrawable = new android.graphics.drawable.GradientDrawable();
+                                                        pillDrawable.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+                                                        pillDrawable.setColor(0xF0FFFFFF);
+                                                        pillDrawable.setCornerRadius(radius);
+                                                        pill.setBackground(pillDrawable);
+                                                        pill.setElevation(8 * density);
+                                                        
+                                                        android.widget.FrameLayout.LayoutParams flp = 
+                                                            new android.widget.FrameLayout.LayoutParams(
+                                                                pillW, 
+                                                                pillH, 
+                                                                android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL
+                                                            );
+                                                        flp.bottomMargin = bMargin;
+                                                        bottomAreaView.addView(pill, flp);
+                                                    }
+                                                }
+                                            }
+                                        } catch (Throwable t) {
+                                            android.util.Log.e("Hyperbounce", "Rim/Pill injection error", t);
+                                        }
+                                    };
+                                    if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                                        updateUI.run();
+                                    } else {
+                                        new android.os.Handler(android.os.Looper.getMainLooper()).post(updateUI);
+                                    }
+                                }
+                            } catch (Throwable t) {
+                                android.util.Log.e("Hyperbounce", "KPVC expansion hook error", t);
+                            }
+                            return result;
+                        });
+                    }
+                    
+                    // Hook doScale / doScale$1 to completely disable shrinking towards center
+                    if (m.getName().startsWith("doScale") && m.getParameterTypes().length == 2 && m.getParameterTypes()[0] == float.class && View.class.isAssignableFrom(m.getParameterTypes()[1])) {
+                        hook(m).intercept(chain -> {
+                            try {
+                                Object rawArgs = chain.getArgs();
+                                Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                                View v = (View) args[1];
+                                if (v != null) {
+                                    Runnable resetScale = () -> {
+                                        v.setScaleX(1.0f);
+                                        v.setScaleY(1.0f);
+                                    };
+                                    if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                                        resetScale.run();
+                                    } else {
+                                        new android.os.Handler(android.os.Looper.getMainLooper()).post(resetScale);
+                                    }
+                                }
+                            } catch (Throwable t) {}
+                            return null;
+                        });
+                    }
+
+                    // Hook startUnlockKeyguardDismissAnim for smooth unlock dismissal upward
+                    if (m.getName().equals("startUnlockKeyguardDismissAnim")) {
+                        hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                Object kpvc = chain.getThisObject();
+                                java.lang.reflect.Field rootViewField = kpvc.getClass().getDeclaredField("keyguardRootView");
+                                rootViewField.setAccessible(true);
+                                View rootView = (View) rootViewField.get(kpvc);
+                                
+                                View notifView = null;
+                                try {
+                                    java.lang.reflect.Field nsslField = kpvc.getClass().getDeclaredField("notificationStackScrollLayout");
+                                    nsslField.setAccessible(true);
+                                    notifView = (View) nsslField.get(kpvc);
+                                } catch (Throwable ignore) {}
+                                if (notifView == null) {
+                                    try {
+                                        java.lang.reflect.Field ncpField = kpvc.getClass().getDeclaredField("notificationContainerParent");
+                                        ncpField.setAccessible(true);
+                                        notifView = (View) ncpField.get(kpvc);
+                                    } catch (Throwable ignore) {}
+                                }
+                                
+                                final View finalNotifView = notifView;
+                                
+                                if (rootView != null) {
+                                    Runnable animUI = () -> {
+                                        float viewHeight = (float) rootView.getHeight();
+                                        if (viewHeight == 0) viewHeight = 2400f;
+                                        rootView.animate()
+                                            .translationY(-viewHeight)
+                                            .alpha(0.0f)
+                                            .setDuration(220)
+                                            .setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f))
+                                            .start();
+                                        if (finalNotifView != null) {
+                                            finalNotifView.animate()
+                                                .translationY(-viewHeight)
+                                                .alpha(0.0f)
+                                                .setDuration(220)
+                                                .setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f))
+                                                .start();
+                                        }
+                                    };
+                                    if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                                        animUI.run();
+                                    } else {
+                                        new android.os.Handler(android.os.Looper.getMainLooper()).post(animUI);
+                                    }
+                                }
+                            } catch (Throwable t) {}
+                            return result;
+                        });
+                    }
+                }
+            } catch (Throwable t) {
+                android.util.Log.e("Hyperbounce", "KPVC class hook error", t);
+            }
+
+            // 2. Disable clock scaling flag in KeyguardClockContainer
+            try {
+                Class<?> clockContainerClass = Class.forName("com.android.keyguard.clock.KeyguardClockContainer", false, param.getClassLoader());
+                for (Method m : clockContainerClass.getDeclaredMethods()) {
+                    if (m.getName().equals("updateMagazineView") || m.getName().equals("onFinishInflate")) {
+                        hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                Object container = chain.getThisObject();
+                                java.lang.reflect.Field canScaleField = container.getClass().getDeclaredField("mClockCanScale");
+                                canScaleField.setAccessible(true);
+                                canScaleField.setBoolean(container, false);
+                            } catch (Throwable t) {}
+                            return result;
+                        });
+                    }
+                }
             } catch (Throwable t) {}
+
+            // 3. Instant Touch Squish on MiuiNumPadKey (Reacts Immediately on Hardware Touch Down/Up)
+            try {
+                Class<?> keyClass = Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, param.getClassLoader());
+                for (Method m : keyClass.getDeclaredMethods()) {
+                    if (m.getName().equals("onTouchEvent") && m.getParameterTypes().length == 1 && m.getParameterTypes()[0] == android.view.MotionEvent.class) {
+                        hook(m).intercept(chain -> {
+                            View view = (View) chain.getThisObject();
+                            Object rawArgs = chain.getArgs();
+                            Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                            android.view.MotionEvent event = (android.view.MotionEvent) args[0];
+                            
+                            if (event != null) {
+                                KeyState state = keyStateMap.get(view);
+                                if (state == null) {
+                                    state = new KeyState();
+                                    keyStateMap.put(view, state);
+                                }
+
+                                int action = event.getActionMasked();
+                                if (action == android.view.MotionEvent.ACTION_DOWN) {
+                                    android.view.ViewParent p = view.getParent();
+                                    while (p != null) {
+                                        p.requestDisallowInterceptTouchEvent(true);
+                                        p = p.getParent();
+                                    }
+                                    try {
+                                        Method setAnimMethod = view.getClass().getMethod("setAnimationEnabled", boolean.class);
+                                        setAnimMethod.setAccessible(true);
+                                        setAnimMethod.invoke(view, false);
+                                    } catch (Throwable ignore) {}
+
+                                    state.isPressed = true;
+                                    state.scale.target = (float) config.pinTapSquishScale;
+                                    state.highlight.target = 1.0f;
+                                    startSpringAnimation(view, state);
+                                } else if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
+                                    state.isPressed = false;
+                                    if (action == android.view.MotionEvent.ACTION_UP) {
+                                        state.scale.current = (float) (config.pinTapSquishScale - config.pinReleasePlunge);
+                                    }
+                                    state.scale.target = 1.0f;
+                                    state.highlight.target = 0.0f;
+                                    startSpringAnimation(view, state);
+                                }
+                            }
+                            return chain.proceed();
+                        });
+                    }
+                }
+            } catch (Throwable t) {
+                android.util.Log.e("Hyperbounce", "MiuiNumPadKey touch squish hook error", t);
+            }
+
+            // 4. Hook MiuiKeyguardPINView for Row Spacing Hijack, Dynamic Sized Circle Glass Backgrounds, Centered Numbers & Y-Axis Glide Entry
+            try {
+                Class<?> pinViewClass = Class.forName("com.android.keyguard.widget.MiuiKeyguardPINView", false, param.getClassLoader());
+
+                final java.util.function.Consumer<View> styleKeyAsCircle = (keyView) -> {
+                    if (keyView == null) return;
+                    try {
+                        Context ctx = keyView.getContext();
+                        float density = ctx.getResources().getDisplayMetrics().density;
+                        
+                        try {
+                            Method setAnimMethod = keyView.getClass().getMethod("setAnimationEnabled", boolean.class);
+                            setAnimMethod.setAccessible(true);
+                            setAnimMethod.invoke(keyView, false);
+                        } catch (Throwable ignore) {}
+
+                        keyView.setClipToOutline(false);
+                        if (keyView.getParent() instanceof ViewGroup) ((ViewGroup) keyView.getParent()).setClipChildren(false);
+                        if (keyView.getParent() != null && keyView.getParent().getParent() instanceof ViewGroup) {
+                            ((ViewGroup) keyView.getParent().getParent()).setClipChildren(false);
+                        }
+                        // Set Perfect Circle Glass Background (Custom Dynamic Circle Drawable)
+                        keyView.setBackground(new CircleGlassDrawable(density));
+                        keyView.setElevation(6 * density);
+                        
+                        // Toggle klondike letters (ABC, DEF, etc.) based on config
+                        try {
+                            java.lang.reflect.Field klondikeField = keyView.getClass().getDeclaredField("mKlondikeText");
+                            klondikeField.setAccessible(true);
+                            android.widget.TextView klondikeText = (android.widget.TextView) klondikeField.get(keyView);
+                            if (klondikeText != null) {
+                                klondikeText.setVisibility(config.pinShowKlondike ? View.VISIBLE : View.GONE);
+                                if (config.pinShowKlondike) {
+                                    klondikeText.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10);
+                                    klondikeText.setTextColor(0xCCFFFFFF);
+                                }
+                            }
+                        } catch (Throwable ignore) {}
+                        
+                        // Center and style digit text (numbers)
+                        try {
+                            java.lang.reflect.Field digitTextField = keyView.getClass().getDeclaredField("mDigitText");
+                            digitTextField.setAccessible(true);
+                            android.widget.TextView digitText = (android.widget.TextView) digitTextField.get(keyView);
+                            if (digitText != null) {
+                                digitText.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, Math.max(18f, config.pinDigitTextSize));
+                                digitText.setTextColor(0xFFFFFFFF);
+                                digitText.setTypeface(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL));
+                                digitText.setGravity(android.view.Gravity.CENTER);
+                            }
+                        } catch (Throwable ignore) {}
+                    } catch (Throwable ignore) {}
+                };
+
+                final java.util.function.Consumer<View> applyPinLayoutAndStyles = (pinView) -> {
+                    if (pinView == null) return;
+                    try {
+                        Context ctx = pinView.getContext();
+                        float density = ctx.getResources().getDisplayMetrics().density;
+                        
+                        // 1. Apply row translation vertical spacing from config
+                        int row1Id = ctx.getResources().getIdentifier("row1", "id", "com.android.systemui");
+                        int row2Id = ctx.getResources().getIdentifier("row2", "id", "com.android.systemui");
+                        int row3Id = ctx.getResources().getIdentifier("row3", "id", "com.android.systemui");
+                        int row4Id = ctx.getResources().getIdentifier("row4", "id", "com.android.systemui");
+                        int row0Id = ctx.getResources().getIdentifier("row0", "id", "com.android.systemui");
+                        
+                        if (row1Id != 0) { View r1 = pinView.findViewById(row1Id); if (r1 != null) r1.setTranslationY(config.pinRow1Offset * density); }
+                        if (row2Id != 0) { View r2 = pinView.findViewById(row2Id); if (r2 != null) r2.setTranslationY(config.pinRow2Offset * density); }
+                        if (row3Id != 0) { View r3 = pinView.findViewById(row3Id); if (r3 != null) r3.setTranslationY(config.pinRow3Offset * density); }
+                        if (row4Id != 0) { View r4 = pinView.findViewById(row4Id); if (r4 != null) r4.setTranslationY(0f); }
+                        if (row0Id != 0) { View r0 = pinView.findViewById(row0Id); if (r0 != null) r0.setTranslationY(config.pinRow0Offset * density); }
+                        
+                        // 2. Style numeric digit keys 1-9 and 0 with circular frosted glass
+                        int[] numKeyIds = new int[]{
+                            ctx.getResources().getIdentifier("key1", "id", "com.android.systemui"),
+                            ctx.getResources().getIdentifier("key2", "id", "com.android.systemui"),
+                            ctx.getResources().getIdentifier("key3", "id", "com.android.systemui"),
+                            ctx.getResources().getIdentifier("key4", "id", "com.android.systemui"),
+                            ctx.getResources().getIdentifier("key5", "id", "com.android.systemui"),
+                            ctx.getResources().getIdentifier("key6", "id", "com.android.systemui"),
+                            ctx.getResources().getIdentifier("key7", "id", "com.android.systemui"),
+                            ctx.getResources().getIdentifier("key8", "id", "com.android.systemui"),
+                            ctx.getResources().getIdentifier("key9", "id", "com.android.systemui"),
+                            ctx.getResources().getIdentifier("key0", "id", "com.android.systemui")
+                        };
+                        for (int id : numKeyIds) {
+                            if (id != 0) {
+                                View k = pinView.findViewById(id);
+                                if (k != null) styleKeyAsCircle.accept(k);
+                            }
+                        }
+                        
+                        // 3. Keep Delete, Cancel, and Emergency transparent
+                        int delId = ctx.getResources().getIdentifier("delete_button", "id", "com.android.systemui");
+                        if (delId != 0) { View del = pinView.findViewById(delId); if (del != null) del.setBackground(null); }
+                        int cancelId = ctx.getResources().getIdentifier("cancel_button", "id", "com.android.systemui");
+                        if (cancelId != 0) { View cancel = pinView.findViewById(cancelId); if (cancel != null) cancel.setBackground(null); }
+                        int emerId = ctx.getResources().getIdentifier("emergency_call_button", "id", "com.android.systemui");
+                        if (emerId != 0) { View emer = pinView.findViewById(emerId); if (emer != null) emer.setBackground(null); }
+                    } catch (Throwable ignore) {}
+                };
+
+                for (Method m : pinViewClass.getDeclaredMethods()) {
+                    if (m.getName().equals("onFinishInflate") || m.getName().equals("updatePositionForFod") || m.getName().equals("updateLayoutParams")) {
+                        hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                View pinView = (View) chain.getThisObject();
+                                applyPinLayoutAndStyles.accept(pinView);
+                            } catch (Throwable ignore) {}
+                            return result;
+                        });
+                    }
+
+                    // Hook startAppearAnimation for Y-Axis Glide & Staggered Sequential Entrance
+                    if (m.getName().equals("startAppearAnimation")) {
+                        hook(m).intercept(chain -> {
+                            Object pinViewObj = chain.getThisObject();
+                            View pinView = (View) pinViewObj;
+                            Context ctx = pinView.getContext();
+                            float density = ctx.getResources().getDisplayMetrics().density;
+                            
+                            try {
+                                android.util.Pair[][] pairs = new android.util.Pair[4][3];
+                                for (int r = 0; r < 4; r++) {
+                                    for (int c = 0; c < 3; c++) {
+                                        pairs[r][c] = new android.util.Pair(0, 0);
+                                    }
+                                }
+                                java.lang.reflect.Field keysAnimField = pinViewObj.getClass().getField("keysAnimStartState");
+                                keysAnimField.setAccessible(true);
+                                keysAnimField.set(pinViewObj, pairs);
+                                
+                                java.lang.reflect.Field appearAnimField = pinViewObj.getClass().getField("mAppearAnimating");
+                                appearAnimField.setAccessible(true);
+                                appearAnimField.setBoolean(pinViewObj, true);
+                                
+                                java.lang.reflect.Field initAppearField = pinViewObj.getClass().getField("initAppearAnimed");
+                                initAppearField.setAccessible(true);
+                                initAppearField.setBoolean(pinViewObj, true);
+                                
+                                java.lang.reflect.Field canceledField = pinViewObj.getClass().getField("appearAnimCanceled");
+                                canceledField.setAccessible(true);
+                                canceledField.setBoolean(pinViewObj, false);
+                            } catch (Throwable ignore) {}
+                            
+                            Runnable runCustomAppear = () -> {
+                                try {
+                                    pinView.setAlpha(1.0f);
+                                    applyPinLayoutAndStyles.accept(pinView);
+                                    
+                                    // 1. PIN dots fade in smoothly
+                                    int row0Id = ctx.getResources().getIdentifier("row0", "id", "com.android.systemui");
+                                    if (row0Id != 0) {
+                                        View row0 = pinView.findViewById(row0Id);
+                                        if (row0 != null) {
+                                            row0.setAlpha(0.0f);
+                                            row0.setTranslationY((config.pinRow0Offset - 15f) * density);
+                                            row0.animate()
+                                                .alpha(1.0f)
+                                                .translationY(config.pinRow0Offset * density)
+                                                .setDuration(340)
+                                                .setInterpolator(new android.view.animation.DecelerateInterpolator())
+                                                .start();
+                                        }
+                                    }
+                                    
+                                    // 2. Y-Axis Glide & Settling Matrix for Keys
+                                    String[][] gridNames = new String[][]{
+                                        { "key1", "key2", "key3" },
+                                        { "key4", "key5", "key6" },
+                                        { "key7", "key8", "key9" },
+                                        { "delete_button", "key0", "cancel_button" }
+                                    };
+                                    
+                                    float initialYDrop = config.pinEntryTranslationY * density;
+                                    long animDuration = (long) Math.max(150f, config.pinEntryDuration);
+                                    float overshootFactor = Math.max(0.0f, config.pinEntryOvershoot);
+                                    android.view.animation.Interpolator iosGlideSpring = (overshootFactor > 0.01f)
+                                        ? new android.view.animation.OvershootInterpolator(overshootFactor)
+                                        : new android.view.animation.PathInterpolator(0.18f, 0.90f, 0.25f, 1.0f);
+                                    
+                                    for (int row = 0; row < gridNames.length; row++) {
+                                        for (int col = 0; col < gridNames[row].length; col++) {
+                                            String name = gridNames[row][col];
+                                            int id = ctx.getResources().getIdentifier(name, "id", "com.android.systemui");
+                                            if (id == 0) continue;
+                                            View key = pinView.findViewById(id);
+                                            if (key != null) {
+                                                // Check for individual per-key delay override or use default stagger step
+                                                float customDelay = config.getDyn("pin_delay_" + name, -1f);
+                                                long delay = (customDelay >= 0f) ? (long) customDelay : (long) ((row * config.pinRowDelayStep) + (col * config.pinColDelayStep));
+                                                
+                                                // Start position: deep below resting place (glide up along Y-axis into position)
+                                                key.setAlpha(0.0f);
+                                                key.setScaleX(config.pinEntryInitialScale);
+                                                key.setScaleY(config.pinEntryInitialScale);
+                                                key.setTranslationY(initialYDrop);
+                                                
+                                                key.animate()
+                                                    .alpha(1.0f)
+                                                    .scaleX(1.0f)
+                                                    .scaleY(1.0f)
+                                                    .translationY(0.0f)
+                                                    .setDuration(animDuration)
+                                                    .setStartDelay(delay)
+                                                    .setInterpolator(iosGlideSpring)
+                                                    .start();
+                                            }
+                                        }
+                                    }
+                                    
+                                    int emerId = ctx.getResources().getIdentifier("emergency_call_button", "id", "com.android.systemui");
+                                    if (emerId != 0) {
+                                        View emer = pinView.findViewById(emerId);
+                                        if (emer != null) {
+                                            float customEmerDelay = config.getDyn("pin_delay_emergency", -1f);
+                                            long emerDelay = (customEmerDelay >= 0f) ? (long) customEmerDelay : (long) (config.pinRowDelayStep * 4);
+                                            emer.setAlpha(0.0f);
+                                            emer.setTranslationY(25f * density);
+                                            emer.animate()
+                                                .alpha(1.0f)
+                                                .translationY(0.0f)
+                                                .setDuration(animDuration)
+                                                .setStartDelay(emerDelay)
+                                                .setInterpolator(iosGlideSpring)
+                                                .start();
+                                        }
+                                    }
+                                } catch (Throwable t) {
+                                    android.util.Log.e("Hyperbounce", "Custom appear animation error", t);
+                                }
+                            };
+                            
+                            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                                runCustomAppear.run();
+                            } else {
+                                new android.os.Handler(android.os.Looper.getMainLooper()).post(runCustomAppear);
+                            }
+                            
+                            return null;
+                        });
+                    }
+
+                    // Hook startBackAnimation for clean crash-free dismiss on BACK press
+                    if (m.getName().equals("startBackAnimation")) {
+                        hook(m).intercept(chain -> {
+                            Object pinViewObj = chain.getThisObject();
+                            View pinView = (View) pinViewObj;
+                            Object rawArgs = chain.getArgs();
+                            Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                            Runnable callback = (args.length > 0 && args[0] instanceof Runnable) ? (Runnable) args[0] : null;
+                            
+                            try {
+                                pinView.animate()
+                                    .alpha(0.0f)
+                                    .setDuration(220)
+                                    .setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f))
+                                    .withEndAction(() -> {
+                                        if (callback != null) callback.run();
+                                    })
+                                    .start();
+                            } catch (Throwable t) {
+                                if (callback != null) callback.run();
+                            }
+                            return null;
+                        });
+                    }
+                }
+            } catch (Throwable t) {
+                android.util.Log.e("Hyperbounce", "PIN view hook error", t);
+            }
+
+            // 5. Hook Control Center and Notification Center Animation Physics
+            try {
+                ControlCenterHook.initSystemUIHooks(this, param.getClassLoader(), config);
+            } catch (Throwable t) {
+                android.util.Log.e("Hyperbounce", "ControlCenterHook SystemUI init error", t);
+            }
+
+            return;
+        }
+
+        if (param.getPackageName().equals("miui.systemui.plugin")) {
+            syncMemory();
+            try {
+                ControlCenterHook.initPluginHooks(this, param.getClassLoader(), config);
+            } catch (Throwable t) {
+                android.util.Log.e("Hyperbounce", "ControlCenterHook plugin init error", t);
+            }
             return;
         }
 
@@ -120,8 +900,6 @@ public class PhysicsHook extends XposedModule {
 
                 Method showMethod = userPresentClass.getDeclaredMethod("showUserPresentAnimation", View.class, int.class, boolean.class);
                 hook(showMethod).intercept(chain -> {
-                    syncMemory();
-                    
                     if (!config.unlockEnabled) return chain.proceed();
 
                     Object rawArgs = chain.getArgs();
@@ -145,9 +923,15 @@ public class PhysicsHook extends XposedModule {
                             long container = 0;
                             Object tag = view.getTag();
                             if (tag != null) {
-                                try { cellX = tag.getClass().getField("cellX").getInt(tag); } catch (Throwable t) {}
-                                try { cellY = tag.getClass().getField("cellY").getInt(tag); } catch (Throwable t) {}
-                                try { container = tag.getClass().getField("container").getLong(tag); } catch (Throwable t) {}
+                                if (!sTagFieldsCached) {
+                                    try { sCellXField = tag.getClass().getField("cellX"); } catch (Throwable t) {}
+                                    try { sCellYField = tag.getClass().getField("cellY"); } catch (Throwable t) {}
+                                    try { sContainerField = tag.getClass().getField("container"); } catch (Throwable t) {}
+                                    sTagFieldsCached = true;
+                                }
+                                if (sCellXField != null) { try { cellX = sCellXField.getInt(tag); } catch (Throwable t) {} }
+                                if (sCellYField != null) { try { cellY = sCellYField.getInt(tag); } catch (Throwable t) {} }
+                                if (sContainerField != null) { try { container = sContainerField.getLong(tag); } catch (Throwable t) {} }
                             }
 
                             int colIndex;
@@ -253,15 +1037,14 @@ public class PhysicsHook extends XposedModule {
                                 args[2] = 0.85f - (0.20f * kF * vInf); 
                                 args[0] = activeDamping.get();
                                 args[1] = activeResponse.get();
-                            } else if (endVal == 0.0f && startVal > 5.0f) { 
+                            } else if (endVal == 0.0f && startVal < -5.0f) { 
                                 if (isDockView.get() || isIndicator.get()) {
-                                    args[2] = config.kineticDockZDepth; 
+                                    args[2] = -Math.abs(config.kineticDockZDepth); 
                                 } else {
                                     float baseZ = config.getDyn("r" + safeRow + "_z", 1000.0f);
                                     float zMult = 1.0f + (kF * vInf * 0.4f);
-                                    // Row depth is user-controlled; do not let the original
-                                    // constructor Z silently override a valid configured value.
-                                    args[2] = Math.max(1.0f, baseZ * zMult);
+                                    // Row depth is user-controlled; ensure it is pushed into the negative Z-space.
+                                    args[2] = -Math.abs(baseZ * zMult);
                                 }
                             }
                         }

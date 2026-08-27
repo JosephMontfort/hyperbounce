@@ -7,8 +7,12 @@ import android.net.Uri;
 import android.os.Bundle;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 
 public class ConfigProvider extends ContentProvider {
+    private static long lastStartupTime = 0;
+    private static int crashLoopCounter = 0;
+
     @Override public boolean onCreate() { return true; }
 
     @Override
@@ -26,6 +30,43 @@ public class ConfigProvider extends ContentProvider {
                 }
             } catch (Exception e) {}
             return b;
+        } else if ("systemUiStartup".equals(method)) {
+            Bundle b = new Bundle();
+            long now = System.currentTimeMillis();
+            if (now - lastStartupTime < 15000) {
+                crashLoopCounter++;
+                if (crashLoopCounter >= 2) {
+                    try {
+                        File f = new File(getContext().getFilesDir(), "safemode.flag");
+                        if (!f.exists()) f.createNewFile();
+                    } catch (Exception e) {}
+                }
+            } else {
+                crashLoopCounter = 1;
+            }
+            lastStartupTime = now;
+            
+            File f = new File(getContext().getFilesDir(), "safemode.flag");
+            b.putBoolean("safeMode", f.exists());
+            return b;
+        } else if ("systemUiHealthy".equals(method)) {
+            crashLoopCounter = 0;
+            return new Bundle();
+        } else if ("isSafeMode".equals(method)) {
+            Bundle b = new Bundle();
+            File f = new File(getContext().getFilesDir(), "safemode.flag");
+            b.putBoolean("safeMode", f.exists());
+            return b;
+        } else if ("setSafeMode".equals(method)) {
+            try {
+                File f = new File(getContext().getFilesDir(), "safemode.flag");
+                if ("true".equals(arg)) {
+                    if (!f.exists()) f.createNewFile();
+                } else {
+                    if (f.exists()) f.delete();
+                }
+            } catch (Exception e) {}
+            return new Bundle();
         }
         return null;
     }

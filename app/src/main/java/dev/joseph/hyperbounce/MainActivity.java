@@ -28,9 +28,6 @@ import android.widget.Toast;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import org.json.JSONObject;
 
 public class MainActivity extends Activity {
@@ -40,16 +37,24 @@ public class MainActivity extends Activity {
     private LinearLayout menuLayout;
     private LinearLayout unlockPageLayout;
     private LinearLayout appAnimPageLayout;
+    private LinearLayout lockPinpadPageLayout;
+    private LinearLayout controlCenterPageLayout;
+
     private LinearLayout unlockSlidersContainer;
     private LinearLayout appAnimSlidersContainer;
+    private LinearLayout lockPinpadSlidersContainer;
 
     private EditText gridInput;
-    private Spinner presetSpinner;
     private Spinner unlockModeSpinner;
     private Switch unlockMasterSwitch;
     private Switch appAnimMasterSwitch;
+    private Switch lockPinpadMasterSwitch;
+    private Switch ccCenterBounceSwitch;
+    private Switch ccLowEndSwitch;
+    private Switch ccJellySwitch;
+    private Switch ccModularEditSwitch;
 
-    private enum Page { MAIN, UNLOCK, APP_ANIM }
+    private enum Page { MAIN, UNLOCK, APP_ANIM, LOCK_PINPAD, CONTROL_CENTER }
     private Page currentPage = Page.MAIN;
 
     @Override
@@ -61,14 +66,20 @@ public class MainActivity extends Activity {
         loadConfig();
         normalizeGrid();
 
+        LinearLayout mainContainer = new LinearLayout(this);
+        mainContainer.setOrientation(LinearLayout.VERTICAL);
+        mainContainer.setPadding(40, 40, 40, 40);
+
+        setupHeader(mainContainer);
+
         ScrollView scroll = new ScrollView(this);
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
         rootLayout = new LinearLayout(this);
         rootLayout.setOrientation(LinearLayout.VERTICAL);
-        rootLayout.setPadding(40, 40, 40, 60);
+        rootLayout.setPadding(0, 30, 0, 40);
         scroll.addView(rootLayout);
-        setContentView(scroll);
-
-        setupHeader();
+        mainContainer.addView(scroll);
+        setContentView(mainContainer);
 
         menuLayout = new LinearLayout(this);
         menuLayout.setOrientation(LinearLayout.VERTICAL);
@@ -81,17 +92,29 @@ public class MainActivity extends Activity {
         appAnimPageLayout.setOrientation(LinearLayout.VERTICAL);
         appAnimPageLayout.setVisibility(View.GONE);
 
+        lockPinpadPageLayout = new LinearLayout(this);
+        lockPinpadPageLayout.setOrientation(LinearLayout.VERTICAL);
+        lockPinpadPageLayout.setVisibility(View.GONE);
+
+        controlCenterPageLayout = new LinearLayout(this);
+        controlCenterPageLayout.setOrientation(LinearLayout.VERTICAL);
+        controlCenterPageLayout.setVisibility(View.GONE);
+
         rootLayout.addView(menuLayout);
+        rootLayout.addView(controlCenterPageLayout);
+        rootLayout.addView(lockPinpadPageLayout);
         rootLayout.addView(unlockPageLayout);
         rootLayout.addView(appAnimPageLayout);
 
         setupMainMenu();
+        setupControlCenterPage();
+        setupLockPinpadPage();
         setupUnlockPage();
         setupAppAnimPage();
         setupBackHandling();
     }
 
-    private void setupHeader() {
+    private void setupHeader(LinearLayout parentContainer) {
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -115,14 +138,14 @@ public class MainActivity extends Activity {
         menuButton.setOnClickListener(v -> showActionMenu(menuButton));
         header.addView(menuButton);
 
-        rootLayout.addView(header);
+        parentContainer.addView(header);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("HyperOS animation physics and transition tuning");
+        subtitle.setText("HyperOS animation physics, spring dynamics & transition tuning");
         subtitle.setTextSize(13);
         subtitle.setTextColor(Color.DKGRAY);
         subtitle.setPadding(0, 0, 0, 30);
-        rootLayout.addView(subtitle);
+        parentContainer.addView(subtitle);
     }
 
     private void showActionMenu(View anchor) {
@@ -130,31 +153,66 @@ public class MainActivity extends Activity {
         Menu menu = popup.getMenu();
         menu.add("Restart Launcher");
         menu.add("Restart System UI");
-        menu.add("Save Current Preset");
-        menu.add("Load Preset");
+        menu.add("Reset All Sliders to Stock");
         popup.setOnMenuItemClickListener(item -> {
             String title = item.getTitle().toString();
             if ("Restart Launcher".equals(title)) {
                 try { Runtime.getRuntime().exec("su -c killall com.miui.home"); Toast.makeText(this, "Launcher Restarted", Toast.LENGTH_SHORT).show(); } catch (Exception e) { Toast.makeText(this, "Unable to restart Launcher", Toast.LENGTH_SHORT).show(); }
             } else if ("Restart System UI".equals(title)) {
                 try { Runtime.getRuntime().exec("su -c killall com.android.systemui"); Toast.makeText(this, "System UI Restarted", Toast.LENGTH_SHORT).show(); } catch (Exception e) { Toast.makeText(this, "Unable to restart System UI", Toast.LENGTH_SHORT).show(); }
-            } else if ("Save Current Preset".equals(title)) {
-                savePresetDialog();
-            } else if ("Load Preset".equals(title)) {
-                loadPresetDialog();
+            } else if ("Reset All Sliders to Stock".equals(title)) {
+                resetAllToStock();
             }
             return true;
         });
         popup.show();
     }
+    
+    private void resetAllToStock() {
+        currentConfig = new JSONObject();
+        try {
+            currentConfig.put("unlockEnabled", false);
+            currentConfig.put("appAnimEnabled", false);
+            currentConfig.put("ccAnimEnabled", false);
+            currentConfig.put("ccLowEndAnim", false);
+            currentConfig.put("ccJellyEnabled", false);
+            currentConfig.put("ccModularEditEnabled", false);
+            saveConfig();
+        } catch(Exception e){}
+        Toast.makeText(this, "All physics reset to absolute stock. Restart System UI / Launcher to apply.", Toast.LENGTH_LONG).show();
+        if (unlockSlidersContainer != null) renderUnlockSliders(currentConfig.optInt("animMode", 0));
+        if (appAnimSlidersContainer != null) renderAppAnimSliders();
+        if (lockPinpadSlidersContainer != null) renderLockPinpadSliders();
+        if (unlockMasterSwitch != null) unlockMasterSwitch.setChecked(false);
+        if (appAnimMasterSwitch != null) appAnimMasterSwitch.setChecked(false);
+        if (lockPinpadMasterSwitch != null) lockPinpadMasterSwitch.setChecked(false);
+        if (ccCenterBounceSwitch != null) ccCenterBounceSwitch.setChecked(false);
+        if (ccLowEndSwitch != null) ccLowEndSwitch.setChecked(false);
+        if (ccJellySwitch != null) ccJellySwitch.setChecked(false);
+        if (ccModularEditSwitch != null) ccModularEditSwitch.setChecked(false);
+    }
 
     private void setupMainMenu() {
         TextView desc = new TextView(this);
-        desc.setText("Choose a tuning module. All controls save immediately and are shared with the Xposed backend.");
+        desc.setText("Choose a tuning module. All controls save immediately and apply instantly over Xposed.");
         desc.setTextSize(14);
         desc.setTextColor(Color.DKGRAY);
         desc.setPadding(0, 0, 0, 28);
         menuLayout.addView(desc);
+
+        Button btnCC = new Button(this);
+        btnCC.setText("Control & Notification Centre");
+        btnCC.setTextSize(16);
+        btnCC.setAllCaps(false);
+        btnCC.setPadding(0, 34, 0, 34);
+        btnCC.setOnClickListener(v -> showPage(Page.CONTROL_CENTER));
+
+        Button btnLockPinpad = new Button(this);
+        btnLockPinpad.setText("Lock Screen Sheet & PIN Pad (iOS)");
+        btnLockPinpad.setTextSize(16);
+        btnLockPinpad.setAllCaps(false);
+        btnLockPinpad.setPadding(0, 34, 0, 34);
+        btnLockPinpad.setOnClickListener(v -> showPage(Page.LOCK_PINPAD));
 
         Button btnUnlock = new Button(this);
         btnUnlock.setText("Screen Unlock Animations");
@@ -170,39 +228,134 @@ public class MainActivity extends Activity {
         btnAppAnim.setPadding(0, 34, 0, 34);
         btnAppAnim.setOnClickListener(v -> showPage(Page.APP_ANIM));
 
+        menuLayout.addView(btnCC);
+        menuLayout.addView(btnLockPinpad);
         menuLayout.addView(btnUnlock);
         menuLayout.addView(btnAppAnim);
 
-        addSectionHeader(menuLayout, "PROFILES");
+        refreshPresetList();
+    }
 
-        LinearLayout presetLayout = new LinearLayout(this);
-        presetLayout.setOrientation(LinearLayout.HORIZONTAL);
-        presetLayout.setGravity(Gravity.CENTER_VERTICAL);
+    private void setupControlCenterPage() {
+        addPageTitle(controlCenterPageLayout, "Control & Notification Centre");
 
-        presetSpinner = new Spinner(this);
-        presetSpinner.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        presetSpinner.setContentDescription("Saved profiles");
+        TextView desc = new TextView(this);
+        desc.setText("Motion dynamics, iOS 26 jelly physics, modular component customizer, and low-end animation engine switches for Xiaomi HyperOS.");
+        desc.setTextSize(14);
+        desc.setTextColor(Color.DKGRAY);
+        desc.setPadding(0, 0, 0, 24);
+        controlCenterPageLayout.addView(desc);
 
-        Button loadPresetBtn = new Button(this);
-        loadPresetBtn.setText("Load");
-        loadPresetBtn.setAllCaps(false);
-        loadPresetBtn.setOnClickListener(v -> loadSelectedPreset());
+        // Switch 1: Modular Component Customization (iOS Edit Engine)
+        LinearLayout rowModular = new LinearLayout(this);
+        rowModular.setOrientation(LinearLayout.VERTICAL);
+        rowModular.setPadding(0, 8, 0, 18);
 
-        Button savePresetBtn = new Button(this);
-        savePresetBtn.setText("Save");
-        savePresetBtn.setAllCaps(false);
-        savePresetBtn.setOnClickListener(v -> savePresetDialog());
+        ccModularEditSwitch = new Switch(this);
+        ccModularEditSwitch.setText("Enable Modular Component Customizer (iOS Edit Mode)");
+        ccModularEditSwitch.setTextSize(16);
+        ccModularEditSwitch.setTypeface(null, Typeface.BOLD);
+        ccModularEditSwitch.setChecked(currentConfig.optBoolean("ccModularEditEnabled", true));
+        ccModularEditSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+            try { currentConfig.put("ccModularEditEnabled", isChecked); saveConfig(); } catch (Exception ignored) {}
+        });
+        rowModular.addView(ccModularEditSwitch);
 
-        presetLayout.addView(presetSpinner);
-        presetLayout.addView(loadPresetBtn);
-        presetLayout.addView(savePresetBtn);
-        menuLayout.addView(presetLayout);
+        TextView modularDesc = new TextView(this);
+        modularDesc.setText("• Unlocks Wi-Fi, Mobile Data, Media Player, and Sliders in the Edit Page.\n• Full drag-and-drop reordering of all major modules and circular tiles.\n• Fluid dynamic grid reflow and persistent custom layout positions.");
+        modularDesc.setTextSize(12);
+        modularDesc.setTextColor(Color.DKGRAY);
+        modularDesc.setPadding(0, 4, 0, 0);
+        rowModular.addView(modularDesc);
+        controlCenterPageLayout.addView(rowModular);
 
-        refreshPresets();
+        // Switch 2: Center Bounce Animation (Control Center)
+        LinearLayout rowBounce = new LinearLayout(this);
+        rowBounce.setOrientation(LinearLayout.VERTICAL);
+        rowBounce.setPadding(0, 8, 0, 18);
+
+        ccCenterBounceSwitch = new Switch(this);
+        ccCenterBounceSwitch.setText("Enable Center Bounce Animation (Control Center)");
+        ccCenterBounceSwitch.setTextSize(16);
+        ccCenterBounceSwitch.setTypeface(null, Typeface.BOLD);
+        ccCenterBounceSwitch.setChecked(currentConfig.optBoolean("ccAnimEnabled", true));
+        ccCenterBounceSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+            try { currentConfig.put("ccAnimEnabled", isChecked); saveConfig(); } catch (Exception ignored) {}
+        });
+        rowBounce.addView(ccCenterBounceSwitch);
+
+        TextView bounceDesc = new TextView(this);
+        bounceDesc.setText("• All tiles emerge outward from the center of the screen with fluid harmonic spring bounce physics.\n• Eliminates left/right horizontal row lag (Wi-Fi & Mobile Data emerge synchronously).\n• Preserves full pull-down overscroll stretch and rubber-band bounce.");
+        bounceDesc.setTextSize(12);
+        bounceDesc.setTextColor(Color.DKGRAY);
+        bounceDesc.setPadding(0, 4, 0, 0);
+        rowBounce.addView(bounceDesc);
+        controlCenterPageLayout.addView(rowBounce);
+
+        // Switch 3: iOS 26 Jelly Physics Animation
+        LinearLayout rowJelly = new LinearLayout(this);
+        rowJelly.setOrientation(LinearLayout.VERTICAL);
+        rowJelly.setPadding(0, 8, 0, 18);
+
+        ccJellySwitch = new Switch(this);
+        ccJellySwitch.setText("Enable Jelly Animation (iOS 26 Physics)");
+        ccJellySwitch.setTextSize(16);
+        ccJellySwitch.setTypeface(null, Typeface.BOLD);
+        ccJellySwitch.setChecked(currentConfig.optBoolean("ccJellyEnabled", true));
+        ccJellySwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+            try { currentConfig.put("ccJellyEnabled", isChecked); saveConfig(); } catch (Exception ignored) {}
+        });
+        rowJelly.addView(ccJellySwitch);
+
+        TextView jellyDesc = new TextView(this);
+        jellyDesc.setText("• Fluid asymmetric squish & stretch on all tiles based on pull-down velocity & displacement.\n• Volume-conserving Poisson lateral contraction and top-anchored gelatinous spring rebound.\n• Works seamlessly with Low-End animation mode and standard mode.");
+        jellyDesc.setTextSize(12);
+        jellyDesc.setTextColor(Color.DKGRAY);
+        jellyDesc.setPadding(0, 4, 0, 0);
+        rowJelly.addView(jellyDesc);
+        controlCenterPageLayout.addView(rowJelly);
+
+        // Switch 4: Xiaomi Native Low-End Animation
+        LinearLayout rowLowEnd = new LinearLayout(this);
+        rowLowEnd.setOrientation(LinearLayout.VERTICAL);
+        rowLowEnd.setPadding(0, 8, 0, 18);
+
+        ccLowEndSwitch = new Switch(this);
+        ccLowEndSwitch.setText("Enable Low-End Animation (Xiaomi Stock)");
+        ccLowEndSwitch.setTextSize(16);
+        ccLowEndSwitch.setTypeface(null, Typeface.BOLD);
+        ccLowEndSwitch.setChecked(currentConfig.optBoolean("ccLowEndAnim", false));
+        ccLowEndSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+            try { currentConfig.put("ccLowEndAnim", isChecked); saveConfig(); } catch (Exception ignored) {}
+        });
+        rowLowEnd.addView(ccLowEndSwitch);
+
+        TextView lowEndDesc = new TextView(this);
+        lowEndDesc.setText("• Activates Xiaomi's native built-in Low-End animation engine for both Control Center and Notification Center.\n• Disables all diagonal unrolls, 3D Z-axis zoom, and complex lateral shifts using pure stock system logic.");
+        lowEndDesc.setTextSize(12);
+        lowEndDesc.setTextColor(Color.DKGRAY);
+        lowEndDesc.setPadding(0, 4, 0, 0);
+        rowLowEnd.addView(lowEndDesc);
+        controlCenterPageLayout.addView(rowLowEnd);
     }
 
     private void setupUnlockPage() {
         addPageTitle(unlockPageLayout, "Screen Unlock Animations");
+        
+        LinearLayout presetLayout = new LinearLayout(this);
+        presetLayout.setOrientation(LinearLayout.HORIZONTAL);
+        presetLayout.setPadding(0, 0, 0, 16);
+        Button loadPresetBtn = new Button(this);
+        loadPresetBtn.setText("📂 Load Preset");
+        loadPresetBtn.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        loadPresetBtn.setOnClickListener(v -> loadPresetAction("unlock"));
+        Button savePresetBtn = new Button(this);
+        savePresetBtn.setText("💾 Save Preset");
+        savePresetBtn.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        savePresetBtn.setOnClickListener(v -> savePresetAction("unlock"));
+        presetLayout.addView(loadPresetBtn);
+        presetLayout.addView(savePresetBtn);
+        unlockPageLayout.addView(presetLayout);
 
         unlockMasterSwitch = new Switch(this);
         unlockMasterSwitch.setText("Enable Unlock Animation Hook");
@@ -264,8 +417,113 @@ public class MainActivity extends Activity {
         renderUnlockSliders(safeMode);
     }
 
+    private void setupLockPinpadPage() {
+        addPageTitle(lockPinpadPageLayout, "Lock Screen Sheet & PIN Pad");
+
+        LinearLayout presetLayout = new LinearLayout(this);
+        presetLayout.setOrientation(LinearLayout.HORIZONTAL);
+        presetLayout.setPadding(0, 0, 0, 16);
+        Button loadPresetBtn = new Button(this);
+        loadPresetBtn.setText("📂 Load Preset");
+        loadPresetBtn.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        loadPresetBtn.setOnClickListener(v -> loadPresetAction("lockPinpad"));
+        Button savePresetBtn = new Button(this);
+        savePresetBtn.setText("💾 Save Preset");
+        savePresetBtn.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        savePresetBtn.setOnClickListener(v -> savePresetAction("lockPinpad"));
+        presetLayout.addView(loadPresetBtn);
+        presetLayout.addView(savePresetBtn);
+        lockPinpadPageLayout.addView(presetLayout);
+
+        lockPinpadMasterSwitch = new Switch(this);
+        lockPinpadMasterSwitch.setText("Enable Lockscreen & Keypad Physics");
+        lockPinpadMasterSwitch.setTextSize(18);
+        lockPinpadMasterSwitch.setTypeface(null, Typeface.BOLD);
+        lockPinpadMasterSwitch.setChecked(currentConfig.optBoolean("unlockEnabled", true));
+        lockPinpadMasterSwitch.setPadding(0, 0, 0, 24);
+        lockPinpadMasterSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+            try { currentConfig.put("unlockEnabled", isChecked); saveConfig(); } catch (Exception ignored) {}
+        });
+        lockPinpadPageLayout.addView(lockPinpadMasterSwitch);
+
+        lockPinpadSlidersContainer = new LinearLayout(this);
+        lockPinpadSlidersContainer.setOrientation(LinearLayout.VERTICAL);
+        lockPinpadPageLayout.addView(lockPinpadSlidersContainer);
+        renderLockPinpadSliders();
+    }
+
+    private void renderLockPinpadSliders() {
+        lockPinpadSlidersContainer.removeAllViews();
+
+        addSectionHeader(lockPinpadSlidersContainer, "LOCK SCREEN SHEET & BOTTOM PILL");
+        addSlider(lockPinpadSlidersContainer, "lockCardBorderWidth", "Sheet Border Width (dp)", "Thickness of Left, Right, and Bottom specular frame outline", 0.5f, 8.0f, 2.5f);
+        addSlider(lockPinpadSlidersContainer, "lockCardBorderAlpha", "Sheet Border Glow / Opacity", "Glow intensity of the glass outline (0.0 to 1.0)", 0.1f, 1.0f, 0.47f);
+        addSlider(lockPinpadSlidersContainer, "lockPillWidth", "Home Indicator Pill Width (dp)", "Length of the bottom iOS home indicator bar", 80.0f, 280.0f, 156.0f);
+        addSlider(lockPinpadSlidersContainer, "lockPillHeight", "Home Indicator Pill Height (dp)", "Thickness of the bottom iOS home indicator bar", 2.0f, 16.0f, 6.0f);
+        addSlider(lockPinpadSlidersContainer, "lockPillBottomMargin", "Pill Bottom Distance (dp)", "Distance between the pill and bottom of the display", 0.0f, 35.0f, 9.0f);
+        addSlider(lockPinpadSlidersContainer, "lockLipHeight", "Bottom Glass Lip Height (dp)", "Height of the specular curved bottom glass layer", 10.0f, 70.0f, 28.0f);
+
+        addSectionHeader(lockPinpadSlidersContainer, "PIN PAD GEOMETRY & TYPOGRAPHY");
+        addSlider(lockPinpadSlidersContainer, "pinCircleDiameter", "Button Circle Diameter (dp)", "Size of each circular numeric key (does not overlap neighbors)", 60.0f, 94.0f, 82.0f);
+        addSlider(lockPinpadSlidersContainer, "pinCircleFillAlpha", "Frosted Glass Fill Opacity", "Inner frosted opacity of circular buttons (0.0 to 1.0)", 0.0f, 0.90f, 0.20f);
+        addSlider(lockPinpadSlidersContainer, "pinCircleStrokeWidth", "Specular Rim Width (dp)", "Thickness of circular border outline", 0.5f, 4.0f, 1.5f);
+        addSlider(lockPinpadSlidersContainer, "pinCircleStrokeAlpha", "Specular Rim Opacity", "Glow intensity of circular border outline (0.0 to 1.0)", 0.0f, 1.0f, 0.47f);
+        addSwitch(lockPinpadSlidersContainer, "pinShowKlondike", "Show Subtitle Letters (ABC, DEF)", "Toggle letters below numeric digits", false);
+        addSlider(lockPinpadSlidersContainer, "pinDigitTextSize", "Digit Font Size (sp)", "Font size of centered PIN numbers", 22.0f, 48.0f, 36.0f);
+
+        addSectionHeader(lockPinpadSlidersContainer, "PIN PAD VERTICAL ROW SPACING");
+        addSlider(lockPinpadSlidersContainer, "pinRow0Offset", "PIN Dots Offset (dp)", "Vertical translation of PIN entry dots", -180.0f, 0.0f, -115.0f);
+        addSlider(lockPinpadSlidersContainer, "pinRow1Offset", "Row 1 (1, 2, 3) Offset (dp)", "Vertical translation of first row", -160.0f, 0.0f, -90.0f);
+        addSlider(lockPinpadSlidersContainer, "pinRow2Offset", "Row 2 (4, 5, 6) Offset (dp)", "Vertical translation of second row", -140.0f, 0.0f, -60.0f);
+        addSlider(lockPinpadSlidersContainer, "pinRow3Offset", "Row 3 (7, 8, 9) Offset (dp)", "Vertical translation of third row", -120.0f, 0.0f, -30.0f);
+
+        addSectionHeader(lockPinpadSlidersContainer, "SPRING SQUISH & GLOW PHYSICS (iOS HARMONIC)");
+        addSlider(lockPinpadSlidersContainer, "pinTapSquishScale", "Tap Compression Scale", "Deformation scale when finger touches down", 0.65f, 0.98f, 0.88f);
+        addSlider(lockPinpadSlidersContainer, "pinReleasePlunge", "Release Extra Plunge", "Extra downward squeeze before rebounding on release", 0.0f, 0.25f, 0.10f);
+        addSlider(lockPinpadSlidersContainer, "pinSpringStiffness", "Spring Bounce Stiffness", "Tension of the recovery spring (higher = faster snap)", 15.0f, 150.0f, 50.0f);
+        addSlider(lockPinpadSlidersContainer, "pinSpringDamping", "Spring Bounce Damping", "Friction of the recovery spring (lower = bouncier wobble, higher = stiffer snap)", 1.0f, 15.0f, 5.5f);
+        addSlider(lockPinpadSlidersContainer, "pinPressGlowAlpha", "Tap Glow Highlight Opacity", "Subtle brightness highlight/glow intensity when tapping a key", 0.0f, 0.80f, 0.35f);
+
+        addSectionHeader(lockPinpadSlidersContainer, "SEQUENTIAL ENTRY ANIMATION (Y-AXIS GLIDE)");
+        addSlider(lockPinpadSlidersContainer, "pinEntryTranslationY", "Initial Y-Axis Drop (dp)", "Distance keys glide up from below into their resting position", 20.0f, 300.0f, 90.0f);
+        addSlider(lockPinpadSlidersContainer, "pinEntryInitialScale", "Initial Entry Scale", "Starting scale of keys during entry cascade", 0.20f, 1.0f, 0.50f);
+        addSlider(lockPinpadSlidersContainer, "pinEntryDuration", "Entry Glide Duration (ms)", "Duration of the upward entry glide", 150.0f, 850.0f, 420.0f);
+        addSlider(lockPinpadSlidersContainer, "pinRowDelayStep", "Row Stagger Step (ms)", "Delay increment per row", 0.0f, 150.0f, 55.0f);
+        addSlider(lockPinpadSlidersContainer, "pinColDelayStep", "Column Stagger Step (ms)", "Delay increment per column", 0.0f, 100.0f, 25.0f);
+        addSlider(lockPinpadSlidersContainer, "pinEntryOvershoot", "Entry Y-Axis Bounce Overshoot", "Ball-like bounce factor when keys glide up past resting slot (0.0 = smooth, 1.8 = iOS bounce)", 0.0f, 5.0f, 1.8f);
+
+        addSectionHeader(lockPinpadSlidersContainer, "PER-KEY INDIVIDUAL DELAY TUNING (ms)");
+        addSlider(lockPinpadSlidersContainer, "pin_delay_key1", "Key 1 Delay", "Custom start delay for digit 1", 0.0f, 500.0f, 0.0f);
+        addSlider(lockPinpadSlidersContainer, "pin_delay_key2", "Key 2 Delay", "Custom start delay for digit 2", 0.0f, 500.0f, 25.0f);
+        addSlider(lockPinpadSlidersContainer, "pin_delay_key3", "Key 3 Delay", "Custom start delay for digit 3", 0.0f, 500.0f, 50.0f);
+        addSlider(lockPinpadSlidersContainer, "pin_delay_key4", "Key 4 Delay", "Custom start delay for digit 4", 0.0f, 500.0f, 55.0f);
+        addSlider(lockPinpadSlidersContainer, "pin_delay_key5", "Key 5 Delay", "Custom start delay for digit 5", 0.0f, 500.0f, 80.0f);
+        addSlider(lockPinpadSlidersContainer, "pin_delay_key6", "Key 6 Delay", "Custom start delay for digit 6", 0.0f, 500.0f, 105.0f);
+        addSlider(lockPinpadSlidersContainer, "pin_delay_key7", "Key 7 Delay", "Custom start delay for digit 7", 0.0f, 500.0f, 110.0f);
+        addSlider(lockPinpadSlidersContainer, "pin_delay_key8", "Key 8 Delay", "Custom start delay for digit 8", 0.0f, 500.0f, 135.0f);
+        addSlider(lockPinpadSlidersContainer, "pin_delay_key9", "Key 9 Delay", "Custom start delay for digit 9", 0.0f, 500.0f, 160.0f);
+        addSlider(lockPinpadSlidersContainer, "pin_delay_key0", "Key 0 Delay", "Custom start delay for digit 0", 0.0f, 500.0f, 190.0f);
+        addSlider(lockPinpadSlidersContainer, "pin_delay_emergency", "Emergency Button Delay", "Custom start delay for Emergency call", 0.0f, 500.0f, 240.0f);
+        addSlider(lockPinpadSlidersContainer, "pin_delay_cancel", "Cancel / Delete Button Delay", "Custom start delay for Delete/Cancel", 0.0f, 500.0f, 220.0f);
+    }
+
     private void setupAppAnimPage() {
         addPageTitle(appAnimPageLayout, "App Open / Close & Recents");
+        
+        LinearLayout presetLayout = new LinearLayout(this);
+        presetLayout.setOrientation(LinearLayout.HORIZONTAL);
+        presetLayout.setPadding(0, 0, 0, 16);
+        Button loadPresetBtn = new Button(this);
+        loadPresetBtn.setText("📂 Load Preset");
+        loadPresetBtn.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        loadPresetBtn.setOnClickListener(v -> loadPresetAction("appAnim"));
+        Button savePresetBtn = new Button(this);
+        savePresetBtn.setText("💾 Save Preset");
+        savePresetBtn.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        savePresetBtn.setOnClickListener(v -> savePresetAction("appAnim"));
+        presetLayout.addView(loadPresetBtn);
+        presetLayout.addView(savePresetBtn);
+        appAnimPageLayout.addView(presetLayout);
 
         appAnimMasterSwitch = new Switch(this);
         appAnimMasterSwitch.setText("Enable App Transition Hooks");
@@ -389,28 +647,32 @@ public class MainActivity extends Activity {
         menuLayout.setVisibility(page == Page.MAIN ? View.VISIBLE : View.GONE);
         unlockPageLayout.setVisibility(page == Page.UNLOCK ? View.VISIBLE : View.GONE);
         appAnimPageLayout.setVisibility(page == Page.APP_ANIM ? View.VISIBLE : View.GONE);
+        lockPinpadPageLayout.setVisibility(page == Page.LOCK_PINPAD ? View.VISIBLE : View.GONE);
+        controlCenterPageLayout.setVisibility(page == Page.CONTROL_CENTER ? View.VISIBLE : View.GONE);
     }
 
     private void setupBackHandling() {
         if (Build.VERSION.SDK_INT >= 33) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
-                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
-                    this::handleBack
+                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                () -> {
+                    if (currentPage != Page.MAIN) {
+                        showPage(Page.MAIN);
+                    } else {
+                        finish();
+                    }
+                }
             );
-        }
-    }
-
-    private void handleBack() {
-        if (currentPage != Page.MAIN) {
-            showPage(Page.MAIN);
-        } else {
-            finish();
         }
     }
 
     @Override
     public void onBackPressed() {
-        handleBack();
+        if (currentPage != Page.MAIN) {
+            showPage(Page.MAIN);
+        } else {
+            super.onBackPressed();
+        }
     }
 
     private void applyGrid() {
@@ -448,134 +710,232 @@ public class MainActivity extends Activity {
 
     private void initializeOptimizedPreset() {
         try {
-            File dir = new File(getFilesDir(), "presets");
-            if (!dir.exists()) dir.mkdirs();
-            File opt = new File(dir, "Optimized.json");
-            if (!opt.exists()) {
-                JSONObject json = new JSONObject();
-                json.put("unlockEnabled", true);
-                json.put("appAnimEnabled", true);
-                json.put("animMode", 1);
-                json.put("gridColumns", 4);
-                json.put("gridRows", 7);
-                json.put("durationScale", 0.782);
-                json.put("velocityInfluence", 1.526);
-                json.put("maxVelocity", 14850.0);
-                json.put("cascadeDamping", 0.920);
-                json.put("kineticDockDamping", 0.850);
-                json.put("kineticDockResponse", 0.281);
-                json.put("kineticDockZDepth", 0.985);
+            File unlockDir = new File(getFilesDir(), "presets_unlock");
+            if (!unlockDir.exists()) unlockDir.mkdirs();
+            File appDir = new File(getFilesDir(), "presets_app");
+            if (!appDir.exists()) appDir.mkdirs();
+            File lockDir = new File(getFilesDir(), "presets_lock");
+            if (!lockDir.exists()) lockDir.mkdirs();
 
-                double[] z = {3157.6, 3032.8, 2849.5, 2599.9, 2350.3, 2170.9, 2057.8};
-                double[] bounces = {0.450, 0.473, 0.474, 0.469, 0.471, 0.459, 0.463};
-                for (int i = 0; i < 7; i++) {
-                    json.put("r" + i + "_z", z[i]);
-                    json.put("r" + i + "_center_bounce", bounces[i]);
-                    json.put("r" + i + "_outer_bounce", bounces[i]);
-                    double settle = 0.531 + ((6 - i) * 0.075);
-                    json.put("r" + i + "_center_settle", settle);
-                    json.put("r" + i + "_outer_settle", settle);
-                }
-                FileOutputStream fos = new FileOutputStream(opt);
-                fos.write(json.toString().getBytes("UTF-8"));
-                fos.close();
+            // Preset 1: Optimized_iOS (Smooth Cascade)
+            File optUnlock1 = new File(unlockDir, "Optimized_iOS.json");
+            JSONObject jsonU1 = new JSONObject();
+            jsonU1.put("unlockEnabled", true);
+            jsonU1.put("appAnimEnabled", true);
+            jsonU1.put("animMode", 1);
+            jsonU1.put("gridColumns", 4);
+            jsonU1.put("gridRows", 7);
+            jsonU1.put("durationScale", 0.950);
+            jsonU1.put("velocityInfluence", 0.850);
+            jsonU1.put("maxVelocity", 12000.0);
+            jsonU1.put("cascadeDamping", 0.900);
+            jsonU1.put("kineticDockDamping", 0.900);
+            jsonU1.put("kineticDockResponse", 0.400);
+            jsonU1.put("kineticDockZDepth", 50.0);
+            double[] z1 = {1800.0, 1650.0, 1500.0, 1350.0, 1200.0, 1050.0, 900.0};
+            for (int i = 0; i < 7; i++) {
+                jsonU1.put("r" + i + "_z", z1[i]);
+                jsonU1.put("r" + i + "_center_bounce", 0.900);
+                jsonU1.put("r" + i + "_outer_bounce", 0.900);
+                double centerSettle = 0.450 + ((6 - i) * 0.065);
+                double outerSettle = centerSettle + ((6 - i) * 0.010) + 0.005;
+                jsonU1.put("r" + i + "_center_settle", centerSettle);
+                jsonU1.put("r" + i + "_outer_settle", outerSettle);
             }
+            FileOutputStream fos1 = new FileOutputStream(optUnlock1);
+            fos1.write(jsonU1.toString().getBytes("UTF-8"));
+            fos1.close();
+
+            // Preset 2: iOS_Optimized_2
+            File optUnlock2 = new File(unlockDir, "iOS_Optimized_2.json");
+            JSONObject jsonU2 = new JSONObject();
+            jsonU2.put("unlockEnabled", true);
+            jsonU2.put("appAnimEnabled", true);
+            jsonU2.put("animMode", 1);
+            jsonU2.put("gridColumns", 4);
+            jsonU2.put("gridRows", 7);
+            jsonU2.put("durationScale", 0.90);
+            jsonU2.put("velocityInfluence", 1.45);
+            jsonU2.put("maxVelocity", 9500.0);
+            jsonU2.put("cascadeDamping", 0.88);
+            jsonU2.put("kineticDockDamping", 0.88);
+            jsonU2.put("kineticDockResponse", 0.32);
+            jsonU2.put("kineticDockZDepth", 120.0);
+            double[] z2 = {2200.0, 1950.0, 1700.0, 1450.0, 1200.0, 950.0, 700.0};
+            double[] cb = {0.35, 0.30, 0.25, 0.20, 0.15, 0.12, 0.10};
+            double[] ob = {0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.12};
+            double[] cs = {0.62, 0.56, 0.50, 0.44, 0.38, 0.34, 0.30};
+            double[] os = {0.68, 0.61, 0.55, 0.49, 0.43, 0.38, 0.33};
+            for (int i = 0; i < 7; i++) {
+                jsonU2.put("r" + i + "_z", z2[i]);
+                jsonU2.put("r" + i + "_center_bounce", cb[i]);
+                jsonU2.put("r" + i + "_outer_bounce", ob[i]);
+                jsonU2.put("r" + i + "_center_settle", cs[i]);
+                jsonU2.put("r" + i + "_outer_settle", os[i]);
+            }
+            FileOutputStream fos2 = new FileOutputStream(optUnlock2);
+            fos2.write(jsonU2.toString().getBytes("UTF-8"));
+            fos2.close();
+
+            // Preset App: Optimized_Fluid
+            File optApp = new File(appDir, "Optimized_Fluid.json");
+            JSONObject jsonA = new JSONObject();
+            jsonA.put("appPosDamping", 0.85);
+            jsonA.put("appPosResponse", 0.45);
+            jsonA.put("appScaleDamping", 0.85);
+            jsonA.put("appScaleResponse", 0.50);
+            jsonA.put("appCornerDamping", 1.0);
+            jsonA.put("appCornerResponse", 0.35);
+            jsonA.put("appAlphaDamping", 1.0);
+            jsonA.put("appAlphaResponse", 0.30);
+            FileOutputStream fosA = new FileOutputStream(optApp);
+            fosA.write(jsonA.toString().getBytes("UTF-8"));
+            fosA.close();
+
+            // Preset Lock/PINPad: iOS_26_Glass
+            File optLock = new File(lockDir, "iOS_26_Glass.json");
+            JSONObject jsonL = new JSONObject();
+            jsonL.put("lockCardBorderWidth", 2.5);
+            jsonL.put("lockCardBorderAlpha", 0.47);
+            jsonL.put("lockPillWidth", 156.0);
+            jsonL.put("lockPillHeight", 6.0);
+            jsonL.put("lockPillBottomMargin", 9.0);
+            jsonL.put("lockLipHeight", 28.0);
+            jsonL.put("pinCircleDiameter", 82.0);
+            jsonL.put("pinCircleFillAlpha", 0.20);
+            jsonL.put("pinCircleStrokeWidth", 1.5);
+            jsonL.put("pinCircleStrokeAlpha", 0.47);
+            jsonL.put("pinShowKlondike", false);
+            jsonL.put("pinDigitTextSize", 36.0);
+            jsonL.put("pinRow1Offset", -90.0);
+            jsonL.put("pinRow2Offset", -60.0);
+            jsonL.put("pinRow3Offset", -30.0);
+            jsonL.put("pinRow0Offset", -115.0);
+            jsonL.put("pinTapSquishScale", 0.88);
+            jsonL.put("pinReleasePlunge", 0.10);
+            jsonL.put("pinSpringStiffness", 50.0);
+            jsonL.put("pinSpringDamping", 5.5);
+            jsonL.put("pinPressGlowAlpha", 0.35);
+            jsonL.put("pinEntryTranslationY", 90.0);
+            jsonL.put("pinEntryInitialScale", 0.50);
+            jsonL.put("pinEntryDuration", 420.0);
+            jsonL.put("pinRowDelayStep", 55.0);
+            jsonL.put("pinColDelayStep", 25.0);
+            jsonL.put("pinEntryOvershoot", 1.8);
+            FileOutputStream fosL = new FileOutputStream(optLock);
+            fosL.write(jsonL.toString().getBytes("UTF-8"));
+            fosL.close();
+
         } catch (Exception ignored) {}
     }
 
-    private void refreshPresets() {
-        if (presetSpinner == null) return;
-        File dir = new File(getFilesDir(), "presets");
-        if (!dir.exists()) dir.mkdirs();
-        File[] files = dir.listFiles();
-        List<String> names = new ArrayList<>();
-        if (files != null) {
-            for (File f : files) if (f.isFile() && f.getName().endsWith(".json")) names.add(f.getName().replace(".json", ""));
-        }
-        Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
-        if (names.isEmpty()) names.add("No saved profiles");
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, names);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        presetSpinner.setAdapter(adapter);
+    private void refreshPresetList() {
+        initializeOptimizedPreset();
     }
 
-    private void savePresetDialog() {
-        AlertDialog.Builder b = new AlertDialog.Builder(this);
-        b.setTitle("Save Preset As");
-        final EditText input = new EditText(this);
-        input.setSingleLine(true);
-        input.setHint("Profile name");
-        b.setView(input);
-        b.setPositiveButton("Save", (dialog, which) -> {
-            String name = input.getText().toString().trim();
-            if (name.isEmpty()) {
-                Toast.makeText(this, "Enter a profile name", Toast.LENGTH_SHORT).show();
+    private void loadPresetAction(String type) {
+        try {
+            String dirName;
+            if (type.equals("unlock")) dirName = "presets_unlock";
+            else if (type.equals("lockPinpad")) dirName = "presets_lock";
+            else dirName = "presets_app";
+
+            File dir = new File(getFilesDir(), dirName);
+            if (!dir.exists()) dir.mkdirs();
+            File[] files = dir.listFiles((d, name) -> name.endsWith(".json"));
+            if (files == null || files.length == 0) {
+                Toast.makeText(this, "No saved presets found in " + dirName, Toast.LENGTH_SHORT).show();
                 return;
             }
-            name = name.replaceAll("[^A-Za-z0-9._-]", "_");
-            try {
-                File dir = new File(getFilesDir(), "presets");
-                if (!dir.exists()) dir.mkdirs();
-                File f = new File(dir, name + ".json");
-                FileOutputStream fos = new FileOutputStream(f);
-                fos.write(currentConfig.toString().getBytes("UTF-8"));
-                fos.close();
-                refreshPresets();
-                Toast.makeText(this, "Preset Saved", Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
-                Toast.makeText(this, "Failed to save preset", Toast.LENGTH_SHORT).show();
+            final String[] names = new String[files.length];
+            for (int i = 0; i < files.length; i++) {
+                names[i] = files[i].getName().replace(".json", "");
+            }
+
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle("Select Preset to Load");
+            builder.setItems(names, (dialog, which) -> {
+                String chosen = names[which];
+                try {
+                    File file = new File(dir, chosen + ".json");
+                    if (file.exists()) {
+                        FileInputStream fis = new FileInputStream(file);
+                        byte[] data = new byte[(int) file.length()];
+                        fis.read(data);
+                        fis.close();
+
+                        JSONObject loaded = new JSONObject(new String(data, "UTF-8"));
+                        java.util.Iterator<String> keys = loaded.keys();
+                        while (keys.hasNext()) {
+                            String k = keys.next();
+                            currentConfig.put(k, loaded.get(k));
+                        }
+                        if (type.equals("unlock")) currentConfig.put("unlockEnabled", true);
+                        if (type.equals("appAnim")) currentConfig.put("appAnimEnabled", true);
+                        if (type.equals("lockPinpad")) currentConfig.put("unlockEnabled", true);
+                        saveConfig();
+
+                        if (unlockSlidersContainer != null) renderUnlockSliders(currentConfig.optInt("animMode", 1));
+                        if (appAnimSlidersContainer != null) renderAppAnimSliders();
+                        if (lockPinpadSlidersContainer != null) renderLockPinpadSliders();
+                        if (unlockMasterSwitch != null) unlockMasterSwitch.setChecked(currentConfig.optBoolean("unlockEnabled", true));
+                        if (appAnimMasterSwitch != null) appAnimMasterSwitch.setChecked(currentConfig.optBoolean("appAnimEnabled", true));
+                        if (lockPinpadMasterSwitch != null) lockPinpadMasterSwitch.setChecked(currentConfig.optBoolean("unlockEnabled", true));
+
+                        Toast.makeText(this, "Loaded Preset: " + chosen, Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(this, "Failed to load preset", Toast.LENGTH_SHORT).show();
+                }
+            });
+            builder.setNegativeButton("Cancel", null);
+            builder.show();
+        } catch (Exception ignored) {}
+    }
+
+    private void savePresetAction(String type) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Save Current Setup as Preset");
+
+        final EditText input = new EditText(this);
+        input.setHint("Preset Name (e.g. My_Custom_Setup)");
+        builder.setView(input);
+
+        builder.setPositiveButton("Save", (dialog, which) -> {
+            String name = input.getText().toString().trim();
+            if (!name.isEmpty()) {
+                try {
+                    String dirName;
+                    if (type.equals("unlock")) dirName = "presets_unlock";
+                    else if (type.equals("lockPinpad")) dirName = "presets_lock";
+                    else dirName = "presets_app";
+
+                    File dir = new File(getFilesDir(), dirName);
+                    if (!dir.exists()) dir.mkdirs();
+                    File file = new File(dir, name + ".json");
+                    FileOutputStream fos = new FileOutputStream(file);
+
+                    JSONObject out = new JSONObject();
+                    java.util.Iterator<String> keys = currentConfig.keys();
+                    while (keys.hasNext()) {
+                        String k = keys.next();
+                        if (type.equals("unlock") && !k.startsWith("app") && !k.startsWith("lock") && !k.startsWith("pin") && !k.startsWith("cc") && !k.startsWith("notif")) {
+                            out.put(k, currentConfig.get(k));
+                        } else if (type.equals("appAnim") && k.startsWith("app")) {
+                            out.put(k, currentConfig.get(k));
+                        } else if (type.equals("lockPinpad") && (k.startsWith("lock") || k.startsWith("pin"))) {
+                            out.put(k, currentConfig.get(k));
+                        }
+                    }
+
+                    fos.write(out.toString().getBytes("UTF-8"));
+                    fos.close();
+                    Toast.makeText(this, "Saved preset: " + name, Toast.LENGTH_SHORT).show();
+                } catch (Exception ignored) {}
             }
         });
-        b.setNegativeButton("Cancel", null);
-        b.show();
-    }
-
-    private void loadPresetDialog() {
-        if (presetSpinner != null) {
-            loadSelectedPreset();
-            return;
-        }
-        refreshPresets();
-    }
-
-    private void loadSelectedPreset() {
-        if (presetSpinner == null || presetSpinner.getSelectedItem() == null) return;
-        String selected = presetSpinner.getSelectedItem().toString();
-        if ("No saved profiles".equals(selected)) {
-            Toast.makeText(this, "No presets found", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        loadPresetByName(selected);
-    }
-
-    private void loadPresetByName(String name) {
-        try {
-            File dir = new File(getFilesDir(), "presets");
-            File f = new File(dir, name + ".json");
-            if (!f.exists()) throw new IllegalStateException("missing");
-            FileInputStream fis = new FileInputStream(f);
-            byte[] data = new byte[(int) f.length()];
-            int read = fis.read(data);
-            fis.close();
-            if (read <= 0) throw new IllegalStateException("empty");
-            currentConfig = new JSONObject(new String(data, "UTF-8"));
-            normalizeGrid();
-            saveConfig();
-            refreshVisibleControls();
-            Toast.makeText(this, "Preset Loaded", Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            Toast.makeText(this, "Failed to load preset", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void refreshVisibleControls() {
-        if (gridInput != null) gridInput.setText(getGridText());
-        if (unlockMasterSwitch != null) unlockMasterSwitch.setChecked(currentConfig.optBoolean("unlockEnabled", true));
-        if (appAnimMasterSwitch != null) appAnimMasterSwitch.setChecked(currentConfig.optBoolean("appAnimEnabled", true));
-        int mode = clamp(currentConfig.optInt("animMode", 1), 0, 1);
-        if (unlockModeSpinner != null) unlockModeSpinner.setSelection(mode);
-        if (unlockSlidersContainer != null) renderUnlockSliders(mode);
-        if (appAnimSlidersContainer != null) renderAppAnimSliders();
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
     }
 
     private void loadConfig() {
@@ -616,6 +976,38 @@ public class MainActivity extends Activity {
         params.setMargins(0, 26, 0, 16);
         header.setLayoutParams(params);
         parent.addView(header);
+    }
+
+    private void addSwitch(LinearLayout parent, String key, String label, String desc, boolean defVal) {
+        boolean currentVal = currentConfig.optBoolean(key, defVal);
+        
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(0, 8, 0, 16);
+        
+        Switch s = new Switch(this);
+        s.setText(label);
+        s.setTextSize(15);
+        s.setTypeface(null, Typeface.BOLD);
+        s.setChecked(currentVal);
+        s.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            try {
+                currentConfig.put(key, isChecked);
+                saveConfig();
+            } catch (Exception ignored) {}
+        });
+        row.addView(s);
+        
+        if (!desc.isEmpty()) {
+            TextView descText = new TextView(this);
+            descText.setText(desc);
+            descText.setTextSize(11);
+            descText.setTextColor(Color.DKGRAY);
+            descText.setPadding(0, 2, 0, 8);
+            row.addView(descText);
+        }
+        
+        parent.addView(row);
     }
 
     private void addSlider(LinearLayout parent, String key, String label, String desc, float min, float max, float defVal) {
