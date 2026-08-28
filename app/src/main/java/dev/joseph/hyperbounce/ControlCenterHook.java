@@ -1215,6 +1215,19 @@ public class ControlCenterHook {
             rotateBtn.setVisibility(View.GONE);
             wrapper.addView(rotateBtn);
 
+            // Injected Disassemble Selection Indicator
+            ImageView disassembleIndicator = new ImageView(ctx);
+            disassembleIndicator.setId(0x7f099998);
+            int dSize = (int) (26 * density);
+            android.widget.FrameLayout.LayoutParams dlp = new android.widget.FrameLayout.LayoutParams(dSize, dSize);
+            dlp.gravity = Gravity.TOP | Gravity.START;
+            int dMargin = (int) (6 * density);
+            dlp.setMargins(dMargin, dMargin, 0, 0);
+            disassembleIndicator.setLayoutParams(dlp);
+            disassembleIndicator.setImageDrawable(new SelectCircleDrawable());
+            disassembleIndicator.setVisibility(View.GONE);
+            wrapper.addView(disassembleIndicator);
+
             root.addView(wrapper);
 
             // Inflate 2 circular child tiles
@@ -1442,6 +1455,20 @@ public class ControlCenterHook {
             int pad = (int) (6 * density);
             container.setPadding(pad, pad, pad, pad);
             wrapper.addView(container, clp);
+
+            // Injected Disassemble Selection Indicator
+            ImageView disassembleIndicator = new ImageView(ctx);
+            disassembleIndicator.setId(0x7f099998);
+            int dSize = (int) (26 * density);
+            android.widget.FrameLayout.LayoutParams dlp = new android.widget.FrameLayout.LayoutParams(dSize, dSize);
+            dlp.gravity = Gravity.TOP | Gravity.START;
+            int dMargin = (int) (6 * density);
+            dlp.setMargins(dMargin, dMargin, 0, 0);
+            disassembleIndicator.setLayoutParams(dlp);
+            disassembleIndicator.setImageDrawable(new SelectCircleDrawable());
+            disassembleIndicator.setVisibility(View.GONE);
+            wrapper.addView(disassembleIndicator);
+
             root.addView(wrapper);
 
             android.widget.LinearLayout rowTop = new android.widget.LinearLayout(ctx);
@@ -2544,10 +2571,26 @@ public class ControlCenterHook {
                                     try {
                                         Object adapterObj = chain.getThisObject();
                                         sMainPanelAdapter = adapterObj;
-                                        Field qsListField = mainAdapterClass.getDeclaredField("qsListController");
-                                        qsListField.setAccessible(true);
-                                        Object qsListCtrl = qsListField.get(adapterObj);
+                                        Object qsListCtrl = null;
+                                        try {
+                                            Field qsListField = mainAdapterClass.getDeclaredField("qsListController");
+                                            qsListField.setAccessible(true);
+                                            qsListCtrl = qsListField.get(adapterObj);
+                                        } catch (Throwable ignore) {}
+                                        if (qsListCtrl == null) qsListCtrl = sQSListController;
+
                                         ViewGroup parent = (ViewGroup) args[0];
+                                        Context ctx = parent.getContext();
+                                        Context sysUIContext = ctx;
+                                        if (qsListCtrl != null) {
+                                            try {
+                                                Field sysUIContextField = qsListCtrl.getClass().getDeclaredField("sysUIContext");
+                                                sysUIContextField.setAccessible(true);
+                                                Context sc = (Context) sysUIContextField.get(qsListCtrl);
+                                                if (sc != null) sysUIContext = sc;
+                                            } catch (Throwable ignore) {}
+                                        }
+
                                         if (vt == 2274) {
                                             Object holder = createGroupedCardViewHolder(parent, qsListCtrl, classLoader);
                                             if (holder != null) return holder;
@@ -2560,14 +2603,10 @@ public class ControlCenterHook {
                                         } else if (vt == 2273) {
                                             Class<?> cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader);
                                             Method inflateMethod = cardBindingClass.getMethod("inflate", LayoutInflater.class, ViewGroup.class, boolean.class);
-                                            Object binding = inflateMethod.invoke(null, LayoutInflater.from(parent.getContext()), parent, false);
+                                            Object binding = inflateMethod.invoke(null, LayoutInflater.from(ctx), parent, false);
 
                                             Method getRootMethod = cardBindingClass.getMethod("getRoot");
                                             View root = (View) getRootMethod.invoke(binding);
-
-                                            Field sysUIContextField = qsListCtrl.getClass().getDeclaredField("sysUIContext");
-                                            sysUIContextField.setAccessible(true);
-                                            Context sysUIContext = (Context) sysUIContextField.get(qsListCtrl);
 
                                             Class<?> cardIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemIconView", false, classLoader);
                                             Constructor<?> iconCtor = null;
@@ -2577,16 +2616,18 @@ public class ControlCenterHook {
                                                     break;
                                                 }
                                             }
-                                            if (iconCtor == null) {
+                                            if (iconCtor == null && cardIconViewClass.getDeclaredConstructors().length > 0) {
                                                 iconCtor = cardIconViewClass.getDeclaredConstructors()[0];
                                             }
-                                            iconCtor.setAccessible(true);
-                                            Object iconView = (iconCtor.getParameterTypes().length == 5) 
-                                                ? iconCtor.newInstance(root.getContext(), sysUIContext, null, 4, null)
-                                                : iconCtor.newInstance(root.getContext(), sysUIContext);
+                                            if (iconCtor != null) {
+                                                iconCtor.setAccessible(true);
+                                                Object iconView = (iconCtor.getParameterTypes().length == 5) 
+                                                    ? iconCtor.newInstance(root.getContext(), sysUIContext, null, 4, null)
+                                                    : iconCtor.newInstance(root.getContext(), sysUIContext);
 
-                                            Method initMethod = root.getClass().getMethod("init", cardIconViewClass);
-                                            initMethod.invoke(root, iconView);
+                                                Method initMethod = root.getClass().getMethod("init", cardIconViewClass);
+                                                initMethod.invoke(root, iconView);
+                                            }
 
                                             Class<?> cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader);
                                             Constructor<?> holderCtor = cardHolderClass.getConstructor(Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemView", false, classLoader));
@@ -3190,16 +3231,6 @@ public class ControlCenterHook {
                                         ImageView indicatorBadge = (rawBadge instanceof ImageView) ? (ImageView) rawBadge : null;
 
                                         if (sIsDisassembleMode) {
-                                            if (indicatorBadge == null && itemView instanceof ViewGroup) {
-                                                indicatorBadge = new ImageView(ctx);
-                                                indicatorBadge.setId(selectTag);
-                                                int badgeSize = (int) (24 * density);
-                                                FrameLayout.LayoutParams slp = new FrameLayout.LayoutParams(badgeSize, badgeSize);
-                                                slp.gravity = Gravity.TOP | Gravity.START;
-                                                slp.leftMargin = (int) (6 * density);
-                                                slp.topMargin = (int) (6 * density);
-                                                ((ViewGroup) itemView).addView(indicatorBadge, slp);
-                                            }
                                             if (indicatorBadge != null) {
                                                 SelectCircleDrawable scd = (indicatorBadge.getDrawable() instanceof SelectCircleDrawable)
                                                     ? (SelectCircleDrawable) indicatorBadge.getDrawable() : new SelectCircleDrawable();
@@ -3207,6 +3238,7 @@ public class ControlCenterHook {
                                                 indicatorBadge.setImageDrawable(scd);
                                                 indicatorBadge.setVisibility(View.VISIBLE);
                                                 indicatorBadge.bringToFront();
+                                                indicatorBadge.setClickable(true);
 
                                                 final ImageView finalBadge = indicatorBadge;
                                                 View.OnClickListener toggleDisassembleSelect = v -> {
@@ -3221,18 +3253,35 @@ public class ControlCenterHook {
                                                         finalBadge.invalidate();
                                                     }
                                                 };
-                                                itemView.setOnClickListener(toggleDisassembleSelect);
                                                 indicatorBadge.setOnClickListener(toggleDisassembleSelect);
+                                                itemView.setOnClickListener(toggleDisassembleSelect);
                                                 itemView.setClickable(true);
-                                                indicatorBadge.setClickable(true);
+
+                                                // Enable selection toggle on EVERY child tile and icon frame inside the container
+                                                for (int ci = 0; ci < 4; ci++) {
+                                                    View ct = getChildTileAt(container, ci);
+                                                    if (ct != null) {
+                                                        ct.setOnClickListener(toggleDisassembleSelect);
+                                                        ct.setClickable(true);
+                                                        ct.setLongClickable(false);
+                                                        int ifId = ctx.getResources().getIdentifier("icon_frame", "id", ctx.getPackageName());
+                                                        View ifView = ct.findViewById(ifId);
+                                                        if (ifView != null) {
+                                                            ifView.setOnClickListener(toggleDisassembleSelect);
+                                                            ifView.setClickable(true);
+                                                        }
+                                                    }
+                                                }
                                             }
                                         } else {
                                             if (indicatorBadge != null) {
                                                 indicatorBadge.setVisibility(View.GONE);
                                             }
-                                            itemView.setOnClickListener(null);
-                                            itemView.setClickable(false);
-                                            itemView.setFocusable(false);
+                                            if (!isEdit) {
+                                                itemView.setOnClickListener(null);
+                                                itemView.setClickable(false);
+                                                itemView.setFocusable(false);
+                                            }
                                         }
                                     }
 
