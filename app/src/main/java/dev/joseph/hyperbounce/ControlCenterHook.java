@@ -227,7 +227,7 @@ public class ControlCenterHook {
                 }
                 editor.putString("tile_groups_v2", groupsSb.toString());
 
-                editor.commit();
+                editor.apply();
             }
         } catch (Throwable ignore) {}
     }
@@ -926,7 +926,6 @@ public class ControlCenterHook {
 
     public static TileGroup isGroupAnchor(String spec) {
         if (spec == null) return null;
-        ensurePrioritiesLoaded();
         for (TileGroup g : sTileGroups) {
             if ((g.specs.size() == 4 || g.specs.size() == 2) && spec.equals(g.specs.get(0))) {
                 return g;
@@ -937,7 +936,6 @@ public class ControlCenterHook {
 
     public static boolean isGroupChild(String spec) {
         if (spec == null) return false;
-        ensurePrioritiesLoaded();
         for (TileGroup g : sTileGroups) {
             if (g.specs.size() == 4 || g.specs.size() == 2) {
                 for (int i = 1; i < g.specs.size(); i++) {
@@ -946,17 +944,6 @@ public class ControlCenterHook {
             }
         }
         return false;
-    }
-
-    private static void ensurePrioritiesLoaded() {
-        if (sPrefs == null && sQSListController != null) {
-            try {
-                Field sysUIContextField = sQSListController.getClass().getDeclaredField("sysUIContext");
-                sysUIContextField.setAccessible(true);
-                Context ctx = (Context) sysUIContextField.get(sQSListController);
-                if (ctx != null) loadSavedPriorities(ctx);
-            } catch (Throwable ignore) {}
-        }
     }
 
     public static TileGroup getTileGroupBySpec(String spec) {
