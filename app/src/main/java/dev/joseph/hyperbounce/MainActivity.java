@@ -8,6 +8,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
+import android.net.Uri;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -113,6 +114,33 @@ public class MainActivity extends Activity {
         setupUnlockPage();
         setupAppAnimPage();
         setupBackHandling();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        checkSafeModeStatus();
+    }
+
+    private void checkSafeModeStatus() {
+        try {
+            File f = new File(getFilesDir(), "safemode.flag");
+            if (f.exists()) {
+                new AlertDialog.Builder(this)
+                    .setTitle("⚠️ Safe Mode Active")
+                    .setMessage("HyperBounce entered Safe Mode due to previous unexpected termination. Custom Control Center physics and modular features are temporarily paused.\n\nWould you like to deactivate Safe Mode and resume custom physics?")
+                    .setCancelable(false)
+                    .setPositiveButton("Deactivate Safe Mode & Resume", (dialog, which) -> {
+                        try {
+                            if (f.exists()) f.delete();
+                            getContentResolver().call(Uri.parse("content://dev.joseph.hyperbounce.provider"), "setSafeMode", "false", null);
+                            Toast.makeText(this, "Safe Mode deactivated! Restart System UI to apply.", Toast.LENGTH_LONG).show();
+                        } catch (Exception e) {}
+                    })
+                    .setNegativeButton("Keep Safe Mode", null)
+                    .show();
+            }
+        } catch (Exception ignored) {}
     }
 
     private void setupHeader(LinearLayout parentContainer) {

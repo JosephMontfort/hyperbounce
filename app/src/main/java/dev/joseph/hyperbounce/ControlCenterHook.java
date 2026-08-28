@@ -12,6 +12,9 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
+import org.json.JSONObject;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -91,16 +94,92 @@ public class ControlCenterHook {
         sComponentPriorities.put("QSListController", 100);
     }
 
+    private static boolean sExplicitReset = false;
+
     private static synchronized void loadSavedPriorities(Context ctx) {
         if (ctx == null) return;
         sLastKnownContext = ctx.getApplicationContext() != null ? ctx.getApplicationContext() : ctx;
         try {
+            String jsonStr = null;
+            // 1. Try HyperBounce ContentProvider
+            try {
+                Bundle res = ctx.getContentResolver().call(
+                    Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                    "getCCLayout", null, null
+                );
+                if (res != null) {
+                    jsonStr = res.getString("cc_layout_json");
+                }
+            } catch (Throwable ignore) {}
+
+            // 2. Fallback to Settings.Secure
+            if (TextUtils.isEmpty(jsonStr)) {
+                try {
+                    jsonStr = android.provider.Settings.Secure.getString(ctx.getContentResolver(), "hyperbounce_cc_layout");
+                } catch (Throwable ignore) {}
+            }
+
+            // 3. Parse JSON from Provider / Settings if available
+            if (!TextUtils.isEmpty(jsonStr)) {
+                try {
+                    JSONObject json = new JSONObject(jsonStr);
+                    JSONObject prioObj = json.optJSONObject("priorities");
+                    if (prioObj != null) {
+                        Iterator<String> keys = prioObj.keys();
+                        while (keys.hasNext()) {
+                            String k = keys.next();
+                            if (!"QSListController".equals(k)) {
+                                sComponentPriorities.put(k, prioObj.getInt(k));
+                            }
+                        }
+                    }
+                    sIsWifiFirst = json.optBoolean("wifi_card_first", sIsWifiFirst);
+
+                    String expSpecs = json.optString("expanded_tile_specs", "");
+                    if (!TextUtils.isEmpty(expSpecs)) {
+                        Set<String> newExp = new LinkedHashSet<>();
+                        for (String sp : expSpecs.split(",")) {
+                            if (!sp.trim().isEmpty()) newExp.add(sp.trim());
+                        }
+                        if (!newExp.isEmpty()) {
+                            sExpandedTileSpecs.clear();
+                            sExpandedTileSpecs.addAll(newExp);
+                        }
+                    }
+
+                    String grpV2 = json.optString("tile_groups_v2", "");
+                    if (!TextUtils.isEmpty(grpV2)) {
+                        List<TileGroup> newGroups = new ArrayList<>();
+                        for (String gEntry : grpV2.split(";")) {
+                            String[] parts = gEntry.split(":");
+                            if (parts.length >= 3) {
+                                String gId = parts[0];
+                                boolean isVert = "V".equalsIgnoreCase(parts[1]);
+                                List<String> gSpecs = new ArrayList<>();
+                                for (String sp : parts[2].split(",")) {
+                                    if (!sp.trim().isEmpty()) gSpecs.add(sp.trim());
+                                }
+                                if (gSpecs.size() == 4 || gSpecs.size() == 2) {
+                                    newGroups.add(new TileGroup(gId, gSpecs, isVert));
+                                }
+                            }
+                        }
+                        if (!newGroups.isEmpty()) {
+                            sTileGroups.clear();
+                            sTileGroups.addAll(newGroups);
+                        }
+                    }
+                    return; // Successfully loaded from persistent provider!
+                } catch (Throwable ignore) {}
+            }
+
+            // 4. Fallback to local SharedPreferences
             if (sPrefs == null) {
                 sPrefs = ctx.getSharedPreferences("hyperbounce_cc_layout", Context.MODE_PRIVATE);
             }
             if (sPrefs != null) {
                 for (String key : sComponentPriorities.keySet()) {
-                    if ("QSListController".equals(key)) continue; // QSList is always anchored at 100
+                    if ("QSListController".equals(key)) continue;
                     int saved = sPrefs.getInt("priority_" + key, -1);
                     if (saved != -1) {
                         sComponentPriorities.put(key, saved);
@@ -108,31 +187,21 @@ public class ControlCenterHook {
                 }
                 sIsWifiFirst = sPrefs.getBoolean("wifi_card_first", true);
 
-                boolean initialized = sPrefs.getBoolean("has_initialized_tile_specs_v6", false);
-                sExpandedTileSpecs.clear();
-                if (!initialized) {
-                    sExpandedTileSpecs.add("wifi");
-                    sExpandedTileSpecs.add("cell");
-                    sPrefs.edit().putBoolean("has_initialized_tile_specs_v6", true).putString("expanded_tile_specs", "wifi,cell").commit();
-                } else {
-                    String expandedStr = sPrefs.getString("expanded_tile_specs", "wifi,cell");
-                    if (!TextUtils.isEmpty(expandedStr)) {
-                        for (String spec : expandedStr.split(",")) {
-                            if (!spec.trim().isEmpty()) {
-                                sExpandedTileSpecs.add(spec.trim());
-                            }
-                        }
+                String expandedStr = sPrefs.getString("expanded_tile_specs", "");
+                if (!TextUtils.isEmpty(expandedStr)) {
+                    Set<String> newExp = new LinkedHashSet<>();
+                    for (String spec : expandedStr.split(",")) {
+                        if (!spec.trim().isEmpty()) newExp.add(spec.trim());
                     }
-                    if (sExpandedTileSpecs.isEmpty()) {
-                        sExpandedTileSpecs.add("wifi");
-                        sExpandedTileSpecs.add("cell");
+                    if (!newExp.isEmpty()) {
+                        sExpandedTileSpecs.clear();
+                        sExpandedTileSpecs.addAll(newExp);
                     }
                 }
 
-                // Load Tile Groups (support v2 with isVertical and legacy v1)
                 String groupsStrV2 = sPrefs.getString("tile_groups_v2", "");
-                sTileGroups.clear();
                 if (!TextUtils.isEmpty(groupsStrV2)) {
+                    List<TileGroup> newGroups = new ArrayList<>();
                     for (String gEntry : groupsStrV2.split(";")) {
                         String[] parts = gEntry.split(":");
                         if (parts.length >= 3) {
@@ -143,26 +212,13 @@ public class ControlCenterHook {
                                 if (!sp.trim().isEmpty()) gSpecs.add(sp.trim());
                             }
                             if (gSpecs.size() == 4 || gSpecs.size() == 2) {
-                                sTileGroups.add(new TileGroup(gId, gSpecs, isVert));
+                                newGroups.add(new TileGroup(gId, gSpecs, isVert));
                             }
                         }
                     }
-                } else {
-                    String groupsStr = sPrefs.getString("tile_groups_v1", "");
-                    if (!TextUtils.isEmpty(groupsStr)) {
-                        for (String gEntry : groupsStr.split(";")) {
-                            String[] parts = gEntry.split(":");
-                            if (parts.length == 2) {
-                                String gId = parts[0];
-                                List<String> gSpecs = new ArrayList<>();
-                                for (String sp : parts[1].split(",")) {
-                                    if (!sp.trim().isEmpty()) gSpecs.add(sp.trim());
-                                }
-                                if (gSpecs.size() == 4 || gSpecs.size() == 2) {
-                                    sTileGroups.add(new TileGroup(gId, gSpecs, false));
-                                }
-                            }
-                        }
+                    if (!newGroups.isEmpty()) {
+                        sTileGroups.clear();
+                        sTileGroups.addAll(newGroups);
                     }
                 }
             }
@@ -172,6 +228,16 @@ public class ControlCenterHook {
     public static synchronized void resetLayoutToStock(Context ctx) {
         if (ctx == null) return;
         try {
+            sExplicitReset = true;
+            try {
+                ctx.getContentResolver().call(
+                    Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                    "resetCCLayout", null, null
+                );
+            } catch (Throwable ignore) {}
+            try {
+                android.provider.Settings.Secure.putString(ctx.getContentResolver(), "hyperbounce_cc_layout", "");
+            } catch (Throwable ignore) {}
             if (sPrefs == null) {
                 sPrefs = ctx.getSharedPreferences("hyperbounce_cc_layout", Context.MODE_PRIVATE);
             }
@@ -190,6 +256,7 @@ public class ControlCenterHook {
             sComponentPriorities.put("BrightnessVolumeController", 4);
             sComponentPriorities.put("QSListController", 100);
             savePriorities(ctx);
+            sExplicitReset = false;
             android.util.Log.i(TAG, "Control Center Layout successfully reset to stock!");
         } catch (Throwable t) {
             android.util.Log.e(TAG, "resetLayoutToStock error", t);
@@ -197,9 +264,55 @@ public class ControlCenterHook {
     }
 
     private static synchronized void savePriorities(Context ctx) {
-        if (ctx == null && sPrefs == null) return;
+        if (ctx == null && sLastKnownContext != null) ctx = sLastKnownContext;
+        if (ctx == null) return;
         try {
-            if (sPrefs == null && ctx != null) {
+            // Build JSON layout object
+            JSONObject json = new JSONObject();
+            JSONObject prioObj = new JSONObject();
+            for (Map.Entry<String, Integer> entry : sComponentPriorities.entrySet()) {
+                prioObj.put(entry.getKey(), entry.getValue().intValue());
+            }
+            json.put("priorities", prioObj);
+            json.put("wifi_card_first", sIsWifiFirst);
+
+            StringBuilder sb = new StringBuilder();
+            for (String spec : sExpandedTileSpecs) {
+                if (sb.length() > 0) sb.append(",");
+                sb.append(spec);
+            }
+            json.put("expanded_tile_specs", sb.toString());
+
+            StringBuilder groupsSb = new StringBuilder();
+            for (TileGroup g : sTileGroups) {
+                if (g.specs.size() == 4 || g.specs.size() == 2) {
+                    if (groupsSb.length() > 0) groupsSb.append(";");
+                    groupsSb.append(g.id).append(":").append(g.isVertical ? "V" : "H").append(":");
+                    for (int i = 0; i < g.specs.size(); i++) {
+                        if (i > 0) groupsSb.append(",");
+                        groupsSb.append(g.specs.get(i));
+                    }
+                }
+            }
+            json.put("tile_groups_v2", groupsSb.toString());
+
+            String jsonStr = json.toString();
+
+            // 1. Save to HyperBounce persistent ContentProvider
+            try {
+                ctx.getContentResolver().call(
+                    Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                    "saveCCLayout", jsonStr, null
+                );
+            } catch (Throwable ignore) {}
+
+            // 2. Save to Android Settings.Secure as system fallback
+            try {
+                android.provider.Settings.Secure.putString(ctx.getContentResolver(), "hyperbounce_cc_layout", jsonStr);
+            } catch (Throwable ignore) {}
+
+            // 3. Save to local SharedPreferences
+            if (sPrefs == null) {
                 sPrefs = ctx.getSharedPreferences("hyperbounce_cc_layout", Context.MODE_PRIVATE);
             }
             if (sPrefs != null) {
@@ -208,28 +321,8 @@ public class ControlCenterHook {
                     editor.putInt("priority_" + entry.getKey(), entry.getValue());
                 }
                 editor.putBoolean("wifi_card_first", sIsWifiFirst);
-
-                StringBuilder sb = new StringBuilder();
-                for (String spec : sExpandedTileSpecs) {
-                    if (sb.length() > 0) sb.append(",");
-                    sb.append(spec);
-                }
                 editor.putString("expanded_tile_specs", sb.toString());
-
-                // Save Tile Groups (v2 supports 4-tile and 2-tile groups with orientation)
-                StringBuilder groupsSb = new StringBuilder();
-                for (TileGroup g : sTileGroups) {
-                    if (g.specs.size() == 4 || g.specs.size() == 2) {
-                        if (groupsSb.length() > 0) groupsSb.append(";");
-                        groupsSb.append(g.id).append(":").append(g.isVertical ? "V" : "H").append(":");
-                        for (int i = 0; i < g.specs.size(); i++) {
-                            if (i > 0) groupsSb.append(",");
-                            groupsSb.append(g.specs.get(i));
-                        }
-                    }
-                }
                 editor.putString("tile_groups_v2", groupsSb.toString());
-
                 editor.commit();
             }
         } catch (Throwable ignore) {}
@@ -576,6 +669,10 @@ public class ControlCenterHook {
     }
 
     private static void refreshAdapter(View root, Context ctx) {
+        refreshAdapter(root, ctx, false);
+    }
+
+    private static void refreshAdapter(View root, Context ctx, boolean isStructuralChange) {
         try {
             if (ctx == null && root != null) ctx = root.getContext();
             if (ctx == null) return;
@@ -595,16 +692,24 @@ public class ControlCenterHook {
                                 distMethod.setAccessible(true);
                                 distMethod.invoke(adp, true);
                             } catch (Throwable ignore) {}
-                            try {
-                                Method getItemCountMethod = adp.getClass().getMethod("getItemCount");
-                                int count = (int) getItemCountMethod.invoke(adp);
-                                Method notifyItemRangeChangedMethod = adp.getClass().getMethod("notifyItemRangeChanged", int.class, int.class);
-                                notifyItemRangeChangedMethod.invoke(adp, 0, count);
-                            } catch (Throwable ignore) {
+
+                            if (isStructuralChange) {
                                 try {
                                     Method notifyDataSetChangedMethod = adp.getClass().getMethod("notifyDataSetChanged");
                                     notifyDataSetChangedMethod.invoke(adp);
-                                } catch (Throwable ignore2) {}
+                                } catch (Throwable ignore) {}
+                            } else {
+                                try {
+                                    Method getItemCountMethod = adp.getClass().getMethod("getItemCount");
+                                    int count = (int) getItemCountMethod.invoke(adp);
+                                    Method notifyItemRangeChangedMethod = adp.getClass().getMethod("notifyItemRangeChanged", int.class, int.class);
+                                    notifyItemRangeChangedMethod.invoke(adp, 0, count);
+                                } catch (Throwable ignore) {
+                                    try {
+                                        Method notifyDataSetChangedMethod = adp.getClass().getMethod("notifyDataSetChanged");
+                                        notifyDataSetChangedMethod.invoke(adp);
+                                    } catch (Throwable ignore2) {}
+                                }
                             }
                         }
                     }
@@ -916,6 +1021,7 @@ public class ControlCenterHook {
 
             groupButton.setOnClickListener(v -> {
                 try {
+                    boolean structural = false;
                     if (!sIsGroupSelectMode) {
                         sIsGroupSelectMode = true;
                         sIsDisassembleMode = false;
@@ -934,20 +1040,22 @@ public class ControlCenterHook {
                             sSelectedTileSpecs.clear();
                             finalGroupBtn.setImageDrawable(new GroupGridDrawable(false));
                             savePriorities(ctx);
+                            structural = true;
                         } else {
                             sIsGroupSelectMode = false;
                             sSelectedTileSpecs.clear();
                             finalGroupBtn.setImageDrawable(new GroupGridDrawable(false));
                         }
                     }
-                    refreshAdapter(root, ctx);
+                    refreshAdapter(root, ctx, structural);
                 } catch (Throwable t) {
-                    tripSafeMode(ctx, t);
+                    android.util.Log.e(TAG, "groupButton error", t);
                 }
             });
 
             disassembleButton.setOnClickListener(v -> {
                 try {
+                    boolean structural = false;
                     if (!sIsDisassembleMode) {
                         sIsDisassembleMode = true;
                         sIsGroupSelectMode = false;
@@ -968,14 +1076,15 @@ public class ControlCenterHook {
                             sIsDisassembleMode = false;
                             finalDisassembleBtn.setImageDrawable(new UngroupHeaderDrawable(false));
                             savePriorities(ctx);
+                            structural = true;
                         } else {
                             sIsDisassembleMode = false;
                             finalDisassembleBtn.setImageDrawable(new UngroupHeaderDrawable(false));
                         }
                     }
-                    refreshAdapter(root, ctx);
+                    refreshAdapter(root, ctx, structural);
                 } catch (Throwable t) {
-                    tripSafeMode(ctx, t);
+                    android.util.Log.e(TAG, "disassembleButton error", t);
                 }
             });
         } catch (Throwable t) {

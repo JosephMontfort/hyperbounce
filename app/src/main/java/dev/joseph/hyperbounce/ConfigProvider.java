@@ -30,12 +30,38 @@ public class ConfigProvider extends ContentProvider {
                 }
             } catch (Exception e) {}
             return b;
+        } else if ("saveCCLayout".equals(method)) {
+            if (arg != null && !arg.trim().isEmpty()) {
+                try {
+                    File file = new File(getContext().getFilesDir(), "cc_layout.json");
+                    File tmp = new File(getContext().getFilesDir(), "cc_layout.tmp");
+                    FileOutputStream fos = new FileOutputStream(tmp);
+                    fos.write(arg.getBytes("UTF-8"));
+                    fos.flush();
+                    fos.close();
+                    tmp.renameTo(file);
+                } catch (Exception e) {}
+            }
+            return new Bundle();
+        } else if ("getCCLayout".equals(method)) {
+            Bundle b = new Bundle();
+            try {
+                File file = new File(getContext().getFilesDir(), "cc_layout.json");
+                if (file.exists()) {
+                    FileInputStream fis = new FileInputStream(file);
+                    byte[] data = new byte[(int) file.length()];
+                    fis.read(data);
+                    fis.close();
+                    b.putString("cc_layout_json", new String(data, "UTF-8"));
+                }
+            } catch (Exception e) {}
+            return b;
         } else if ("systemUiStartup".equals(method)) {
             Bundle b = new Bundle();
             long now = System.currentTimeMillis();
-            if (now - lastStartupTime < 25000) {
+            if (now - lastStartupTime < 5000) {
                 crashLoopCounter++;
-                if (crashLoopCounter >= 2) {
+                if (crashLoopCounter >= 5) {
                     try {
                         File f = new File(getContext().getFilesDir(), "safemode.flag");
                         if (!f.exists()) f.createNewFile();
@@ -59,6 +85,8 @@ public class ConfigProvider extends ContentProvider {
             return b;
         } else if ("resetCCLayout".equals(method)) {
             try {
+                File file = new File(getContext().getFilesDir(), "cc_layout.json");
+                if (file.exists()) file.delete();
                 android.content.Intent intent = new android.content.Intent("dev.joseph.hyperbounce.RESET_CC_LAYOUT");
                 getContext().sendBroadcast(intent);
             } catch (Exception e) {}
