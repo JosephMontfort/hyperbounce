@@ -2000,6 +2000,56 @@ public class ControlCenterHook {
                 }
             } catch (Throwable ignore) {}
 
+            // 3b. Hook ControlCenterWindowViewImpl for Lifecycle and Touch Transitions
+            try {
+                Class<?> windowViewImplClass = Class.forName("miui.systemui.controlcenter.windowview.ControlCenterWindowViewImpl", false, classLoader);
+                for (Method m : windowViewImplClass.getDeclaredMethods()) {
+                    if (m.getName().equals("notifyLifecycleStateChanged")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                Object rawArgs = chain.getArgs();
+                                Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                                if (args != null && args.length >= 2) {
+                                    Object stateObj = args[1];
+                                    if (stateObj != null && ("STARTED".equals(stateObj.toString()) || "RESUMED".equals(stateObj.toString()))) {
+                                        wakeAndRefreshAllGroupedTiles();
+                                        View windowView = (View) chain.getThisObject();
+                                        if (windowView != null) {
+                                            refreshAdapter(windowView, windowView.getContext());
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return result;
+                        });
+                    }
+                    if (m.getName().equals("handleExpandTouchEvent") || m.getName().equals("handleExternalTouchEvent") || m.getName().equals("handleMotionEvent")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            try {
+                                Object rawArgs = chain.getArgs();
+                                Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                                if (args != null && args.length > 0 && args[0] instanceof MotionEvent) {
+                                    MotionEvent me = (MotionEvent) args[0];
+                                    if (me.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                                        wakeAndRefreshAllGroupedTiles();
+                                        View windowView = (View) chain.getThisObject();
+                                        if (windowView != null) {
+                                            refreshAdapter(windowView, windowView.getContext());
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return chain.proceed();
+                        });
+                    }
+                }
+            } catch (Throwable t) {
+                android.util.Log.e(TAG, "windowViewImpl hook error", t);
+            }
+
             // 4. Hook ControlCenterExpandController for Velocity and Hide Handlers
             try {
                 Class<?> expandControllerClass = Class.forName("miui.systemui.controlcenter.windowview.ControlCenterExpandController", false, classLoader);
