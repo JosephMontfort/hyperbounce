@@ -2719,10 +2719,32 @@ public class ControlCenterHook {
                 }
             } catch (Throwable ignore) {}
 
-            // 11. Hook MainPanelContentDistributor.distributePanels: Load saved priorities & sort rightPanelContent
+            // 11. Hook MainPanelContentDistributor.distributePanels & onConfigurationChanged
             try {
                 Class<?> distributorClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelContentDistributor", false, classLoader);
                 for (Method m : distributorClass.getDeclaredMethods()) {
+                    if (m.getName().equals("onConfigurationChanged")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                Object distributor = chain.getThisObject();
+                                Method getRightAdp = distributorClass.getMethod("getRightAdapter");
+                                Object rightAdp = getRightAdp.invoke(distributor);
+                                if (rightAdp != null) {
+                                    Method notifyMethod = rightAdp.getClass().getMethod("notifyDataSetChanged");
+                                    notifyMethod.invoke(rightAdp);
+                                }
+                                Method getLeftAdp = distributorClass.getMethod("getLeftAdapter");
+                                Object leftAdp = getLeftAdp.invoke(distributor);
+                                if (leftAdp != null) {
+                                    Method notifyMethod = leftAdp.getClass().getMethod("notifyDataSetChanged");
+                                    notifyMethod.invoke(leftAdp);
+                                }
+                            } catch (Throwable ignore) {}
+                            return result;
+                        });
+                    }
                     if (m.getName().equals("distributePanels")) {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
@@ -3561,10 +3583,34 @@ public class ControlCenterHook {
                 }
             } catch (Throwable ignore) {}
 
-            // 14c. Keep Grouped 2x2 Container in Dark Realtime Blur & 20dp Rounded Outlines (Never Solid White, Never Sharp)
+            // 14c. Keep Grouped 2x2 Container in Dark Realtime Blur & Forward onConfigurationChanged to children
             try {
                 Class<?> cardViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemView", false, classLoader);
                 for (Method m : cardViewClass.getDeclaredMethods()) {
+                    if (m.getName().equals("onConfigurationChanged")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                View itemView = (View) chain.getThisObject();
+                                ViewGroup container = itemView.findViewById(0x7f099995);
+                                if (container != null) {
+                                    Object rawArgs = chain.getArgs();
+                                    Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                                    for (int i = 0; i < 4; i++) {
+                                        View childTile = getChildTileAt(container, i);
+                                        if (childTile != null) {
+                                            try {
+                                                Method occM = childTile.getClass().getMethod("onConfigurationChanged", int.class);
+                                                occM.invoke(childTile, args);
+                                            } catch (Throwable ignore) {}
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return result;
+                        });
+                    }
                     if (m.getName().equals("updateBlurBlendBackground") || m.getName().equals("updateDrawableBackground") || m.getName().equals("updateBackground") || m.getName().equals("updateClip")) {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
