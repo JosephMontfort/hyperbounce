@@ -562,8 +562,18 @@ public class ControlCenterHook {
                 Method getAdapterMethod = rv.getClass().getMethod("getAdapter");
                 Object adp = getAdapterMethod.invoke(rv);
                 if (adp != null) {
-                    Method notifyDataSetChangedMethod = adp.getClass().getMethod("notifyDataSetChanged");
-                    notifyDataSetChangedMethod.invoke(adp);
+                    try {
+                        Method notifyChangedMethod = adp.getClass().getMethod("notifyChanged", boolean.class, boolean.class);
+                        notifyChangedMethod.invoke(adp, true, true);
+                    } catch (Throwable ignore) {
+                        try {
+                            Method distMethod = adp.getClass().getDeclaredMethod("distributeContent", boolean.class);
+                            distMethod.setAccessible(true);
+                            distMethod.invoke(adp, true);
+                        } catch (Throwable ignore2) {}
+                        Method notifyDataSetChangedMethod = adp.getClass().getMethod("notifyDataSetChanged");
+                        notifyDataSetChangedMethod.invoke(adp);
+                    }
                 }
             }
         } catch (Throwable ignore) {}

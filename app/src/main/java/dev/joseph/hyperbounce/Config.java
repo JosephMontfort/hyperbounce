@@ -12,6 +12,7 @@ public class Config {
     public boolean ccLowEndAnim = false;
     public boolean ccJellyEnabled = true;
     public boolean ccModularEditEnabled = true;
+    public boolean ccRestartOnEditExit = true;
     public boolean notifAnimEnabled = false;
 
     // Modular Component Customization Priorities
@@ -172,6 +173,7 @@ public class Config {
         ccLowEndAnim = d.ccLowEndAnim;
         ccJellyEnabled = d.ccJellyEnabled;
         ccModularEditEnabled = d.ccModularEditEnabled;
+        ccRestartOnEditExit = d.ccRestartOnEditExit;
         ccPriorityCards = d.ccPriorityCards;
         ccPriorityMedia = d.ccPriorityMedia;
         ccPriorityBrightness = d.ccPriorityBrightness;
@@ -291,6 +293,7 @@ public class Config {
             ccLowEndAnim = json.optBoolean("ccLowEndAnim", ccLowEndAnim);
             ccJellyEnabled = json.optBoolean("ccJellyEnabled", ccJellyEnabled);
             ccModularEditEnabled = json.optBoolean("ccModularEditEnabled", ccModularEditEnabled);
+            ccRestartOnEditExit = json.optBoolean("ccRestartOnEditExit", ccRestartOnEditExit);
             ccPriorityCards = json.optInt("ccPriorityCards", ccPriorityCards);
             ccPriorityMedia = json.optInt("ccPriorityMedia", ccPriorityMedia);
             ccPriorityBrightness = json.optInt("ccPriorityBrightness", ccPriorityBrightness);

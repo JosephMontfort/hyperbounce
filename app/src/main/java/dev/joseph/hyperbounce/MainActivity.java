@@ -53,6 +53,7 @@ public class MainActivity extends Activity {
     private Switch ccLowEndSwitch;
     private Switch ccJellySwitch;
     private Switch ccModularEditSwitch;
+    private Switch ccRestartOnEditExitSwitch;
 
     private enum Page { MAIN, UNLOCK, APP_ANIM, LOCK_PINPAD, CONTROL_CENTER }
     private Page currentPage = Page.MAIN;
@@ -268,6 +269,29 @@ public class MainActivity extends Activity {
         modularDesc.setPadding(0, 4, 0, 0);
         rowModular.addView(modularDesc);
         controlCenterPageLayout.addView(rowModular);
+
+        // Switch 1b: Auto-Restart System UI on Edit Confirmation
+        LinearLayout rowRestartOnEdit = new LinearLayout(this);
+        rowRestartOnEdit.setOrientation(LinearLayout.VERTICAL);
+        rowRestartOnEdit.setPadding(0, 8, 0, 18);
+
+        ccRestartOnEditExitSwitch = new Switch(this);
+        ccRestartOnEditExitSwitch.setText("Auto-Restart System UI on Edit Exit");
+        ccRestartOnEditExitSwitch.setTextSize(16);
+        ccRestartOnEditExitSwitch.setTypeface(null, Typeface.BOLD);
+        ccRestartOnEditExitSwitch.setChecked(currentConfig.optBoolean("ccRestartOnEditExit", true));
+        ccRestartOnEditExitSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+            try { currentConfig.put("ccRestartOnEditExit", isChecked); saveConfig(); } catch (Exception ignored) {}
+        });
+        rowRestartOnEdit.addView(ccRestartOnEditExitSwitch);
+
+        TextView restartOnEditDesc = new TextView(this);
+        restartOnEditDesc.setText("• Automatically restarts System UI when confirming and exiting edit mode to ensure 100% clean touch target binding on new tile containers.");
+        restartOnEditDesc.setTextSize(12);
+        restartOnEditDesc.setTextColor(Color.DKGRAY);
+        restartOnEditDesc.setPadding(0, 4, 0, 0);
+        rowRestartOnEdit.addView(restartOnEditDesc);
+        controlCenterPageLayout.addView(rowRestartOnEdit);
 
         // Switch 2: Center Bounce Animation (Control Center)
         LinearLayout rowBounce = new LinearLayout(this);
