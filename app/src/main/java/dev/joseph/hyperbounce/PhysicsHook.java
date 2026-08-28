@@ -15,131 +15,378 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 
 public class PhysicsHook extends XposedModule {
-        public static class CircleGlassDrawable extends android.graphics.drawable.Drawable {
-        private final android.graphics.Paint fillPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-        private final android.graphics.Paint strokePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-        private final android.graphics.Paint glowPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-        private final float density;
-        public float highlightAlpha = 0f;
+        // 1. AndroidLiquidGlass: 4-Sided True Refraction Shader for Lockscreen Card
+        private static final String REFRACTION_SHADER_SRC =
+            "uniform shader content;\n" +
+            "uniform float2 size;\n" +
+            "uniform float2 offset;\n" +
+            "uniform float4 cornerRadii;\n" +
+            "uniform float refractionHeight;\n" +
+            "uniform float refractionAmount;\n" +
+            "uniform float depthEffect;\n" +
+            "\n" +
+            "float radiusAt(float2 coord, float4 radii) {\n" +
+            "    if (coord.x >= 0.0) {\n" +
+            "        if (coord.y <= 0.0) return radii.y;\n" +
+            "        else return radii.z;\n" +
+            "    } else {\n" +
+            "        if (coord.y <= 0.0) return radii.x;\n" +
+            "        else return radii.w;\n" +
+            "    }\n" +
+            "}\n" +
+            "\n" +
+            "float sdRoundedRect(float2 coord, float2 halfSize, float radius) {\n" +
+            "    float2 cornerCoord = abs(coord) - (halfSize - float2(radius));\n" +
+            "    float outside = length(max(cornerCoord, 0.0)) - radius;\n" +
+            "    float inside = min(max(cornerCoord.x, cornerCoord.y), 0.0);\n" +
+            "    return outside + inside;\n" +
+            "}\n" +
+            "\n" +
+            "float2 gradSdRoundedRect(float2 coord, float2 halfSize, float radius) {\n" +
+            "    float2 cornerCoord = abs(coord) - (halfSize - float2(radius));\n" +
+            "    if (cornerCoord.x >= 0.0 || cornerCoord.y >= 0.0) {\n" +
+            "        return sign(coord) * normalize(max(cornerCoord, 0.0));\n" +
+            "    } else {\n" +
+            "        float gradX = step(cornerCoord.y, cornerCoord.x);\n" +
+            "        return sign(coord) * float2(gradX, 1.0 - gradX);\n" +
+            "    }\n" +
+            "}\n" +
+            "\n" +
+            "float circleMap(float x) {\n" +
+            "    return 1.0 - sqrt(max(0.0, 1.0 - x * x));\n" +
+            "}\n" +
+            "\n" +
+            "half4 main(float2 coord) {\n" +
+            "    float2 halfSize = size * 0.5;\n" +
+            "    float2 centeredCoord = (coord + offset) - halfSize;\n" +
+            "    float radius = radiusAt(centeredCoord, cornerRadii);\n" +
+            "    float sd = sdRoundedRect(centeredCoord, halfSize, radius);\n" +
+            "    if (-sd >= refractionHeight) {\n" +
+            "        return content.eval(coord);\n" +
+            "    }\n" +
+            "    sd = min(sd, 0.0);\n" +
+            "    float d = circleMap(1.0 - -sd / max(0.001, refractionHeight)) * refractionAmount;\n" +
+            "    float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));\n" +
+            "    float2 grad = normalize(gradSdRoundedRect(centeredCoord, halfSize, gradRadius) + depthEffect * normalize(centeredCoord + float2(0.0001)));\n" +
+            "    float2 refractedCoord = coord + d * grad;\n" +
+            "    return content.eval(refractedCoord);\n" +
+            "}\n";
 
-        public CircleGlassDrawable(float density) {
-            this.density = density;
-            fillPaint.setStyle(android.graphics.Paint.Style.FILL);
-            strokePaint.setStyle(android.graphics.Paint.Style.STROKE);
-            glowPaint.setStyle(android.graphics.Paint.Style.FILL);
+        // 2. AndroidLiquidGlass: Physical Directional Fresnel Highlight Shader for 4-Sided Card Frame
+        private static final String FRESNEL_FRAME_SHADER_SRC =
+            "uniform float2 size;\n" +
+            "uniform float4 cornerRadii;\n" +
+            "layout(color) uniform half4 color;\n" +
+            "uniform float angle;\n" +
+            "uniform float falloff;\n" +
+            "\n" +
+            "float radiusAt(float2 coord, float4 radii) {\n" +
+            "    if (coord.x >= 0.0) {\n" +
+            "        if (coord.y <= 0.0) return radii.y;\n" +
+            "        else return radii.z;\n" +
+            "    } else {\n" +
+            "        if (coord.y <= 0.0) return radii.x;\n" +
+            "        else return radii.w;\n" +
+            "    }\n" +
+            "}\n" +
+            "\n" +
+            "float sdRoundedRect(float2 coord, float2 halfSize, float radius) {\n" +
+            "    float2 cornerCoord = abs(coord) - (halfSize - float2(radius));\n" +
+            "    float outside = length(max(cornerCoord, 0.0)) - radius;\n" +
+            "    float inside = min(max(cornerCoord.x, cornerCoord.y), 0.0);\n" +
+            "    return outside + inside;\n" +
+            "}\n" +
+            "\n" +
+            "float2 gradSdRoundedRect(float2 coord, float2 halfSize, float radius) {\n" +
+            "    float2 cornerCoord = abs(coord) - (halfSize - float2(radius));\n" +
+            "    if (cornerCoord.x >= 0.0 || cornerCoord.y >= 0.0) {\n" +
+            "        return sign(coord) * normalize(max(cornerCoord, 0.0));\n" +
+            "    } else {\n" +
+            "        float gradX = step(cornerCoord.y, cornerCoord.x);\n" +
+            "        return sign(coord) * float2(gradX, 1.0 - gradX);\n" +
+            "    }\n" +
+            "}\n" +
+            "\n" +
+            "half4 main(float2 coord) {\n" +
+            "    float2 halfSize = size * 0.5;\n" +
+            "    float2 centeredCoord = coord - halfSize;\n" +
+            "    float radius = radiusAt(centeredCoord, cornerRadii);\n" +
+            "    float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));\n" +
+            "    float2 grad = gradSdRoundedRect(centeredCoord, halfSize, gradRadius);\n" +
+            "    float2 normal = float2(cos(angle), sin(angle));\n" +
+            "    float d = dot(grad, normal);\n" +
+            "    float intensity = pow(abs(d), falloff);\n" +
+            "    return color * intensity;\n" +
+            "}\n";
+
+        // 3. AndroidLiquidGlass: Radial Specular Highlight Shader for PIN Buttons
+        private static final String RADIAL_TOUCH_SHADER_SRC =
+            "uniform float2 size;\n" +
+            "layout(color) uniform half4 color;\n" +
+            "uniform float radius;\n" +
+            "uniform float2 position;\n" +
+            "\n" +
+            "half4 main(float2 coord) {\n" +
+            "    float dist = distance(coord, position);\n" +
+            "    float intensity = smoothstep(radius, radius * 0.40, dist);\n" +
+            "    return color * intensity;\n" +
+            "}\n";
+
+        public static class CircleGlassDrawable extends android.graphics.drawable.Drawable {
+            private final android.graphics.Paint fillPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            private final android.graphics.Paint strokePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            private final android.graphics.Paint glowPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            private final float density;
+            public float highlightAlpha = 0f;
+            public float touchX = -1f;
+            public float touchY = -1f;
+            private Object radialRuntimeShader = null;
+
+            public CircleGlassDrawable(float density) {
+                this.density = density;
+                fillPaint.setStyle(android.graphics.Paint.Style.FILL);
+                strokePaint.setStyle(android.graphics.Paint.Style.STROKE);
+                glowPaint.setStyle(android.graphics.Paint.Style.FILL);
+                
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    try {
+                        radialRuntimeShader = new android.graphics.RuntimeShader(RADIAL_TOUCH_SHADER_SRC);
+                    } catch (Throwable ignore) {}
+                }
+            }
+
+            @Override
+            public void draw(android.graphics.Canvas canvas) {
+                android.graphics.Rect bounds = getBounds();
+                float cx = bounds.exactCenterX();
+                float cy = bounds.exactCenterY();
+                
+                float radius = (config.pinCircleDiameter / 2.0f) * density;
+                if (radius <= 0f) radius = 41f * density;
+
+                float baseFill = Math.max(0f, Math.min(1f, config.pinCircleFillAlpha));
+                float boost = Math.max(0f, Math.min(1f, config.pinPressGlowAlpha)) * highlightAlpha;
+                float totalFill = Math.min(1.0f, baseFill + boost);
+
+                int fillA = (int) (totalFill * 255);
+                fillPaint.setColor(0x00FFFFFF | (fillA << 24));
+                
+                // Fresnel specular rim lighting with 45-degree top-left light source
+                int strokeA = (int) (Math.max(0f, Math.min(1f, config.pinCircleStrokeAlpha)) * 255);
+                strokePaint.setStrokeWidth(Math.max(0.5f, config.pinCircleStrokeWidth) * density);
+                android.graphics.SweepGradient sweepGrad = new android.graphics.SweepGradient(
+                    cx, cy,
+                    new int[]{ 
+                        0x00FFFFFF | (strokeA << 24), 
+                        0x00FFFFFF | (((int) (strokeA * 0.45f)) << 24), 
+                        0x00FFFFFF | (((int) (strokeA * 0.90f)) << 24), 
+                        0x00FFFFFF | (strokeA << 24) 
+                    },
+                    new float[]{ 0.0f, 0.45f, 0.75f, 1.0f }
+                );
+                strokePaint.setShader(sweepGrad);
+
+                canvas.drawCircle(cx, cy, radius, fillPaint);
+                canvas.drawCircle(cx, cy, radius, strokePaint);
+
+                // Localized Radial Specular Highlight on touch contact
+                if (highlightAlpha > 0.01f && config.pinPressGlowAlpha > 0.01f) {
+                    float pX = touchX >= 0 ? touchX : cx;
+                    float pY = touchY >= 0 ? touchY : cy;
+                    int glowA = (int) (Math.max(0f, Math.min(1f, config.pinPressGlowAlpha * highlightAlpha)) * 255);
+                    
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && radialRuntimeShader instanceof android.graphics.RuntimeShader) {
+                        try {
+                            android.graphics.RuntimeShader shader = (android.graphics.RuntimeShader) radialRuntimeShader;
+                            shader.setFloatUniform("size", bounds.width(), bounds.height());
+                            shader.setColorUniform("color", 0x00FFFFFF | (glowA << 24));
+                            shader.setFloatUniform("radius", radius * 1.4f);
+                            shader.setFloatUniform("position", pX, pY);
+                            glowPaint.setShader(shader);
+                            canvas.drawCircle(cx, cy, radius, glowPaint);
+                        } catch (Throwable t) {
+                            glowPaint.setShader(null);
+                            glowPaint.setColor(0x00FFFFFF | (((int)(glowA * 0.65f)) << 24));
+                            canvas.drawCircle(pX, pY, radius * 0.75f, glowPaint);
+                        }
+                    } else {
+                        android.graphics.RadialGradient radGrad = new android.graphics.RadialGradient(
+                            pX, pY, radius * 1.1f,
+                            0x00FFFFFF | (glowA << 24),
+                            0x00FFFFFF,
+                            android.graphics.Shader.TileMode.CLAMP
+                        );
+                        glowPaint.setShader(radGrad);
+                        canvas.drawCircle(cx, cy, radius, glowPaint);
+                    }
+                }
+            }
+
+            @Override public void setAlpha(int alpha) {}
+            @Override public void setColorFilter(android.graphics.ColorFilter colorFilter) {
+                fillPaint.setColorFilter(colorFilter);
+                strokePaint.setColorFilter(colorFilter);
+                glowPaint.setColorFilter(colorFilter);
+            }
+            @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
         }
 
-        @Override
-        public void draw(android.graphics.Canvas canvas) {
-            android.graphics.Rect bounds = getBounds();
-            float cx = bounds.exactCenterX();
-            float cy = bounds.exactCenterY();
-            
-            float radius = (config.pinCircleDiameter / 2.0f) * density;
-            if (radius <= 0f) radius = 41f * density;
+        // 4. AndroidLiquidGlass: Specular Fresnel Frame for 4-Sided Lockscreen Card
+        public static class LiquidGlassFrameDrawable extends android.graphics.drawable.Drawable {
+            private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            private final android.graphics.Paint strokePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            private final float density;
+            private Object fresnelShader = null;
 
-            float baseFill = Math.max(0f, Math.min(1f, config.pinCircleFillAlpha));
-            float boost = Math.max(0f, Math.min(1f, config.pinPressGlowAlpha)) * highlightAlpha;
-            float totalFill = Math.min(1.0f, baseFill + boost);
+            public LiquidGlassFrameDrawable(float density) {
+                this.density = density;
+                paint.setStyle(android.graphics.Paint.Style.FILL);
+                strokePaint.setStyle(android.graphics.Paint.Style.STROKE);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    try {
+                        fresnelShader = new android.graphics.RuntimeShader(FRESNEL_FRAME_SHADER_SRC);
+                    } catch (Throwable ignore) {}
+                }
+            }
 
-            int fillA = (int) (totalFill * 255);
-            fillPaint.setColor(0x00FFFFFF | (fillA << 24));
-            
-            int strokeA = (int) (Math.max(0f, Math.min(1f, config.pinCircleStrokeAlpha)) * 255);
-            strokePaint.setColor(0x00FFFFFF | (strokeA << 24));
-            strokePaint.setStrokeWidth(Math.max(0.5f, config.pinCircleStrokeWidth) * density);
+            @Override
+            public void draw(android.graphics.Canvas canvas) {
+                android.graphics.Rect bounds = getBounds();
+                if (bounds.width() <= 0 || bounds.height() <= 0) return;
 
-            canvas.drawCircle(cx, cy, radius, fillPaint);
-            canvas.drawCircle(cx, cy, radius, strokePaint);
+                int strokeA = (int) (Math.max(0f, Math.min(1f, config.lockCardBorderAlpha)) * 255);
+                float strokeW = Math.max(0.5f, config.lockCardBorderWidth) * density;
+                float cornerR = 28f * density;
 
-            if (highlightAlpha > 0.01f && config.pinPressGlowAlpha > 0.01f) {
-                int glowA = (int) (Math.max(0f, Math.min(1f, config.pinPressGlowAlpha * highlightAlpha * 0.75f)) * 255);
-                glowPaint.setColor(0x00FFFFFF | (glowA << 24));
-                canvas.drawCircle(cx, cy, radius, glowPaint);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && fresnelShader instanceof android.graphics.RuntimeShader) {
+                    try {
+                        android.graphics.RuntimeShader shader = (android.graphics.RuntimeShader) fresnelShader;
+                        shader.setFloatUniform("size", bounds.width(), bounds.height());
+                        shader.setFloatUniform("cornerRadii", 0f, 0f, cornerR, cornerR);
+                        shader.setColorUniform("color", 0x00FFFFFF | (strokeA << 24));
+                        shader.setFloatUniform("angle", 45f * ((float) Math.PI / 180f));
+                        shader.setFloatUniform("falloff", 1.2f);
+                        strokePaint.setShader(shader);
+                        strokePaint.setStrokeWidth(strokeW);
+                        
+                        android.graphics.RectF rf = new android.graphics.RectF(bounds);
+                        canvas.drawRoundRect(rf, cornerR, cornerR, strokePaint);
+                        return;
+                    } catch (Throwable ignore) {}
+                }
+
+                strokePaint.setShader(null);
+                strokePaint.setColor(0x00FFFFFF | (strokeA << 24));
+                strokePaint.setStrokeWidth(strokeW);
+                android.graphics.RectF rf = new android.graphics.RectF(bounds);
+                canvas.drawRoundRect(rf, cornerR, cornerR, strokePaint);
+            }
+
+            @Override public void setAlpha(int alpha) {}
+            @Override public void setColorFilter(android.graphics.ColorFilter colorFilter) {
+                paint.setColorFilter(colorFilter);
+                strokePaint.setColorFilter(colorFilter);
+            }
+            @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
+        }
+
+        public static class Spring {
+            public float current = 1f;
+            public float target = 1f;
+            public float velocity = 0f;
+
+            public Spring(float cur, float tgt) {
+                this.current = cur;
+                this.target = tgt;
+            }
+
+            public boolean update(float stiffness, float damping) {
+                float displacement = current - target;
+                float acceleration = (-stiffness * displacement) + (-damping * velocity);
+                velocity += acceleration * 0.016f;
+                current += velocity * 0.016f;
+                return Math.abs(velocity) > 0.001f || Math.abs(displacement) > 0.001f;
+            }
+
+            public void snap(float value) {
+                current = value;
+                target = value;
+                velocity = 0f;
             }
         }
 
-        @Override public void setAlpha(int alpha) {}
-        @Override public void setColorFilter(android.graphics.ColorFilter colorFilter) {
-            fillPaint.setColorFilter(colorFilter);
-            strokePaint.setColorFilter(colorFilter);
-            glowPaint.setColorFilter(colorFilter);
-        }
-        @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
-    }
-
-    public static class Spring {
-        public float current = 1f;
-        public float target = 1f;
-        public float velocity = 0f;
-
-        public Spring(float cur, float tgt) {
-            this.current = cur;
-            this.target = tgt;
+        public static class KeyState {
+            public final Spring scale = new Spring(1f, 1f);
+            public final Spring highlight = new Spring(0f, 0f);
+            public final Spring dragX = new Spring(0f, 0f);
+            public final Spring dragY = new Spring(0f, 0f);
+            public float touchDownX = 0f;
+            public float touchDownY = 0f;
+            public boolean isPressed = false;
+            public boolean isRunning = false;
         }
 
-        public boolean update(float stiffness, float damping) {
-            float displacement = current - target;
-            float acceleration = (-stiffness * displacement) + (-damping * velocity);
-            velocity += acceleration * 0.016f;
-            current += velocity * 0.016f;
-            return Math.abs(velocity) > 0.001f || Math.abs(displacement) > 0.001f;
-        }
+        private static final java.util.WeakHashMap<View, KeyState> keyStateMap = new java.util.WeakHashMap<>();
 
-        public void snap(float value) {
-            current = value;
-            target = value;
-            velocity = 0f;
-        }
-    }
+        private static void startSpringAnimation(View view, KeyState state) {
+            if (state.isRunning) return;
+            state.isRunning = true;
 
-    public static class KeyState {
-        public final Spring scale = new Spring(1f, 1f);
-        public final Spring highlight = new Spring(0f, 0f);
-        public boolean isPressed = false;
-        public boolean isRunning = false;
-    }
+            final Runnable springStep = new Runnable() {
+                @Override
+                public void run() {
+                    float stiffness = Math.max(5f, config.pinSpringStiffness);
+                    float damping = Math.max(0.5f, config.pinSpringDamping);
 
-    private static final java.util.WeakHashMap<View, KeyState> keyStateMap = new java.util.WeakHashMap<>();
+                    boolean activeScale = state.scale.update(stiffness, damping);
+                    boolean activeHighlight = state.highlight.update(stiffness * 1.5f, damping * 1.2f);
+                    boolean activeDragX = state.dragX.update(stiffness * 0.85f, damping * 0.90f);
+                    boolean activeDragY = state.dragY.update(stiffness * 0.85f, damping * 0.90f);
 
-    private static void startSpringAnimation(View view, KeyState state) {
-        if (state.isRunning) return;
-        state.isRunning = true;
+                    // AndroidLiquidGlass: Hyperbolic tangent elastic limits for jelly drag
+                    float maxOffset = Math.min(view.getWidth(), view.getHeight()) * 0.40f;
+                    if (maxOffset <= 0f) maxOffset = 40f;
+                    float initialDerivative = 0.25f;
+                    float tx = (float) (maxOffset * Math.tanh(initialDerivative * state.dragX.current / maxOffset));
+                    float ty = (float) (maxOffset * Math.tanh(initialDerivative * state.dragY.current / maxOffset));
+                    view.setTranslationX(tx);
+                    view.setTranslationY(ty);
 
-        final Runnable springStep = new Runnable() {
-            @Override
-            public void run() {
-                float stiffness = Math.max(5f, config.pinSpringStiffness);
-                float damping = Math.max(0.5f, config.pinSpringDamping);
+                    // AndroidLiquidGlass: Anisotropic angle stretch & squash (atan2)
+                    float dist = (float) Math.hypot(state.dragX.current, state.dragY.current);
+                    float offsetAngle = (float) Math.atan2(state.dragY.current, state.dragX.current);
+                    float maxDragScale = 0.16f;
+                    float stretchMag = (float) Math.min(maxDragScale, (dist / maxOffset) * maxDragScale);
 
-                boolean activeScale = state.scale.update(stiffness, damping);
-                boolean activeHighlight = state.highlight.update(stiffness * 1.5f, damping * 1.2f);
+                    float sx = state.scale.current + (float) (stretchMag * Math.abs(Math.cos(offsetAngle)));
+                    float sy = state.scale.current + (float) (stretchMag * Math.abs(Math.sin(offsetAngle)));
+                    view.setScaleX(sx);
+                    view.setScaleY(sy);
 
-                view.setScaleX(state.scale.current);
-                view.setScaleY(state.scale.current);
-
-                if (view.getBackground() instanceof CircleGlassDrawable) {
-                    CircleGlassDrawable d = (CircleGlassDrawable) view.getBackground();
-                    d.highlightAlpha = Math.max(0f, Math.min(1f, state.highlight.current));
-                    view.invalidate();
-                }
-
-                if (activeScale || activeHighlight) {
-                    view.postOnAnimation(this);
-                } else {
-                    view.setScaleX(state.scale.target);
-                    view.setScaleY(state.scale.target);
                     if (view.getBackground() instanceof CircleGlassDrawable) {
                         CircleGlassDrawable d = (CircleGlassDrawable) view.getBackground();
-                        d.highlightAlpha = state.highlight.target;
+                        d.highlightAlpha = Math.max(0f, Math.min(1f, state.highlight.current));
                         view.invalidate();
                     }
-                    state.isRunning = false;
+
+                    if (activeScale || activeHighlight || activeDragX || activeDragY || state.isPressed) {
+                        view.postOnAnimation(this);
+                    } else {
+                        view.setScaleX(state.scale.target);
+                        view.setScaleY(state.scale.target);
+                        view.setTranslationX(0f);
+                        view.setTranslationY(0f);
+                        if (view.getBackground() instanceof CircleGlassDrawable) {
+                            CircleGlassDrawable d = (CircleGlassDrawable) view.getBackground();
+                            d.highlightAlpha = state.highlight.target;
+                            view.invalidate();
+                        }
+                        state.isRunning = false;
+                    }
                 }
-            }
-        };
-        view.postOnAnimation(springStep);
-    }
+            };
+            view.postOnAnimation(springStep);
+        }
 
     private static final Config config = new Config();
     private static boolean receiverRegistered = false;
@@ -305,6 +552,27 @@ public class PhysicsHook extends XposedModule {
                                         rootView.setTranslationY(upwardOffset);
                                         rootView.setScaleX(1.0f);
                                         rootView.setScaleY(1.0f);
+
+                                        // AndroidLiquidGlass: 4-Sided True Refraction Shader on Lockscreen Card Sheet
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                            try {
+                                                float cardW = rootView.getWidth() > 0 ? (float) rootView.getWidth() : 1080f;
+                                                float cardH = rootView.getHeight() > 0 ? (float) rootView.getHeight() : 2400f;
+                                                float density = rootView.getContext().getResources().getDisplayMetrics().density;
+                                                float cornerR = 28f * density;
+                                                
+                                                android.graphics.RuntimeShader refractionShader = new android.graphics.RuntimeShader(REFRACTION_SHADER_SRC);
+                                                refractionShader.setFloatUniform("size", cardW, cardH);
+                                                refractionShader.setFloatUniform("offset", 0f, 0f);
+                                                refractionShader.setFloatUniform("cornerRadii", 0f, 0f, cornerR, cornerR);
+                                                refractionShader.setFloatUniform("refractionHeight", 24f * density);
+                                                refractionShader.setFloatUniform("refractionAmount", 32f * density);
+                                                refractionShader.setFloatUniform("depthEffect", 0.12f);
+                                                
+                                                android.graphics.RenderEffect shaderEffect = android.graphics.RenderEffect.createRuntimeShaderEffect(refractionShader, "content");
+                                                rootView.setRenderEffect(shaderEffect);
+                                            } catch (Throwable ignore) {}
+                                        }
                                         
                                         // 2. Move notification container upward in sync
                                         if (finalNotifView != null) {
@@ -313,7 +581,7 @@ public class PhysicsHook extends XposedModule {
                                             finalNotifView.setScaleY(1.0f);
                                         }
                                         
-                                        // 3. Inject Full Container Sheet Outline with Dynamic Config Width & Alpha
+                                        // 3. Inject Full Container Sheet Outline with Physical Fresnel Specular Highlights
                                         if (rootView instanceof ViewGroup) {
                                             ViewGroup rootGroup = (ViewGroup) rootView;
                                             View fullFrame = rootGroup.findViewWithTag("hyperbounce_full_sheet_frame");
@@ -324,19 +592,7 @@ public class PhysicsHook extends XposedModule {
                                                 fullFrame.setTag("hyperbounce_full_sheet_frame");
                                                 
                                                 float density = context.getResources().getDisplayMetrics().density;
-                                                int cornerR = (int) (28 * density);
-                                                
-                                                int strokeA = (int) (Math.max(0f, Math.min(1f, config.lockCardBorderAlpha)) * 255);
-                                                int strokeColor = 0x00FFFFFF | (strokeA << 24);
-                                                int strokeW = (int) (Math.max(0.5f, config.lockCardBorderWidth) * density);
-                                                
-                                                android.graphics.drawable.GradientDrawable frameDrawable = new android.graphics.drawable.GradientDrawable();
-                                                frameDrawable.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
-                                                frameDrawable.setColor(0x04FFFFFF);
-                                                frameDrawable.setCornerRadii(new float[]{ 0, 0, 0, 0, cornerR, cornerR, cornerR, cornerR });
-                                                frameDrawable.setStroke(strokeW, strokeColor);
-                                                
-                                                fullFrame.setBackground(frameDrawable);
+                                                fullFrame.setBackground(new LiquidGlassFrameDrawable(density));
                                                 
                                                 boolean added = false;
                                                 try {
@@ -595,9 +851,31 @@ public class PhysicsHook extends XposedModule {
                                         setAnimMethod.invoke(view, false);
                                     } catch (Throwable ignore) {}
 
+                                    state.touchDownX = event.getX();
+                                    state.touchDownY = event.getY();
                                     state.isPressed = true;
                                     state.scale.target = (float) config.pinTapSquishScale;
                                     state.highlight.target = 1.0f;
+                                    state.dragX.target = 0f;
+                                    state.dragY.target = 0f;
+
+                                    if (view.getBackground() instanceof CircleGlassDrawable) {
+                                        CircleGlassDrawable d = (CircleGlassDrawable) view.getBackground();
+                                        d.touchX = event.getX();
+                                        d.touchY = event.getY();
+                                    }
+                                    startSpringAnimation(view, state);
+                                } else if (action == android.view.MotionEvent.ACTION_MOVE) {
+                                    float dx = event.getX() - state.touchDownX;
+                                    float dy = event.getY() - state.touchDownY;
+                                    state.dragX.target = dx;
+                                    state.dragY.target = dy;
+
+                                    if (view.getBackground() instanceof CircleGlassDrawable) {
+                                        CircleGlassDrawable d = (CircleGlassDrawable) view.getBackground();
+                                        d.touchX = event.getX();
+                                        d.touchY = event.getY();
+                                    }
                                     startSpringAnimation(view, state);
                                 } else if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
                                     state.isPressed = false;
@@ -606,6 +884,8 @@ public class PhysicsHook extends XposedModule {
                                     }
                                     state.scale.target = 1.0f;
                                     state.highlight.target = 0.0f;
+                                    state.dragX.target = 0f;
+                                    state.dragY.target = 0f;
                                     startSpringAnimation(view, state);
                                 }
                             }
