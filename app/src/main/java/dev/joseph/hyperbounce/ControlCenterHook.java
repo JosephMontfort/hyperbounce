@@ -57,9 +57,9 @@ public class ControlCenterHook {
 
     public static final List<TileGroup> sTileGroups = new ArrayList<>();
     public static volatile boolean sIsGroupSelectMode = false;
-    public static final Set<String> sSelectedTileSpecs = new HashSet<>();
+    public static final Set<String> sSelectedTileSpecs = new java.util.LinkedHashSet<>();
     public static volatile boolean sIsDisassembleMode = false;
-    public static final Set<String> sSelectedDisassembleGroups = new HashSet<>();
+    public static final Set<String> sSelectedDisassembleGroups = new java.util.LinkedHashSet<>();
     public static volatile Object sQSListController = null;
     public static volatile Object sMainPanelAdapter = null;
     public static volatile Object sFrameCallback = null;

@@ -122,11 +122,13 @@ public class SpannedGridLayoutManager extends GridLayoutManager {
         int paddingBottom = getPaddingBottom();
 
         int availableWidth = Math.max(0, parentWidth - paddingLeft - paddingRight);
-        int gapX = dpToPx(10);
-        int gapY = dpToPx(10);
+        int resMarginId = mContext.getResources().getIdentifier("control_center_universal_margin", "dimen", mContext.getPackageName());
+        int gapX = (resMarginId != 0) ? mContext.getResources().getDimensionPixelSize(resMarginId) : dpToPx(10);
+        int gapY = gapX;
 
         int colWidth = Math.max(1, (availableWidth - (SPAN_COUNT - 1) * gapX) / SPAN_COUNT);
-        int unitHeight = dpToPx(76);
+        int resHeightId = mContext.getResources().getIdentifier("control_center_universal_1_row_with_margin_size", "dimen", mContext.getPackageName());
+        int unitHeight = (resHeightId != 0) ? mContext.getResources().getDimensionPixelSize(resHeightId) : dpToPx(76);
         int tallHeight = unitHeight * 2 + gapY; // ~162dp for 2-row modules
 
         int[][] grid = new int[MAX_ROWS][SPAN_COUNT];
