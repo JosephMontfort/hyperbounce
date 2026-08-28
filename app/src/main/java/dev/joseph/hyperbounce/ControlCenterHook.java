@@ -3075,48 +3075,39 @@ public class ControlCenterHook {
                                             try {
                                                 Map<String, Object> recordMap = new HashMap<>();
 
-                                                // Get the active QSListController directly associated with this record
+                                                // Get the active QSListController directly from the record's qsListController lazy field
                                                 Object activeQsListCtrl = null;
                                                 try {
-                                                    Field qsControllerField = qsRecordClass.getDeclaredField("qsController");
-                                                    qsControllerField.setAccessible(true);
-                                                    Object qsCtrl = qsControllerField.get(record);
-                                                    if (qsCtrl != null) {
-                                                        Method getQsListCtrlMethod = qsCtrl.getClass().getMethod("getQsListController");
-                                                        Object lazyQsList = getQsListCtrlMethod.invoke(qsCtrl);
-                                                        Method getMethod = lazyQsList.getClass().getMethod("get");
-                                                        activeQsListCtrl = getMethod.invoke(lazyQsList);
+                                                    Field qsListCtrlField = qsRecordClass.getDeclaredField("qsListController");
+                                                    qsListCtrlField.setAccessible(true);
+                                                    Object lazyQsList = qsListCtrlField.get(record);
+                                                    if (lazyQsList != null) {
+                                                        Method getM = lazyQsList.getClass().getMethod("get");
+                                                        activeQsListCtrl = getM.invoke(lazyQsList);
                                                     }
                                                 } catch (Throwable ignore) {}
                                                 if (activeQsListCtrl == null) activeQsListCtrl = sQSListController;
 
                                                 if (activeQsListCtrl != null) {
-                                                    try {
-                                                        Field recsF = activeQsListCtrl.getClass().getDeclaredField("records");
-                                                        recsF.setAccessible(true);
-                                                        List recsList = (List) recsF.get(activeQsListCtrl);
-                                                        if (recsList != null) {
-                                                            for (Object r : recsList) {
-                                                                String s = getRecordSpec(r);
-                                                                if (s != null) recordMap.put(s, r);
+                                                    String[] listFieldNames = new String[]{"addedTiles", "copiedTiles", "systemTiles", "packageTiles", "records"};
+                                                    for (String fn : listFieldNames) {
+                                                        try {
+                                                            Field f = activeQsListCtrl.getClass().getDeclaredField(fn);
+                                                            f.setAccessible(true);
+                                                            List list = (List) f.get(activeQsListCtrl);
+                                                            if (list != null) {
+                                                                for (Object r : list) {
+                                                                    String s = getRecordSpec(r);
+                                                                    if (s != null && !recordMap.containsKey(s)) recordMap.put(s, r);
+                                                                }
                                                             }
-                                                        }
-                                                    } catch (Throwable ignore) {}
+                                                        } catch (Throwable ignore) {}
+                                                    }
                                                     try {
                                                         Method getAddedMethod = activeQsListCtrl.getClass().getMethod("getAddedTiles");
                                                         List addedList = (List) getAddedMethod.invoke(activeQsListCtrl);
                                                         if (addedList != null) {
                                                             for (Object r : addedList) {
-                                                                String s = getRecordSpec(r);
-                                                                if (s != null && !recordMap.containsKey(s)) recordMap.put(s, r);
-                                                            }
-                                                        }
-                                                    } catch (Throwable ignore) {}
-                                                    try {
-                                                        Method getRecordsM = activeQsListCtrl.getClass().getMethod("getRecords");
-                                                        List allRecs = (List) getRecordsM.invoke(activeQsListCtrl);
-                                                        if (allRecs != null) {
-                                                            for (Object r : allRecs) {
                                                                 String s = getRecordSpec(r);
                                                                 if (s != null && !recordMap.containsKey(s)) recordMap.put(s, r);
                                                             }
@@ -3183,6 +3174,42 @@ public class ControlCenterHook {
                                                     View childView = getChildTileAt(container, i);
                                                     Object childRecord = recordMap.get(childSpec);
                                                     Object subHolder = (subHolders != null && i < subHolders.length) ? subHolders[i] : null;
+
+                                                    if (childRecord == null && activeQsListCtrl != null) {
+                                                        try {
+                                                            Field hostField = activeQsListCtrl.getClass().getDeclaredField("host");
+                                                            hostField.setAccessible(true);
+                                                            Object host = hostField.get(activeQsListCtrl);
+                                                            if (host != null) {
+                                                                Method getTilesMethod = host.getClass().getMethod("getTiles");
+                                                                java.util.Collection<?> tiles = (java.util.Collection<?>) getTilesMethod.invoke(host);
+                                                                if (tiles != null) {
+                                                                    Class<?> qsTileClass = Class.forName("com.android.systemui.plugins.qs.QSTile", false, classLoader);
+                                                                    Method getSpecM = qsTileClass.getMethod("getTileSpec");
+                                                                    for (Object t : tiles) {
+                                                                        if (t != null && qsTileClass.isInstance(t)) {
+                                                                            String ts = (String) getSpecM.invoke(t);
+                                                                            if (childSpec.equals(ts)) {
+                                                                                Field recordFactoryField = activeQsListCtrl.getClass().getDeclaredField("recordFactory");
+                                                                                recordFactoryField.setAccessible(true);
+                                                                                Object recordFactory = recordFactoryField.get(activeQsListCtrl);
+                                                                                if (recordFactory != null) {
+                                                                                    for (Method createM : recordFactory.getClass().getMethods()) {
+                                                                                        if (createM.getName().equals("create") && createM.getParameterTypes().length == 2 && qsTileClass.isAssignableFrom(createM.getParameterTypes()[0])) {
+                                                                                            childRecord = createM.invoke(recordFactory, t, false);
+                                                                                            if (childRecord != null) recordMap.put(childSpec, childRecord);
+                                                                                            break;
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                                break;
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        } catch (Throwable ignore) {}
+                                                    }
 
                                                     if (childRecord == null) {
                                                         missingChild = true;
