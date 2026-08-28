@@ -1374,6 +1374,20 @@ public class ControlCenterHook {
             root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
                 applyGroupContainerStyle(v, classLoader);
             });
+            root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                @Override
+                public void onViewAttachedToWindow(View v) {
+                    v.postDelayed(() -> {
+                        try {
+                            if (v.isAttachedToWindow()) {
+                                refreshAdapter(v, v.getContext());
+                            }
+                        } catch (Throwable ignore) {}
+                    }, 50);
+                }
+                @Override
+                public void onViewDetachedFromWindow(View v) {}
+            });
 
             Class<?> cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader);
             Class<?> qsItemViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSItemView", false, classLoader);
@@ -1921,6 +1935,25 @@ public class ControlCenterHook {
                             return chain.proceed();
                         });
                     }
+                    if (m.getName().equals("showPanel") || m.getName().equals("onExpandStart") || m.getName().equals("expandPanel")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object res = chain.proceed();
+                            try {
+                                Object ctrl = chain.getThisObject();
+                                for (Method cm : ctrl.getClass().getMethods()) {
+                                    if (cm.getName().toLowerCase().contains("panel") && cm.getParameterTypes().length == 0 && View.class.isAssignableFrom(cm.getReturnType())) {
+                                        View pv = (View) cm.invoke(ctrl);
+                                        if (pv != null) {
+                                            pv.post(() -> refreshAdapter(pv, pv.getContext()));
+                                            break;
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return res;
+                        });
+                    }
                 }
             } catch (Throwable t) {
                 android.util.Log.e(TAG, "expandController hook error", t);
@@ -2421,6 +2454,26 @@ public class ControlCenterHook {
                         });
                     }
                     if (m.getName().equals("distributeTiles")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object res = chain.proceed();
+                            try {
+                                Object qsListCtrl = chain.getThisObject();
+                                Field mainPanelField = qsListClass.getDeclaredField("mainPanelController");
+                                mainPanelField.setAccessible(true);
+                                Object mainPanelLazy = mainPanelField.get(qsListCtrl);
+                                Method getM = mainPanelLazy.getClass().getMethod("get");
+                                Object mainPanelCtrl = getM.invoke(mainPanelLazy);
+                                Method getViewM = mainPanelCtrl.getClass().getMethod("getView");
+                                View view = (View) getViewM.invoke(mainPanelCtrl);
+                                if (view != null) {
+                                    view.postDelayed(() -> refreshAdapter(view, view.getContext()), 60);
+                                }
+                            } catch (Throwable ignore) {}
+                            return res;
+                        });
+                    }
+                    if (m.getName().equals("distributeTiles_orig_removed")) {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
                             try {
