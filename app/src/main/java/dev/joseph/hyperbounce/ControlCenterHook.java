@@ -199,7 +199,7 @@ public class ControlCenterHook {
                 }
                 editor.putString("tile_groups_v2", groupsSb.toString());
 
-                editor.apply();
+                editor.commit();
             }
         } catch (Throwable ignore) {}
     }
@@ -869,6 +869,7 @@ public class ControlCenterHook {
 
     public static TileGroup isGroupAnchor(String spec) {
         if (spec == null) return null;
+        ensurePrioritiesLoaded();
         for (TileGroup g : sTileGroups) {
             if ((g.specs.size() == 4 || g.specs.size() == 2) && spec.equals(g.specs.get(0))) {
                 return g;
@@ -879,6 +880,7 @@ public class ControlCenterHook {
 
     public static boolean isGroupChild(String spec) {
         if (spec == null) return false;
+        ensurePrioritiesLoaded();
         for (TileGroup g : sTileGroups) {
             if (g.specs.size() == 4 || g.specs.size() == 2) {
                 for (int i = 1; i < g.specs.size(); i++) {
@@ -887,6 +889,17 @@ public class ControlCenterHook {
             }
         }
         return false;
+    }
+
+    private static void ensurePrioritiesLoaded() {
+        if (sPrefs == null && sQSListController != null) {
+            try {
+                Field sysUIContextField = sQSListController.getClass().getDeclaredField("sysUIContext");
+                sysUIContextField.setAccessible(true);
+                Context ctx = (Context) sysUIContextField.get(sQSListController);
+                if (ctx != null) loadSavedPriorities(ctx);
+            } catch (Throwable ignore) {}
+        }
     }
 
     public static TileGroup getTileGroupBySpec(String spec) {
@@ -1127,25 +1140,44 @@ public class ControlCenterHook {
                 blurEnabled = (boolean) getBlurM.invoke(null, ctx);
             } catch (Throwable ignore) {}
 
-            android.widget.FrameLayout wrapper = new android.widget.FrameLayout(ctx);
+            // Add FrameLayout wrapper with Edit Mode touch interception
+            android.widget.FrameLayout wrapper = new android.widget.FrameLayout(ctx) {
+                @Override
+                public boolean onInterceptTouchEvent(MotionEvent ev) {
+                    Boolean isEditTag = (Boolean) getTag(0x7f099991);
+                    if (isEditTag != null && isEditTag.booleanValue()) {
+                        return true; // Intercept all touches in Edit Mode so parent QSCardViewHolder drags smoothly
+                    }
+                    return super.onInterceptTouchEvent(ev);
+                }
+            };
+            wrapper.setId(0x7f099996);
             wrapper.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            wrapper.setClipChildren(false);
+            wrapper.setClipToPadding(false);
 
             android.widget.LinearLayout container = new android.widget.LinearLayout(ctx);
             container.setId(0x7f099995);
             container.setOrientation(isVertical ? android.widget.LinearLayout.VERTICAL : android.widget.LinearLayout.HORIZONTAL);
             container.setGravity(Gravity.CENTER);
-            int pad = (int) (4 * density);
-            container.setPadding(pad, pad, pad, pad);
+            container.setClipChildren(false);
+            container.setClipToPadding(false);
+            if (isVertical) {
+                container.setPadding(0, (int) (4 * density), 0, (int) (4 * density));
+            } else {
+                int pad = (int) (4 * density);
+                container.setPadding(pad, pad, pad, pad);
+            }
             wrapper.addView(container, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
             // Injected Rotate Button for 2-tile containers in Edit Mode
             ImageView rotateBtn = new ImageView(ctx);
             rotateBtn.setId(0x7f099992);
             rotateBtn.setImageDrawable(new RotateIconDrawable());
-            int rSize = (int) (26 * density);
+            int rSize = (int) (22 * density);
             android.widget.FrameLayout.LayoutParams rlpBtn = new android.widget.FrameLayout.LayoutParams(rSize, rSize);
             rlpBtn.gravity = Gravity.BOTTOM | Gravity.END;
-            int rMargin = (int) (4 * density);
+            int rMargin = (int) (3 * density);
             rlpBtn.setMargins(0, 0, rMargin, rMargin);
             rotateBtn.setLayoutParams(rlpBtn);
             rotateBtn.setVisibility(View.GONE);
@@ -1196,6 +1228,11 @@ public class ControlCenterHook {
 
                 Method initMethod = childTile.getClass().getMethod("init", tileIconViewClass);
                 initMethod.invoke(childTile, iconView);
+
+                if (isVertical && iconView instanceof View) {
+                    ((View) iconView).setScaleX(0.92f);
+                    ((View) iconView).setScaleY(0.92f);
+                }
 
                 int iconFrameId = ctx.getResources().getIdentifier("icon_frame", "id", ctx.getPackageName());
                 View iconFrame = childTile.findViewById(iconFrameId);
@@ -1360,15 +1397,30 @@ public class ControlCenterHook {
                 blurEnabled = (boolean) getBlurM.invoke(null, ctx);
             } catch (Throwable ignore) {}
 
-            // Add 2-Row Vertical Container inside QSCardItemView
+            // Add FrameLayout wrapper with Edit Mode touch interception
+            android.widget.FrameLayout wrapper = new android.widget.FrameLayout(ctx) {
+                @Override
+                public boolean onInterceptTouchEvent(MotionEvent ev) {
+                    Boolean isEditTag = (Boolean) getTag(0x7f099991);
+                    if (isEditTag != null && isEditTag.booleanValue()) {
+                        return true; // Intercept all touches in Edit Mode so parent QSCardViewHolder drags smoothly
+                    }
+                    return super.onInterceptTouchEvent(ev);
+                }
+            };
+            wrapper.setId(0x7f099996);
+            wrapper.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+            // Add 2-Row Vertical Container inside wrapper
             android.widget.LinearLayout container = new android.widget.LinearLayout(ctx);
             container.setId(0x7f099995);
             container.setOrientation(android.widget.LinearLayout.VERTICAL);
             container.setGravity(Gravity.CENTER);
-            android.widget.LinearLayout.LayoutParams clp = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            android.widget.FrameLayout.LayoutParams clp = new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
             int pad = (int) (6 * density);
             container.setPadding(pad, pad, pad, pad);
-            root.addView(container, clp);
+            wrapper.addView(container, clp);
+            root.addView(wrapper);
 
             android.widget.LinearLayout rowTop = new android.widget.LinearLayout(ctx);
             rowTop.setOrientation(android.widget.LinearLayout.HORIZONTAL);
@@ -2778,9 +2830,13 @@ public class ControlCenterHook {
                                     Context ctx = itemView.getContext();
                                     float density = ctx.getResources().getDisplayMetrics().density;
 
-                                    // Grouped 2x2 Card Binding & Ungroup Badge
+                                    // Grouped Card Binding (4-Tile & 2-Tile)
                                     TileGroup group = isGroupAnchor(spec);
                                     if (group != null) {
+                                        View wrapperView = itemView.findViewById(0x7f099996);
+                                        if (wrapperView != null) {
+                                            wrapperView.setTag(0x7f099991, isEdit);
+                                        }
                                         View rotateBtn = itemView.findViewById(0x7f099992);
                                         if (rotateBtn != null) {
                                             if (isEdit) {
