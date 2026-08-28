@@ -1420,6 +1420,39 @@ public class ControlCenterHook {
             root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
                 applyGroupContainerStyle(v, classLoader);
             });
+            root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                @Override
+                public void onViewAttachedToWindow(View v) {
+                    try {
+                        Object[] holders = (Object[]) v.getTag(0x7f099993);
+                        if (holders != null) {
+                            for (Object h : holders) {
+                                if (h != null) {
+                                    try {
+                                        Method getItemM = h.getClass().getMethod("getItem");
+                                        Object rec = getItemM.invoke(h);
+                                        if (rec != null) {
+                                            Method startM = rec.getClass().getMethod("startListening");
+                                            startM.invoke(rec);
+                                            Method getTileM = rec.getClass().getMethod("getTile");
+                                            Object tile = getTileM.invoke(rec);
+                                            if (tile != null) {
+                                                Method setLisM = tile.getClass().getMethod("setListening", Object.class, boolean.class);
+                                                setLisM.invoke(tile, rec, true);
+                                                Method refM = tile.getClass().getMethod("refreshState");
+                                                refM.invoke(tile);
+                                            }
+                                        }
+                                    } catch (Throwable ignore) {}
+                                }
+                            }
+                        }
+                    } catch (Throwable ignore) {}
+                }
+
+                @Override
+                public void onViewDetachedFromWindow(View v) {}
+            });
 
 
             Class<?> cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader);
@@ -1943,6 +1976,38 @@ public class ControlCenterHook {
             try {
                 Class<?> expandControllerClass = Class.forName("miui.systemui.controlcenter.windowview.ControlCenterExpandController", false, classLoader);
                 for (Method m : expandControllerClass.getDeclaredMethods()) {
+                    if (m.getName().equals("showPanel") || m.getName().equals("onExpandStart")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                if (sAllQSRecords != null) {
+                                    for (Object r : sAllQSRecords) {
+                                        if (r != null) {
+                                            String spec = getRecordSpec(r);
+                                            if (isGroupChild(spec)) {
+                                                try {
+                                                    Method startLisM = r.getClass().getMethod("startListening");
+                                                    startLisM.invoke(r);
+                                                } catch (Throwable ignore) {}
+                                                try {
+                                                    Method getTileM = r.getClass().getMethod("getTile");
+                                                    Object tileObj = getTileM.invoke(r);
+                                                    if (tileObj != null) {
+                                                        Method setLisM = tileObj.getClass().getMethod("setListening", Object.class, boolean.class);
+                                                        setLisM.invoke(tileObj, r, true);
+                                                        Method refM = tileObj.getClass().getMethod("refreshState");
+                                                        refM.invoke(tileObj);
+                                                    }
+                                                } catch (Throwable ignore) {}
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return result;
+                        });
+                    }
                     if (m.getName().equals("hidePanel")) {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
@@ -2466,6 +2531,60 @@ public class ControlCenterHook {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
                             return 100; // QSList is always anchored at 100
+                        });
+                    }
+                    if (m.getName().equals("onStart")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                if (sAllQSRecords != null) {
+                                    for (Object r : sAllQSRecords) {
+                                        if (r != null) {
+                                            String spec = getRecordSpec(r);
+                                            if (isGroupChild(spec)) {
+                                                try {
+                                                    Method startLisM = r.getClass().getMethod("startListening");
+                                                    startLisM.invoke(r);
+                                                } catch (Throwable ignore) {}
+                                                try {
+                                                    Method getTileM = r.getClass().getMethod("getTile");
+                                                    Object tileObj = getTileM.invoke(r);
+                                                    if (tileObj != null) {
+                                                        Method setLisM = tileObj.getClass().getMethod("setListening", Object.class, boolean.class);
+                                                        setLisM.invoke(tileObj, r, true);
+                                                        Method refM = tileObj.getClass().getMethod("refreshState");
+                                                        refM.invoke(tileObj);
+                                                    }
+                                                } catch (Throwable ignore) {}
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return result;
+                        });
+                    }
+                    if (m.getName().equals("onStop")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                if (sAllQSRecords != null) {
+                                    for (Object r : sAllQSRecords) {
+                                        if (r != null) {
+                                            String spec = getRecordSpec(r);
+                                            if (isGroupChild(spec)) {
+                                                try {
+                                                    Method setLisM = r.getClass().getMethod("setListening", boolean.class);
+                                                    setLisM.invoke(r, false);
+                                                } catch (Throwable ignore) {}
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return result;
                         });
                     }
                     if (m.getName().equals("setListening")) {
