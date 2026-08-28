@@ -1140,17 +1140,7 @@ public class ControlCenterHook {
                 blurEnabled = (boolean) getBlurM.invoke(null, ctx);
             } catch (Throwable ignore) {}
 
-            // Add FrameLayout wrapper with Edit Mode touch interception
-            android.widget.FrameLayout wrapper = new android.widget.FrameLayout(ctx) {
-                @Override
-                public boolean onInterceptTouchEvent(MotionEvent ev) {
-                    Boolean isEditTag = (Boolean) getTag(0x7f099991);
-                    if (isEditTag != null && isEditTag.booleanValue()) {
-                        return true; // Intercept all touches in Edit Mode so parent QSCardViewHolder drags smoothly
-                    }
-                    return super.onInterceptTouchEvent(ev);
-                }
-            };
+            android.widget.FrameLayout wrapper = new android.widget.FrameLayout(ctx);
             wrapper.setId(0x7f099996);
             wrapper.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             wrapper.setClipChildren(false);
@@ -1397,17 +1387,7 @@ public class ControlCenterHook {
                 blurEnabled = (boolean) getBlurM.invoke(null, ctx);
             } catch (Throwable ignore) {}
 
-            // Add FrameLayout wrapper with Edit Mode touch interception
-            android.widget.FrameLayout wrapper = new android.widget.FrameLayout(ctx) {
-                @Override
-                public boolean onInterceptTouchEvent(MotionEvent ev) {
-                    Boolean isEditTag = (Boolean) getTag(0x7f099991);
-                    if (isEditTag != null && isEditTag.booleanValue()) {
-                        return true; // Intercept all touches in Edit Mode so parent QSCardViewHolder drags smoothly
-                    }
-                    return super.onInterceptTouchEvent(ev);
-                }
-            };
+            android.widget.FrameLayout wrapper = new android.widget.FrameLayout(ctx);
             wrapper.setId(0x7f099996);
             wrapper.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -2841,6 +2821,8 @@ public class ControlCenterHook {
                                         if (rotateBtn != null) {
                                             if (isEdit) {
                                                 rotateBtn.setVisibility(View.VISIBLE);
+                                                rotateBtn.bringToFront();
+                                                rotateBtn.setClickable(true);
                                                 rotateBtn.setOnClickListener(v -> {
                                                     try {
                                                         group.isVertical = !group.isVertical;
