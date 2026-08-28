@@ -605,6 +605,21 @@ public class ControlCenterHook {
         }
     }
 
+    private static void hideAllRotateButtons(ViewGroup root) {
+        if (root == null) return;
+        for (int i = 0; i < root.getChildCount(); i++) {
+            View child = root.getChildAt(i);
+            if (child != null) {
+                if (child.getId() == 0x7f099992) {
+                    child.setVisibility(View.GONE);
+                }
+                if (child instanceof ViewGroup) {
+                    hideAllRotateButtons((ViewGroup) child);
+                }
+            }
+        }
+    }
+
     private static void ensureGroupButtonInjected(Object controller, ClassLoader classLoader) {
         if (controller == null) return;
         try {
@@ -624,6 +639,15 @@ public class ControlCenterHook {
             View customizeTitle = root.findViewById(titleId);
 
             if (customizeHeader == null || completeButton == null) return;
+
+            completeButton.setOnClickListener(v -> {
+                try {
+                    View rootV = root.getRootView();
+                    if (rootV instanceof ViewGroup) {
+                        hideAllRotateButtons((ViewGroup) rootV);
+                    }
+                } catch (Throwable ignore) {}
+            });
 
             int groupTag = 0x7f099997;
             int disassembleTag = 0x7f099994;
@@ -1907,9 +1931,39 @@ public class ControlCenterHook {
                 android.util.Log.e(TAG, "spreadAnimator hook error", t);
             }
 
-            // 7. Hook MainPanelItemViewHolder (Center-Bounce, Spring Easing & iOS 26 Jelly)
+            // 7. Hook MainPanelItemViewHolder (Center-Bounce, Spring Easing & iOS 26 Jelly & Mode Transitions)
             try {
                 Class<?> holderClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader);
+                for (Method m : holderClass.getDeclaredMethods()) {
+                    if (m.getName().equals("updateMode")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                Object holder = chain.getThisObject();
+                                View itemView = getViewHolderItemView(holder);
+                                if (itemView != null) {
+                                    View rotateBtn = itemView.findViewById(0x7f099992);
+                                    if (rotateBtn != null) {
+                                        Object rawArgs = chain.getArgs();
+                                        Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                                        boolean isEdit = false;
+                                        if (args != null) {
+                                            for (Object arg : args) {
+                                                if (arg != null && "EDIT".equals(arg.toString())) {
+                                                    isEdit = true;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        rotateBtn.setVisibility(isEdit ? View.VISIBLE : View.GONE);
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return result;
+                        });
+                    }
+                }
                 Class<?> easeManagerClass = Class.forName("miuix.animation.utils.EaseManager", false, classLoader);
                 Method getStyleMethod = easeManagerClass.getMethod("getStyle", int.class, float[].class);
 
@@ -2468,7 +2522,7 @@ public class ControlCenterHook {
                             Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
                             if (args != null && args.length >= 2) {
                                 int vt = (Integer) args[1];
-                                if (vt == 2274 || vt == 2275 || vt == 2276) {
+                                if (vt == 2274 || vt == 2275 || vt == 2276 || vt == 2273) {
                                     try {
                                         Object adapterObj = chain.getThisObject();
                                         sMainPanelAdapter = adapterObj;
@@ -2485,6 +2539,40 @@ public class ControlCenterHook {
                                         } else if (vt == 2276) {
                                             Object holder = createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, true);
                                             if (holder != null) return holder;
+                                        } else if (vt == 2273) {
+                                            Class<?> cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader);
+                                            Method inflateMethod = cardBindingClass.getMethod("inflate", LayoutInflater.class, ViewGroup.class, boolean.class);
+                                            Object binding = inflateMethod.invoke(null, LayoutInflater.from(parent.getContext()), parent, false);
+
+                                            Method getRootMethod = cardBindingClass.getMethod("getRoot");
+                                            View root = (View) getRootMethod.invoke(binding);
+
+                                            Field sysUIContextField = qsListCtrl.getClass().getDeclaredField("sysUIContext");
+                                            sysUIContextField.setAccessible(true);
+                                            Context sysUIContext = (Context) sysUIContextField.get(qsListCtrl);
+
+                                            Class<?> cardIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemIconView", false, classLoader);
+                                            Constructor<?> iconCtor = null;
+                                            for (Constructor<?> c : cardIconViewClass.getDeclaredConstructors()) {
+                                                if (c.getParameterTypes().length == 5) {
+                                                    iconCtor = c;
+                                                    break;
+                                                }
+                                            }
+                                            if (iconCtor == null) {
+                                                iconCtor = cardIconViewClass.getDeclaredConstructors()[0];
+                                            }
+                                            iconCtor.setAccessible(true);
+                                            Object iconView = (iconCtor.getParameterTypes().length == 5) 
+                                                ? iconCtor.newInstance(root.getContext(), sysUIContext, null, 4, null)
+                                                : iconCtor.newInstance(root.getContext(), sysUIContext);
+
+                                            Method initMethod = root.getClass().getMethod("init", cardIconViewClass);
+                                            initMethod.invoke(root, iconView);
+
+                                            Class<?> cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader);
+                                            Constructor<?> holderCtor = cardHolderClass.getConstructor(Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemView", false, classLoader));
+                                            return holderCtor.newInstance(root);
                                         }
                                     } catch (Throwable t) {
                                         android.util.Log.e(TAG, "MainPanelAdapter.onCreateViewHolder " + vt + " intercept error", t);
@@ -2880,6 +2968,26 @@ public class ControlCenterHook {
                                                             if (s != null) recordMap.put(s, r);
                                                         }
                                                     }
+                                                }
+
+                                                // Fallback on boot: query all records from sQSListController
+                                                if (sQSListController != null) {
+                                                    try {
+                                                        Method getRecordsM = sQSListController.getClass().getMethod("getRecords");
+                                                        List allRecs = (List) getRecordsM.invoke(sQSListController);
+                                                        if (allRecs != null) {
+                                                            for (Object r : allRecs) {
+                                                                if (r != null) {
+                                                                    Field sF = r.getClass().getDeclaredField("spec");
+                                                                    sF.setAccessible(true);
+                                                                    String s = (String) sF.get(r);
+                                                                    if (s != null && !recordMap.containsKey(s)) {
+                                                                        recordMap.put(s, r);
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    } catch (Throwable ignore) {}
                                                 }
 
                                                 // Ensure grouped container permanently maintains dark translucent blur & 20dp smooth corners
