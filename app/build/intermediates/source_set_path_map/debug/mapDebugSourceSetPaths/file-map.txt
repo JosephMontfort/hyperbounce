@@ -1,0 +1,7 @@
+dev.joseph.hyperbounce.app-pngs-0 /data/data/com.termux/files/home/hyperbounce-diagnostics/app/build/generated/res/pngs/debug
+dev.joseph.hyperbounce.app-resValues-1 /data/data/com.termux/files/home/hyperbounce-diagnostics/app/build/generated/res/resValues/debug
+dev.joseph.hyperbounce.app-packageDebugResources-2 /data/data/com.termux/files/home/hyperbounce-diagnostics/app/build/intermediates/incremental/debug/packageDebugResources/merged.dir
+dev.joseph.hyperbounce.app-packageDebugResources-3 /data/data/com.termux/files/home/hyperbounce-diagnostics/app/build/intermediates/incremental/debug/packageDebugResources/stripped.dir
+dev.joseph.hyperbounce.app-debug-4 /data/data/com.termux/files/home/hyperbounce-diagnostics/app/build/intermediates/merged_res/debug/mergeDebugResources
+dev.joseph.hyperbounce.app-debug-5 /data/data/com.termux/files/home/hyperbounce-diagnostics/app/src/debug/res
+dev.joseph.hyperbounce.app-main-6 /data/data/com.termux/files/home/hyperbounce-diagnostics/app/src/main/res

@@ -171,14 +171,20 @@ public class PhysicsHook extends XposedModule {
         } catch (Throwable t) { return null; }
     }
 
-    private static void syncMemory() {
+    public static synchronized void syncMemory(Context inputCtx) {
         if (receiverRegistered) return;
-        Context ctx = getAppContext();
+        Context ctx = inputCtx != null ? inputCtx.getApplicationContext() : getAppContext();
+        if (ctx == null && inputCtx != null) ctx = inputCtx;
         if (ctx == null) return;
         try {
             Uri uri = Uri.parse("content://dev.joseph.hyperbounce.provider");
             Bundle res = ctx.getContentResolver().call(uri, "getConfig", null, null);
-            if (res != null) config.loadFromJson(res.getString("config_json"));
+            if (res != null) {
+                String jsonStr = res.getString("config_json");
+                if (jsonStr != null && !jsonStr.isEmpty()) {
+                    config.loadFromJson(jsonStr);
+                }
+            }
         } catch (Throwable t) {}
         try {
             IntentFilter filter = new IntentFilter();
@@ -187,11 +193,15 @@ public class PhysicsHook extends XposedModule {
             BroadcastReceiver receiver = new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context context, Intent intent) {
+                    if (intent == null) return;
                     if ("dev.joseph.hyperbounce.ACTION_VELOCITY_UPDATE".equals(intent.getAction())) {
                         latestVelocity = intent.getFloatExtra("velocity", 0.0f);
                         lastVelocityTime = System.currentTimeMillis();
                     } else if ("dev.joseph.hyperbounce.ACTION_CONFIG_CHANGED".equals(intent.getAction())) {
-                        config.loadFromJson(intent.getStringExtra("config_json"));
+                        String json = intent.getStringExtra("config_json");
+                        if (json != null) {
+                            config.loadFromJson(json);
+                        }
                     }
                 }
             };
@@ -199,6 +209,10 @@ public class PhysicsHook extends XposedModule {
             else ctx.registerReceiver(receiver, filter);
             receiverRegistered = true;
         } catch (Throwable t) {}
+    }
+
+    public static void syncMemory() {
+        syncMemory(null);
     }
 
     @Override
@@ -259,6 +273,10 @@ public class PhysicsHook extends XposedModule {
                                 java.lang.reflect.Field rootViewField = kpvc.getClass().getDeclaredField("keyguardRootView");
                                 rootViewField.setAccessible(true);
                                 View rootView = (View) rootViewField.get(kpvc);
+
+                                if (!receiverRegistered && rootView != null) {
+                                    syncMemory(rootView.getContext());
+                                }
                                 
                                 View notifView = null;
                                 try {
@@ -550,6 +568,9 @@ public class PhysicsHook extends XposedModule {
                     if (m.getName().equals("onTouchEvent") && m.getParameterTypes().length == 1 && m.getParameterTypes()[0] == android.view.MotionEvent.class) {
                         hook(m).intercept(chain -> {
                             View view = (View) chain.getThisObject();
+                            if (!receiverRegistered && view != null) {
+                                syncMemory(view.getContext());
+                            }
                             Object rawArgs = chain.getArgs();
                             Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : (Object[]) rawArgs;
                             android.view.MotionEvent event = (android.view.MotionEvent) args[0];
@@ -716,6 +737,9 @@ public class PhysicsHook extends XposedModule {
                         hook(m).intercept(chain -> {
                             Object pinViewObj = chain.getThisObject();
                             View pinView = (View) pinViewObj;
+                            if (!receiverRegistered && pinView != null) {
+                                syncMemory(pinView.getContext());
+                            }
                             Context ctx = pinView.getContext();
                             float density = ctx.getResources().getDisplayMetrics().density;
                             
@@ -900,11 +924,15 @@ public class PhysicsHook extends XposedModule {
 
                 Method showMethod = userPresentClass.getDeclaredMethod("showUserPresentAnimation", View.class, int.class, boolean.class);
                 hook(showMethod).intercept(chain -> {
-                    if (!config.unlockEnabled) return chain.proceed();
-
                     Object rawArgs = chain.getArgs();
                     Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : (Object[]) rawArgs;
                     View view = (View) args[0];
+
+                    if (!receiverRegistered && view != null) {
+                        syncMemory(view.getContext());
+                    }
+
+                    if (!config.unlockEnabled) return chain.proceed();
 
                     if (view != null) {
                         try {
@@ -1021,11 +1049,14 @@ public class PhysicsHook extends XposedModule {
                         Object rawArgs = chain.getArgs();
                         Object[] args = (rawArgs instanceof java.util.List) ? ((java.util.List<?>) rawArgs).toArray() : ((Object[]) rawArgs).clone();
 
+                        float startVal = (float) args[2];
+                        float endVal = (float) args[3];
+
                         if (config.animMode == 0) {
-                            args[2] = ((float) args[2]) * config.zDepthMultiplier;
+                            if (endVal == 0.0f && startVal > 5.0f) {
+                                args[2] = startVal * config.zDepthMultiplier;
+                            }
                         } else {
-                            float startVal = (float) args[2];
-                            float endVal = (float) args[3];
                             float kF = currentKineticFactor.get();
                             float vInf = config.velocityInfluence;
                             int safeRow = Math.max(0, Math.min(config.gridRows - 1, currentRow.get()));
@@ -1037,14 +1068,13 @@ public class PhysicsHook extends XposedModule {
                                 args[2] = 0.85f - (0.20f * kF * vInf); 
                                 args[0] = activeDamping.get();
                                 args[1] = activeResponse.get();
-                            } else if (endVal == 0.0f && startVal < -5.0f) { 
+                            } else if (endVal == 0.0f && startVal > 5.0f) { 
                                 if (isDockView.get() || isIndicator.get()) {
-                                    args[2] = -Math.abs(config.kineticDockZDepth); 
+                                    args[2] = Math.max(1.0f, config.kineticDockZDepth); 
                                 } else {
                                     float baseZ = config.getDyn("r" + safeRow + "_z", 1000.0f);
                                     float zMult = 1.0f + (kF * vInf * 0.4f);
-                                    // Row depth is user-controlled; ensure it is pushed into the negative Z-space.
-                                    args[2] = -Math.abs(baseZ * zMult);
+                                    args[2] = Math.max(1.0f, baseZ * zMult);
                                 }
                             }
                         }

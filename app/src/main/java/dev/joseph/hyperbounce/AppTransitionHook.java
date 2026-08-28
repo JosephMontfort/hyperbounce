@@ -35,6 +35,7 @@ public class AppTransitionHook {
             Method generateMethod = companionClass.getDeclaredMethod("generateSpringBundlesByAnimType", animTypeEnum, RectF.class, RectF.class);
             
             module.hook(generateMethod).intercept(chain -> {
+                PhysicsHook.syncMemory();
                 Object[] result = (Object[]) chain.proceed();
                 if (result == null || !config.appAnimEnabled) {
                     return result; // Stock behaviour by default

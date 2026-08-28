@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "dev.joseph.hyperbounce.app-mergeDebugResources-2:/values/values.xml",
+            "map": [
+                {
+                    "source": "/data/data/com.termux/files/home/hyperbounce-diagnostics/app/src/main/res/values/arrays.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "27",
+                        "endColumns": "19",
+                        "endOffsets": "1094"
+                    }
+                }
+            ]
+        }
+    ]
+}
