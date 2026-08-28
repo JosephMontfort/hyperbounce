@@ -57,6 +57,12 @@ public class ConfigProvider extends ContentProvider {
             File f = new File(getContext().getFilesDir(), "safemode.flag");
             b.putBoolean("safeMode", f.exists());
             return b;
+        } else if ("resetCCLayout".equals(method)) {
+            try {
+                android.content.Intent intent = new android.content.Intent("dev.joseph.hyperbounce.RESET_CC_LAYOUT");
+                getContext().sendBroadcast(intent);
+            } catch (Exception e) {}
+            return new Bundle();
         } else if ("setSafeMode".equals(method)) {
             try {
                 File f = new File(getContext().getFilesDir(), "safemode.flag");

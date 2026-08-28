@@ -337,6 +337,43 @@ public class MainActivity extends Activity {
         lowEndDesc.setPadding(0, 4, 0, 0);
         rowLowEnd.addView(lowEndDesc);
         controlCenterPageLayout.addView(rowLowEnd);
+
+        // Reset Control Center Layout Button Card
+        LinearLayout rowReset = new LinearLayout(this);
+        rowReset.setOrientation(LinearLayout.VERTICAL);
+        rowReset.setPadding(0, 16, 0, 18);
+
+        Button resetLayoutBtn = new Button(this);
+        resetLayoutBtn.setText("🔄 Reset Control Center Layout to Stock");
+        resetLayoutBtn.setTextSize(14);
+        resetLayoutBtn.setTypeface(null, Typeface.BOLD);
+        resetLayoutBtn.setTextColor(Color.WHITE);
+        resetLayoutBtn.setBackgroundColor(Color.parseColor("#B00020"));
+        resetLayoutBtn.setOnClickListener(v -> {
+            new AlertDialog.Builder(this)
+                .setTitle("Reset Layout to Stock?")
+                .setMessage("This will dissolve all 2x2, 2x1, and 1x2 tile groups, restore stock Wi-Fi/Mobile Data expansion, and reset all component positions to stock.")
+                .setPositiveButton("Reset", (dialog, which) -> {
+                    try {
+                        sendBroadcast(new Intent("dev.joseph.hyperbounce.RESET_CC_LAYOUT"));
+                        getContentResolver().call(android.net.Uri.parse("content://dev.joseph.hyperbounce.provider"), "resetCCLayout", null, null);
+                        Toast.makeText(this, "Control Center layout reset to stock!", Toast.LENGTH_SHORT).show();
+                    } catch (Exception e) {
+                        Toast.makeText(this, "Failed to reset layout: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+        });
+        rowReset.addView(resetLayoutBtn);
+
+        TextView resetDesc = new TextView(this);
+        resetDesc.setText("• Reverts all modular customizations and tile groupings to pure Xiaomi HyperOS defaults.");
+        resetDesc.setTextSize(12);
+        resetDesc.setTextColor(Color.DKGRAY);
+        resetDesc.setPadding(0, 4, 0, 0);
+        rowReset.addView(resetDesc);
+        controlCenterPageLayout.addView(rowReset);
     }
 
     private void setupUnlockPage() {

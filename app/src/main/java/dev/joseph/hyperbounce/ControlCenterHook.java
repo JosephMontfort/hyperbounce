@@ -165,6 +165,33 @@ public class ControlCenterHook {
         } catch (Throwable ignore) {}
     }
 
+    public static synchronized void resetLayoutToStock(Context ctx) {
+        if (ctx == null) return;
+        try {
+            if (sPrefs == null) {
+                sPrefs = ctx.getSharedPreferences("hyperbounce_cc_layout", Context.MODE_PRIVATE);
+            }
+            if (sPrefs != null) {
+                sPrefs.edit().clear().commit();
+            }
+            sTileGroups.clear();
+            sExpandedTileSpecs.clear();
+            sExpandedTileSpecs.add("wifi");
+            sExpandedTileSpecs.add("cell");
+            sComponentPriorities.clear();
+            sComponentPriorities.put("CompactQS", 0);
+            sComponentPriorities.put("CompactQSCard", 1);
+            sComponentPriorities.put("QSCardsController", 2);
+            sComponentPriorities.put("BigMediaController", 3);
+            sComponentPriorities.put("BrightnessVolumeController", 4);
+            sComponentPriorities.put("QSListController", 100);
+            savePriorities(ctx);
+            android.util.Log.i(TAG, "Control Center Layout successfully reset to stock!");
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "resetLayoutToStock error", t);
+        }
+    }
+
     private static synchronized void savePriorities(Context ctx) {
         if (ctx == null && sPrefs == null) return;
         try {
@@ -639,15 +666,6 @@ public class ControlCenterHook {
             View customizeTitle = root.findViewById(titleId);
 
             if (customizeHeader == null || completeButton == null) return;
-
-            completeButton.setOnClickListener(v -> {
-                try {
-                    View rootV = root.getRootView();
-                    if (rootV instanceof ViewGroup) {
-                        hideAllRotateButtons((ViewGroup) rootV);
-                    }
-                } catch (Throwable ignore) {}
-            });
 
             int groupTag = 0x7f099997;
             int disassembleTag = 0x7f099994;
@@ -2600,6 +2618,15 @@ public class ControlCenterHook {
                                     Method getCtxMethod = distributorClass.getMethod("getContext");
                                     Context ctx = (Context) getCtxMethod.invoke(distributor);
                                     loadSavedPriorities(ctx);
+                                    try {
+                                        android.content.IntentFilter resetFilter = new android.content.IntentFilter("dev.joseph.hyperbounce.RESET_CC_LAYOUT");
+                                        ctx.registerReceiver(new android.content.BroadcastReceiver() {
+                                            @Override
+                                            public void onReceive(Context rCtx, android.content.Intent intent) {
+                                                resetLayoutToStock(rCtx);
+                                            }
+                                        }, resetFilter, Context.RECEIVER_EXPORTED);
+                                    } catch (Throwable ignore) {}
 
                                     Field rightPanelContentField = distributorClass.getDeclaredField("rightPanelContent");
                                     rightPanelContentField.setAccessible(true);
@@ -3157,19 +3184,20 @@ public class ControlCenterHook {
                                             }
                                         }
 
-                                        // Disassemble Selection Indicator or Ungroup Badge in Edit Mode
-                                        int selectTag = 0x7f099996;
-                                        ImageView indicatorBadge = itemView.findViewById(selectTag);
+                                        // Disassemble Selection Indicator attached to top-left of all containers
+                                        int selectTag = 0x7f099998;
+                                        View rawBadge = itemView.findViewById(selectTag);
+                                        ImageView indicatorBadge = (rawBadge instanceof ImageView) ? (ImageView) rawBadge : null;
 
                                         if (sIsDisassembleMode) {
                                             if (indicatorBadge == null && itemView instanceof ViewGroup) {
                                                 indicatorBadge = new ImageView(ctx);
                                                 indicatorBadge.setId(selectTag);
-                                                int badgeSize = (int) (22 * density);
+                                                int badgeSize = (int) (24 * density);
                                                 FrameLayout.LayoutParams slp = new FrameLayout.LayoutParams(badgeSize, badgeSize);
                                                 slp.gravity = Gravity.TOP | Gravity.START;
-                                                slp.leftMargin = (int) (8 * density);
-                                                slp.topMargin = (int) (8 * density);
+                                                slp.leftMargin = (int) (6 * density);
+                                                slp.topMargin = (int) (6 * density);
                                                 ((ViewGroup) itemView).addView(indicatorBadge, slp);
                                             }
                                             if (indicatorBadge != null) {
@@ -3181,40 +3209,30 @@ public class ControlCenterHook {
                                                 indicatorBadge.bringToFront();
 
                                                 final ImageView finalBadge = indicatorBadge;
-                                                itemView.setOnClickListener(v -> {
+                                                View.OnClickListener toggleDisassembleSelect = v -> {
                                                     if (sSelectedDisassembleGroups.contains(group.id)) {
                                                         sSelectedDisassembleGroups.remove(group.id);
                                                     } else {
                                                         sSelectedDisassembleGroups.add(group.id);
                                                     }
                                                     SelectCircleDrawable curScd = (SelectCircleDrawable) finalBadge.getDrawable();
-                                                    if (curScd != null) curScd.setChecked(sSelectedDisassembleGroups.contains(group.id));
-                                                });
+                                                    if (curScd != null) {
+                                                        curScd.setChecked(sSelectedDisassembleGroups.contains(group.id));
+                                                        finalBadge.invalidate();
+                                                    }
+                                                };
+                                                itemView.setOnClickListener(toggleDisassembleSelect);
+                                                indicatorBadge.setOnClickListener(toggleDisassembleSelect);
+                                                itemView.setClickable(true);
+                                                indicatorBadge.setClickable(true);
                                             }
                                         } else {
+                                            if (indicatorBadge != null) {
+                                                indicatorBadge.setVisibility(View.GONE);
+                                            }
                                             itemView.setOnClickListener(null);
                                             itemView.setClickable(false);
                                             itemView.setFocusable(false);
-                                            if (isEdit) {
-                                                if (indicatorBadge == null && itemView instanceof ViewGroup) {
-                                                    indicatorBadge = new ImageView(ctx);
-                                                    indicatorBadge.setId(selectTag);
-                                                    int badgeSize = (int) (24 * density);
-                                                    FrameLayout.LayoutParams ulp = new FrameLayout.LayoutParams(badgeSize, badgeSize);
-                                                    ulp.gravity = Gravity.TOP | Gravity.END;
-                                                    ulp.rightMargin = (int) (8 * density);
-                                                    ulp.topMargin = (int) (8 * density);
-                                                    ((ViewGroup) itemView).addView(indicatorBadge, ulp);
-                                                }
-                                                if (indicatorBadge != null) {
-                                                    indicatorBadge.setImageDrawable(new UngroupBadgeDrawable());
-                                                    indicatorBadge.setVisibility(View.VISIBLE);
-                                                    indicatorBadge.bringToFront();
-                                                    indicatorBadge.setOnClickListener(v -> ungroupTileGroup(ctx, group, itemView));
-                                                }
-                                            } else if (indicatorBadge != null) {
-                                                indicatorBadge.setVisibility(View.GONE);
-                                            }
                                         }
                                     }
 
