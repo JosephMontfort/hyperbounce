@@ -612,12 +612,27 @@ public class ControlCenterHook {
                     Method setBlendMethod = miBlurClass.getMethod("setMiBackgroundBlendColors", View.class, blendColors.getClass());
                     setBlendMethod.invoke(null, groupButton, blendColors);
 
-                    Class<?> outlineClass = Class.forName("miui.systemui.util.ViewOutlineProviderExt", false, classLoader);
-                    Object outlineInst = outlineClass.getDeclaredField("INSTANCE").get(null);
-                    Method getOutlineMethod = outlineClass.getMethod("getOutlineProvider", int.class);
-                    Object outlineProvider = getOutlineMethod.invoke(outlineInst, (int) (20 * density));
-                    groupButton.setOutlineProvider((android.view.ViewOutlineProvider) outlineProvider);
-                    groupButton.setClipToOutline(true);
+                } catch (Throwable ignore) {}
+
+                final float gRadius = btnSize / 2f;
+                groupButton.setOutlineProvider(new android.view.ViewOutlineProvider() {
+                    @Override
+                    public void getOutline(View v, android.graphics.Outline outline) {
+                        outline.setRoundRect(0, 0, v.getWidth(), v.getHeight(), gRadius);
+                    }
+                });
+                groupButton.setClipToOutline(true);
+
+                try {
+                    Class<?> ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader);
+                    Method getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context.class);
+                    boolean bOpened = (boolean) getBlurM.invoke(null, ctx);
+                    if (!bOpened) {
+                        android.graphics.drawable.GradientDrawable gBg = new android.graphics.drawable.GradientDrawable();
+                        gBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                        gBg.setColor(Color.parseColor("#33808080"));
+                        groupButton.setBackground(gBg);
+                    }
                 } catch (Throwable ignore) {}
 
                 try {
@@ -676,12 +691,27 @@ public class ControlCenterHook {
                     Method setBlendMethod = miBlurClass.getMethod("setMiBackgroundBlendColors", View.class, blendColors.getClass());
                     setBlendMethod.invoke(null, disassembleButton, blendColors);
 
-                    Class<?> outlineClass = Class.forName("miui.systemui.util.ViewOutlineProviderExt", false, classLoader);
-                    Object outlineInst = outlineClass.getDeclaredField("INSTANCE").get(null);
-                    Method getOutlineMethod = outlineClass.getMethod("getOutlineProvider", int.class);
-                    Object outlineProvider = getOutlineMethod.invoke(outlineInst, (int) (20 * density));
-                    disassembleButton.setOutlineProvider((android.view.ViewOutlineProvider) outlineProvider);
-                    disassembleButton.setClipToOutline(true);
+                } catch (Throwable ignore) {}
+
+                final float dRadius = btnSize / 2f;
+                disassembleButton.setOutlineProvider(new android.view.ViewOutlineProvider() {
+                    @Override
+                    public void getOutline(View v, android.graphics.Outline outline) {
+                        outline.setRoundRect(0, 0, v.getWidth(), v.getHeight(), dRadius);
+                    }
+                });
+                disassembleButton.setClipToOutline(true);
+
+                try {
+                    Class<?> ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader);
+                    Method getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context.class);
+                    boolean bOpened = (boolean) getBlurM.invoke(null, ctx);
+                    if (!bOpened) {
+                        android.graphics.drawable.GradientDrawable dBg = new android.graphics.drawable.GradientDrawable();
+                        dBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                        dBg.setColor(Color.parseColor("#33808080"));
+                        disassembleButton.setBackground(dBg);
+                    }
                 } catch (Throwable ignore) {}
 
                 try {
@@ -1110,8 +1140,8 @@ public class ControlCenterHook {
                     if (blurEnabled) {
                         android.graphics.drawable.GradientDrawable discBg = new android.graphics.drawable.GradientDrawable();
                         discBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-                        discBg.setColor(Color.parseColor("#33FFFFFF")); // 20% translucent white plate
-                        discBg.setStroke((int) (0.8f * density), Color.parseColor("#26FFFFFF")); // subtle border
+                        discBg.setColor(Color.parseColor("#38FFFFFF")); // 22% white translucent plate
+                        discBg.setStroke((int) Math.max(1, 1.5f * density), Color.parseColor("#80FFFFFF")); // 50% crisp white outline
                         iconFrame.setBackground(discBg);
                     } else {
                         iconFrame.setBackground(null);
@@ -2589,8 +2619,8 @@ public class ControlCenterHook {
                                                                     if (blurEnabled) {
                                                                         android.graphics.drawable.GradientDrawable discBg = new android.graphics.drawable.GradientDrawable();
                                                                         discBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-                                                                        discBg.setColor(Color.parseColor("#33FFFFFF"));
-                                                                        discBg.setStroke((int) (0.8f * density), Color.parseColor("#26FFFFFF"));
+                                                                        discBg.setColor(Color.parseColor("#38FFFFFF"));
+                                                                        discBg.setStroke((int) Math.max(1, 1.5f * density), Color.parseColor("#80FFFFFF"));
                                                                         iconFrame.setBackground(discBg);
                                                                     } else {
                                                                         iconFrame.setBackground(null);
