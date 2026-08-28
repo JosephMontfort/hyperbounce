@@ -2468,6 +2468,38 @@ public class ControlCenterHook {
                             return 100; // QSList is always anchored at 100
                         });
                     }
+                    if (m.getName().equals("setListening")) {
+                        m.setAccessible(true);
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            try {
+                                Object rawArgs = chain.getArgs();
+                                Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
+                                if (args != null && args.length > 0 && Boolean.TRUE.equals(args[0])) {
+                                    if (sAllQSRecords != null) {
+                                        for (Object r : sAllQSRecords) {
+                                            if (r != null) {
+                                                String spec = getRecordSpec(r);
+                                                if (isGroupChild(spec)) {
+                                                    try {
+                                                        Method getTileM = r.getClass().getMethod("getTile");
+                                                        Object tileObj = getTileM.invoke(r);
+                                                        if (tileObj != null) {
+                                                            Method setLisM = tileObj.getClass().getMethod("setListening", Object.class, boolean.class);
+                                                            setLisM.invoke(tileObj, r, true);
+                                                            Method refM = tileObj.getClass().getMethod("refreshState");
+                                                            refM.invoke(tileObj);
+                                                        }
+                                                    } catch (Throwable ignore) {}
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignore) {}
+                            return result;
+                        });
+                    }
                     if (m.getName().equals("distributeTiles")) {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
@@ -3208,6 +3240,20 @@ public class ControlCenterHook {
                                                                     setLisM.invoke(tileObj, childRecord, true);
                                                                     Method refM = tileObj.getClass().getMethod("refreshState");
                                                                     refM.invoke(tileObj);
+
+                                                                    try {
+                                                                        Method getStateM = tileObj.getClass().getMethod("getState");
+                                                                        Object curState = getStateM.invoke(tileObj);
+                                                                        if (curState != null) {
+                                                                            for (Method hm : subHolder.getClass().getMethods()) {
+                                                                                if ((hm.getName().equals("onStateChanged") || hm.getName().equals("handleUpdateState")) && hm.getParameterTypes().length == 1) {
+                                                                                    hm.setAccessible(true);
+                                                                                    hm.invoke(subHolder, curState);
+                                                                                    break;
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    } catch (Throwable ignore) {}
                                                                 }
                                                             } catch (Throwable ignore) {}
 
