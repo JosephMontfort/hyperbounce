@@ -524,6 +524,34 @@ public class ControlCenterHook {
         @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
     }
 
+    private static void wakeAndRefreshAllGroupedTiles() {
+        try {
+            if (sAllQSRecords != null) {
+                for (Object r : sAllQSRecords) {
+                    if (r != null) {
+                        String spec = getRecordSpec(r);
+                        if (isGroupChild(spec)) {
+                            try {
+                                Method startLisM = r.getClass().getMethod("startListening");
+                                startLisM.invoke(r);
+                            } catch (Throwable ignore) {}
+                            try {
+                                Method getTileM = r.getClass().getMethod("getTile");
+                                Object tileObj = getTileM.invoke(r);
+                                if (tileObj != null) {
+                                    Method setLisM = tileObj.getClass().getMethod("setListening", Object.class, boolean.class);
+                                    setLisM.invoke(tileObj, r, true);
+                                    Method refM = tileObj.getClass().getMethod("refreshState");
+                                    refM.invoke(tileObj);
+                                }
+                            } catch (Throwable ignore) {}
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignore) {}
+    }
+
     private static void refreshAdapter(View root, Context ctx) {
         try {
             View decor = root.getRootView();
@@ -1976,36 +2004,11 @@ public class ControlCenterHook {
             try {
                 Class<?> expandControllerClass = Class.forName("miui.systemui.controlcenter.windowview.ControlCenterExpandController", false, classLoader);
                 for (Method m : expandControllerClass.getDeclaredMethods()) {
-                    if (m.getName().equals("showPanel") || m.getName().equals("onExpandStart")) {
+                    if (m.getName().equals("showPanel") || m.getName().equals("onExpandChange") || m.getName().equals("onStart")) {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
-                            Object result = chain.proceed();
-                            try {
-                                if (sAllQSRecords != null) {
-                                    for (Object r : sAllQSRecords) {
-                                        if (r != null) {
-                                            String spec = getRecordSpec(r);
-                                            if (isGroupChild(spec)) {
-                                                try {
-                                                    Method startLisM = r.getClass().getMethod("startListening");
-                                                    startLisM.invoke(r);
-                                                } catch (Throwable ignore) {}
-                                                try {
-                                                    Method getTileM = r.getClass().getMethod("getTile");
-                                                    Object tileObj = getTileM.invoke(r);
-                                                    if (tileObj != null) {
-                                                        Method setLisM = tileObj.getClass().getMethod("setListening", Object.class, boolean.class);
-                                                        setLisM.invoke(tileObj, r, true);
-                                                        Method refM = tileObj.getClass().getMethod("refreshState");
-                                                        refM.invoke(tileObj);
-                                                    }
-                                                } catch (Throwable ignore) {}
-                                            }
-                                        }
-                                    }
-                                }
-                            } catch (Throwable ignore) {}
-                            return result;
+                            wakeAndRefreshAllGroupedTiles();
+                            return chain.proceed();
                         });
                     }
                     if (m.getName().equals("hidePanel")) {
@@ -2537,31 +2540,7 @@ public class ControlCenterHook {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
                             Object result = chain.proceed();
-                            try {
-                                if (sAllQSRecords != null) {
-                                    for (Object r : sAllQSRecords) {
-                                        if (r != null) {
-                                            String spec = getRecordSpec(r);
-                                            if (isGroupChild(spec)) {
-                                                try {
-                                                    Method startLisM = r.getClass().getMethod("startListening");
-                                                    startLisM.invoke(r);
-                                                } catch (Throwable ignore) {}
-                                                try {
-                                                    Method getTileM = r.getClass().getMethod("getTile");
-                                                    Object tileObj = getTileM.invoke(r);
-                                                    if (tileObj != null) {
-                                                        Method setLisM = tileObj.getClass().getMethod("setListening", Object.class, boolean.class);
-                                                        setLisM.invoke(tileObj, r, true);
-                                                        Method refM = tileObj.getClass().getMethod("refreshState");
-                                                        refM.invoke(tileObj);
-                                                    }
-                                                } catch (Throwable ignore) {}
-                                            }
-                                        }
-                                    }
-                                }
-                            } catch (Throwable ignore) {}
+                            wakeAndRefreshAllGroupedTiles();
                             return result;
                         });
                     }
