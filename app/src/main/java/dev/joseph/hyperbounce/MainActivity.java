@@ -544,9 +544,12 @@ public class MainActivity extends Activity {
     private void renderLockPinpadSliders() {
         lockPinpadSlidersContainer.removeAllViews();
 
-        addSectionHeader(lockPinpadSlidersContainer, "LOCK SCREEN SHEET & BOTTOM PILL");
+        addSectionHeader(lockPinpadSlidersContainer, "LOCK SCREEN SHEET & 4-SIDED REFRACTION");
         addSlider(lockPinpadSlidersContainer, "lockCardBorderWidth", "Sheet Border Width (dp)", "Thickness of Left, Right, and Bottom specular frame outline", 0.5f, 8.0f, 2.5f);
         addSlider(lockPinpadSlidersContainer, "lockCardBorderAlpha", "Sheet Border Glow / Opacity", "Glow intensity of the glass outline (0.0 to 1.0)", 0.1f, 1.0f, 0.47f);
+        addSlider(lockPinpadSlidersContainer, "lockCardRefractionHeight", "Border Refraction Falloff (dp)", "Depth of optical glass edge refraction on all 4 borders", 0.0f, 60.0f, 24.0f);
+        addSlider(lockPinpadSlidersContainer, "lockCardRefractionAmount", "Border Refraction Distortion (dp)", "Optical bending strength of background wallpaper", 0.0f, 80.0f, 32.0f);
+        addSlider(lockPinpadSlidersContainer, "lockCardDepthEffect", "3D Spherical Warp Factor", "Convex curvature distortion across sheet boundaries", 0.0f, 0.40f, 0.12f);
         addSlider(lockPinpadSlidersContainer, "lockPillWidth", "Home Indicator Pill Width (dp)", "Length of the bottom iOS home indicator bar", 80.0f, 280.0f, 156.0f);
         addSlider(lockPinpadSlidersContainer, "lockPillHeight", "Home Indicator Pill Height (dp)", "Thickness of the bottom iOS home indicator bar", 2.0f, 16.0f, 6.0f);
         addSlider(lockPinpadSlidersContainer, "lockPillBottomMargin", "Pill Bottom Distance (dp)", "Distance between the pill and bottom of the display", 0.0f, 35.0f, 9.0f);
@@ -566,12 +569,15 @@ public class MainActivity extends Activity {
         addSlider(lockPinpadSlidersContainer, "pinRow2Offset", "Row 2 (4, 5, 6) Offset (dp)", "Vertical translation of second row", -140.0f, 0.0f, -60.0f);
         addSlider(lockPinpadSlidersContainer, "pinRow3Offset", "Row 3 (7, 8, 9) Offset (dp)", "Vertical translation of third row", -120.0f, 0.0f, -30.0f);
 
-        addSectionHeader(lockPinpadSlidersContainer, "SPRING SQUISH & GLOW PHYSICS (iOS HARMONIC)");
+        addSectionHeader(lockPinpadSlidersContainer, "LIQUID GLASS JELLY PHYSICS & GLOW (NEW ENGINE)");
         addSlider(lockPinpadSlidersContainer, "pinTapSquishScale", "Tap Compression Scale", "Deformation scale when finger touches down", 0.65f, 0.98f, 0.88f);
         addSlider(lockPinpadSlidersContainer, "pinReleasePlunge", "Release Extra Plunge", "Extra downward squeeze before rebounding on release", 0.0f, 0.25f, 0.10f);
+        addSlider(lockPinpadSlidersContainer, "pinJellyMaxStretch", "Anisotropic Jelly Stretch", "Maximum elongation scale along touch drag angle (atan2)", 0.0f, 0.35f, 0.16f);
+        addSlider(lockPinpadSlidersContainer, "pinJellyElasticLimit", "Elastic Pull Limit (tanh)", "Maximum finger displacement resistance threshold", 0.10f, 0.80f, 0.40f);
         addSlider(lockPinpadSlidersContainer, "pinSpringStiffness", "Spring Bounce Stiffness", "Tension of the recovery spring (higher = faster snap)", 15.0f, 150.0f, 50.0f);
         addSlider(lockPinpadSlidersContainer, "pinSpringDamping", "Spring Bounce Damping", "Friction of the recovery spring (lower = bouncier wobble, higher = stiffer snap)", 1.0f, 15.0f, 5.5f);
-        addSlider(lockPinpadSlidersContainer, "pinPressGlowAlpha", "Tap Glow Highlight Opacity", "Subtle brightness highlight/glow intensity when tapping a key", 0.0f, 0.80f, 0.35f);
+        addSlider(lockPinpadSlidersContainer, "pinPressGlowAlpha", "Tap Specular Glow Opacity", "Brightness of the localized radial touch-point highlight", 0.0f, 0.80f, 0.35f);
+        addSlider(lockPinpadSlidersContainer, "pinGlowRadius", "Tap Specular Glow Spread", "Size multiplier of the localized radial highlight spotlight", 0.5f, 2.5f, 1.4f);
 
         addSectionHeader(lockPinpadSlidersContainer, "SEQUENTIAL ENTRY ANIMATION (Y-AXIS GLIDE)");
         addSlider(lockPinpadSlidersContainer, "pinEntryTranslationY", "Initial Y-Axis Drop (dp)", "Distance keys glide up from below into their resting position", 20.0f, 300.0f, 90.0f);
@@ -886,6 +892,9 @@ public class MainActivity extends Activity {
             JSONObject jsonL = new JSONObject();
             jsonL.put("lockCardBorderWidth", 2.5);
             jsonL.put("lockCardBorderAlpha", 0.47);
+            jsonL.put("lockCardRefractionHeight", 24.0);
+            jsonL.put("lockCardRefractionAmount", 32.0);
+            jsonL.put("lockCardDepthEffect", 0.12);
             jsonL.put("lockPillWidth", 156.0);
             jsonL.put("lockPillHeight", 6.0);
             jsonL.put("lockPillBottomMargin", 9.0);
@@ -902,9 +911,12 @@ public class MainActivity extends Activity {
             jsonL.put("pinRow0Offset", -115.0);
             jsonL.put("pinTapSquishScale", 0.88);
             jsonL.put("pinReleasePlunge", 0.10);
+            jsonL.put("pinJellyMaxStretch", 0.16);
+            jsonL.put("pinJellyElasticLimit", 0.40);
             jsonL.put("pinSpringStiffness", 50.0);
             jsonL.put("pinSpringDamping", 5.5);
             jsonL.put("pinPressGlowAlpha", 0.35);
+            jsonL.put("pinGlowRadius", 1.4);
             jsonL.put("pinEntryTranslationY", 90.0);
             jsonL.put("pinEntryInitialScale", 0.50);
             jsonL.put("pinEntryDuration", 420.0);

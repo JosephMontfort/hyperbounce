@@ -200,7 +200,7 @@ public class PhysicsHook extends XposedModule {
                             android.graphics.RuntimeShader shader = (android.graphics.RuntimeShader) radialRuntimeShader;
                             shader.setFloatUniform("size", bounds.width(), bounds.height());
                             shader.setColorUniform("color", 0x00FFFFFF | (glowA << 24));
-                            shader.setFloatUniform("radius", radius * 1.4f);
+                            shader.setFloatUniform("radius", radius * Math.max(0.5f, config.pinGlowRadius));
                             shader.setFloatUniform("position", pX, pY);
                             glowPaint.setShader(shader);
                             canvas.drawCircle(cx, cy, radius, glowPaint);
@@ -211,7 +211,7 @@ public class PhysicsHook extends XposedModule {
                         }
                     } else {
                         android.graphics.RadialGradient radGrad = new android.graphics.RadialGradient(
-                            pX, pY, radius * 1.1f,
+                            pX, pY, radius * Math.max(0.5f, config.pinGlowRadius * 0.8f),
                             0x00FFFFFF | (glowA << 24),
                             0x00FFFFFF,
                             android.graphics.Shader.TileMode.CLAMP
@@ -344,7 +344,7 @@ public class PhysicsHook extends XposedModule {
                     boolean activeDragY = state.dragY.update(stiffness * 0.85f, damping * 0.90f);
 
                     // AndroidLiquidGlass: Hyperbolic tangent elastic limits for jelly drag
-                    float maxOffset = Math.min(view.getWidth(), view.getHeight()) * 0.40f;
+                    float maxOffset = Math.min(view.getWidth(), view.getHeight()) * Math.max(0.10f, config.pinJellyElasticLimit);
                     if (maxOffset <= 0f) maxOffset = 40f;
                     float initialDerivative = 0.25f;
                     float tx = (float) (maxOffset * Math.tanh(initialDerivative * state.dragX.current / maxOffset));
@@ -355,7 +355,7 @@ public class PhysicsHook extends XposedModule {
                     // AndroidLiquidGlass: Anisotropic angle stretch & squash (atan2)
                     float dist = (float) Math.hypot(state.dragX.current, state.dragY.current);
                     float offsetAngle = (float) Math.atan2(state.dragY.current, state.dragX.current);
-                    float maxDragScale = 0.16f;
+                    float maxDragScale = Math.max(0.0f, config.pinJellyMaxStretch);
                     float stretchMag = (float) Math.min(maxDragScale, (dist / maxOffset) * maxDragScale);
 
                     float sx = state.scale.current + (float) (stretchMag * Math.abs(Math.cos(offsetAngle)));
@@ -565,9 +565,9 @@ public class PhysicsHook extends XposedModule {
                                                 refractionShader.setFloatUniform("size", cardW, cardH);
                                                 refractionShader.setFloatUniform("offset", 0f, 0f);
                                                 refractionShader.setFloatUniform("cornerRadii", 0f, 0f, cornerR, cornerR);
-                                                refractionShader.setFloatUniform("refractionHeight", 24f * density);
-                                                refractionShader.setFloatUniform("refractionAmount", 32f * density);
-                                                refractionShader.setFloatUniform("depthEffect", 0.12f);
+                                                refractionShader.setFloatUniform("refractionHeight", Math.max(1f, config.lockCardRefractionHeight) * density);
+                                                refractionShader.setFloatUniform("refractionAmount", Math.max(1f, config.lockCardRefractionAmount) * density);
+                                                refractionShader.setFloatUniform("depthEffect", Math.max(0f, config.lockCardDepthEffect));
                                                 
                                                 android.graphics.RenderEffect shaderEffect = android.graphics.RenderEffect.createRuntimeShaderEffect(refractionShader, "content");
                                                 rootView.setRenderEffect(shaderEffect);

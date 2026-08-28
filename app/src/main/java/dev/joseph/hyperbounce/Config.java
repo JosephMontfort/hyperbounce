@@ -81,6 +81,9 @@ public class Config {
     // ==========================================
     public float lockCardBorderWidth = 2.5f;
     public float lockCardBorderAlpha = 0.47f;
+    public float lockCardRefractionHeight = 24.0f;
+    public float lockCardRefractionAmount = 32.0f;
+    public float lockCardDepthEffect = 0.12f;
     public float lockPillWidth = 156.0f;
     public float lockPillHeight = 6.0f;
     public float lockPillBottomMargin = 9.0f;
@@ -105,9 +108,12 @@ public class Config {
     // ==========================================
     public float pinTapSquishScale = 0.88f;
     public float pinReleasePlunge = 0.10f;
+    public float pinJellyMaxStretch = 0.16f;
+    public float pinJellyElasticLimit = 0.40f;
     public float pinSpringStiffness = 50.0f;
     public float pinSpringDamping = 5.5f;
     public float pinPressGlowAlpha = 0.35f;
+    public float pinGlowRadius = 1.4f;
 
     // ==========================================
     // PIN PAD SEQUENTIAL ENTRY ANIMATION
@@ -221,6 +227,9 @@ public class Config {
         appIconCameraDist = d.appIconCameraDist;
         lockCardBorderWidth = d.lockCardBorderWidth;
         lockCardBorderAlpha = d.lockCardBorderAlpha;
+        lockCardRefractionHeight = d.lockCardRefractionHeight;
+        lockCardRefractionAmount = d.lockCardRefractionAmount;
+        lockCardDepthEffect = d.lockCardDepthEffect;
         lockPillWidth = d.lockPillWidth;
         lockPillHeight = d.lockPillHeight;
         lockPillBottomMargin = d.lockPillBottomMargin;
@@ -237,9 +246,12 @@ public class Config {
         pinRow0Offset = d.pinRow0Offset;
         pinTapSquishScale = d.pinTapSquishScale;
         pinReleasePlunge = d.pinReleasePlunge;
+        pinJellyMaxStretch = d.pinJellyMaxStretch;
+        pinJellyElasticLimit = d.pinJellyElasticLimit;
         pinSpringStiffness = d.pinSpringStiffness;
         pinSpringDamping = d.pinSpringDamping;
         pinPressGlowAlpha = d.pinPressGlowAlpha;
+        pinGlowRadius = d.pinGlowRadius;
         pinEntryTranslationY = d.pinEntryTranslationY;
         pinEntryInitialScale = d.pinEntryInitialScale;
         pinEntryDuration = d.pinEntryDuration;
@@ -345,6 +357,9 @@ public class Config {
 
             lockCardBorderWidth = (float) json.optDouble("lockCardBorderWidth", lockCardBorderWidth);
             lockCardBorderAlpha = (float) json.optDouble("lockCardBorderAlpha", lockCardBorderAlpha);
+            lockCardRefractionHeight = (float) json.optDouble("lockCardRefractionHeight", lockCardRefractionHeight);
+            lockCardRefractionAmount = (float) json.optDouble("lockCardRefractionAmount", lockCardRefractionAmount);
+            lockCardDepthEffect = (float) json.optDouble("lockCardDepthEffect", lockCardDepthEffect);
             lockPillWidth = (float) json.optDouble("lockPillWidth", lockPillWidth);
             lockPillHeight = (float) json.optDouble("lockPillHeight", lockPillHeight);
             lockPillBottomMargin = (float) json.optDouble("lockPillBottomMargin", lockPillBottomMargin);
@@ -361,9 +376,12 @@ public class Config {
             pinRow0Offset = (float) json.optDouble("pinRow0Offset", pinRow0Offset);
             pinTapSquishScale = (float) json.optDouble("pinTapSquishScale", pinTapSquishScale);
             pinReleasePlunge = (float) json.optDouble("pinReleasePlunge", pinReleasePlunge);
+            pinJellyMaxStretch = (float) json.optDouble("pinJellyMaxStretch", pinJellyMaxStretch);
+            pinJellyElasticLimit = (float) json.optDouble("pinJellyElasticLimit", pinJellyElasticLimit);
             pinSpringStiffness = (float) json.optDouble("pinSpringStiffness", pinSpringStiffness);
             pinSpringDamping = (float) json.optDouble("pinSpringDamping", pinSpringDamping);
             pinPressGlowAlpha = (float) json.optDouble("pinPressGlowAlpha", pinPressGlowAlpha);
+            pinGlowRadius = (float) json.optDouble("pinGlowRadius", pinGlowRadius);
             pinEntryTranslationY = (float) json.optDouble("pinEntryTranslationY", pinEntryTranslationY);
             pinEntryInitialScale = (float) json.optDouble("pinEntryInitialScale", pinEntryInitialScale);
             pinEntryDuration = (float) json.optDouble("pinEntryDuration", pinEntryDuration);
