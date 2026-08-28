@@ -64,6 +64,7 @@ public class ControlCenterHook {
 
     public static final List<TileGroup> sTileGroups = new ArrayList<>();
     public static volatile boolean sIsGroupSelectMode = false;
+    public static volatile boolean sPendingOrientationRebind = false;
     public static final Set<String> sSelectedTileSpecs = new java.util.LinkedHashSet<>();
     public static volatile boolean sIsDisassembleMode = false;
     public static final Set<String> sSelectedDisassembleGroups = new java.util.LinkedHashSet<>();
@@ -2000,7 +2001,7 @@ public class ControlCenterHook {
                 }
             } catch (Throwable ignore) {}
 
-            // 3b. Hook ControlCenterWindowViewImpl for Lifecycle and Touch Transitions
+            // 3b. Hook ControlCenterWindowViewImpl for Lifecycle Transitions
             try {
                 Class<?> windowViewImplClass = Class.forName("miui.systemui.controlcenter.windowview.ControlCenterWindowViewImpl", false, classLoader);
                 for (Method m : windowViewImplClass.getDeclaredMethods()) {
@@ -2013,36 +2014,21 @@ public class ControlCenterHook {
                                 Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
                                 if (args != null && args.length >= 2) {
                                     Object stateObj = args[1];
-                                    if (stateObj != null && ("STARTED".equals(stateObj.toString()) || "RESUMED".equals(stateObj.toString()))) {
-                                        wakeAndRefreshAllGroupedTiles();
-                                        View windowView = (View) chain.getThisObject();
-                                        if (windowView != null) {
-                                            refreshAdapter(windowView, windowView.getContext());
+                                    if (stateObj != null && "STARTED".equals(stateObj.toString())) {
+                                        if (sPendingOrientationRebind) {
+                                            sPendingOrientationRebind = false;
+                                            wakeAndRefreshAllGroupedTiles();
+                                            View windowView = (View) chain.getThisObject();
+                                            if (windowView != null) {
+                                                refreshAdapter(windowView, windowView.getContext());
+                                            }
+                                        } else {
+                                            wakeAndRefreshAllGroupedTiles();
                                         }
                                     }
                                 }
                             } catch (Throwable ignore) {}
                             return result;
-                        });
-                    }
-                    if (m.getName().equals("handleExpandTouchEvent") || m.getName().equals("handleExternalTouchEvent") || m.getName().equals("handleMotionEvent")) {
-                        m.setAccessible(true);
-                        module.hook(m).intercept(chain -> {
-                            try {
-                                Object rawArgs = chain.getArgs();
-                                Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
-                                if (args != null && args.length > 0 && args[0] instanceof MotionEvent) {
-                                    MotionEvent me = (MotionEvent) args[0];
-                                    if (me.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                                        wakeAndRefreshAllGroupedTiles();
-                                        View windowView = (View) chain.getThisObject();
-                                        if (windowView != null) {
-                                            refreshAdapter(windowView, windowView.getContext());
-                                        }
-                                    }
-                                }
-                            } catch (Throwable ignore) {}
-                            return chain.proceed();
                         });
                     }
                 }
@@ -2054,7 +2040,7 @@ public class ControlCenterHook {
             try {
                 Class<?> expandControllerClass = Class.forName("miui.systemui.controlcenter.windowview.ControlCenterExpandController", false, classLoader);
                 for (Method m : expandControllerClass.getDeclaredMethods()) {
-                    if (m.getName().equals("showPanel") || m.getName().equals("onExpandChange") || m.getName().equals("onStart")) {
+                    if (m.getName().equals("showPanel") || m.getName().equals("onStart")) {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
                             wakeAndRefreshAllGroupedTiles();
@@ -2874,23 +2860,8 @@ public class ControlCenterHook {
                     if (m.getName().equals("onConfigurationChanged")) {
                         m.setAccessible(true);
                         module.hook(m).intercept(chain -> {
-                            Object result = chain.proceed();
-                            try {
-                                Object distributor = chain.getThisObject();
-                                Method getRightAdp = distributorClass.getMethod("getRightAdapter");
-                                Object rightAdp = getRightAdp.invoke(distributor);
-                                if (rightAdp != null) {
-                                    Method notifyMethod = rightAdp.getClass().getMethod("notifyDataSetChanged");
-                                    notifyMethod.invoke(rightAdp);
-                                }
-                                Method getLeftAdp = distributorClass.getMethod("getLeftAdapter");
-                                Object leftAdp = getLeftAdp.invoke(distributor);
-                                if (leftAdp != null) {
-                                    Method notifyMethod = leftAdp.getClass().getMethod("notifyDataSetChanged");
-                                    notifyMethod.invoke(leftAdp);
-                                }
-                            } catch (Throwable ignore) {}
-                            return result;
+                            sPendingOrientationRebind = true;
+                            return chain.proceed();
                         });
                     }
                     if (m.getName().equals("distributePanels")) {
