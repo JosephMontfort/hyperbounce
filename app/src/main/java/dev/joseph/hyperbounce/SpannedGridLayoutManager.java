@@ -91,6 +91,22 @@ public class SpannedGridLayoutManager extends GridLayoutManager {
             if (viewType == 2274) {
                 return new int[]{2, 2};
             }
+            // 2275: Grouped 2-Tile Horizontal -> 2x1
+            if (viewType == 2275) {
+                return new int[]{2, 1};
+            }
+            // 2276: Grouped 2-Tile Vertical -> 1x2
+            if (viewType == 2276) {
+                return new int[]{1, 2};
+            }
+            // 2275: Grouped 2-Tile Horizontal -> 2x1
+            if (viewType == 2275) {
+                return new int[]{2, 1};
+            }
+            // 2276: Grouped 2-Tile Vertical -> 1x2
+            if (viewType == 2276) {
+                return new int[]{1, 2};
+            }
             // 2273: Wi-Fi / Cell / Expanded Card -> 2x1
             if (viewType == 2273) {
                 return new int[]{2, 1};
@@ -200,7 +216,7 @@ public class SpannedGridLayoutManager extends GridLayoutManager {
 
     @Override
     public void onLayoutChildren(RecyclerView.Recycler recycler, RecyclerView.State state) {
-        if (getItemCount() == 0 || state.isPreLayout()) {
+        if (getItemCount() == 0) {
             super.onLayoutChildren(recycler, state);
             return;
         }
@@ -229,11 +245,17 @@ public class SpannedGridLayoutManager extends GridLayoutManager {
                 View view = recycler.getViewForPosition(i);
                 addView(view);
 
+                RecyclerView.LayoutParams rlp = (RecyclerView.LayoutParams) view.getLayoutParams();
+                if (rlp != null) {
+                    rlp.width = r.width();
+                    rlp.height = r.height();
+                }
+
                 int widthSpec = View.MeasureSpec.makeMeasureSpec(r.width(), View.MeasureSpec.EXACTLY);
                 int heightSpec = View.MeasureSpec.makeMeasureSpec(r.height(), View.MeasureSpec.EXACTLY);
                 view.measure(widthSpec, heightSpec);
 
-                layoutDecoratedWithMargins(view, r.left, viewTop, r.right, viewBottom);
+                layoutDecorated(view, r.left, viewTop, r.right, viewBottom);
             }
         }
 

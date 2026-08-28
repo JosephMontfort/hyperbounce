@@ -49,9 +49,16 @@ public class ControlCenterHook {
     public static class TileGroup {
         public String id;
         public List<String> specs = new ArrayList<>();
+        public boolean isVertical = false;
+
         public TileGroup(String id, List<String> specs) {
+            this(id, specs, false);
+        }
+
+        public TileGroup(String id, List<String> specs, boolean isVertical) {
             this.id = id;
             this.specs = specs != null ? specs : new ArrayList<>();
+            this.isVertical = isVertical;
         }
     }
 
@@ -118,20 +125,38 @@ public class ControlCenterHook {
                     }
                 }
 
-                // Load Tile Groups
-                String groupsStr = sPrefs.getString("tile_groups_v1", "");
+                // Load Tile Groups (support v2 with isVertical and legacy v1)
+                String groupsStrV2 = sPrefs.getString("tile_groups_v2", "");
                 sTileGroups.clear();
-                if (!TextUtils.isEmpty(groupsStr)) {
-                    for (String gEntry : groupsStr.split(";")) {
+                if (!TextUtils.isEmpty(groupsStrV2)) {
+                    for (String gEntry : groupsStrV2.split(";")) {
                         String[] parts = gEntry.split(":");
-                        if (parts.length == 2) {
+                        if (parts.length >= 3) {
                             String gId = parts[0];
+                            boolean isVert = "V".equalsIgnoreCase(parts[1]);
                             List<String> gSpecs = new ArrayList<>();
-                            for (String sp : parts[1].split(",")) {
+                            for (String sp : parts[2].split(",")) {
                                 if (!sp.trim().isEmpty()) gSpecs.add(sp.trim());
                             }
-                            if (gSpecs.size() == 4) {
-                                sTileGroups.add(new TileGroup(gId, gSpecs));
+                            if (gSpecs.size() == 4 || gSpecs.size() == 2) {
+                                sTileGroups.add(new TileGroup(gId, gSpecs, isVert));
+                            }
+                        }
+                    }
+                } else {
+                    String groupsStr = sPrefs.getString("tile_groups_v1", "");
+                    if (!TextUtils.isEmpty(groupsStr)) {
+                        for (String gEntry : groupsStr.split(";")) {
+                            String[] parts = gEntry.split(":");
+                            if (parts.length == 2) {
+                                String gId = parts[0];
+                                List<String> gSpecs = new ArrayList<>();
+                                for (String sp : parts[1].split(",")) {
+                                    if (!sp.trim().isEmpty()) gSpecs.add(sp.trim());
+                                }
+                                if (gSpecs.size() == 4 || gSpecs.size() == 2) {
+                                    sTileGroups.add(new TileGroup(gId, gSpecs, false));
+                                }
                             }
                         }
                     }
@@ -160,19 +185,19 @@ public class ControlCenterHook {
                 }
                 editor.putString("expanded_tile_specs", sb.toString());
 
-                // Save Tile Groups
+                // Save Tile Groups (v2 supports 4-tile and 2-tile groups with orientation)
                 StringBuilder groupsSb = new StringBuilder();
                 for (TileGroup g : sTileGroups) {
-                    if (g.specs.size() == 4) {
+                    if (g.specs.size() == 4 || g.specs.size() == 2) {
                         if (groupsSb.length() > 0) groupsSb.append(";");
-                        groupsSb.append(g.id).append(":");
+                        groupsSb.append(g.id).append(":").append(g.isVertical ? "V" : "H").append(":");
                         for (int i = 0; i < g.specs.size(); i++) {
                             if (i > 0) groupsSb.append(",");
                             groupsSb.append(g.specs.get(i));
                         }
                     }
                 }
-                editor.putString("tile_groups_v1", groupsSb.toString());
+                editor.putString("tile_groups_v2", groupsSb.toString());
 
                 editor.apply();
             }
@@ -206,6 +231,46 @@ public class ControlCenterHook {
                 "setSafeMode", "true", null
             );
         } catch (Throwable ignore) {}
+    }
+
+    // Custom Anti-Aliased Rotate Icon Badge Drawable for 2-Tile Groups
+    private static class RotateIconDrawable extends Drawable {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        public RotateIconDrawable() {
+            paint.setColor(Color.WHITE);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(3.0f);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            bgPaint.setColor(Color.parseColor("#99000000"));
+            bgPaint.setStyle(Paint.Style.FILL);
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            android.graphics.Rect bounds = getBounds();
+            float cx = bounds.exactCenterX();
+            float cy = bounds.exactCenterY();
+            float r = Math.min(bounds.width(), bounds.height()) / 2f;
+            canvas.drawCircle(cx, cy, r, bgPaint);
+
+            float arcR = r * 0.55f;
+            android.graphics.RectF arcRect = new android.graphics.RectF(cx - arcR, cy - arcR, cx + arcR, cy + arcR);
+            canvas.drawArc(arcRect, 30, 260, false, paint);
+
+            float arrowX = cx + arcR * (float) Math.cos(Math.toRadians(290));
+            float arrowY = cy + arcR * (float) Math.sin(Math.toRadians(290));
+            canvas.drawLine(arrowX, arrowY, arrowX - 5f, arrowY - 5f, paint);
+            canvas.drawLine(arrowX, arrowY, arrowX + 5f, arrowY - 5f, paint);
+        }
+
+        @Override
+        public void setAlpha(int alpha) { paint.setAlpha(alpha); }
+        @Override
+        public void setColorFilter(ColorFilter colorFilter) { paint.setColorFilter(colorFilter); }
+        @Override
+        public int getOpacity() { return PixelFormat.TRANSLUCENT; }
     }
 
     // Custom Anti-Aliased Resize Handle Vector Badge Drawable
@@ -743,12 +808,12 @@ public class ControlCenterHook {
                         finalGroupBtn.setImageDrawable(new GroupGridDrawable(true));
                         if (finalDisassembleBtn != null) finalDisassembleBtn.setImageDrawable(new UngroupHeaderDrawable(false));
                     } else {
-                        if (sSelectedTileSpecs.size() == 4) {
+                        if (sSelectedTileSpecs.size() == 4 || sSelectedTileSpecs.size() == 2) {
                             String groupId = "group_" + System.currentTimeMillis();
                             for (String spec : sSelectedTileSpecs) {
                                 sExpandedTileSpecs.remove(spec);
                             }
-                            sTileGroups.add(new TileGroup(groupId, new ArrayList<>(sSelectedTileSpecs)));
+                            sTileGroups.add(new TileGroup(groupId, new ArrayList<>(sSelectedTileSpecs), false));
                             sIsGroupSelectMode = false;
                             sSelectedTileSpecs.clear();
                             finalGroupBtn.setImageDrawable(new GroupGridDrawable(false));
@@ -805,7 +870,7 @@ public class ControlCenterHook {
     public static TileGroup isGroupAnchor(String spec) {
         if (spec == null) return null;
         for (TileGroup g : sTileGroups) {
-            if (g.specs.size() == 4 && spec.equals(g.specs.get(0))) {
+            if ((g.specs.size() == 4 || g.specs.size() == 2) && spec.equals(g.specs.get(0))) {
                 return g;
             }
         }
@@ -815,7 +880,7 @@ public class ControlCenterHook {
     public static boolean isGroupChild(String spec) {
         if (spec == null) return false;
         for (TileGroup g : sTileGroups) {
-            if (g.specs.size() == 4) {
+            if (g.specs.size() == 4 || g.specs.size() == 2) {
                 for (int i = 1; i < g.specs.size(); i++) {
                     if (spec.equals(g.specs.get(i))) return true;
                 }
@@ -983,6 +1048,243 @@ public class ControlCenterHook {
             }
         } catch (Throwable t) {
             android.util.Log.e(TAG, "applyGroupContainerStyle error", t);
+        }
+    }
+
+    private static Object createGrouped2TileViewHolder(ViewGroup parent, Object qsListCtrl, ClassLoader classLoader, boolean isVertical) {
+        if (parent == null || qsListCtrl == null || classLoader == null) return null;
+        try {
+            Context ctx = parent.getContext();
+            float density = ctx.getResources().getDisplayMetrics().density;
+
+            Field sysUIContextField = qsListCtrl.getClass().getDeclaredField("sysUIContext");
+            sysUIContextField.setAccessible(true);
+            Context sysUIContext = (Context) sysUIContextField.get(qsListCtrl);
+
+            // Inflate genuine QSCardItemView as root
+            Class<?> cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader);
+            Method inflateMethod = cardBindingClass.getMethod("inflate", LayoutInflater.class, ViewGroup.class, boolean.class);
+            Object binding = inflateMethod.invoke(null, LayoutInflater.from(ctx), parent, false);
+
+            Method getRootMethod = cardBindingClass.getMethod("getRoot");
+            ViewGroup root = (ViewGroup) getRootMethod.invoke(binding);
+
+            // Initialize QSCardItemView with QSCardItemIconView
+            try {
+                Class<?> cardIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemIconView", false, classLoader);
+                Constructor<?> cardIconCtor = null;
+                for (Constructor<?> c : cardIconViewClass.getDeclaredConstructors()) {
+                    if (c.getParameterTypes().length == 5) {
+                        cardIconCtor = c;
+                        break;
+                    }
+                }
+                if (cardIconCtor == null) {
+                    cardIconCtor = cardIconViewClass.getDeclaredConstructors()[0];
+                }
+                cardIconCtor.setAccessible(true);
+                Object cardIconView = (cardIconCtor.getParameterTypes().length == 5)
+                    ? cardIconCtor.newInstance(root.getContext(), sysUIContext, null, 4, null)
+                    : cardIconCtor.newInstance(root.getContext(), sysUIContext);
+
+                Method initCardMethod = root.getClass().getMethod("init", cardIconViewClass);
+                initCardMethod.invoke(root, cardIconView);
+            } catch (Throwable t) {
+                android.util.Log.e(TAG, "QSCardItemView init error", t);
+            }
+
+            root.removeAllViews();
+
+            int resHeightId = ctx.getResources().getIdentifier("control_center_universal_1_row_with_margin_size", "dimen", ctx.getPackageName());
+            int unitH = (resHeightId != 0) ? ctx.getResources().getDimensionPixelSize(resHeightId) : (int) (76 * density);
+            int resMarginId = ctx.getResources().getIdentifier("control_center_universal_margin", "dimen", ctx.getPackageName());
+            int gap = (resMarginId != 0) ? ctx.getResources().getDimensionPixelSize(resMarginId) : (int) (10 * density);
+            int tallH = unitH * 2 + gap;
+
+            int cardH = isVertical ? tallH : unitH;
+            ViewGroup.LayoutParams rlp = root.getLayoutParams();
+            if (rlp != null) {
+                rlp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                rlp.height = cardH;
+                root.setLayoutParams(rlp);
+            } else {
+                root.setLayoutParams(new ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, cardH));
+            }
+
+            Object mainPanelController = null;
+            try {
+                Field mainPanelControllerField = qsListCtrl.getClass().getDeclaredField("mainPanelController");
+                mainPanelControllerField.setAccessible(true);
+                Object mainPanelCtrlLazy = mainPanelControllerField.get(qsListCtrl);
+                Method getMethod = mainPanelCtrlLazy.getClass().getMethod("get");
+                mainPanelController = getMethod.invoke(mainPanelCtrlLazy);
+            } catch (Throwable ignore) {}
+
+            boolean blurEnabled = false;
+            try {
+                Class<?> ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader);
+                Method getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context.class);
+                blurEnabled = (boolean) getBlurM.invoke(null, ctx);
+            } catch (Throwable ignore) {}
+
+            android.widget.FrameLayout wrapper = new android.widget.FrameLayout(ctx);
+            wrapper.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+            android.widget.LinearLayout container = new android.widget.LinearLayout(ctx);
+            container.setId(0x7f099995);
+            container.setOrientation(isVertical ? android.widget.LinearLayout.VERTICAL : android.widget.LinearLayout.HORIZONTAL);
+            container.setGravity(Gravity.CENTER);
+            int pad = (int) (4 * density);
+            container.setPadding(pad, pad, pad, pad);
+            wrapper.addView(container, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+            // Injected Rotate Button for 2-tile containers in Edit Mode
+            ImageView rotateBtn = new ImageView(ctx);
+            rotateBtn.setId(0x7f099992);
+            rotateBtn.setImageDrawable(new RotateIconDrawable());
+            int rSize = (int) (26 * density);
+            android.widget.FrameLayout.LayoutParams rlpBtn = new android.widget.FrameLayout.LayoutParams(rSize, rSize);
+            rlpBtn.gravity = Gravity.BOTTOM | Gravity.END;
+            int rMargin = (int) (4 * density);
+            rlpBtn.setMargins(0, 0, rMargin, rMargin);
+            rotateBtn.setLayoutParams(rlpBtn);
+            rotateBtn.setVisibility(View.GONE);
+            wrapper.addView(rotateBtn);
+
+            root.addView(wrapper);
+
+            // Inflate 2 circular child tiles
+            int tileLayoutId = ctx.getResources().getIdentifier("qs_tile_item_view", "layout", ctx.getPackageName());
+            Class<?> tileIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemIconView", false, classLoader);
+            Constructor<?> iconCtor = null;
+            for (Constructor<?> c : tileIconViewClass.getDeclaredConstructors()) {
+                if (c.getParameterTypes().length == 5) {
+                    iconCtor = c;
+                    break;
+                }
+            }
+            if (iconCtor == null) iconCtor = tileIconViewClass.getDeclaredConstructors()[0];
+            iconCtor.setAccessible(true);
+
+            container.setClickable(false);
+            container.setFocusable(false);
+            root.setClickable(false);
+            root.setFocusable(false);
+
+            Object[] subHolders = new Object[2];
+            Class<?> subHolderClass = null;
+            Constructor<?> subHolderCtor = null;
+            try {
+                subHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSItemViewHolder", false, classLoader);
+                for (Constructor<?> c : subHolderClass.getDeclaredConstructors()) {
+                    if (c.getParameterTypes().length == 2) {
+                        subHolderCtor = c;
+                        break;
+                    }
+                }
+                if (subHolderCtor == null && subHolderClass.getDeclaredConstructors().length > 0) {
+                    subHolderCtor = subHolderClass.getDeclaredConstructors()[0];
+                }
+                if (subHolderCtor != null) subHolderCtor.setAccessible(true);
+            } catch (Throwable ignore) {}
+
+            for (int i = 0; i < 2; i++) {
+                View childTile = LayoutInflater.from(ctx).inflate(tileLayoutId, container, false);
+                Object iconView = (iconCtor.getParameterTypes().length == 5)
+                    ? iconCtor.newInstance(ctx, sysUIContext, false, 4, null)
+                    : iconCtor.newInstance(ctx, sysUIContext, false);
+
+                Method initMethod = childTile.getClass().getMethod("init", tileIconViewClass);
+                initMethod.invoke(childTile, iconView);
+
+                int iconFrameId = ctx.getResources().getIdentifier("icon_frame", "id", ctx.getPackageName());
+                View iconFrame = childTile.findViewById(iconFrameId);
+                if (iconFrame != null) {
+                    ViewGroup.LayoutParams iflp = iconFrame.getLayoutParams();
+                    if (iflp instanceof android.widget.FrameLayout.LayoutParams) {
+                        android.widget.FrameLayout.LayoutParams flp = (android.widget.FrameLayout.LayoutParams) iflp;
+                        flp.gravity = Gravity.CENTER;
+                        flp.topMargin = 0;
+                        flp.bottomMargin = 0;
+                        iconFrame.setLayoutParams(flp);
+                    }
+                    if (blurEnabled) {
+                        android.graphics.drawable.GradientDrawable discBg = new android.graphics.drawable.GradientDrawable();
+                        discBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                        discBg.setColor(Color.parseColor("#38FFFFFF"));
+                        discBg.setStroke((int) Math.max(1, 1.5f * density), Color.parseColor("#80FFFFFF"));
+                        iconFrame.setBackground(discBg);
+                    } else {
+                        iconFrame.setBackground(null);
+                    }
+                }
+
+                if (mainPanelController != null) {
+                    try {
+                        Method setMainCtrlMethod = childTile.getClass().getMethod("setMainPanelController", Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController", false, classLoader));
+                        setMainCtrlMethod.invoke(childTile, mainPanelController);
+                    } catch (Throwable ignore) {}
+                }
+
+                if (subHolderCtor != null) {
+                    try {
+                        if (subHolderCtor.getParameterTypes().length == 2) {
+                            subHolders[i] = subHolderCtor.newInstance(childTile, mainPanelController);
+                        } else {
+                            subHolders[i] = subHolderCtor.newInstance(childTile);
+                        }
+                    } catch (Throwable t) {
+                        android.util.Log.e(TAG, "Failed creating QSItemViewHolder for subTile " + i, t);
+                    }
+                }
+
+                if (subHolders[i] != null) {
+                    Class<?> sc = subHolders[i].getClass();
+                    while (sc != null) {
+                        try {
+                            Field af = sc.getDeclaredField("attached");
+                            af.setAccessible(true);
+                            af.setBoolean(subHolders[i], true);
+                        } catch (Throwable ignore) {}
+                        try {
+                            Field mpaField = sc.getDeclaredField("mainPanelAdapter");
+                            mpaField.setAccessible(true);
+                            if (sMainPanelAdapter != null) {
+                                mpaField.set(subHolders[i], sMainPanelAdapter);
+                            }
+                        } catch (Throwable ignore) {}
+                        try {
+                            Field fcField = sc.getDeclaredField("frameCallback");
+                            fcField.setAccessible(true);
+                            if (sFrameCallback != null) {
+                                fcField.set(subHolders[i], sFrameCallback);
+                            }
+                        } catch (Throwable ignore) {}
+                        sc = sc.getSuperclass();
+                    }
+                }
+
+                android.widget.LinearLayout.LayoutParams tlp = isVertical
+                    ? new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f)
+                    : new android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f);
+                tlp.gravity = Gravity.CENTER;
+                container.addView(childTile, tlp);
+            }
+
+            root.setTag(0x7f099993, subHolders);
+
+            applyGroupContainerStyle(root, classLoader);
+            root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+                applyGroupContainerStyle(v, classLoader);
+            });
+
+            Class<?> cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader);
+            Class<?> qsItemViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSItemView", false, classLoader);
+            Constructor<?> holderCtor = cardHolderClass.getConstructor(qsItemViewClass);
+            return holderCtor.newInstance(root);
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "createGrouped2TileViewHolder error", t);
+            return null;
         }
     }
 
@@ -1323,15 +1625,22 @@ public class ControlCenterHook {
 
     private static View getChildTileAt(ViewGroup container, int index) {
         if (container == null) return null;
-        int rowIndex = index / 2;
-        int colIndex = index % 2;
-        if (rowIndex < container.getChildCount()) {
-            View row = container.getChildAt(rowIndex);
-            if (row instanceof ViewGroup && colIndex < ((ViewGroup) row).getChildCount()) {
-                return ((ViewGroup) row).getChildAt(colIndex);
+        if (container.getChildCount() > 0 && container.getChildAt(0) instanceof android.widget.LinearLayout && ((android.widget.LinearLayout) container.getChildAt(0)).getChildCount() > 0 && !(container.getChildAt(0).getClass().getName().contains("QSTileItemView"))) {
+            int rowIndex = index / 2;
+            int colIndex = index % 2;
+            if (rowIndex < container.getChildCount()) {
+                View row = container.getChildAt(rowIndex);
+                if (row instanceof ViewGroup && colIndex < ((ViewGroup) row).getChildCount()) {
+                    return ((ViewGroup) row).getChildAt(colIndex);
+                }
             }
+            return null;
+        } else {
+            if (index < container.getChildCount()) {
+                return container.getChildAt(index);
+            }
+            return null;
         }
-        return null;
     }
 
     private static void toggleTileSize(Context ctx, String spec, View tileView) {
@@ -2065,6 +2374,14 @@ public class ControlCenterHook {
                                             Object holder = createGroupedCardViewHolder(parent, qsListCtrl, classLoader);
                                             if (holder != null) return holder;
                                         }
+                                        if (viewType == 2275) {
+                                            Object holder = createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, false);
+                                            if (holder != null) return holder;
+                                        }
+                                        if (viewType == 2276) {
+                                            Object holder = createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, true);
+                                            if (holder != null) return holder;
+                                        }
 
                                         if (viewType == 2273) {
                                             Class<?> cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader);
@@ -2117,18 +2434,29 @@ public class ControlCenterHook {
                         module.hook(m).intercept(chain -> {
                             Object rawArgs = chain.getArgs();
                             Object[] args = (rawArgs instanceof List) ? ((List<?>) rawArgs).toArray() : (Object[]) rawArgs;
-                            if (args != null && args.length >= 2 && ((Integer) args[1]) == 2274) {
-                                try {
-                                    Object adapterObj = chain.getThisObject();
-                                    sMainPanelAdapter = adapterObj;
-                                    Field qsListField = mainAdapterClass.getDeclaredField("qsListController");
-                                    qsListField.setAccessible(true);
-                                    Object qsListCtrl = qsListField.get(adapterObj);
-                                    ViewGroup parent = (ViewGroup) args[0];
-                                    Object holder = createGroupedCardViewHolder(parent, qsListCtrl, classLoader);
-                                    if (holder != null) return holder;
-                                } catch (Throwable t) {
-                                    android.util.Log.e(TAG, "MainPanelAdapter.onCreateViewHolder 2274 intercept error", t);
+                            if (args != null && args.length >= 2) {
+                                int vt = (Integer) args[1];
+                                if (vt == 2274 || vt == 2275 || vt == 2276) {
+                                    try {
+                                        Object adapterObj = chain.getThisObject();
+                                        sMainPanelAdapter = adapterObj;
+                                        Field qsListField = mainAdapterClass.getDeclaredField("qsListController");
+                                        qsListField.setAccessible(true);
+                                        Object qsListCtrl = qsListField.get(adapterObj);
+                                        ViewGroup parent = (ViewGroup) args[0];
+                                        if (vt == 2274) {
+                                            Object holder = createGroupedCardViewHolder(parent, qsListCtrl, classLoader);
+                                            if (holder != null) return holder;
+                                        } else if (vt == 2275) {
+                                            Object holder = createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, false);
+                                            if (holder != null) return holder;
+                                        } else if (vt == 2276) {
+                                            Object holder = createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, true);
+                                            if (holder != null) return holder;
+                                        }
+                                    } catch (Throwable t) {
+                                        android.util.Log.e(TAG, "MainPanelAdapter.onCreateViewHolder " + vt + " intercept error", t);
+                                    }
                                 }
                             }
                             return chain.proceed();
@@ -2215,8 +2543,13 @@ public class ControlCenterHook {
                                 specField.setAccessible(true);
                                 String spec = (String) specField.get(record);
                                 if (spec != null) {
-                                    if (isGroupAnchor(spec) != null) {
-                                        return 2274; // Grouped 2x2 Card Container!
+                                    TileGroup g = isGroupAnchor(spec);
+                                    if (g != null) {
+                                        if (g.specs.size() == 4) {
+                                            return 2274; // Grouped 2x2 Card Container!
+                                        } else if (g.specs.size() == 2) {
+                                            return g.isVertical ? 2276 : 2275; // 2-Tile Vertical (1x2) or Horizontal (2x1)
+                                        }
                                     }
                                     if (sExpandedTileSpecs.contains(spec)) {
                                         return 2273; // Genuine 2273 Card View Type!
@@ -2236,8 +2569,13 @@ public class ControlCenterHook {
                                 specField.setAccessible(true);
                                 String spec = (String) specField.get(record);
                                 if (spec != null) {
-                                    if (isGroupAnchor(spec) != null) {
-                                        return 2; // 2-Column Span!
+                                    TileGroup g = isGroupAnchor(spec);
+                                    if (g != null) {
+                                        if (g.specs.size() == 4) {
+                                            return 2; // 2-Column Span for 2x2!
+                                        } else if (g.specs.size() == 2) {
+                                            return g.isVertical ? 1 : 2; // 1-Column for Vertical, 2-Column for Horizontal!
+                                        }
                                     }
                                     if (sExpandedTileSpecs.contains(spec)) {
                                         return 2; // Genuine 2-Column Span!
@@ -2443,6 +2781,23 @@ public class ControlCenterHook {
                                     // Grouped 2x2 Card Binding & Ungroup Badge
                                     TileGroup group = isGroupAnchor(spec);
                                     if (group != null) {
+                                        View rotateBtn = itemView.findViewById(0x7f099992);
+                                        if (rotateBtn != null) {
+                                            if (isEdit) {
+                                                rotateBtn.setVisibility(View.VISIBLE);
+                                                rotateBtn.setOnClickListener(v -> {
+                                                    try {
+                                                        group.isVertical = !group.isVertical;
+                                                        savePriorities(ctx);
+                                                        refreshAdapter(itemView.getRootView(), ctx);
+                                                    } catch (Throwable t) {
+                                                        android.util.Log.e(TAG, "Rotate group click error", t);
+                                                    }
+                                                });
+                                            } else {
+                                                rotateBtn.setVisibility(View.GONE);
+                                            }
+                                        }
                                         ViewGroup container = itemView.findViewById(0x7f099995);
                                         if (container != null) {
                                             try {
@@ -2543,6 +2898,19 @@ public class ControlCenterHook {
 
                                                     if (childRecord != null && subHolder != null && childView != null) {
                                                         try {
+                                                            // In edit mode: child tiles are non-clickable and transparent to touches
+                                                            try {
+                                                                if (isEdit) {
+                                                                    childView.setClickable(false);
+                                                                    childView.setLongClickable(false);
+                                                                    childView.setFocusable(false);
+                                                                } else {
+                                                                    childView.setClickable(true);
+                                                                    childView.setLongClickable(true);
+                                                                    childView.setFocusable(true);
+                                                                }
+                                                            } catch (Throwable ignore) {}
+
                                                             // 1. Wire subHolder to childRecord
                                                             try {
                                                                 for (Method shM : subHolder.getClass().getMethods()) {
