@@ -69,6 +69,7 @@ public class ControlCenterHook {
     public static final Set<String> sSelectedDisassembleGroups = new java.util.LinkedHashSet<>();
     public static volatile Object sQSListController = null;
     public static volatile Object sMainPanelAdapter = null;
+    public static volatile List<Object> sAllQSRecords = new java.util.concurrent.CopyOnWriteArrayList<>();
     public static volatile Object sFrameCallback = null;
     private static final ThreadLocal<Set<Object>> sBindingRecords = ThreadLocal.withInitial(HashSet::new);
 
@@ -2451,6 +2452,10 @@ public class ControlCenterHook {
                         module.hook(m).intercept(chain -> {
                             sQSListController = chain.getThisObject();
                             List originalList = (List) chain.proceed();
+                            if (originalList != null) {
+                                sAllQSRecords.clear();
+                                sAllQSRecords.addAll(originalList);
+                            }
                             if (originalList == null || sTileGroups.isEmpty()) return originalList;
                             try {
                                 ArrayList filtered = new ArrayList();
@@ -2667,6 +2672,14 @@ public class ControlCenterHook {
                                                 resetLayoutToStock(rCtx);
                                             }
                                         }, resetFilter, Context.RECEIVER_EXPORTED);
+                                    } catch (Throwable ignore) {}
+
+                                    // Proactively refresh adapter after layout distribution / orientation change
+                                    try {
+                                        if (sMainPanelAdapter != null) {
+                                            Method notifyM = sMainPanelAdapter.getClass().getMethod("notifyDataSetChanged");
+                                            notifyM.invoke(sMainPanelAdapter);
+                                        }
                                     } catch (Throwable ignore) {}
 
                                     Field rightPanelContentField = distributorClass.getDeclaredField("rightPanelContent");
@@ -3038,6 +3051,28 @@ public class ControlCenterHook {
                                                     }
                                                 }
 
+                                                // Proactive fallback: query sAllQSRecords cache
+                                                if (sAllQSRecords != null && !sAllQSRecords.isEmpty()) {
+                                                    for (Object r : sAllQSRecords) {
+                                                        if (r != null) {
+                                                            String s = null;
+                                                            try {
+                                                                Method getSpecMethod = r.getClass().getMethod("getSpec");
+                                                                s = (String) getSpecMethod.invoke(r);
+                                                            } catch (Throwable ignore) {
+                                                                try {
+                                                                    Field sF = r.getClass().getDeclaredField("spec");
+                                                                    sF.setAccessible(true);
+                                                                    s = (String) sF.get(r);
+                                                                } catch (Throwable ignore2) {}
+                                                            }
+                                                            if (s != null && !recordMap.containsKey(s)) {
+                                                                recordMap.put(s, r);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
                                                 // Fallback on boot: query all records from sQSListController
                                                 if (sQSListController != null) {
                                                     try {
@@ -3276,11 +3311,35 @@ public class ControlCenterHook {
                                         } else {
                                             if (indicatorBadge != null) {
                                                 indicatorBadge.setVisibility(View.GONE);
+                                                indicatorBadge.setOnClickListener(null);
+                                                indicatorBadge.setClickable(false);
                                             }
-                                            if (!isEdit) {
-                                                itemView.setOnClickListener(null);
-                                                itemView.setClickable(false);
-                                                itemView.setFocusable(false);
+                                            itemView.setOnClickListener(null);
+                                            itemView.setClickable(false);
+                                            itemView.setFocusable(false);
+
+                                            // Explicitly restore clean click dispatching on child tiles & icon frames
+                                            for (int ci = 0; ci < 4; ci++) {
+                                                View ct = getChildTileAt(container, ci);
+                                                if (ct != null) {
+                                                    int ifId = ctx.getResources().getIdentifier("icon_frame", "id", ctx.getPackageName());
+                                                    View ifView = ct.findViewById(ifId);
+                                                    if (ifView != null) {
+                                                        ifView.setOnClickListener(null);
+                                                        ifView.setClickable(false);
+                                                    }
+                                                    if (isEdit) {
+                                                        ct.setOnClickListener(null);
+                                                        ct.setClickable(false);
+                                                        ct.setLongClickable(false);
+                                                        ct.setFocusable(false);
+                                                    } else {
+                                                        ct.setOnClickListener(null);
+                                                        ct.setClickable(true);
+                                                        ct.setLongClickable(true);
+                                                        ct.setFocusable(true);
+                                                    }
+                                                }
                                             }
                                         }
                                     }
