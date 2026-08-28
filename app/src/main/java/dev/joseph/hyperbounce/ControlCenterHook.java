@@ -79,6 +79,7 @@ public class ControlCenterHook {
     private static final Set<String> sExpandedTileSpecs = new HashSet<>();
     private static boolean sIsWifiFirst = true;
     private static SharedPreferences sPrefs = null;
+    private static Context sLastKnownContext = null;
 
     static {
         sComponentPriorities.put("QSCardsController", 20);
@@ -92,6 +93,7 @@ public class ControlCenterHook {
 
     private static synchronized void loadSavedPriorities(Context ctx) {
         if (ctx == null) return;
+        sLastKnownContext = ctx.getApplicationContext() != null ? ctx.getApplicationContext() : ctx;
         try {
             if (sPrefs == null) {
                 sPrefs = ctx.getSharedPreferences("hyperbounce_cc_layout", Context.MODE_PRIVATE);
@@ -111,7 +113,7 @@ public class ControlCenterHook {
                 if (!initialized) {
                     sExpandedTileSpecs.add("wifi");
                     sExpandedTileSpecs.add("cell");
-                    sPrefs.edit().putBoolean("has_initialized_tile_specs_v6", true).putString("expanded_tile_specs", "wifi,cell").apply();
+                    sPrefs.edit().putBoolean("has_initialized_tile_specs_v6", true).putString("expanded_tile_specs", "wifi,cell").commit();
                 } else {
                     String expandedStr = sPrefs.getString("expanded_tile_specs", "wifi,cell");
                     if (!TextUtils.isEmpty(expandedStr)) {
@@ -228,7 +230,7 @@ public class ControlCenterHook {
                 }
                 editor.putString("tile_groups_v2", groupsSb.toString());
 
-                editor.apply();
+                editor.commit();
             }
         } catch (Throwable ignore) {}
     }
@@ -544,6 +546,26 @@ public class ControlCenterHook {
                                     setLisM.invoke(tileObj, r, true);
                                     Method refM = tileObj.getClass().getMethod("refreshState");
                                     refM.invoke(tileObj);
+                                    try {
+                                        Method getStateM = tileObj.getClass().getMethod("getState");
+                                        Object curState = getStateM.invoke(tileObj);
+                                        Method getHolderM = r.getClass().getMethod("getHolder");
+                                        Object holder = getHolderM.invoke(r);
+                                        if (holder != null && curState != null) {
+                                            Field ivField = holder.getClass().getDeclaredField("itemView");
+                                            ivField.setAccessible(true);
+                                            View childView = (View) ivField.get(holder);
+                                            if (childView != null) {
+                                                for (Method vm : childView.getClass().getMethods()) {
+                                                    if (vm.getName().equals("updateState") && vm.getParameterTypes().length == 3) {
+                                                        vm.setAccessible(true);
+                                                        vm.invoke(childView, curState, true, false);
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } catch (Throwable ignore) {}
                                 }
                             } catch (Throwable ignore) {}
                         }
@@ -555,24 +577,36 @@ public class ControlCenterHook {
 
     private static void refreshAdapter(View root, Context ctx) {
         try {
+            if (ctx == null && root != null) ctx = root.getContext();
+            if (ctx == null) return;
+            loadSavedPriorities(ctx);
             View decor = root.getRootView();
-            int rvId = ctx.getResources().getIdentifier("main_panel", "id", ctx.getPackageName());
-            View rv = decor.findViewById(rvId);
-            if (rv != null) {
-                Method getAdapterMethod = rv.getClass().getMethod("getAdapter");
-                Object adp = getAdapterMethod.invoke(rv);
-                if (adp != null) {
-                    try {
-                        Method notifyChangedMethod = adp.getClass().getMethod("notifyChanged", boolean.class, boolean.class);
-                        notifyChangedMethod.invoke(adp, true, true);
-                    } catch (Throwable ignore) {
-                        try {
-                            Method distMethod = adp.getClass().getDeclaredMethod("distributeContent", boolean.class);
-                            distMethod.setAccessible(true);
-                            distMethod.invoke(adp, true);
-                        } catch (Throwable ignore2) {}
-                        Method notifyDataSetChangedMethod = adp.getClass().getMethod("notifyDataSetChanged");
-                        notifyDataSetChangedMethod.invoke(adp);
+            String[] panelIds = new String[]{"main_panel", "right_main_panel", "left_main_panel", "right_panel", "left_panel"};
+            for (String pIdStr : panelIds) {
+                int rvId = ctx.getResources().getIdentifier(pIdStr, "id", ctx.getPackageName());
+                if (rvId != 0) {
+                    View rv = decor.findViewById(rvId);
+                    if (rv != null) {
+                        Method getAdapterMethod = rv.getClass().getMethod("getAdapter");
+                        Object adp = getAdapterMethod.invoke(rv);
+                        if (adp != null) {
+                            try {
+                                Method distMethod = adp.getClass().getDeclaredMethod("distributeContent", boolean.class);
+                                distMethod.setAccessible(true);
+                                distMethod.invoke(adp, true);
+                            } catch (Throwable ignore) {}
+                            try {
+                                Method getItemCountMethod = adp.getClass().getMethod("getItemCount");
+                                int count = (int) getItemCountMethod.invoke(adp);
+                                Method notifyItemRangeChangedMethod = adp.getClass().getMethod("notifyItemRangeChanged", int.class, int.class);
+                                notifyItemRangeChangedMethod.invoke(adp, 0, count);
+                            } catch (Throwable ignore) {
+                                try {
+                                    Method notifyDataSetChangedMethod = adp.getClass().getMethod("notifyDataSetChanged");
+                                    notifyDataSetChangedMethod.invoke(adp);
+                                } catch (Throwable ignore2) {}
+                            }
+                        }
                     }
                 }
             }
@@ -965,6 +999,7 @@ public class ControlCenterHook {
 
     public static TileGroup isGroupAnchor(String spec) {
         if (spec == null) return null;
+        if (sPrefs == null && sLastKnownContext != null) loadSavedPriorities(sLastKnownContext);
         for (TileGroup g : sTileGroups) {
             if ((g.specs.size() == 4 || g.specs.size() == 2) && spec.equals(g.specs.get(0))) {
                 return g;
@@ -975,6 +1010,7 @@ public class ControlCenterHook {
 
     public static boolean isGroupChild(String spec) {
         if (spec == null) return false;
+        if (sPrefs == null && sLastKnownContext != null) loadSavedPriorities(sLastKnownContext);
         for (TileGroup g : sTileGroups) {
             if (g.specs.size() == 4 || g.specs.size() == 2) {
                 for (int i = 1; i < g.specs.size(); i++) {
@@ -3422,7 +3458,16 @@ public class ControlCenterHook {
                                                                     try {
                                                                         Method getStateM = tileObj.getClass().getMethod("getState");
                                                                         Object curState = getStateM.invoke(tileObj);
-                                                                        if (curState != null) {
+                                                                        if (curState != null && childView != null) {
+                                                                            try {
+                                                                                for (Method vm : childView.getClass().getMethods()) {
+                                                                                    if (vm.getName().equals("updateState") && vm.getParameterTypes().length == 3) {
+                                                                                        vm.setAccessible(true);
+                                                                                        vm.invoke(childView, curState, true, false);
+                                                                                        break;
+                                                                                    }
+                                                                                }
+                                                                            } catch (Throwable ignore) {}
                                                                             for (Method hm : subHolder.getClass().getMethods()) {
                                                                                 if ((hm.getName().equals("onStateChanged") || hm.getName().equals("handleUpdateState")) && hm.getParameterTypes().length == 1) {
                                                                                     hm.setAccessible(true);
@@ -3703,6 +3748,30 @@ public class ControlCenterHook {
                                     if (resizeHandle != null) {
                                         resizeHandle.setVisibility(isEdit ? View.VISIBLE : View.GONE);
                                         if (isEdit) resizeHandle.bringToFront();
+                                    }
+
+                                    int selectTag = 0x7f099998;
+                                    ImageView selectBadge = itemView.findViewById(selectTag);
+                                    if (selectBadge != null) {
+                                        if (!isEdit || !sIsGroupSelectMode) {
+                                            selectBadge.setVisibility(View.GONE);
+                                        } else {
+                                            selectBadge.setVisibility(View.VISIBLE);
+                                            selectBadge.bringToFront();
+                                        }
+                                    }
+
+                                    View rotateBtn = itemView.findViewById(0x7f099992);
+                                    if (rotateBtn != null) {
+                                        rotateBtn.setVisibility(isEdit ? View.VISIBLE : View.GONE);
+                                        if (isEdit) rotateBtn.bringToFront();
+                                    }
+
+                                    if (!isEdit) {
+                                        sIsGroupSelectMode = false;
+                                        sIsDisassembleMode = false;
+                                        sSelectedTileSpecs.clear();
+                                        sSelectedDisassembleGroups.clear();
                                     }
                                 } catch (Throwable ignore) {}
                                 return result;
