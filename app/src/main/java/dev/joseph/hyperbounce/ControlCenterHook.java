@@ -910,6 +910,20 @@ public class ControlCenterHook {
         }
     }
 
+    private static String getRecordSpec(Object r) {
+        if (r == null) return null;
+        try {
+            Method m = r.getClass().getMethod("getSpec");
+            return (String) m.invoke(r);
+        } catch (Throwable ignore) {
+            try {
+                Field f = r.getClass().getDeclaredField("spec");
+                f.setAccessible(true);
+                return (String) f.get(r);
+            } catch (Throwable ignore2) { return null; }
+        }
+    }
+
     public static TileGroup isGroupAnchor(String spec) {
         if (spec == null) return null;
         ensurePrioritiesLoaded();
@@ -2674,13 +2688,7 @@ public class ControlCenterHook {
                                         }, resetFilter, Context.RECEIVER_EXPORTED);
                                     } catch (Throwable ignore) {}
 
-                                    // Proactively refresh adapter after layout distribution / orientation change
-                                    try {
-                                        if (sMainPanelAdapter != null) {
-                                            Method notifyM = sMainPanelAdapter.getClass().getMethod("notifyDataSetChanged");
-                                            notifyM.invoke(sMainPanelAdapter);
-                                        }
-                                    } catch (Throwable ignore) {}
+
 
                                     Field rightPanelContentField = distributorClass.getDeclaredField("rightPanelContent");
                                     rightPanelContentField.setAccessible(true);
@@ -2982,6 +2990,7 @@ public class ControlCenterHook {
                                     // Grouped Card Binding (4-Tile & 2-Tile)
                                     TileGroup group = isGroupAnchor(spec);
                                     if (group != null) {
+                                        boolean missingChild = false;
                                         View wrapperView = itemView.findViewById(0x7f099996);
                                         if (wrapperView != null) {
                                             wrapperView.setTag(0x7f099991, isEdit);
@@ -3008,89 +3017,63 @@ public class ControlCenterHook {
                                         ViewGroup container = itemView.findViewById(0x7f099995);
                                         if (container != null) {
                                             try {
-                                                List addedList = null;
-                                                if (sQSListController != null) {
-                                                    try {
-                                                        Method getAddedMethod = sQSListController.getClass().getMethod("getAddedTiles");
-                                                        addedList = (List) getAddedMethod.invoke(sQSListController);
-                                                    } catch (Throwable ignore) {}
-                                                }
-                                                if (addedList == null) {
-                                                    try {
-                                                        Field qsControllerField = qsRecordClass.getDeclaredField("qsController");
-                                                        qsControllerField.setAccessible(true);
-                                                        Object qsCtrl = qsControllerField.get(record);
-                                                        if (qsCtrl != null) {
-                                                            Method getQsListCtrlMethod = qsCtrl.getClass().getMethod("getQsListController");
-                                                            Object lazyQsList = getQsListCtrlMethod.invoke(qsCtrl);
-                                                            Method getMethod = lazyQsList.getClass().getMethod("get");
-                                                            Object qsListCtrl = getMethod.invoke(lazyQsList);
-                                                            Method getAddedMethod = qsListCtrl.getClass().getMethod("getAddedTiles");
-                                                            addedList = (List) getAddedMethod.invoke(qsListCtrl);
-                                                        }
-                                                    } catch (Throwable ignore) {}
-                                                }
-
                                                 Map<String, Object> recordMap = new HashMap<>();
-                                                if (addedList != null) {
-                                                    for (Object r : addedList) {
-                                                        if (r != null) {
-                                                            String s = null;
-                                                            try {
-                                                                Method getSpecMethod = r.getClass().getMethod("getSpec");
-                                                                s = (String) getSpecMethod.invoke(r);
-                                                            } catch (Throwable ignore) {
-                                                                try {
-                                                                    Field sF = r.getClass().getDeclaredField("spec");
-                                                                    sF.setAccessible(true);
-                                                                    s = (String) sF.get(r);
-                                                                } catch (Throwable ignore2) {}
-                                                            }
-                                                            if (s != null) recordMap.put(s, r);
-                                                        }
-                                                    }
-                                                }
 
-                                                // Proactive fallback: query sAllQSRecords cache
-                                                if (sAllQSRecords != null && !sAllQSRecords.isEmpty()) {
-                                                    for (Object r : sAllQSRecords) {
-                                                        if (r != null) {
-                                                            String s = null;
-                                                            try {
-                                                                Method getSpecMethod = r.getClass().getMethod("getSpec");
-                                                                s = (String) getSpecMethod.invoke(r);
-                                                            } catch (Throwable ignore) {
-                                                                try {
-                                                                    Field sF = r.getClass().getDeclaredField("spec");
-                                                                    sF.setAccessible(true);
-                                                                    s = (String) sF.get(r);
-                                                                } catch (Throwable ignore2) {}
-                                                            }
-                                                            if (s != null && !recordMap.containsKey(s)) {
-                                                                recordMap.put(s, r);
-                                                            }
-                                                        }
+                                                // Get the active QSListController directly associated with this record
+                                                Object activeQsListCtrl = null;
+                                                try {
+                                                    Field qsControllerField = qsRecordClass.getDeclaredField("qsController");
+                                                    qsControllerField.setAccessible(true);
+                                                    Object qsCtrl = qsControllerField.get(record);
+                                                    if (qsCtrl != null) {
+                                                        Method getQsListCtrlMethod = qsCtrl.getClass().getMethod("getQsListController");
+                                                        Object lazyQsList = getQsListCtrlMethod.invoke(qsCtrl);
+                                                        Method getMethod = lazyQsList.getClass().getMethod("get");
+                                                        activeQsListCtrl = getMethod.invoke(lazyQsList);
                                                     }
-                                                }
+                                                } catch (Throwable ignore) {}
+                                                if (activeQsListCtrl == null) activeQsListCtrl = sQSListController;
 
-                                                // Fallback on boot: query all records from sQSListController
-                                                if (sQSListController != null) {
+                                                if (activeQsListCtrl != null) {
                                                     try {
-                                                        Method getRecordsM = sQSListController.getClass().getMethod("getRecords");
-                                                        List allRecs = (List) getRecordsM.invoke(sQSListController);
+                                                        Field recsF = activeQsListCtrl.getClass().getDeclaredField("records");
+                                                        recsF.setAccessible(true);
+                                                        List recsList = (List) recsF.get(activeQsListCtrl);
+                                                        if (recsList != null) {
+                                                            for (Object r : recsList) {
+                                                                String s = getRecordSpec(r);
+                                                                if (s != null) recordMap.put(s, r);
+                                                            }
+                                                        }
+                                                    } catch (Throwable ignore) {}
+                                                    try {
+                                                        Method getAddedMethod = activeQsListCtrl.getClass().getMethod("getAddedTiles");
+                                                        List addedList = (List) getAddedMethod.invoke(activeQsListCtrl);
+                                                        if (addedList != null) {
+                                                            for (Object r : addedList) {
+                                                                String s = getRecordSpec(r);
+                                                                if (s != null && !recordMap.containsKey(s)) recordMap.put(s, r);
+                                                            }
+                                                        }
+                                                    } catch (Throwable ignore) {}
+                                                    try {
+                                                        Method getRecordsM = activeQsListCtrl.getClass().getMethod("getRecords");
+                                                        List allRecs = (List) getRecordsM.invoke(activeQsListCtrl);
                                                         if (allRecs != null) {
                                                             for (Object r : allRecs) {
-                                                                if (r != null) {
-                                                                    Field sF = r.getClass().getDeclaredField("spec");
-                                                                    sF.setAccessible(true);
-                                                                    String s = (String) sF.get(r);
-                                                                    if (s != null && !recordMap.containsKey(s)) {
-                                                                        recordMap.put(s, r);
-                                                                    }
-                                                                }
+                                                                String s = getRecordSpec(r);
+                                                                if (s != null && !recordMap.containsKey(s)) recordMap.put(s, r);
                                                             }
                                                         }
                                                     } catch (Throwable ignore) {}
+                                                }
+
+                                                // Fallback to static cache
+                                                if (sAllQSRecords != null && !sAllQSRecords.isEmpty()) {
+                                                    for (Object r : sAllQSRecords) {
+                                                        String s = getRecordSpec(r);
+                                                        if (s != null && !recordMap.containsKey(s)) recordMap.put(s, r);
+                                                    }
                                                 }
 
                                                 // Ensure grouped container permanently maintains dark translucent blur & 20dp smooth corners
@@ -3145,21 +3128,12 @@ public class ControlCenterHook {
                                                     Object childRecord = recordMap.get(childSpec);
                                                     Object subHolder = (subHolders != null && i < subHolders.length) ? subHolders[i] : null;
 
+                                                    if (childRecord == null) {
+                                                        missingChild = true;
+                                                    }
+
                                                     if (childRecord != null && subHolder != null && childView != null) {
                                                         try {
-                                                            // In edit mode: child tiles are non-clickable and transparent to touches
-                                                            try {
-                                                                if (isEdit) {
-                                                                    childView.setClickable(false);
-                                                                    childView.setLongClickable(false);
-                                                                    childView.setFocusable(false);
-                                                                } else {
-                                                                    childView.setClickable(true);
-                                                                    childView.setLongClickable(true);
-                                                                    childView.setFocusable(true);
-                                                                }
-                                                            } catch (Throwable ignore) {}
-
                                                             // 1. Wire subHolder to childRecord
                                                             try {
                                                                 for (Method shM : subHolder.getClass().getMethods()) {
@@ -3174,7 +3148,7 @@ public class ControlCenterHook {
                                                             Method setHolderMethod = childRecord.getClass().getMethod("setHolder", Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader));
                                                             setHolderMethod.invoke(childRecord, subHolder);
 
-                                                            // 3. Delegate to native onBindViewHolder of QSRecord!
+                                                            // 3. Delegate to native onBindViewHolder of QSRecord (attaches native click listener!)
                                                             Method onBindMethod = childRecord.getClass().getMethod("onBindViewHolder");
                                                             onBindMethod.invoke(childRecord);
 
@@ -3189,12 +3163,12 @@ public class ControlCenterHook {
                                                                 } catch (Throwable ignore) { vhCls = vhCls.getSuperclass(); }
                                                             }
 
-                                                            // 5. Update mode to NORMAL
+                                                            // 5. Update mode
                                                             try {
                                                                 Class<?> modeClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController$Mode", false, classLoader);
-                                                                Object normalMode = Enum.valueOf((Class<Enum>) modeClass, "NORMAL");
+                                                                Object currentMode = isEdit ? Enum.valueOf((Class<Enum>) modeClass, "EDIT") : Enum.valueOf((Class<Enum>) modeClass, "NORMAL");
                                                                 Method updateModeMethod = childRecord.getClass().getMethod("updateMode", modeClass, boolean.class);
-                                                                updateModeMethod.invoke(childRecord, normalMode, false);
+                                                                updateModeMethod.invoke(childRecord, currentMode, false);
                                                             } catch (Throwable ignore) {}
 
                                                             // 6. Direct QSTile listening registration & refreshState
@@ -3212,6 +3186,17 @@ public class ControlCenterHook {
                                                                     refM.invoke(tileObj);
                                                                 }
                                                             } catch (Throwable ignore) {}
+
+                                                            // In edit mode: child tiles are non-clickable so dragging pulls container
+                                                            if (isEdit) {
+                                                                childView.setClickable(false);
+                                                                childView.setLongClickable(false);
+                                                                childView.setFocusable(false);
+                                                            } else {
+                                                                childView.setClickable(true);
+                                                                childView.setLongClickable(true);
+                                                                childView.setFocusable(true);
+                                                            }
 
                                                             // 7. Center icon_frame and apply blur disc highlight if Advanced Textures is on
                                                             try {
@@ -3318,7 +3303,7 @@ public class ControlCenterHook {
                                             itemView.setClickable(false);
                                             itemView.setFocusable(false);
 
-                                            // Explicitly restore clean click dispatching on child tiles & icon frames
+                                            // Clear icon_frame overlay clicks and configure edit/normal touch state
                                             for (int ci = 0; ci < 4; ci++) {
                                                 View ct = getChildTileAt(container, ci);
                                                 if (ct != null) {
@@ -3329,18 +3314,29 @@ public class ControlCenterHook {
                                                         ifView.setClickable(false);
                                                     }
                                                     if (isEdit) {
-                                                        ct.setOnClickListener(null);
                                                         ct.setClickable(false);
                                                         ct.setLongClickable(false);
                                                         ct.setFocusable(false);
                                                     } else {
-                                                        ct.setOnClickListener(null);
                                                         ct.setClickable(true);
                                                         ct.setLongClickable(true);
                                                         ct.setFocusable(true);
                                                     }
                                                 }
                                             }
+                                        }
+
+                                        // If any sub-tile record was not yet ready on early layout, schedule one-shot retry pass
+                                        if (missingChild) {
+                                            final Object finalRecord = record;
+                                            itemView.postDelayed(() -> {
+                                                try {
+                                                    if (itemView.isAttachedToWindow()) {
+                                                        Method onBindM = finalRecord.getClass().getMethod("onBindViewHolder");
+                                                        onBindM.invoke(finalRecord);
+                                                    }
+                                                } catch (Throwable ignore) {}
+                                            }, 100);
                                         }
                                     }
 
