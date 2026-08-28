@@ -1108,6 +1108,65 @@ public class ControlCenterHook {
         }
     }
 
+    private static Object createCardViewHolder(ViewGroup parent, Object qsListCtrl, ClassLoader classLoader) {
+        try {
+            Context ctx = parent.getContext();
+            Context sysUIContext = ctx;
+            if (qsListCtrl != null) {
+                try {
+                    Field sysUIContextField = qsListCtrl.getClass().getDeclaredField("sysUIContext");
+                    sysUIContextField.setAccessible(true);
+                    Context sc = (Context) sysUIContextField.get(qsListCtrl);
+                    if (sc != null) sysUIContext = sc;
+                } catch (Throwable ignore) {}
+            }
+
+            Class<?> cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader);
+            Method inflateMethod = cardBindingClass.getMethod("inflate", LayoutInflater.class, ViewGroup.class, boolean.class);
+            Object binding = inflateMethod.invoke(null, LayoutInflater.from(ctx), parent, false);
+
+            Method getRootMethod = cardBindingClass.getMethod("getRoot");
+            View root = (View) getRootMethod.invoke(binding);
+
+            Class<?> cardIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemIconView", false, classLoader);
+            Constructor<?> iconCtor = null;
+            for (Constructor<?> c : cardIconViewClass.getDeclaredConstructors()) {
+                if (c.getParameterTypes().length == 5) {
+                    iconCtor = c;
+                    break;
+                }
+            }
+            if (iconCtor == null && cardIconViewClass.getDeclaredConstructors().length > 0) {
+                iconCtor = cardIconViewClass.getDeclaredConstructors()[0];
+            }
+            if (iconCtor != null) {
+                iconCtor.setAccessible(true);
+                Object iconView = (iconCtor.getParameterTypes().length == 5) 
+                    ? iconCtor.newInstance(root.getContext(), sysUIContext, null, 4, null)
+                    : iconCtor.newInstance(root.getContext(), sysUIContext);
+
+                Method initMethod = root.getClass().getMethod("init", cardIconViewClass);
+                initMethod.invoke(root, iconView);
+            }
+
+            Class<?> cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader);
+            for (Constructor<?> c : cardHolderClass.getDeclaredConstructors()) {
+                if (c.getParameterTypes().length == 1 && c.getParameterTypes()[0].isAssignableFrom(root.getClass())) {
+                    c.setAccessible(true);
+                    return c.newInstance(root);
+                }
+            }
+            if (cardHolderClass.getDeclaredConstructors().length > 0) {
+                Constructor<?> c = cardHolderClass.getDeclaredConstructors()[0];
+                c.setAccessible(true);
+                return c.newInstance(root);
+            }
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "createCardViewHolder error", t);
+        }
+        return null;
+    }
+
     private static Object createGrouped2TileViewHolder(ViewGroup parent, Object qsListCtrl, ClassLoader classLoader, boolean isVertical) {
         if (parent == null || qsListCtrl == null || classLoader == null) return null;
         try {
@@ -2576,6 +2635,7 @@ public class ControlCenterHook {
                             if (args != null && args.length >= 2) {
                                 int vt = (Integer) args[1];
                                 if (vt == 2274 || vt == 2275 || vt == 2276 || vt == 2273) {
+                                    ViewGroup parent = (ViewGroup) args[0];
                                     try {
                                         Object adapterObj = chain.getThisObject();
                                         sMainPanelAdapter = adapterObj;
@@ -2587,7 +2647,6 @@ public class ControlCenterHook {
                                         } catch (Throwable ignore) {}
                                         if (qsListCtrl == null) qsListCtrl = sQSListController;
 
-                                        ViewGroup parent = (ViewGroup) args[0];
                                         Context ctx = parent.getContext();
                                         Context sysUIContext = ctx;
                                         if (qsListCtrl != null) {
@@ -2609,40 +2668,16 @@ public class ControlCenterHook {
                                             Object holder = createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, true);
                                             if (holder != null) return holder;
                                         } else if (vt == 2273) {
-                                            Class<?> cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader);
-                                            Method inflateMethod = cardBindingClass.getMethod("inflate", LayoutInflater.class, ViewGroup.class, boolean.class);
-                                            Object binding = inflateMethod.invoke(null, LayoutInflater.from(ctx), parent, false);
-
-                                            Method getRootMethod = cardBindingClass.getMethod("getRoot");
-                                            View root = (View) getRootMethod.invoke(binding);
-
-                                            Class<?> cardIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemIconView", false, classLoader);
-                                            Constructor<?> iconCtor = null;
-                                            for (Constructor<?> c : cardIconViewClass.getDeclaredConstructors()) {
-                                                if (c.getParameterTypes().length == 5) {
-                                                    iconCtor = c;
-                                                    break;
-                                                }
-                                            }
-                                            if (iconCtor == null && cardIconViewClass.getDeclaredConstructors().length > 0) {
-                                                iconCtor = cardIconViewClass.getDeclaredConstructors()[0];
-                                            }
-                                            if (iconCtor != null) {
-                                                iconCtor.setAccessible(true);
-                                                Object iconView = (iconCtor.getParameterTypes().length == 5) 
-                                                    ? iconCtor.newInstance(root.getContext(), sysUIContext, null, 4, null)
-                                                    : iconCtor.newInstance(root.getContext(), sysUIContext);
-
-                                                Method initMethod = root.getClass().getMethod("init", cardIconViewClass);
-                                                initMethod.invoke(root, iconView);
-                                            }
-
-                                            Class<?> cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader);
-                                            Constructor<?> holderCtor = cardHolderClass.getConstructor(Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemView", false, classLoader));
-                                            return holderCtor.newInstance(root);
+                                            Object holder = createCardViewHolder(parent, qsListCtrl, classLoader);
+                                            if (holder != null) return holder;
                                         }
+                                        // Bulletproof fallback: Never fall through for custom view types
+                                        Object fallbackHolder = createCardViewHolder(parent, qsListCtrl, classLoader);
+                                        if (fallbackHolder != null) return fallbackHolder;
                                     } catch (Throwable t) {
                                         android.util.Log.e(TAG, "MainPanelAdapter.onCreateViewHolder " + vt + " intercept error", t);
+                                        Object fallbackHolder = createCardViewHolder(parent, null, classLoader);
+                                        if (fallbackHolder != null) return fallbackHolder;
                                     }
                                 }
                             }
