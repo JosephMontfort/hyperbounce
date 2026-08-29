@@ -187,6 +187,7 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                             onNavigate = push
                         )
 
+                        Destination.Diagnostics -> dev.joseph.hyperbounce.ui.screens.DiagnosticsScreen(repository = repository, colors = colors, backdrop = backdrop, onBack = pop)
                         Destination.Keypad -> KeypadScreen(
                             repository = repository,
                             colors = colors,

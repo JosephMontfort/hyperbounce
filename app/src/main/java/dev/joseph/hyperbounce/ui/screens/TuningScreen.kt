@@ -77,6 +77,15 @@ fun TuningScreen(
                 onClick = { onNavigate(Destination.Keypad) },
                 icon = { dev.joseph.hyperbounce.ui.components.LockIcon(color = Color.White, size = 15.dp) }
             )
+            RowDivider(colors.separator)
+            SettingsNavRow(
+                title = "System Diagnostics",
+                subtitle = "Control Center & Lockscreen overrides",
+                colors = colors,
+                iconTint = colors.accentGreen,
+                onClick = { onNavigate(Destination.Diagnostics) },
+                icon = { dev.joseph.hyperbounce.ui.components.InfoIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
+            )
         }
         SectionFooter(
             "Tap any section to configure its specific rendering engine and physical feel.",

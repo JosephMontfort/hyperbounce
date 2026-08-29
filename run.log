@@ -1,0 +1,1348 @@
+build	Set up job	﻿2026-08-29T18:09:57.6753460Z Current runner version: '2.336.0'
+build	Set up job	2026-08-29T18:09:57.6780284Z ##[group]Runner Image Provisioner
+build	Set up job	2026-08-29T18:09:57.6781421Z Hosted Compute Agent
+build	Set up job	2026-08-29T18:09:57.6782150Z Version: 20260819.586
+build	Set up job	2026-08-29T18:09:57.6782910Z Commit: 3cc4a88dfa507ef76119ad1bb3eccc6378bb2b76
+build	Set up job	2026-08-29T18:09:57.6783684Z Build Date: 2026-08-18T23:20:18Z
+build	Set up job	2026-08-29T18:09:57.6784707Z Worker ID: {bfdcc6e0-812d-4919-9b3e-bff99f6aae7d}
+build	Set up job	2026-08-29T18:09:57.6785662Z Azure Region: westus
+build	Set up job	2026-08-29T18:09:57.6786279Z ##[endgroup]
+build	Set up job	2026-08-29T18:09:57.6788320Z ##[group]Operating System
+build	Set up job	2026-08-29T18:09:57.6789084Z Ubuntu
+build	Set up job	2026-08-29T18:09:57.6789842Z 24.04.4
+build	Set up job	2026-08-29T18:09:57.6790467Z LTS
+build	Set up job	2026-08-29T18:09:57.6791077Z ##[endgroup]
+build	Set up job	2026-08-29T18:09:57.6791737Z ##[group]Runner Image
+build	Set up job	2026-08-29T18:09:57.6792443Z Image: ubuntu-24.04
+build	Set up job	2026-08-29T18:09:57.6793167Z Version: 20260823.283.1
+build	Set up job	2026-08-29T18:09:57.6794323Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260823.283/images/ubuntu/Ubuntu2404-Readme.md
+build	Set up job	2026-08-29T18:09:57.6796228Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260823.283
+build	Set up job	2026-08-29T18:09:57.6797704Z ##[endgroup]
+build	Set up job	2026-08-29T18:09:57.6799137Z ##[group]GITHUB_TOKEN Permissions
+build	Set up job	2026-08-29T18:09:57.6801374Z Contents: write
+build	Set up job	2026-08-29T18:09:57.6802173Z Metadata: read
+build	Set up job	2026-08-29T18:09:57.6802856Z ##[endgroup]
+build	Set up job	2026-08-29T18:09:57.6804966Z Secret source: Actions
+build	Set up job	2026-08-29T18:09:57.6806189Z Prepare workflow directory
+build	Set up job	2026-08-29T18:09:57.7583406Z Prepare all required actions
+build	Set up job	2026-08-29T18:09:57.7632392Z Getting action download info
+build	Set up job	2026-08-29T18:09:58.0981477Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+build	Set up job	2026-08-29T18:09:59.1624874Z Download action repository 'actions/setup-java@v4' (SHA:cf277c60eb25467037889841efdb72551f06f6c3)
+build	Set up job	2026-08-29T18:09:59.7938545Z Complete job name: build
+build	Run actions/checkout@v4	﻿2026-08-29T18:09:59.8880685Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8889161Z ##[group]Run actions/checkout@v4
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8889812Z with:
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8890224Z   repository: JosephMontfort/hyperbounce
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8893249Z   token: ***
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8893618Z   ssh-strict: true
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8893983Z   ssh-user: git
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8894358Z   persist-credentials: true
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8894745Z   clean: true
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8895168Z   sparse-checkout-cone-mode: true
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8895588Z   fetch-depth: 1
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8895939Z   fetch-tags: false
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8896298Z   show-progress: true
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8896679Z   lfs: false
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8897018Z   submodules: false
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8897848Z   set-safe-directory: true
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8898289Z   allow-unsafe-pr-checkout: false
+build	Run actions/checkout@v4	2026-08-29T18:09:59.8899044Z ##[endgroup]
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0016786Z Syncing repository: JosephMontfort/hyperbounce
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0020588Z ##[group]Getting Git version info
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0022872Z Working directory is '/home/runner/work/hyperbounce/hyperbounce'
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0074849Z [command]/usr/bin/git version
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0303796Z git version 2.55.0
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0311153Z ##[endgroup]
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0322624Z Temporarily overriding HOME='/home/runner/work/_temp/6f546bc0-3694-4f26-aab5-c6be465cc272' before making global git config changes
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0324919Z Adding repository directory to the temporary git global config as a safe directory
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0326712Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/hyperbounce/hyperbounce
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0391493Z Deleting the contents of '/home/runner/work/hyperbounce/hyperbounce'
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0419521Z ##[group]Initializing the repository
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0421115Z [command]/usr/bin/git init /home/runner/work/hyperbounce/hyperbounce
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0525952Z hint: Using 'master' as the name for the initial branch. This default branch name
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0528272Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0530479Z hint: to use in all of your new repositories, which will suppress this warning,
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0531891Z hint: call:
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0533123Z hint:
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0534282Z hint: 	git config --global init.defaultBranch <name>
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0535894Z hint:
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0537115Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0539462Z hint: 'development'. The just-created branch can be renamed via this command:
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0540881Z hint:
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0543760Z hint: 	git branch -m <name>
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0546589Z hint:
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0548775Z hint: Disable this message with "git config set advice.defaultBranchName false"
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0550875Z Initialized empty Git repository in /home/runner/work/hyperbounce/hyperbounce/.git/
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0588865Z [command]/usr/bin/git remote add origin https://github.com/JosephMontfort/hyperbounce
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0638152Z ##[endgroup]
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0659091Z ##[group]Disabling automatic garbage collection
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0789209Z [command]/usr/bin/git config --local gc.auto 0
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0828618Z ##[endgroup]
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0831987Z ##[group]Setting up auth
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0833391Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+build	Run actions/checkout@v4	2026-08-29T18:10:00.0839505Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+build	Run actions/checkout@v4	2026-08-29T18:10:00.1238834Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+build	Run actions/checkout@v4	2026-08-29T18:10:00.1469473Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+build	Run actions/checkout@v4	2026-08-29T18:10:00.1604247Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+build	Run actions/checkout@v4	2026-08-29T18:10:00.1644434Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+build	Run actions/checkout@v4	2026-08-29T18:10:00.1888670Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+build	Run actions/checkout@v4	2026-08-29T18:10:00.1930592Z ##[endgroup]
+build	Run actions/checkout@v4	2026-08-29T18:10:00.1932516Z ##[group]Fetching the repository
+build	Run actions/checkout@v4	2026-08-29T18:10:00.1942319Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +7f93326c73a22bd019d5f656507be3ccfa889e4c:refs/remotes/origin/full-merge-102-ui
+build	Run actions/checkout@v4	2026-08-29T18:10:00.7406181Z From https://github.com/JosephMontfort/hyperbounce
+build	Run actions/checkout@v4	2026-08-29T18:10:00.7551113Z  * [new ref]         7f93326c73a22bd019d5f656507be3ccfa889e4c -> origin/full-merge-102-ui
+build	Run actions/checkout@v4	2026-08-29T18:10:00.7555534Z ##[endgroup]
+build	Run actions/checkout@v4	2026-08-29T18:10:00.7557050Z ##[group]Determining the checkout info
+build	Run actions/checkout@v4	2026-08-29T18:10:00.7558677Z ##[endgroup]
+build	Run actions/checkout@v4	2026-08-29T18:10:00.7559863Z [command]/usr/bin/git sparse-checkout disable
+build	Run actions/checkout@v4	2026-08-29T18:10:00.7562957Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+build	Run actions/checkout@v4	2026-08-29T18:10:00.7567146Z ##[group]Checking out the ref
+build	Run actions/checkout@v4	2026-08-29T18:10:00.7581146Z [command]/usr/bin/git checkout --progress --force -B full-merge-102-ui refs/remotes/origin/full-merge-102-ui
+build	Run actions/checkout@v4	2026-08-29T18:10:00.7715533Z Switched to a new branch 'full-merge-102-ui'
+build	Run actions/checkout@v4	2026-08-29T18:10:00.7730435Z branch 'full-merge-102-ui' set up to track 'origin/full-merge-102-ui'.
+build	Run actions/checkout@v4	2026-08-29T18:10:00.7741291Z ##[endgroup]
+build	Run actions/checkout@v4	2026-08-29T18:10:00.7776133Z [command]/usr/bin/git log -1 --format=%H
+build	Run actions/checkout@v4	2026-08-29T18:10:00.7805162Z 7f93326c73a22bd019d5f656507be3ccfa889e4c
+build	Set up JDK 17	﻿2026-08-29T18:10:00.8113380Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+build	Set up JDK 17	2026-08-29T18:10:00.8115400Z ##[group]Run actions/setup-java@v4
+build	Set up JDK 17	2026-08-29T18:10:00.8115724Z with:
+build	Set up JDK 17	2026-08-29T18:10:00.8115980Z   java-version: 17
+build	Set up JDK 17	2026-08-29T18:10:00.8116249Z   distribution: temurin
+build	Set up JDK 17	2026-08-29T18:10:00.8116529Z   cache: gradle
+build	Set up JDK 17	2026-08-29T18:10:00.8116793Z   java-package: jdk
+build	Set up JDK 17	2026-08-29T18:10:00.8117065Z   check-latest: false
+build	Set up JDK 17	2026-08-29T18:10:00.8117516Z   server-id: github
+build	Set up JDK 17	2026-08-29T18:10:00.8117795Z   server-username: GITHUB_ACTOR
+build	Set up JDK 17	2026-08-29T18:10:00.8118115Z   server-password: GITHUB_TOKEN
+build	Set up JDK 17	2026-08-29T18:10:00.8118428Z   overwrite-settings: true
+build	Set up JDK 17	2026-08-29T18:10:00.8118718Z   job-status: success
+build	Set up JDK 17	2026-08-29T18:10:00.8121448Z   token: ***
+build	Set up JDK 17	2026-08-29T18:10:00.8121710Z ##[endgroup]
+build	Set up JDK 17	2026-08-29T18:10:01.0520903Z (node:2020) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+build	Set up JDK 17	2026-08-29T18:10:01.0568284Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
+build	Set up JDK 17	2026-08-29T18:10:01.0740261Z (Use `node --trace-deprecation ...` to show where the warning was created)
+build	Set up JDK 17	2026-08-29T18:10:01.0741563Z ##[group]Installed distributions
+build	Set up JDK 17	2026-08-29T18:10:01.2017745Z Resolved Java 17.0.20+1 from tool-cache
+build	Set up JDK 17	2026-08-29T18:10:01.2037123Z Setting Java 17.0.20+1 as the default
+build	Set up JDK 17	2026-08-29T18:10:01.2058261Z Creating toolchains.xml for JDK version 17 from temurin
+build	Set up JDK 17	2026-08-29T18:10:01.2059780Z Writing to /home/runner/.m2/toolchains.xml
+build	Set up JDK 17	2026-08-29T18:10:01.2150732Z 
+build	Set up JDK 17	2026-08-29T18:10:01.2181326Z Java configuration:
+build	Set up JDK 17	2026-08-29T18:10:01.2278593Z   Distribution: temurin
+build	Set up JDK 17	2026-08-29T18:10:01.2279245Z   Version: 17.0.20+1
+build	Set up JDK 17	2026-08-29T18:10:01.2280062Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+build	Set up JDK 17	2026-08-29T18:10:01.2280798Z 
+build	Set up JDK 17	2026-08-29T18:10:01.2289191Z ##[endgroup]
+build	Set up JDK 17	2026-08-29T18:10:01.2306863Z Creating settings.xml with server-id: github
+build	Set up JDK 17	2026-08-29T18:10:01.2308600Z Writing to /home/runner/.m2/settings.xml
+build	Set up JDK 17	2026-08-29T18:10:01.4723284Z (node:2020) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+build	Set up JDK 17	2026-08-29T18:10:01.4730500Z Cache hit for: setup-java-Linux-x64-gradle-ffd5a9be46c54a8f366d553a84975f8265d08ba1b3ea5558a9b2b1faeda24348
+build	Set up JDK 17	2026-08-29T18:10:02.7338411Z Received 0 of 621703275 (0.0%), 0.0 MBs/sec
+build	Set up JDK 17	2026-08-29T18:10:03.7338630Z Received 121634816 of 621703275 (19.6%), 58.0 MBs/sec
+build	Set up JDK 17	2026-08-29T18:10:04.7356035Z Received 247463936 of 621703275 (39.8%), 78.6 MBs/sec
+build	Set up JDK 17	2026-08-29T18:10:05.7429153Z Received 381681664 of 621703275 (61.4%), 90.9 MBs/sec
+build	Set up JDK 17	2026-08-29T18:10:06.7382702Z Received 536870912 of 621703275 (86.4%), 102.3 MBs/sec
+build	Set up JDK 17	2026-08-29T18:10:07.2376623Z Received 621703275 of 621703275 (100.0%), 107.7 MBs/sec
+build	Set up JDK 17	2026-08-29T18:10:07.2378091Z Cache Size: ~593 MB (621703275 B)
+build	Set up JDK 17	2026-08-29T18:10:07.2481620Z [command]/usr/bin/tar -xf /home/runner/work/_temp/c1cd7c80-51be-4696-b285-c8b135e4d709/cache.tzst -P -C /home/runner/work/hyperbounce/hyperbounce --use-compress-program unzstd
+build	Set up JDK 17	2026-08-29T18:10:11.7700858Z Cache restored successfully
+build	Set up JDK 17	2026-08-29T18:10:11.7982214Z Cache restored from key: setup-java-Linux-x64-gradle-ffd5a9be46c54a8f366d553a84975f8265d08ba1b3ea5558a9b2b1faeda24348
+build	Restore release keystore	﻿2026-08-29T18:10:11.8235713Z ##[group]Run mkdir -p "$HOME/keystore"
+build	Restore release keystore	2026-08-29T18:10:11.8236171Z ^[[36;1mmkdir -p "$HOME/keystore"^[[0m
+build	Restore release keystore	2026-08-29T18:10:11.8255301Z ^[[36;1mprintf '%s' "***" | base64 -d > "$HOME/keystore/HyperBounce.jks"^[[0m
+build	Restore release keystore	2026-08-29T18:10:11.8298361Z shell: /usr/bin/bash -e {0}
+build	Restore release keystore	2026-08-29T18:10:11.8298661Z env:
+build	Restore release keystore	2026-08-29T18:10:11.8299035Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+build	Restore release keystore	2026-08-29T18:10:11.8299565Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+build	Restore release keystore	2026-08-29T18:10:11.8300192Z ##[endgroup]
+build	Build Release APK	﻿2026-08-29T18:10:11.8862826Z ##[group]Run ./gradlew assembleRelease --stacktrace
+build	Build Release APK	2026-08-29T18:10:11.8863320Z ^[[36;1m./gradlew assembleRelease --stacktrace^[[0m
+build	Build Release APK	2026-08-29T18:10:11.8901420Z shell: /usr/bin/bash -e {0}
+build	Build Release APK	2026-08-29T18:10:11.8901705Z env:
+build	Build Release APK	2026-08-29T18:10:11.8902051Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+build	Build Release APK	2026-08-29T18:10:11.8902579Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+build	Build Release APK	2026-08-29T18:10:11.8903070Z   RELEASE_STORE_FILE: /home/runner/keystore/HyperBounce.jks
+build	Build Release APK	2026-08-29T18:10:11.8903431Z   RELEASE_KEY_ALIAS: hyperbounce
+build	Build Release APK	2026-08-29T18:10:11.8903803Z   RELEASE_STORE_PASSWORD: ***
+build	Build Release APK	2026-08-29T18:10:11.8904092Z   RELEASE_KEY_PASSWORD: ***
+build	Build Release APK	2026-08-29T18:10:11.8904340Z ##[endgroup]
+build	Build Release APK	2026-08-29T18:10:13.4626801Z Fetching distribution.
+build	Build Release APK	2026-08-29T18:10:13.4628431Z Downloading https://services.gradle.org/distributions/gradle-9.6.0-bin.zip
+build	Build Release APK	2026-08-29T18:10:15.7605820Z .............10%.............20%..............30%.............40%..............50%.............60%.............70%..............80%.............90%..............100%
+build	Build Release APK	2026-08-29T18:10:15.7628419Z Deleting directory /home/runner/.gradle/wrapper/dists/gradle-9.6.0-bin/42k10rwplmzkhuboz9kdazi7s/gradle-9.6.0
+build	Build Release APK	2026-08-29T18:10:17.3128527Z 
+build	Build Release APK	2026-08-29T18:10:17.3158409Z Welcome to Gradle 9.6.0!
+build	Build Release APK	2026-08-29T18:10:17.3160307Z 
+build	Build Release APK	2026-08-29T18:10:17.3192032Z Here are the highlights of this release:
+build	Build Release APK	2026-08-29T18:10:17.3198872Z  - Improved Configuration Cache hit rates
+build	Build Release APK	2026-08-29T18:10:17.3199922Z  - Additional CLI rendering options
+build	Build Release APK	2026-08-29T18:10:17.3201743Z  - Important project hierarchy lookup deprecations
+build	Build Release APK	2026-08-29T18:10:17.3222528Z 
+build	Build Release APK	2026-08-29T18:10:17.3242912Z For more details see https://docs.gradle.org/9.6.0/release-notes.html
+build	Build Release APK	2026-08-29T18:10:17.3278047Z 
+build	Build Release APK	2026-08-29T18:10:17.5109448Z Starting a Gradle Daemon (subsequent builds will be faster)
+build	Build Release APK	2026-08-29T18:10:30.2169975Z > Task :app:preBuild UP-TO-DATE
+build	Build Release APK	2026-08-29T18:10:30.2170716Z > Task :app:preReleaseBuild UP-TO-DATE
+build	Build Release APK	2026-08-29T18:10:30.4109052Z > Task :app:mergeReleaseJniLibFolders
+build	Build Release APK	2026-08-29T18:10:31.2108819Z > Task :app:mergeReleaseNativeLibs
+build	Build Release APK	2026-08-29T18:10:31.4119168Z > Task :app:checkReleaseDuplicateClasses
+build	Build Release APK	2026-08-29T18:10:31.4136850Z > Task :app:generateReleaseResources
+build	Build Release APK	2026-08-29T18:10:31.5108278Z > Task :app:packageReleaseResources
+build	Build Release APK	2026-08-29T18:10:31.7115727Z > Task :app:processReleaseNavigationResources
+build	Build Release APK	2026-08-29T18:10:31.9107773Z > Task :app:stripReleaseDebugSymbols
+build	Build Release APK	2026-08-29T18:10:35.7158550Z > Task :app:extractReleaseNativeSymbolTables
+build	Build Release APK	2026-08-29T18:10:35.7198130Z > Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+build	Build Release APK	2026-08-29T18:10:35.7253038Z > Task :app:javaPreCompileRelease
+build	Build Release APK	2026-08-29T18:10:35.8119253Z > Task :app:parseReleaseLocalResources
+build	Build Release APK	2026-08-29T18:10:35.9112442Z > Task :app:checkReleaseAarMetadata
+build	Build Release APK	2026-08-29T18:10:35.9118305Z > Task :app:mapReleaseSourceSetPaths
+build	Build Release APK	2026-08-29T18:10:36.0116667Z > Task :app:generateReleaseRFile
+build	Build Release APK	2026-08-29T18:10:36.0132364Z > Task :app:compileReleaseNavigationResources
+build	Build Release APK	2026-08-29T18:10:41.6138245Z > Task :app:mergeReleaseResources
+build	Build Release APK	2026-08-29T18:10:41.6158025Z > Task :app:createReleaseCompatibleScreenManifests
+build	Build Release APK	2026-08-29T18:10:41.6228189Z > Task :app:extractDeepLinksRelease
+build	Build Release APK	2026-08-29T18:10:42.2148361Z > Task :app:processReleaseMainManifest
+build	Build Release APK	2026-08-29T18:10:42.5117871Z > Task :app:processReleaseManifest
+build	Build Release APK	2026-08-29T18:10:42.6137788Z > Task :app:processReleaseManifestForPackage
+build	Build Release APK	2026-08-29T18:10:43.5118610Z > Task :app:processReleaseResources
+build	Build Release APK	2026-08-29T18:10:43.5158215Z > Task :app:desugarReleaseFileDependencies
+build	Build Release APK	2026-08-29T18:10:43.5170667Z > Task :app:mergeReleaseStartupProfile
+build	Build Release APK	2026-08-29T18:11:06.0111955Z > Task :app:compileReleaseKotlin
+build	Build Release APK	2026-08-29T18:11:08.0136169Z > Task :app:mergeExtDexRelease
+build	Build Release APK	2026-08-29T18:11:08.2138392Z > Task :app:mergeReleaseArtProfile
+build	Build Release APK	2026-08-29T18:11:08.2168899Z > Task :app:generateReleaseAssets UP-TO-DATE
+build	Build Release APK	2026-08-29T18:11:08.4128499Z > Task :app:mergeReleaseAssets
+build	Build Release APK	2026-08-29T18:11:08.4147908Z > Task :app:compressReleaseAssets
+build	Build Release APK	2026-08-29T18:11:08.5619123Z > Task :app:extractReleaseVersionControlInfo
+build	Build Release APK	2026-08-29T18:11:08.5658057Z > Task :app:extractProguardFiles
+build	Build Release APK	2026-08-29T18:11:08.7537599Z > Task :app:optimizeReleaseResources
+build	Build Release APK	2026-08-29T18:11:08.9531980Z > Task :app:collectReleaseDependencies
+build	Build Release APK	2026-08-29T18:11:09.2309507Z > Task :app:sdkReleaseDependencyData
+build	Build Release APK	2026-08-29T18:11:09.2317865Z > Task :app:validateSigningRelease
+build	Build Release APK	2026-08-29T18:11:09.2689368Z > Task :app:writeReleaseAppMetadata
+build	Build Release APK	2026-08-29T18:11:09.2690719Z > Task :app:writeReleaseSigningConfigVersions
+build	Build Release APK	2026-08-29T18:11:32.7135235Z 
+build	Build Release APK	2026-08-29T18:11:32.7158365Z > Task :app:compileReleaseKotlin
+build	Build Release APK	2026-08-29T18:11:32.7188925Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/nav/InstagramHook.kt:108:68 Unnecessary safe call on a non-null receiver of type 'View'.
+build	Build Release APK	2026-08-29T18:11:32.7238872Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/nav/InstagramNavBarHost.kt:113:129 Unnecessary safe call on a non-null receiver of type 'ViewGroup'.
+build	Build Release APK	2026-08-29T18:11:32.7258740Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidSliderViewBackdrop.kt:96:41 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:11:32.7268847Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidSliderViewBackdrop.kt:96:62 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:11:32.7278804Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidSliderViewBackdrop.kt:124:89 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:11:32.7298851Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidSliderViewBackdrop.kt:124:118 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:11:32.7318971Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidToggleViewBackdrop.kt:96:41 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:11:32.7339152Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidToggleViewBackdrop.kt:96:62 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:11:32.7669787Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidToggleViewBackdrop.kt:124:89 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:11:32.7678803Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidToggleViewBackdrop.kt:124:118 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:11:32.8000404Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/ui/screens/RootScaffold.kt:85:21 'val LocalClipboardManager: ProvidableCompositionLocal<ClipboardManager>' is deprecated. Use LocalClipboard instead which supports suspend functions.
+build	Build Release APK	2026-08-29T18:11:36.4137921Z 
+build	Build Release APK	2026-08-29T18:11:36.4189306Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:402: error: 'try' without 'catch', 'finally' or resource declarations
+build	Build Release APK	2026-08-29T18:11:36.4222234Z                             try {
+build	Build Release APK	2026-08-29T18:11:36.4222817Z > Task :app:compileReleaseJavaWithJavac
+build	Build Release APK	2026-08-29T18:11:36.4284934Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.4326688Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:597: error: ')' expected
+build	Build Release APK	2026-08-29T18:11:36.4371707Z                             } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.4407799Z                              ^
+build	Build Release APK	2026-08-29T18:11:36.4447583Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:597: error: 'catch' without 'try'
+build	Build Release APK	2026-08-29T18:11:36.4448978Z                             } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.4487857Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.4489522Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:601: error: illegal start of expression
+build	Build Release APK	2026-08-29T18:11:36.4491084Z                         });
+build	Build Release APK	2026-08-29T18:11:36.4491522Z                          ^
+build	Build Release APK	2026-08-29T18:11:36.4492878Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:395: error: 'try' without 'catch', 'finally' or resource declarations
+build	Build Release APK	2026-08-29T18:11:36.4494329Z             try {
+build	Build Release APK	2026-08-29T18:11:36.4494713Z             ^
+build	Build Release APK	2026-08-29T18:11:36.4495818Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:683: error: illegal start of type
+build	Build Release APK	2026-08-29T18:11:36.4497087Z             } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.4497820Z               ^
+build	Build Release APK	2026-08-29T18:11:36.4498881Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:683: error: ';' expected
+build	Build Release APK	2026-08-29T18:11:36.4500084Z             } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.4500585Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.4501795Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:688: error: illegal start of type
+build	Build Release APK	2026-08-29T18:11:36.4503025Z             try {
+build	Build Release APK	2026-08-29T18:11:36.4503403Z             ^
+build	Build Release APK	2026-08-29T18:11:36.4504497Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:704: error: illegal start of type
+build	Build Release APK	2026-08-29T18:11:36.4505745Z             } catch (Throwable t) {}
+build	Build Release APK	2026-08-29T18:11:36.4506227Z               ^
+build	Build Release APK	2026-08-29T18:11:36.4548042Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:704: error: ';' expected
+build	Build Release APK	2026-08-29T18:11:36.4549234Z             } catch (Throwable t) {}
+build	Build Release APK	2026-08-29T18:11:36.4549700Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.4550913Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:707: error: illegal start of type
+build	Build Release APK	2026-08-29T18:11:36.4552147Z             try {
+build	Build Release APK	2026-08-29T18:11:36.4552508Z             ^
+build	Build Release APK	2026-08-29T18:11:36.4553538Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:713: error: ')' expected
+build	Build Release APK	2026-08-29T18:11:36.4554686Z                             }
+build	Build Release APK	2026-08-29T18:11:36.4555331Z                              ^
+build	Build Release APK	2026-08-29T18:11:36.4556528Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:777: error: illegal start of expression
+build	Build Release APK	2026-08-29T18:11:36.4558101Z                         });
+build	Build Release APK	2026-08-29T18:11:36.4558524Z                          ^
+build	Build Release APK	2026-08-29T18:11:36.4559760Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:780: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4561138Z             } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.4561591Z               ^
+build	Build Release APK	2026-08-29T18:11:36.4562816Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:782: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4564145Z             }
+build	Build Release APK	2026-08-29T18:11:36.4564482Z             ^
+build	Build Release APK	2026-08-29T18:11:36.4565685Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:788: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4587690Z                 final java.util.function.Consumer<View> styleKeyAsCircle = (keyView) -> {
+build	Build Release APK	2026-08-29T18:11:36.4588542Z                       ^
+build	Build Release APK	2026-08-29T18:11:36.4589814Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:790: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4591177Z                     try {
+build	Build Release APK	2026-08-29T18:11:36.4591854Z                     ^
+build	Build Release APK	2026-08-29T18:11:36.4593115Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:792: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4594941Z                         float density = ctx.getResources().getDisplayMetrics().density;
+build	Build Release APK	2026-08-29T18:11:36.4595663Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.4596992Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:794: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4598721Z                         try {
+build	Build Release APK	2026-08-29T18:11:36.4599145Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.4600265Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:795: error: <identifier> expected
+build	Build Release APK	2026-08-29T18:11:36.4601845Z                             Method setAnimMethod = keyView.getClass().getMethod("setAnimationEnabled", boolean.class);
+build	Build Release APK	2026-08-29T18:11:36.4602889Z                                                                                                                     ^
+build	Build Release APK	2026-08-29T18:11:36.4604378Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:796: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4605800Z                             setAnimMethod.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.4606357Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.4648082Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:797: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4649791Z                             setAnimMethod.invoke(keyView, false);
+build	Build Release APK	2026-08-29T18:11:36.4650446Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.4651777Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:798: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4653235Z                         } catch (Throwable ignore) {}
+build	Build Release APK	2026-08-29T18:11:36.4653806Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.4655096Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:801: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4656950Z                         if (keyView.getParent() instanceof ViewGroup) ((ViewGroup) keyView.getParent()).setClipChildren(false);
+build	Build Release APK	2026-08-29T18:11:36.4658249Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.4659566Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:802: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4661364Z                         if (keyView.getParent() != null && keyView.getParent().getParent() instanceof ViewGroup) {
+build	Build Release APK	2026-08-29T18:11:36.4662265Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.4663589Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:804: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4664973Z                         }
+build	Build Release APK	2026-08-29T18:11:36.4665392Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.4666642Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:807: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4708487Z                         keyView.setElevation(6 * density);
+build	Build Release APK	2026-08-29T18:11:36.4709079Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.4709957Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:810: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4710746Z                         try {
+build	Build Release APK	2026-08-29T18:11:36.4710996Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.4711704Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:812: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4712772Z                             klondikeField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.4713219Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.4713918Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:813: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4714878Z                             android.widget.TextView klondikeText = (android.widget.TextView) klondikeField.get(keyView);
+build	Build Release APK	2026-08-29T18:11:36.4715380Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.4716062Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:814: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4716815Z                             if (klondikeText != null) {
+build	Build Release APK	2026-08-29T18:11:36.4717111Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.4718637Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:816: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4720141Z                                 if (config.pinShowKlondike) {
+build	Build Release APK	2026-08-29T18:11:36.4720747Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.4722010Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:818: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4723514Z                                     klondikeText.setTextColor(0xCCFFFFFF);
+build	Build Release APK	2026-08-29T18:11:36.4724151Z                                     ^
+build	Build Release APK	2026-08-29T18:11:36.4725482Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:819: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4726829Z                                 }
+build	Build Release APK	2026-08-29T18:11:36.4727645Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.4728968Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:826: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4730432Z                             digitTextField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.4731043Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.4732344Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:827: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4734116Z                             android.widget.TextView digitText = (android.widget.TextView) digitTextField.get(keyView);
+build	Build Release APK	2026-08-29T18:11:36.4735012Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.4736324Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:828: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4737963Z                             if (digitText != null) {
+build	Build Release APK	2026-08-29T18:11:36.4738497Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.4739795Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:830: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4741292Z                                 digitText.setTextColor(0xFFFFFFFF);
+build	Build Release APK	2026-08-29T18:11:36.4741897Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.4743230Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:831: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4745210Z                                 digitText.setTypeface(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL));
+build	Build Release APK	2026-08-29T18:11:36.4746326Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.4748074Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:832: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4749849Z                                 digitText.setGravity(android.view.Gravity.CENTER);
+build	Build Release APK	2026-08-29T18:11:36.4750773Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.4752041Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:833: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4753401Z                             }
+build	Build Release APK	2026-08-29T18:11:36.4753859Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.4755164Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:838: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.4756875Z                 final java.util.function.Consumer<View> applyPinLayoutAndStyles = (pinView) -> {
+build	Build Release APK	2026-08-29T18:11:36.4757977Z                       ^
+build	Build Release APK	2026-08-29T18:11:36.5149362Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:840: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5177890Z                     try {
+build	Build Release APK	2026-08-29T18:11:36.5178327Z                     ^
+build	Build Release APK	2026-08-29T18:11:36.5179580Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:842: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5181149Z                         float density = ctx.getResources().getDisplayMetrics().density;
+build	Build Release APK	2026-08-29T18:11:36.5181835Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.5183101Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:845: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5184828Z                         int row1Id = ctx.getResources().getIdentifier("row1", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.5185662Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.5186898Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:846: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5188893Z                         int row2Id = ctx.getResources().getIdentifier("row2", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.5189780Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.5191086Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:847: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5192801Z                         int row3Id = ctx.getResources().getIdentifier("row3", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.5193636Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.5194926Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:848: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5196628Z                         int row4Id = ctx.getResources().getIdentifier("row4", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.5217972Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.5219345Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:849: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5254844Z                         int row0Id = ctx.getResources().getIdentifier("row0", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.5284611Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.5308774Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:851: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5328459Z                         if (row1Id != 0) { View r1 = pinView.findViewById(row1Id); if (r1 != null) r1.setTranslationY(config.pinRow1Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.5329563Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.5359272Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:851: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5361811Z                         if (row1Id != 0) { View r1 = pinView.findViewById(row1Id); if (r1 != null) r1.setTranslationY(config.pinRow1Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.5363420Z                                                                                    ^
+build	Build Release APK	2026-08-29T18:11:36.5365105Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:851: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5367215Z                         if (row1Id != 0) { View r1 = pinView.findViewById(row1Id); if (r1 != null) r1.setTranslationY(config.pinRow1Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.5384889Z                                                                                                                                                        ^
+build	Build Release APK	2026-08-29T18:11:36.5408896Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:852: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5428443Z                         if (row2Id != 0) { View r2 = pinView.findViewById(row2Id); if (r2 != null) r2.setTranslationY(config.pinRow2Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.5429870Z                                                                                    ^
+build	Build Release APK	2026-08-29T18:11:36.5448921Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:852: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5468549Z                         if (row2Id != 0) { View r2 = pinView.findViewById(row2Id); if (r2 != null) r2.setTranslationY(config.pinRow2Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.5488276Z                                                                                                                                                        ^
+build	Build Release APK	2026-08-29T18:11:36.5508923Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:853: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5511159Z                         if (row3Id != 0) { View r3 = pinView.findViewById(row3Id); if (r3 != null) r3.setTranslationY(config.pinRow3Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.5539731Z                                                                                    ^
+build	Build Release APK	2026-08-29T18:11:36.5569003Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:853: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5610146Z                         if (row3Id != 0) { View r3 = pinView.findViewById(row3Id); if (r3 != null) r3.setTranslationY(config.pinRow3Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.5648167Z                                                                                                                                                        ^
+build	Build Release APK	2026-08-29T18:11:36.5668961Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:854: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5708351Z                         if (row4Id != 0) { View r4 = pinView.findViewById(row4Id); if (r4 != null) r4.setTranslationY(0f); }
+build	Build Release APK	2026-08-29T18:11:36.5727968Z                                                                                    ^
+build	Build Release APK	2026-08-29T18:11:36.5768823Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:854: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5780745Z                         if (row4Id != 0) { View r4 = pinView.findViewById(row4Id); if (r4 != null) r4.setTranslationY(0f); }
+build	Build Release APK	2026-08-29T18:11:36.5798102Z                                                                                                                            ^
+build	Build Release APK	2026-08-29T18:11:36.5818843Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:855: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5838459Z                         if (row0Id != 0) { View r0 = pinView.findViewById(row0Id); if (r0 != null) r0.setTranslationY(config.pinRow0Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.5857961Z                                                                                    ^
+build	Build Release APK	2026-08-29T18:11:36.5861769Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:855: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5878419Z                         if (row0Id != 0) { View r0 = pinView.findViewById(row0Id); if (r0 != null) r0.setTranslationY(config.pinRow0Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.5898194Z                                                                                                                                                        ^
+build	Build Release APK	2026-08-29T18:11:36.5918797Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:870: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5937964Z                         for (int id : numKeyIds) {
+build	Build Release APK	2026-08-29T18:11:36.5957767Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.5959353Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:873: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.5978099Z                                 if (k != null) styleKeyAsCircle.accept(k);
+build	Build Release APK	2026-08-29T18:11:36.5997853Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6018745Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:874: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6020365Z                             }
+build	Build Release APK	2026-08-29T18:11:36.6037994Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.6058829Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:879: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6078317Z                         if (delId != 0) { View del = pinView.findViewById(delId); if (del != null) del.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.6079566Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.6098917Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:879: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6118334Z                         if (delId != 0) { View del = pinView.findViewById(delId); if (del != null) del.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.6137976Z                                                                                   ^
+build	Build Release APK	2026-08-29T18:11:36.6158893Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:879: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6161005Z                         if (delId != 0) { View del = pinView.findViewById(delId); if (del != null) del.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.6178060Z                                                                                                                             ^
+build	Build Release APK	2026-08-29T18:11:36.6198811Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:881: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6218438Z                         if (cancelId != 0) { View cancel = pinView.findViewById(cancelId); if (cancel != null) cancel.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.6237855Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.6239374Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:881: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6258473Z                         if (cancelId != 0) { View cancel = pinView.findViewById(cancelId); if (cancel != null) cancel.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.6277104Z                                                                                            ^
+build	Build Release APK	2026-08-29T18:11:36.6298840Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:881: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6318380Z                         if (cancelId != 0) { View cancel = pinView.findViewById(cancelId); if (cancel != null) cancel.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.6319867Z                                                                                                                                            ^
+build	Build Release APK	2026-08-29T18:11:36.6339028Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:883: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6357489Z                         if (emerId != 0) { View emer = pinView.findViewById(emerId); if (emer != null) emer.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.6377939Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.6393470Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:883: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6395619Z                         if (emerId != 0) { View emer = pinView.findViewById(emerId); if (emer != null) emer.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.6418069Z                                                                                      ^
+build	Build Release APK	2026-08-29T18:11:36.6434292Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:883: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6436519Z                         if (emerId != 0) { View emer = pinView.findViewById(emerId); if (emer != null) emer.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.6438227Z                                                                                                                                  ^
+build	Build Release APK	2026-08-29T18:11:36.6440046Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:887: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6441723Z                 for (Method m : pinViewClass.getDeclaredMethods()) {
+build	Build Release APK	2026-08-29T18:11:36.6442589Z                 ^
+build	Build Release APK	2026-08-29T18:11:36.6443990Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:891: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6445616Z                             try {
+build	Build Release APK	2026-08-29T18:11:36.6446339Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.6448232Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:893: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6449966Z                                 applyPinLayoutAndStyles.accept(pinView);
+build	Build Release APK	2026-08-29T18:11:36.6450754Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6452262Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:894: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6453870Z                             } catch (Throwable ignore) {}
+build	Build Release APK	2026-08-29T18:11:36.6454601Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.6456134Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:896: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6457972Z                         });
+build	Build Release APK	2026-08-29T18:11:36.6458646Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.6460153Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:897: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6461793Z                     }
+build	Build Release APK	2026-08-29T18:11:36.6462384Z                     ^
+build	Build Release APK	2026-08-29T18:11:36.6463961Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:903: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6465915Z                             View pinView = (View) pinViewObj;
+build	Build Release APK	2026-08-29T18:11:36.6466977Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.6468804Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:904: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6470335Z                             }
+build	Build Release APK	2026-08-29T18:11:36.6471046Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.6472653Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:906: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6474506Z                             float density = ctx.getResources().getDisplayMetrics().density;
+build	Build Release APK	2026-08-29T18:11:36.6475432Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.6476836Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:908: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6478814Z                             try {
+build	Build Release APK	2026-08-29T18:11:36.6479525Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.6481016Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:910: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6482701Z                                 for (int r = 0; r < 4; r++) {
+build	Build Release APK	2026-08-29T18:11:36.6483504Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6484982Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:910: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6486606Z                                 for (int r = 0; r < 4; r++) {
+build	Build Release APK	2026-08-29T18:11:36.6487523Z                                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6489091Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:910: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6490705Z                                 for (int r = 0; r < 4; r++) {
+build	Build Release APK	2026-08-29T18:11:36.6491447Z                                                        ^
+build	Build Release APK	2026-08-29T18:11:36.6492970Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:911: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6494537Z                                     for (int c = 0; c < 3; c++) {
+build	Build Release APK	2026-08-29T18:11:36.6495265Z                                                     ^
+build	Build Release APK	2026-08-29T18:11:36.6496730Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:911: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6499289Z                                     for (int c = 0; c < 3; c++) {
+build	Build Release APK	2026-08-29T18:11:36.6500102Z                                                            ^
+build	Build Release APK	2026-08-29T18:11:36.6501673Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:913: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6503224Z                                     }
+build	Build Release APK	2026-08-29T18:11:36.6503852Z                                     ^
+build	Build Release APK	2026-08-29T18:11:36.6505322Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:916: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6506920Z                                 keysAnimField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.6507981Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6509526Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:917: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6511197Z                                 keysAnimField.set(pinViewObj, pairs);
+build	Build Release APK	2026-08-29T18:11:36.6512197Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6513668Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:919: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6515813Z                                 java.lang.reflect.Field appearAnimField = pinViewObj.getClass().getField("mAppearAnimating");
+build	Build Release APK	2026-08-29T18:11:36.6516924Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6518612Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:920: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6520293Z                                 appearAnimField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.6521073Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6522540Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:921: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6524126Z                                 appearAnimField.setBoolean(pinViewObj, true);
+build	Build Release APK	2026-08-29T18:11:36.6524965Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6526548Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:923: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6528792Z                                 java.lang.reflect.Field initAppearField = pinViewObj.getClass().getField("initAppearAnimed");
+build	Build Release APK	2026-08-29T18:11:36.6530049Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6531694Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:924: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6533297Z                                 initAppearField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.6534007Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6535253Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:925: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6536850Z                                 initAppearField.setBoolean(pinViewObj, true);
+build	Build Release APK	2026-08-29T18:11:36.6537896Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6539367Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:927: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6541256Z                                 java.lang.reflect.Field canceledField = pinViewObj.getClass().getField("appearAnimCanceled");
+build	Build Release APK	2026-08-29T18:11:36.6542389Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6543801Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:928: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6545872Z                                 canceledField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.6546702Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6548550Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:929: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6550300Z                                 canceledField.setBoolean(pinViewObj, false);
+build	Build Release APK	2026-08-29T18:11:36.6578909Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.6580947Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:930: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.6582690Z                             } catch (Throwable ignore) {}
+build	Build Release APK	2026-08-29T18:11:36.6583379Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.6583952Z 100 errors
+build	Build Release APK	2026-08-29T18:11:36.7137780Z 
+build	Build Release APK	2026-08-29T18:11:36.7137846Z 
+build	Build Release APK	2026-08-29T18:11:36.7173294Z FAILURE: Build failed with an exception.
+build	Build Release APK	2026-08-29T18:11:36.7217681Z 
+build	Build Release APK	2026-08-29T18:11:36.7218286Z > Task :app:compileReleaseJavaWithJavac FAILED
+build	Build Release APK	2026-08-29T18:11:36.7219606Z * What went wrong:
+build	Build Release APK	2026-08-29T18:11:36.7258526Z Execution failed for task ':app:compileReleaseJavaWithJavac' (registered by plugin 'com.android.internal.application').
+build	Build Release APK	2026-08-29T18:11:36.7259753Z 
+build	Build Release APK	2026-08-29T18:11:36.7298185Z > Compilation failed; see the compiler output below.
+build	Build Release APK	2026-08-29T18:11:36.7338843Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:780: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.7340917Z [Incubating] Problems report is available at: file:///home/runner/work/hyperbounce/hyperbounce/build/reports/problems/problems-report.html
+build	Build Release APK	2026-08-29T18:11:36.7377839Z               } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.7408137Z                 ^
+build	Build Release APK	2026-08-29T18:11:36.7450572Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:782: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.7487880Z               }
+build	Build Release APK	2026-08-29T18:11:36.7489960Z               ^
+build	Build Release APK	2026-08-29T18:11:36.7538768Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:788: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.7572672Z                   final java.util.function.Consumer<View> styleKeyAsCircle = (keyView) -> {
+build	Build Release APK	2026-08-29T18:11:36.7600324Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.7618794Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:790: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.7651746Z                       try {
+build	Build Release APK	2026-08-29T18:11:36.7690008Z                       ^
+build	Build Release APK	2026-08-29T18:11:36.7728686Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:792: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.7747125Z                           float density = ctx.getResources().getDisplayMetrics().density;
+build	Build Release APK	2026-08-29T18:11:36.7805608Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.7848661Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:794: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.7867908Z                           try {
+build	Build Release APK	2026-08-29T18:11:36.7919252Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.7938968Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:796: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.7975314Z                               setAnimMethod.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.7982096Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8003263Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:797: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8007001Z                               setAnimMethod.invoke(keyView, false);
+build	Build Release APK	2026-08-29T18:11:36.8041565Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8044856Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:798: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8062759Z                           } catch (Throwable ignore) {}
+build	Build Release APK	2026-08-29T18:11:36.8063816Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8065246Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:801: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8067235Z                           if (keyView.getParent() instanceof ViewGroup) ((ViewGroup) keyView.getParent()).setClipChildren(false);
+build	Build Release APK	2026-08-29T18:11:36.8068485Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8069717Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:802: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8071645Z                           if (keyView.getParent() != null && keyView.getParent().getParent() instanceof ViewGroup) {
+build	Build Release APK	2026-08-29T18:11:36.8072697Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8073921Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:804: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8075205Z                           }
+build	Build Release APK	2026-08-29T18:11:36.8075670Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8076883Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:807: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8080930Z                           keyView.setElevation(6 * density);
+build	Build Release APK	2026-08-29T18:11:36.8081644Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8083060Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:810: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8084552Z                           try {
+build	Build Release APK	2026-08-29T18:11:36.8085081Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8086448Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:812: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8088484Z                               klondikeField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.8089171Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8090696Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:813: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8092745Z                               android.widget.TextView klondikeText = (android.widget.TextView) klondikeField.get(keyView);
+build	Build Release APK	2026-08-29T18:11:36.8093911Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8095403Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:814: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8097064Z                               if (klondikeText != null) {
+build	Build Release APK	2026-08-29T18:11:36.8098100Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8099477Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:816: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8102226Z                                   if (config.pinShowKlondike) {
+build	Build Release APK	2026-08-29T18:11:36.8121153Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8123772Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:818: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8125574Z                                       klondikeText.setTextColor(0xCCFFFFFF);
+build	Build Release APK	2026-08-29T18:11:36.8126326Z                                       ^
+build	Build Release APK	2026-08-29T18:11:36.8131436Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:819: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8161469Z                                   }
+build	Build Release APK	2026-08-29T18:11:36.8162157Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8163662Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:826: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8165366Z                               digitTextField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.8166162Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8167967Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:827: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8170006Z                               android.widget.TextView digitText = (android.widget.TextView) digitTextField.get(keyView);
+build	Build Release APK	2026-08-29T18:11:36.8171137Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8172949Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:828: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8174846Z                               if (digitText != null) {
+build	Build Release APK	2026-08-29T18:11:36.8175555Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8177050Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:830: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8179117Z                                   digitText.setTextColor(0xFFFFFFFF);
+build	Build Release APK	2026-08-29T18:11:36.8179841Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8181264Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:831: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8183366Z                                   digitText.setTypeface(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL));
+build	Build Release APK	2026-08-29T18:11:36.8184588Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8186048Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:832: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8188041Z                                   digitText.setGravity(android.view.Gravity.CENTER);
+build	Build Release APK	2026-08-29T18:11:36.8188923Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8190444Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:833: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8192009Z                               }
+build	Build Release APK	2026-08-29T18:11:36.8192628Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8194115Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:838: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8196007Z                   final java.util.function.Consumer<View> applyPinLayoutAndStyles = (pinView) -> {
+build	Build Release APK	2026-08-29T18:11:36.8196984Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.8198885Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:840: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8200395Z                       try {
+build	Build Release APK	2026-08-29T18:11:36.8200933Z                       ^
+build	Build Release APK	2026-08-29T18:11:36.8202327Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:842: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8204091Z                           float density = ctx.getResources().getDisplayMetrics().density;
+build	Build Release APK	2026-08-29T18:11:36.8204935Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8248769Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:845: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8268142Z                           int row1Id = ctx.getResources().getIdentifier("row1", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.8274583Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8281213Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:846: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8283062Z                           int row2Id = ctx.getResources().getIdentifier("row2", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.8284036Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8285443Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:847: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8287241Z                           int row3Id = ctx.getResources().getIdentifier("row3", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.8288438Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8290274Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:848: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8292464Z                           int row4Id = ctx.getResources().getIdentifier("row4", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.8293506Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8294972Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:849: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8296900Z                           int row0Id = ctx.getResources().getIdentifier("row0", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.8298308Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8299775Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:851: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8301951Z                           if (row1Id != 0) { View r1 = pinView.findViewById(row1Id); if (r1 != null) r1.setTranslationY(config.pinRow1Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.8303243Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8304713Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:851: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8306856Z                           if (row1Id != 0) { View r1 = pinView.findViewById(row1Id); if (r1 != null) r1.setTranslationY(config.pinRow1Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.8308362Z                                                                                      ^
+build	Build Release APK	2026-08-29T18:11:36.8309921Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:851: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8311929Z                           if (row1Id != 0) { View r1 = pinView.findViewById(row1Id); if (r1 != null) r1.setTranslationY(config.pinRow1Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.8313314Z                                                                                                                                                          ^
+build	Build Release APK	2026-08-29T18:11:36.8315015Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:852: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8316984Z                           if (row2Id != 0) { View r2 = pinView.findViewById(row2Id); if (r2 != null) r2.setTranslationY(config.pinRow2Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.8318406Z                                                                                      ^
+build	Build Release APK	2026-08-29T18:11:36.8319950Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:852: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8321943Z                           if (row2Id != 0) { View r2 = pinView.findViewById(row2Id); if (r2 != null) r2.setTranslationY(config.pinRow2Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.8323357Z                                                                                                                                                          ^
+build	Build Release APK	2026-08-29T18:11:36.8358541Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:853: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8378344Z                           if (row3Id != 0) { View r3 = pinView.findViewById(row3Id); if (r3 != null) r3.setTranslationY(config.pinRow3Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.8397978Z                                                                                      ^
+build	Build Release APK	2026-08-29T18:11:36.8399480Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:853: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8413115Z                           if (row3Id != 0) { View r3 = pinView.findViewById(row3Id); if (r3 != null) r3.setTranslationY(config.pinRow3Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.8415173Z 37 actionable tasks: 37 executed
+build	Build Release APK	2026-08-29T18:11:36.8416225Z                                                                                                                                                          ^
+build	Build Release APK	2026-08-29T18:11:36.8424466Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:854: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8426449Z                           if (row4Id != 0) { View r4 = pinView.findViewById(row4Id); if (r4 != null) r4.setTranslationY(0f); }
+build	Build Release APK	2026-08-29T18:11:36.8427847Z                                                                                      ^
+build	Build Release APK	2026-08-29T18:11:36.8429455Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:854: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8431418Z                           if (row4Id != 0) { View r4 = pinView.findViewById(row4Id); if (r4 != null) r4.setTranslationY(0f); }
+build	Build Release APK	2026-08-29T18:11:36.8432645Z                                                                                                                              ^
+build	Build Release APK	2026-08-29T18:11:36.8434307Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:855: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8436367Z                           if (row0Id != 0) { View r0 = pinView.findViewById(row0Id); if (r0 != null) r0.setTranslationY(config.pinRow0Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.8437876Z                                                                                      ^
+build	Build Release APK	2026-08-29T18:11:36.8439568Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:855: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8441729Z                           if (row0Id != 0) { View r0 = pinView.findViewById(row0Id); if (r0 != null) r0.setTranslationY(config.pinRow0Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.8443227Z                                                                                                                                                          ^
+build	Build Release APK	2026-08-29T18:11:36.8445032Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:870: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8446687Z                           for (int id : numKeyIds) {
+build	Build Release APK	2026-08-29T18:11:36.8447650Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8452389Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:873: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8478034Z                                   if (k != null) styleKeyAsCircle.accept(k);
+build	Build Release APK	2026-08-29T18:11:36.8481116Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8482769Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:874: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8484515Z                               }
+build	Build Release APK	2026-08-29T18:11:36.8485079Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8487061Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:879: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8489686Z                           if (delId != 0) { View del = pinView.findViewById(delId); if (del != null) del.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.8490716Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8492102Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:879: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8493970Z                           if (delId != 0) { View del = pinView.findViewById(delId); if (del != null) del.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.8495487Z                                                                                     ^
+build	Build Release APK	2026-08-29T18:11:36.8496902Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:879: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8498820Z                           if (delId != 0) { View del = pinView.findViewById(delId); if (del != null) del.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.8500502Z                                                                                                                               ^
+build	Build Release APK	2026-08-29T18:11:36.8511115Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:881: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8513624Z                           if (cancelId != 0) { View cancel = pinView.findViewById(cancelId); if (cancel != null) cancel.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.8517549Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8551995Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:881: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8554727Z                           if (cancelId != 0) { View cancel = pinView.findViewById(cancelId); if (cancel != null) cancel.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.8583855Z                                                                                              ^
+build	Build Release APK	2026-08-29T18:11:36.8608695Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:881: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8628443Z                           if (cancelId != 0) { View cancel = pinView.findViewById(cancelId); if (cancel != null) cancel.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.8668064Z                                                                                                                                              ^
+build	Build Release APK	2026-08-29T18:11:36.8688761Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:883: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8703219Z                           if (emerId != 0) { View emer = pinView.findViewById(emerId); if (emer != null) emer.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.8733189Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8765157Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:883: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8767660Z                           if (emerId != 0) { View emer = pinView.findViewById(emerId); if (emer != null) emer.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.8769506Z                                                                                        ^
+build	Build Release APK	2026-08-29T18:11:36.8771317Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:883: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8773483Z                           if (emerId != 0) { View emer = pinView.findViewById(emerId); if (emer != null) emer.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.8774932Z                                                                                                                                    ^
+build	Build Release APK	2026-08-29T18:11:36.8776779Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:887: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8778964Z                   for (Method m : pinViewClass.getDeclaredMethods()) {
+build	Build Release APK	2026-08-29T18:11:36.8779872Z                   ^
+build	Build Release APK	2026-08-29T18:11:36.8781375Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:891: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8783348Z                               try {
+build	Build Release APK	2026-08-29T18:11:36.8784185Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8785601Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:893: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8787186Z                                   applyPinLayoutAndStyles.accept(pinView);
+build	Build Release APK	2026-08-29T18:11:36.8788268Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8789904Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:894: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8791640Z                               } catch (Throwable ignore) {}
+build	Build Release APK	2026-08-29T18:11:36.8792435Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8793978Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:896: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8795660Z                           });
+build	Build Release APK	2026-08-29T18:11:36.8796359Z                           ^
+build	Build Release APK	2026-08-29T18:11:36.8798251Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:897: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8799930Z                       }
+build	Build Release APK	2026-08-29T18:11:36.8800596Z                       ^
+build	Build Release APK	2026-08-29T18:11:36.8802135Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:903: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8803959Z                               View pinView = (View) pinViewObj;
+build	Build Release APK	2026-08-29T18:11:36.8804769Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8806347Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:904: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8808215Z                               }
+build	Build Release APK	2026-08-29T18:11:36.8844466Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8862729Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:906: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8865857Z                               float density = ctx.getResources().getDisplayMetrics().density;
+build	Build Release APK	2026-08-29T18:11:36.8866880Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8868713Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:908: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8870269Z                               try {
+build	Build Release APK	2026-08-29T18:11:36.8870897Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8872332Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:910: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8873910Z                                   for (int r = 0; r < 4; r++) {
+build	Build Release APK	2026-08-29T18:11:36.8874627Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8876078Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:910: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8878057Z                                   for (int r = 0; r < 4; r++) {
+build	Build Release APK	2026-08-29T18:11:36.8878810Z                                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8880337Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:910: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8882056Z                                   for (int r = 0; r < 4; r++) {
+build	Build Release APK	2026-08-29T18:11:36.8882877Z                                                          ^
+build	Build Release APK	2026-08-29T18:11:36.8884534Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:911: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8886760Z                                       for (int c = 0; c < 3; c++) {
+build	Build Release APK	2026-08-29T18:11:36.8887931Z                                                       ^
+build	Build Release APK	2026-08-29T18:11:36.8889341Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:911: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8890704Z                                       for (int c = 0; c < 3; c++) {
+build	Build Release APK	2026-08-29T18:11:36.8891213Z                                                              ^
+build	Build Release APK	2026-08-29T18:11:36.8892444Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:913: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8893785Z                                       }
+build	Build Release APK	2026-08-29T18:11:36.8894274Z                                       ^
+build	Build Release APK	2026-08-29T18:11:36.8895495Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:916: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8896856Z                                   keysAnimField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.8897734Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8899002Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:917: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8900386Z                                   keysAnimField.set(pinViewObj, pairs);
+build	Build Release APK	2026-08-29T18:11:36.8900953Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8902121Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:919: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8903130Z                                   java.lang.reflect.Field appearAnimField = pinViewObj.getClass().getField("mAppearAnimating");
+build	Build Release APK	2026-08-29T18:11:36.8903690Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8904432Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:920: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8905226Z                                   appearAnimField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.8905557Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8906249Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:921: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8907050Z                                   appearAnimField.setBoolean(pinViewObj, true);
+build	Build Release APK	2026-08-29T18:11:36.8908020Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8909331Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:923: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8911559Z                                   java.lang.reflect.Field initAppearField = pinViewObj.getClass().getField("initAppearAnimed");
+build	Build Release APK	2026-08-29T18:11:36.8912522Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8913814Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:924: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8915281Z                                   initAppearField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.8915866Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8917141Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:925: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8918858Z                                   initAppearField.setBoolean(pinViewObj, true);
+build	Build Release APK	2026-08-29T18:11:36.8919478Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8920753Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:927: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8922908Z                                   java.lang.reflect.Field canceledField = pinViewObj.getClass().getField("appearAnimCanceled");
+build	Build Release APK	2026-08-29T18:11:36.8967689Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8969142Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:928: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8970644Z                                   canceledField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.8971251Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8972546Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:929: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8974085Z                                   canceledField.setBoolean(pinViewObj, false);
+build	Build Release APK	2026-08-29T18:11:36.8974727Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.8976024Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:930: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.8977782Z                               } catch (Throwable ignore) {}
+build	Build Release APK	2026-08-29T18:11:36.8978348Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.8979579Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:601: error: illegal start of expression
+build	Build Release APK	2026-08-29T18:11:36.8980835Z                           });
+build	Build Release APK	2026-08-29T18:11:36.8981262Z                            ^
+build	Build Release APK	2026-08-29T18:11:36.8982435Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:777: error: illegal start of expression
+build	Build Release APK	2026-08-29T18:11:36.8983682Z                           });
+build	Build Release APK	2026-08-29T18:11:36.8984126Z                            ^
+build	Build Release APK	2026-08-29T18:11:36.8985328Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:597: error: 'catch' without 'try'
+build	Build Release APK	2026-08-29T18:11:36.8986586Z                               } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.8987111Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9028716Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:683: error: illegal start of type
+build	Build Release APK	2026-08-29T18:11:36.9030005Z               } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.9030479Z                 ^
+build	Build Release APK	2026-08-29T18:11:36.9031592Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:688: error: illegal start of type
+build	Build Release APK	2026-08-29T18:11:36.9032811Z               try {
+build	Build Release APK	2026-08-29T18:11:36.9033163Z               ^
+build	Build Release APK	2026-08-29T18:11:36.9034241Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:704: error: illegal start of type
+build	Build Release APK	2026-08-29T18:11:36.9035483Z               } catch (Throwable t) {}
+build	Build Release APK	2026-08-29T18:11:36.9035941Z                 ^
+build	Build Release APK	2026-08-29T18:11:36.9037023Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:707: error: illegal start of type
+build	Build Release APK	2026-08-29T18:11:36.9038393Z               try {
+build	Build Release APK	2026-08-29T18:11:36.9038745Z               ^
+build	Build Release APK	2026-08-29T18:11:36.9040007Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:402: error: 'try' without 'catch', 'finally' or resource declarations
+build	Build Release APK	2026-08-29T18:11:36.9041430Z                               try {
+build	Build Release APK	2026-08-29T18:11:36.9041884Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.9043219Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:395: error: 'try' without 'catch', 'finally' or resource declarations
+build	Build Release APK	2026-08-29T18:11:36.9044627Z               try {
+build	Build Release APK	2026-08-29T18:11:36.9045260Z               ^
+build	Build Release APK	2026-08-29T18:11:36.9046287Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:597: error: ')' expected
+build	Build Release APK	2026-08-29T18:11:36.9078174Z                               } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.9078736Z                                ^
+build	Build Release APK	2026-08-29T18:11:36.9080264Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:683: error: ';' expected
+build	Build Release APK	2026-08-29T18:11:36.9081413Z               } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.9081879Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.9082936Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:704: error: ';' expected
+build	Build Release APK	2026-08-29T18:11:36.9084041Z               } catch (Throwable t) {}
+build	Build Release APK	2026-08-29T18:11:36.9084531Z                                   ^
+build	Build Release APK	2026-08-29T18:11:36.9085620Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:713: error: ')' expected
+build	Build Release APK	2026-08-29T18:11:36.9086766Z                               }
+build	Build Release APK	2026-08-29T18:11:36.9087178Z                                ^
+build	Build Release APK	2026-08-29T18:11:36.9088593Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:795: error: <identifier> expected
+build	Build Release APK	2026-08-29T18:11:36.9090277Z                               Method setAnimMethod = keyView.getClass().getMethod("setAnimationEnabled", boolean.class);
+build	Build Release APK	2026-08-29T18:11:36.9091298Z                                                                                                                       ^
+build	Build Release APK	2026-08-29T18:11:36.9091958Z   100 errors
+build	Build Release APK	2026-08-29T18:11:36.9092188Z 
+build	Build Release APK	2026-08-29T18:11:36.9092339Z * Try:
+build	Build Release APK	2026-08-29T18:11:36.9092882Z > Check your code and dependencies to fix the compilation error(s)
+build	Build Release APK	2026-08-29T18:11:36.9093741Z > Run with --scan to get full insights from a Build Scan (powered by Develocity).
+build	Build Release APK	2026-08-29T18:11:36.9094291Z 
+build	Build Release APK	2026-08-29T18:11:36.9094439Z * Exception is:
+build	Build Release APK	2026-08-29T18:11:36.9095659Z org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:compileReleaseJavaWithJavac' (registered by plugin 'com.android.internal.application').
+build	Build Release APK	2026-08-29T18:11:36.9118072Z 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.lambda$executeIfValid$1(ExecuteActionsTaskExecuter.java:135)
+build	Build Release APK	2026-08-29T18:11:36.9119539Z 	at org.gradle.internal.Try$Failure.ifSuccessfulOrElse(Try.java:288)
+build	Build Release APK	2026-08-29T18:11:36.9120966Z 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:133)
+build	Build Release APK	2026-08-29T18:11:36.9122814Z 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.execute(ExecuteActionsTaskExecuter.java:121)
+build	Build Release APK	2026-08-29T18:11:36.9124764Z 	at org.gradle.api.internal.tasks.execution.ProblemsTaskPathTrackingTaskExecuter.execute(ProblemsTaskPathTrackingTaskExecuter.java:41)
+build	Build Release APK	2026-08-29T18:11:36.9126898Z 	at org.gradle.api.internal.tasks.execution.ResolveTaskExecutionModeExecuter.execute(ResolveTaskExecutionModeExecuter.java:51)
+build	Build Release APK	2026-08-29T18:11:36.9129196Z 	at org.gradle.api.internal.tasks.execution.FinalizePropertiesTaskExecuter.execute(FinalizePropertiesTaskExecuter.java:46)
+build	Build Release APK	2026-08-29T18:11:36.9131094Z 	at org.gradle.api.internal.tasks.execution.SkipTaskWithNoActionsExecuter.execute(SkipTaskWithNoActionsExecuter.java:57)
+build	Build Release APK	2026-08-29T18:11:36.9132856Z 	at org.gradle.api.internal.tasks.execution.SkipOnlyIfTaskExecuter.execute(SkipOnlyIfTaskExecuter.java:74)
+build	Build Release APK	2026-08-29T18:11:36.9134583Z 	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
+build	Build Release APK	2026-08-29T18:11:36.9136289Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.executeTask(EventFiringTaskExecuter.java:77)
+build	Build Release APK	2026-08-29T18:11:36.9153348Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:55)
+build	Build Release APK	2026-08-29T18:11:36.9154986Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:52)
+build	Build Release APK	2026-08-29T18:11:36.9157058Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
+build	Build Release APK	2026-08-29T18:11:36.9159470Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
+build	Build Release APK	2026-08-29T18:11:36.9161289Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+build	Build Release APK	2026-08-29T18:11:36.9162870Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:11:36.9164486Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+build	Build Release APK	2026-08-29T18:11:36.9166126Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:11:36.9188099Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
+build	Build Release APK	2026-08-29T18:11:36.9189796Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter.execute(EventFiringTaskExecuter.java:52)
+build	Build Release APK	2026-08-29T18:11:36.9191372Z 	at org.gradle.execution.plan.DefaultNodeExecutor.executeLocalTaskNode(DefaultNodeExecutor.java:55)
+build	Build Release APK	2026-08-29T18:11:36.9192753Z 	at org.gradle.execution.plan.DefaultNodeExecutor.execute(DefaultNodeExecutor.java:34)
+build	Build Release APK	2026-08-29T18:11:36.9194332Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:355)
+build	Build Release APK	2026-08-29T18:11:36.9196407Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:343)
+build	Build Release APK	2026-08-29T18:11:36.9198774Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.lambda$execute$0(DefaultTaskExecutionGraph.java:339)
+build	Build Release APK	2026-08-29T18:11:36.9200707Z 	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:84)
+build	Build Release APK	2026-08-29T18:11:36.9202558Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:339)
+build	Build Release APK	2026-08-29T18:11:36.9204732Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:328)
+build	Build Release APK	2026-08-29T18:11:36.9206490Z 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(DefaultPlanExecutor.java:459)
+build	Build Release APK	2026-08-29T18:11:36.9228307Z 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:376)
+build	Build Release APK	2026-08-29T18:11:36.9229850Z 	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+build	Build Release APK	2026-08-29T18:11:36.9231342Z 	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+build	Build Release APK	2026-08-29T18:11:36.9232970Z Caused by: org.gradle.api.internal.tasks.compile.CompilationFailedException: Compilation failed; see the compiler output below.
+build	Build Release APK	2026-08-29T18:11:36.9235101Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:402: error: 'try' without 'catch', 'finally' or resource declarations
+build	Build Release APK	2026-08-29T18:11:36.9236525Z                             try {
+build	Build Release APK	2026-08-29T18:11:36.9236973Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9238359Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:597: error: ')' expected
+build	Build Release APK	2026-08-29T18:11:36.9239536Z                             } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.9240033Z                              ^
+build	Build Release APK	2026-08-29T18:11:36.9241111Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:597: error: 'catch' without 'try'
+build	Build Release APK	2026-08-29T18:11:36.9242359Z                             } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.9242866Z                               ^
+build	Build Release APK	2026-08-29T18:11:36.9244337Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:601: error: illegal start of expression
+build	Build Release APK	2026-08-29T18:11:36.9245877Z                         });
+build	Build Release APK	2026-08-29T18:11:36.9246309Z                          ^
+build	Build Release APK	2026-08-29T18:11:36.9268106Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:395: error: 'try' without 'catch', 'finally' or resource declarations
+build	Build Release APK	2026-08-29T18:11:36.9269571Z             try {
+build	Build Release APK	2026-08-29T18:11:36.9269948Z             ^
+build	Build Release APK	2026-08-29T18:11:36.9271038Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:683: error: illegal start of type
+build	Build Release APK	2026-08-29T18:11:36.9272264Z             } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.9272727Z               ^
+build	Build Release APK	2026-08-29T18:11:36.9273737Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:683: error: ';' expected
+build	Build Release APK	2026-08-29T18:11:36.9274924Z             } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.9275384Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9276532Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:688: error: illegal start of type
+build	Build Release APK	2026-08-29T18:11:36.9277957Z             try {
+build	Build Release APK	2026-08-29T18:11:36.9278304Z             ^
+build	Build Release APK	2026-08-29T18:11:36.9279384Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:704: error: illegal start of type
+build	Build Release APK	2026-08-29T18:11:36.9280613Z             } catch (Throwable t) {}
+build	Build Release APK	2026-08-29T18:11:36.9281072Z               ^
+build	Build Release APK	2026-08-29T18:11:36.9282114Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:704: error: ';' expected
+build	Build Release APK	2026-08-29T18:11:36.9283303Z             } catch (Throwable t) {}
+build	Build Release APK	2026-08-29T18:11:36.9283781Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9284961Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:707: error: illegal start of type
+build	Build Release APK	2026-08-29T18:11:36.9286167Z             try {
+build	Build Release APK	2026-08-29T18:11:36.9286531Z             ^
+build	Build Release APK	2026-08-29T18:11:36.9307922Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:713: error: ')' expected
+build	Build Release APK	2026-08-29T18:11:36.9309391Z                             }
+build	Build Release APK	2026-08-29T18:11:36.9309854Z                              ^
+build	Build Release APK	2026-08-29T18:11:36.9311075Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:777: error: illegal start of expression
+build	Build Release APK	2026-08-29T18:11:36.9312340Z                         });
+build	Build Release APK	2026-08-29T18:11:36.9312765Z                          ^
+build	Build Release APK	2026-08-29T18:11:36.9313936Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:780: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9315259Z             } catch (Throwable t) {
+build	Build Release APK	2026-08-29T18:11:36.9315684Z               ^
+build	Build Release APK	2026-08-29T18:11:36.9316919Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:782: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9318440Z             }
+build	Build Release APK	2026-08-29T18:11:36.9318799Z             ^
+build	Build Release APK	2026-08-29T18:11:36.9319904Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:788: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9321540Z                 final java.util.function.Consumer<View> styleKeyAsCircle = (keyView) -> {
+build	Build Release APK	2026-08-29T18:11:36.9322312Z                       ^
+build	Build Release APK	2026-08-29T18:11:36.9323564Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:790: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9324932Z                     try {
+build	Build Release APK	2026-08-29T18:11:36.9325684Z                     ^
+build	Build Release APK	2026-08-29T18:11:36.9326935Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:792: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9349296Z                         float density = ctx.getResources().getDisplayMetrics().density;
+build	Build Release APK	2026-08-29T18:11:36.9350023Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9351249Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:794: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9352509Z                         try {
+build	Build Release APK	2026-08-29T18:11:36.9352911Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9353969Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:795: error: <identifier> expected
+build	Build Release APK	2026-08-29T18:11:36.9355538Z                             Method setAnimMethod = keyView.getClass().getMethod("setAnimationEnabled", boolean.class);
+build	Build Release APK	2026-08-29T18:11:36.9356601Z                                                                                                                     ^
+build	Build Release APK	2026-08-29T18:11:36.9358262Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:796: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9359663Z                             setAnimMethod.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.9360253Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9361486Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:797: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9362927Z                             setAnimMethod.invoke(keyView, false);
+build	Build Release APK	2026-08-29T18:11:36.9363515Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9364752Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:798: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9366166Z                         } catch (Throwable ignore) {}
+build	Build Release APK	2026-08-29T18:11:36.9366727Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9388313Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:801: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9390211Z                         if (keyView.getParent() instanceof ViewGroup) ((ViewGroup) keyView.getParent()).setClipChildren(false);
+build	Build Release APK	2026-08-29T18:11:36.9391191Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9392510Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:802: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9394262Z                         if (keyView.getParent() != null && keyView.getParent().getParent() instanceof ViewGroup) {
+build	Build Release APK	2026-08-29T18:11:36.9395133Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9396259Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:804: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9397835Z                         }
+build	Build Release APK	2026-08-29T18:11:36.9398284Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9399575Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:807: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9400940Z                         keyView.setElevation(6 * density);
+build	Build Release APK	2026-08-29T18:11:36.9401448Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9402662Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:810: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9403969Z                         try {
+build	Build Release APK	2026-08-29T18:11:36.9404390Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9405675Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:812: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9411899Z                             klondikeField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.9427776Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9429108Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:813: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9430888Z                             android.widget.TextView klondikeText = (android.widget.TextView) klondikeField.get(keyView);
+build	Build Release APK	2026-08-29T18:11:36.9431806Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9433090Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:814: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9434476Z                             if (klondikeText != null) {
+build	Build Release APK	2026-08-29T18:11:36.9435009Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9436265Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:816: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9437878Z                                 if (config.pinShowKlondike) {
+build	Build Release APK	2026-08-29T18:11:36.9438460Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9439782Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:818: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9441269Z                                     klondikeText.setTextColor(0xCCFFFFFF);
+build	Build Release APK	2026-08-29T18:11:36.9441876Z                                     ^
+build	Build Release APK	2026-08-29T18:11:36.9443112Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:819: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9444492Z                                 }
+build	Build Release APK	2026-08-29T18:11:36.9444951Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9446253Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:826: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9468050Z                             digitTextField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.9468651Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9469919Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:827: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9471645Z                             android.widget.TextView digitText = (android.widget.TextView) digitTextField.get(keyView);
+build	Build Release APK	2026-08-29T18:11:36.9472529Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9473806Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:828: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9475200Z                             if (digitText != null) {
+build	Build Release APK	2026-08-29T18:11:36.9475711Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9476993Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:830: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9478675Z                                 digitText.setTextColor(0xFFFFFFFF);
+build	Build Release APK	2026-08-29T18:11:36.9479230Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9480539Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:831: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9482431Z                                 digitText.setTypeface(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL));
+build	Build Release APK	2026-08-29T18:11:36.9483503Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9484764Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:832: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9486534Z                                 digitText.setGravity(android.view.Gravity.CENTER);
+build	Build Release APK	2026-08-29T18:11:36.9487165Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9509030Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:833: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9510387Z                             }
+build	Build Release APK	2026-08-29T18:11:36.9510841Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9512160Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:838: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9513838Z                 final java.util.function.Consumer<View> applyPinLayoutAndStyles = (pinView) -> {
+build	Build Release APK	2026-08-29T18:11:36.9514642Z                       ^
+build	Build Release APK	2026-08-29T18:11:36.9515892Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:840: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9517191Z                     try {
+build	Build Release APK	2026-08-29T18:11:36.9517878Z                     ^
+build	Build Release APK	2026-08-29T18:11:36.9519161Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:842: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9520780Z                         float density = ctx.getResources().getDisplayMetrics().density;
+build	Build Release APK	2026-08-29T18:11:36.9521498Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9522788Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:845: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9524493Z                         int row1Id = ctx.getResources().getIdentifier("row1", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.9525321Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9526586Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:846: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9548579Z                         int row2Id = ctx.getResources().getIdentifier("row2", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.9549487Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9550725Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:847: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9552366Z                         int row3Id = ctx.getResources().getIdentifier("row3", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.9553155Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9554378Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:848: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9556042Z                         int row4Id = ctx.getResources().getIdentifier("row4", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.9556842Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9558300Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:849: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9559941Z                         int row0Id = ctx.getResources().getIdentifier("row0", "id", "com.android.systemui");
+build	Build Release APK	2026-08-29T18:11:36.9560821Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9562065Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:851: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9563881Z                         if (row1Id != 0) { View r1 = pinView.findViewById(row1Id); if (r1 != null) r1.setTranslationY(config.pinRow1Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.9564907Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9566148Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:851: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9588801Z                         if (row1Id != 0) { View r1 = pinView.findViewById(row1Id); if (r1 != null) r1.setTranslationY(config.pinRow1Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.9590264Z                                                                                    ^
+build	Build Release APK	2026-08-29T18:11:36.9591746Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:851: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9593679Z                         if (row1Id != 0) { View r1 = pinView.findViewById(row1Id); if (r1 != null) r1.setTranslationY(config.pinRow1Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.9594977Z                                                                                                                                                        ^
+build	Build Release APK	2026-08-29T18:11:36.9596572Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:852: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9598881Z                         if (row2Id != 0) { View r2 = pinView.findViewById(row2Id); if (r2 != null) r2.setTranslationY(config.pinRow2Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.9600124Z                                                                                    ^
+build	Build Release APK	2026-08-29T18:11:36.9601567Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:852: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9603468Z                         if (row2Id != 0) { View r2 = pinView.findViewById(row2Id); if (r2 != null) r2.setTranslationY(config.pinRow2Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.9604709Z                                                                                                                                                        ^
+build	Build Release APK	2026-08-29T18:11:36.9606288Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:853: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9628586Z                         if (row3Id != 0) { View r3 = pinView.findViewById(row3Id); if (r3 != null) r3.setTranslationY(config.pinRow3Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.9629762Z                                                                                    ^
+build	Build Release APK	2026-08-29T18:11:36.9631194Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:853: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9633111Z                         if (row3Id != 0) { View r3 = pinView.findViewById(row3Id); if (r3 != null) r3.setTranslationY(config.pinRow3Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.9634374Z                                                                                                                                                        ^
+build	Build Release APK	2026-08-29T18:11:36.9635954Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:854: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9637917Z                         if (row4Id != 0) { View r4 = pinView.findViewById(row4Id); if (r4 != null) r4.setTranslationY(0f); }
+build	Build Release APK	2026-08-29T18:11:36.9638871Z                                                                                    ^
+build	Build Release APK	2026-08-29T18:11:36.9640361Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:854: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9642131Z                         if (row4Id != 0) { View r4 = pinView.findViewById(row4Id); if (r4 != null) r4.setTranslationY(0f); }
+build	Build Release APK	2026-08-29T18:11:36.9643168Z                                                                                                                            ^
+build	Build Release APK	2026-08-29T18:11:36.9644655Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:855: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9646990Z                         if (row0Id != 0) { View r0 = pinView.findViewById(row0Id); if (r0 != null) r0.setTranslationY(config.pinRow0Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.9668600Z                                                                                    ^
+build	Build Release APK	2026-08-29T18:11:36.9670088Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:855: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9671979Z                         if (row0Id != 0) { View r0 = pinView.findViewById(row0Id); if (r0 != null) r0.setTranslationY(config.pinRow0Offset * density); }
+build	Build Release APK	2026-08-29T18:11:36.9673273Z                                                                                                                                                        ^
+build	Build Release APK	2026-08-29T18:11:36.9674862Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:870: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9676269Z                         for (int id : numKeyIds) {
+build	Build Release APK	2026-08-29T18:11:36.9676791Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9678276Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:873: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9679739Z                                 if (k != null) styleKeyAsCircle.accept(k);
+build	Build Release APK	2026-08-29T18:11:36.9680333Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9681585Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:874: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9682909Z                             }
+build	Build Release APK	2026-08-29T18:11:36.9683323Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9684565Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:879: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9686239Z                         if (delId != 0) { View del = pinView.findViewById(delId); if (del != null) del.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.9687109Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9708700Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:879: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9710458Z                         if (delId != 0) { View del = pinView.findViewById(delId); if (del != null) del.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.9711422Z                                                                                   ^
+build	Build Release APK	2026-08-29T18:11:36.9712818Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:879: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9714519Z                         if (delId != 0) { View del = pinView.findViewById(delId); if (del != null) del.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.9715576Z                                                                                                                             ^
+build	Build Release APK	2026-08-29T18:11:36.9717126Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:881: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9719125Z                         if (cancelId != 0) { View cancel = pinView.findViewById(cancelId); if (cancel != null) cancel.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.9720136Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9721361Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:881: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9723144Z                         if (cancelId != 0) { View cancel = pinView.findViewById(cancelId); if (cancel != null) cancel.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.9724210Z                                                                                            ^
+build	Build Release APK	2026-08-29T18:11:36.9725861Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:881: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9758219Z                         if (cancelId != 0) { View cancel = pinView.findViewById(cancelId); if (cancel != null) cancel.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.9759458Z                                                                                                                                            ^
+build	Build Release APK	2026-08-29T18:11:36.9761008Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:883: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9762748Z                         if (emerId != 0) { View emer = pinView.findViewById(emerId); if (emer != null) emer.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.9763654Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9764914Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:883: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9766663Z                         if (emerId != 0) { View emer = pinView.findViewById(emerId); if (emer != null) emer.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.9767875Z                                                                                      ^
+build	Build Release APK	2026-08-29T18:11:36.9769265Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:883: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9771007Z                         if (emerId != 0) { View emer = pinView.findViewById(emerId); if (emer != null) emer.setBackground(null); }
+build	Build Release APK	2026-08-29T18:11:36.9772064Z                                                                                                                                  ^
+build	Build Release APK	2026-08-29T18:11:36.9773538Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:887: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9775012Z                 for (Method m : pinViewClass.getDeclaredMethods()) {
+build	Build Release APK	2026-08-29T18:11:36.9775658Z                 ^
+build	Build Release APK	2026-08-29T18:11:36.9776948Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:891: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9798638Z                             try {
+build	Build Release APK	2026-08-29T18:11:36.9799145Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9812102Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:893: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9813825Z                                 applyPinLayoutAndStyles.accept(pinView);
+build	Build Release APK	2026-08-29T18:11:36.9814477Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9815777Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:894: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9817195Z                             } catch (Throwable ignore) {}
+build	Build Release APK	2026-08-29T18:11:36.9838035Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9839214Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:896: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9840412Z                         });
+build	Build Release APK	2026-08-29T18:11:36.9840796Z                         ^
+build	Build Release APK	2026-08-29T18:11:36.9841922Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:897: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9843265Z                     }
+build	Build Release APK	2026-08-29T18:11:36.9843639Z                     ^
+build	Build Release APK	2026-08-29T18:11:36.9844861Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:903: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9846613Z                             View pinView = (View) pinViewObj;
+build	Build Release APK	2026-08-29T18:11:36.9867708Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9869123Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:904: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9870490Z                             }
+build	Build Release APK	2026-08-29T18:11:36.9870938Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9872221Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:906: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9873784Z                             float density = ctx.getResources().getDisplayMetrics().density;
+build	Build Release APK	2026-08-29T18:11:36.9874512Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9875827Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:908: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9897499Z                             try {
+build	Build Release APK	2026-08-29T18:11:36.9898043Z                             ^
+build	Build Release APK	2026-08-29T18:11:36.9899289Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:910: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9900623Z                                 for (int r = 0; r < 4; r++) {
+build	Build Release APK	2026-08-29T18:11:36.9901125Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9902370Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:910: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9903707Z                                 for (int r = 0; r < 4; r++) {
+build	Build Release APK	2026-08-29T18:11:36.9904239Z                                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9905508Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:910: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9906822Z                                 for (int r = 0; r < 4; r++) {
+build	Build Release APK	2026-08-29T18:11:36.9907540Z                                                        ^
+build	Build Release APK	2026-08-29T18:11:36.9908846Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:911: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9910171Z                                     for (int c = 0; c < 3; c++) {
+build	Build Release APK	2026-08-29T18:11:36.9910701Z                                                     ^
+build	Build Release APK	2026-08-29T18:11:36.9947899Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:911: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9949458Z                                     for (int c = 0; c < 3; c++) {
+build	Build Release APK	2026-08-29T18:11:36.9950067Z                                                            ^
+build	Build Release APK	2026-08-29T18:11:36.9951492Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:913: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9952876Z                                     }
+build	Build Release APK	2026-08-29T18:11:36.9953351Z                                     ^
+build	Build Release APK	2026-08-29T18:11:36.9954641Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:916: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9956115Z                                 keysAnimField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.9956709Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9958258Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:917: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9959661Z                                 keysAnimField.set(pinViewObj, pairs);
+build	Build Release APK	2026-08-29T18:11:36.9960217Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9961831Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:919: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9963719Z                                 java.lang.reflect.Field appearAnimField = pinViewObj.getClass().getField("mAppearAnimating");
+build	Build Release APK	2026-08-29T18:11:36.9964605Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9987683Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:920: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9989208Z                                 appearAnimField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:36.9989821Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9991078Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:921: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9992561Z                                 appearAnimField.setBoolean(pinViewObj, true);
+build	Build Release APK	2026-08-29T18:11:36.9993148Z                                 ^
+build	Build Release APK	2026-08-29T18:11:36.9994288Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:923: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:36.9995935Z                                 java.lang.reflect.Field initAppearField = pinViewObj.getClass().getField("initAppearAnimed");
+build	Build Release APK	2026-08-29T18:11:37.0018224Z                                 ^
+build	Build Release APK	2026-08-29T18:11:37.0019344Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:924: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:37.0020583Z                                 initAppearField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:37.0021101Z                                 ^
+build	Build Release APK	2026-08-29T18:11:37.0022242Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:925: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:37.0023610Z                                 initAppearField.setBoolean(pinViewObj, true);
+build	Build Release APK	2026-08-29T18:11:37.0024183Z                                 ^
+build	Build Release APK	2026-08-29T18:11:37.0025328Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:927: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:37.0027040Z                                 java.lang.reflect.Field canceledField = pinViewObj.getClass().getField("appearAnimCanceled");
+build	Build Release APK	2026-08-29T18:11:37.0048334Z                                 ^
+build	Build Release APK	2026-08-29T18:11:37.0049714Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:928: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:37.0051145Z                                 canceledField.setAccessible(true);
+build	Build Release APK	2026-08-29T18:11:37.0051732Z                                 ^
+build	Build Release APK	2026-08-29T18:11:37.0053078Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:929: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:37.0054560Z                                 canceledField.setBoolean(pinViewObj, false);
+build	Build Release APK	2026-08-29T18:11:37.0055195Z                                 ^
+build	Build Release APK	2026-08-29T18:11:37.0056462Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:930: error: class, interface, enum, or record expected
+build	Build Release APK	2026-08-29T18:11:37.0058128Z                             } catch (Throwable ignore) {}
+build	Build Release APK	2026-08-29T18:11:37.0058642Z                             ^
+build	Build Release APK	2026-08-29T18:11:37.0059027Z 100 errors
+build	Build Release APK	2026-08-29T18:11:37.0059766Z 	at org.gradle.api.internal.tasks.compile.JdkJavaCompiler.execute(JdkJavaCompiler.java:88)
+build	Build Release APK	2026-08-29T18:11:37.0061025Z 	at org.gradle.api.internal.tasks.compile.JdkJavaCompiler.execute(JdkJavaCompiler.java:49)
+build	Build Release APK	2026-08-29T18:11:37.0062627Z 	at org.gradle.api.internal.tasks.compile.NormalizingJavaCompiler.delegateAndHandleErrors(NormalizingJavaCompiler.java:98)
+build	Build Release APK	2026-08-29T18:11:37.0064781Z 	at org.gradle.api.internal.tasks.compile.NormalizingJavaCompiler.execute(NormalizingJavaCompiler.java:52)
+build	Build Release APK	2026-08-29T18:11:37.0066409Z 	at org.gradle.api.internal.tasks.compile.NormalizingJavaCompiler.execute(NormalizingJavaCompiler.java:38)
+build	Build Release APK	2026-08-29T18:11:37.0108594Z 	at org.gradle.api.internal.tasks.compile.AnnotationProcessorDiscoveringCompiler.execute(AnnotationProcessorDiscoveringCompiler.java:52)
+build	Build Release APK	2026-08-29T18:11:37.0110727Z 	at org.gradle.api.internal.tasks.compile.AnnotationProcessorDiscoveringCompiler.execute(AnnotationProcessorDiscoveringCompiler.java:38)
+build	Build Release APK	2026-08-29T18:11:37.0112777Z 	at org.gradle.api.internal.tasks.compile.ModuleApplicationNameWritingCompiler.execute(ModuleApplicationNameWritingCompiler.java:46)
+build	Build Release APK	2026-08-29T18:11:37.0114800Z 	at org.gradle.api.internal.tasks.compile.ModuleApplicationNameWritingCompiler.execute(ModuleApplicationNameWritingCompiler.java:36)
+build	Build Release APK	2026-08-29T18:11:37.0116595Z 	at org.gradle.jvm.toolchain.internal.DefaultToolchainJavaCompiler.execute(DefaultToolchainJavaCompiler.java:57)
+build	Build Release APK	2026-08-29T18:11:37.0118332Z 	at org.gradle.api.tasks.compile.JavaCompile.lambda$createToolchainCompiler$3(JavaCompile.java:206)
+build	Build Release APK	2026-08-29T18:11:37.0119704Z 	at org.gradle.api.internal.tasks.compile.CleaningJavaCompiler.execute(CleaningJavaCompiler.java:53)
+build	Build Release APK	2026-08-29T18:11:37.0121571Z 	at org.gradle.api.internal.tasks.compile.incremental.IncrementalCompilerFactory.lambda$createRebuildAllCompiler$0(IncrementalCompilerFactory.java:55)
+build	Build Release APK	2026-08-29T18:11:37.0123499Z 	at org.gradle.api.internal.tasks.compile.incremental.SelectiveCompiler.execute(SelectiveCompiler.java:70)
+build	Build Release APK	2026-08-29T18:11:37.0125074Z 	at org.gradle.api.internal.tasks.compile.incremental.SelectiveCompiler.execute(SelectiveCompiler.java:44)
+build	Build Release APK	2026-08-29T18:11:37.0126922Z 	at org.gradle.api.internal.tasks.compile.incremental.IncrementalResultStoringCompiler.execute(IncrementalResultStoringCompiler.java:66)
+build	Build Release APK	2026-08-29T18:11:37.0159732Z 	at org.gradle.api.internal.tasks.compile.incremental.IncrementalResultStoringCompiler.execute(IncrementalResultStoringCompiler.java:52)
+build	Build Release APK	2026-08-29T18:11:37.0162160Z 	at org.gradle.api.internal.tasks.compile.CompileJavaBuildOperationReportingCompiler$CompileOperation.call(CompileJavaBuildOperationReportingCompiler.java:78)
+build	Build Release APK	2026-08-29T18:11:37.0164699Z 	at org.gradle.api.internal.tasks.compile.CompileJavaBuildOperationReportingCompiler$CompileOperation.call(CompileJavaBuildOperationReportingCompiler.java:52)
+build	Build Release APK	2026-08-29T18:11:37.0167047Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
+build	Build Release APK	2026-08-29T18:11:37.0169325Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
+build	Build Release APK	2026-08-29T18:11:37.0171087Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+build	Build Release APK	2026-08-29T18:11:37.0172634Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:11:37.0174208Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+build	Build Release APK	2026-08-29T18:11:37.0175789Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:11:37.0227698Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
+build	Build Release APK	2026-08-29T18:11:37.0229749Z 	at org.gradle.api.internal.tasks.compile.CompileJavaBuildOperationReportingCompiler.execute(CompileJavaBuildOperationReportingCompiler.java:49)
+build	Build Release APK	2026-08-29T18:11:37.0231665Z 	at org.gradle.api.tasks.compile.JavaCompile.performCompilation(JavaCompile.java:224)
+build	Build Release APK	2026-08-29T18:11:37.0233083Z 	at org.gradle.api.tasks.compile.JavaCompile.performIncrementalCompilation(JavaCompile.java:165)
+build	Build Release APK	2026-08-29T18:11:37.0234312Z 	at org.gradle.api.tasks.compile.JavaCompile.compile(JavaCompile.java:150)
+build	Build Release APK	2026-08-29T18:11:37.0235625Z 	at org.gradle.internal.reflect.JavaMethod.invoke(JavaMethod.java:125)
+build	Build Release APK	2026-08-29T18:11:37.0237186Z 	at org.gradle.api.internal.project.taskfactory.IncrementalTaskAction.doExecute(IncrementalTaskAction.java:45)
+build	Build Release APK	2026-08-29T18:11:37.0238968Z 	at org.gradle.api.internal.project.taskfactory.StandardTaskAction.execute(StandardTaskAction.java:51)
+build	Build Release APK	2026-08-29T18:11:37.0240507Z 	at org.gradle.api.internal.project.taskfactory.IncrementalTaskAction.execute(IncrementalTaskAction.java:26)
+build	Build Release APK	2026-08-29T18:11:37.0242024Z 	at org.gradle.api.internal.project.taskfactory.StandardTaskAction.execute(StandardTaskAction.java:29)
+build	Build Release APK	2026-08-29T18:11:37.0243334Z 	at org.gradle.api.internal.tasks.execution.TaskExecution$3.run(TaskExecution.java:259)
+build	Build Release APK	2026-08-29T18:11:37.0244681Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:30)
+build	Build Release APK	2026-08-29T18:11:37.0246226Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:27)
+build	Build Release APK	2026-08-29T18:11:37.0288113Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+build	Build Release APK	2026-08-29T18:11:37.0289821Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:11:37.0291501Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+build	Build Release APK	2026-08-29T18:11:37.0293139Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:11:37.0294722Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:48)
+build	Build Release APK	2026-08-29T18:11:37.0296180Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.executeAction(TaskExecution.java:244)
+build	Build Release APK	2026-08-29T18:11:37.0297960Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.executeActions(TaskExecution.java:227)
+build	Build Release APK	2026-08-29T18:11:37.0299548Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.executeWithPreviousOutputFiles(TaskExecution.java:210)
+build	Build Release APK	2026-08-29T18:11:37.0301068Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.execute(TaskExecution.java:176)
+build	Build Release APK	2026-08-29T18:11:37.0302343Z 	at org.gradle.internal.execution.steps.ExecuteStep.executeInternal(ExecuteStep.java:167)
+build	Build Release APK	2026-08-29T18:11:37.0303602Z 	at org.gradle.internal.execution.steps.ExecuteStep.access$000(ExecuteStep.java:47)
+build	Build Release APK	2026-08-29T18:11:37.0304728Z 	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:137)
+build	Build Release APK	2026-08-29T18:11:37.0305818Z 	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:134)
+build	Build Release APK	2026-08-29T18:11:37.0347775Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
+build	Build Release APK	2026-08-29T18:11:37.0349997Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
+build	Build Release APK	2026-08-29T18:11:37.0351917Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+build	Build Release APK	2026-08-29T18:11:37.0353568Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:11:37.0355206Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+build	Build Release APK	2026-08-29T18:11:37.0356835Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:11:37.0358705Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
+build	Build Release APK	2026-08-29T18:11:37.0360074Z 	at org.gradle.internal.execution.steps.ExecuteStep.execute(ExecuteStep.java:134)
+build	Build Release APK	2026-08-29T18:11:37.0361263Z 	at org.gradle.internal.execution.steps.ExecuteStep$Mutable.execute(ExecuteStep.java:80)
+build	Build Release APK	2026-08-29T18:11:37.0362565Z 	at org.gradle.internal.execution.steps.CancelExecutionStep.execute(CancelExecutionStep.java:42)
+build	Build Release APK	2026-08-29T18:11:37.0364354Z 	at org.gradle.internal.execution.steps.TimeoutStep.executeWithoutTimeout(TimeoutStep.java:75)
+build	Build Release APK	2026-08-29T18:11:37.0365816Z 	at org.gradle.internal.execution.steps.TimeoutStep.execute(TimeoutStep.java:55)
+build	Build Release APK	2026-08-29T18:11:37.0367204Z 	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:51)
+build	Build Release APK	2026-08-29T18:11:37.0409250Z 	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:29)
+build	Build Release APK	2026-08-29T18:11:37.0410971Z 	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.executeMutable(RemovePreviousOutputsStep.java:67)
+build	Build Release APK	2026-08-29T18:11:37.0413220Z 	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.executeMutable(RemovePreviousOutputsStep.java:39)
+build	Build Release APK	2026-08-29T18:11:37.0414680Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:11:37.0416154Z 	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:42)
+build	Build Release APK	2026-08-29T18:11:37.0418067Z 	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:24)
+build	Build Release APK	2026-08-29T18:11:37.0419850Z 	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:69)
+build	Build Release APK	2026-08-29T18:11:37.0421742Z 	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:46)
+build	Build Release APK	2026-08-29T18:11:37.0423581Z 	at org.gradle.internal.execution.steps.ResolveInputChangesStep.executeMutable(ResolveInputChangesStep.java:39)
+build	Build Release APK	2026-08-29T18:11:37.0425256Z 	at org.gradle.internal.execution.steps.ResolveInputChangesStep.executeMutable(ResolveInputChangesStep.java:28)
+build	Build Release APK	2026-08-29T18:11:37.0426670Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:11:37.0468392Z 	at org.gradle.internal.execution.steps.BuildCacheStep.executeWithoutCache(BuildCacheStep.java:189)
+build	Build Release APK	2026-08-29T18:11:37.0469875Z 	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$execute$1(BuildCacheStep.java:76)
+build	Build Release APK	2026-08-29T18:11:37.0470931Z 	at org.gradle.internal.Either$Right.fold(Either.java:176)
+build	Build Release APK	2026-08-29T18:11:37.0471862Z 	at org.gradle.internal.execution.caching.CachingState.fold(CachingState.java:62)
+build	Build Release APK	2026-08-29T18:11:37.0473049Z 	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:74)
+build	Build Release APK	2026-08-29T18:11:37.0474248Z 	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:49)
+build	Build Release APK	2026-08-29T18:11:37.0475674Z 	at org.gradle.internal.execution.steps.StoreExecutionStateStep.executeMutable(StoreExecutionStateStep.java:46)
+build	Build Release APK	2026-08-29T18:11:37.0477498Z 	at org.gradle.internal.execution.steps.StoreExecutionStateStep.executeMutable(StoreExecutionStateStep.java:35)
+build	Build Release APK	2026-08-29T18:11:37.0478875Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:11:37.0480116Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.executeBecause(SkipUpToDateStep.java:75)
+build	Build Release APK	2026-08-29T18:11:37.0481522Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.lambda$execute$2(SkipUpToDateStep.java:53)
+build	Build Release APK	2026-08-29T18:11:37.0482857Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:53)
+build	Build Release APK	2026-08-29T18:11:37.0484088Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:35)
+build	Build Release APK	2026-08-29T18:11:37.0485794Z 	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:37)
+build	Build Release APK	2026-08-29T18:11:37.0528311Z 	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:27)
+build	Build Release APK	2026-08-29T18:11:37.0530410Z 	at org.gradle.internal.execution.steps.ResolveMutableCachingStateStep.executeDelegate(ResolveMutableCachingStateStep.java:70)
+build	Build Release APK	2026-08-29T18:11:37.0532402Z 	at org.gradle.internal.execution.steps.ResolveMutableCachingStateStep.executeDelegate(ResolveMutableCachingStateStep.java:32)
+build	Build Release APK	2026-08-29T18:11:37.0534684Z 	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:69)
+build	Build Release APK	2026-08-29T18:11:37.0536729Z 	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:37)
+build	Build Release APK	2026-08-29T18:11:37.0538594Z 	at org.gradle.internal.execution.steps.ResolveChangesStep.executeMutable(ResolveChangesStep.java:63)
+build	Build Release APK	2026-08-29T18:11:37.0540086Z 	at org.gradle.internal.execution.steps.ResolveChangesStep.executeMutable(ResolveChangesStep.java:34)
+build	Build Release APK	2026-08-29T18:11:37.0541428Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:11:37.0542696Z 	at org.gradle.internal.execution.steps.ValidateStep$Mutable.executeDelegate(ValidateStep.java:79)
+build	Build Release APK	2026-08-29T18:11:37.0544047Z 	at org.gradle.internal.execution.steps.ValidateStep$Mutable.executeDelegate(ValidateStep.java:65)
+build	Build Release APK	2026-08-29T18:11:37.0545295Z 	at org.gradle.internal.execution.steps.ValidateStep.execute(ValidateStep.java:105)
+build	Build Release APK	2026-08-29T18:11:37.0546509Z 	at org.gradle.internal.execution.steps.ValidateStep$Mutable.execute(ValidateStep.java:65)
+build	Build Release APK	2026-08-29T18:11:37.0588688Z 	at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.executeMutable(CaptureMutableStateBeforeExecutionStep.java:86)
+build	Build Release APK	2026-08-29T18:11:37.0591039Z 	at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.execute(CaptureMutableStateBeforeExecutionStep.java:65)
+build	Build Release APK	2026-08-29T18:11:37.0593217Z 	at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.execute(CaptureMutableStateBeforeExecutionStep.java:45)
+build	Build Release APK	2026-08-29T18:11:37.0595333Z 	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeWithNonEmptySources(SkipEmptyMutableWorkStep.java:210)
+build	Build Release APK	2026-08-29T18:11:37.0597166Z 	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeMutable(SkipEmptyMutableWorkStep.java:90)
+build	Build Release APK	2026-08-29T18:11:37.0599135Z 	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeMutable(SkipEmptyMutableWorkStep.java:53)
+build	Build Release APK	2026-08-29T18:11:37.0600563Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:11:37.0602160Z 	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsStartedStep.execute(MarkSnapshottingInputsStartedStep.java:38)
+build	Build Release APK	2026-08-29T18:11:37.0604176Z 	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.executeMutable(LoadPreviousExecutionStateStep.java:36)
+build	Build Release APK	2026-08-29T18:11:37.0606158Z 	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.executeMutable(LoadPreviousExecutionStateStep.java:23)
+build	Build Release APK	2026-08-29T18:11:37.0648250Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:11:37.0649833Z 	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:77)
+build	Build Release APK	2026-08-29T18:11:37.0651488Z 	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:43)
+build	Build Release APK	2026-08-29T18:11:37.0652889Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:11:37.0654388Z 	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.lambda$executeMutable$0(AssignMutableWorkspaceStep.java:34)
+build	Build Release APK	2026-08-29T18:11:37.0656016Z 	at org.gradle.api.internal.tasks.execution.TaskExecution$4.withWorkspace(TaskExecution.java:305)
+build	Build Release APK	2026-08-29T18:11:37.0658724Z 	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.executeMutable(AssignMutableWorkspaceStep.java:30)
+build	Build Release APK	2026-08-29T18:11:37.0660597Z 	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.executeMutable(AssignMutableWorkspaceStep.java:21)
+build	Build Release APK	2026-08-29T18:11:37.0662075Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:11:37.0663314Z 	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:40)
+build	Build Release APK	2026-08-29T18:11:37.0664761Z 	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:23)
+build	Build Release APK	2026-08-29T18:11:37.0666846Z 	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.lambda$execute$2(ExecuteWorkBuildOperationFiringStep.java:67)
+build	Build Release APK	2026-08-29T18:11:37.0708986Z 	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:67)
+build	Build Release APK	2026-08-29T18:11:37.0710908Z 	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:39)
+build	Build Release APK	2026-08-29T18:11:37.0712557Z 	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:46)
+build	Build Release APK	2026-08-29T18:11:37.0713795Z 	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:34)
+build	Build Release APK	2026-08-29T18:11:37.0714950Z 	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:56)
+build	Build Release APK	2026-08-29T18:11:37.0716039Z 	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:38)
+build	Build Release APK	2026-08-29T18:11:37.0717506Z 	at org.gradle.internal.execution.impl.DefaultExecutionEngine$1.execute(DefaultExecutionEngine.java:68)
+build	Build Release APK	2026-08-29T18:11:37.0719131Z 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:132)
+build	Build Release APK	2026-08-29T18:11:37.0720260Z 	... 30 more
+build	Build Release APK	2026-08-29T18:11:37.0720461Z 
+build	Build Release APK	2026-08-29T18:11:37.0720470Z 
+build	Build Release APK	2026-08-29T18:11:37.0720622Z BUILD FAILED in 1m 23s
+build	Build Release APK	2026-08-29T18:11:37.4134372Z ##[error]Process completed with exit code 1.
+build	Post Set up JDK 17	﻿2026-08-29T18:11:37.4275575Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+build	Post Set up JDK 17	2026-08-29T18:11:37.4276890Z Post job cleanup.
+build	Post Set up JDK 17	2026-08-29T18:11:37.5719012Z (node:2213) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+build	Post Set up JDK 17	2026-08-29T18:11:37.5720376Z (Use `node --trace-deprecation ...` to show where the warning was created)
+build	Post Run actions/checkout@v4	﻿2026-08-29T18:11:37.5983283Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+build	Post Run actions/checkout@v4	2026-08-29T18:11:37.5985515Z Post job cleanup.
+build	Post Run actions/checkout@v4	2026-08-29T18:11:37.7252127Z [command]/usr/bin/git version
+build	Post Run actions/checkout@v4	2026-08-29T18:11:37.7337970Z git version 2.55.0
+build	Post Run actions/checkout@v4	2026-08-29T18:11:37.7396235Z Temporarily overriding HOME='/home/runner/work/_temp/bb5a933d-6658-45d5-959f-db46196de6de' before making global git config changes
+build	Post Run actions/checkout@v4	2026-08-29T18:11:37.7404360Z Adding repository directory to the temporary git global config as a safe directory
+build	Post Run actions/checkout@v4	2026-08-29T18:11:37.7428361Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/hyperbounce/hyperbounce
+build	Post Run actions/checkout@v4	2026-08-29T18:11:37.7450511Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+build	Post Run actions/checkout@v4	2026-08-29T18:11:37.7581240Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+build	Post Run actions/checkout@v4	2026-08-29T18:11:37.7874974Z fatal: No url found for submodule path 'hyperbounce-diagnostics' in .gitmodules
+build	Post Run actions/checkout@v4	2026-08-29T18:11:37.7919709Z ##[warning]The process '/usr/bin/git' failed with exit code 128
+build	Complete job	﻿2026-08-29T18:11:37.8163933Z Cleaning up orphan processes
+build	Complete job	2026-08-29T18:11:37.8500672Z Terminate orphan process: pid (2085) (java)
+build	Complete job	2026-08-29T18:11:37.8540115Z Terminate orphan process: pid (2153) (java)
+build	Complete job	2026-08-29T18:11:37.8590870Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-java@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

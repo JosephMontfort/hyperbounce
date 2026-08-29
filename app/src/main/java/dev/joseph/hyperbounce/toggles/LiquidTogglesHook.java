@@ -1220,8 +1220,31 @@ public class LiquidTogglesHook extends XposedModule {
 
         if (packageName.equals("miui.systemui.plugin") ||
                 packageName.equals("com.android.systemui")) {
+                
+            dev.joseph.hyperbounce.systemui.DiagnosticConfig diagConfig = new dev.joseph.hyperbounce.systemui.DiagnosticConfig();
+            try {
+                android.content.SharedPreferences remotePrefs = getRemotePreferences("hyperbounce_settings");
+                diagConfig.load(remotePrefs);
+                remotePrefs.registerOnSharedPreferenceChangeListener((prefs, key) -> {
+                    if (key != null && key.startsWith("diag_")) {
+                        diagConfig.load(prefs);
+                    }
+                });
+            } catch (Throwable t) {
+                log(4, "HyperBounce", "Failed to load DiagnosticConfig: " + t);
+            }
+
+            if (packageName.equals("com.android.systemui")) {
+                dev.joseph.hyperbounce.systemui.ControlCenterHook.initSystemUIHooks(this, packageClassLoader, diagConfig);
+                dev.joseph.hyperbounce.systemui.LockscreenHook.init(this, packageClassLoader, diagConfig);
+            }
+            if (packageName.equals("miui.systemui.plugin")) {
+                dev.joseph.hyperbounce.systemui.ControlCenterHook.initPluginHooks(this, packageClassLoader, diagConfig);
+            }
+
             if (hyperBouncePrefs == null || hyperBouncePrefs.getKeypadEnabled()) {
-                dev.joseph.hyperbounce.toggles.LiquidKeypadHook.INSTANCE.apply(this, packageClassLoader);
+                // dev.joseph.hyperbounce.toggles.LiquidKeypadHook.INSTANCE.apply(this, packageClassLoader);
+                // Scrapped in favor of diagnostic lockscreen hooks which handle keypad/pinpad
             }
             try {
                 Class<?> delegateClass = findClassIfExists(

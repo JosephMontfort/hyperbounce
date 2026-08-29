@@ -26,6 +26,7 @@ package dev.joseph.hyperbounce.ui.state
 
 import android.content.Context
 import android.content.SharedPreferences
+import org.json.JSONObject
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -89,22 +90,22 @@ class SettingsRepository(context: Context) {
 
     val globalGlass = GlobalGlassHolder()
 
-    @JvmName("setModuleEnabledPref")
+    @JvmName("setModuleEnabledPrefPref")
     fun setModuleEnabled(value: Boolean) {
         moduleEnabled = value
     }
 
-    @JvmName("setToggleEnginePref")
+    @JvmName("setToggleEnginePrefPref")
     fun setToggleEngine(value: RenderEngine) {
         toggleEngine = value
     }
 
-    @JvmName("setSliderEnginePref")
+    @JvmName("setSliderEnginePrefPref")
     fun setSliderEngine(value: RenderEngine) {
         sliderEngine = value
     }
 
-    @JvmName("setKeypadEnabledPref")
+    @JvmName("setKeypadEnabledPrefPref")
     fun setKeypadEnabled(value: Boolean) {
         keypadEnabled = value
     }
@@ -123,6 +124,89 @@ class SettingsRepository(context: Context) {
         sliderEngine = RenderEngine.LiquidGlass
         keypadEnabled = true
     }
+
+
+    // Diagnostics Primitive Delegates
+    var ccLowEndAnim by prefsBooleanState("diag_ccLowEndAnim", false); private set
+    @JvmName("setCcLowEndAnimPref") fun setCcLowEndAnim(v: Boolean) { ccLowEndAnim = v }
+
+    var ccAnimEnabled by prefsBooleanState("diag_ccAnimEnabled", true); private set
+    @JvmName("setCcAnimEnabledPref") fun setCcAnimEnabled(v: Boolean) { ccAnimEnabled = v }
+
+    var ccModularEditEnabled by prefsBooleanState("diag_ccModularEditEnabled", true); private set
+    @JvmName("setCcModularEditEnabledPref") fun setCcModularEditEnabled(v: Boolean) { ccModularEditEnabled = v }
+
+    var ccJellyEnabled by prefsBooleanState("diag_ccJellyEnabled", false); private set
+    @JvmName("setCcJellyEnabledPref") fun setCcJellyEnabled(v: Boolean) { ccJellyEnabled = v }
+
+    var lockCardBorderWidth by prefsFloatState("diag_lockCardBorderWidth", 1.0f); private set
+    @JvmName("setLockCardBorderWidthPref") fun setLockCardBorderWidth(v: Float) { lockCardBorderWidth = v }
+
+    var lockCardBorderAlpha by prefsFloatState("diag_lockCardBorderAlpha", 0.1f); private set
+    @JvmName("setLockCardBorderAlphaPref") fun setLockCardBorderAlpha(v: Float) { lockCardBorderAlpha = v }
+
+    var lockCardRefractionHeight by prefsFloatState("diag_lockCardRefractionHeight", 10.0f); private set
+    @JvmName("setLockCardRefractionHeightPref") fun setLockCardRefractionHeight(v: Float) { lockCardRefractionHeight = v }
+
+    var lockCardRefractionAmount by prefsFloatState("diag_lockCardRefractionAmount", 16.0f); private set
+    @JvmName("setLockCardRefractionAmountPref") fun setLockCardRefractionAmount(v: Float) { lockCardRefractionAmount = v }
+
+    var lockCardDepthEffect by prefsFloatState("diag_lockCardDepthEffect", 0.5f); private set
+    @JvmName("setLockCardDepthEffectPref") fun setLockCardDepthEffect(v: Float) { lockCardDepthEffect = v }
+
+    var lockPillWidth by prefsFloatState("diag_lockPillWidth", 40.0f); private set
+    @JvmName("setLockPillWidthPref") fun setLockPillWidth(v: Float) { lockPillWidth = v }
+
+    var lockPillHeight by prefsFloatState("diag_lockPillHeight", 2.0f); private set
+    @JvmName("setLockPillHeightPref") fun setLockPillHeight(v: Float) { lockPillHeight = v }
+
+    var lockPillBottomMargin by prefsFloatState("diag_lockPillBottomMargin", 9.0f); private set
+    @JvmName("setLockPillBottomMarginPref") fun setLockPillBottomMargin(v: Float) { lockPillBottomMargin = v }
+
+    var lockLipHeight by prefsFloatState("diag_lockLipHeight", 10.0f); private set
+    @JvmName("setLockLipHeightPref") fun setLockLipHeight(v: Float) { lockLipHeight = v }
+
+    var pinDigitTextSize by prefsFloatState("diag_pinDigitTextSize", 28.0f); private set
+    @JvmName("setPinDigitTextSizePref") fun setPinDigitTextSize(v: Float) { pinDigitTextSize = v }
+
+    var pinRow1Offset by prefsFloatState("diag_pinRow1Offset", 0.0f); private set
+    @JvmName("setPinRow1OffsetPref") fun setPinRow1Offset(v: Float) { pinRow1Offset = v }
+
+    var pinRow2Offset by prefsFloatState("diag_pinRow2Offset", 0.0f); private set
+    @JvmName("setPinRow2OffsetPref") fun setPinRow2Offset(v: Float) { pinRow2Offset = v }
+
+    var pinRow3Offset by prefsFloatState("diag_pinRow3Offset", 0.0f); private set
+    @JvmName("setPinRow3OffsetPref") fun setPinRow3Offset(v: Float) { pinRow3Offset = v }
+
+    var pinRow0Offset by prefsFloatState("diag_pinRow0Offset", 0.0f); private set
+    @JvmName("setPinRow0OffsetPref") fun setPinRow0Offset(v: Float) { pinRow0Offset = v }
+
+    var pinTapSquishScale by prefsFloatState("diag_pinTapSquishScale", 0.85f); private set
+    @JvmName("setPinTapSquishScalePref") fun setPinTapSquishScale(v: Float) { pinTapSquishScale = v }
+
+    var pinReleasePlunge by prefsFloatState("diag_pinReleasePlunge", 0.95f); private set
+    @JvmName("setPinReleasePlungePref") fun setPinReleasePlunge(v: Float) { pinReleasePlunge = v }
+
+    var pinShowKlondike by prefsBooleanState("diag_pinShowKlondike", true); private set
+    @JvmName("setPinShowKlondikePref") fun setPinShowKlondike(v: Boolean) { pinShowKlondike = v }
+
+    var pinEntryTranslationY by prefsFloatState("diag_pinEntryTranslationY", 100.0f); private set
+    @JvmName("setPinEntryTranslationYPref") fun setPinEntryTranslationY(v: Float) { pinEntryTranslationY = v }
+
+    var pinEntryInitialScale by prefsFloatState("diag_pinEntryInitialScale", 0.8f); private set
+    @JvmName("setPinEntryInitialScalePref") fun setPinEntryInitialScale(v: Float) { pinEntryInitialScale = v }
+
+    var pinEntryDuration by prefsFloatState("diag_pinEntryDuration", 500.0f); private set
+    @JvmName("setPinEntryDurationPref") fun setPinEntryDuration(v: Float) { pinEntryDuration = v }
+
+    var pinRowDelayStep by prefsFloatState("diag_pinRowDelayStep", 50.0f); private set
+    @JvmName("setPinRowDelayStepPref") fun setPinRowDelayStep(v: Float) { pinRowDelayStep = v }
+
+    var pinColDelayStep by prefsFloatState("diag_pinColDelayStep", 20.0f); private set
+    @JvmName("setPinColDelayStepPref") fun setPinColDelayStep(v: Float) { pinColDelayStep = v }
+
+    var pinEntryOvershoot by prefsFloatState("diag_pinEntryOvershoot", 1.1f); private set
+    @JvmName("setPinEntryOvershootPref") fun setPinEntryOvershoot(v: Float) { pinEntryOvershoot = v }
 
     // --- per-app nav bar settings -------------------------------------------------------
 
@@ -159,21 +243,21 @@ class SettingsRepository(context: Context) {
             enabled, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, themeMode, accent
         )
 
-        @JvmName("setEnabledPref")
+        @JvmName("setEnabledPrefPref")
         fun setEnabled(v: Boolean) { enabled = v }
-        @JvmName("setGlassIntensityPref")
+        @JvmName("setGlassIntensityPrefPref")
         fun setGlassIntensity(v: Float) { glassIntensity = v }
-        @JvmName("setContainerOpacityPref")
+        @JvmName("setContainerOpacityPrefPref")
         fun setContainerOpacity(v: Float) { containerOpacity = v }
-        @JvmName("setCornerRadiusPref")
+        @JvmName("setCornerRadiusPrefPref")
         fun setCornerRadius(v: Float) { cornerRadius = v }
-        @JvmName("setBarHeightPref")
+        @JvmName("setBarHeightPrefPref")
         fun setBarHeight(v: Float) { barHeight = v }
-        @JvmName("setTabWidthPref")
+        @JvmName("setTabWidthPrefPref")
         fun setTabWidth(v: Float) { tabWidth = v }
-        @JvmName("setThemeModePref")
+        @JvmName("setThemeModePrefPref")
         fun setThemeMode(v: ThemeMode) { themeMode = v }
-        @JvmName("setAccentPref")
+        @JvmName("setAccentPrefPref")
         fun setAccent(v: AccentPreset) { accent = v }
 
         fun reloadFromDefaults() {
@@ -213,21 +297,21 @@ class SettingsRepository(context: Context) {
             dragSensitivity, springDamping, springStiffness
         )
 
-        @JvmName("setBlurDpPref")
+        @JvmName("setBlurDpPrefPref")
         fun setBlurDp(v: Float) { blurDp = v }
-        @JvmName("setLensSizeDpPref")
+        @JvmName("setLensSizeDpPrefPref")
         fun setLensSizeDp(v: Float) { lensSizeDp = v }
-        @JvmName("setLensDepthDpPref")
+        @JvmName("setLensDepthDpPrefPref")
         fun setLensDepthDp(v: Float) { lensDepthDp = v }
-        @JvmName("setHighlightStrengthPref")
+        @JvmName("setHighlightStrengthPrefPref")
         fun setHighlightStrength(v: Float) { highlightStrength = v }
-        @JvmName("setShadowRadiusDpPref")
+        @JvmName("setShadowRadiusDpPrefPref")
         fun setShadowRadiusDp(v: Float) { shadowRadiusDp = v }
-        @JvmName("setDragSensitivityPref")
+        @JvmName("setDragSensitivityPrefPref")
         fun setDragSensitivity(v: Float) { dragSensitivity = v }
-        @JvmName("setSpringDampingPref")
+        @JvmName("setSpringDampingPrefPref")
         fun setSpringDamping(v: Float) { springDamping = v }
-        @JvmName("setSpringStiffnessPref")
+        @JvmName("setSpringStiffnessPrefPref")
         fun setSpringStiffness(v: Float) { springStiffness = v }
 
         fun reloadFromDefaults() {
@@ -264,17 +348,17 @@ class SettingsRepository(context: Context) {
             enabled, blurDp, refractionHeightDp, refractionAmountDp, chromaticAberration, hapticsEnabled
         )
 
-        @JvmName("setEnabledPref")
+        @JvmName("setEnabledPrefPref")
         fun setEnabled(v: Boolean) { enabled = v }
-        @JvmName("setBlurDpPref")
+        @JvmName("setBlurDpPrefPref")
         fun setBlurDp(v: Float) { blurDp = v }
-        @JvmName("setRefractionHeightDpPref")
+        @JvmName("setRefractionHeightDpPrefPref")
         fun setRefractionHeightDp(v: Float) { refractionHeightDp = v }
-        @JvmName("setRefractionAmountDpPref")
+        @JvmName("setRefractionAmountDpPrefPref")
         fun setRefractionAmountDp(v: Float) { refractionAmountDp = v }
-        @JvmName("setChromaticAberrationPref")
+        @JvmName("setChromaticAberrationPrefPref")
         fun setChromaticAberration(v: Boolean) { chromaticAberration = v }
-        @JvmName("setHapticsEnabledPref")
+        @JvmName("setHapticsEnabledPrefPref")
         fun setHapticsEnabled(v: Boolean) { hapticsEnabled = v }
 
         fun reloadFromDefaults() {
