@@ -2580,12 +2580,7 @@ public class ControlCenterHook {
                 "miui.systemui.controlcenter.panel.main.qs.QSCardsController",
                 "miui.systemui.controlcenter.panel.main.media.MediaPlayerController",
                 "miui.systemui.controlcenter.panel.main.brightness.BrightnessSliderController",
-                "miui.systemui.controlcenter.panel.main.volume.VolumeSliderController",
-                "miui.systemui.controlcenter.panel.main.qs.QSListController",
-                "miui.systemui.controlcenter.panel.main.devicecenter.entry.DeviceCenterEntryController",
-                "miui.systemui.controlcenter.panel.main.devicecontrol.DeviceControlsEntryController",
-                "miui.systemui.controlcenter.panel.main.qs.CompactQSCardController",
-                "miui.systemui.controlcenter.panel.main.qs.CompactQSListController"
+                "miui.systemui.controlcenter.panel.main.volume.VolumeSliderController"
             };
 
             for (String className : majorModuleClassNames) {
