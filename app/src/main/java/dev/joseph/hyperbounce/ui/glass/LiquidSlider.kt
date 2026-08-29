@@ -98,7 +98,7 @@ fun LiquidSlider(
                         didDrag = dragAmount.x != 0f
                     }
                     val delta = (valueRange.endInclusive - valueRange.start) * (dragAmount.x / trackWidth)
-                    val nextValue = (value + (if (isLtr) delta else -delta)).coerceIn(valueRange)
+                    val nextValue = (this.value + (if (isLtr) delta else -delta)).coerceIn(valueRange)
                     snapValue(nextValue)
                     onValueChange(nextValue)
                 }
