@@ -35,11 +35,6 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.Shadow
 import dev.joseph.hyperbounce.ui.glass.DropdownOverlayRequest
 import dev.joseph.hyperbounce.ui.glass.LocalDropdownOverlayHost
@@ -47,6 +42,7 @@ import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import androidx.compose.ui.platform.LocalDensity
 
 @Composable
 fun DropdownPicker(
@@ -79,12 +75,6 @@ fun DropdownPicker(
                         selectedIndex = selectedIndex,
                         anchorPosition = anchorPosition,
                         anchorSize = anchorSize,
-                        backdrop = backdrop,
-                        glassEnabled = glass.enabled,
-                        blurDp = glass.blurDp,
-                        refractionHeightDp = glass.refractionHeightDp,
-                        refractionAmountDp = glass.refractionAmountDp,
-                        chromaticAberration = glass.chromaticAberration,
                         progress = progress,
                         onSelect = { index ->
                             onSelect(index)
@@ -133,23 +123,19 @@ private fun DropdownPanel(
     selectedIndex: Int,
     anchorPosition: Offset,
     anchorSize: IntSize,
-    backdrop: Backdrop,
-    glassEnabled: Boolean,
-    blurDp: Float,
-    refractionHeightDp: Float,
-    refractionAmountDp: Float,
-    chromaticAberration: Boolean,
     progress: Animatable<Float, *>,
     onSelect: (Int) -> Unit
 ) {
     val isDark = isSystemInDarkTheme()
-    val shape = RoundedCornerShape(14.dp)
+    val density = LocalDensity.current
+    val inwardOffsetPx = with(density) { 16.dp.toPx() }
     
     var contentWidth by remember { mutableStateOf(0f) }
     var contentHeight by remember { mutableStateOf(0f) }
 
     Box(
         Modifier
+            // 1. Move to the absolute (x,y)
             .graphicsLayer {
                 val p = progress.value
                 val w = if (contentWidth > 0f) contentWidth else anchorSize.width.toFloat()
@@ -158,11 +144,31 @@ private fun DropdownPanel(
                 val currentW = lerp(anchorSize.width.toFloat(), w, p)
                 val currentH = lerp(anchorSize.height.toFloat(), h, p)
                 
-                translationX = anchorPosition.x + anchorSize.width / 2f - currentW / 2f
+                // Shift inward slightly as it expands
+                val rightEdgeStart = anchorPosition.x + anchorSize.width
+                val rightEdgeEnd = rightEdgeStart - inwardOffsetPx
+                val currentRightEdge = lerp(rightEdgeStart, rightEdgeEnd, p)
+                
+                translationX = currentRightEdge - currentW
                 translationY = anchorPosition.y + anchorSize.height - currentH
+                
+                // Add a drop shadow manually to the graphics layer so it follows the morphing shape
+                shadowElevation = lerp(0f, 24f, p)
+                shape = RoundedCornerShape(14.dp)
+                spotShadowColor = Color.Black.copy(alpha = 0.6f)
+                ambientShadowColor = Color.Black.copy(alpha = 0.2f)
+                clip = false
             }
+            // 2. Prevent parent relayout by reporting 0x0
             .layout { measurable, constraints ->
                 val placeable = measurable.measure(constraints)
+                layout(0, 0) {
+                    placeable.placeWithLayer(0, 0)
+                }
+            }
+            // 3. Size the container physically to currentW x currentH so background/clip morphs
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints) // measures inner unbounded box
                 contentWidth = placeable.width.toFloat()
                 contentHeight = placeable.height.toFloat()
                 
@@ -170,95 +176,89 @@ private fun DropdownPanel(
                 val currentW = lerp(anchorSize.width.toFloat(), contentWidth, p).roundToInt()
                 val currentH = lerp(anchorSize.height.toFloat(), contentHeight, p).roundToInt()
                 
-                // Fixed layout size prevents parent (ScreenScaffold) from recomposing/relayouting
-                layout(0, 0) {
-                    val x = (currentW - placeable.width) / 2
+                layout(currentW, currentH) {
+                    // Place inner content anchored to the bottom right
+                    val x = currentW - placeable.width
                     val y = currentH - placeable.height
-                    placeable.placeWithLayer(x, y)
+                    placeable.place(x, y)
                 }
             }
-            .then(
-                if (glassEnabled) {
-                    Modifier.drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { shape },
-                        effects = {
-                            vibrancy()
-                            blur((blurDp / 2.5f).dp.toPx())
-                            lens(
-                                (refractionHeightDp / 1.5f).dp.toPx(),
-                                (refractionAmountDp / 1.5f).dp.toPx(),
-                                chromaticAberration = chromaticAberration
-                            )
-                        },
-                        highlight = { Highlight.Default },
-                        shadow = { Shadow(radius = 14f.dp, color = Color.Black.copy(alpha = 0.22f)) }
-                    )
-                } else {
-                    Modifier.background(Color(0xFF1C1C1E).copy(alpha = 0.96f))
-                }
+            // Fully opaque background, no glass/blur as requested
+            .background(
+                color = if (isDark) Color(0xFF1C1C1E) else Color.White,
+                shape = RoundedCornerShape(14.dp)
             )
-            .clip(shape)
+            .clip(RoundedCornerShape(14.dp))
     ) {
-        // Old content that fades out
-        Box(
-            Modifier
-                .layout { measurable, constraints ->
-                    val placeable = measurable.measure(constraints)
-                    layout(placeable.width, placeable.height) {
-                        // Position it so it exactly matches the anchor position visually when scale is applied
-                        placeable.place(0, 0)
+        // Inner Box that is measured at FULL size (W x H)
+        Box {
+            // New content that fades in
+            Column(
+                Modifier
+                    .widthIn(min = 160.dp, max = 240.dp)
+                    .padding(vertical = 6.dp)
+                    .graphicsLayer {
+                        alpha = progress.value
+                    }
+            ) {
+                options.forEachIndexed { index, option ->
+                    Row(
+                        Modifier
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { onSelect(index) }
+                            )
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (index == selectedIndex) {
+                            CheckmarkIcon(color = if (isDark) Color.White else Color.Black, size = 13.dp, strokeWidth = 2.dp)
+                        } else {
+                            Spacer(Modifier.width(13.dp))
+                        }
+                        BasicText(option, style = HyperBounceType.subhead.copy(color = if (isDark) Color.White else Color.Black))
                     }
                 }
-                .graphicsLayer {
-                    alpha = 1f - progress.value
-                }
-                .padding(horizontal = 12.dp, vertical = 7.dp)
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                BasicText(
-                    options.getOrElse(selectedIndex) { "" },
-                    style = HyperBounceType.subhead.copy(color = if (isDark) Color.White else Color.Black.copy(alpha = 0.82f))
-                )
-                ChevronIcon(
-                    color = if (isDark) Color.White.copy(alpha = 0.6f) else Color.Black.copy(alpha = 0.4f),
-                    size = 9.dp,
-                    strokeWidth = 1.6.dp,
-                    pointingLeft = false
-                )
             }
-        }
 
-        // New content that fades in
-        Column(
-            Modifier
-                .widthIn(min = 160.dp, max = 240.dp)
-                .padding(vertical = 6.dp)
-                .graphicsLayer {
-                    alpha = progress.value
-                }
-        ) {
-            options.forEachIndexed { index, option ->
-                Row(
-                    Modifier
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = { onSelect(index) }
+            // Old content that fades out, positioned exactly where the anchor would be in the full size box
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    // The anchor padding was 12dp horizontal, 7dp vertical. We need to match the anchor size exactly.
+                    // Instead of full alignment, let's just use layout to force its size to anchorSize.
+                    .layout { measurable, constraints ->
+                        val placeable = measurable.measure(
+                            constraints.copy(
+                                minWidth = anchorSize.width, maxWidth = anchorSize.width,
+                                minHeight = anchorSize.height, maxHeight = anchorSize.height
+                            )
                         )
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        layout(placeable.width, placeable.height) {
+                            placeable.place(0, 0)
+                        }
+                    }
+                    .graphicsLayer {
+                        alpha = 1f - progress.value
+                    }
+                    .padding(horizontal = 12.dp, vertical = 7.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (index == selectedIndex) {
-                        CheckmarkIcon(color = if (isDark) Color.White else Color.Black, size = 13.dp, strokeWidth = 2.dp)
-                    } else {
-                        Spacer(Modifier.width(13.dp))
-                    }
-                    BasicText(option, style = HyperBounceType.subhead.copy(color = if (isDark) Color.White else Color.Black))
+                    BasicText(
+                        options.getOrElse(selectedIndex) { "" },
+                        style = HyperBounceType.subhead.copy(color = if (isDark) Color.White else Color.Black.copy(alpha = 0.82f))
+                    )
+                    ChevronIcon(
+                        color = if (isDark) Color.White.copy(alpha = 0.6f) else Color.Black.copy(alpha = 0.4f),
+                        size = 9.dp,
+                        strokeWidth = 1.6.dp,
+                        pointingLeft = false
+                    )
                 }
             }
         }
