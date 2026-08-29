@@ -297,7 +297,6 @@ public class Config {
 
     public void loadFromJson(String jsonStr) {
         try {
-            resetDefaults();
             JSONObject json = new JSONObject(jsonStr);
             unlockEnabled = json.optBoolean("unlockEnabled", unlockEnabled);
             appAnimEnabled = json.optBoolean("appAnimEnabled", appAnimEnabled);

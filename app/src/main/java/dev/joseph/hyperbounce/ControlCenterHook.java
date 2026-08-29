@@ -101,25 +101,28 @@ public class ControlCenterHook {
         sLastKnownContext = ctx.getApplicationContext() != null ? ctx.getApplicationContext() : ctx;
         try {
             String jsonStr = null;
-            // 1. Try HyperBounce ContentProvider
+            // 1. Primary: Load from Settings.Secure (100% available immediately on early system boot!)
             try {
-                Bundle res = ctx.getContentResolver().call(
-                    Uri.parse("content://dev.joseph.hyperbounce.provider"),
-                    "getCCLayout", null, null
-                );
-                if (res != null) {
-                    jsonStr = res.getString("cc_layout_json");
+                jsonStr = android.provider.Settings.Secure.getString(ctx.getContentResolver(), "sysui_hyperbounce_cc_layout");
+                if (TextUtils.isEmpty(jsonStr)) {
+                    jsonStr = android.provider.Settings.Secure.getString(ctx.getContentResolver(), "hyperbounce_cc_layout");
                 }
             } catch (Throwable ignore) {}
 
-            // 2. Fallback to Settings.Secure
+            // 2. Secondary: Load from HyperBounce ContentProvider
             if (TextUtils.isEmpty(jsonStr)) {
                 try {
-                    jsonStr = android.provider.Settings.Secure.getString(ctx.getContentResolver(), "hyperbounce_cc_layout");
+                    Bundle res = ctx.getContentResolver().call(
+                        Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                        "getCCLayout", null, null
+                    );
+                    if (res != null) {
+                        jsonStr = res.getString("cc_layout_json");
+                    }
                 } catch (Throwable ignore) {}
             }
 
-            // 3. Parse JSON from Provider / Settings if available
+            // 3. Parse JSON from Settings.Secure / Provider if available
             if (!TextUtils.isEmpty(jsonStr)) {
                 try {
                     JSONObject json = new JSONObject(jsonStr);
@@ -133,7 +136,9 @@ public class ControlCenterHook {
                             }
                         }
                     }
-                    sIsWifiFirst = json.optBoolean("wifi_card_first", sIsWifiFirst);
+                    if (json.has("wifi_card_first")) {
+                        sIsWifiFirst = json.optBoolean("wifi_card_first", sIsWifiFirst);
+                    }
 
                     String expSpecs = json.optString("expanded_tile_specs", "");
                     if (!TextUtils.isEmpty(expSpecs)) {
@@ -169,7 +174,7 @@ public class ControlCenterHook {
                             sTileGroups.addAll(newGroups);
                         }
                     }
-                    return; // Successfully loaded from persistent provider!
+                    return; // Successfully loaded from persistent store!
                 } catch (Throwable ignore) {}
             }
 
@@ -185,7 +190,7 @@ public class ControlCenterHook {
                         sComponentPriorities.put(key, saved);
                     }
                 }
-                sIsWifiFirst = sPrefs.getBoolean("wifi_card_first", true);
+                sIsWifiFirst = sPrefs.getBoolean("wifi_card_first", sIsWifiFirst);
 
                 String expandedStr = sPrefs.getString("expanded_tile_specs", "");
                 if (!TextUtils.isEmpty(expandedStr)) {
@@ -230,13 +235,14 @@ public class ControlCenterHook {
         try {
             sExplicitReset = true;
             try {
+                android.provider.Settings.Secure.putString(ctx.getContentResolver(), "sysui_hyperbounce_cc_layout", "");
+                android.provider.Settings.Secure.putString(ctx.getContentResolver(), "hyperbounce_cc_layout", "");
+            } catch (Throwable ignore) {}
+            try {
                 ctx.getContentResolver().call(
                     Uri.parse("content://dev.joseph.hyperbounce.provider"),
                     "resetCCLayout", null, null
                 );
-            } catch (Throwable ignore) {}
-            try {
-                android.provider.Settings.Secure.putString(ctx.getContentResolver(), "hyperbounce_cc_layout", "");
             } catch (Throwable ignore) {}
             if (sPrefs == null) {
                 sPrefs = ctx.getSharedPreferences("hyperbounce_cc_layout", Context.MODE_PRIVATE);
@@ -248,12 +254,16 @@ public class ControlCenterHook {
             sExpandedTileSpecs.clear();
             sExpandedTileSpecs.add("wifi");
             sExpandedTileSpecs.add("cell");
+            sIsWifiFirst = true;
             sComponentPriorities.clear();
             sComponentPriorities.put("CompactQS", 0);
             sComponentPriorities.put("CompactQSCard", 1);
-            sComponentPriorities.put("QSCardsController", 2);
-            sComponentPriorities.put("BigMediaController", 3);
-            sComponentPriorities.put("BrightnessVolumeController", 4);
+            sComponentPriorities.put("QSCardsController", 20);
+            sComponentPriorities.put("MediaPlayerController", 30);
+            sComponentPriorities.put("BrightnessSliderController", 31);
+            sComponentPriorities.put("VolumeSliderController", 32);
+            sComponentPriorities.put("DeviceCenterEntryController", 50);
+            sComponentPriorities.put("DeviceControlsEntryController", 51);
             sComponentPriorities.put("QSListController", 100);
             savePriorities(ctx);
             sExplicitReset = false;
@@ -267,6 +277,17 @@ public class ControlCenterHook {
         if (ctx == null && sLastKnownContext != null) ctx = sLastKnownContext;
         if (ctx == null) return;
         try {
+            // Guard: Never overwrite disk with empty layout unless explicit reset was triggered
+            if (!sExplicitReset && sTileGroups.isEmpty() && sExpandedTileSpecs.size() <= 2) {
+                try {
+                    String existing = android.provider.Settings.Secure.getString(ctx.getContentResolver(), "sysui_hyperbounce_cc_layout");
+                    if (!TextUtils.isEmpty(existing) && existing.contains("tile_groups_v2") && !existing.contains("\"tile_groups_v2\":\"\"")) {
+                        // Previous valid groups exist on disk, refuse to overwrite with empty state
+                        return;
+                    }
+                } catch (Throwable ignore) {}
+            }
+
             // Build JSON layout object
             JSONObject json = new JSONObject();
             JSONObject prioObj = new JSONObject();
@@ -298,7 +319,13 @@ public class ControlCenterHook {
 
             String jsonStr = json.toString();
 
-            // 1. Save to HyperBounce persistent ContentProvider
+            // 1. Primary: Save to Android Settings.Secure (guaranteed instant load on early boot)
+            try {
+                android.provider.Settings.Secure.putString(ctx.getContentResolver(), "sysui_hyperbounce_cc_layout", jsonStr);
+                android.provider.Settings.Secure.putString(ctx.getContentResolver(), "hyperbounce_cc_layout", jsonStr);
+            } catch (Throwable ignore) {}
+
+            // 2. Secondary: Save to HyperBounce persistent ContentProvider
             try {
                 ctx.getContentResolver().call(
                     Uri.parse("content://dev.joseph.hyperbounce.provider"),
@@ -306,12 +333,7 @@ public class ControlCenterHook {
                 );
             } catch (Throwable ignore) {}
 
-            // 2. Save to Android Settings.Secure as system fallback
-            try {
-                android.provider.Settings.Secure.putString(ctx.getContentResolver(), "hyperbounce_cc_layout", jsonStr);
-            } catch (Throwable ignore) {}
-
-            // 3. Save to local SharedPreferences
+            // 3. Local SharedPreferences Cache
             if (sPrefs == null) {
                 sPrefs = ctx.getSharedPreferences("hyperbounce_cc_layout", Context.MODE_PRIVATE);
             }
@@ -2558,7 +2580,12 @@ public class ControlCenterHook {
                 "miui.systemui.controlcenter.panel.main.qs.QSCardsController",
                 "miui.systemui.controlcenter.panel.main.media.MediaPlayerController",
                 "miui.systemui.controlcenter.panel.main.brightness.BrightnessSliderController",
-                "miui.systemui.controlcenter.panel.main.volume.VolumeSliderController"
+                "miui.systemui.controlcenter.panel.main.volume.VolumeSliderController",
+                "miui.systemui.controlcenter.panel.main.qs.QSListController",
+                "miui.systemui.controlcenter.panel.main.devicecenter.entry.DeviceCenterEntryController",
+                "miui.systemui.controlcenter.panel.main.devicecontrol.DeviceControlsEntryController",
+                "miui.systemui.controlcenter.panel.main.qs.CompactQSCardController",
+                "miui.systemui.controlcenter.panel.main.qs.CompactQSListController"
             };
 
             for (String className : majorModuleClassNames) {
@@ -3067,6 +3094,44 @@ public class ControlCenterHook {
                                             }
                                         }
                                     }
+
+                                    try {
+                                        Field childControllersField = distributorClass.getDeclaredField("childControllers");
+                                        childControllersField.setAccessible(true);
+                                        List childControllers = (List) childControllersField.get(distributor);
+                                        if (childControllers != null && childControllers.size() > 1) {
+                                            Collections.sort(childControllers, (o1, o2) -> {
+                                                try {
+                                                    Method p1 = o1.getClass().getMethod("getPriority");
+                                                    Method p2 = o2.getClass().getMethod("getPriority");
+                                                    int pr1 = (int) p1.invoke(o1);
+                                                    int pr2 = (int) p2.invoke(o2);
+                                                    return Integer.compare(pr1, pr2);
+                                                } catch (Throwable ignore) {
+                                                    return 0;
+                                                }
+                                            });
+                                        }
+                                    } catch (Throwable ignore) {}
+
+                                    try {
+                                        Field leftPanelContentField = distributorClass.getDeclaredField("leftPanelContent");
+                                        leftPanelContentField.setAccessible(true);
+                                        List leftList = (List) leftPanelContentField.get(distributor);
+                                        if (leftList != null && leftList.size() > 1) {
+                                            Collections.sort(leftList, (o1, o2) -> {
+                                                try {
+                                                    Method p1 = o1.getClass().getMethod("getPriority");
+                                                    Method p2 = o2.getClass().getMethod("getPriority");
+                                                    int pr1 = (int) p1.invoke(o1);
+                                                    int pr2 = (int) p2.invoke(o2);
+                                                    return Integer.compare(pr1, pr2);
+                                                } catch (Throwable ignore) {
+                                                    return 0;
+                                                }
+                                            });
+                                        }
+                                    } catch (Throwable ignore) {}
 
                                     if (rightList != null && rightList.size() > 1) {
                                         Collections.sort(rightList, (o1, o2) -> {
