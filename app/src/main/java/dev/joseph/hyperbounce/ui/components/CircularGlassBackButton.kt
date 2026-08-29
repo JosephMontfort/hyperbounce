@@ -85,21 +85,18 @@ fun CircularGlassBackButton(
     Box(
         modifier
             .size(size)
+            .graphicsLayer {
+                jellyLayerBlock()
+                shape = CircleShape
+                clip = true
+            }
+            .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF1C1C1E) else Color(0xFFFFFFFF))
+            .border(0.5.dp, Color.Gray.copy(alpha = 0.3f), CircleShape)
             .clickable(
                 interactionSource = null,
                 indication = LocalIndication.current,
                 role = Role.Button,
                 onClick = onClick
-            )
-            .then(
-                Modifier
-                    .graphicsLayer {
-                        jellyLayerBlock()
-                        shape = CircleShape
-                        clip = true
-                    }
-                    .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF1C1C1E) else Color(0xFFFFFFFF))
-                    .border(0.5.dp, Color.Gray.copy(alpha = 0.3f), CircleShape)
             )
             .then(interactiveHighlight.modifier)
             .then(interactiveHighlight.gestureModifier),

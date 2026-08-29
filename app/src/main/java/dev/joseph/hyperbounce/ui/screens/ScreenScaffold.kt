@@ -45,7 +45,7 @@ fun ScreenScaffold(
     backdrop: Backdrop,
     onBack: () -> Unit,
     subtitle: String? = null,
-    content: @Composable ColumnScope.() -> Unit
+    content: @Composable ColumnScope.(contentBackdrop: Backdrop) -> Unit
 ) {
     val scrollState = rememberScrollState()
     val collapseProgress = (scrollState.value / 220f).fastCoerceIn(0f, 1f)
@@ -85,7 +85,7 @@ fun ScreenScaffold(
                 )
             }
             Spacer(Modifier.height(16.dp))
-            content()
+            content(contentBackdrop)
             Spacer(Modifier.height(56.dp))
         }
 

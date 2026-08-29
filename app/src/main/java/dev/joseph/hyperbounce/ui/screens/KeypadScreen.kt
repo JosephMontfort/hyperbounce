@@ -32,7 +32,7 @@ fun KeypadScreen(
         colors = colors,
         backdrop = backdrop,
         onBack = onBack
-    ) {
+    ) { _ ->
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsToggleRow(
                 title = "Liquid Glass Keypad",

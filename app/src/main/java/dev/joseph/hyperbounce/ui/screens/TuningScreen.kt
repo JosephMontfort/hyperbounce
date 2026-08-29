@@ -49,110 +49,45 @@ fun TuningScreen(
         onReset = repository::resetToDefaults,
         onAbout = { onNavigate(Destination.About) }
     ) {
-        SectionHeader("Apps", colors)
+        SectionHeader("Features", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-            NavApp.entries.forEachIndexed { index, app ->
-                SettingsNavRow(
-                    title = app.displayName,
-                    subtitle = navSummary(repository, app),
-                    colors = colors,
-                    iconTint = appTint(app),
-                    onClick = { onNavigate(Destination.AppDetail(app)) },
-                    icon = { AppIcon(app) }
-                )
-                if (index != NavApp.entries.lastIndex) {
-                    RowDivider(colors.separator)
-                }
-            }
-        }
-        SectionFooter(
-            "Floating nav-bar glass for Instagram, WhatsApp, and YouTube — each app's " +
-                "settings are stored and applied independently.",
-            colors
-        )
-
-        SectionHeader("Engine", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+            SettingsNavRow(
+                title = "Floating Navigation Bar",
+                subtitle = "App-specific glass overrides",
+                colors = colors,
+                iconTint = colors.accentBlue,
+                onClick = { onNavigate(Destination.AppsList) },
+                icon = { dev.joseph.hyperbounce.ui.components.AppsIcon(color = Color.White, size = 16.dp) }
+            )
+            RowDivider(colors.separator)
             SettingsNavRow(
                 title = "Toggles & Sliders",
                 subtitle = engineSummary(repository),
                 colors = colors,
-                iconTint = colors.accentBlue.copy(alpha = 0.85f),
+                iconTint = colors.accentOrange,
                 onClick = { onNavigate(Destination.Engine) },
-                icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                icon = { dev.joseph.hyperbounce.ui.components.SlidersIcon(color = Color.White, size = 16.dp) }
+            )
+            RowDivider(colors.separator)
+            SettingsNavRow(
+                title = "Lock Screen",
+                subtitle = if (repository.keypadEnabled) "Glass Pinpad" else "Off",
+                colors = colors,
+                iconTint = colors.accentIndigo,
+                onClick = { onNavigate(Destination.Keypad) },
+                icon = { dev.joseph.hyperbounce.ui.components.LockIcon(color = Color.White, size = 15.dp) }
             )
         }
         SectionFooter(
-            "HyperOS system toggles, sliders, and keypad — pick the rendering engine and " +
-                "tune the glass feel for each.",
+            "Tap any section to configure its specific rendering engine and physical feel.",
             colors
         )
     }
 }
 
-@Composable
-private fun AppIcon(app: NavApp) {
-    val context = LocalContext.current
-    val pm = context.packageManager
-    var bitmap by remember(app) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
-    
-    LaunchedEffect(app) {
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                val drawable = pm.getApplicationIcon(app.packageName)
-                val bmp = if (drawable is android.graphics.drawable.BitmapDrawable) {
-                    drawable.bitmap
-                } else {
-                    val width = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 96
-                    val height = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 96
-                    val canvasBmp = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-                    val canvas = android.graphics.Canvas(canvasBmp)
-                    drawable.setBounds(0, 0, canvas.width, canvas.height)
-                    drawable.draw(canvas)
-                    canvasBmp
-                }
-                bitmap = bmp.asImageBitmap()
-            } catch (e: Exception) {
-                bitmap = null
-            }
-        }
-    }
-    
-    if (bitmap != null) {
-        androidx.compose.foundation.Image(
-            bitmap = bitmap!!,
-            contentDescription = app.displayName,
-            modifier = Modifier.size(28.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-        )
-    } else {
-        // Fallback to monogram if not installed
-        Box(
-            Modifier
-                .size(28.dp)
-                .background(appTint(app), androidx.compose.foundation.shape.CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            BasicText(
-                app.displayName.take(1),
-                style = HyperBounceType.footnote.copy(color = Color.White, fontWeight = FontWeight.Bold)
-            )
-        }
-    }
-}
-
-private fun appTint(app: NavApp): Color = when (app) {
-    NavApp.Instagram -> Color(0xFFE1306C).copy(alpha = 0.85f)
-    NavApp.WhatsApp -> Color(0xFF25D366).copy(alpha = 0.85f)
-    NavApp.YouTube -> Color(0xFFFF0000).copy(alpha = 0.85f)
-}
-
-private fun navSummary(repository: SettingsRepository, app: NavApp): String {
-    val s = repository.appSettings(app)
-    return if (!s.enabled) "Off" else "Glass ${(s.glassIntensity * 100).toInt()}% · ${s.cornerRadius.toInt()}dp corners"
-}
-
 private fun engineSummary(repository: SettingsRepository): String {
-    val toggle = repository.toggleEngine.label
-    val slider = repository.sliderEngine.label
-    return if (toggle == slider) "Both using $toggle" else "Toggle: $toggle · Slider: $slider"
+    val s = repository.engineSettings
+    val t = if (s.togglesEngine == dev.joseph.hyperbounce.ui.state.RenderEngine.LiquidGlass) "Liquid Glass" else "Native Canvas"
+    val sl = if (s.slidersEngine == dev.joseph.hyperbounce.ui.state.RenderEngine.LiquidGlass) "Liquid Glass" else "Native Canvas"
+    return "Toggles: $t · Sliders: $sl"
 }

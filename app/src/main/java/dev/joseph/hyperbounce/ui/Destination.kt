@@ -9,6 +9,7 @@ import dev.joseph.hyperbounce.ui.state.NavApp
  * subpages that genuinely drill down (push/pop), layered on top of the pager.
  */
 sealed interface Destination {
+    data object AppsList : Destination
     data class AppDetail(val app: NavApp) : Destination
     data object Engine : Destination
     data object Keypad : Destination

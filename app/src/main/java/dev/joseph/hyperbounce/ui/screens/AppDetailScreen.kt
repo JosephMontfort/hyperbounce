@@ -56,7 +56,7 @@ fun AppDetailScreen(
         colors = colors,
         backdrop = backdrop,
         onBack = onBack
-    ) {
+    ) { _ ->
         NavBarPreview(
             backdrop = backdrop,
             accentColor = accentColor,

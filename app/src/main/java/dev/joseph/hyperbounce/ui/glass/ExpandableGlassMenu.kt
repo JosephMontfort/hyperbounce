@@ -354,7 +354,6 @@ fun GlassEffectContainer(
 
     Box(
         modifier = Modifier
-            // ZERO-RECOMPOSITION LAYOUT (Executes measuring natively without calling recompose)
             .layout { measurable, constraints ->
                 val p = animatableProgress.value
                 val widthDiff = (contentSize.width - labelSize.width).coerceAtLeast(0f)
@@ -375,7 +374,21 @@ fun GlassEffectContainer(
                         maxHeight = currentHeightPx.toInt()
                     )
                 )
-                layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+
+                // By fixing the layout size to labelSize, the parent NEVER re-measures or re-layouts
+                // during the animation. The expanded placeable is simply drawn outside these bounds.
+                val layoutW = labelSize.width.toInt()
+                val layoutH = labelSize.height.toInt()
+                
+                val offset = alignment.composeAlignment.align(
+                    size = androidx.compose.ui.unit.IntSize(placeable.width, placeable.height),
+                    space = androidx.compose.ui.unit.IntSize(layoutW, layoutH),
+                    layoutDirection = layoutDirection
+                )
+
+                layout(layoutW, layoutH) { 
+                    placeable.placeWithLayer(offset.x, offset.y) 
+                }
             }
             .graphicsLayer {
                 val progress = animatableProgress.value

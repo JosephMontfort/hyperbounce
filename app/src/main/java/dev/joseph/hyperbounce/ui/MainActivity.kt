@@ -163,6 +163,14 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                     }
                 } else {
                     when (destination) {
+                        Destination.AppsList -> dev.joseph.hyperbounce.ui.screens.AppsListScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop,
+                            onNavigate = push
+                        )
+                        
                         is Destination.AppDetail -> AppDetailScreen(
                             app = destination.app,
                             repository = repository,

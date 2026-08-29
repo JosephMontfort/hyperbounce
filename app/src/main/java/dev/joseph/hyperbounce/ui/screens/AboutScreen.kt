@@ -42,7 +42,7 @@ fun AboutScreen(
         colors = colors,
         backdrop = backdrop,
         onBack = onBack
-    ) {
+    ) { _ ->
         Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
             val shape = RoundedCornerShape(28.dp)
             Box(

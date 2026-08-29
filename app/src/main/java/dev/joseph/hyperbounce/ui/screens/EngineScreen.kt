@@ -19,6 +19,7 @@ import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsNavRow
 import dev.joseph.hyperbounce.ui.components.SlidersIcon
+import dev.joseph.hyperbounce.ui.glass.rememberCombinedBackdrop
 import dev.joseph.hyperbounce.ui.state.RenderEngine
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
@@ -38,13 +39,16 @@ fun EngineScreen(
         colors = colors,
         backdrop = backdrop,
         onBack = onBack
-    ) {
+    ) { contentBackdrop ->
+        val s = repository.engineSettings
+        val combinedBackdrop = rememberCombinedBackdrop(backdrop, contentBackdrop)
+
         SectionHeader("Rendering Engine", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
             EngineRow(
                 title = "Toggle Switches",
                 colors = colors,
-                backdrop = backdrop,
+                backdrop = combinedBackdrop,
                 selected = repository.toggleEngine,
                 onSelect = repository::setToggleEngine
             )
@@ -52,7 +56,7 @@ fun EngineScreen(
             EngineRow(
                 title = "Sliders",
                 colors = colors,
-                backdrop = backdrop,
+                backdrop = combinedBackdrop,
                 selected = repository.sliderEngine,
                 onSelect = repository::setSliderEngine
             )
@@ -63,17 +67,6 @@ fun EngineScreen(
                 "else in this app.",
             colors
         )
-
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-            SettingsNavRow(
-                title = "Keypad",
-                subtitle = if (repository.keypadEnabled) "Enabled" else "Disabled",
-                colors = colors,
-                iconTint = colors.accentBlue.copy(alpha = 0.85f),
-                onClick = { onNavigate(Destination.Keypad) },
-                icon = { SlidersIcon(color = Color.White, size = 14.dp) }
-            )
-        }
 
         GlassFeelSection(
             sectionTitle = "Toggle Glass",

@@ -368,3 +368,91 @@ fun dashedStroke(width: Dp, dp: Dp = 6f.dp, gap: Dp = 6f.dp) = Stroke(
     cap = StrokeCap.Round,
     pathEffect = PathEffect.dashPathEffect(floatArrayOf(dp.value, gap.value))
 )
+
+@Composable
+fun AppsIcon(color: Color, size: Dp = 24.dp, strokeWidth: Dp = 2.dp) {
+    Canvas(modifier = Modifier.size(size)) {
+        val s = strokeWidth.toPx()
+        val side = (this.size.width - s) / 2f
+        
+        // Top-left
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(s/2, s/2),
+            size = Size(side - s/2, side - s/2),
+            cornerRadius = CornerRadius(s, s),
+            style = Stroke(s)
+        )
+        // Top-right
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(this.size.width/2 + s/2, s/2),
+            size = Size(side - s/2, side - s/2),
+            cornerRadius = CornerRadius(s, s),
+            style = Stroke(s)
+        )
+        // Bottom-left
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(s/2, this.size.height/2 + s/2),
+            size = Size(side - s/2, side - s/2),
+            cornerRadius = CornerRadius(s, s),
+            style = Stroke(s)
+        )
+        // Bottom-right
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(this.size.width/2 + s/2, this.size.height/2 + s/2),
+            size = Size(side - s/2, side - s/2),
+            cornerRadius = CornerRadius(s, s),
+            style = Stroke(s)
+        )
+    }
+}
+
+@Composable
+fun LockIcon(color: Color, size: Dp = 24.dp, strokeWidth: Dp = 2.dp) {
+    Canvas(modifier = Modifier.size(size)) {
+        val s = strokeWidth.toPx()
+        val bodyWidth = this.size.width * 0.7f
+        val bodyHeight = this.size.height * 0.5f
+        val shackleRadius = bodyWidth * 0.35f
+        val shackleYOffset = this.size.height * 0.15f
+        
+        val bodyTop = this.size.height - bodyHeight
+        
+        // Body
+        drawRoundRect(
+            color = color,
+            topLeft = Offset((this.size.width - bodyWidth) / 2f, bodyTop),
+            size = Size(bodyWidth, bodyHeight),
+            cornerRadius = CornerRadius(s * 1.5f, s * 1.5f),
+            style = Stroke(s)
+        )
+        
+        // Shackle
+        drawArc(
+            color = color,
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset((this.size.width - shackleRadius * 2) / 2f, shackleYOffset),
+            size = Size(shackleRadius * 2, shackleRadius * 2),
+            style = Stroke(s)
+        )
+        
+        // Shackle legs connecting to body
+        drawLine(
+            color = color,
+            start = Offset((this.size.width - shackleRadius * 2) / 2f, shackleYOffset + shackleRadius),
+            end = Offset((this.size.width - shackleRadius * 2) / 2f, bodyTop),
+            strokeWidth = s
+        )
+        drawLine(
+            color = color,
+            start = Offset((this.size.width + shackleRadius * 2) / 2f, shackleYOffset + shackleRadius),
+            end = Offset((this.size.width + shackleRadius * 2) / 2f, bodyTop),
+            strokeWidth = s
+        )
+    }
+}

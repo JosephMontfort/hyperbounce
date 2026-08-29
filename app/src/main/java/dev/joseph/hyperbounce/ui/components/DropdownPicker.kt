@@ -1,14 +1,5 @@
 package dev.joseph.hyperbounce.ui.components
 
-/*
- * Every "choose one of several options" control in this app uses this dropdown style
- * instead of a segmented control. Renders via LocalDropdownOverlayHost (see
- * ui/glass/DropdownOverlay.kt) rather than inline: the inline part is only ever a small,
- * fixed-size label button, so it never pushes its parent Row/Card around, and the expanded
- * panel always draws above everything else on the screen since it's hosted at the
- * scaffold's own top level, not nested deep inside a Card.
- */
-
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -16,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,14 +27,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -55,6 +46,7 @@ import dev.joseph.hyperbounce.ui.glass.LocalDropdownOverlayHost
 import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @Composable
 fun DropdownPicker(
@@ -150,19 +142,41 @@ private fun DropdownPanel(
     progress: Animatable<Float, *>,
     onSelect: (Int) -> Unit
 ) {
+    val isDark = isSystemInDarkTheme()
     val shape = RoundedCornerShape(14.dp)
-    Column(
+    
+    var contentWidth by remember { mutableStateOf(0f) }
+    var contentHeight by remember { mutableStateOf(0f) }
+
+    Box(
         Modifier
             .graphicsLayer {
-                translationX = anchorPosition.x
-                translationY = anchorPosition.y + anchorSize.height + 6f.dp.toPx()
                 val p = progress.value
-                scaleX = 0.85f + 0.15f * p
-                scaleY = 0.85f + 0.15f * p
-                alpha = p
-                transformOrigin = TransformOrigin(0f, 0f)
+                val w = if (contentWidth > 0f) contentWidth else anchorSize.width.toFloat()
+                val h = if (contentHeight > 0f) contentHeight else anchorSize.height.toFloat()
+                
+                val currentW = lerp(anchorSize.width.toFloat(), w, p)
+                val currentH = lerp(anchorSize.height.toFloat(), h, p)
+                
+                translationX = anchorPosition.x + anchorSize.width / 2f - currentW / 2f
+                translationY = anchorPosition.y + anchorSize.height - currentH
             }
-            .widthIn(min = 160.dp, max = 240.dp)
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                contentWidth = placeable.width.toFloat()
+                contentHeight = placeable.height.toFloat()
+                
+                val p = progress.value
+                val currentW = lerp(anchorSize.width.toFloat(), contentWidth, p).roundToInt()
+                val currentH = lerp(anchorSize.height.toFloat(), contentHeight, p).roundToInt()
+                
+                // Fixed layout size prevents parent (ScreenScaffold) from recomposing/relayouting
+                layout(0, 0) {
+                    val x = (currentW - placeable.width) / 2
+                    val y = currentH - placeable.height
+                    placeable.placeWithLayer(x, y)
+                }
+            }
             .then(
                 if (glassEnabled) {
                     Modifier.drawBackdrop(
@@ -185,26 +199,67 @@ private fun DropdownPanel(
                 }
             )
             .clip(shape)
-            .padding(vertical = 6.dp)
     ) {
-        options.forEachIndexed { index, option ->
+        // Old content that fades out
+        Box(
+            Modifier
+                .layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints)
+                    layout(placeable.width, placeable.height) {
+                        // Position it so it exactly matches the anchor position visually when scale is applied
+                        placeable.place(0, 0)
+                    }
+                }
+                .graphicsLayer {
+                    alpha = 1f - progress.value
+                }
+                .padding(horizontal = 12.dp, vertical = 7.dp)
+        ) {
             Row(
-                Modifier
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { onSelect(index) }
-                    )
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (index == selectedIndex) {
-                    CheckmarkIcon(color = Color.White, size = 13.dp, strokeWidth = 2.dp)
-                } else {
-                    Spacer(Modifier.width(13.dp))
+                BasicText(
+                    options.getOrElse(selectedIndex) { "" },
+                    style = HyperBounceType.subhead.copy(color = if (isDark) Color.White else Color.Black.copy(alpha = 0.82f))
+                )
+                ChevronIcon(
+                    color = if (isDark) Color.White.copy(alpha = 0.6f) else Color.Black.copy(alpha = 0.4f),
+                    size = 9.dp,
+                    strokeWidth = 1.6.dp,
+                    pointingLeft = false
+                )
+            }
+        }
+
+        // New content that fades in
+        Column(
+            Modifier
+                .widthIn(min = 160.dp, max = 240.dp)
+                .padding(vertical = 6.dp)
+                .graphicsLayer {
+                    alpha = progress.value
                 }
-                BasicText(option, style = HyperBounceType.subhead.copy(color = Color.White))
+        ) {
+            options.forEachIndexed { index, option ->
+                Row(
+                    Modifier
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { onSelect(index) }
+                        )
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (index == selectedIndex) {
+                        CheckmarkIcon(color = if (isDark) Color.White else Color.Black, size = 13.dp, strokeWidth = 2.dp)
+                    } else {
+                        Spacer(Modifier.width(13.dp))
+                    }
+                    BasicText(option, style = HyperBounceType.subhead.copy(color = if (isDark) Color.White else Color.Black))
+                }
             }
         }
     }

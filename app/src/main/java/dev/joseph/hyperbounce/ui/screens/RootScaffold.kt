@@ -200,7 +200,7 @@ fun RootScaffold(
                 refractionHeight = glass.refractionHeightDp,
                 refractionAmount = glass.refractionAmountDp,
                 chromaticAberration = glass.chromaticAberration,
-                horizontalOffset = 16f,
+                horizontalOffset = -16f,
                 verticalOffset = 30f,
                 labelSize = Size(44f, 44f),
                 onRowSelected = { index ->
