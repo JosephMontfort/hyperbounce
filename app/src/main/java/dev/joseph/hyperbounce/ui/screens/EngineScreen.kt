@@ -40,7 +40,6 @@ fun EngineScreen(
         backdrop = backdrop,
         onBack = onBack
     ) { contentBackdrop ->
-        val s = repository.engineSettings
         val combinedBackdrop = rememberCombinedBackdrop(backdrop, contentBackdrop)
 
         SectionHeader("Rendering Engine", colors)

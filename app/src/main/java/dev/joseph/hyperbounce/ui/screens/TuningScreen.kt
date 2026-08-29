@@ -73,7 +73,7 @@ fun TuningScreen(
                 title = "Lock Screen",
                 subtitle = if (repository.keypadEnabled) "Glass Pinpad" else "Off",
                 colors = colors,
-                iconTint = colors.accentIndigo,
+                iconTint = colors.accentBlue,
                 onClick = { onNavigate(Destination.Keypad) },
                 icon = { dev.joseph.hyperbounce.ui.components.LockIcon(color = Color.White, size = 15.dp) }
             )
@@ -86,8 +86,7 @@ fun TuningScreen(
 }
 
 private fun engineSummary(repository: SettingsRepository): String {
-    val s = repository.engineSettings
-    val t = if (s.togglesEngine == dev.joseph.hyperbounce.ui.state.RenderEngine.LiquidGlass) "Liquid Glass" else "Native Canvas"
-    val sl = if (s.slidersEngine == dev.joseph.hyperbounce.ui.state.RenderEngine.LiquidGlass) "Liquid Glass" else "Native Canvas"
+    val t = if (repository.toggleEngine == dev.joseph.hyperbounce.ui.state.RenderEngine.LiquidGlass) "Liquid Glass" else "Native Canvas"
+    val sl = if (repository.sliderEngine == dev.joseph.hyperbounce.ui.state.RenderEngine.LiquidGlass) "Liquid Glass" else "Native Canvas"
     return "Toggles: $t · Sliders: $sl"
 }
