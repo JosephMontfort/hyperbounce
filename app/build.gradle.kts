@@ -79,7 +79,7 @@ dependencies {
     // only (not -extended): it's a self-contained icon asset library, not the full Material
     // component system, and every icon this app needs (Settings, Tune, ArrowBack, Refresh,
     // ContentCopy, Info, Check, MoreHoriz, PowerSettingsNew) is in the core set.
-    implementation("org.jetbrains.compose.material:material-icons-core:1.11.1")
+    implementation("org.jetbrains.compose.material:material-icons-core:1.7.3")
 
     // Kyant's actual Liquid Glass backdrop engine. Shared by the nav-bar engine
     // (dev.joseph.hyperbounce.nav.glass) and the toggle/slider engine
