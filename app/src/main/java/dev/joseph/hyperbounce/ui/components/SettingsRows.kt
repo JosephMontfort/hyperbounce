@@ -26,7 +26,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.emptyBackdrop
 import dev.joseph.hyperbounce.ui.glass.LiquidSlider
 import dev.joseph.hyperbounce.ui.glass.LiquidToggle
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
@@ -133,7 +132,7 @@ fun SettingsToggleRow(
         LiquidToggle(
             selected = { checked },
             onSelect = onCheckedChange,
-            backdrop = emptyBackdrop()
+            backdrop = backdrop
         )
     }
 }
@@ -186,7 +185,7 @@ fun SettingsSliderRow(
                     onValueChange = onValueChange,
                     valueRange = valueRange,
                     visibilityThreshold = (valueRange.endInclusive - valueRange.start) / 1000f,
-                    backdrop = emptyBackdrop(),
+                    backdrop = backdrop,
                     modifier = Modifier.fillMaxWidth()
                 )
             } else {
