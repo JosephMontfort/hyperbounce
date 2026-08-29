@@ -109,7 +109,8 @@ internal class LiquidToggleViewBackdrop(private val targetView: View) : Backdrop
 
             val isNight = (targetView.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
             val typedValue = TypedValue()
-            val surfaceColor = if (targetView.context.theme.resolveAttribute(android.R.attr.colorSurface, typedValue, true) && typedValue.type >= TypedValue.TYPE_FIRST_COLOR_INT && typedValue.type <= TypedValue.TYPE_LAST_COLOR_INT) {
+            val colorSurfaceId = targetView.context.resources.getIdentifier("colorSurface", "attr", targetView.context.packageName)
+            val surfaceColor = if (colorSurfaceId != 0 && targetView.context.theme.resolveAttribute(colorSurfaceId, typedValue, true) && typedValue.type >= TypedValue.TYPE_FIRST_COLOR_INT && typedValue.type <= TypedValue.TYPE_LAST_COLOR_INT) {
                 typedValue.data
             } else if (targetView.context.theme.resolveAttribute(android.R.attr.colorBackground, typedValue, true) && typedValue.type >= TypedValue.TYPE_FIRST_COLOR_INT && typedValue.type <= TypedValue.TYPE_LAST_COLOR_INT) {
                 typedValue.data
