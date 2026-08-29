@@ -314,6 +314,11 @@ internal object LiquidToggleHost {
         try {
             var p: View? = target.parent as? View
             while (p != null) {
+                val name = p.javaClass.name
+                if (name.contains("DecorView") || p.id == android.R.id.content || name.contains("ContentFrameLayout")) {
+                    break
+                }
+
                 val bg = p.background
                 if (bg != null && p.width > 0 && p.height > 0) {
                     val bmp = android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)
@@ -331,11 +336,15 @@ internal object LiquidToggleHost {
                     
                     val pixel = bmp.getPixel(0, 0)
                     bmp.recycle()
-                    if (android.graphics.Color.alpha(pixel) > 180) {
+                    val a = android.graphics.Color.alpha(pixel)
+                    val r = android.graphics.Color.red(pixel)
+                    val g = android.graphics.Color.green(pixel)
+                    val b = android.graphics.Color.blue(pixel)
+                    // If it's a solid non-black surface pixel:
+                    if (a > 200 && !(isNight && r == 0 && g == 0 && b == 0)) {
                         return androidx.compose.ui.graphics.Color(pixel)
                     }
                 }
-                if (p.javaClass.name.contains("DecorView") || p.id == android.R.id.content) break
                 p = p.parent as? View
             }
 
@@ -344,15 +353,17 @@ internal object LiquidToggleHost {
             
             val surfaceAttrId = ctx.resources.getIdentifier("colorSurface", "attr", ctx.packageName)
             if (surfaceAttrId != 0 && ctx.theme.resolveAttribute(surfaceAttrId, tv, true) && tv.type >= android.util.TypedValue.TYPE_FIRST_COLOR_INT && tv.type <= android.util.TypedValue.TYPE_LAST_COLOR_INT) {
-                return androidx.compose.ui.graphics.Color(tv.data)
+                val c = tv.data
+                val r = android.graphics.Color.red(c)
+                val g = android.graphics.Color.green(c)
+                val b = android.graphics.Color.blue(c)
+                if (!(isNight && r == 0 && g == 0 && b == 0)) {
+                    return androidx.compose.ui.graphics.Color(c)
+                }
             }
             
             val cardBgAttrId = ctx.resources.getIdentifier("cardBackgroundColor", "attr", ctx.packageName)
             if (cardBgAttrId != 0 && ctx.theme.resolveAttribute(cardBgAttrId, tv, true) && tv.type >= android.util.TypedValue.TYPE_FIRST_COLOR_INT && tv.type <= android.util.TypedValue.TYPE_LAST_COLOR_INT) {
-                return androidx.compose.ui.graphics.Color(tv.data)
-            }
-
-            if (ctx.theme.resolveAttribute(android.R.attr.colorBackground, tv, true) && tv.type >= android.util.TypedValue.TYPE_FIRST_COLOR_INT && tv.type <= android.util.TypedValue.TYPE_LAST_COLOR_INT) {
                 return androidx.compose.ui.graphics.Color(tv.data)
             }
         } catch (_: Throwable) {}
