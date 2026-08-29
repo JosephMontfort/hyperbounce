@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -66,6 +67,7 @@ fun LiquidToggle(
 
     val glass = dev.joseph.hyperbounce.ui.glass.LocalGlassSettings.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val currentHapticsEnabled by rememberUpdatedState(glass.hapticsEnabled)
 
     val density = LocalDensity.current
     val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
@@ -73,6 +75,10 @@ fun LiquidToggle(
     val animationScope = rememberCoroutineScope()
     var didDrag by remember { mutableStateOf(false) }
     var fraction by remember { mutableFloatStateOf(if (selected()) 1f else 0f) }
+    
+    // -1 for left edge haptic, 1 for right edge haptic, 0 for none/reset
+    var lastHapticEdge by remember { mutableIntStateOf(if (selected()) 1 else -1) }
+
     val dampedDragAnimation = remember(animationScope) {
         DampedDragAnimation(
             animationScope = animationScope,
@@ -92,8 +98,10 @@ fun LiquidToggle(
                     fraction = if (selected()) 0f else 1f
                     onSelect(fraction == 1f)
                 }
-                if (glass.hapticsEnabled && (oldFraction != 0f && oldFraction != 1f || fraction != oldFraction)) {
+                
+                if (currentHapticsEnabled && (oldFraction != 0f && oldFraction != 1f || fraction != oldFraction)) {
                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                    lastHapticEdge = if (fraction == 1f) 1 else -1
                 }
             },
             onDrag = { _, dragAmount ->
@@ -101,14 +109,21 @@ fun LiquidToggle(
                     didDrag = dragAmount.x != 0f
                 }
                 val delta = dragAmount.x / dragWidth
-                val oldFraction = fraction
                 fraction =
                     if (isLtr) (fraction + delta).fastCoerceIn(0f, 1f)
                     else (fraction - delta).fastCoerceIn(0f, 1f)
                 
-                if (glass.hapticsEnabled) {
-                    if ((oldFraction < 1f && fraction == 1f) || (oldFraction > 0f && fraction == 0f)) {
+                if (currentHapticsEnabled) {
+                    // require a 10% pullback before allowing the same edge to haptic again
+                    if (fraction < 0.9f && fraction > 0.1f) {
+                        lastHapticEdge = 0
+                    }
+                    if (fraction == 1f && lastHapticEdge != 1) {
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        lastHapticEdge = 1
+                    } else if (fraction == 0f && lastHapticEdge != -1) {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        lastHapticEdge = -1
                     }
                 }
             }

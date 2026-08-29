@@ -7,10 +7,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
@@ -51,7 +58,7 @@ fun TuningScreen(
                     colors = colors,
                     iconTint = appTint(app),
                     onClick = { onNavigate(Destination.AppDetail(app)) },
-                    icon = { AppMonogram(app) }
+                    icon = { AppIcon(app) }
                 )
                 if (index != NavApp.entries.lastIndex) {
                     RowDivider(colors.separator)
@@ -84,18 +91,52 @@ fun TuningScreen(
 }
 
 @Composable
-private fun AppMonogram(app: NavApp) {
-    Box(
-        Modifier
-            .size(29.dp)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.001f)),
-        contentAlignment = Alignment.Center
-    ) {
-        BasicText(
-            app.displayName.take(1),
-            style = HyperBounceType.footnote.copy(color = Color.White, fontWeight = FontWeight.Bold)
+private fun AppIcon(app: NavApp) {
+    val context = LocalContext.current
+    val pm = context.packageManager
+    var bitmap by remember(app) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    
+    LaunchedEffect(app) {
+        kotlinx.coroutines.Dispatchers.IO.invoke {
+            try {
+                val drawable = pm.getApplicationIcon(app.packageName)
+                val bmp = if (drawable is android.graphics.drawable.BitmapDrawable) {
+                    drawable.bitmap
+                } else {
+                    val width = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 96
+                    val height = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 96
+                    val canvasBmp = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                    val canvas = android.graphics.Canvas(canvasBmp)
+                    drawable.setBounds(0, 0, canvas.width, canvas.height)
+                    drawable.draw(canvas)
+                    canvasBmp
+                }
+                bitmap = bmp.asImageBitmap()
+            } catch (e: Exception) {
+                bitmap = null
+            }
+        }
+    }
+    
+    if (bitmap != null) {
+        androidx.compose.foundation.Image(
+            bitmap = bitmap!!,
+            contentDescription = app.displayName,
+            modifier = Modifier.size(28.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
         )
+    } else {
+        // Fallback to monogram if not installed
+        Box(
+            Modifier
+                .size(28.dp)
+                .background(appTint(app), androidx.compose.foundation.shape.CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            BasicText(
+                app.displayName.take(1),
+                style = HyperBounceType.footnote.copy(color = Color.White, fontWeight = FontWeight.Bold)
+            )
+        }
     }
 }
 

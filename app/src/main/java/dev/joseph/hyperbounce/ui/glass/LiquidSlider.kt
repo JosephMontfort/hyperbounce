@@ -22,6 +22,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -74,6 +75,7 @@ fun LiquidSlider(
 
     val glass = dev.joseph.hyperbounce.ui.glass.LocalGlassSettings.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val currentHapticsEnabled by rememberUpdatedState(glass.hapticsEnabled)
 
     BoxWithConstraints(
         modifier.fillMaxWidth(),
@@ -85,6 +87,14 @@ fun LiquidSlider(
         val animationScope = rememberCoroutineScope()
         var didDrag by remember { mutableStateOf(false) }
         var currentVal by remember { mutableFloatStateOf(value()) }
+        
+        // -1 for left edge, 1 for right edge, 0 for none
+        var lastHapticEdge by remember { 
+            mutableIntStateOf(
+                if (currentVal <= valueRange.start) -1 
+                else if (currentVal >= valueRange.endInclusive) 1 else 0
+            ) 
+        }
 
         val dampedDragAnimation = remember(animationScope) {
             DampedDragAnimation(
@@ -106,16 +116,22 @@ fun LiquidSlider(
                         didDrag = dragAmount.x != 0f
                     }
                     val delta = (valueRange.endInclusive - valueRange.start) * (dragAmount.x / trackWidth)
-                    val oldVal = currentVal
                     currentVal =
                         if (isLtr) (currentVal + delta).coerceIn(valueRange)
                         else (currentVal - delta).coerceIn(valueRange)
                         
-                    if (glass.hapticsEnabled) {
-                        if (oldVal > valueRange.start && currentVal == valueRange.start) {
+                    if (currentHapticsEnabled) {
+                        val threshold = (valueRange.endInclusive - valueRange.start) * 0.05f
+                        if (currentVal > valueRange.start + threshold && currentVal < valueRange.endInclusive - threshold) {
+                            lastHapticEdge = 0
+                        }
+                        
+                        if (currentVal == valueRange.start && lastHapticEdge != -1) {
                             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-                        } else if (oldVal < valueRange.endInclusive && currentVal == valueRange.endInclusive) {
+                            lastHapticEdge = -1
+                        } else if (currentVal == valueRange.endInclusive && lastHapticEdge != 1) {
                             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                            lastHapticEdge = 1
                         }
                     }
                     

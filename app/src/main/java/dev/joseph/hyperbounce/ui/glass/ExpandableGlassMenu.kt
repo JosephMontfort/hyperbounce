@@ -402,8 +402,8 @@ fun GlassEffectContainer(
                 val jellySx = baseScale + maxDragScale * abs(cos(offsetAngle) * animatedDragX / maxDim) * (w / h).coerceAtMost(1f)
                 val jellySy = baseScale + maxDragScale * abs(sin(offsetAngle) * animatedDragY / maxDim) * (h / w).coerceAtMost(1f)
 
-                val expandedTx = -animatedDragX * 0.03f
-                val expandedTy = -animatedDragY * 0.03f
+                val expandedTx = animatedDragX * 0.03f
+                val expandedTy = animatedDragY * 0.03f
                 val expandedStretchX = (1f + abs(animatedDragX) * 0.00005f - abs(animatedDragY) * 0.00005f).coerceIn(0.99f, 1.01f)
                 val expandedStretchY = (1f + abs(animatedDragY) * 0.00005f - abs(animatedDragX) * 0.00005f).coerceIn(0.99f, 1.01f)
 
@@ -430,7 +430,7 @@ fun GlassEffectContainer(
                     }
                 },
                 highlight = { null },
-                shadow = { Shadow(radius = 18f.dp, color = Color.Black.copy(alpha = 0.12f)) },
+                shadow = { Shadow(radius = 24f.dp, color = Color.Black.copy(alpha = 0.25f)) },
                 innerShadow = { null },
                 onDrawSurface = {
                     val progress = animatableProgress.value
@@ -438,11 +438,11 @@ fun GlassEffectContainer(
                     val startColor = if (isLightTheme) Color(0xFFFFFFFF) else Color(0xFF1C1C1E)
                     val endColor = if (isLightTheme) Color.White.copy(alpha = 0.6f) else Color(0xFF1E1E1E).copy(alpha = 0.6f)
                     
-                    // Border stroke for sharp edges
+                    val outlineColor = if (isLightTheme) Color.Black.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.25f)
                     drawRoundRect(
-                        color = Color.Gray.copy(alpha = 0.3f),
+                        color = outlineColor,
                         cornerRadius = CornerRadius(cr, cr),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(0.5.dp.toPx())
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx())
                     )
 
                     drawRoundRect(

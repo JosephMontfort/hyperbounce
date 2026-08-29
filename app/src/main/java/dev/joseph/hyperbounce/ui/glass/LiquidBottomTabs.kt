@@ -39,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -158,6 +159,7 @@ fun LiquidBottomTabs(
         var lastHapticIndex by remember(selectedTabIndex) {
             mutableIntStateOf(selectedTabIndex())
         }
+        val currentHapticsEnabled by rememberUpdatedState(glass.hapticsEnabled)
         val dampedDragAnimation = remember(animationScope) {
             DampedDragAnimation(
                 animationScope = animationScope,
@@ -186,7 +188,7 @@ fun LiquidBottomTabs(
                     val newIndex = newVal.fastRoundToInt()
                     if (newIndex != lastHapticIndex) {
                         lastHapticIndex = newIndex
-                        if (glass.hapticsEnabled) {
+                        if (currentHapticsEnabled) {
                             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                         }
                     }

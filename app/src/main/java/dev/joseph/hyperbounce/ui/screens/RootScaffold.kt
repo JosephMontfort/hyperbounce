@@ -15,6 +15,7 @@ package dev.joseph.hyperbounce.ui.screens
 import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +52,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceIn
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dev.joseph.hyperbounce.ui.components.CopyIcon
@@ -183,11 +185,14 @@ fun RootScaffold(
                 .safeDrawingPadding()
                 .padding(top = 8.dp, end = 20.dp)
         ) {
+            val menuContentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
+            val menuSecondaryColor = menuContentColor.copy(alpha = 0.7f)
+            
             ExpandableGlassMenu(
                 animatableProgress = menuProgress,
                 animationPreset = MenuAnimationPreset.Bouncy,
                 alignment = MenuAlignment.TopTrailing,
-                backdrop = contentBackdrop,
+                backdrop = rememberCombinedBackdrop(backdrop, contentBackdrop),
                 isGlassEnabled = true,
                 isHapticsEnabled = glass.hapticsEnabled,
                 cornerRadius = 22.dp,
@@ -195,7 +200,7 @@ fun RootScaffold(
                 refractionHeight = glass.refractionHeightDp,
                 refractionAmount = glass.refractionAmountDp,
                 chromaticAberration = glass.chromaticAberration,
-                horizontalOffset = 0f,
+                horizontalOffset = 16f,
                 verticalOffset = 30f,
                 labelSize = Size(44f, 44f),
                 onRowSelected = { index ->
@@ -205,7 +210,7 @@ fun RootScaffold(
                         2 -> onAbout()
                     }
                 },
-                label = {
+                buttonContent = {
                     Canvas(
                         modifier = Modifier.size(22.dp)
                     ) {
@@ -214,7 +219,7 @@ fun RootScaffold(
                         val x1 = size.width * 0.25f
                         val x2 = size.width * 0.50f
                         val x3 = size.width * 0.75f
-                        val dotColor = if (colors.background.luminance() > 0.5f) Color.Black else Color.White
+                        val dotColor = menuContentColor
                         drawCircle(dotColor, r, Offset(x1, y))
                         drawCircle(dotColor, r, Offset(x2, y))
                         drawCircle(dotColor, r, Offset(x3, y))
@@ -224,8 +229,8 @@ fun RootScaffold(
                 MenuRow(
                     title = "Reset to Defaults",
                     description = "Restore every slider and toggle",
-                    contentColor = Color.White,
-                    secondaryColor = Color.White.copy(alpha = 0.7f),
+                    contentColor = menuContentColor,
+                    secondaryColor = menuSecondaryColor,
                     isHovered = hoveredIndex == 0,
                     onHoverChange = { hovering -> if (hovering) setHovered(0) else if (hoveredIndex == 0) setHovered(null) },
                     globalTouchPosition = globalTouch,
@@ -233,13 +238,13 @@ fun RootScaffold(
                         closeMenuFromRow()
                         onReset()
                     },
-                    icon = { ResetArrowIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
+                    icon = { ResetArrowIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) }
                 )
                 MenuRow(
                     title = "Copy Debug Info",
                     description = "Version & current engine state",
-                    contentColor = Color.White,
-                    secondaryColor = Color.White.copy(alpha = 0.7f),
+                    contentColor = menuContentColor,
+                    secondaryColor = menuSecondaryColor,
                     isHovered = hoveredIndex == 1,
                     onHoverChange = { hovering -> if (hovering) setHovered(1) else if (hoveredIndex == 1) setHovered(null) },
                     globalTouchPosition = globalTouch,
@@ -247,13 +252,13 @@ fun RootScaffold(
                         closeMenuFromRow()
                         copyDebugInfo()
                     },
-                    icon = { CopyIcon(color = Color.White, size = 14.dp, strokeWidth = 1.6.dp) }
+                    icon = { CopyIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.6.dp) }
                 )
                 MenuRow(
                     title = "About HyperBounce",
-                    description = "Version, credits",
-                    contentColor = Color.White,
-                    secondaryColor = Color.White.copy(alpha = 0.7f),
+                    description = "Credits and library versions",
+                    contentColor = menuContentColor,
+                    secondaryColor = menuSecondaryColor,
                     isHovered = hoveredIndex == 2,
                     onHoverChange = { hovering -> if (hovering) setHovered(2) else if (hoveredIndex == 2) setHovered(null) },
                     globalTouchPosition = globalTouch,
@@ -261,7 +266,7 @@ fun RootScaffold(
                         closeMenuFromRow()
                         onAbout()
                     },
-                    icon = { InfoIcon(color = Color.White, size = 15.dp, strokeWidth = 1.6.dp) }
+                    icon = { InfoIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.6.dp) }
                 )
             }
         }
