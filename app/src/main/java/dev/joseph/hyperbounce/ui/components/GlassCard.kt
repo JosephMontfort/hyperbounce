@@ -48,18 +48,27 @@ fun GlassCard(
             .fillMaxWidth()
             .then(
                 if (glass.enabled) {
-                    Modifier.drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { shape },
-                        effects = {
-                            vibrancy()
-                            blur((glass.blurDp / 4f).dp.toPx())
-                        },
-                        highlight = { Highlight.Ambient },
-                        shadow = { Shadow(radius = 6f.dp, color = Color.Black.copy(alpha = 0.08f)) }
-                    )
+                    Modifier
+                        .drawBackdrop(
+                            backdrop = backdrop,
+                            shape = { shape },
+                            effects = {
+                                vibrancy()
+                                blur((glass.blurDp / 4f).dp.toPx())
+                            },
+                            highlight = { Highlight.Ambient },
+                            shadow = { Shadow(radius = 6f.dp, color = Color.Black.copy(alpha = 0.2f)) }
+                        )
+                        .background(
+                            if (isDark) Color(0xFF1C1C1E).copy(alpha = 0.78f)
+                            else Color.White.copy(alpha = 0.7f),
+                            shape
+                        )
                 } else {
-                    Modifier.background(if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.55f))
+                    Modifier.background(
+                        if (isDark) Color(0xFF1C1C1E) else Color.White,
+                        shape
+                    )
                 }
             )
             .clip(shape),
@@ -78,7 +87,7 @@ fun RowDivider(color: Color, insetStart: Dp = 56.dp) {
         Spacer(
             Modifier
                 .fillMaxWidth()
-                .height(0.75.dp)
+                .height(0.5.dp)
                 .background(color)
         )
     }

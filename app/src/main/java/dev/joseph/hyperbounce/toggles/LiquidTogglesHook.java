@@ -37,6 +37,8 @@ public class LiquidTogglesHook extends XposedModule {
     private static final int TRACK_ON = Color.parseColor("#30D158");
     private static final int TRACK_OFF_DARK = Color.parseColor("#39393D");
     private static final int TRACK_OFF_LIGHT = Color.parseColor("#E9E9EA");
+    private static final int TRACK_ON_DISABLED = Color.parseColor("#1C4D25");
+    private static final int TRACK_OFF_DISABLED = Color.parseColor("#2C2C2E");
 
     private static final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private static final Paint activePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -85,6 +87,7 @@ public class LiquidTogglesHook extends XposedModule {
 
     private final Set<Class<?>> hookedDynamicClasses =
             Collections.newSetFromMap(new WeakHashMap<Class<?>, Boolean>());
+    private final WeakHashMap<Object, ToggleState> stateMap = new WeakHashMap<>();
     private final WeakHashMap<Object, SliderState> sliderStateMap = new WeakHashMap<>();
 
     private interface HookAction {
@@ -104,6 +107,18 @@ public class LiquidTogglesHook extends XposedModule {
         float bubbleVelocity;
         float lastX;
         float density = 1.0f;
+    }
+
+    private static class ToggleState extends GlassState {
+        float progress = 0.0f;
+        float colorProgress = 0.0f;
+        boolean isTouching = false;
+        boolean isDragging = false;
+        boolean isParentPressed = false;
+        boolean initializedObserver = false;
+        float startX = 0f;
+        float currentX = 0f;
+        long lastTime = System.currentTimeMillis();
     }
 
     private static class SliderState extends GlassState {
@@ -147,6 +162,83 @@ public class LiquidTogglesHook extends XposedModule {
         }
     }
 
+    private static final String AGSL_SHADER_TOGGLE =
+            "uniform shader content;\n" +
+            "uniform float2 size;\n" +
+            "uniform float2 offset;\n" +
+            "uniform float4 cornerRadii;\n" +
+            "uniform float refractionHeight;\n" +
+            "uniform float refractionAmount;\n" +
+            "uniform float depthEffect;\n" +
+            "uniform float chromaticAberration;\n" +
+            "\n" +
+            "float radiusAt(float2 coord, float4 radii) {\n" +
+            "    if (coord.x >= 0.0) {\n" +
+            "        if (coord.y <= 0.0) return radii.y;\n" +
+            "        else return radii.z;\n" +
+            "    } else {\n" +
+            "        if (coord.y <= 0.0) return radii.x;\n" +
+            "        else return radii.w;\n" +
+            "    }\n" +
+            "}\n" +
+            "\n" +
+            "float sdRoundedRect(float2 coord, float2 halfSize, float radius) {\n" +
+            "    float2 cornerCoord = abs(coord) - (halfSize - float2(radius));\n" +
+            "    float outside = length(max(cornerCoord, 0.0)) - radius;\n" +
+            "    float inside = min(max(cornerCoord.x, cornerCoord.y), 0.0);\n" +
+            "    return outside + inside;\n" +
+            "}\n" +
+            "\n" +
+            "float2 gradSdRoundedRect(float2 coord, float2 halfSize, float radius) {\n" +
+            "    float2 cornerCoord = abs(coord) - (halfSize - float2(radius));\n" +
+            "    if (cornerCoord.x >= 0.0 || cornerCoord.y >= 0.0) {\n" +
+            "        return sign(coord) * normalize(max(cornerCoord, 0.0));\n" +
+            "    } else {\n" +
+            "        float gradX = step(cornerCoord.y, cornerCoord.x);\n" +
+            "        return sign(coord) * float2(gradX, 1.0 - gradX);\n" +
+            "    }\n" +
+            "}\n" +
+            "\n" +
+            "float circleMap(float x) {\n" +
+            "    return 1.0 - sqrt(1.0 - x * x);\n" +
+            "}\n" +
+            "\n" +
+            "half4 sampleDispersion(float2 coord, float2 dispersedCoord) {\n" +
+            "    half4 color = half4(0.0);\n" +
+            "    half4 red = content.eval(coord + dispersedCoord);\n" +
+            "    color.r += red.r / 3.5; color.a += red.a / 7.0;\n" +
+            "    half4 orange = content.eval(coord + dispersedCoord * (2.0 / 3.0));\n" +
+            "    color.r += orange.r / 3.5; color.g += orange.g / 7.0; color.a += orange.a / 7.0;\n" +
+            "    half4 yellow = content.eval(coord + dispersedCoord * (1.0 / 3.0));\n" +
+            "    color.r += yellow.r / 3.5; color.g += yellow.g / 3.5; color.a += yellow.a / 7.0;\n" +
+            "    half4 green = content.eval(coord);\n" +
+            "    color.g += green.g / 3.5; color.a += green.a / 7.0;\n" +
+            "    half4 cyan = content.eval(coord - dispersedCoord * (1.0 / 3.0));\n" +
+            "    color.g += cyan.g / 3.5; color.b += cyan.b / 3.0; color.a += cyan.a / 7.0;\n" +
+            "    half4 blue = content.eval(coord - dispersedCoord * (2.0 / 3.0));\n" +
+            "    color.b += blue.b / 3.0; color.a += blue.a / 7.0;\n" +
+            "    half4 purple = content.eval(coord - dispersedCoord);\n" +
+            "    color.r += purple.r / 7.0; color.b += purple.b / 3.0; color.a += purple.a / 7.0;\n" +
+            "    return color;\n" +
+            "}\n" +
+            "\n" +
+            "half4 main(float2 coord) {\n" +
+            "    if (refractionHeight <= 0.001 || refractionAmount <= 0.001) return content.eval(coord);\n" +
+            "    float2 halfSize = size * 0.5;\n" +
+            "    float2 centeredCoord = (coord + offset) - halfSize;\n" +
+            "    float radius = radiusAt(coord, cornerRadii);\n" +
+            "    float sd = sdRoundedRect(centeredCoord, halfSize, radius);\n" +
+            "    if (-sd >= refractionHeight) return content.eval(coord);\n" +
+            "    sd = min(sd, 0.0);\n" +
+            "    float d = circleMap(1.0 - -sd / refractionHeight) * refractionAmount;\n" +
+            "    float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));\n" +
+            "    float2 grad = normalize(gradSdRoundedRect(centeredCoord, halfSize, gradRadius) + depthEffect * normalize(centeredCoord));\n" +
+            "    float2 refractedCoord = coord + d * grad;\n" +
+            "    float dispersionIntensity = chromaticAberration * ((centeredCoord.x * centeredCoord.y) / max(halfSize.x * halfSize.y, 0.001));\n" +
+            "    float2 dispersedCoord = d * grad * dispersionIntensity;\n" +
+            "    return sampleDispersion(refractedCoord, dispersedCoord);\n" +
+            "}";
+
     private static final String AGSL_SHADER_SLIDER =
             "uniform shader content;\n" +
             "uniform float thumbL;\n" +
@@ -179,6 +271,116 @@ public class LiquidTogglesHook extends XposedModule {
             "    color.rgb += rim * 0.40;\n" +
             "    return color;\n" +
             "}";
+
+    private void renderLiquidGlassToggleThumb(Canvas canvas, ToggleState s, int w, int h,
+                                              float thumbL, float thumbT, float thumbR, float thumbB,
+                                              float thumbRadius) {
+        if (!canvas.isHardwareAccelerated()) return;
+
+        if (s.blurNode == null) s.blurNode = new RenderNode("HyperBounceToggleBlur");
+        if (s.glassNode == null) s.glassNode = new RenderNode("HyperBounceToggleGlass");
+
+        final float density = Math.max(1.0f, s.density);
+        final float bloom = Math.max(0f, Math.min(1f, s.bloom));
+        final float refractionHeight = 5.0f * density * bloom;
+        final float refractionAmount = 10.0f * density * bloom;
+        final float blurRadius = 8.0f * density * (1.0f - bloom);
+
+        try {
+            s.blurNode.setRenderEffect(RenderEffect.createBlurEffect(
+                    Math.max(0.001f, blurRadius), Math.max(0.001f, blurRadius), Shader.TileMode.CLAMP));
+
+            if (!s.shaderInitialized) {
+                s.shader = new RuntimeShader(AGSL_SHADER_TOGGLE);
+                s.glassNode.setRenderEffect(RenderEffect.createRuntimeShaderEffect(s.shader, "content"));
+                s.shaderInitialized = true;
+            }
+
+            float sx = thumbR - thumbL;
+            float sy = thumbB - thumbT;
+            float radius = Math.min(thumbRadius, Math.min(sx, sy) * 0.5f);
+            s.shader.setFloatUniform("size", sx, sy);
+            s.shader.setFloatUniform("offset", -thumbL, -thumbT);
+            s.shader.setFloatUniform("cornerRadii", radius, radius, radius, radius);
+            s.shader.setFloatUniform("refractionHeight", refractionHeight);
+            s.shader.setFloatUniform("refractionAmount", refractionAmount);
+            s.shader.setFloatUniform("depthEffect", 0.0f);
+            s.shader.setFloatUniform("chromaticAberration", 1.0f);
+
+            float backdropScaleX = lerpFloatToggle(1.0f, 0.75f, bloom);
+            float backdropScaleY = lerpFloatToggle(1.0f, 0.75f, bloom);
+            float centerX = (thumbL + thumbR) * 0.5f;
+            float centerY = (thumbT + thumbB) * 0.5f;
+
+            s.blurNode.setPosition(0, 0, w, h);
+            Canvas rcBlur = s.blurNode.beginRecording(w, h);
+
+            rcBlur.save();
+            float backdropPadding = 10.0f * density;
+            rcBlur.clipRect(
+                    thumbL - backdropPadding, thumbT - backdropPadding,
+                    thumbR + backdropPadding, thumbB + backdropPadding);
+
+            rcBlur.translate(centerX, centerY);
+            rcBlur.scale(backdropScaleX, backdropScaleY);
+            rcBlur.translate(-centerX, -centerY);
+            if (s.trackBitmap != null) rcBlur.drawBitmap(s.trackBitmap, 0.0f, 0.0f, bmpPaint);
+            rcBlur.restore();
+
+            s.blurNode.endRecording();
+
+            s.glassNode.setPosition(0, 0, w, h);
+            Canvas rcGlass = s.glassNode.beginRecording(w, h);
+            rcGlass.drawRenderNode(s.blurNode);
+            s.glassNode.endRecording();
+
+            Path clipPath = new Path();
+            clipPath.addRoundRect(new RectF(thumbL, thumbT, thumbR, thumbB),
+                    radius, radius, Path.Direction.CW);
+            canvas.save();
+            canvas.clipPath(clipPath);
+            canvas.drawRenderNode(s.glassNode);
+            canvas.restore();
+
+            float bubbleAmount = Math.max(0.0f, Math.min(1.0f, s.bubbleSquish / 0.70f));
+
+            int ambientAlpha = (int) (38f * bloom + 18f * bubbleAmount);
+            if (ambientAlpha > 0) {
+                highlightPaint.setAlpha(Math.min(72, ambientAlpha));
+                canvas.drawRoundRect(new RectF(
+                                thumbL + 0.7f * density,
+                                thumbT + 0.7f * density,
+                                thumbR - 0.7f * density,
+                                thumbB - 0.7f * density),
+                        Math.max(0.0f, radius - 0.7f * density),
+                        Math.max(0.0f, radius - 0.7f * density),
+                        highlightPaint);
+                highlightPaint.setAlpha(255);
+            }
+
+            if (bloom > 0.01f) {
+                strokePaint.setStyle(Paint.Style.STROKE);
+                strokePaint.setStrokeWidth(Math.max(0.75f, 1.2f * density * bloom));
+                strokePaint.setColor(Color.argb(
+                        (int) (42f * bloom),
+                        255, 255, 255));
+                canvas.drawRoundRect(new RectF(
+                                thumbL + 0.9f * density,
+                                thumbT + 0.9f * density,
+                                thumbR - 0.9f * density,
+                                thumbB - 0.9f * density),
+                        Math.max(0.0f, radius - 0.9f * density),
+                        Math.max(0.0f, radius - 0.9f * density),
+                        strokePaint);
+                strokePaint.setStrokeWidth(1.0f);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static float lerpFloatToggle(float a, float b, float t) {
+        return a + (b - a) * t;
+    }
 
     private void renderLiquidGlassThumb(Canvas canvas, GlassState s, int w, int h,
                                         float thumbL, float thumbT, float thumbR,
@@ -454,6 +656,36 @@ public class LiquidTogglesHook extends XposedModule {
                 LiquidToggleHost.forwardTouchEvent(view, event);
                 return true;
             }
+
+            View view = (View) chain.getThisObject();
+            if (!view.isEnabled()) return false;
+            disableClipping(view);
+
+            MotionEvent event = (MotionEvent) chain.getArg(0);
+            ToggleState s = stateMap.get(view);
+            if (s == null) {
+                s = new ToggleState();
+                s.progress = ((android.widget.CompoundButton) view).isChecked() ? 1.0f : 0.0f;
+                s.colorProgress = s.progress;
+                stateMap.put(view, s);
+            }
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                s.isTouching = true;
+                s.isDragging = false;
+                s.startX = event.getX();
+                s.currentX = event.getX();
+                s.lastX = event.getX();
+                view.postInvalidateOnAnimation();
+            } else if (action == MotionEvent.ACTION_MOVE) {
+                s.currentX = event.getX();
+                if (Math.abs(s.currentX - s.startX) > 4.0f) s.isDragging = true;
+                view.postInvalidateOnAnimation();
+            } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                s.isTouching = false;
+                s.isDragging = false;
+                view.postInvalidateOnAnimation();
+            }
             return chain.proceed();
         });
 
@@ -471,7 +703,171 @@ public class LiquidTogglesHook extends XposedModule {
                 LiquidToggleHost.ensure(view);
                 return null;
             }
-            return chain.proceed();
+
+            Canvas canvas = (Canvas) chain.getArg(0);
+            disableClipping(view);
+            try {
+                if (view.getButtonDrawable() != null) view.setButtonDrawable(null);
+            } catch (Throwable ignored) {
+            }
+
+            ToggleState s = stateMap.get(view);
+            if (s == null) {
+                s = new ToggleState();
+                s.progress = view.isChecked() ? 1.0f : 0.0f;
+                s.colorProgress = s.progress;
+                stateMap.put(view, s);
+            }
+
+            if (!s.initializedObserver) {
+                ViewParent p = view.getParent();
+                View rowView = null;
+                while (p instanceof View) {
+                    View pv = (View) p;
+                    String name = pv.getClass().getSimpleName();
+                    if (name.equals("RecyclerView") || name.contains("ListView")) break;
+                    rowView = pv;
+                    p = pv.getParent();
+                }
+                if (rowView != null) {
+                    final android.widget.CompoundButton finalView = view;
+                    final ToggleState finalS = s;
+                    rowView.setOnTouchListener((v, event) -> {
+                        int action = event.getActionMasked();
+                        boolean isDown = (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE);
+                        if (finalS.isParentPressed != isDown) {
+                            finalS.isParentPressed = isDown;
+                            finalView.postInvalidateOnAnimation();
+                        }
+                        return false;
+                    });
+                }
+                s.initializedObserver = true;
+            }
+
+            boolean isChecked = view.isChecked();
+            boolean isEnabled = view.isEnabled();
+            boolean isDarkMode = (view.getContext().getResources().getConfiguration().uiMode & 0x30) == 0x20;
+
+            long now = System.currentTimeMillis();
+            float dt = Math.min((now - s.lastTime) / 1000.0f, 0.05f);
+            s.lastTime = now;
+
+            final float toggleScale = 0.95f;
+            float density = view.getResources().getDisplayMetrics().density;
+            s.density = density;
+            float drawW = 64.0f * toggleScale * density;
+            float drawH = 28.0f * toggleScale * density;
+            float offsetX, offsetY;
+            if (width > height * 2.5f && width > 200f) {
+                offsetX = width - drawW - (height * 0.15f);
+                offsetY = (height - drawH) / 2.0f;
+            } else {
+                offsetX = (width - drawW) / 2.0f;
+                offsetY = (height - drawH) / 2.0f;
+            }
+
+            float trackHeight = drawH;
+            float restThumbHeight = 24.0f * toggleScale * density;
+            float restThumbWidth = 40.0f * toggleScale * density;
+
+            float targetProgress = isChecked ? 1.0f : 0.0f;
+            if (s.isDragging) {
+                float minCenter = offsetX + (restThumbWidth / 2.0f);
+                float maxCenter = offsetX + drawW - (restThumbWidth / 2.0f);
+                float rawDrag = (s.currentX - minCenter) / (maxCenter - minCenter);
+                targetProgress = Math.max(0f, Math.min(1f, rawDrag));
+            }
+            s.progress += (targetProgress - s.progress) * dt * 18.0f;
+
+            float targetColorRatio = (s.progress >= 0.5f) ? 1.0f : 0.0f;
+            s.colorProgress += (targetColorRatio - s.colorProgress) * dt * 16.0f;
+            s.colorProgress = Math.max(0.0f, Math.min(1.0f, s.colorProgress));
+
+            float bloomTarget = (s.isTouching || s.isDragging || s.isParentPressed) ? 1.0f : 0.0f;
+            float bloomForce = (bloomTarget - s.bloom) * 250.0f - (s.bloomVelocity * 16.0f);
+            s.bloomVelocity += bloomForce * dt;
+            s.bloom += s.bloomVelocity * dt;
+
+            float dx = s.currentX - s.lastX;
+            s.lastX = s.currentX;
+            float velocity = Math.abs(dx) / Math.max(dt, 0.001f);
+            float targetBubble = s.isDragging ? Math.min(velocity / 800.0f, 0.70f) : 0.0f;
+            float springForce = (targetBubble - s.bubbleSquish) * 250.0f - (s.bubbleVelocity * 12.0f);
+            s.bubbleVelocity += springForce * dt;
+            s.bubbleSquish += s.bubbleVelocity * dt;
+
+            if (s.isTouching && !s.isDragging) s.bubbleVelocity += s.bloomVelocity * 0.15f;
+
+            if (Math.abs(s.progress - targetProgress) > 0.002f ||
+                    Math.abs(s.bloom - bloomTarget) > 0.005f || Math.abs(s.bloomVelocity) > 0.01f ||
+                    Math.abs(s.colorProgress - targetColorRatio) > 0.005f ||
+                    Math.abs(s.bubbleVelocity) > 0.01f || s.bubbleSquish > 0.005f) {
+                view.postInvalidateOnAnimation();
+            }
+
+            float trackTop = offsetY + (drawH - trackHeight) / 2.0f;
+            float trackBottom = trackTop + trackHeight;
+            float trackRadius = trackHeight / 2.0f;
+
+            float maxExpandedW = 60.0f * toggleScale * density;
+            float maxExpandedH = 36.0f * toggleScale * density;
+            float bubbleAmount = Math.max(0.0f, Math.min(1.0f, s.bubbleSquish / 0.70f));
+            float bubbleScaleX = 1.0f + (0.11f * bubbleAmount);
+            float bubbleScaleY = 1.0f - (0.055f * bubbleAmount);
+            float currentThumbHeight = (restThumbHeight + (maxExpandedH - restThumbHeight) * s.bloom) * bubbleScaleY;
+            float currentThumbWidth = (restThumbWidth + (maxExpandedW - restThumbWidth) * s.bloom) * bubbleScaleX;
+            float thumbRadius = currentThumbHeight / 2.0f;
+
+            float thumbPadding = 2.0f * toggleScale * density;
+            float baseMinX = offsetX + thumbPadding + (restThumbWidth / 2.0f);
+            float baseMaxX = offsetX + drawW - thumbPadding - (restThumbWidth / 2.0f);
+            float minX = baseMinX;
+            float maxX = baseMaxX;
+
+            float cx = minX + s.progress * (maxX - minX);
+            float cy = offsetY + (drawH / 2.0f);
+
+            float thumbL = cx - (currentThumbWidth / 2.0f);
+            float thumbR = cx + (currentThumbWidth / 2.0f);
+            float thumbT = cy - (currentThumbHeight / 2.0f);
+            float thumbB = cy + (currentThumbHeight / 2.0f);
+
+            int targetOffColor = !isEnabled ? TRACK_OFF_DISABLED : (isDarkMode ? TRACK_OFF_DARK : TRACK_OFF_LIGHT);
+            int targetOnColor = !isEnabled ? TRACK_ON_DISABLED : TRACK_ON;
+            bgPaint.setColor(blendColors(targetOffColor, targetOnColor, s.colorProgress));
+
+            canvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
+
+            if (s.trackBitmap == null || s.trackBitmap.getWidth() != width || s.trackBitmap.getHeight() != height) {
+                s.trackBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                s.trackCanvas = new Canvas(s.trackBitmap);
+            }
+
+            s.trackCanvas.drawColor(0, PorterDuff.Mode.CLEAR);
+            s.trackCanvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
+
+            int shadowAlpha = (int) (48 * (1.0f - Math.max(0f, Math.min(1f, s.bloom))));
+            if (shadowAlpha > 0 && isEnabled) {
+                shadowPaint.setAlpha(shadowAlpha);
+                canvas.drawRoundRect(thumbL - 1.0f, thumbT + 2.0f, thumbR + 1.0f, thumbB + 3.0f, thumbRadius, thumbRadius, shadowPaint);
+            }
+
+            renderLiquidGlassToggleThumb(canvas, s, width, height, thumbL, thumbT, thumbR, thumbB, thumbRadius);
+
+            RectF roundRectF = new RectF(thumbL, thumbT, thumbR, thumbB);
+            int glowStroke = blendColors(Color.parseColor("#75FFFFFF"), bgPaint.getColor(), 0.70f * Math.max(0.3f, s.bloom));
+            strokePaint.setColor(glowStroke);
+            canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, strokePaint);
+            strokePaint.setColor(Color.parseColor("#75FFFFFF"));
+
+            int whiteAlpha = (int) (255 * (1.0f - Math.max(0f, Math.min(1f, s.bloom))));
+            if (whiteAlpha > 0) {
+                baseThumbPaint.setAlpha(isEnabled ? whiteAlpha : (int) (whiteAlpha * 0.5f));
+                canvas.drawRoundRect(roundRectF, thumbRadius, thumbRadius, baseThumbPaint);
+            }
+
+            return null;
         });
     }
 

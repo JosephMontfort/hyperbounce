@@ -98,17 +98,16 @@ fun LiquidSlider(
                         didDrag = dragAmount.x != 0f
                     }
                     val delta = (valueRange.endInclusive - valueRange.start) * (dragAmount.x / trackWidth)
-                    onValueChange(
-                        if (isLtr) (targetValue + delta).coerceIn(valueRange)
-                        else (targetValue - delta).coerceIn(valueRange)
-                    )
+                    val nextValue = (value + (if (isLtr) delta else -delta)).coerceIn(valueRange)
+                    snapValue(nextValue)
+                    onValueChange(nextValue)
                 }
             )
         }
         LaunchedEffect(dampedDragAnimation) {
             snapshotFlow { value() }
                 .collectLatest { value ->
-                    if (dampedDragAnimation.targetValue != value) {
+                    if (!dampedDragAnimation.isDragging && dampedDragAnimation.targetValue != value) {
                         dampedDragAnimation.updateValue(value)
                     }
                 }

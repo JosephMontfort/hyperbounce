@@ -62,6 +62,9 @@ class DampedDragAnimation(
 
     private val velocityTracker = VelocityTracker()
 
+    var isDragging: Boolean by androidx.compose.runtime.mutableStateOf(false)
+        private set
+
     val value: Float get() = valueAnimation.value
     val progress: Float get() = (value - valueRange.start) / (valueRange.endInclusive - valueRange.start)
     val targetValue: Float get() = valueAnimation.targetValue
@@ -73,14 +76,17 @@ class DampedDragAnimation(
     val modifier: Modifier = Modifier.pointerInput(Unit) {
         inspectDragGestures(
             onDragStart = { down ->
+                isDragging = true
                 onDragStarted(down.position)
                 press()
             },
             onDragEnd = {
+                isDragging = false
                 onDragStopped()
                 release()
             },
             onDragCancel = {
+                isDragging = false
                 onDragStopped()
                 release()
             }
@@ -110,6 +116,14 @@ class DampedDragAnimation(
             launch { pressProgressAnimation.animateTo(0f, pressProgressAnimationSpec) }
             launch { scaleXAnimation.animateTo(initialScale, scaleXAnimationSpec) }
             launch { scaleYAnimation.animateTo(initialScale, scaleYAnimationSpec) }
+        }
+    }
+
+    fun snapValue(value: Float) {
+        val target = value.coerceIn(valueRange)
+        animationScope.launch {
+            valueAnimation.snapTo(target)
+            updateVelocity()
         }
     }
 
