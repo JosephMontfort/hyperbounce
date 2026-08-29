@@ -64,6 +64,9 @@ fun LiquidToggle(
         if (isLightTheme) Color(0xFF787878).copy(0.2f)
         else Color(0xFF787880).copy(0.36f)
 
+    val glass = dev.joseph.hyperbounce.ui.glass.LocalGlassSettings.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
     val density = LocalDensity.current
     val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
     val dragWidth = with(density) { 20f.dp.toPx() }
@@ -80,6 +83,7 @@ fun LiquidToggle(
             pressedScale = 1.5f,
             onDragStarted = {},
             onDragStopped = {
+                val oldFraction = fraction
                 if (didDrag) {
                     fraction = if (targetValue >= 0.5f) 1f else 0f
                     onSelect(fraction == 1f)
@@ -88,15 +92,25 @@ fun LiquidToggle(
                     fraction = if (selected()) 0f else 1f
                     onSelect(fraction == 1f)
                 }
+                if (glass.hapticsEnabled && (oldFraction != 0f && oldFraction != 1f || fraction != oldFraction)) {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                }
             },
             onDrag = { _, dragAmount ->
                 if (!didDrag) {
                     didDrag = dragAmount.x != 0f
                 }
                 val delta = dragAmount.x / dragWidth
+                val oldFraction = fraction
                 fraction =
                     if (isLtr) (fraction + delta).fastCoerceIn(0f, 1f)
                     else (fraction - delta).fastCoerceIn(0f, 1f)
+                
+                if (glass.hapticsEnabled) {
+                    if ((oldFraction < 1f && fraction == 1f) || (oldFraction > 0f && fraction == 0f)) {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                    }
+                }
             }
         )
     }
@@ -162,11 +176,11 @@ fun LiquidToggle(
                     shape = { Capsule() },
                     effects = {
                         val progress = dampedDragAnimation.pressProgress
-                        blur(8f.dp.toPx() * (1f - progress))
+                        blur(glass.blurDp.dp.toPx() * (1f - progress))
                         lens(
-                            5f.dp.toPx() * progress,
-                            10f.dp.toPx() * progress,
-                            chromaticAberration = true
+                            (glass.refractionHeightDp * 0.5f).dp.toPx() * progress,
+                            glass.refractionAmountDp.dp.toPx() * progress,
+                            chromaticAberration = glass.chromaticAberration
                         )
                     },
                     highlight = {

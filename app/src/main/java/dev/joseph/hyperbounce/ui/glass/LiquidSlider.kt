@@ -72,6 +72,9 @@ fun LiquidSlider(
 
     val trackBackdrop = rememberLayerBackdrop()
 
+    val glass = dev.joseph.hyperbounce.ui.glass.LocalGlassSettings.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
     BoxWithConstraints(
         modifier.fillMaxWidth(),
         contentAlignment = Alignment.CenterStart
@@ -103,9 +106,19 @@ fun LiquidSlider(
                         didDrag = dragAmount.x != 0f
                     }
                     val delta = (valueRange.endInclusive - valueRange.start) * (dragAmount.x / trackWidth)
+                    val oldVal = currentVal
                     currentVal =
                         if (isLtr) (currentVal + delta).coerceIn(valueRange)
                         else (currentVal - delta).coerceIn(valueRange)
+                        
+                    if (glass.hapticsEnabled) {
+                        if (oldVal > valueRange.start && currentVal == valueRange.start) {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        } else if (oldVal < valueRange.endInclusive && currentVal == valueRange.endInclusive) {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        }
+                    }
+                    
                     onValueChange(currentVal)
                 }
             )
@@ -185,11 +198,11 @@ fun LiquidSlider(
                     shape = { Capsule() },
                     effects = {
                         val progress = dampedDragAnimation.pressProgress
-                        blur(8f.dp.toPx() * (1f - progress))
+                        blur(glass.blurDp.dp.toPx() * (1f - progress))
                         lens(
-                            10f.dp.toPx() * progress,
-                            14f.dp.toPx() * progress,
-                            chromaticAberration = true
+                            glass.refractionHeightDp.dp.toPx() * progress,
+                            glass.refractionAmountDp.dp.toPx() * progress,
+                            chromaticAberration = glass.chromaticAberration
                         )
                     },
                     highlight = {

@@ -126,6 +126,9 @@ fun LiquidBottomTabs(
         if (isLightTheme) Color(0xFFFAFAFA).copy(0.4f)
         else Color(0xFF121212).copy(0.4f)
 
+    val glass = dev.joseph.hyperbounce.ui.glass.LocalGlassSettings.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
     val tabsBackdrop = rememberLayerBackdrop()
 
     BoxWithConstraints(
@@ -152,6 +155,9 @@ fun LiquidBottomTabs(
         var currentIndex by remember(selectedTabIndex) {
             mutableIntStateOf(selectedTabIndex())
         }
+        var lastHapticIndex by remember(selectedTabIndex) {
+            mutableIntStateOf(selectedTabIndex())
+        }
         val dampedDragAnimation = remember(animationScope) {
             DampedDragAnimation(
                 animationScope = animationScope,
@@ -173,10 +179,18 @@ fun LiquidBottomTabs(
                     }
                 },
                 onDrag = { _, dragAmount ->
-                    updateValue(
-                        (targetValue + dragAmount.x / tabWidth * if (isLtr) 1f else -1f)
-                            .fastCoerceIn(0f, (tabsCount - 1).toFloat())
-                    )
+                    val newVal = (targetValue + dragAmount.x / tabWidth * if (isLtr) 1f else -1f)
+                        .fastCoerceIn(0f, (tabsCount - 1).toFloat())
+                    updateValue(newVal)
+                    
+                    val newIndex = newVal.fastRoundToInt()
+                    if (newIndex != lastHapticIndex) {
+                        lastHapticIndex = newIndex
+                        if (glass.hapticsEnabled) {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        }
+                    }
+                    
                     animationScope.launch {
                         offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x)
                     }
@@ -221,8 +235,8 @@ fun LiquidBottomTabs(
                     shape = { Capsule() },
                     effects = {
                         vibrancy()
-                        blur(8f.dp.toPx())
-                        lens(24f.dp.toPx(), 24f.dp.toPx())
+                        blur(glass.blurDp.dp.toPx())
+                        lens(glass.refractionHeightDp.dp.toPx(), glass.refractionAmountDp.dp.toPx(), chromaticAberration = glass.chromaticAberration)
                     },
                     layerBlock = {
                         val progress = dampedDragAnimation.pressProgress
@@ -259,10 +273,11 @@ fun LiquidBottomTabs(
                         effects = {
                             val progress = dampedDragAnimation.pressProgress
                             vibrancy()
-                            blur(8f.dp.toPx())
+                            blur(glass.blurDp.dp.toPx())
                             lens(
-                                24f.dp.toPx() * progress,
-                                24f.dp.toPx() * progress
+                                glass.refractionHeightDp.dp.toPx() * progress,
+                                glass.refractionAmountDp.dp.toPx() * progress,
+                                chromaticAberration = glass.chromaticAberration
                             )
                         },
                         highlight = {
@@ -297,9 +312,9 @@ fun LiquidBottomTabs(
                     effects = {
                         val progress = dampedDragAnimation.pressProgress
                         lens(
-                            10f.dp.toPx() * progress,
-                            14f.dp.toPx() * progress,
-                            chromaticAberration = true
+                            (glass.refractionHeightDp * 0.4f).dp.toPx() * progress,
+                            (glass.refractionAmountDp * 0.6f).dp.toPx() * progress,
+                            chromaticAberration = glass.chromaticAberration
                         )
                     },
                     highlight = {

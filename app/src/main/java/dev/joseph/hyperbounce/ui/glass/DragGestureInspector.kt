@@ -62,9 +62,11 @@ private suspend inline fun AwaitPointerEventScope.drag(
             return null
         }
         if (change.changedToUpIgnoreConsumed()) {
+            change.consume()
             return change
         }
         onDrag(change)
+        change.consume()
         pointer = change.id
     }
 }

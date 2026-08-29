@@ -421,6 +421,12 @@ fun GlassEffectContainer(
                     if (isGlassEnabled && progress > 0.01f) {
                         vibrancy()
                         blur((blurRadius * progress).dp.toPx())
+                        lens(
+                            refractionHeight.dp.toPx() * progress, 
+                            refractionAmount.dp.toPx() * progress, 
+                            depthEffect = true, 
+                            chromaticAberration = chromaticAberration
+                        )
                     }
                 },
                 highlight = { null },

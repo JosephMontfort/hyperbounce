@@ -106,18 +106,18 @@ private fun HyperBounceApp(repository: SettingsRepository) {
 
     CompositionLocalProvider(LocalGlassSettings provides repository.globalGlass.snapshot()) {
         Box(Modifier.fillMaxSize()) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .layerBackdrop(backdrop)
-            ) {
-                HyperBounceBackground(colors, Modifier.fillMaxSize())
-            }
-
             // Root is considered null in the backStack, or we can just use the current top of stack
             val currentDestination = backStack.lastOrNull()
             
             Box(Modifier.fillMaxSize().layerBackdrop(navBackdrop)) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .layerBackdrop(backdrop)
+                ) {
+                    HyperBounceBackground(colors, Modifier.fillMaxSize())
+                }
+
                 AnimatedContent(
                 targetState = currentDestination,
                 modifier = Modifier.fillMaxSize(),
