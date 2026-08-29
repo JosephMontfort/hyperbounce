@@ -3,6 +3,7 @@ package dev.joseph.hyperbounce.ui.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -31,18 +34,16 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.shadow.Shadow
 import dev.joseph.hyperbounce.ui.glass.DropdownOverlayRequest
 import dev.joseph.hyperbounce.ui.glass.LocalDropdownOverlayHost
-import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
-import androidx.compose.ui.platform.LocalDensity
 
 @Composable
 fun DropdownPicker(
@@ -52,7 +53,6 @@ fun DropdownPicker(
     backdrop: Backdrop,
     modifier: Modifier = Modifier
 ) {
-    val glass = LocalGlassSettings.current
     val isDark = isSystemInDarkTheme()
     val overlayHost = LocalDropdownOverlayHost.current
     val ownerId = remember { Any() }
@@ -63,7 +63,6 @@ fun DropdownPicker(
     val isOpen = overlayHost.request?.ownerId == ownerId
 
     fun open() {
-        val progress = Animatable(0f)
         overlayHost.show(
             DropdownOverlayRequest(
                 ownerId = ownerId,
@@ -75,7 +74,8 @@ fun DropdownPicker(
                         selectedIndex = selectedIndex,
                         anchorPosition = anchorPosition,
                         anchorSize = anchorSize,
-                        progress = progress,
+                        isDismissing = overlayHost.isDismissing,
+                        onDismissed = { overlayHost.clear() },
                         onSelect = { index ->
                             onSelect(index)
                             overlayHost.dismiss(ownerId)
@@ -84,7 +84,6 @@ fun DropdownPicker(
                 }
             )
         )
-        scope.launch { progress.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 380f)) }
     }
 
     Row(
@@ -98,8 +97,9 @@ fun DropdownPicker(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = { if (isOpen) overlayHost.dismiss(ownerId) else open() }
+                onClick = { if (!isOpen) open() else overlayHost.dismiss(ownerId) }
             )
+            .alpha(if (isOpen) 0f else 1f)
             .padding(horizontal = 12.dp, vertical = 7.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -123,12 +123,24 @@ private fun DropdownPanel(
     selectedIndex: Int,
     anchorPosition: Offset,
     anchorSize: IntSize,
-    progress: Animatable<Float, *>,
+    isDismissing: Boolean,
+    onDismissed: () -> Unit,
     onSelect: (Int) -> Unit
 ) {
     val isDark = isSystemInDarkTheme()
     val density = LocalDensity.current
     val inwardOffsetPx = with(density) { 16.dp.toPx() }
+    
+    val progress = remember { Animatable(0f) }
+
+    LaunchedEffect(isDismissing) {
+        if (isDismissing) {
+            progress.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 500f))
+            onDismissed()
+        } else {
+            progress.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 380f))
+        }
+    }
     
     var contentWidth by remember { mutableStateOf(0f) }
     var contentHeight by remember { mutableStateOf(0f) }
@@ -183,9 +195,14 @@ private fun DropdownPanel(
                     placeable.place(x, y)
                 }
             }
-            // Fully opaque background, no glass/blur as requested
+            // Fully opaque background using the deep black / underlying layer color
             .background(
-                color = if (isDark) Color(0xFF1C1C1E) else Color.White,
+                color = if (isDark) Color(0xFF000000) else Color(0xFFF2F2F7),
+                shape = RoundedCornerShape(14.dp)
+            )
+            .border(
+                width = 1.dp,
+                color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f),
                 shape = RoundedCornerShape(14.dp)
             )
             .clip(RoundedCornerShape(14.dp))
@@ -227,8 +244,7 @@ private fun DropdownPanel(
             Box(
                 Modifier
                     .align(Alignment.BottomEnd)
-                    // The anchor padding was 12dp horizontal, 7dp vertical. We need to match the anchor size exactly.
-                    // Instead of full alignment, let's just use layout to force its size to anchorSize.
+                    // Force the old content to strictly match the anchor size
                     .layout { measurable, constraints ->
                         val placeable = measurable.measure(
                             constraints.copy(

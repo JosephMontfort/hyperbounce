@@ -45,17 +45,30 @@ class DropdownOverlayRequest(
 class DropdownOverlayHostState {
     var request by mutableStateOf<DropdownOverlayRequest?>(null)
         private set
+        
+    var isDismissing by mutableStateOf(false)
+        private set
 
     fun show(request: DropdownOverlayRequest) {
         this.request = request
+        this.isDismissing = false
     }
 
     fun dismiss(ownerId: Any) {
-        if (request?.ownerId == ownerId) request = null
+        if (request?.ownerId == ownerId) {
+            isDismissing = true
+        }
     }
 
     fun dismissAny() {
+        if (request != null) {
+            isDismissing = true
+        }
+    }
+    
+    fun clear() {
         request = null
+        isDismissing = false
     }
 }
 
