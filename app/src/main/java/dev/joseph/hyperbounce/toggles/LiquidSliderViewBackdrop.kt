@@ -128,6 +128,7 @@ internal class LiquidSliderViewBackdrop(private val targetView: View) : Backdrop
             val rootTopInCapture = rootLoc[1] - capWindowY
             canvas.translate(rootLeftInCapture.toFloat(), rootTopInCapture.toFloat())
 
+            // Punch out target view region
             val targetLeftInRoot = targetLoc[0] - rootLoc[0]
             val targetTopInRoot = targetLoc[1] - rootLoc[1]
             canvas.clipOutRect(
@@ -137,15 +138,27 @@ internal class LiquidSliderViewBackdrop(private val targetView: View) : Backdrop
                 (targetTopInRoot + targetView.height).toFloat()
             )
 
-            val oldOverlayVis = overlayViewToHide?.visibility
-            if (overlayViewToHide != null) {
-                overlayViewToHide?.visibility = View.INVISIBLE
+            // Punch out overlay region and set alpha to 0 to prevent OverlayViewGroup from drawing it
+            val overlay = overlayViewToHide
+            val oldAlpha = overlay?.alpha ?: 1f
+            if (overlay != null) {
+                val overlayLoc = IntArray(2)
+                overlay.getLocationInWindow(overlayLoc)
+                val overlayLeftInRoot = overlayLoc[0] - rootLoc[0]
+                val overlayTopInRoot = overlayLoc[1] - rootLoc[1]
+                canvas.clipOutRect(
+                    overlayLeftInRoot.toFloat(),
+                    overlayTopInRoot.toFloat(),
+                    (overlayLeftInRoot + overlay.width).toFloat(),
+                    (overlayTopInRoot + overlay.height).toFloat()
+                )
+                overlay.alpha = 0f
             }
 
             root.draw(canvas)
 
-            if (overlayViewToHide != null && oldOverlayVis != null) {
-                overlayViewToHide?.visibility = oldOverlayVis
+            if (overlay != null) {
+                overlay.alpha = oldAlpha
             }
 
             canvas.restore()
