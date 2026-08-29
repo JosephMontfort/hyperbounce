@@ -3,6 +3,7 @@ package dev.joseph.hyperbounce.toggles
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.util.TypedValue
 import android.view.Choreographer
 import android.view.View
 import android.view.ViewGroup
@@ -24,7 +25,7 @@ internal data class LiquidSliderCapturedFrame(
     val originInWindow: Offset,
 )
 
-internal class LiquidSliderViewBackdrop(private val sourceView: View) : Backdrop {
+internal class LiquidSliderViewBackdrop(private val targetView: View) : Backdrop {
     override val isCoordinatesDependent: Boolean = true
     var overlayViewToHide: View? = null
 
@@ -33,7 +34,7 @@ internal class LiquidSliderViewBackdrop(private val sourceView: View) : Backdrop
     var capturedFrame: LiquidSliderCapturedFrame? by mutableStateOf(null)
         private set
 
-    private var region: CaptureRegion? = null
+    private var paddingPx: Int = 0
     private var frameNumber = 0
     private var lastCapturedFrame = -1
     private var lastCaptureNanos = 0L
@@ -52,79 +53,124 @@ internal class LiquidSliderViewBackdrop(private val sourceView: View) : Backdrop
     }
 
     fun setTargetBounds(left: Float, top: Float, width: Int, height: Int, paddingPx: Int) {
-        region = CaptureRegion(
-            left = left - paddingPx,
-            top = top - paddingPx,
-            width = width + paddingPx * 2,
-            height = height + paddingPx * 2,
-        )
+        this.paddingPx = paddingPx
+        captureNow()
     }
 
     fun start() {
-        sourceView.viewTreeObserver.addOnPreDrawListener(preDrawListener)
+        captureNow()
+        val root = findCaptureRoot(targetView)
+        root.viewTreeObserver.addOnPreDrawListener(preDrawListener)
         Choreographer.getInstance().postFrameCallback(frameCallback)
     }
 
     fun stop() {
-        sourceView.viewTreeObserver.removeOnPreDrawListener(preDrawListener)
+        val root = findCaptureRoot(targetView)
+        if (root.viewTreeObserver.isAlive) {
+            root.viewTreeObserver.removeOnPreDrawListener(preDrawListener)
+        }
         Choreographer.getInstance().removeFrameCallback(frameCallback)
+    }
+
+    fun captureNow() {
+        doCapture()
     }
 
     private fun captureOncePerFrame() {
         if (lastCapturedFrame == frameNumber) return
         val now = System.nanoTime()
         if (now - lastCaptureNanos < minCaptureIntervalNanos) return
+        doCapture()
+    }
 
-        val currentRegion = region ?: return
-        if (currentRegion.width <= 0 || currentRegion.height <= 0) return
+    private fun doCapture() {
+        if (targetView.width <= 0 || targetView.height <= 0) return
+        if (!targetView.isAttachedToWindow) return
 
-        val location = IntArray(2)
-        sourceView.getLocationInWindow(location)
-        val localLeft = currentRegion.left - location[0]
-        val localTop = currentRegion.top - location[1]
+        val targetLoc = IntArray(2)
+        targetView.getLocationInWindow(targetLoc)
+        if (targetLoc[0] == 0 && targetLoc[1] == 0) return
+
+        val root = findCaptureRoot(targetView)
+        val rootLoc = IntArray(2)
+        root.getLocationInWindow(rootLoc)
+
+        val capPadding = if (paddingPx > 0) paddingPx else (24f * targetView.resources.displayMetrics.density).toInt()
+        val capWindowX = targetLoc[0] - capPadding
+        val capWindowY = targetLoc[1] - capPadding
+        val capWidth = targetView.width + capPadding * 2
+        val capHeight = targetView.height + capPadding * 2
+
+        if (capWidth <= 0 || capHeight <= 0) return
 
         try {
-            ensureBuffers(currentRegion.width, currentRegion.height)
-            val target = back ?: return
-            
-            val isNight = (sourceView.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-            target.eraseColor(if (isNight) Color.parseColor("#242424") else Color.WHITE)
+            ensureBuffers(capWidth, capHeight)
+            val targetBmp = back ?: return
 
-            val canvas = Canvas(target)
-            canvas.save()
-            canvas.clipRect(0, 0, currentRegion.width, currentRegion.height)
-            canvas.translate(-localLeft.toFloat(), -localTop.toFloat())
-
-            val hiddenStates = mutableListOf<Pair<View, Int>>()
-            
-            fun hideSliders(v: View) {
-                val name = v.javaClass.simpleName
-                if (v === overlayViewToHide || name.contains("SeekBar") || name.contains("ProgressBar")) {
-                    hiddenStates.add(Pair(v, v.visibility))
-                    v.visibility = View.INVISIBLE
-                } else if (v is ViewGroup) {
-                    for (i in 0 until v.childCount) {
-                        hideSliders(v.getChildAt(i))
-                    }
-                }
+            val isNight = (targetView.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+            val typedValue = TypedValue()
+            val surfaceColor = if (targetView.context.theme.resolveAttribute(android.R.attr.colorSurface, typedValue, true) && typedValue.type >= TypedValue.TYPE_FIRST_COLOR_INT && typedValue.type <= TypedValue.TYPE_LAST_COLOR_INT) {
+                typedValue.data
+            } else if (targetView.context.theme.resolveAttribute(android.R.attr.colorBackground, typedValue, true) && typedValue.type >= TypedValue.TYPE_FIRST_COLOR_INT && typedValue.type <= TypedValue.TYPE_LAST_COLOR_INT) {
+                typedValue.data
+            } else {
+                if (isNight) Color.parseColor("#242424") else Color.WHITE
             }
-            
-            hideSliders(sourceView)
-            sourceView.draw(canvas)
 
-            for ((child, oldVis) in hiddenStates) {
-                child.visibility = oldVis
+            targetBmp.eraseColor(surfaceColor)
+
+            val canvas = Canvas(targetBmp)
+            canvas.save()
+            canvas.clipRect(0, 0, capWidth, capHeight)
+
+            val rootLeftInCapture = rootLoc[0] - capWindowX
+            val rootTopInCapture = rootLoc[1] - capWindowY
+            canvas.translate(rootLeftInCapture.toFloat(), rootTopInCapture.toFloat())
+
+            val targetLeftInRoot = targetLoc[0] - rootLoc[0]
+            val targetTopInRoot = targetLoc[1] - rootLoc[1]
+            canvas.clipOutRect(
+                targetLeftInRoot.toFloat(),
+                targetTopInRoot.toFloat(),
+                (targetLeftInRoot + targetView.width).toFloat(),
+                (targetTopInRoot + targetView.height).toFloat()
+            )
+
+            val oldOverlayVis = overlayViewToHide?.visibility
+            if (overlayViewToHide != null) {
+                overlayViewToHide?.visibility = View.INVISIBLE
+            }
+
+            root.draw(canvas)
+
+            if (overlayViewToHide != null && oldOverlayVis != null) {
+                overlayViewToHide?.visibility = oldOverlayVis
             }
 
             canvas.restore()
 
             val previousFront = front
-            front = target
+            front = targetBmp
             back = previousFront
-            capturedFrame = LiquidSliderCapturedFrame(target, Offset(currentRegion.left.toFloat(), currentRegion.top.toFloat()))
+            capturedFrame = LiquidSliderCapturedFrame(targetBmp, Offset(capWindowX.toFloat(), capWindowY.toFloat()))
             lastCapturedFrame = frameNumber
-            lastCaptureNanos = now
+            lastCaptureNanos = System.nanoTime()
         } catch (_: Throwable) {}
+    }
+
+    private fun findCaptureRoot(target: View): View {
+        var curr: View = target.parent as? View ?: target
+        var best: View = curr
+        while (curr.parent is View) {
+            val p = curr.parent as View
+            val name = p.javaClass.name
+            if (name.contains("RecyclerView") || name.contains("ListView") || name.contains("ScrollView") || name.contains("DecorView")) {
+                break
+            }
+            curr = p
+            best = curr
+        }
+        return best
     }
 
     private fun ensureBuffers(width: Int, height: Int) {
@@ -143,7 +189,6 @@ internal class LiquidSliderViewBackdrop(private val sourceView: View) : Backdrop
         front = null
         back = null
         capturedFrame = null
-        region = null
         lastCapturedFrame = -1
         lastCaptureNanos = 0L
         overlayViewToHide = null
@@ -155,6 +200,4 @@ internal class LiquidSliderViewBackdrop(private val sourceView: View) : Backdrop
         val drawOffset = coords.positionInWindow() - frame.originInWindow
         drawImage(image = frame.bitmap.asImageBitmap(), topLeft = -drawOffset)
     }
-
-    private data class CaptureRegion(val left: Float, val top: Float, val width: Int, val height: Int)
 }

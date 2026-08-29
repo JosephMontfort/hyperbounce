@@ -92,7 +92,7 @@ internal object LiquidSliderHost {
         
         private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
         private var isEnabledState by mutableStateOf(target.isEnabled)
-        internal val backdrop = LiquidSliderViewBackdrop(parent)
+        internal val backdrop = LiquidSliderViewBackdrop(target)
 
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {

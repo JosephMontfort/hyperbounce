@@ -82,7 +82,7 @@ internal object LiquidToggleHost {
         
         var composeLeftInTarget by mutableIntStateOf(0)
         var composeTopInTarget by mutableIntStateOf(0)
-        internal val backdrop = LiquidToggleViewBackdrop(parent)
+        internal val backdrop = LiquidToggleViewBackdrop(target)
 
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
