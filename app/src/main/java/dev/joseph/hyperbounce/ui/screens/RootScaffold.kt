@@ -14,6 +14,7 @@ package dev.joseph.hyperbounce.ui.screens
 
 import android.os.Build
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -53,8 +55,6 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dev.joseph.hyperbounce.ui.components.CopyIcon
 import dev.joseph.hyperbounce.ui.components.InfoIcon
 import dev.joseph.hyperbounce.ui.components.MenuRow
-import androidx.compose.foundation.Canvas
-import androidx.compose.ui.geometry.Offset
 import dev.joseph.hyperbounce.ui.components.ResetArrowIcon
 import dev.joseph.hyperbounce.ui.glass.DropdownOverlayHost
 import dev.joseph.hyperbounce.ui.glass.ExpandableGlassMenu

@@ -42,7 +42,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.components.SlidersImageVector
 import dev.joseph.hyperbounce.ui.glass.LiquidBottomTab
 import dev.joseph.hyperbounce.ui.glass.LiquidBottomTabs

@@ -16,15 +16,14 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.path
-import androidx.compose.ui.graphics.vector.path
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.cos
@@ -168,10 +167,9 @@ val SlidersImageVector: ImageVector = ImageVector.Builder(
     viewportHeight = 20f
 ).apply {
     path(
-        fill = androidx.compose.ui.graphics.SolidColor(Color.White),
-        stroke = androidx.compose.ui.graphics.SolidColor(Color.White),
+        stroke = SolidColor(Color.White),
         strokeLineWidth = 1.4f,
-        strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round
+        strokeLineCap = StrokeCap.Round
     ) {
         moveTo(2f, 5f)
         horizontalLineTo(18f)
@@ -179,24 +177,30 @@ val SlidersImageVector: ImageVector = ImageVector.Builder(
         horizontalLineTo(18f)
         moveTo(2f, 15f)
         horizontalLineTo(18f)
-
-        moveTo(7f, 5f)
-        curveTo(7f, 3.9f, 7.9f, 3f, 9f, 3f)
+    }
+    path(
+        fill = SolidColor(Color.White)
+    ) {
+        moveTo(9f, 3f)
         curveTo(10.1f, 3f, 11f, 3.9f, 11f, 5f)
         curveTo(11f, 6.1f, 10.1f, 7f, 9f, 7f)
         curveTo(7.9f, 7f, 7f, 6.1f, 7f, 5f)
+        curveTo(7f, 3.9f, 7.9f, 3f, 9f, 3f)
+        close()
 
-        moveTo(11f, 10f)
-        curveTo(11f, 8.9f, 11.9f, 8f, 13f, 8f)
+        moveTo(13f, 8f)
         curveTo(14.1f, 8f, 15f, 8.9f, 15f, 10f)
         curveTo(15f, 11.1f, 14.1f, 12f, 13f, 12f)
         curveTo(11.9f, 12f, 11f, 11.1f, 11f, 10f)
+        curveTo(11f, 8.9f, 11.9f, 8f, 13f, 8f)
+        close()
 
-        moveTo(5f, 15f)
-        curveTo(5f, 13.9f, 5.9f, 13f, 7f, 13f)
+        moveTo(7f, 13f)
         curveTo(8.1f, 13f, 9f, 13.9f, 9f, 15f)
         curveTo(9f, 16.1f, 8.1f, 17f, 7f, 17f)
         curveTo(5.9f, 17f, 5f, 16.1f, 5f, 15f)
+        curveTo(5f, 13.9f, 5.9f, 13f, 7f, 13f)
+        close()
     }
 }.build()
 
