@@ -112,9 +112,6 @@ private fun DropdownPanel(
     onSelect: (Int) -> Unit
 ) {
     val isDark = isSystemInDarkTheme()
-    val density = LocalDensity.current
-    val inwardOffsetPx = with(density) { 16.dp.toPx() }
-    val topGapPx = with(density) { 6.dp.toPx() }
     
     var contentWidth by remember { mutableStateOf(0f) }
 
@@ -124,12 +121,12 @@ private fun DropdownPanel(
             .graphicsLayer {
                 val w = if (contentWidth > 0f) contentWidth else anchorSize.width.toFloat()
                 
-                // Align right edge slightly inward
-                val rightEdge = anchorPosition.x + anchorSize.width - inwardOffsetPx
+                // Align right edge exactly with the anchor's right edge
+                val rightEdge = anchorPosition.x + anchorSize.width
                 
                 translationX = rightEdge - w
-                // Expand downwards from the anchor's bottom edge, with a small gap
-                translationY = anchorPosition.y + anchorSize.height + topGapPx
+                // Align top exactly with the anchor's top, perfectly covering the resting state
+                translationY = anchorPosition.y
                 
                 shadowElevation = 24f
                 shape = RoundedCornerShape(14.dp)
