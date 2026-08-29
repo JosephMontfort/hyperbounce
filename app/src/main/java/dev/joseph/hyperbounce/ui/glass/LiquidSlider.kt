@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -50,6 +51,7 @@ import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Capsule
 import kotlinx.coroutines.flow.collectLatest
+import kotlin.math.abs
 
 @Composable
 fun LiquidSlider(
@@ -79,10 +81,12 @@ fun LiquidSlider(
         val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
         val animationScope = rememberCoroutineScope()
         var didDrag by remember { mutableStateOf(false) }
+        var currentVal by remember { mutableFloatStateOf(value()) }
+
         val dampedDragAnimation = remember(animationScope) {
             DampedDragAnimation(
                 animationScope = animationScope,
-                initialValue = value(),
+                initialValue = currentVal,
                 valueRange = valueRange,
                 visibilityThreshold = visibilityThreshold,
                 initialScale = 1f,
@@ -90,7 +94,8 @@ fun LiquidSlider(
                 onDragStarted = {},
                 onDragStopped = {
                     if (didDrag) {
-                        onValueChange(targetValue)
+                        onValueChange(currentVal)
+                        didDrag = false
                     }
                 },
                 onDrag = { _, dragAmount ->
@@ -98,17 +103,25 @@ fun LiquidSlider(
                         didDrag = dragAmount.x != 0f
                     }
                     val delta = (valueRange.endInclusive - valueRange.start) * (dragAmount.x / trackWidth)
-                    val nextValue = (this.value + (if (isLtr) delta else -delta)).coerceIn(valueRange)
-                    snapValue(nextValue)
-                    onValueChange(nextValue)
+                    currentVal =
+                        if (isLtr) (currentVal + delta).coerceIn(valueRange)
+                        else (currentVal - delta).coerceIn(valueRange)
+                    onValueChange(currentVal)
                 }
             )
         }
         LaunchedEffect(dampedDragAnimation) {
+            snapshotFlow { currentVal }
+                .collectLatest { v ->
+                    dampedDragAnimation.updateValue(v)
+                }
+        }
+        LaunchedEffect(value) {
             snapshotFlow { value() }
-                .collectLatest { value ->
-                    if (!dampedDragAnimation.isDragging && dampedDragAnimation.targetValue != value) {
-                        dampedDragAnimation.updateValue(value)
+                .collectLatest { externalVal ->
+                    if (!didDrag && abs(externalVal - currentVal) > visibilityThreshold) {
+                        currentVal = externalVal
+                        dampedDragAnimation.animateToValue(externalVal)
                     }
                 }
         }
@@ -125,6 +138,7 @@ fun LiquidSlider(
                                 (if (isLtr) valueRange.start + delta
                                 else valueRange.endInclusive - delta)
                                     .coerceIn(valueRange)
+                            currentVal = targetValue
                             dampedDragAnimation.animateToValue(targetValue)
                             onValueChange(targetValue)
                         }
