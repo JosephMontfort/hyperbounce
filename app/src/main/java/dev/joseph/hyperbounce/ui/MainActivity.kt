@@ -74,6 +74,7 @@ class MainActivity : ComponentActivity() {
 private fun HyperBounceApp(repository: SettingsRepository) {
     val colors = hyperBounceColors()
     val backdrop = rememberLayerBackdrop()
+    val navBackdrop = rememberLayerBackdrop()
 
     // Tuning (page 0) and Settings (page 1) are true swipeable pager pages, not pushed
     // stack destinations — swiping between them, and the floating tab bar below, are both
@@ -105,15 +106,6 @@ private fun HyperBounceApp(repository: SettingsRepository) {
 
     CompositionLocalProvider(LocalGlassSettings provides repository.globalGlass.snapshot()) {
         Box(Modifier.fillMaxSize()) {
-            // IMPORTANT: layerBackdrop tags ONLY this background's own render node as the
-            // thing every drawBackdrop() consumer samples from. It must never wrap a Box
-            // that also contains those same glass consumers as children — doing so puts
-            // the consumers inside the very node being captured, so each captured frame
-            // includes the previous frame's glass rendering, which includes the capture
-            // again, and so on: an unbounded recursive RenderNode graph that crashes
-            // RenderThread with a stack-overflow SIGSEGV. The background and the screen
-            // content below must be siblings under a plain (non-backdrop) Box, exactly as
-            // the library's own catalog HomeContent does it.
             Box(
                 Modifier
                     .fillMaxSize()
@@ -125,7 +117,8 @@ private fun HyperBounceApp(repository: SettingsRepository) {
             // Root is considered null in the backStack, or we can just use the current top of stack
             val currentDestination = backStack.lastOrNull()
             
-            AnimatedContent(
+            Box(Modifier.fillMaxSize().layerBackdrop(navBackdrop)) {
+                AnimatedContent(
                 targetState = currentDestination,
                 modifier = Modifier.fillMaxSize(),
                 transitionSpec = {
@@ -201,6 +194,7 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                     }
                 }
             }
+            } // Close AnimatedContent Box
 
             // Floating bottom-center tab bar — hidden while drilled into a subpage,
             // matching iOS tab bars hiding on push and reappearing on pop back to a root
@@ -217,19 +211,21 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                 exit = slideOutVertically(spring(dampingRatio = 0.8f, stiffness = 380f)) { it / 2 } + fadeOut()
             ) {
                 Box(Modifier.width(196.dp)) {
+                    val tabItemColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White else Color.Black
                     LiquidBottomTabs(
                         selectedTabIndex = { pagerState.currentPage },
                         onTabSelected = selectTab,
-                        backdrop = backdrop,
-                        tabsCount = 2
+                        backdrop = navBackdrop,
+                        tabsCount = 2,
+                        modifier = Modifier.padding(bottom = 24.dp)
                     ) {
                         LiquidBottomTab(onClick = { selectTab(0) }) {
-                            TabIcon(SlidersImageVector)
-                            BasicText("Tuning", style = HyperBounceType.caption.copy(color = Color.White))
+                            TabIcon(SlidersImageVector, color = tabItemColor)
+                            BasicText("Tuning", style = HyperBounceType.caption.copy(color = tabItemColor))
                         }
                         LiquidBottomTab(onClick = { selectTab(1) }) {
-                            TabIcon(Icons.Filled.Settings)
-                            BasicText("Settings", style = HyperBounceType.caption.copy(color = Color.White))
+                            TabIcon(Icons.Filled.Settings, color = tabItemColor)
+                            BasicText("Settings", style = HyperBounceType.caption.copy(color = tabItemColor))
                         }
                     }
                 }
@@ -239,11 +235,11 @@ private fun HyperBounceApp(repository: SettingsRepository) {
 }
 
 @Composable
-private fun TabIcon(icon: ImageVector) {
+private fun TabIcon(icon: ImageVector, color: Color = Color.White) {
     Image(
         imageVector = icon,
         contentDescription = null,
-        colorFilter = ColorFilter.tint(Color.White),
-        modifier = Modifier.size(20.dp)
+        modifier = Modifier.size(20.dp),
+        colorFilter = ColorFilter.tint(color)
     )
 }

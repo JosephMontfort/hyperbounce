@@ -85,29 +85,11 @@ fun CircularGlassBackButton(
         modifier
             .size(size)
             .then(
-                if (glass.enabled) {
-                    Modifier.drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { Capsule() },
-                        effects = {
-                            vibrancy()
-                            blur((glass.blurDp / 4f).dp.toPx())
-                            lens(
-                                (glass.refractionHeightDp / 1.7f).dp.toPx(),
-                                (glass.refractionAmountDp / 1.6f).dp.toPx(),
-                                chromaticAberration = glass.chromaticAberration
-                            )
-                        },
-                        highlight = { Highlight.Ambient },
-                        shadow = { Shadow(radius = 7f.dp, color = Color.Black.copy(alpha = 0.14f)) },
-                        layerBlock = jellyLayerBlock
-                    )
-                } else {
-                    Modifier
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.16f))
-                        .graphicsLayer(block = jellyLayerBlock)
-                }
+                Modifier
+                    .clip(CircleShape)
+                    .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF1C1C1E) else Color(0xFFFFFFFF))
+                    .androidx.compose.foundation.border(0.5.dp, Color.Gray.copy(alpha = 0.3f), CircleShape)
+                    .graphicsLayer(block = jellyLayerBlock)
             )
             .clickable(
                 interactionSource = null,
@@ -119,6 +101,7 @@ fun CircularGlassBackButton(
             .then(interactiveHighlight.gestureModifier),
         contentAlignment = Alignment.Center
     ) {
-        ChevronIcon(color = Color.White, size = 13.dp, strokeWidth = 2.4.dp, pointingLeft = true)
+        val iconColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White else Color.Black
+        ChevronIcon(color = iconColor, size = 13.dp, strokeWidth = 2.4.dp, pointingLeft = true)
     }
 }

@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceIn
@@ -186,7 +187,7 @@ fun RootScaffold(
                 animatableProgress = menuProgress,
                 animationPreset = MenuAnimationPreset.Bouncy,
                 alignment = MenuAlignment.TopTrailing,
-                backdrop = backdrop,
+                backdrop = contentBackdrop,
                 isGlassEnabled = true,
                 isHapticsEnabled = glass.hapticsEnabled,
                 cornerRadius = 22.dp,
@@ -213,9 +214,10 @@ fun RootScaffold(
                         val x1 = size.width * 0.25f
                         val x2 = size.width * 0.50f
                         val x3 = size.width * 0.75f
-                        drawCircle(Color.White, r, Offset(x1, y))
-                        drawCircle(Color.White, r, Offset(x2, y))
-                        drawCircle(Color.White, r, Offset(x3, y))
+                        val dotColor = if (colors.background.luminance() > 0.5f) Color.Black else Color.White
+                        drawCircle(dotColor, r, Offset(x1, y))
+                        drawCircle(dotColor, r, Offset(x2, y))
+                        drawCircle(dotColor, r, Offset(x3, y))
                     }
                 }
             ) { globalTouch, closeMenuFromRow, hoveredIndex, setHovered ->

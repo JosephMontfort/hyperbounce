@@ -418,26 +418,33 @@ fun GlassEffectContainer(
                 shape = { RoundedCornerShape(cornerRadius) },
                 effects = {
                     val progress = animatableProgress.value
-                    if (isGlassEnabled) {
-                        val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
-                        val motionBlur = motionBlurAmount * sin(progress.coerceIn(0f, 1f) * PI).toFloat()
+                    if (isGlassEnabled && progress > 0.01f) {
                         vibrancy()
-                        blur((2f + blurRadius * blurProgress.coerceIn(0f, 1f) + motionBlur).dp.toPx())
-                        lens(refractionHeight.dp.toPx(), refractionAmount.dp.toPx(), depthEffect = true, chromaticAberration = chromaticAberration)
+                        blur((blurRadius * progress).dp.toPx())
                     }
                 },
-                highlight = { if (isGlassEnabled) Highlight.Ambient.copy(alpha = 0.65f) else null },
+                highlight = { null },
                 shadow = { Shadow(radius = 18f.dp, color = Color.Black.copy(alpha = 0.12f)) },
                 innerShadow = { null },
                 onDrawSurface = {
                     val progress = animatableProgress.value
                     val cr = cornerRadius.toPx()
+                    val startColor = if (isLightTheme) Color(0xFFFFFFFF) else Color(0xFF1C1C1E)
+                    val endColor = if (isLightTheme) Color.White.copy(alpha = 0.6f) else Color(0xFF1E1E1E).copy(alpha = 0.6f)
+                    
+                    // Border stroke for sharp edges
                     drawRoundRect(
-                        color = if (isLightTheme) Color.White.copy(alpha = 0.28f + 0.12f * progress) else Color(0xFF1E1E1E).copy(alpha = 0.35f + 0.15f * progress),
+                        color = Color.Gray.copy(alpha = 0.3f),
+                        cornerRadius = CornerRadius(cr, cr),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(0.5.dp.toPx())
+                    )
+
+                    drawRoundRect(
+                        color = androidx.compose.ui.graphics.lerp(startColor, endColor, progress),
                         cornerRadius = CornerRadius(cr, cr)
                     )
                     if (progress == 0f && buttonPressProgress > 0f) {
-                        drawRoundRect(color = Color.White.copy(alpha = 0.15f * buttonPressProgress), cornerRadius = CornerRadius(cr, cr), blendMode = BlendMode.Plus)
+                        drawRoundRect(color = Color.White.copy(alpha = 0.15f * buttonPressProgress), cornerRadius = CornerRadius(cr, cr), blendMode = androidx.compose.ui.graphics.BlendMode.Plus)
                     }
                 }
             )

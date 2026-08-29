@@ -32,16 +32,15 @@ fun ProgressiveBlurHeader(
     modifier: Modifier = Modifier,
     tintIntensity: Float = 0.8f
 ) {
-    Box(modifier = modifier) {
-        Box(
-            Modifier.matchParentSize().drawPlainBackdrop(
-                backdrop = backdrop,
-                shape = { RectangleShape },
-                effects = {
-                    blur(4f.dp.toPx())
-                    runtimeShaderEffect(
-                        "AlphaMask",
-                        """
+    Box(
+        modifier.drawPlainBackdrop(
+            backdrop = backdrop,
+            shape = { RectangleShape },
+            effects = {
+                blur(16f.dp.toPx())
+                runtimeShaderEffect(
+                    "AlphaMask",
+                    """
 uniform shader content;
 
 uniform float2 size;
@@ -53,22 +52,13 @@ half4 main(float2 coord) {
     float tintAlpha = smoothstep(size.y, size.y * 0.5, coord.y);
     return mix(content.eval(coord) * blurAlpha, tint * tintAlpha, tintIntensity);
 }""",
-                        "content"
-                    ) {
-                        setFloatUniform("size", size.width, size.height)
-                        setColorUniform("tint", tintColor)
-                        setFloatUniform("tintIntensity", tintIntensity)
-                    }
+                    "content"
+                ) {
+                    setFloatUniform("size", size.width, size.height)
+                    setColorUniform("tint", tintColor)
+                    setFloatUniform("tintIntensity", tintIntensity)
                 }
-            )
+            }
         )
-        // Thin bottom separator
-        Spacer(
-            Modifier
-                .fillMaxWidth()
-                .height(0.33.dp)
-                .background(Color.Gray.copy(alpha = 0.3f))
-                .align(Alignment.BottomCenter)
-        )
-    }
+    )
 }

@@ -129,10 +129,14 @@ fun SettingsToggleRow(
                 BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
             }
         }
+        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val cardColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+        val localBackdrop = com.kyant.backdrop.backdrops.rememberCanvasBackdrop { drawRect(cardColor) }
+        
         LiquidToggle(
             selected = { checked },
             onSelect = onCheckedChange,
-            backdrop = backdrop
+            backdrop = localBackdrop
         )
     }
 }
@@ -180,12 +184,16 @@ fun SettingsSliderRow(
         }
         Box(Modifier.padding(top = 8.dp)) {
             if (enabled) {
+                val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+                val cardColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+                val localBackdrop = com.kyant.backdrop.backdrops.rememberCanvasBackdrop { drawRect(cardColor) }
+
                 LiquidSlider(
                     value = { value },
                     onValueChange = onValueChange,
                     valueRange = valueRange,
                     visibilityThreshold = (valueRange.endInclusive - valueRange.start) / 1000f,
-                    backdrop = backdrop,
+                    backdrop = localBackdrop,
                     modifier = Modifier.fillMaxWidth()
                 )
             } else {
