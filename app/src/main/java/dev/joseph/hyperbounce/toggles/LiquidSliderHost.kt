@@ -226,7 +226,6 @@ internal object LiquidSliderHost {
             }
 
             composeView = compose
-            backdrop.overlayViewToHide = compose
             syncState()
             refreshGeometry()
             updateViewportVisibility()
