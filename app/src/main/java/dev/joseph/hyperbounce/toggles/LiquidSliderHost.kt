@@ -62,8 +62,6 @@ internal object LiquidSliderHost {
         val density = target.resources.displayMetrics.density
         val paddingPx = (24f * density).toInt() 
         
-        if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) host.backdrop.start()
-        if (event.actionMasked == android.view.MotionEvent.ACTION_UP || event.actionMasked == android.view.MotionEvent.ACTION_CANCEL) host.backdrop.stop()
         val offsetEvent = android.view.MotionEvent.obtain(event)
         offsetEvent.offsetLocation(paddingPx.toFloat(), paddingPx.toFloat())
         
@@ -92,7 +90,6 @@ internal object LiquidSliderHost {
         
         private var isVisibleState by mutableStateOf(target.visibility == View.VISIBLE)
         private var isEnabledState by mutableStateOf(target.isEnabled)
-        internal val backdrop = LiquidSliderViewBackdrop(target)
 
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
@@ -172,10 +169,13 @@ internal object LiquidSliderHost {
                         val targetHeightDp = with(LocalDensity.current) { target.height.toDp() }
                         val isNight = androidx.compose.foundation.isSystemInDarkTheme()
                         val alphaValue = if (isEnabledState) 1f else if (isNight) 0.3f else 0.5f
+                        val cardColor = remember(target, isNight) { LiquidToggleHost.resolveUnderlyingCardColor(target, isNight) }
+                        val backdrop = com.kyant.backdrop.backdrops.rememberCanvasBackdrop {
+                            drawRect(cardColor)
+                        }
                         
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Box(
-                                // Removed hardcoded padding to perfectly map X coordinates 1:1
                                 modifier = Modifier.size(width = targetWidthDp, height = targetHeightDp).graphicsLayer { alpha = alphaValue },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -184,7 +184,6 @@ internal object LiquidSliderHost {
                                 LiquidSlider(
                                     value = { sliderValue },
                                     onValueChange = { newValue ->
-                                        // The native slider handles writing internally via LiquidTogglesHook!
                                         sliderValue = newValue
                                     },
                                     valueRange = sliderMin..sliderMax,
@@ -274,14 +273,6 @@ internal object LiquidSliderHost {
                 overlayLeftPx + overlayWidthPx,
                 overlayTopPx + overlayHeightPx
             )
-            
-            backdrop.setTargetBounds(
-                left = target.left.toFloat(), 
-                top = target.top.toFloat(), 
-                width = target.width, 
-                height = target.height, 
-                paddingPx = paddingPx
-            )
         }
 
         private fun updateViewportVisibility() {
@@ -326,10 +317,8 @@ internal object LiquidSliderHost {
 
             val compose = composeView
             composeView = null
-            backdrop.release()
             compose?.setContent { }
             compose?.let { parent.overlay?.remove(it) }
-
         }
     }
 

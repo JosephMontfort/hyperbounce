@@ -60,8 +60,6 @@ internal object LiquidToggleHost {
     fun forwardTouchEvent(target: View, event: android.view.MotionEvent): Boolean {
         val host = hosts[target] ?: return false
         val compose = host.composeView ?: return false
-        if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) host.backdrop.start()
-        if (event.actionMasked == android.view.MotionEvent.ACTION_UP || event.actionMasked == android.view.MotionEvent.ACTION_CANCEL) host.backdrop.stop()
         val offsetEvent = android.view.MotionEvent.obtain(event)
         offsetEvent.offsetLocation(-host.composeLeftInTarget.toFloat(), -host.composeTopInTarget.toFloat())
         val handled = compose.dispatchTouchEvent(offsetEvent)
@@ -82,7 +80,6 @@ internal object LiquidToggleHost {
         
         var composeLeftInTarget by mutableIntStateOf(0)
         var composeTopInTarget by mutableIntStateOf(0)
-        internal val backdrop = LiquidToggleViewBackdrop(target)
 
         private val attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
@@ -98,19 +95,6 @@ internal object LiquidToggleHost {
             refreshGeometry()
         }
 
-        /*
-         * Keep the Compose overlay out of the render traversal when the native target is
-         * clipped completely out of the viewport (RecyclerView/ScrollView/etc.).
-         *
-         * The original Android widget is naturally culled by its parent. Our replacement
-         * lives in ViewGroupOverlay, so it does not automatically inherit that culling.
-         * Without this guard, off-screen liquid widgets continue to be rasterized while
-         * the list scrolls.
-         *
-         * A pre-draw listener is intentionally attached to the target itself: it runs only
-         * while the native target participates in drawing, avoiding a global per-frame host
-         * scan.
-         */
         private val visibleRect = Rect()
         private val viewportPreDrawListener = ViewTreeObserver.OnPreDrawListener {
             updateViewportVisibility()
@@ -122,22 +106,17 @@ internal object LiquidToggleHost {
             target.addOnLayoutChangeListener(layoutListener)
             target.viewTreeObserver.addOnPreDrawListener(viewportPreDrawListener)
             disableClipping(target)
-            // Obtain a safe application context without depending on the legacy Xposed helper API.
             val baseCtx = try {
                 val atClass = Class.forName("android.app.ActivityThread")
                 val method = atClass.getDeclaredMethod("currentApplication")
                 method.isAccessible = true
                 method.invoke(null) as? Context
             } catch (e: Throwable) { null } ?: try {
-                // Failsafe: Generate a pure framework context
                 target.context.createPackageContext("android", 0)
-            } catch (e: Throwable) {
+            } catch (e: Throwable) { 
                 target.context 
             }
 
-            // THE UNWRAP-PROOF WRAPPER:
-            // By passing 'baseCtx' into ContextThemeWrapper, Jetpack Compose will unwrap 
-            // the wrapper and hit our healthy 'baseCtx' instead of the broken MIUI plugin context.
             val safeContext = object : android.view.ContextThemeWrapper(baseCtx, 0) {
                 override fun getTheme(): android.content.res.Resources.Theme {
                     return try { target.context.theme ?: super.getTheme() } catch(e: Throwable) { super.getTheme() }
@@ -151,12 +130,6 @@ internal object LiquidToggleHost {
                     return try { target.context.classLoader ?: super.getClassLoader() } catch(e: Throwable) { super.getClassLoader() }
                 }
 
-                // Compose's WindowRecomposer reads context.applicationContext when an
-                // animation first starts. Some HyperOS/SystemUI plugin Contexts return
-                // null here. Modern Compose treats this as a non-null platform type and
-                // therefore crashes with an NPE inside getAnimationScaleFlowFor().
-                //
-                // Always provide a non-null application context for injected Compose.
                 override fun getApplicationContext(): Context {
                     return try {
                         baseCtx.applicationContext ?: baseCtx
@@ -170,22 +143,6 @@ internal object LiquidToggleHost {
                 }
             }
 
-            /*
-             * IMPORTANT: Do not let this injected ComposeView inherit SystemUI's
-             * window/tree Recomposer.
-             *
-             * HyperOS SystemUI can expose a Compose composition context whose
-             * MotionDurationScale implementation reaches a null applicationContext.
-             * Compose's Animatable then crashes at:
-             *   WindowRecomposer -> getAnimationScaleFlowFor ->
-             *   applicationContext.contentResolver
-             *
-             * setParentCompositionContext() is the supported Compose escape hatch:
-             * an explicit parent context wins over the ancestor/window Recomposer.
-             * We therefore use a shared injected Recomposer with the same fixed
-             * MotionDurationScale. This keeps the LiquidToggle animation pipeline
-             * isolated from SystemUI's Recomposer without creating one scheduler per widget.
-             */
             val sharedRecomposer = InjectedComposeRecomposer.get()
 
             val compose = ComposeView(safeContext).apply {
@@ -196,7 +153,7 @@ internal object LiquidToggleHost {
                 setParentCompositionContext(sharedRecomposer)
                 setContent {
                     LiquidToggleOverlay(
-                        backdrop = backdrop,
+                        target = target,
                         visible = isVisibleState,
                         enabled = isEnabledState,
                         selected = { checked },
@@ -225,7 +182,6 @@ internal object LiquidToggleHost {
             }
 
             composeView = compose
-            backdrop.overlayViewToHide = compose
             refreshGeometry()
             updateViewportVisibility()
         }
@@ -273,7 +229,6 @@ internal object LiquidToggleHost {
                 overlayLeftPx + overlayWidthPx,
                 overlayTopPx + overlayHeightPx
             )
-            backdrop.setTargetBounds(left = target.left.toFloat(), top = target.top.toFloat(), width = target.width, height = target.height, paddingPx = (24f * density).toInt())
         }
 
         private fun updateViewportVisibility() {
@@ -310,20 +265,14 @@ internal object LiquidToggleHost {
             }
             target.removeOnAttachStateChangeListener(attachListener)
             target.removeOnLayoutChangeListener(layoutListener)
-            target.alpha = 1f 
-
-            val compose = composeView
+            composeView?.let { parent.overlay?.remove(it) }
             composeView = null
-            backdrop.release()
-            compose?.setContent { }
-            compose?.let { parent.overlay?.remove(it) }
-
         }
     }
 
     @Composable
     private fun LiquidToggleOverlay(
-        backdrop: com.kyant.backdrop.Backdrop,
+        target: View,
         visible: Boolean,
         enabled: Boolean,
         selected: () -> Boolean,
@@ -333,6 +282,10 @@ internal object LiquidToggleHost {
         val alphaValue = if (enabled) 1f else if (isNight) 0.3f else 0.5f
         val prefs = hyperBouncePrefs
         val feel = if (prefs != null) rememberLiveGlassFeel(prefs, "toggle_glass") else null
+        val cardColor = remember(target, isNight) { resolveUnderlyingCardColor(target, isNight) }
+        val backdrop = com.kyant.backdrop.backdrops.rememberCanvasBackdrop {
+            drawRect(cardColor)
+        }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (visible) {
                 LiquidToggle(
@@ -355,6 +308,56 @@ internal object LiquidToggleHost {
                 )
             }
         }
+    }
+
+    internal fun resolveUnderlyingCardColor(target: View, isNight: Boolean): androidx.compose.ui.graphics.Color {
+        try {
+            var p: View? = target.parent as? View
+            while (p != null) {
+                val bg = p.background
+                if (bg != null && p.width > 0 && p.height > 0) {
+                    val bmp = android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)
+                    val canvas = android.graphics.Canvas(bmp)
+                    val loc = IntArray(2)
+                    target.getLocationInWindow(loc)
+                    val pLoc = IntArray(2)
+                    p.getLocationInWindow(pLoc)
+                    val sampleX = (loc[0] - pLoc[0] - 8).coerceIn(0, p.width - 1)
+                    val sampleY = (loc[1] - pLoc[1] + target.height / 2).coerceIn(0, p.height - 1)
+                    
+                    canvas.translate(-sampleX.toFloat(), -sampleY.toFloat())
+                    bg.setBounds(0, 0, p.width, p.height)
+                    bg.draw(canvas)
+                    
+                    val pixel = bmp.getPixel(0, 0)
+                    bmp.recycle()
+                    if (android.graphics.Color.alpha(pixel) > 180) {
+                        return androidx.compose.ui.graphics.Color(pixel)
+                    }
+                }
+                if (p.javaClass.name.contains("DecorView") || p.id == android.R.id.content) break
+                p = p.parent as? View
+            }
+
+            val ctx = target.context
+            val tv = android.util.TypedValue()
+            
+            val surfaceAttrId = ctx.resources.getIdentifier("colorSurface", "attr", ctx.packageName)
+            if (surfaceAttrId != 0 && ctx.theme.resolveAttribute(surfaceAttrId, tv, true) && tv.type >= android.util.TypedValue.TYPE_FIRST_COLOR_INT && tv.type <= android.util.TypedValue.TYPE_LAST_COLOR_INT) {
+                return androidx.compose.ui.graphics.Color(tv.data)
+            }
+            
+            val cardBgAttrId = ctx.resources.getIdentifier("cardBackgroundColor", "attr", ctx.packageName)
+            if (cardBgAttrId != 0 && ctx.theme.resolveAttribute(cardBgAttrId, tv, true) && tv.type >= android.util.TypedValue.TYPE_FIRST_COLOR_INT && tv.type <= android.util.TypedValue.TYPE_LAST_COLOR_INT) {
+                return androidx.compose.ui.graphics.Color(tv.data)
+            }
+
+            if (ctx.theme.resolveAttribute(android.R.attr.colorBackground, tv, true) && tv.type >= android.util.TypedValue.TYPE_FIRST_COLOR_INT && tv.type <= android.util.TypedValue.TYPE_LAST_COLOR_INT) {
+                return androidx.compose.ui.graphics.Color(tv.data)
+            }
+        } catch (_: Throwable) {}
+
+        return if (isNight) androidx.compose.ui.graphics.Color(0xFF242424) else androidx.compose.ui.graphics.Color.White
     }
 
     private val ownerMap = WeakHashMap<View, FakeLifecycleOwner>()
