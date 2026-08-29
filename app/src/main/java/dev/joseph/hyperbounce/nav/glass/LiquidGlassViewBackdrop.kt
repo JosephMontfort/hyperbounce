@@ -55,8 +55,6 @@ internal class LiquidGlassViewBackdrop(
     private var surfaceFronts = mutableMapOf<View, SurfaceFrame>()
     private val pendingSurfaceCopies = mutableSetOf<View>()
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var textureViewBuffer: Bitmap? = null
-    private var surfaceViewBuffer: Bitmap? = null
 
     var capturedFrame: LiquidGlassCapturedFrame? by mutableStateOf(null)
         private set
@@ -132,7 +130,7 @@ internal class LiquidGlassViewBackdrop(
             ensureBuffers(scaledWidth, scaledHeight)
 
             val target = back ?: return
-            target.eraseColor(android.graphics.Color.TRANSPARENT)
+            target.eraseColor(android.graphics.Color.parseColor("#40000000"))
 
             val canvas = Canvas(target)
             canvas.save()
@@ -152,11 +150,6 @@ internal class LiquidGlassViewBackdrop(
             // not only sourceView's descendants.
             requestHardwareSurfaceFrames(currentRegion, location, scale)
             drawLatestHardwareSurfaceFrames(canvas, currentRegion, location, scale)
-            
-            val bgPaint = android.graphics.Paint()
-            bgPaint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OVER)
-            bgPaint.color = android.graphics.Color.parseColor("#40000000")
-            canvas.drawRect(0f, 0f, scaledWidth.toFloat(), scaledHeight.toFloat(), bgPaint)
 
             val previousFront = front
             front = target
@@ -184,7 +177,8 @@ internal class LiquidGlassViewBackdrop(
         scale: Float,
     ) {
         val surfaces = ArrayList<View>()
-        collectAllHardwareSurfaceViews(surfaces)
+        val root = sourceView.rootView
+        collectHardwareSurfaceViews(root, surfaces)
 
         // Avoid duplicate requests if the hierarchy traversal encounters a view
         // through an unusual parent/SurfaceControl arrangement.
@@ -193,26 +187,12 @@ internal class LiquidGlassViewBackdrop(
             lastHardwareSurfaceCount = uniqueSurfaces.size
             Log.e(
                 "HyperBounce-Backdrop",
-                "hardwareSurfaces=${uniqueSurfaces.size}",
+                "root=${root.javaClass.name} hardwareSurfaces=${uniqueSurfaces.size}",
             )
         }
 
-        val activeSurfaces = mutableSetOf<View>()
-
         for (surface in uniqueSurfaces) {
             if (!surface.isShown || surface.width <= 0 || surface.height <= 0) continue
-            
-            var isVisible = true
-            var current: View? = surface
-            while (current != null) {
-                if (current.alpha <= 0.01f || current.visibility != View.VISIBLE) {
-                    isVisible = false
-                    break
-                }
-                val parent = current.parent
-                current = if (parent is View) parent else null
-            }
-            if (!isVisible) continue
 
             val surfaceLocation = IntArray(2)
             surface.getLocationInWindow(surfaceLocation)
@@ -227,6 +207,8 @@ internal class LiquidGlassViewBackdrop(
             val overlapBottom = minOf(currentRegion.top + currentRegion.height, bottom)
             if (overlapRight <= overlapLeft || overlapBottom <= overlapTop) continue
 
+            if (pendingSurfaceCopies.contains(surface)) continue
+
             val srcLeft = (overlapLeft - left).toInt().coerceAtLeast(0)
             val srcTop = (overlapTop - top).toInt().coerceAtLeast(0)
             val srcRight = (overlapRight - left).toInt().coerceAtMost(surface.width)
@@ -234,10 +216,6 @@ internal class LiquidGlassViewBackdrop(
             val srcWidth = srcRight - srcLeft
             val srcHeight = srcBottom - srcTop
             if (srcWidth <= 0 || srcHeight <= 0) continue
-
-            activeSurfaces.add(surface)
-
-            if (pendingSurfaceCopies.contains(surface)) continue
 
             val destWidth = (srcWidth * scale).toInt().coerceAtLeast(1)
             val destHeight = (srcHeight * scale).toInt().coerceAtLeast(1)
@@ -248,31 +226,17 @@ internal class LiquidGlassViewBackdrop(
             when (surface) {
                 is SurfaceView -> {
                     try {
-                        var sBuffer = surfaceViewBuffer
-                        if (sBuffer == null || sBuffer.width != surface.width || sBuffer.height != surface.height) {
-                            sBuffer?.recycle()
-                            sBuffer = Bitmap.createBitmap(surface.width, surface.height, Bitmap.Config.ARGB_8888)
-                            surfaceViewBuffer = sBuffer
-                        }
                         PixelCopy.request(
                             surface,
-                            null,
-                            sBuffer,
+                            Rect(srcLeft, srcTop, srcRight, srcBottom),
+                            dest,
                             { result ->
                                 pendingSurfaceCopies.remove(surface)
                                 if (result == PixelCopy.SUCCESS) {
-                                    val canvas = Canvas(dest)
-                                    canvas.drawBitmap(
-                                        sBuffer!!,
-                                        Rect(srcLeft, srcTop, srcRight, srcBottom),
-                                        Rect(0, 0, destWidth, destHeight),
-                                        null
-                                    )
                                     val frame = SurfaceFrame(
                                         bitmap = dest,
                                         left = ((overlapLeft - currentRegion.left) * scale).toInt(),
                                         top = ((overlapTop - currentRegion.top) * scale).toInt(),
-                                        isSurfaceView = true
                                     )
                                     replaceSurfaceFrame(surface, frame)
                                 } else {
@@ -290,23 +254,9 @@ internal class LiquidGlassViewBackdrop(
 
                 is TextureView -> {
                     try {
-                        var buffer = textureViewBuffer
-                        if (buffer == null || buffer.width != surface.width || buffer.height != surface.height) {
-                            buffer?.recycle()
-                            buffer = Bitmap.createBitmap(surface.width, surface.height, Bitmap.Config.ARGB_8888)
-                            textureViewBuffer = buffer
-                        }
-                        
-                        if (surface.getBitmap(buffer) != null) {
-                            val canvas = Canvas(dest)
-                            canvas.drawBitmap(
-                                buffer,
-                                Rect(srcLeft, srcTop, srcRight, srcBottom),
-                                Rect(0, 0, destWidth, destHeight),
-                                null
-                            )
-                        }
-
+                        // TextureView#getBitmap(bitmap) copies the texture content
+                        // without requiring a software View.draw() pass.
+                        surface.getBitmap(dest)
                         pendingSurfaceCopies.remove(surface)
                         replaceSurfaceFrame(
                             surface,
@@ -314,7 +264,6 @@ internal class LiquidGlassViewBackdrop(
                                 bitmap = dest,
                                 left = ((overlapLeft - currentRegion.left) * scale).toInt(),
                                 top = ((overlapTop - currentRegion.top) * scale).toInt(),
-                                isSurfaceView = false
                             )
                         )
                     } catch (_: Throwable) {
@@ -322,17 +271,6 @@ internal class LiquidGlassViewBackdrop(
                         dest.recycle()
                     }
                 }
-            }
-        }
-
-        val iter = surfaceFronts.iterator()
-        while (iter.hasNext()) {
-            val entry = iter.next()
-            if (entry.key !in activeSurfaces) {
-                if (!entry.value.bitmap.isRecycled) {
-                    entry.value.bitmap.recycle()
-                }
-                iter.remove()
             }
         }
     }
@@ -343,13 +281,9 @@ internal class LiquidGlassViewBackdrop(
         sourceLocation: IntArray,
         scale: Float,
     ) {
-        val paintDstOver = android.graphics.Paint()
-        paintDstOver.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OVER)
-
         for (frame in surfaceFronts.values) {
             if (frame.bitmap.isRecycled) continue
-            val paint = if (frame.isSurfaceView) paintDstOver else null
-            canvas.drawBitmap(frame.bitmap, frame.left.toFloat(), frame.top.toFloat(), paint)
+            canvas.drawBitmap(frame.bitmap, frame.left.toFloat(), frame.top.toFloat(), null)
         }
     }
 
@@ -357,34 +291,6 @@ internal class LiquidGlassViewBackdrop(
         val old = surfaceFronts.put(surface, newFrame)
         if (old != null && old.bitmap !== newFrame.bitmap && !old.bitmap.isRecycled) {
             old.bitmap.recycle()
-        }
-    }
-
-    private fun collectAllHardwareSurfaceViews(result: MutableList<View>) {
-        try {
-            val wmgClass = Class.forName("android.view.WindowManagerGlobal")
-            val getInstanceMethod = wmgClass.getMethod("getInstance")
-            val wmg = getInstanceMethod.invoke(null)
-            val mViewsField = wmgClass.getDeclaredField("mViews")
-            mViewsField.isAccessible = true
-            val views = mViewsField.get(wmg)
-            if (views is Iterable<*>) {
-                for (view in views) {
-                    if (view is View) {
-                        collectHardwareSurfaceViews(view, result)
-                    }
-                }
-            } else if (views is Array<*>) {
-                for (view in views) {
-                    if (view is View) {
-                        collectHardwareSurfaceViews(view, result)
-                    }
-                }
-            } else {
-                collectHardwareSurfaceViews(sourceView.rootView, result)
-            }
-        } catch (e: Throwable) {
-            collectHardwareSurfaceViews(sourceView.rootView, result)
         }
     }
 
@@ -419,7 +325,6 @@ internal class LiquidGlassViewBackdrop(
         val bitmap: Bitmap,
         val left: Int,
         val top: Int,
-        val isSurfaceView: Boolean = false,
     )
 
     fun release() {
@@ -431,8 +336,6 @@ internal class LiquidGlassViewBackdrop(
         pendingSurfaceCopies.clear()
         front?.recycle()
         back?.recycle()
-        textureViewBuffer?.recycle()
-        textureViewBuffer = null
         front = null
         back = null
         capturedFrame = null

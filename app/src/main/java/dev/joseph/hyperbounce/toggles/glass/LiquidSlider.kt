@@ -51,7 +51,14 @@ fun LiquidSlider(
     valueRange: ClosedFloatingPointRange<Float>,
     visibilityThreshold: Float,
     backdrop: Backdrop,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    blurDp: Float = 8f,
+    lensSizeDp: Float = 10f,
+    lensDepthDp: Float = 14f,
+    highlightStrength: Float = 0.67f,
+    shadowRadiusDp: Float = 4f,
+    springDamping: Float = 0.7f,
+    springStiffness: Float = 800f
 ) {
     val isLightTheme = !isSystemInDarkTheme()
     
@@ -93,7 +100,9 @@ fun LiquidSlider(
                         if (isLtr) (targetValue + delta).coerceIn(valueRange)
                         else (targetValue - delta).coerceIn(valueRange)
                     )
-                }
+                },
+                valueSpringDamping = springDamping,
+                valueSpringStiffness = springStiffness
             )
         }
         LaunchedEffect(dampedDragAnimation) {
@@ -172,24 +181,24 @@ fun LiquidSlider(
                     shape = { Capsule() },
                     effects = {
                         val progress = dampedDragAnimation.pressProgress
-                        blur(8f.dp.toPx() * (1f - progress))
+                        blur(blurDp.dp.toPx() * (1f - progress))
                         lens(
-                            10f.dp.toPx() * progress,
-                            14f.dp.toPx() * progress,
+                            lensSizeDp.dp.toPx() * progress,
+                            lensDepthDp.dp.toPx() * progress,
                             chromaticAberration = true
                         )
                     },
                     highlight = {
                         val progress = dampedDragAnimation.pressProgress
                         Highlight.Ambient.copy(
-                            width = Highlight.Ambient.width / 1.5f,
-                            blurRadius = Highlight.Ambient.blurRadius / 1.5f,
+                            width = Highlight.Ambient.width * highlightStrength,
+                            blurRadius = Highlight.Ambient.blurRadius * highlightStrength,
                             alpha = progress
                         )
                     },
                     shadow = {
                         Shadow(
-                            radius = 4f.dp,
+                            radius = shadowRadiusDp.dp,
                             color = Color.Black.copy(alpha = 0.05f)
                         )
                     },

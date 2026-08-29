@@ -3,11 +3,8 @@ package dev.joseph.hyperbounce.ui.components
 /*
  * A live-updating miniature of the floating nav bar, styled from the same
  * containerOpacity/cornerRadius/barHeight/tabWidth/glassIntensity values the sliders on
- * AppDetailScreen edit — so dragging a slider visibly changes this preview in real time,
- * the same way iOS's Settings > Display & Brightness > Text Size screen previews live.
- * Rendered as a flat tinted bar (glass/backdrop is reserved for toggles, sliders, and the
- * dropdown/popup menus in this app), with the tint alpha standing in for containerOpacity
- * and a subtle scale-with-glassIntensity so both sliders still visibly do something here.
+ * AppDetailScreen edit. Also reads LocalGlassSettings (the Settings screen's master
+ * switch) — real subtle backdrop glass when on, a flat tinted fill when off.
  */
 
 import androidx.compose.foundation.background
@@ -26,10 +23,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
+import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
 
 @Composable
 fun NavBarPreview(
-    // Kept for call-site compatibility (unused now that this preview is a flat fill).
     backdrop: Backdrop,
     accentColor: Color,
     glassIntensity: Float,
@@ -41,6 +44,7 @@ fun NavBarPreview(
     selectedIndex: Int = 1,
     modifier: Modifier = Modifier
 ) {
+    val glass = LocalGlassSettings.current
     Box(
         modifier
             .fillMaxWidth()
@@ -51,8 +55,31 @@ fun NavBarPreview(
         Row(
             Modifier
                 .height(barHeightDp.dp)
+                .then(
+                    if (glass.enabled) {
+                        Modifier.drawBackdrop(
+                            backdrop = backdrop,
+                            shape = { shape },
+                            effects = {
+                                vibrancy()
+                                blur((glass.blurDp / 2f).dp.toPx() * glassIntensity)
+                                lens(
+                                    (glass.refractionHeightDp / 1.7f).dp.toPx() * glassIntensity,
+                                    (glass.refractionAmountDp / 1.7f).dp.toPx() * glassIntensity,
+                                    chromaticAberration = glass.chromaticAberration
+                                )
+                            },
+                            highlight = { Highlight.Default },
+                            shadow = { Shadow(radius = 8f.dp, color = Color.Black.copy(alpha = 0.14f)) },
+                            onDrawSurface = {
+                                drawRect(Color.White.copy(alpha = containerOpacity * 0.35f))
+                            }
+                        )
+                    } else {
+                        Modifier.background(Color(0xFF3A3A3C).copy(alpha = (0.35f + containerOpacity * 0.5f).coerceIn(0f, 1f)))
+                    }
+                )
                 .clip(shape)
-                .background(Color(0xFF3A3A3C).copy(alpha = (0.35f + containerOpacity * 0.5f).coerceIn(0f, 1f)))
                 .padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -64,7 +91,7 @@ fun NavBarPreview(
                 ) {
                     Box(
                         Modifier
-                            .size((7f + glassIntensity * 2f).dp)
+                            .size(9.dp)
                             .clip(CircleShape)
                             .background(
                                 if (index == selectedIndex) accentColor else Color.White.copy(alpha = 0.55f)

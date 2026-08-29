@@ -2,14 +2,16 @@ package dev.joseph.hyperbounce.ui.state
 
 /*
  * Persists every setting from SettingsModels.kt to a plain SharedPreferences file
- * ("hyperbounce_settings"). This file is the natural handoff point for Phase 2: the
- * Xposed hooks read the same file via a small XSharedPreferences-based reader (see
- * dev.joseph.hyperbounce.prefs.HyperBouncePrefs) once wiring begins — see
- * docs/UI_DESIGN_NOTES.md and docs/PHASE2_BACKEND_WIRING.md.
+ * ("hyperbounce_settings") — this app's own always-available source of truth, read
+ * synchronously, same as Phase 1. Phase 2 additionally mirrors every write out to the
+ * Xposed framework's remote preferences (see ui/state/XposedServiceBridge.kt for the
+ * write side, prefs/HyperBouncePrefs.kt for the hook-side read), so the hooks running
+ * inside Instagram/WhatsApp/YouTube/HyperOS system apps can see the same values. That
+ * mirroring is best-effort and asynchronous — nothing in this class ever waits on it.
  *
  * One primitive SharedPreferences entry per field (no JSON/serialization dependency
  * needed — none is present in this project, and this keeps every value independently
- * readable/writable, which matters once XSharedPreferences reads it from another process).
+ * readable/writable, which matters since the hook side reads them individually too).
  *
  * Every property below is `var x by ... private set` PLUS an explicit `fun setX(...)`
  * (so callers can pass a bound method reference like `repository::setModuleEnabled`
@@ -36,6 +38,31 @@ class SettingsRepository(context: Context) {
 
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    init {
+        // Local prefs (above) are this app's own always-available source of truth — the UI
+        // never waits on the Xposed service. This just also mirrors everything out to the
+        // hooks once/if that service becomes available: every individual write already
+        // mirrors itself (see the three Pref*Delegate classes below), but this catches
+        // anything changed *before* the service was bound (e.g. the very first run).
+        XposedServiceBridge.init()
+        XposedServiceBridge.onBind { pushAllLocalToRemote() }
+    }
+
+    private fun pushAllLocalToRemote() {
+        val remote = XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME) ?: return
+        val editor = remote.edit()
+        for ((key, value) in prefs.all) {
+            when (value) {
+                is Boolean -> editor.putBoolean(key, value)
+                is Float -> editor.putFloat(key, value)
+                is String -> editor.putString(key, value)
+                is Int -> editor.putInt(key, value)
+                is Long -> editor.putLong(key, value)
+            }
+        }
+        editor.apply()
+    }
 
     var moduleEnabled by prefsBooleanState("module_enabled", true)
         private set
@@ -101,7 +128,15 @@ class SettingsRepository(context: Context) {
 
     inner class AppSettingsHolder(val app: NavApp) {
         private val prefix = "app_${app.name.lowercase()}"
-        private val defaults = NavBarAppSettings()
+        // Defaults match each app's actual current hardcoded nav-bar values exactly (see
+        // nav/InstagramNavBarHost.kt, nav/WhatsAppNavBarHost.kt, nav/YouTubeNavBarHost.kt)
+        // so wiring these into the hooks in Phase 2 doesn't silently change anyone's
+        // current behavior — WhatsApp in particular used a taller/wider/more-rounded bar
+        // (70/92/36) than Instagram and YouTube's shared defaults (64/64/32).
+        private val defaults = when (app) {
+            NavApp.WhatsApp -> NavBarAppSettings(barHeight = 70f, tabWidth = 92f, cornerRadius = 36f)
+            else -> NavBarAppSettings()
+        }
 
         var enabled by prefsBooleanState("${prefix}_enabled", defaults.enabled)
             private set
@@ -274,6 +309,7 @@ private class PrefBooleanDelegate(
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) {
         state = value
         prefs.edit().putBoolean(key, value).apply()
+        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putBoolean(key, value)?.apply()
     }
 }
 
@@ -287,6 +323,7 @@ private class PrefFloatDelegate(
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Float) {
         state = value
         prefs.edit().putFloat(key, value).apply()
+        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, value)?.apply()
     }
 }
 
@@ -304,5 +341,6 @@ private class PrefEnumDelegate<E : Enum<E>>(
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: E) {
         state = value
         prefs.edit().putString(key, value.name).apply()
+        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putString(key, value.name)?.apply()
     }
 }

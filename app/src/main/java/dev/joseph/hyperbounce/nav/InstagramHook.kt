@@ -5,6 +5,7 @@ import android.content.res.Resources
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 import java.util.WeakHashMap
@@ -16,6 +17,12 @@ class InstagramHook(
     private val sOverlayParents = WeakHashMap<ViewGroup, Boolean>()
 
     fun onPackageReady() {
+        val hyperBouncePrefs = HyperBouncePrefs(module)
+        if (!hyperBouncePrefs.moduleEnabled || !hyperBouncePrefs.appEnabled("instagram")) {
+            log("HyperBounce: disabled for Instagram, skipping injection")
+            return
+        }
+
         log("==================================================")
         log("[INIT] HyperBounce: Ultimate Smart Shifter Final")
         log("==================================================")
@@ -85,7 +92,7 @@ class InstagramHook(
                                     val decorView = activity.window.decorView as ViewGroup
                                     val stockBar = decorView.findViewById<View>(stockBarId)
 
-                                    injectLiquidGlass(activity, view as ViewGroup, stockBar as? ViewGroup)
+                                    injectLiquidGlass(activity, view as ViewGroup, stockBar as? ViewGroup, hyperBouncePrefs)
 
                                     decorView.viewTreeObserver.addOnGlobalLayoutListener {
                                         val injectedBar = decorView.findViewWithTag<View>("LiquidGlassInjected")

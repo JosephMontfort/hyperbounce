@@ -145,3 +145,48 @@ transitively via `compose.foundation`, matching the library's own dependency lis
   use) so the header blurs the actual list content passing underneath it, and both got a
   matching collapsing-title treatment (`RootScaffold` now fades/collapses its large title
   into a small fixed one on scroll, the same pattern `ScreenScaffold` already had).
+
+## Round 3: restored backdrop, swipeable tabs, dropdown overlay fix, real icons
+
+- **Backdrop restored, subtle** — Round 2 over-corrected: "no glass on containers" was meant
+  to exclude cards/buttons/previews from the *master switch's* effect, not strip backdrop
+  from them outright. `GlassCard`, `CircularGlassBackButton`, `NavBarPreview`, and the About
+  screen's icon badge all read `LocalGlassSettings` again (real subtle blur+vibrancy when
+  the switch is on, flat fill when off) — small blur radii throughout, no heavy effects.
+  Also added `ui/theme/Background.kt`: a plain background is *invisible* to blur (there's
+  nothing to soften), which is why everything looked flat even with backdrop code intact —
+  a strictly monochromatic (no color tint) soft gradient + two low-contrast highlight
+  patches gives blur something to react to without being the colorful wallpaper again.
+- **CircularGlassBackButton jelly bug fixed** — the Round 2 rewrite applied `.clip()` and
+  `.graphicsLayer{ jelly }` as two separate modifiers, which put the clip on a static layer
+  while the jelly transform moved a different inner one — dragging revealed the button's
+  square underlying bounds as a hard edge. Fixed by passing the jelly transform as
+  `drawBackdrop`'s own `layerBlock` again (matching `LiquidButton`), so the clip and the
+  transform are the same operation and always move together.
+- **Swipeable Tuning/Settings** — replaced the push/pop `Destination.Tuning`/`.Settings`
+  stack entries with a real `HorizontalPager` (2 pages) in `MainActivity.kt`. The floating
+  tab bar's `selectedTabIndex` reads `pagerState.currentPage` directly — one source of
+  truth, so a swipe and a tab tap can never disagree. `Destination` now only covers the
+  genuine drill-down subpages (AppDetail/Engine/About), layered on top of the pager via
+  their own small back stack.
+- **Tab bar**: moved to `Alignment.BottomCenter`; hand-drawn icons replaced with
+  `Icons.Filled.Tune`/`Icons.Filled.Settings` from the newly-added `material-icons-core`
+  dependency.
+- **Dropdown menu label centering** — the top-right menu's collapsed icon swapped from a
+  hand-drawn `AppGridIcon` (which had an off-center drawing bug) to `Icons.Filled.MoreHoriz`.
+- **Long-press-drag-select gesture, corrected default** — re-verified against the intended
+  behavior once more; unchanged from the Round 2 fix (release over a hovered row now fires
+  its action for a single continuous long-press → drag → release gesture).
+- **Inline dropdown pickers (Theme, engine choices) no longer resize their parent card** —
+  `ExpandableGlassMenu` reports its own *growing* measured size to whatever it's nested in,
+  which is correct for the top-right menu (already inside a fillMaxSize Box) but wrong for
+  a picker embedded in a Row inside a Card (the Row/Card visibly grew with it). Rebuilt
+  `DropdownPicker` around a new `ui/glass/DropdownOverlay.kt`: the inline part is only ever
+  a small fixed-size label button; opening it posts a request to a `DropdownOverlayHostState`
+  provided once per scaffold (`ScreenScaffold`/`RootScaffold` both now wrap their content in
+  `DropdownOverlayHost`), which renders the actual panel as the last, topmost child of the
+  scaffold's own root Box — same rendering surface as everything else (so its backdrop
+  glass still samples correctly — a real Compose `Popup` creates a separate Android window
+  with its own surface, which would break RenderNode-based backdrop capture), but
+  structurally independent of the small card it was opened from, so it can render over
+  any other content without changing that card's size.

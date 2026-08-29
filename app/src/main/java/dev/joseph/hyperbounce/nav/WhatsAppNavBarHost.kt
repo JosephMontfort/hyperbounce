@@ -14,6 +14,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
+import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
+import dev.joseph.hyperbounce.prefs.rememberLiveNavBarSettings
 
 private data class WhatsAppTabData(
     val inactiveBitmap: Bitmap?,
@@ -91,8 +93,14 @@ fun WhatsAppNavBarHost(
     stockBar: ViewGroup,
     externalTabState: State<Int>,
     backdropSource: View,
+    hyperBouncePrefs: HyperBouncePrefs,
 ) {
-    val isDark = isSystemInDarkTheme()
+    val live = rememberLiveNavBarSettings(hyperBouncePrefs, "whatsapp")
+    val isDark = when (live.themeMode) {
+        "Light" -> false
+        "Dark" -> true
+        else -> isSystemInDarkTheme()
+    }
 
     val tabs = remember(stockBar, isDark) { extractWhatsAppTabs(stockBar, isDark) }
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
@@ -110,10 +118,14 @@ fun WhatsAppNavBarHost(
         tabs = tabs.map { it.inactiveBitmap },
         activeTabs = tabs.map { it.activeBitmap },
         labels = tabs.map { it.label },
-        customAccentColor = androidx.compose.ui.graphics.Color(0xFF21C063),
-        barHeight = 70.dp,
-        tabWidth = 92.dp,
-        cornerRadius = 36.dp,
+        customAccentColor = accentColorFor(live.accent),
+        forceLightTheme = live.themeMode == "Light",
+        forceDarkTheme = live.themeMode == "Dark",
+        effectMultiplier = live.glassIntensity,
+        containerAlpha = live.containerOpacity,
+        barHeight = live.barHeight.dp,
+        tabWidth = live.tabWidth.dp,
+        cornerRadius = live.cornerRadius.dp,
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index
@@ -124,4 +136,16 @@ fun WhatsAppNavBarHost(
         },
         sourceView = backdropSource,
     )
+}
+
+/** WhatsApp's "Auto" accent is its own brand green — that's what this bar always used
+ *  before this setting existed, so it stays the default rather than falling back to a
+ *  generic black/white adaptive color. */
+private fun accentColorFor(preset: String): androidx.compose.ui.graphics.Color = when (preset) {
+    "Blue" -> androidx.compose.ui.graphics.Color(0xFF0088FF)
+    "Pink" -> androidx.compose.ui.graphics.Color(0xFFFF2D78)
+    "Purple" -> androidx.compose.ui.graphics.Color(0xFFAF52DE)
+    "Orange" -> androidx.compose.ui.graphics.Color(0xFFFF9500)
+    "Green" -> androidx.compose.ui.graphics.Color(0xFF34C759)
+    else -> androidx.compose.ui.graphics.Color(0xFF21C063)
 }

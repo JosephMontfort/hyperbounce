@@ -68,13 +68,13 @@ fun AppDetailScreen(
             modifier = Modifier.padding(horizontal = 16.dp)
         )
 
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) { cardBackdrop ->
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             SettingsToggleRow(
                 title = "Floating Nav Bar",
                 subtitle = if (s.enabled) "Liquid glass replaces the stock bar" else "Stock nav bar restored",
                 colors = colors,
                 iconTint = accentColor.copy(alpha = 0.85f),
-                backdrop = cardBackdrop,
+                backdrop = backdrop,
                 checked = s.enabled,
                 onCheckedChange = holder::setEnabled,
                 icon = { PowerIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
@@ -82,11 +82,11 @@ fun AppDetailScreen(
         }
 
         SectionHeader("Glass Effect", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Glass Intensity",
                 colors = colors,
-                backdrop = cardBackdrop,
+                backdrop = backdrop,
                 value = s.glassIntensity,
                 onValueChange = holder::setGlassIntensity,
                 valueRange = 0.4f..2.0f,
@@ -97,7 +97,7 @@ fun AppDetailScreen(
             SettingsSliderRow(
                 title = "Container Opacity",
                 colors = colors,
-                backdrop = cardBackdrop,
+                backdrop = backdrop,
                 value = s.containerOpacity,
                 onValueChange = holder::setContainerOpacity,
                 valueRange = 0f..1f,
@@ -111,11 +111,11 @@ fun AppDetailScreen(
         )
 
         SectionHeader("Shape & Size", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Corner Radius",
                 colors = colors,
-                backdrop = cardBackdrop,
+                backdrop = backdrop,
                 value = s.cornerRadius,
                 onValueChange = holder::setCornerRadius,
                 valueRange = 12f..40f,
@@ -126,7 +126,7 @@ fun AppDetailScreen(
             SettingsSliderRow(
                 title = "Bar Height",
                 colors = colors,
-                backdrop = cardBackdrop,
+                backdrop = backdrop,
                 value = s.barHeight,
                 onValueChange = holder::setBarHeight,
                 valueRange = 48f..88f,
@@ -137,7 +137,7 @@ fun AppDetailScreen(
             SettingsSliderRow(
                 title = "Tab Width",
                 colors = colors,
-                backdrop = cardBackdrop,
+                backdrop = backdrop,
                 value = s.tabWidth,
                 onValueChange = holder::setTabWidth,
                 valueRange = 48f..88f,
@@ -147,7 +147,7 @@ fun AppDetailScreen(
         }
 
         SectionHeader("Appearance", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { cardBackdrop ->
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -158,7 +158,7 @@ fun AppDetailScreen(
                     options = listOf("System", "Light", "Dark"),
                     selectedIndex = ThemeMode.entries.indexOf(s.themeMode),
                     onSelect = { holder.setThemeMode(ThemeMode.entries[it]) },
-                    backdrop = cardBackdrop
+                    backdrop = backdrop
                 )
             }
             RowDivider(colors.separator, insetStart = 16.dp)

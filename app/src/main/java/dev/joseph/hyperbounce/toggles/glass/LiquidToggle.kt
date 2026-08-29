@@ -50,7 +50,15 @@ fun LiquidToggle(
     selected: () -> Boolean,
     onSelect: (Boolean) -> Unit,
     backdrop: Backdrop,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    blurDp: Float = 8f,
+    lensSizeDp: Float = 5f,
+    lensDepthDp: Float = 10f,
+    highlightStrength: Float = 0.67f,
+    shadowRadiusDp: Float = 4f,
+    dragSensitivity: Float = 0.72f,
+    springDamping: Float = 0.82f,
+    springStiffness: Float = 400f
 ) {
     val isLightTheme = !isSystemInDarkTheme()
     val accentColor = if (isLightTheme) Color(0xFF34C759) else Color(0xFF30D158)
@@ -89,7 +97,6 @@ fun LiquidToggle(
                 // Deliberately reduce the direct finger-to-track mapping. The animation spring
                 // then eases the rendered thumb toward this softened target, creating a very
                 // small, premium-feeling follow delay even during fast pulls.
-                val dragSensitivity = 0.72f
                 val delta = (dragAmount.x / dragWidth) * dragSensitivity
                 fraction = if (isLtr) {
                     (fraction + delta).fastCoerceIn(0f, 1f)
@@ -97,8 +104,8 @@ fun LiquidToggle(
                     (fraction - delta).fastCoerceIn(0f, 1f)
                 }
             },
-            valueSpringDamping = 0.82f,
-            valueSpringStiffness = 400f,
+            valueSpringDamping = springDamping,
+            valueSpringStiffness = springStiffness,
             pressSpringDamping = 1f,
             pressSpringStiffness = 720f,
             scaleXSpringDamping = 0.72f,
@@ -166,14 +173,14 @@ fun LiquidToggle(
                     shape = { Capsule() },
                     effects = {
                         val progress = dampedDragAnimation.pressProgress
-                        blur(8f.dp.toPx() * (1f - progress))
-                        lens(5f.dp.toPx() * progress, 10f.dp.toPx() * progress, chromaticAberration = true)
+                        blur(blurDp.dp.toPx() * (1f - progress))
+                        lens(lensSizeDp.dp.toPx() * progress, lensDepthDp.dp.toPx() * progress, chromaticAberration = true)
                     },
                     highlight = {
                         val progress = dampedDragAnimation.pressProgress
-                        Highlight.Ambient.copy(width = Highlight.Ambient.width / 1.5f, blurRadius = Highlight.Ambient.blurRadius / 1.5f, alpha = progress)
+                        Highlight.Ambient.copy(width = Highlight.Ambient.width * highlightStrength, blurRadius = Highlight.Ambient.blurRadius * highlightStrength, alpha = progress)
                     },
-                    shadow = { Shadow(radius = 4f.dp, color = Color.Black.copy(alpha = 0.05f)) },
+                    shadow = { Shadow(radius = shadowRadiusDp.dp, color = Color.Black.copy(alpha = 0.05f)) },
                     innerShadow = { val progress = dampedDragAnimation.pressProgress; InnerShadow(radius = 4f.dp * progress, alpha = progress) },
                     layerBlock = {
                         scaleX = dampedDragAnimation.scaleX

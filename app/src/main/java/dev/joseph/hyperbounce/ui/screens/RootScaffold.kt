@@ -14,6 +14,7 @@ package dev.joseph.hyperbounce.ui.screens
 
 import android.os.Build
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -38,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -45,11 +49,13 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceIn
 import com.kyant.backdrop.Backdrop
-import dev.joseph.hyperbounce.ui.components.AppGridIcon
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dev.joseph.hyperbounce.ui.components.CopyIcon
 import dev.joseph.hyperbounce.ui.components.InfoIcon
 import dev.joseph.hyperbounce.ui.components.MenuRow
 import dev.joseph.hyperbounce.ui.components.ResetArrowIcon
+import dev.joseph.hyperbounce.ui.glass.DropdownOverlayHost
 import dev.joseph.hyperbounce.ui.glass.ExpandableGlassMenu
 import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
 import dev.joseph.hyperbounce.ui.glass.MenuAlignment
@@ -79,6 +85,7 @@ fun RootScaffold(
 
     val scrollState = rememberScrollState()
     val collapseProgress = (scrollState.value / 160f).fastCoerceIn(0f, 1f)
+    val contentBackdrop = rememberLayerBackdrop()
 
     fun closeMenu() {
         menuAnimationScope.launch {
@@ -98,9 +105,11 @@ fun RootScaffold(
     }
 
     Box(Modifier.fillMaxSize()) {
+        DropdownOverlayHost {
         Column(
             Modifier
                 .fillMaxSize()
+                .layerBackdrop(contentBackdrop)
                 .safeDrawingPadding()
                 .verticalScroll(scrollState)
         ) {
@@ -133,7 +142,7 @@ fun RootScaffold(
         }
 
         ProgressiveBlurHeader(
-            backdrop = backdrop,
+            backdrop = contentBackdrop,
             tintColor = colors.background,
             modifier = Modifier
                 .fillMaxWidth()
@@ -194,7 +203,14 @@ fun RootScaffold(
                         2 -> onAbout()
                     }
                 },
-                label = { AppGridIcon(color = Color.White, size = 17.dp) }
+                label = {
+                    Image(
+                        imageVector = Icons.Filled.MoreHoriz,
+                        contentDescription = null,
+                        colorFilter = ColorFilter.tint(Color.White),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             ) { globalTouch, closeMenuFromRow, hoveredIndex, setHovered ->
                 MenuRow(
                     title = "Reset to Defaults",
@@ -239,6 +255,7 @@ fun RootScaffold(
                     icon = { InfoIcon(color = Color.White, size = 15.dp, strokeWidth = 1.6.dp) }
                 )
             }
+        }
         }
     }
 }

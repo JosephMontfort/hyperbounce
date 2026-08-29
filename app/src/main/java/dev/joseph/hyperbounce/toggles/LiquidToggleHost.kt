@@ -19,11 +19,17 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.FakeLifecycleOwner
+import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
+import dev.joseph.hyperbounce.prefs.rememberLiveGlassFeel
 import dev.joseph.hyperbounce.toggles.glass.LiquidToggle
 import java.util.WeakHashMap
 
 internal object LiquidToggleHost {
     private val hosts = WeakHashMap<View, Host>()
+
+    /** Set once from LiquidTogglesHook.onPackageReady() before any toggle is hooked. */
+    @JvmStatic
+    var hyperBouncePrefs: HyperBouncePrefs? = null
 
     @JvmStatic
     fun ensure(target: View) {
@@ -325,6 +331,8 @@ internal object LiquidToggleHost {
     ) {
         val isNight = androidx.compose.foundation.isSystemInDarkTheme()
         val alphaValue = if (enabled) 1f else if (isNight) 0.3f else 0.5f
+        val prefs = hyperBouncePrefs
+        val feel = if (prefs != null) rememberLiveGlassFeel(prefs, "toggle_glass") else null
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (visible) {
                 LiquidToggle(
@@ -335,7 +343,15 @@ internal object LiquidToggleHost {
                         scaleX = 0.975f
                         scaleY = 0.975f
                         alpha = alphaValue
-                    }
+                    },
+                    blurDp = feel?.blurDp ?: 8f,
+                    lensSizeDp = feel?.lensSizeDp ?: 5f,
+                    lensDepthDp = feel?.lensDepthDp ?: 10f,
+                    highlightStrength = feel?.highlightStrength ?: 0.67f,
+                    shadowRadiusDp = feel?.shadowRadiusDp ?: 4f,
+                    dragSensitivity = feel?.dragSensitivity ?: 0.72f,
+                    springDamping = feel?.springDamping ?: 0.82f,
+                    springStiffness = feel?.springStiffness ?: 400f
                 )
             }
         }

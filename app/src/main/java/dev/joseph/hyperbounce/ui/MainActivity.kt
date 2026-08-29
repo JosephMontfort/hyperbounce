@@ -9,53 +9,60 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import dev.joseph.hyperbounce.ui.components.GearIcon
-import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.glass.LiquidBottomTab
 import dev.joseph.hyperbounce.ui.glass.LiquidBottomTabs
 import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
 import dev.joseph.hyperbounce.ui.screens.AboutScreen
 import dev.joseph.hyperbounce.ui.screens.AppDetailScreen
 import dev.joseph.hyperbounce.ui.screens.EngineScreen
+import dev.joseph.hyperbounce.ui.screens.KeypadScreen
 import dev.joseph.hyperbounce.ui.screens.SettingsScreen
 import dev.joseph.hyperbounce.ui.screens.TuningScreen
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
+import dev.joseph.hyperbounce.ui.theme.HyperBounceBackground
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import dev.joseph.hyperbounce.ui.theme.hyperBounceColors
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
             val repository = remember { SettingsRepository(this) }
             HyperBounceApp(repository)
@@ -67,85 +74,97 @@ class MainActivity : ComponentActivity() {
 private fun HyperBounceApp(repository: SettingsRepository) {
     val colors = hyperBounceColors()
     val backdrop = rememberLayerBackdrop()
-    val pagerState = rememberPagerState(initialPage = 0, pageCount = { 2 })
-    var rootTabIndex by remember { mutableStateOf(0) }
-    var subDestination by remember { mutableStateOf<Destination?>(null) }
-    val navigationScope = rememberCoroutineScope()
 
-    // Tuning and Settings are the actual root pages. They live together in one horizontal
-    // pager, so a swipe changes the page rather than pushing Settings onto Tuning's stack.
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.currentPage }
-            .distinctUntilChanged()
-            .collect { page -> rootTabIndex = page.coerceIn(0, 1) }
+    // Tuning (page 0) and Settings (page 1) are true swipeable pager pages, not pushed
+    // stack destinations — swiping between them, and the floating tab bar below, are both
+    // driven by this one pagerState so they can never fall out of sync.
+    val pagerState = rememberPagerState(initialPage = 0) { 2 }
+    val pagerScope = rememberCoroutineScope()
+
+    // AppDetail/Engine/About are genuine drill-down subpages, layered on top of the pager
+    // via their own small back stack.
+    val backStack = remember { mutableStateListOf<Destination>() }
+    var isPush by remember { mutableStateOf(true) }
+    val atRoot = backStack.isEmpty()
+
+    val push: (Destination) -> Unit = { destination ->
+        isPush = true
+        backStack.add(destination)
     }
-
-    fun selectRootTab(index: Int) {
-        if (subDestination != null) subDestination = null
-        if (pagerState.currentPage != index) {
-            // Keep the bar, pager and swipe position as one state machine.
-            navigationScope.launch {
-                pagerState.animateScrollToPage(index)
-            }
+    val pop: () -> Unit = {
+        if (backStack.isNotEmpty()) {
+            isPush = false
+            backStack.removeAt(backStack.lastIndex)
         }
     }
-
-    BackHandler(enabled = subDestination != null) {
-        subDestination = null
+    val selectTab: (Int) -> Unit = { index ->
+        pagerScope.launch { pagerState.animateScrollToPage(index) }
     }
 
+    BackHandler(enabled = backStack.isNotEmpty()) { pop() }
+
     CompositionLocalProvider(LocalGlassSettings provides repository.globalGlass.snapshot()) {
-        Box(Modifier.fillMaxSize().background(colors.background)) {
-            // Only this plain background render node becomes the source backdrop. None of the
-            // glass consumers are descendants of this layer, preventing recursive self-capture.
+        Box(Modifier.fillMaxSize()) {
+            // IMPORTANT: layerBackdrop tags ONLY this background's own render node as the
+            // thing every drawBackdrop() consumer samples from. It must never wrap a Box
+            // that also contains those same glass consumers as children — doing so puts
+            // the consumers inside the very node being captured, so each captured frame
+            // includes the previous frame's glass rendering, which includes the capture
+            // again, and so on: an unbounded recursive RenderNode graph that crashes
+            // RenderThread with a stack-overflow SIGSEGV. The background and the screen
+            // content below must be siblings under a plain (non-backdrop) Box, exactly as
+            // the library's own catalog HomeContent does it.
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                colors.background,
-                                colors.wallpaperTop.copy(alpha = if (colors.isDark) 0.28f else 0.16f),
-                                colors.background,
-                                colors.wallpaperBottom.copy(alpha = if (colors.isDark) 0.20f else 0.12f)
-                            )
-                        )
-                    )
                     .layerBackdrop(backdrop)
-            )
-
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-                userScrollEnabled = subDestination == null,
-                beyondViewportPageCount = 1
-            ) { page ->
-                when (page) {
-                    0 -> TuningScreen(
-                        repository = repository,
-                        colors = colors,
-                        backdrop = backdrop,
-                        onNavigate = { subDestination = it }
-                    )
-                    else -> SettingsScreen(
-                        repository = repository,
-                        colors = colors,
-                        backdrop = backdrop,
-                        onNavigate = { subDestination = it }
-                    )
-                }
+            ) {
+                HyperBounceBackground(colors, Modifier.fillMaxSize())
             }
 
-            // Pushed detail screens are deliberately separate from the two root pages.
-            if (subDestination != null) {
+            if (atRoot) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
+                    when (page) {
+                        0 -> TuningScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onNavigate = push
+                        )
+
+                        else -> SettingsScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onNavigate = push
+                        )
+                    }
+                }
+            } else {
                 AnimatedContent(
-                    targetState = subDestination,
+                    targetState = backStack.last(),
                     modifier = Modifier.fillMaxSize(),
                     transitionSpec = {
-                        (androidx.compose.animation.slideInHorizontally(spring(dampingRatio = 0.88f, stiffness = 340f)) { it } + fadeIn())
-                            .togetherWith(androidx.compose.animation.slideOutHorizontally(spring(dampingRatio = 0.88f, stiffness = 340f)) { -it / 5 } + fadeOut())
+                        val forwardSpring = spring<androidx.compose.ui.unit.IntOffset>(
+                            dampingRatio = 0.88f,
+                            stiffness = 340f
+                        )
+                        if (isPush) {
+                            (slideInHorizontally(forwardSpring) { fullWidth -> fullWidth } + fadeIn())
+                                .togetherWith(
+                                    slideOutHorizontally(forwardSpring) { fullWidth -> -fullWidth / 5 } + fadeOut()
+                                )
+                        } else {
+                            (slideInHorizontally(forwardSpring) { fullWidth -> -fullWidth / 5 } + fadeIn())
+                                .togetherWith(
+                                    slideOutHorizontally(forwardSpring) { fullWidth -> fullWidth } + fadeOut()
+                                )
+                        }
                     },
-                    label = "subscreenTransition"
+                    label = "screenTransition"
                 ) { destination ->
                     when (destination) {
                         is Destination.AppDetail -> AppDetailScreen(
@@ -153,26 +172,40 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                             repository = repository,
                             colors = colors,
                             backdrop = backdrop,
-                            onBack = { subDestination = null }
+                            onBack = pop
                         )
+
                         Destination.Engine -> EngineScreen(
                             repository = repository,
                             colors = colors,
                             backdrop = backdrop,
-                            onBack = { subDestination = null }
+                            onBack = pop,
+                            onNavigate = push
                         )
+
+                        Destination.Keypad -> KeypadScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
                         Destination.About -> AboutScreen(
                             colors = colors,
                             backdrop = backdrop,
-                            onBack = { subDestination = null }
+                            onBack = pop
                         )
-                        Destination.Tuning, Destination.Settings, null -> Unit
                     }
                 }
             }
 
+            // Floating bottom-center tab bar — hidden while drilled into a subpage,
+            // matching iOS tab bars hiding on push and reappearing on pop back to a root
+            // tab. selectedTabIndex reads pagerState.currentPage directly (a single source
+            // of truth), so the pill can never drift out of sync with either a swipe or a
+            // tap.
             AnimatedVisibility(
-                visible = subDestination == null,
+                visible = atRoot,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .safeDrawingPadding()
@@ -180,19 +213,19 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                 enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = 380f)) { it / 2 } + fadeIn(),
                 exit = slideOutVertically(spring(dampingRatio = 0.8f, stiffness = 380f)) { it / 2 } + fadeOut()
             ) {
-                Box(Modifier.width(200.dp)) {
+                Box(Modifier.width(196.dp)) {
                     LiquidBottomTabs(
-                        selectedTabIndex = rootTabIndex,
-                        onTabSelected = ::selectRootTab,
+                        selectedTabIndex = { pagerState.currentPage },
+                        onTabSelected = selectTab,
                         backdrop = backdrop,
                         tabsCount = 2
                     ) {
-                        LiquidBottomTab(onClick = { selectRootTab(0) }) {
-                            SlidersIcon(color = Color.White, size = 22.dp)
+                        LiquidBottomTab(onClick = { selectTab(0) }) {
+                            TabIcon(Icons.Filled.Tune)
                             BasicText("Tuning", style = HyperBounceType.caption.copy(color = Color.White))
                         }
-                        LiquidBottomTab(onClick = { selectRootTab(1) }) {
-                            GearIcon(color = Color.White, size = 22.dp)
+                        LiquidBottomTab(onClick = { selectTab(1) }) {
+                            TabIcon(Icons.Filled.Settings)
                             BasicText("Settings", style = HyperBounceType.caption.copy(color = Color.White))
                         }
                     }
@@ -200,4 +233,14 @@ private fun HyperBounceApp(repository: SettingsRepository) {
             }
         }
     }
+}
+
+@Composable
+private fun TabIcon(icon: ImageVector) {
+    Image(
+        imageVector = icon,
+        contentDescription = null,
+        colorFilter = ColorFilter.tint(Color.White),
+        modifier = Modifier.size(20.dp)
+    )
 }

@@ -32,11 +32,11 @@ fun GlassFeelSection(
     val feel = holder.snapshot()
 
     SectionHeader(sectionTitle, colors)
-    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
+    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
         SettingsSliderRow(
             title = "Blur",
             colors = colors,
-            backdrop = cardBackdrop,
+            backdrop = backdrop,
             value = feel.blurDp,
             onValueChange = holder::setBlurDp,
             valueRange = 0f..16f,
@@ -47,7 +47,7 @@ fun GlassFeelSection(
         SettingsSliderRow(
             title = "Lens Size",
             colors = colors,
-            backdrop = cardBackdrop,
+            backdrop = backdrop,
             value = feel.lensSizeDp,
             onValueChange = holder::setLensSizeDp,
             valueRange = 0f..18f,
@@ -58,7 +58,7 @@ fun GlassFeelSection(
         SettingsSliderRow(
             title = "Lens Depth",
             colors = colors,
-            backdrop = cardBackdrop,
+            backdrop = backdrop,
             value = feel.lensDepthDp,
             onValueChange = holder::setLensDepthDp,
             valueRange = 0f..26f,
@@ -69,7 +69,7 @@ fun GlassFeelSection(
         SettingsSliderRow(
             title = "Highlight Strength",
             colors = colors,
-            backdrop = cardBackdrop,
+            backdrop = backdrop,
             value = feel.highlightStrength,
             onValueChange = holder::setHighlightStrength,
             valueRange = 0f..1f,
@@ -80,7 +80,7 @@ fun GlassFeelSection(
         SettingsSliderRow(
             title = "Shadow Radius",
             colors = colors,
-            backdrop = cardBackdrop,
+            backdrop = backdrop,
             value = feel.shadowRadiusDp,
             onValueChange = holder::setShadowRadiusDp,
             valueRange = 0f..10f,
@@ -90,11 +90,11 @@ fun GlassFeelSection(
     }
 
     SectionHeader("$sectionTitle · Drag Physics", colors)
-    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
+    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
         SettingsSliderRow(
             title = "Drag Sensitivity",
             colors = colors,
-            backdrop = cardBackdrop,
+            backdrop = backdrop,
             value = feel.dragSensitivity,
             onValueChange = holder::setDragSensitivity,
             valueRange = 0.2f..1.5f,
@@ -106,7 +106,7 @@ fun GlassFeelSection(
             title = "Spring Bounciness",
             subtitle = "Lower damping = more bounce",
             colors = colors,
-            backdrop = cardBackdrop,
+            backdrop = backdrop,
             value = feel.springDamping,
             onValueChange = holder::setSpringDamping,
             valueRange = 0.3f..1.0f,
@@ -118,7 +118,7 @@ fun GlassFeelSection(
             title = "Spring Stiffness",
             subtitle = "How quickly it settles",
             colors = colors,
-            backdrop = cardBackdrop,
+            backdrop = backdrop,
             value = feel.springStiffness,
             onValueChange = holder::setSpringStiffness,
             valueRange = 100f..1000f,

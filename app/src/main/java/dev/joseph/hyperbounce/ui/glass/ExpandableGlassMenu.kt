@@ -58,7 +58,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -160,7 +159,6 @@ fun ExpandableGlassMenu(
     dragJellyTension: Float = 0.05f,
     motionBlurAmount: Float = 25f,
     arcYOffsetDp: Float = 75f,
-    surfaceColor: Color = Color.Unspecified,
     // Fires when the finger is released while hovering a row during a long-press-drag
     // gesture (not a plain tap on the row — that's handled by MenuRow's own onClick).
     // Called just before the menu closes, with the hovered row's index. Default no-op so
@@ -219,7 +217,6 @@ fun ExpandableGlassMenu(
             dragJellyTension = dragJellyTension,
             motionBlurAmount = motionBlurAmount,
             arcYOffsetDp = arcYOffsetDp,
-            surfaceColor = surfaceColor,
             labelSize = labelSizePx,
             contentSize = contentMeasuredSize,
             label = {
@@ -340,7 +337,6 @@ fun GlassEffectContainer(
     dragJellyTension: Float,
     motionBlurAmount: Float,
     arcYOffsetDp: Float,
-    surfaceColor: Color,
     labelSize: Size,
     contentSize: Size,
     label: @Composable () -> Unit,
@@ -436,15 +432,11 @@ fun GlassEffectContainer(
                 onDrawSurface = {
                     val progress = animatableProgress.value
                     val cr = cornerRadius.toPx()
-                    val fill = if (surfaceColor.isSpecified) {
-                        surfaceColor
-                    } else if (isLightTheme) {
-                        Color.White.copy(alpha = 0.28f + 0.12f * progress)
-                    } else {
-                        Color(0xFF1E1E1E).copy(alpha = 0.35f + 0.15f * progress)
-                    }
-                    drawRoundRect(color = fill, cornerRadius = CornerRadius(cr, cr))
-                    if (!surfaceColor.isSpecified && progress == 0f && buttonPressProgress > 0f) {
+                    drawRoundRect(
+                        color = if (isLightTheme) Color.White.copy(alpha = 0.28f + 0.12f * progress) else Color(0xFF1E1E1E).copy(alpha = 0.35f + 0.15f * progress),
+                        cornerRadius = CornerRadius(cr, cr)
+                    )
+                    if (progress == 0f && buttonPressProgress > 0f) {
                         drawRoundRect(color = Color.White.copy(alpha = 0.15f * buttonPressProgress), cornerRadius = CornerRadius(cr, cr), blendMode = BlendMode.Plus)
                     }
                 }

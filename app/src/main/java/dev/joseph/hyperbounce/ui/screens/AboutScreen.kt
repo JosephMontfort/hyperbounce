@@ -16,9 +16,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
+import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 
@@ -28,6 +35,7 @@ fun AboutScreen(
     backdrop: Backdrop,
     onBack: () -> Unit
 ) {
+    val glass = LocalGlassSettings.current
     val isDark = isSystemInDarkTheme()
     ScreenScaffold(
         title = "About",
@@ -36,12 +44,31 @@ fun AboutScreen(
         onBack = onBack
     ) {
         Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+            val shape = RoundedCornerShape(28.dp)
             Box(
                 Modifier
                     .size(88.dp)
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
-                    .background(colors.accentBlue.copy(alpha = 0.18f))
+                    .then(
+                        if (glass.enabled) {
+                            Modifier.drawBackdrop(
+                                backdrop = backdrop,
+                                shape = { shape },
+                                effects = {
+                                    vibrancy()
+                                    blur((glass.blurDp / 3f).dp.toPx())
+                                    lens((glass.refractionHeightDp / 1.2f).dp.toPx(), (glass.refractionAmountDp / 1.2f).dp.toPx())
+                                },
+                                highlight = { Highlight.Ambient },
+                                shadow = { Shadow(radius = 12f.dp, color = Color.Black.copy(alpha = 0.18f)) },
+                                onDrawSurface = { drawRect(colors.accentBlue.copy(alpha = 0.16f)) }
+                            )
+                        } else {
+                            Modifier
+                                .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
+                                .background(colors.accentBlue.copy(alpha = 0.18f))
+                        }
+                    )
+                    .clip(shape)
             )
         }
 
@@ -56,7 +83,7 @@ fun AboutScreen(
         }
 
         SectionHeader("Status", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             AboutRow(
                 "This build",
                 "Settings UI only — every screen you've just used reads and writes real preferences, but the Xposed hooks don't read them yet.",
@@ -71,7 +98,7 @@ fun AboutScreen(
         }
 
         SectionHeader("Built With", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             AboutRow(
                 "AndroidLiquidGlass 2.0.0",
                 "Every toggle, slider, and the dropdown menu in this app is built on Kyant0's backdrop + shapes libraries.",

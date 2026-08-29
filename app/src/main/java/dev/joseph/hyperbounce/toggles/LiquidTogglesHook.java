@@ -20,6 +20,8 @@ import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface;
 
+import dev.joseph.hyperbounce.prefs.HyperBouncePrefs;
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -75,8 +77,11 @@ public class LiquidTogglesHook extends XposedModule {
             "fan.androidbase.widget.SeekBar"
     };
 
-    private static final boolean USE_LIQUID_GLASS_TOGGLE = true;
-    private static final boolean USE_LIQUID_GLASS_SLIDER = true;
+    // Not `final`: set once per process from HyperBouncePrefs at the top of
+    // onPackageReady(), before either flag is read anywhere else in this file. The
+    // `true` defaults here only matter if that read somehow never runs.
+    private static boolean USE_LIQUID_GLASS_TOGGLE = true;
+    private static boolean USE_LIQUID_GLASS_SLIDER = true;
 
     private final Set<Class<?>> hookedDynamicClasses =
             Collections.newSetFromMap(new WeakHashMap<Class<?>, Boolean>());
@@ -726,6 +731,26 @@ public class LiquidTogglesHook extends XposedModule {
         if (classLoader == null) classLoader = param.getDefaultClassLoader();
         final ClassLoader packageClassLoader = classLoader;
 
+        HyperBouncePrefs hyperBouncePrefs = null;
+        try {
+            hyperBouncePrefs = new HyperBouncePrefs(this);
+            if (!hyperBouncePrefs.getModuleEnabled()) {
+                log(4, "HyperBounce", "disabled globally, skipping toggles/sliders/keypad injection");
+                return;
+            }
+            USE_LIQUID_GLASS_TOGGLE = hyperBouncePrefs.getToggleEngineIsLiquidGlass();
+            USE_LIQUID_GLASS_SLIDER = hyperBouncePrefs.getSliderEngineIsLiquidGlass();
+            dev.joseph.hyperbounce.toggles.LiquidToggleHost.setHyperBouncePrefs(hyperBouncePrefs);
+            dev.joseph.hyperbounce.toggles.LiquidSliderHost.setHyperBouncePrefs(hyperBouncePrefs);
+        } catch (Throwable t) {
+            // This hook runs inside system-critical processes (android, systemui,
+            // settings) — an uncaught exception here is a much worse outcome than falling
+            // back to the pre-Phase-2 hardcoded defaults (both flags already default to
+            // `true` above), so this must never propagate. hyperBouncePrefs may be left
+            // null; LiquidKeypadHook below checks for that.
+            log(5, "HyperBounce", "settings read failed, continuing with defaults: " + t);
+        }
+
         // The active liquid implementation handles target touches through each
         // widget's onTouchEvent hook. The old global dispatchTouchEvent hook is only
         // needed by the legacy non-liquid path; installing it globally otherwise adds
@@ -799,7 +824,9 @@ public class LiquidTogglesHook extends XposedModule {
 
         if (packageName.equals("miui.systemui.plugin") ||
                 packageName.equals("com.android.systemui")) {
-            dev.joseph.hyperbounce.toggles.LiquidKeypadHook.INSTANCE.apply(this, packageClassLoader);
+            if (hyperBouncePrefs == null || hyperBouncePrefs.getKeypadEnabled()) {
+                dev.joseph.hyperbounce.toggles.LiquidKeypadHook.INSTANCE.apply(this, packageClassLoader);
+            }
             try {
                 Class<?> delegateClass = findClassIfExists(
                         "miui.systemui.dynamicisland.anim.DynamicIslandAnimationDelegate",

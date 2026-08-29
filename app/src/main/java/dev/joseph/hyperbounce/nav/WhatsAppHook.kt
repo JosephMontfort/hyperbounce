@@ -17,6 +17,7 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.FakeLifecycleOwner
+import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 import java.lang.reflect.Constructor
@@ -27,8 +28,14 @@ class WhatsAppHook(
 ) {
     private var lastUiMode = -1
     private var externalTabState: MutableState<Int>? = null
+    private val hyperBouncePrefs = HyperBouncePrefs(module)
 
     fun onPackageReady() {
+        if (!hyperBouncePrefs.moduleEnabled || !hyperBouncePrefs.appEnabled("whatsapp")) {
+            module.log(Log.INFO, "HyperBounce", "disabled for WhatsApp, skipping injection")
+            return
+        }
+
         try {
             module.hook(
                 View::class.java.getDeclaredMethod("onAttachedToWindow")
@@ -174,6 +181,7 @@ class WhatsAppHook(
                         stockBar = stockBar,
                         externalTabState = tabState,
                         backdropSource = backdropSource,
+                        hyperBouncePrefs = hyperBouncePrefs,
                     )
                 }
             }

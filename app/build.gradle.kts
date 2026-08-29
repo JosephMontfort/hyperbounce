@@ -54,6 +54,12 @@ dependencies {
     // as a build-time dependency. This is a build-time-only change (compileOnly is not
     // packaged into the module) and does not affect compiled bytecode or runtime behavior.
     compileOnly(files("libs/api-102.0.0.aar"))
+    // Phase 2: lets the companion app itself (not the hooks) write settings the hooks can
+    // read back via XposedInterface.getRemotePreferences(group) — see
+    // prefs/HyperBouncePrefs.kt and ui/state/XposedServiceBridge.kt for the full mechanism.
+    // Unlike the hook API above, this runs in the app's own process, so it's a normal
+    // `implementation`, not `compileOnly`.
+    implementation("io.github.libxposed:service:102.0.0")
 
     // Match the liquid-glass library's published Compose Multiplatform Android line.
     // (Identical versions across both source branches.)
@@ -68,6 +74,12 @@ dependencies {
     // but AnimatedContent lives in the separate "animation" artifact, so it's declared
     // explicitly here rather than assumed transitive.
     implementation("org.jetbrains.compose.animation:animation:1.11.1")
+    // Proper vector icon set — replacing the hand-drawn Canvas icons used through Phase 1,
+    // which read as low-quality at small sizes (tab bar, menu label). material-icons-core
+    // only (not -extended): it's a self-contained icon asset library, not the full Material
+    // component system, and every icon this app needs (Settings, Tune, ArrowBack, Refresh,
+    // ContentCopy, Info, Check, MoreHoriz, PowerSettingsNew) is in the core set.
+    implementation("org.jetbrains.compose.material:material-icons-core:1.11.1")
 
     // Kyant's actual Liquid Glass backdrop engine. Shared by the nav-bar engine
     // (dev.joseph.hyperbounce.nav.glass) and the toggle/slider engine

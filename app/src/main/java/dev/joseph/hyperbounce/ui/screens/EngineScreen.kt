@@ -11,12 +11,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.joseph.hyperbounce.ui.Destination
 import dev.joseph.hyperbounce.ui.components.DropdownPicker
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
-import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
+import dev.joseph.hyperbounce.ui.components.SettingsNavRow
 import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.state.RenderEngine
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
@@ -28,7 +29,8 @@ fun EngineScreen(
     repository: SettingsRepository,
     colors: HyperBounceColors,
     backdrop: Backdrop,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onNavigate: (Destination) -> Unit
 ) {
     ScreenScaffold(
         title = "Toggles & Sliders",
@@ -38,11 +40,11 @@ fun EngineScreen(
         onBack = onBack
     ) {
         SectionHeader("Rendering Engine", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { cardBackdrop ->
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
             EngineRow(
                 title = "Toggle Switches",
                 colors = colors,
-                backdrop = cardBackdrop,
+                backdrop = backdrop,
                 selected = repository.toggleEngine,
                 onSelect = repository::setToggleEngine
             )
@@ -50,7 +52,7 @@ fun EngineScreen(
             EngineRow(
                 title = "Sliders",
                 colors = colors,
-                backdrop = cardBackdrop,
+                backdrop = backdrop,
                 selected = repository.sliderEngine,
                 onSelect = repository::setSliderEngine
             )
@@ -62,15 +64,13 @@ fun EngineScreen(
             colors
         )
 
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) { cardBackdrop ->
-            SettingsToggleRow(
-                title = "Liquid Glass Keypad",
-                subtitle = "Dialer & lock screen keypad glass effect",
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+            SettingsNavRow(
+                title = "Keypad",
+                subtitle = if (repository.keypadEnabled) "Enabled" else "Disabled",
                 colors = colors,
                 iconTint = colors.accentBlue.copy(alpha = 0.85f),
-                backdrop = cardBackdrop,
-                checked = repository.keypadEnabled,
-                onCheckedChange = repository::setKeypadEnabled,
+                onClick = { onNavigate(Destination.Keypad) },
                 icon = { SlidersIcon(color = Color.White, size = 14.dp) }
             )
         }

@@ -20,6 +20,7 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.FakeLifecycleOwner
+import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 
@@ -29,8 +30,14 @@ class YouTubeHook(
 ) {
     private val isDarkState = mutableStateOf(false)
     private var cachedInsetTargets = intArrayOf()
+    private val hyperBouncePrefs = HyperBouncePrefs(module)
 
     fun onPackageReady() {
+        if (!hyperBouncePrefs.moduleEnabled || !hyperBouncePrefs.appEnabled("youtube")) {
+            module.log(Log.INFO, "HyperBounce", "disabled for YouTube, skipping injection")
+            return
+        }
+
         try {
             module.hook(
                 View::class.java.getDeclaredMethod("dispatchApplyWindowInsets", WindowInsets::class.java)
@@ -189,6 +196,7 @@ class YouTubeHook(
                         externalTabState = tabState,
                         isDarkState = isDarkState,
                         backdropSource = backdropSource,
+                        hyperBouncePrefs = hyperBouncePrefs,
                     )
                 }
             }

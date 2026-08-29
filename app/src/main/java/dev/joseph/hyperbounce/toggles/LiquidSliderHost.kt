@@ -22,10 +22,16 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.FakeLifecycleOwner
+import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
+import dev.joseph.hyperbounce.prefs.rememberLiveGlassFeel
 import dev.joseph.hyperbounce.toggles.glass.LiquidSlider
 import java.util.WeakHashMap
 
 internal object LiquidSliderHost {
+
+    /** Set once from LiquidTogglesHook.onPackageReady() before any slider is hooked. */
+    @JvmStatic
+    var hyperBouncePrefs: HyperBouncePrefs? = null
     private val hosts = WeakHashMap<View, Host>()
 
     @JvmStatic
@@ -173,6 +179,8 @@ internal object LiquidSliderHost {
                                 modifier = Modifier.size(width = targetWidthDp, height = targetHeightDp).graphicsLayer { alpha = alphaValue },
                                 contentAlignment = Alignment.Center
                             ) {
+                                val prefs = hyperBouncePrefs
+                                val feel = if (prefs != null) rememberLiveGlassFeel(prefs, "slider_glass") else null
                                 LiquidSlider(
                                     value = { sliderValue },
                                     onValueChange = { newValue ->
@@ -182,7 +190,14 @@ internal object LiquidSliderHost {
                                     valueRange = sliderMin..sliderMax,
                                     visibilityThreshold = 0.01f,
                                     backdrop = backdrop,
-                                    modifier = Modifier.fillMaxSize()
+                                    modifier = Modifier.fillMaxSize(),
+                                    blurDp = feel?.blurDp ?: 8f,
+                                    lensSizeDp = feel?.lensSizeDp ?: 10f,
+                                    lensDepthDp = feel?.lensDepthDp ?: 14f,
+                                    highlightStrength = feel?.highlightStrength ?: 0.67f,
+                                    shadowRadiusDp = feel?.shadowRadiusDp ?: 4f,
+                                    springDamping = feel?.springDamping ?: 0.7f,
+                                    springStiffness = feel?.springStiffness ?: 800f
                                 )
                             }
                         }

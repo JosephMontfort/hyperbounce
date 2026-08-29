@@ -7,6 +7,8 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.compose.runtime.*
 import androidx.compose.ui.unit.dp
+import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
+import dev.joseph.hyperbounce.prefs.rememberLiveNavBarSettings
 import kotlinx.coroutines.delay
 
 private data class YouTubeTabData(val sourceView: View, val inactiveBitmap: Bitmap?, val activeBitmap: Bitmap?)
@@ -111,8 +113,14 @@ fun YouTubeNavBarHost(
     externalTabState: State<Int>,
     isDarkState: State<Boolean>,
     backdropSource: View,
+    hyperBouncePrefs: HyperBouncePrefs,
 ) {
-    val isDark = isDarkState.value
+    val live = rememberLiveNavBarSettings(hyperBouncePrefs, "youtube")
+    val isDark = when (live.themeMode) {
+        "Light" -> false
+        "Dark" -> true
+        else -> isDarkState.value
+    }
 
     var tabs by remember { mutableStateOf(emptyList<YouTubeTabData>()) }
     var selectedIndex by remember { mutableIntStateOf(0) }
@@ -134,8 +142,8 @@ fun YouTubeNavBarHost(
             delay(500)
         }
     }
-    
-    val accent = if (isDark) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black
+
+    val accent = accentColorFor(live.accent, isDark)
     val profileIndex = if (tabs.isNotEmpty()) tabs.size - 1 else -1
 
     LiquidNavigationBar(
@@ -143,6 +151,11 @@ fun YouTubeNavBarHost(
         tabs = tabs.map { it.inactiveBitmap },
         activeTabs = tabs.map { it.activeBitmap },
         customAccentColor = accent,
+        effectMultiplier = live.glassIntensity,
+        containerAlpha = live.containerOpacity,
+        barHeight = live.barHeight.dp,
+        tabWidth = live.tabWidth.dp,
+        cornerRadius = live.cornerRadius.dp,
         circularIndices = if (profileIndex >= 0) setOf(profileIndex) else emptySet(),
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
@@ -153,4 +166,13 @@ fun YouTubeNavBarHost(
         forceLightTheme = !isDark,
         forceDarkTheme = isDark,
     )
+}
+
+private fun accentColorFor(preset: String, isDark: Boolean): androidx.compose.ui.graphics.Color = when (preset) {
+    "Blue" -> androidx.compose.ui.graphics.Color(0xFF0088FF)
+    "Pink" -> androidx.compose.ui.graphics.Color(0xFFFF2D78)
+    "Purple" -> androidx.compose.ui.graphics.Color(0xFFAF52DE)
+    "Orange" -> androidx.compose.ui.graphics.Color(0xFFFF9500)
+    "Green" -> androidx.compose.ui.graphics.Color(0xFF34C759)
+    else -> if (isDark) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black
 }

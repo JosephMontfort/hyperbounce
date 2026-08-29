@@ -160,13 +160,13 @@ fun InfoIcon(
 fun SlidersIcon(
     modifier: Modifier = Modifier,
     color: Color = Color.White,
-    size: Dp = 22.dp,
-    strokeWidth: Dp = 2f.dp
+    size: Dp = 18.dp,
+    strokeWidth: Dp = 1.8f.dp
 ) {
     Canvas(modifier.size(size)) {
         val w = this.size.width
         val h = this.size.height
-        val rows = listOf(0.25f, 0.5f, 0.75f)
+        val rows = listOf(0.28f, 0.5f, 0.72f)
         val knobs = listOf(0.32f, 0.66f, 0.46f)
         rows.forEachIndexed { i, yFrac ->
             val y = h * yFrac
@@ -195,16 +195,13 @@ fun AppGridIcon(
     Canvas(modifier.size(size)) {
         val w = this.size.width
         val h = this.size.height
-        val cell = minOf(w, h) * 0.31f
-        val gap = minOf(w, h) * 0.11f
-        val group = cell * 2f + gap
-        val startX = (w - group) / 2f
-        val startY = (h - group) / 2f
-        val radius = CornerRadius(cell * 0.22f, cell * 0.22f)
+        val cell = w * 0.34f
+        val gap = w * 0.1f
+        val radius = CornerRadius(w * 0.12f, h * 0.12f)
         for (row in 0..1) {
             for (col in 0..1) {
-                val x = startX + col * (cell + gap)
-                val y = startY + row * (cell + gap)
+                val x = col * (cell + gap)
+                val y = row * (cell + gap)
                 drawRoundRect(
                     color = color,
                     topLeft = Offset(x, y),
@@ -251,8 +248,8 @@ fun PowerIcon(
 fun GearIcon(
     modifier: Modifier = Modifier,
     color: Color = Color.White,
-    size: Dp = 20.dp,
-    strokeWidth: Dp = 1.9.dp
+    size: Dp = 18.dp,
+    strokeWidth: Dp = 1.8.dp
 ) {
     Canvas(modifier.size(size)) {
         val w = this.size.width

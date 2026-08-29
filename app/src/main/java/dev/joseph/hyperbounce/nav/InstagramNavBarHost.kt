@@ -16,6 +16,8 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.FakeLifecycleOwner
+import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
+import dev.joseph.hyperbounce.prefs.rememberLiveNavBarSettings
 import kotlinx.coroutines.delay
 
 private data class InstagramTabData(val resId: Int, val inactiveBitmap: Bitmap?, val activeBitmap: Bitmap?)
@@ -79,8 +81,13 @@ private fun extractInstagramTabs(stockBar: ViewGroup, tabNames: List<String>, is
 }
 
 @Composable
-fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View) {
-    val isDark = isSystemInDarkTheme()
+fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBouncePrefs: HyperBouncePrefs) {
+    val live = rememberLiveNavBarSettings(hyperBouncePrefs, "instagram")
+    val isDark = when (live.themeMode) {
+        "Light" -> false
+        "Dark" -> true
+        else -> isSystemInDarkTheme()
+    }
 
     var selectedIndex by remember { mutableIntStateOf(0) }
     var tabs by remember { mutableStateOf(emptyList<InstagramTabData>()) }
@@ -104,13 +111,20 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View) {
     }
 
     val profileIndex = tabs.indexOfFirst { it.resId == stockBar?.context?.resources?.getIdentifier("profile_tab", "id", stockBar?.context?.packageName) }
-    val accent = if (isDark) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black
+    val accent = accentColorFor(live.accent, isDark)
 
     LiquidNavigationBar(
         bottomPadding = 40.dp,
         tabs = tabs.map { it.inactiveBitmap },
         activeTabs = tabs.map { it.activeBitmap },
         customAccentColor = accent,
+        forceLightTheme = live.themeMode == "Light",
+        forceDarkTheme = live.themeMode == "Dark",
+        effectMultiplier = live.glassIntensity,
+        containerAlpha = live.containerOpacity,
+        cornerRadius = live.cornerRadius.dp,
+        barHeight = live.barHeight.dp,
+        tabWidth = live.tabWidth.dp,
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index
@@ -123,7 +137,16 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View) {
     )
 }
 
-fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: ViewGroup?) {
+private fun accentColorFor(preset: String, isDark: Boolean): androidx.compose.ui.graphics.Color = when (preset) {
+    "Blue" -> androidx.compose.ui.graphics.Color(0xFF0088FF)
+    "Pink" -> androidx.compose.ui.graphics.Color(0xFFFF2D78)
+    "Purple" -> androidx.compose.ui.graphics.Color(0xFFAF52DE)
+    "Orange" -> androidx.compose.ui.graphics.Color(0xFFFF9500)
+    "Green" -> androidx.compose.ui.graphics.Color(0xFF34C759)
+    else -> if (isDark) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black
+}
+
+fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: ViewGroup?, hyperBouncePrefs: HyperBouncePrefs) {
     val decorView = activity.window.decorView as ViewGroup
     if (decorView.findViewWithTag<ComposeView>("LiquidGlassInjected") != null) return
 
@@ -142,7 +165,7 @@ fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: View
                 tag = "LiquidGlassInjected"
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
-                    InstagramNavBarHost(stockBar, mainWrapper)
+                    InstagramNavBarHost(stockBar, mainWrapper, hyperBouncePrefs)
                 }
             }
 
