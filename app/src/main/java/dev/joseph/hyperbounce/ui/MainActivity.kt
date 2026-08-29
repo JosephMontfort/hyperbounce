@@ -26,7 +26,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -43,6 +42,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.glass.LiquidBottomTab
 import dev.joseph.hyperbounce.ui.glass.LiquidBottomTabs
 import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
@@ -221,7 +221,7 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                         tabsCount = 2
                     ) {
                         LiquidBottomTab(onClick = { selectTab(0) }) {
-                            TabIcon(Icons.Filled.Tune)
+                            TabIcon(SlidersIcon)
                             BasicText("Tuning", style = HyperBounceType.caption.copy(color = Color.White))
                         }
                         LiquidBottomTab(onClick = { selectTab(1) }) {

@@ -32,7 +32,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -54,6 +53,8 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dev.joseph.hyperbounce.ui.components.CopyIcon
 import dev.joseph.hyperbounce.ui.components.InfoIcon
 import dev.joseph.hyperbounce.ui.components.MenuRow
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
 import dev.joseph.hyperbounce.ui.components.ResetArrowIcon
 import dev.joseph.hyperbounce.ui.glass.DropdownOverlayHost
 import dev.joseph.hyperbounce.ui.glass.ExpandableGlassMenu
@@ -204,12 +205,18 @@ fun RootScaffold(
                     }
                 },
                 label = {
-                    Image(
-                        imageVector = Icons.Filled.MoreHoriz,
-                        contentDescription = null,
-                        colorFilter = ColorFilter.tint(Color.White),
+                    Canvas(
                         modifier = Modifier.size(22.dp)
-                    )
+                    ) {
+                        val y = size.height / 2f
+                        val r = size.minDimension * 0.075f
+                        val x1 = size.width * 0.25f
+                        val x2 = size.width * 0.50f
+                        val x3 = size.width * 0.75f
+                        drawCircle(Color.White, r, Offset(x1, y))
+                        drawCircle(Color.White, r, Offset(x2, y))
+                        drawCircle(Color.White, r, Offset(x3, y))
+                    }
                 }
             ) { globalTouch, closeMenuFromRow, hoveredIndex, setHovered ->
                 MenuRow(
