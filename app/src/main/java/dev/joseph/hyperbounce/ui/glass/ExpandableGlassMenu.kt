@@ -426,9 +426,9 @@ fun GlassEffectContainer(
                         lens(refractionHeight.dp.toPx(), refractionAmount.dp.toPx(), depthEffect = true, chromaticAberration = chromaticAberration)
                     }
                 },
-                highlight = { if (isGlassEnabled) Highlight.Default.copy(alpha = 0.65f) else null },
+                highlight = { if (isGlassEnabled) Highlight.Ambient.copy(alpha = 0.65f) else null },
                 shadow = { Shadow(radius = 18f.dp, color = Color.Black.copy(alpha = 0.12f)) },
-                innerShadow = { if (isGlassEnabled) InnerShadow(radius = 10f.dp, color = Color.White.copy(alpha = 0.25f)) else null },
+                innerShadow = { null },
                 onDrawSurface = {
                     val progress = animatableProgress.value
                     val cr = cornerRadius.toPx()

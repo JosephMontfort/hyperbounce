@@ -22,37 +22,6 @@ import androidx.compose.ui.graphics.Color
 @Composable
 fun HyperBounceBackground(colors: HyperBounceColors, modifier: Modifier = Modifier) {
     Canvas(modifier.fillMaxSize()) {
-        val w = size.width
-        val h = size.height
-
-        val top: Color
-        val bottom: Color
-        val glow: Color
-        if (colors.isDark) {
-            top = Color(0xFF0B0B0D)
-            bottom = Color(0xFF1C1C1F)
-            glow = Color(0xFF3A3A3F)
-        } else {
-            top = Color(0xFFF9F9FB)
-            bottom = Color(0xFFE9E9ED)
-            glow = Color.White
-        }
-
-        drawRect(brush = Brush.verticalGradient(listOf(top, bottom)))
-
-        drawRect(
-            brush = Brush.radialGradient(
-                colors = listOf(glow.copy(alpha = if (colors.isDark) 0.22f else 0.55f), glow.copy(alpha = 0f)),
-                center = Offset(w * 0.22f, h * 0.06f),
-                radius = w * 0.9f
-            )
-        )
-        drawRect(
-            brush = Brush.radialGradient(
-                colors = listOf(glow.copy(alpha = if (colors.isDark) 0.12f else 0.3f), glow.copy(alpha = 0f)),
-                center = Offset(w * 0.85f, h * 0.75f),
-                radius = w * 0.8f
-            )
-        )
+        drawRect(color = colors.background)
     }
 }

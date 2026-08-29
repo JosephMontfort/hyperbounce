@@ -26,42 +26,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.shadow.Shadow
-import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
 
 @Composable
 fun GlassCard(
     backdrop: Backdrop,
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 18.dp,
+    cornerRadius: Dp = 10.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val glass = LocalGlassSettings.current
     val isDark = isSystemInDarkTheme()
     val shape = RoundedCornerShape(cornerRadius)
+    val cardColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+    
     Column(
         modifier
             .fillMaxWidth()
-            .then(
-                if (glass.enabled) {
-                    Modifier.drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { shape },
-                        effects = {
-                            vibrancy()
-                            blur((glass.blurDp / 4f).dp.toPx())
-                        },
-                        highlight = { Highlight.Ambient },
-                        shadow = { Shadow(radius = 6f.dp, color = Color.Black.copy(alpha = 0.08f)) }
-                    )
-                } else {
-                    Modifier.background(if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.55f))
-                }
-            )
+            .background(cardColor, shape)
             .clip(shape),
         content = content
     )

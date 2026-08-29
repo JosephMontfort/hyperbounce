@@ -122,50 +122,53 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                 HyperBounceBackground(colors, Modifier.fillMaxSize())
             }
 
-            if (atRoot) {
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxSize()
-                ) { page ->
-                    when (page) {
-                        0 -> TuningScreen(
-                            repository = repository,
-                            colors = colors,
-                            backdrop = backdrop,
-                            onNavigate = push
-                        )
-
-                        else -> SettingsScreen(
-                            repository = repository,
-                            colors = colors,
-                            backdrop = backdrop,
-                            onNavigate = push
-                        )
+            // Root is considered null in the backStack, or we can just use the current top of stack
+            val currentDestination = backStack.lastOrNull()
+            
+            AnimatedContent(
+                targetState = currentDestination,
+                modifier = Modifier.fillMaxSize(),
+                transitionSpec = {
+                    val forwardSpring = spring<androidx.compose.ui.unit.IntOffset>(
+                        dampingRatio = 0.88f,
+                        stiffness = 340f
+                    )
+                    if (isPush) {
+                        (slideInHorizontally(forwardSpring) { fullWidth -> fullWidth } + fadeIn())
+                            .togetherWith(
+                                slideOutHorizontally(forwardSpring) { fullWidth -> -fullWidth / 5 } + fadeOut()
+                            )
+                    } else {
+                        (slideInHorizontally(forwardSpring) { fullWidth -> -fullWidth / 5 } + fadeIn())
+                            .togetherWith(
+                                slideOutHorizontally(forwardSpring) { fullWidth -> fullWidth } + fadeOut()
+                            )
                     }
-                }
-            } else {
-                AnimatedContent(
-                    targetState = backStack.last(),
-                    modifier = Modifier.fillMaxSize(),
-                    transitionSpec = {
-                        val forwardSpring = spring<androidx.compose.ui.unit.IntOffset>(
-                            dampingRatio = 0.88f,
-                            stiffness = 340f
-                        )
-                        if (isPush) {
-                            (slideInHorizontally(forwardSpring) { fullWidth -> fullWidth } + fadeIn())
-                                .togetherWith(
-                                    slideOutHorizontally(forwardSpring) { fullWidth -> -fullWidth / 5 } + fadeOut()
-                                )
-                        } else {
-                            (slideInHorizontally(forwardSpring) { fullWidth -> -fullWidth / 5 } + fadeIn())
-                                .togetherWith(
-                                    slideOutHorizontally(forwardSpring) { fullWidth -> fullWidth } + fadeOut()
-                                )
+                },
+                label = "screenTransition"
+            ) { destination ->
+                if (destination == null) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize()
+                    ) { page ->
+                        when (page) {
+                            0 -> TuningScreen(
+                                repository = repository,
+                                colors = colors,
+                                backdrop = backdrop,
+                                onNavigate = push
+                            )
+
+                            else -> SettingsScreen(
+                                repository = repository,
+                                colors = colors,
+                                backdrop = backdrop,
+                                onNavigate = push
+                            )
                         }
-                    },
-                    label = "screenTransition"
-                ) { destination ->
+                    }
+                } else {
                     when (destination) {
                         is Destination.AppDetail -> AppDetailScreen(
                             app = destination.app,
