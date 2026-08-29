@@ -20,7 +20,11 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawPlainBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.runtimeShaderEffect
-
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.background
+import androidx.compose.ui.Alignment
 @Composable
 fun ProgressiveBlurHeader(
     backdrop: Backdrop,
@@ -59,12 +63,12 @@ half4 main(float2 coord) {
             )
         )
         // Thin bottom separator
-        androidx.compose.foundation.layout.Spacer(
+        Spacer(
             Modifier
-                .androidx.compose.foundation.layout.fillMaxWidth()
-                .androidx.compose.foundation.layout.height(0.33.dp)
-                .androidx.compose.foundation.background(Color.Gray.copy(alpha = 0.3f))
-                .align(androidx.compose.ui.Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(0.33.dp)
+                .background(Color.Gray.copy(alpha = 0.3f))
+                .align(Alignment.BottomCenter)
         )
     }
 }
