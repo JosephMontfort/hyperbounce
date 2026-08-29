@@ -97,7 +97,7 @@ private fun AppIcon(app: NavApp) {
     var bitmap by remember(app) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     
     LaunchedEffect(app) {
-        kotlinx.coroutines.Dispatchers.IO.invoke {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 val drawable = pm.getApplicationIcon(app.packageName)
                 val bmp = if (drawable is android.graphics.drawable.BitmapDrawable) {

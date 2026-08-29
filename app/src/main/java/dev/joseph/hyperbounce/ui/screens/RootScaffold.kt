@@ -210,7 +210,7 @@ fun RootScaffold(
                         2 -> onAbout()
                     }
                 },
-                buttonContent = {
+                label = {
                     Canvas(
                         modifier = Modifier.size(22.dp)
                     ) {
