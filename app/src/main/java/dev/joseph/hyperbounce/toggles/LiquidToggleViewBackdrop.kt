@@ -121,47 +121,32 @@ internal class LiquidToggleViewBackdrop(private val targetView: View) : Backdrop
             targetBmp.eraseColor(surfaceColor)
 
             val canvas = Canvas(targetBmp)
-            canvas.save()
             canvas.clipRect(0, 0, capWidth, capHeight)
 
-            val rootLeftInCapture = rootLoc[0] - capWindowX
-            val rootTopInCapture = rootLoc[1] - capWindowY
-            canvas.translate(rootLeftInCapture.toFloat(), rootTopInCapture.toFloat())
-
-            // Punch out target view region
-            val targetLeftInRoot = targetLoc[0] - rootLoc[0]
-            val targetTopInRoot = targetLoc[1] - rootLoc[1]
-            canvas.clipOutRect(
-                targetLeftInRoot.toFloat(),
-                targetTopInRoot.toFloat(),
-                (targetLeftInRoot + targetView.width).toFloat(),
-                (targetTopInRoot + targetView.height).toFloat()
-            )
-
-            // Punch out overlay region and set alpha to 0 to prevent OverlayViewGroup from drawing it
-            val overlay = overlayViewToHide
-            val oldAlpha = overlay?.alpha ?: 1f
-            if (overlay != null) {
-                val overlayLoc = IntArray(2)
-                overlay.getLocationInWindow(overlayLoc)
-                val overlayLeftInRoot = overlayLoc[0] - rootLoc[0]
-                val overlayTopInRoot = overlayLoc[1] - rootLoc[1]
-                canvas.clipOutRect(
-                    overlayLeftInRoot.toFloat(),
-                    overlayTopInRoot.toFloat(),
-                    (overlayLeftInRoot + overlay.width).toFloat(),
-                    (overlayTopInRoot + overlay.height).toFloat()
-                )
-                overlay.alpha = 0f
+            // Collect ancestor views from targetView up to DecorView
+            val ancestors = mutableListOf<View>()
+            var p: View? = targetView.parent as? View
+            while (p != null) {
+                ancestors.add(p)
+                val name = p.javaClass.name
+                if (name.contains("DecorView") || p.id == android.R.id.content) break
+                p = p.parent as? View
             }
 
-            root.draw(canvas)
+            // Draw ancestor background drawables from outermost (DecorView/Card) to innermost (Row)
+            for (i in ancestors.indices.reversed()) {
+                val ancestor = ancestors[i]
+                val bg = ancestor.background ?: continue
+                val aLoc = IntArray(2)
+                ancestor.getLocationInWindow(aLoc)
+                val aLeftInCap = aLoc[0] - capWindowX
+                val aTopInCap = aLoc[1] - capWindowY
 
-            if (overlay != null) {
-                overlay.alpha = oldAlpha
+                canvas.save()
+                canvas.translate(aLeftInCap.toFloat(), aTopInCap.toFloat())
+                bg.draw(canvas)
+                canvas.restore()
             }
-
-            canvas.restore()
 
             val previousFront = front
             front = targetBmp
