@@ -17,6 +17,7 @@ package dev.joseph.hyperbounce.ui.components
 
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -88,7 +89,7 @@ fun CircularGlassBackButton(
                 Modifier
                     .clip(CircleShape)
                     .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF1C1C1E) else Color(0xFFFFFFFF))
-                    .androidx.compose.foundation.border(0.5.dp, Color.Gray.copy(alpha = 0.3f), CircleShape)
+                    .border(0.5.dp, Color.Gray.copy(alpha = 0.3f), CircleShape)
                     .graphicsLayer(block = jellyLayerBlock)
             )
             .clickable(
