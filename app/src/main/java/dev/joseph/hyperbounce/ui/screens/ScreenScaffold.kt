@@ -76,6 +76,7 @@ fun ScreenScaffold(
     onRestartApp: (() -> Unit)? = null,
     content: LazyListScope.(contentBackdrop: Backdrop) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val lazyListState = rememberLazyListState()
     val collapseProgress by remember {
         derivedStateOf {

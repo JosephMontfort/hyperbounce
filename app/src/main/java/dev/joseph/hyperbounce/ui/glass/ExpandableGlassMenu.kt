@@ -448,7 +448,7 @@ fun GlassEffectContainer(
         dialogMeasuredSize.height
     } else with(density) { 210.dp.toPx() }
 
-    val animatedRadius = lerp(cornerRadius, 32.dp, dialogProgress)
+    val animatedRadius = (cornerRadius.value + (32f - cornerRadius.value) * dialogProgress).dp
 
     Box(
         modifier = modifier
@@ -564,7 +564,7 @@ fun GlassEffectContainer(
                 shadow = {
                     val dp = dialogProgress
                     Shadow(
-                        radius = lerp(24f.dp, 36f.dp, dp),
+                        radius = (24f + 12f * dp).dp,
                         color = Color.Black.copy(alpha = lerp(0.25f, 0.40f, dp))
                     )
                 },
