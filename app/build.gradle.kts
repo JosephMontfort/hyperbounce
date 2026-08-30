@@ -47,7 +47,6 @@ android {
 }
 
 dependencies {
-    compileOnly("androidx.recyclerview:recyclerview:1.3.2")
     // Merge note: both branches compiled against the same io.github.libxposed:api:102.0.0
     // artifact, but fetched it differently (floating-nav via the api.xposed.info Maven repo,
     // liquid-toggles via a vendored local AAR). We standardize on the local AAR: it's the

@@ -12,7 +12,9 @@ sealed interface Destination {
     data object AppsList : Destination
     data class AppDetail(val app: NavApp) : Destination
     data object Engine : Destination
+    data object LockScreenSheet : Destination
     data object Keypad : Destination
-    data object Diagnostics : Destination
+    data object KeypadDelays : Destination
     data object About : Destination
 }
+

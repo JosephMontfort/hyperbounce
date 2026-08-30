@@ -28,6 +28,20 @@ class PhysicsHook : XposedModule() {
 
                 param.packageName == "com.google.android.youtube" ->
                     YouTubeHook(this, param).onPackageReady()
+
+                param.packageName == "com.android.systemui" -> {
+                    try {
+                        val prefs = getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
+                        dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
+                        prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                            dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
+                        }
+                    } catch (t: Throwable) {
+                        Log.e("HyperBounce", "Failed to bind remote preferences in SystemUI", t)
+                    }
+                    dev.joseph.hyperbounce.lockscreen.LockScreenSheetHook.init(this, param.classLoader)
+                    dev.joseph.hyperbounce.lockscreen.KeypadPhysicsHook.init(this, param.classLoader)
+                }
             }
         } catch (t: Throwable) {
             Log.e("HyperBounce", "PhysicsHook failed for ${param.packageName}, leaving stock UI untouched", t)

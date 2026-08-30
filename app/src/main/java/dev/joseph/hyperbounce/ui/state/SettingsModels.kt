@@ -102,3 +102,59 @@ data class GlobalGlassSettings(
     val chromaticAberration: Boolean = false,
     val hapticsEnabled: Boolean = true
 )
+
+/** Feature 1: Lock Screen Sheet & 4-Sided AGSL Liquid Glass Refraction Settings */
+data class LockScreenSheetSettings(
+    val enabled: Boolean = true,
+    val borderWidth: Float = 2.5f,
+    val borderAlpha: Float = 0.47f,
+    val refractionHeight: Float = 24.0f,
+    val refractionAmount: Float = 32.0f,
+    val depthEffect: Float = 0.12f,
+    val pillWidth: Float = 156.0f,
+    val pillHeight: Float = 6.0f,
+    val pillBottomMargin: Float = 9.0f,
+    val lipHeight: Float = 28.0f
+)
+
+/** Feature 2: Fluid iOS PIN Pad Geometry & Jelly Squish Engine Settings */
+data class LockScreenKeypadSettings(
+    val enabled: Boolean = true,
+    val circleDiameter: Float = 82.0f,
+    val fillAlpha: Float = 0.20f,
+    val strokeWidth: Float = 1.5f,
+    val strokeAlpha: Float = 0.47f,
+    val showKlondike: Boolean = false,
+    val digitTextSize: Float = 36.0f,
+    val row0Offset: Float = -115.0f,
+    val row1Offset: Float = -90.0f,
+    val row2Offset: Float = -60.0f,
+    val row3Offset: Float = -30.0f,
+    val tapSquishScale: Float = 0.88f,
+    val releasePlunge: Float = 0.10f,
+    val jellyMaxStretch: Float = 0.16f,
+    val jellyElasticLimit: Float = 0.40f,
+    val springStiffness: Float = 50.0f,
+    val springDamping: Float = 5.5f,
+    val pressGlowAlpha: Float = 0.35f,
+    val glowRadius: Float = 1.4f,
+    val entryTranslationY: Float = 90.0f,
+    val entryInitialScale: Float = 0.50f,
+    val entryDuration: Float = 420.0f,
+    val rowDelayStep: Float = 55.0f,
+    val colDelayStep: Float = 25.0f,
+    val entryOvershoot: Float = 1.8f,
+    val delayKey1: Float = -1f,
+    val delayKey2: Float = -1f,
+    val delayKey3: Float = -1f,
+    val delayKey4: Float = -1f,
+    val delayKey5: Float = -1f,
+    val delayKey6: Float = -1f,
+    val delayKey7: Float = -1f,
+    val delayKey8: Float = -1f,
+    val delayKey9: Float = -1f,
+    val delayKey0: Float = -1f,
+    val delayEmergency: Float = -1f,
+    val delayCancel: Float = -1f
+)
+

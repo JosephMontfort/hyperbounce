@@ -70,21 +70,21 @@ fun TuningScreen(
             )
             RowDivider(colors.separator)
             SettingsNavRow(
-                title = "Lock Screen",
-                subtitle = if (repository.keypadEnabled) "Glass Pinpad" else "Off",
+                title = "Lock Screen Sheet",
+                subtitle = if (repository.lockScreenSheet.enabled) "4-Sided AGSL Refraction" else "Off",
                 colors = colors,
-                iconTint = colors.accentBlue,
-                onClick = { onNavigate(Destination.Keypad) },
+                iconTint = colors.accentPink,
+                onClick = { onNavigate(Destination.LockScreenSheet) },
                 icon = { dev.joseph.hyperbounce.ui.components.LockIcon(color = Color.White, size = 15.dp) }
             )
             RowDivider(colors.separator)
             SettingsNavRow(
-                title = "System Diagnostics",
-                subtitle = "Control Center & Lockscreen overrides",
+                title = "PIN Pad Physics",
+                subtitle = if (repository.lockScreenKeypad.enabled) "Fluid iOS Geometry & Jelly Squish" else "Off",
                 colors = colors,
-                iconTint = colors.accentGreen,
-                onClick = { onNavigate(Destination.Diagnostics) },
-                icon = { dev.joseph.hyperbounce.ui.components.InfoIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
+                iconTint = colors.accentBlue,
+                onClick = { onNavigate(Destination.Keypad) },
+                icon = { dev.joseph.hyperbounce.ui.components.SlidersIcon(color = Color.White, size = 15.dp) }
             )
         }
         SectionFooter(

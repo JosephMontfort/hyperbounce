@@ -26,7 +26,6 @@ package dev.joseph.hyperbounce.ui.state
 
 import android.content.Context
 import android.content.SharedPreferences
-import org.json.JSONObject
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -89,25 +88,28 @@ class SettingsRepository(context: Context) {
     val sliderGlass = GlassFeelHolder("slider_glass", EngineSettings().sliderGlass)
 
     val globalGlass = GlobalGlassHolder()
+    val lockScreenSheet = LockScreenSheetHolder()
+    val lockScreenKeypad = LockScreenKeypadHolder()
 
-    @JvmName("setModuleEnabledPrefPref")
+    @JvmName("setModuleEnabledPref")
     fun setModuleEnabled(value: Boolean) {
         moduleEnabled = value
     }
 
-    @JvmName("setToggleEnginePrefPref")
+    @JvmName("setToggleEnginePref")
     fun setToggleEngine(value: RenderEngine) {
         toggleEngine = value
     }
 
-    @JvmName("setSliderEnginePrefPref")
+    @JvmName("setSliderEnginePref")
     fun setSliderEngine(value: RenderEngine) {
         sliderEngine = value
     }
 
-    @JvmName("setKeypadEnabledPrefPref")
+    @JvmName("setKeypadEnabledPref")
     fun setKeypadEnabled(value: Boolean) {
         keypadEnabled = value
+        lockScreenKeypad.setEnabled(value)
     }
 
     /** Clears every stored key, restoring every field to the defaults in SettingsModels.kt. */
@@ -119,94 +121,13 @@ class SettingsRepository(context: Context) {
         toggleGlass.reloadFromDefaults()
         sliderGlass.reloadFromDefaults()
         globalGlass.reloadFromDefaults()
+        lockScreenSheet.reloadFromDefaults()
+        lockScreenKeypad.reloadFromDefaults()
         moduleEnabled = true
         toggleEngine = RenderEngine.LiquidGlass
         sliderEngine = RenderEngine.LiquidGlass
         keypadEnabled = true
     }
-
-
-    // Diagnostics Primitive Delegates
-    var ccLowEndAnim by prefsBooleanState("diag_ccLowEndAnim", false); private set
-    @JvmName("setCcLowEndAnimPref") fun setCcLowEndAnim(v: Boolean) { ccLowEndAnim = v }
-
-    var ccAnimEnabled by prefsBooleanState("diag_ccAnimEnabled", true); private set
-    @JvmName("setCcAnimEnabledPref") fun setCcAnimEnabled(v: Boolean) { ccAnimEnabled = v }
-
-    var ccModularEditEnabled by prefsBooleanState("diag_ccModularEditEnabled", true); private set
-    @JvmName("setCcModularEditEnabledPref") fun setCcModularEditEnabled(v: Boolean) { ccModularEditEnabled = v }
-
-    var ccJellyEnabled by prefsBooleanState("diag_ccJellyEnabled", false); private set
-    @JvmName("setCcJellyEnabledPref") fun setCcJellyEnabled(v: Boolean) { ccJellyEnabled = v }
-
-    var lockCardBorderWidth by prefsFloatState("diag_lockCardBorderWidth", 1.0f); private set
-    @JvmName("setLockCardBorderWidthPref") fun setLockCardBorderWidth(v: Float) { lockCardBorderWidth = v }
-
-    var lockCardBorderAlpha by prefsFloatState("diag_lockCardBorderAlpha", 0.1f); private set
-    @JvmName("setLockCardBorderAlphaPref") fun setLockCardBorderAlpha(v: Float) { lockCardBorderAlpha = v }
-
-    var lockCardRefractionHeight by prefsFloatState("diag_lockCardRefractionHeight", 10.0f); private set
-    @JvmName("setLockCardRefractionHeightPref") fun setLockCardRefractionHeight(v: Float) { lockCardRefractionHeight = v }
-
-    var lockCardRefractionAmount by prefsFloatState("diag_lockCardRefractionAmount", 16.0f); private set
-    @JvmName("setLockCardRefractionAmountPref") fun setLockCardRefractionAmount(v: Float) { lockCardRefractionAmount = v }
-
-    var lockCardDepthEffect by prefsFloatState("diag_lockCardDepthEffect", 0.5f); private set
-    @JvmName("setLockCardDepthEffectPref") fun setLockCardDepthEffect(v: Float) { lockCardDepthEffect = v }
-
-    var lockPillWidth by prefsFloatState("diag_lockPillWidth", 40.0f); private set
-    @JvmName("setLockPillWidthPref") fun setLockPillWidth(v: Float) { lockPillWidth = v }
-
-    var lockPillHeight by prefsFloatState("diag_lockPillHeight", 2.0f); private set
-    @JvmName("setLockPillHeightPref") fun setLockPillHeight(v: Float) { lockPillHeight = v }
-
-    var lockPillBottomMargin by prefsFloatState("diag_lockPillBottomMargin", 9.0f); private set
-    @JvmName("setLockPillBottomMarginPref") fun setLockPillBottomMargin(v: Float) { lockPillBottomMargin = v }
-
-    var lockLipHeight by prefsFloatState("diag_lockLipHeight", 10.0f); private set
-    @JvmName("setLockLipHeightPref") fun setLockLipHeight(v: Float) { lockLipHeight = v }
-
-    var pinDigitTextSize by prefsFloatState("diag_pinDigitTextSize", 28.0f); private set
-    @JvmName("setPinDigitTextSizePref") fun setPinDigitTextSize(v: Float) { pinDigitTextSize = v }
-
-    var pinRow1Offset by prefsFloatState("diag_pinRow1Offset", 0.0f); private set
-    @JvmName("setPinRow1OffsetPref") fun setPinRow1Offset(v: Float) { pinRow1Offset = v }
-
-    var pinRow2Offset by prefsFloatState("diag_pinRow2Offset", 0.0f); private set
-    @JvmName("setPinRow2OffsetPref") fun setPinRow2Offset(v: Float) { pinRow2Offset = v }
-
-    var pinRow3Offset by prefsFloatState("diag_pinRow3Offset", 0.0f); private set
-    @JvmName("setPinRow3OffsetPref") fun setPinRow3Offset(v: Float) { pinRow3Offset = v }
-
-    var pinRow0Offset by prefsFloatState("diag_pinRow0Offset", 0.0f); private set
-    @JvmName("setPinRow0OffsetPref") fun setPinRow0Offset(v: Float) { pinRow0Offset = v }
-
-    var pinTapSquishScale by prefsFloatState("diag_pinTapSquishScale", 0.85f); private set
-    @JvmName("setPinTapSquishScalePref") fun setPinTapSquishScale(v: Float) { pinTapSquishScale = v }
-
-    var pinReleasePlunge by prefsFloatState("diag_pinReleasePlunge", 0.95f); private set
-    @JvmName("setPinReleasePlungePref") fun setPinReleasePlunge(v: Float) { pinReleasePlunge = v }
-
-    var pinShowKlondike by prefsBooleanState("diag_pinShowKlondike", true); private set
-    @JvmName("setPinShowKlondikePref") fun setPinShowKlondike(v: Boolean) { pinShowKlondike = v }
-
-    var pinEntryTranslationY by prefsFloatState("diag_pinEntryTranslationY", 100.0f); private set
-    @JvmName("setPinEntryTranslationYPref") fun setPinEntryTranslationY(v: Float) { pinEntryTranslationY = v }
-
-    var pinEntryInitialScale by prefsFloatState("diag_pinEntryInitialScale", 0.8f); private set
-    @JvmName("setPinEntryInitialScalePref") fun setPinEntryInitialScale(v: Float) { pinEntryInitialScale = v }
-
-    var pinEntryDuration by prefsFloatState("diag_pinEntryDuration", 500.0f); private set
-    @JvmName("setPinEntryDurationPref") fun setPinEntryDuration(v: Float) { pinEntryDuration = v }
-
-    var pinRowDelayStep by prefsFloatState("diag_pinRowDelayStep", 50.0f); private set
-    @JvmName("setPinRowDelayStepPref") fun setPinRowDelayStep(v: Float) { pinRowDelayStep = v }
-
-    var pinColDelayStep by prefsFloatState("diag_pinColDelayStep", 20.0f); private set
-    @JvmName("setPinColDelayStepPref") fun setPinColDelayStep(v: Float) { pinColDelayStep = v }
-
-    var pinEntryOvershoot by prefsFloatState("diag_pinEntryOvershoot", 1.1f); private set
-    @JvmName("setPinEntryOvershootPref") fun setPinEntryOvershoot(v: Float) { pinEntryOvershoot = v }
 
     // --- per-app nav bar settings -------------------------------------------------------
 
@@ -243,21 +164,21 @@ class SettingsRepository(context: Context) {
             enabled, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, themeMode, accent
         )
 
-        @JvmName("setEnabledPrefPref")
+        @JvmName("setEnabledPref")
         fun setEnabled(v: Boolean) { enabled = v }
-        @JvmName("setGlassIntensityPrefPref")
+        @JvmName("setGlassIntensityPref")
         fun setGlassIntensity(v: Float) { glassIntensity = v }
-        @JvmName("setContainerOpacityPrefPref")
+        @JvmName("setContainerOpacityPref")
         fun setContainerOpacity(v: Float) { containerOpacity = v }
-        @JvmName("setCornerRadiusPrefPref")
+        @JvmName("setCornerRadiusPref")
         fun setCornerRadius(v: Float) { cornerRadius = v }
-        @JvmName("setBarHeightPrefPref")
+        @JvmName("setBarHeightPref")
         fun setBarHeight(v: Float) { barHeight = v }
-        @JvmName("setTabWidthPrefPref")
+        @JvmName("setTabWidthPref")
         fun setTabWidth(v: Float) { tabWidth = v }
-        @JvmName("setThemeModePrefPref")
+        @JvmName("setThemeModePref")
         fun setThemeMode(v: ThemeMode) { themeMode = v }
-        @JvmName("setAccentPrefPref")
+        @JvmName("setAccentPref")
         fun setAccent(v: AccentPreset) { accent = v }
 
         fun reloadFromDefaults() {
@@ -297,21 +218,21 @@ class SettingsRepository(context: Context) {
             dragSensitivity, springDamping, springStiffness
         )
 
-        @JvmName("setBlurDpPrefPref")
+        @JvmName("setBlurDpPref")
         fun setBlurDp(v: Float) { blurDp = v }
-        @JvmName("setLensSizeDpPrefPref")
+        @JvmName("setLensSizeDpPref")
         fun setLensSizeDp(v: Float) { lensSizeDp = v }
-        @JvmName("setLensDepthDpPrefPref")
+        @JvmName("setLensDepthDpPref")
         fun setLensDepthDp(v: Float) { lensDepthDp = v }
-        @JvmName("setHighlightStrengthPrefPref")
+        @JvmName("setHighlightStrengthPref")
         fun setHighlightStrength(v: Float) { highlightStrength = v }
-        @JvmName("setShadowRadiusDpPrefPref")
+        @JvmName("setShadowRadiusDpPref")
         fun setShadowRadiusDp(v: Float) { shadowRadiusDp = v }
-        @JvmName("setDragSensitivityPrefPref")
+        @JvmName("setDragSensitivityPref")
         fun setDragSensitivity(v: Float) { dragSensitivity = v }
-        @JvmName("setSpringDampingPrefPref")
+        @JvmName("setSpringDampingPref")
         fun setSpringDamping(v: Float) { springDamping = v }
-        @JvmName("setSpringStiffnessPrefPref")
+        @JvmName("setSpringStiffnessPref")
         fun setSpringStiffness(v: Float) { springStiffness = v }
 
         fun reloadFromDefaults() {
@@ -348,17 +269,17 @@ class SettingsRepository(context: Context) {
             enabled, blurDp, refractionHeightDp, refractionAmountDp, chromaticAberration, hapticsEnabled
         )
 
-        @JvmName("setEnabledPrefPref")
+        @JvmName("setEnabledPref")
         fun setEnabled(v: Boolean) { enabled = v }
-        @JvmName("setBlurDpPrefPref")
+        @JvmName("setBlurDpPref")
         fun setBlurDp(v: Float) { blurDp = v }
-        @JvmName("setRefractionHeightDpPrefPref")
+        @JvmName("setRefractionHeightDpPref")
         fun setRefractionHeightDp(v: Float) { refractionHeightDp = v }
-        @JvmName("setRefractionAmountDpPrefPref")
+        @JvmName("setRefractionAmountDpPref")
         fun setRefractionAmountDp(v: Float) { refractionAmountDp = v }
-        @JvmName("setChromaticAberrationPrefPref")
+        @JvmName("setChromaticAberrationPref")
         fun setChromaticAberration(v: Boolean) { chromaticAberration = v }
-        @JvmName("setHapticsEnabledPrefPref")
+        @JvmName("setHapticsEnabledPref")
         fun setHapticsEnabled(v: Boolean) { hapticsEnabled = v }
 
         fun reloadFromDefaults() {
@@ -370,6 +291,186 @@ class SettingsRepository(context: Context) {
             hapticsEnabled = defaults.hapticsEnabled
         }
     }
+
+    // --- lock screen sheet settings (Feature 1) -------------------------------------------
+
+    inner class LockScreenSheetHolder {
+        private val defaults = LockScreenSheetSettings()
+
+        var enabled by prefsBooleanState("lock_sheet_enabled", defaults.enabled); private set
+        var borderWidth by prefsFloatState("lock_card_border_width", defaults.borderWidth); private set
+        var borderAlpha by prefsFloatState("lock_card_border_alpha", defaults.borderAlpha); private set
+        var refractionHeight by prefsFloatState("lock_card_refraction_height", defaults.refractionHeight); private set
+        var refractionAmount by prefsFloatState("lock_card_refraction_amount", defaults.refractionAmount); private set
+        var depthEffect by prefsFloatState("lock_card_depth_effect", defaults.depthEffect); private set
+        var pillWidth by prefsFloatState("lock_pill_width", defaults.pillWidth); private set
+        var pillHeight by prefsFloatState("lock_pill_height", defaults.pillHeight); private set
+        var pillBottomMargin by prefsFloatState("lock_pill_bottom_margin", defaults.pillBottomMargin); private set
+        var lipHeight by prefsFloatState("lock_lip_height", defaults.lipHeight); private set
+
+        fun snapshot(): LockScreenSheetSettings = LockScreenSheetSettings(
+            enabled, borderWidth, borderAlpha, refractionHeight, refractionAmount, depthEffect,
+            pillWidth, pillHeight, pillBottomMargin, lipHeight
+        )
+
+        @JvmName("setSheetEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
+        @JvmName("setSheetBorderWidthPref") fun setBorderWidth(v: Float) { borderWidth = v }
+        @JvmName("setSheetBorderAlphaPref") fun setBorderAlpha(v: Float) { borderAlpha = v }
+        @JvmName("setSheetRefractionHeightPref") fun setRefractionHeight(v: Float) { refractionHeight = v }
+        @JvmName("setSheetRefractionAmountPref") fun setRefractionAmount(v: Float) { refractionAmount = v }
+        @JvmName("setSheetDepthEffectPref") fun setDepthEffect(v: Float) { depthEffect = v }
+        @JvmName("setSheetPillWidthPref") fun setPillWidth(v: Float) { pillWidth = v }
+        @JvmName("setSheetPillHeightPref") fun setPillHeight(v: Float) { pillHeight = v }
+        @JvmName("setSheetPillBottomMarginPref") fun setPillBottomMargin(v: Float) { pillBottomMargin = v }
+        @JvmName("setSheetLipHeightPref") fun setLipHeight(v: Float) { lipHeight = v }
+
+        fun reloadFromDefaults() {
+            enabled = defaults.enabled
+            borderWidth = defaults.borderWidth
+            borderAlpha = defaults.borderAlpha
+            refractionHeight = defaults.refractionHeight
+            refractionAmount = defaults.refractionAmount
+            depthEffect = defaults.depthEffect
+            pillWidth = defaults.pillWidth
+            pillHeight = defaults.pillHeight
+            pillBottomMargin = defaults.pillBottomMargin
+            lipHeight = defaults.lipHeight
+        }
+    }
+
+    // --- lock screen keypad physics settings (Feature 2) ----------------------------------
+
+    inner class LockScreenKeypadHolder {
+        private val defaults = LockScreenKeypadSettings()
+
+        var enabled by prefsBooleanState("engine_keypad_enabled", defaults.enabled); private set
+        var circleDiameter by prefsFloatState("pin_circle_diameter", defaults.circleDiameter); private set
+        var fillAlpha by prefsFloatState("pin_circle_fill_alpha", defaults.fillAlpha); private set
+        var strokeWidth by prefsFloatState("pin_circle_stroke_width", defaults.strokeWidth); private set
+        var strokeAlpha by prefsFloatState("pin_circle_stroke_alpha", defaults.strokeAlpha); private set
+        var showKlondike by prefsBooleanState("pin_show_klondike", defaults.showKlondike); private set
+        var digitTextSize by prefsFloatState("pin_digit_text_size", defaults.digitTextSize); private set
+        var row0Offset by prefsFloatState("pin_row0_offset", defaults.row0Offset); private set
+        var row1Offset by prefsFloatState("pin_row1_offset", defaults.row1Offset); private set
+        var row2Offset by prefsFloatState("pin_row2_offset", defaults.row2Offset); private set
+        var row3Offset by prefsFloatState("pin_row3_offset", defaults.row3Offset); private set
+        var tapSquishScale by prefsFloatState("pin_tap_squish_scale", defaults.tapSquishScale); private set
+        var releasePlunge by prefsFloatState("pin_release_plunge", defaults.releasePlunge); private set
+        var jellyMaxStretch by prefsFloatState("pin_jelly_max_stretch", defaults.jellyMaxStretch); private set
+        var jellyElasticLimit by prefsFloatState("pin_jelly_elastic_limit", defaults.jellyElasticLimit); private set
+        var springStiffness by prefsFloatState("pin_spring_stiffness", defaults.springStiffness); private set
+        var springDamping by prefsFloatState("pin_spring_damping", defaults.springDamping); private set
+        var pressGlowAlpha by prefsFloatState("pin_press_glow_alpha", defaults.pressGlowAlpha); private set
+        var glowRadius by prefsFloatState("pin_glow_radius", defaults.glowRadius); private set
+        var entryTranslationY by prefsFloatState("pin_entry_translation_y", defaults.entryTranslationY); private set
+        var entryInitialScale by prefsFloatState("pin_entry_initial_scale", defaults.entryInitialScale); private set
+        var entryDuration by prefsFloatState("pin_entry_duration", defaults.entryDuration); private set
+        var rowDelayStep by prefsFloatState("pin_row_delay_step", defaults.rowDelayStep); private set
+        var colDelayStep by prefsFloatState("pin_col_delay_step", defaults.colDelayStep); private set
+        var entryOvershoot by prefsFloatState("pin_entry_overshoot", defaults.entryOvershoot); private set
+
+        var delayKey1 by prefsFloatState("pin_delay_key1", defaults.delayKey1); private set
+        var delayKey2 by prefsFloatState("pin_delay_key2", defaults.delayKey2); private set
+        var delayKey3 by prefsFloatState("pin_delay_key3", defaults.delayKey3); private set
+        var delayKey4 by prefsFloatState("pin_delay_key4", defaults.delayKey4); private set
+        var delayKey5 by prefsFloatState("pin_delay_key5", defaults.delayKey5); private set
+        var delayKey6 by prefsFloatState("pin_delay_key6", defaults.delayKey6); private set
+        var delayKey7 by prefsFloatState("pin_delay_key7", defaults.delayKey7); private set
+        var delayKey8 by prefsFloatState("pin_delay_key8", defaults.delayKey8); private set
+        var delayKey9 by prefsFloatState("pin_delay_key9", defaults.delayKey9); private set
+        var delayKey0 by prefsFloatState("pin_delay_key0", defaults.delayKey0); private set
+        var delayEmergency by prefsFloatState("pin_delay_emergency", defaults.delayEmergency); private set
+        var delayCancel by prefsFloatState("pin_delay_cancel", defaults.delayCancel); private set
+
+        fun snapshot(): LockScreenKeypadSettings = LockScreenKeypadSettings(
+            enabled, circleDiameter, fillAlpha, strokeWidth, strokeAlpha, showKlondike, digitTextSize,
+            row0Offset, row1Offset, row2Offset, row3Offset, tapSquishScale, releasePlunge,
+            jellyMaxStretch, jellyElasticLimit, springStiffness, springDamping, pressGlowAlpha,
+            glowRadius, entryTranslationY, entryInitialScale, entryDuration, rowDelayStep, colDelayStep,
+            entryOvershoot, delayKey1, delayKey2, delayKey3, delayKey4, delayKey5, delayKey6,
+            delayKey7, delayKey8, delayKey9, delayKey0, delayEmergency, delayCancel
+        )
+
+        @JvmName("setKeypadEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
+        @JvmName("setCircleDiameterPref") fun setCircleDiameter(v: Float) { circleDiameter = v }
+        @JvmName("setFillAlphaPref") fun setFillAlpha(v: Float) { fillAlpha = v }
+        @JvmName("setStrokeWidthPref") fun setStrokeWidth(v: Float) { strokeWidth = v }
+        @JvmName("setStrokeAlphaPref") fun setStrokeAlpha(v: Float) { strokeAlpha = v }
+        @JvmName("setShowKlondikePref") fun setShowKlondike(v: Boolean) { showKlondike = v }
+        @JvmName("setDigitTextSizePref") fun setDigitTextSize(v: Float) { digitTextSize = v }
+        @JvmName("setRow0OffsetPref") fun setRow0Offset(v: Float) { row0Offset = v }
+        @JvmName("setRow1OffsetPref") fun setRow1Offset(v: Float) { row1Offset = v }
+        @JvmName("setRow2OffsetPref") fun setRow2Offset(v: Float) { row2Offset = v }
+        @JvmName("setRow3OffsetPref") fun setRow3Offset(v: Float) { row3Offset = v }
+        @JvmName("setTapSquishScalePref") fun setTapSquishScale(v: Float) { tapSquishScale = v }
+        @JvmName("setReleasePlungePref") fun setReleasePlunge(v: Float) { releasePlunge = v }
+        @JvmName("setJellyMaxStretchPref") fun setJellyMaxStretch(v: Float) { jellyMaxStretch = v }
+        @JvmName("setJellyElasticLimitPref") fun setJellyElasticLimit(v: Float) { jellyElasticLimit = v }
+        @JvmName("setSpringStiffnessPref") fun setSpringStiffness(v: Float) { springStiffness = v }
+        @JvmName("setSpringDampingPref") fun setSpringDamping(v: Float) { springDamping = v }
+        @JvmName("setPressGlowAlphaPref") fun setPressGlowAlpha(v: Float) { pressGlowAlpha = v }
+        @JvmName("setGlowRadiusPref") fun setGlowRadius(v: Float) { glowRadius = v }
+        @JvmName("setEntryTranslationYPref") fun setEntryTranslationY(v: Float) { entryTranslationY = v }
+        @JvmName("setEntryInitialScalePref") fun setEntryInitialScale(v: Float) { entryInitialScale = v }
+        @JvmName("setEntryDurationPref") fun setEntryDuration(v: Float) { entryDuration = v }
+        @JvmName("setRowDelayStepPref") fun setRowDelayStep(v: Float) { rowDelayStep = v }
+        @JvmName("setColDelayStepPref") fun setColDelayStep(v: Float) { colDelayStep = v }
+        @JvmName("setEntryOvershootPref") fun setEntryOvershoot(v: Float) { entryOvershoot = v }
+
+        @JvmName("setDelayKey1Pref") fun setDelayKey1(v: Float) { delayKey1 = v }
+        @JvmName("setDelayKey2Pref") fun setDelayKey2(v: Float) { delayKey2 = v }
+        @JvmName("setDelayKey3Pref") fun setDelayKey3(v: Float) { delayKey3 = v }
+        @JvmName("setDelayKey4Pref") fun setDelayKey4(v: Float) { delayKey4 = v }
+        @JvmName("setDelayKey5Pref") fun setDelayKey5(v: Float) { delayKey5 = v }
+        @JvmName("setDelayKey6Pref") fun setDelayKey6(v: Float) { delayKey6 = v }
+        @JvmName("setDelayKey7Pref") fun setDelayKey7(v: Float) { delayKey7 = v }
+        @JvmName("setDelayKey8Pref") fun setDelayKey8(v: Float) { delayKey8 = v }
+        @JvmName("setDelayKey9Pref") fun setDelayKey9(v: Float) { delayKey9 = v }
+        @JvmName("setDelayKey0Pref") fun setDelayKey0(v: Float) { delayKey0 = v }
+        @JvmName("setDelayEmergencyPref") fun setDelayEmergency(v: Float) { delayEmergency = v }
+        @JvmName("setDelayCancelPref") fun setDelayCancel(v: Float) { delayCancel = v }
+
+        fun reloadFromDefaults() {
+            enabled = defaults.enabled
+            circleDiameter = defaults.circleDiameter
+            fillAlpha = defaults.fillAlpha
+            strokeWidth = defaults.strokeWidth
+            strokeAlpha = defaults.strokeAlpha
+            showKlondike = defaults.showKlondike
+            digitTextSize = defaults.digitTextSize
+            row0Offset = defaults.row0Offset
+            row1Offset = defaults.row1Offset
+            row2Offset = defaults.row2Offset
+            row3Offset = defaults.row3Offset
+            tapSquishScale = defaults.tapSquishScale
+            releasePlunge = defaults.releasePlunge
+            jellyMaxStretch = defaults.jellyMaxStretch
+            jellyElasticLimit = defaults.jellyElasticLimit
+            springStiffness = defaults.springStiffness
+            springDamping = defaults.springDamping
+            pressGlowAlpha = defaults.pressGlowAlpha
+            glowRadius = defaults.glowRadius
+            entryTranslationY = defaults.entryTranslationY
+            entryInitialScale = defaults.entryInitialScale
+            entryDuration = defaults.entryDuration
+            rowDelayStep = defaults.rowDelayStep
+            colDelayStep = defaults.colDelayStep
+            entryOvershoot = defaults.entryOvershoot
+            delayKey1 = defaults.delayKey1
+            delayKey2 = defaults.delayKey2
+            delayKey3 = defaults.delayKey3
+            delayKey4 = defaults.delayKey4
+            delayKey5 = defaults.delayKey5
+            delayKey6 = defaults.delayKey6
+            delayKey7 = defaults.delayKey7
+            delayKey8 = defaults.delayKey8
+            delayKey9 = defaults.delayKey9
+            delayKey0 = defaults.delayKey0
+            delayEmergency = defaults.delayEmergency
+            delayCancel = defaults.delayCancel
+        }
+    }
+
 
     // --- small property-delegate helpers over SharedPreferences --------------------------
 

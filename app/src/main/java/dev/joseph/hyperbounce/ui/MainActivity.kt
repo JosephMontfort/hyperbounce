@@ -49,7 +49,9 @@ import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
 import dev.joseph.hyperbounce.ui.screens.AboutScreen
 import dev.joseph.hyperbounce.ui.screens.AppDetailScreen
 import dev.joseph.hyperbounce.ui.screens.EngineScreen
+import dev.joseph.hyperbounce.ui.screens.KeypadDelaysScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadScreen
+import dev.joseph.hyperbounce.ui.screens.LockScreenSheetScreen
 import dev.joseph.hyperbounce.ui.screens.SettingsScreen
 import dev.joseph.hyperbounce.ui.screens.TuningScreen
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
@@ -187,8 +189,22 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                             onNavigate = push
                         )
 
-                        Destination.Diagnostics -> dev.joseph.hyperbounce.ui.screens.DiagnosticsScreen(repository = repository, colors = colors, backdrop = backdrop, onBack = pop)
+                        Destination.LockScreenSheet -> LockScreenSheetScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
                         Destination.Keypad -> KeypadScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop,
+                            onNavigate = push
+                        )
+
+                        Destination.KeypadDelays -> KeypadDelaysScreen(
                             repository = repository,
                             colors = colors,
                             backdrop = backdrop,
