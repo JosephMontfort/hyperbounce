@@ -51,16 +51,12 @@ fun AppTransitionsScreen(
                 icon = { SlidersIcon(color = Color.White, size = 15.dp) }
             )
         }
-        SectionFooter(
-            "Hooks SpringParamsProvider to dynamically customize per-channel spring curves.",
-            colors
-        )
 
         SectionHeader("POSITION CHANNEL (centerX, centerY)", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Flight Path Damping",
-                subtitle = "Friction for center X and Y movement (lower = bouncier)",
+                subtitle = "Lower = more flight bounce on open/close, Higher = stiffer flight settling",
                 colors = colors,
                 backdrop = backdrop,
                 value = trans.posDamping,
@@ -73,7 +69,7 @@ fun AppTransitionsScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Flight Path Response",
-                subtitle = "Response time for center position channels",
+                subtitle = "Lower = window snaps faster along path, Higher = floats along path",
                 colors = colors,
                 backdrop = backdrop,
                 value = trans.posResponse,
@@ -84,13 +80,12 @@ fun AppTransitionsScreen(
                 enabled = trans.enabled
             )
         }
-        SectionFooter("Controls the travel curve as the app window expands from or collapses to its icon.", colors)
 
         SectionHeader("SCALE CHANNEL (Width, Height, Ratio)", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Window Scale Damping",
-                subtitle = "Damping for Width, Height, and Ratio channels",
+                subtitle = "Lower = more elastic window scale bounce, Higher = rigid scale settling",
                 colors = colors,
                 backdrop = backdrop,
                 value = trans.scaleDamping,
@@ -103,7 +98,7 @@ fun AppTransitionsScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Window Scale Response",
-                subtitle = "Response for Width, Height, and Ratio channels",
+                subtitle = "Lower = window expands faster, Higher = window expands smoothly",
                 colors = colors,
                 backdrop = backdrop,
                 value = trans.scaleResponse,
@@ -114,13 +109,12 @@ fun AppTransitionsScreen(
                 enabled = trans.enabled
             )
         }
-        SectionFooter("Controls geometric expansion stiffness and stretch during launch and recents dismiss.", colors)
 
         SectionHeader("CORNER RADIUS CHANNEL (RadiusRatio, Radius)", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Corner Morph Damping",
-                subtitle = "Damping for corner radius interpolation",
+                subtitle = "Lower = springy corner rounding, Higher = smooth corner settling",
                 colors = colors,
                 backdrop = backdrop,
                 value = trans.cornerDamping,
@@ -133,7 +127,7 @@ fun AppTransitionsScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Corner Morph Response",
-                subtitle = "Response time for corner radius morphing",
+                subtitle = "Lower = morphs corners rapidly, Higher = morphs corners smoothly",
                 colors = colors,
                 backdrop = backdrop,
                 value = trans.cornerResponse,
@@ -144,13 +138,12 @@ fun AppTransitionsScreen(
                 enabled = trans.enabled
             )
         }
-        SectionFooter("Smoothness of rectangular window morphing into rounded squircle icon.", colors)
 
         SectionHeader("SURFACE FADE CHANNEL (alpha, SurfaceExtAlpha)", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Surface Fade Damping",
-                subtitle = "Damping for opacity and leash blur channels",
+                subtitle = "Lower = bouncy opacity fade, Higher = smooth critical opacity fade",
                 colors = colors,
                 backdrop = backdrop,
                 value = trans.alphaDamping,
@@ -163,7 +156,7 @@ fun AppTransitionsScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Surface Fade Response",
-                subtitle = "Response time for opacity channels",
+                subtitle = "Lower = fades opacity quickly, Higher = fades opacity smoothly",
                 colors = colors,
                 backdrop = backdrop,
                 value = trans.alphaResponse,
@@ -174,7 +167,6 @@ fun AppTransitionsScreen(
                 enabled = trans.enabled
             )
         }
-        SectionFooter("Fade duration and transparency envelope during app entry and exit.", colors)
 
         SectionHeader("SPATIAL TRAJECTORY & 3D DEPTH", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -219,7 +211,7 @@ fun AppTransitionsScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Gesture Interrupt Stabilizer",
-                subtitle = "Rate of recovery when interrupting an ongoing animation",
+                subtitle = "Lower = loose gesture takeover, Higher = instant smooth gesture recovery",
                 colors = colors,
                 backdrop = backdrop,
                 value = trans.appInterruptSmooth,
@@ -256,6 +248,5 @@ fun AppTransitionsScreen(
                 enabled = trans.enabled
             )
         }
-        SectionFooter("Spatial 3D transformations applied during app launch and dismiss flight paths.", colors)
     }
 }

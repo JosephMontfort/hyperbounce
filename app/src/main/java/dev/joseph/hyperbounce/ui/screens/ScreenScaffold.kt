@@ -224,7 +224,6 @@ fun ScreenScaffold(
                                 val currentIdx = rowIndex++
                                 MenuRow(
                                     title = "Reset All",
-                                    description = "Restore this page to defaults",
                                     contentColor = menuContentColor,
                                     secondaryColor = menuSecondaryColor,
                                     isHovered = hoveredIndex == currentIdx,
@@ -241,7 +240,6 @@ fun ScreenScaffold(
                                 val currentIdx = rowIndex++
                                 MenuRow(
                                     title = restartAppTitle,
-                                    description = restartAppSubtitle ?: "Restart scoped process",
                                     contentColor = menuContentColor,
                                     secondaryColor = menuSecondaryColor,
                                     isHovered = hoveredIndex == currentIdx,

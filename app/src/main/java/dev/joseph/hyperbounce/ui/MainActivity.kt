@@ -110,6 +110,7 @@ private fun HyperBounceApp(repository: SettingsRepository) {
     BackHandler(enabled = backStack.isNotEmpty()) { pop() }
 
     CompositionLocalProvider(LocalGlassSettings provides repository.globalGlass.snapshot()) {
+        dev.joseph.hyperbounce.ui.glass.CustomValueDialogHost(colors) {
         Box(Modifier.fillMaxSize()) {
             // Root is considered null in the backStack, or we can just use the current top of stack
             val currentDestination = backStack.lastOrNull()

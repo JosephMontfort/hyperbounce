@@ -53,10 +53,6 @@ fun KeypadScreen(
                 icon = { SlidersIcon(color = Color.White, size = 15.dp) }
             )
         }
-        SectionFooter(
-            "Replaces stock MIUI PIN buttons with dynamic circular glass keys featuring real-time spring squish and elastic drag physics.",
-            colors
-        )
 
         SectionHeader("Geometry & Typography", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -88,7 +84,7 @@ fun KeypadScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Specular Rim Width",
-                subtitle = "45-degree directional stroke thickness",
+                subtitle = "Directional specular stroke thickness",
                 colors = colors,
                 backdrop = backdrop,
                 value = keypad.strokeWidth,
@@ -154,6 +150,7 @@ fun KeypadScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Row 1 Offset (Keys 1, 2, 3)",
+                subtitle = "Vertical position offset for row 1 keys",
                 colors = colors,
                 backdrop = backdrop,
                 value = keypad.row1Offset,
@@ -166,6 +163,7 @@ fun KeypadScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Row 2 Offset (Keys 4, 5, 6)",
+                subtitle = "Vertical position offset for row 2 keys",
                 colors = colors,
                 backdrop = backdrop,
                 value = keypad.row2Offset,
@@ -178,6 +176,7 @@ fun KeypadScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Row 3 Offset (Keys 7, 8, 9)",
+                subtitle = "Vertical position offset for row 3 keys",
                 colors = colors,
                 backdrop = backdrop,
                 value = keypad.row3Offset,
@@ -193,7 +192,7 @@ fun KeypadScreen(
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Tap Compression Scale",
-                subtitle = "Target scale while finger is pressed down",
+                subtitle = "Lower = deeper press squish, Higher = subtle press squish",
                 colors = colors,
                 backdrop = backdrop,
                 value = keypad.tapSquishScale,
@@ -206,7 +205,7 @@ fun KeypadScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Release Extra Plunge",
-                subtitle = "Momentary compression on touch release before snap",
+                subtitle = "Lower = instant rebound snap, Higher = deeper momentary release plunge",
                 colors = colors,
                 backdrop = backdrop,
                 value = keypad.releasePlunge,
@@ -219,7 +218,7 @@ fun KeypadScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Anisotropic Jelly Stretch",
-                subtitle = "atan2 elongation along finger drag angle",
+                subtitle = "Lower = subtle stretch on drag, Higher = dramatic jelly stretch on drag",
                 colors = colors,
                 backdrop = backdrop,
                 value = keypad.jellyMaxStretch,
@@ -232,7 +231,7 @@ fun KeypadScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Elastic Pull Limit",
-                subtitle = "Hyperbolic tangent tanh drag ceiling factor",
+                subtitle = "Lower = tight drag constraint, Higher = loose drag stretch range",
                 colors = colors,
                 backdrop = backdrop,
                 value = keypad.jellyElasticLimit,
@@ -245,7 +244,7 @@ fun KeypadScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Spring Bounce Stiffness",
-                subtitle = "Spring oscillation speed",
+                subtitle = "Lower = slower oscillation frequency, Higher = snappier bounce frequency",
                 colors = colors,
                 backdrop = backdrop,
                 value = keypad.springStiffness,
@@ -258,7 +257,7 @@ fun KeypadScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Spring Bounce Damping",
-                subtitle = "Friction resistance preventing prolonged oscillation",
+                subtitle = "Lower = more bounce oscillation, Higher = stiffer vibration damping",
                 colors = colors,
                 backdrop = backdrop,
                 value = keypad.springDamping,
@@ -271,7 +270,7 @@ fun KeypadScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Tap Specular Glow Opacity",
-                subtitle = "Intensity of touch contact specular highlight",
+                subtitle = "Brightness of touch contact highlight",
                 colors = colors,
                 backdrop = backdrop,
                 value = keypad.pressGlowAlpha,
@@ -313,7 +312,7 @@ fun KeypadScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Initial Entry Scale",
-                subtitle = "Starting size multiplier during entrance",
+                subtitle = "Starting scale multiplier during entrance",
                 colors = colors,
                 backdrop = backdrop,
                 value = keypad.entryInitialScale,
@@ -326,7 +325,7 @@ fun KeypadScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Entry Glide Duration",
-                subtitle = "Total animation time per key",
+                subtitle = "Total glide animation duration per key",
                 colors = colors,
                 backdrop = backdrop,
                 value = keypad.entryDuration,
@@ -365,7 +364,7 @@ fun KeypadScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Glide Overshoot Bounce",
-                subtitle = "Overshoot spring factor on arrival",
+                subtitle = "Lower = smooth gentle arrival, Higher = bouncy overshoot snap",
                 colors = colors,
                 backdrop = backdrop,
                 value = keypad.entryOvershoot,
@@ -388,9 +387,5 @@ fun KeypadScreen(
                 icon = { SlidersIcon(color = Color.White, size = 15.dp) }
             )
         }
-        SectionFooter(
-            "Fine-tune individual entrance timing for every PIN key, emergency button, and cancel action.",
-            colors
-        )
     }
 }

@@ -54,6 +54,7 @@ fun KeypadDelaysScreen(
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Key 1 Delay",
+                subtitle = "Entrance delay for Key 1",
                 colors = colors,
                 backdrop = backdrop,
                 value = if (keypad.delayKey1 >= 0f) keypad.delayKey1 else (0 * keypad.rowDelayStep + 0 * keypad.colDelayStep),
@@ -65,6 +66,7 @@ fun KeypadDelaysScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Key 2 Delay",
+                subtitle = "Entrance delay for Key 2",
                 colors = colors,
                 backdrop = backdrop,
                 value = if (keypad.delayKey2 >= 0f) keypad.delayKey2 else (0 * keypad.rowDelayStep + 1 * keypad.colDelayStep),
@@ -76,6 +78,7 @@ fun KeypadDelaysScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Key 3 Delay",
+                subtitle = "Entrance delay for Key 3",
                 colors = colors,
                 backdrop = backdrop,
                 value = if (keypad.delayKey3 >= 0f) keypad.delayKey3 else (0 * keypad.rowDelayStep + 2 * keypad.colDelayStep),
@@ -90,6 +93,7 @@ fun KeypadDelaysScreen(
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Key 4 Delay",
+                subtitle = "Entrance delay for Key 4",
                 colors = colors,
                 backdrop = backdrop,
                 value = if (keypad.delayKey4 >= 0f) keypad.delayKey4 else (1 * keypad.rowDelayStep + 0 * keypad.colDelayStep),
@@ -101,6 +105,7 @@ fun KeypadDelaysScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Key 5 Delay",
+                subtitle = "Entrance delay for Key 5",
                 colors = colors,
                 backdrop = backdrop,
                 value = if (keypad.delayKey5 >= 0f) keypad.delayKey5 else (1 * keypad.rowDelayStep + 1 * keypad.colDelayStep),
@@ -112,6 +117,7 @@ fun KeypadDelaysScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Key 6 Delay",
+                subtitle = "Entrance delay for Key 6",
                 colors = colors,
                 backdrop = backdrop,
                 value = if (keypad.delayKey6 >= 0f) keypad.delayKey6 else (1 * keypad.rowDelayStep + 2 * keypad.colDelayStep),
@@ -126,6 +132,7 @@ fun KeypadDelaysScreen(
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Key 7 Delay",
+                subtitle = "Entrance delay for Key 7",
                 colors = colors,
                 backdrop = backdrop,
                 value = if (keypad.delayKey7 >= 0f) keypad.delayKey7 else (2 * keypad.rowDelayStep + 0 * keypad.colDelayStep),
@@ -137,6 +144,7 @@ fun KeypadDelaysScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Key 8 Delay",
+                subtitle = "Entrance delay for Key 8",
                 colors = colors,
                 backdrop = backdrop,
                 value = if (keypad.delayKey8 >= 0f) keypad.delayKey8 else (2 * keypad.rowDelayStep + 1 * keypad.colDelayStep),
@@ -148,6 +156,7 @@ fun KeypadDelaysScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Key 9 Delay",
+                subtitle = "Entrance delay for Key 9",
                 colors = colors,
                 backdrop = backdrop,
                 value = if (keypad.delayKey9 >= 0f) keypad.delayKey9 else (2 * keypad.rowDelayStep + 2 * keypad.colDelayStep),
@@ -162,6 +171,7 @@ fun KeypadDelaysScreen(
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Key 0 Delay",
+                subtitle = "Entrance delay for Key 0",
                 colors = colors,
                 backdrop = backdrop,
                 value = if (keypad.delayKey0 >= 0f) keypad.delayKey0 else (3 * keypad.rowDelayStep + 1 * keypad.colDelayStep),
@@ -173,6 +183,7 @@ fun KeypadDelaysScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Cancel / Delete Button Delay",
+                subtitle = "Entrance delay for Cancel / Delete action",
                 colors = colors,
                 backdrop = backdrop,
                 value = if (keypad.delayCancel >= 0f) keypad.delayCancel else (3 * keypad.rowDelayStep + 2 * keypad.colDelayStep),
@@ -184,6 +195,7 @@ fun KeypadDelaysScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Emergency Call Button Delay",
+                subtitle = "Entrance delay for Emergency Call button",
                 colors = colors,
                 backdrop = backdrop,
                 value = if (keypad.delayEmergency >= 0f) keypad.delayEmergency else (keypad.rowDelayStep * 4),
@@ -193,9 +205,5 @@ fun KeypadDelaysScreen(
                 enabled = keypad.enabled
             )
         }
-        SectionFooter(
-            "Individual key delay overrides supersede row and column delay steps.",
-            colors
-        )
     }
 }

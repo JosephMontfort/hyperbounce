@@ -63,10 +63,6 @@ fun ScreenUnlockScreen(
                 icon = { LockIcon(color = Color.White, size = 15.dp) }
             )
         }
-        SectionFooter(
-            "Intercepts UserPresentAnimationCompatPhone to drive physics on home screen icons and dock.",
-            colors
-        )
 
         SectionHeader("ANIMATION MODE", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -96,7 +92,7 @@ fun ScreenUnlockScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Grid Columns",
-                subtitle = "Column detection on home screen",
+                subtitle = "Number of icon columns detected on home screen",
                 colors = colors,
                 backdrop = backdrop,
                 value = unlock.gridColumns.toFloat(),
@@ -109,7 +105,7 @@ fun ScreenUnlockScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Grid Rows",
-                subtitle = "Row detection on home screen",
+                subtitle = "Number of icon rows detected on home screen",
                 colors = colors,
                 backdrop = backdrop,
                 value = unlock.gridRows.toFloat(),
@@ -120,14 +116,13 @@ fun ScreenUnlockScreen(
                 enabled = unlock.enabled
             )
         }
-        SectionFooter("Configures grid size for column and row detection.", colors)
 
         if (unlock.animMode == 0) {
             SectionHeader("CLASSIC RADIAL UNLOCK", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
                     title = "Center Damping",
-                    subtitle = "Lower = rubber-band bouncy | Higher = firm",
+                    subtitle = "Lower = more bounce on release, Higher = stiffer settling",
                     colors = colors,
                     backdrop = backdrop,
                     value = unlock.centerDamping,
@@ -140,7 +135,7 @@ fun ScreenUnlockScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Center Response",
-                    subtitle = "Lower = snaps faster | Higher = floats",
+                    subtitle = "Lower = snaps faster to position, Higher = slower float",
                     colors = colors,
                     backdrop = backdrop,
                     value = unlock.centerResponse,
@@ -153,7 +148,7 @@ fun ScreenUnlockScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Edge Damping Drop",
-                    subtitle = "Higher = edges become more bouncy than center",
+                    subtitle = "Lower = uniform bounce across screen, Higher = looser edges",
                     colors = colors,
                     backdrop = backdrop,
                     value = unlock.edgeDampingDrop,
@@ -166,7 +161,7 @@ fun ScreenUnlockScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Edge Response Delay",
-                    subtitle = "Higher = outer edges lag behind center",
+                    subtitle = "Lower = simultaneous expansion, Higher = edges lag behind",
                     colors = colors,
                     backdrop = backdrop,
                     value = unlock.edgeResponseDelay,
@@ -179,7 +174,7 @@ fun ScreenUnlockScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Z-Depth Scale",
-                    subtitle = "Starting 3D depth multiplier",
+                    subtitle = "Multiplies initial 3D depth perspective",
                     colors = colors,
                     backdrop = backdrop,
                     value = unlock.zDepthMultiplier,
@@ -192,7 +187,7 @@ fun ScreenUnlockScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Dock Damping",
-                    subtitle = "Damping for dock view and indicators",
+                    subtitle = "Lower = bouncier dock icons, Higher = stiffer dock settling",
                     colors = colors,
                     backdrop = backdrop,
                     value = unlock.dockDamping,
@@ -205,7 +200,7 @@ fun ScreenUnlockScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Dock Response",
-                    subtitle = "Response for dock view and indicators",
+                    subtitle = "Lower = snaps dock faster, Higher = slower dock arrival",
                     colors = colors,
                     backdrop = backdrop,
                     value = unlock.dockResponse,
@@ -216,13 +211,12 @@ fun ScreenUnlockScreen(
                     enabled = unlock.enabled
                 )
             }
-            SectionFooter("Radial dispersion calculates optical distance from screen center (0.42 Y).", colors)
         } else {
             SectionHeader("KINETIC Y-AXIS UNLOCK GLOBALS", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
                     title = "Global Anim Duration",
-                    subtitle = "Lower = faster animation | Higher = slower settling",
+                    subtitle = "Lower = faster overall animation, Higher = slower motion",
                     colors = colors,
                     backdrop = backdrop,
                     value = unlock.durationScale,
@@ -235,7 +229,7 @@ fun ScreenUnlockScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Velocity Impact",
-                    subtitle = "Coupling between swipe-up speed and kinetic bounce",
+                    subtitle = "Lower = subtle speed scaling, Higher = strong speed scaling",
                     colors = colors,
                     backdrop = backdrop,
                     value = unlock.velocityInfluence,
@@ -248,7 +242,7 @@ fun ScreenUnlockScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Max Swipe Normalizer",
-                    subtitle = "Velocity ceiling for maximum bounce scaling",
+                    subtitle = "Ceiling velocity for maximum kinetic bounce",
                     colors = colors,
                     backdrop = backdrop,
                     value = unlock.maxVelocity,
@@ -261,7 +255,7 @@ fun ScreenUnlockScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Resting Damping",
-                    subtitle = "Baseline damping when settling",
+                    subtitle = "Lower = bouncy settling curve, Higher = smooth critical damping",
                     colors = colors,
                     backdrop = backdrop,
                     value = unlock.cascadeDamping,
@@ -272,13 +266,12 @@ fun ScreenUnlockScreen(
                     enabled = unlock.enabled
                 )
             }
-            SectionFooter("Velocity influence dynamically scales row spring properties based on flick speed.", colors)
 
             SectionHeader("DOCK ISOLATION", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
                     title = "Dock Damping",
-                    subtitle = "Lower = bouncier dock | Higher = stiffer dock",
+                    subtitle = "Lower = bouncier dock icons, Higher = stiffer dock settling",
                     colors = colors,
                     backdrop = backdrop,
                     value = unlock.kineticDockDamping,
@@ -291,7 +284,7 @@ fun ScreenUnlockScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Dock Response",
-                    subtitle = "Lower = snaps faster | Higher = floats into place",
+                    subtitle = "Lower = snaps dock faster, Higher = slower dock arrival",
                     colors = colors,
                     backdrop = backdrop,
                     value = unlock.kineticDockResponse,
@@ -304,7 +297,7 @@ fun ScreenUnlockScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Dock Z-Depth",
-                    subtitle = "Starting 3D perspective depth for dock",
+                    subtitle = "Starting 3D perspective depth for bottom dock",
                     colors = colors,
                     backdrop = backdrop,
                     value = unlock.kineticDockZDepth,
@@ -315,7 +308,6 @@ fun ScreenUnlockScreen(
                     enabled = unlock.enabled
                 )
             }
-            SectionFooter("Dedicated motion curve for the bottom dock bar and page indicator.", colors)
 
             val rows = unlock.gridRows.coerceIn(1, 12)
 
@@ -327,7 +319,7 @@ fun ScreenUnlockScreen(
                     val defZ = (2000.0f - (r * 200.0f)).coerceAtLeast(100.0f)
                     SettingsSliderRow(
                         title = "Row $r Z-Depth",
-                        subtitle = "Starting 3D perspective depth",
+                        subtitle = "Starting 3D perspective depth for row $r",
                         colors = colors,
                         backdrop = backdrop,
                         value = currentZ,
@@ -339,7 +331,6 @@ fun ScreenUnlockScreen(
                     )
                 }
             }
-            SectionFooter("Starting 3D depth for each horizontal icon row.", colors)
 
             SectionHeader("DYNAMIC VELOCITY BOUNCE (CENTER VS OUTER)", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -350,7 +341,7 @@ fun ScreenUnlockScreen(
                     val defBounce = (0.45f - (r * 0.05f)).coerceAtLeast(0.0f)
                     SettingsSliderRow(
                         title = "Row $r Center Bounce",
-                        subtitle = "Overshoot for inner columns",
+                        subtitle = "Lower = subtle overshoot, Higher = pronounced center bounce",
                         colors = colors,
                         backdrop = backdrop,
                         value = cBounce,
@@ -363,7 +354,7 @@ fun ScreenUnlockScreen(
                     RowDivider(colors.separator)
                     SettingsSliderRow(
                         title = "Row $r Outer Bounce",
-                        subtitle = "Overshoot for outer columns",
+                        subtitle = "Lower = subtle overshoot, Higher = pronounced outer bounce",
                         colors = colors,
                         backdrop = backdrop,
                         value = oBounce,
@@ -375,7 +366,6 @@ fun ScreenUnlockScreen(
                     )
                 }
             }
-            SectionFooter("Differential bounce between inner and screen-edge columns.", colors)
 
             SectionHeader("DYNAMIC SETTLING TIME (CENTER VS OUTER)", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -386,7 +376,7 @@ fun ScreenUnlockScreen(
                     val defSettle = 0.55f + (r * 0.04f)
                     SettingsSliderRow(
                         title = "Row $r Center Settling",
-                        subtitle = "Settling response for center columns",
+                        subtitle = "Lower = rapid center arrival, Higher = delayed float",
                         colors = colors,
                         backdrop = backdrop,
                         value = cSettle,
@@ -399,7 +389,7 @@ fun ScreenUnlockScreen(
                     RowDivider(colors.separator)
                     SettingsSliderRow(
                         title = "Row $r Outer Settling",
-                        subtitle = "Settling response for outer columns",
+                        subtitle = "Lower = rapid edge arrival, Higher = delayed float",
                         colors = colors,
                         backdrop = backdrop,
                         value = oSettle,
@@ -411,7 +401,6 @@ fun ScreenUnlockScreen(
                     )
                 }
             }
-            SectionFooter("Settling duration curves per row and column position.", colors)
         }
     }
 }

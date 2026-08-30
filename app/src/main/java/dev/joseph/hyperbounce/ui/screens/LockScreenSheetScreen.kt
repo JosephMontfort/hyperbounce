@@ -50,16 +50,12 @@ fun LockScreenSheetScreen(
                 icon = { LockIcon(color = Color.White, size = 15.dp) }
             )
         }
-        SectionFooter(
-            "Enables true upward translation of the lockscreen root container on swipe up, completely removing stock shrink-to-center scaling degradation.",
-            colors
-        )
 
         SectionHeader("4-Sided AGSL Refraction Shader", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Border Width",
-                subtitle = "Specular frame outline stroke width",
+                subtitle = "Thickness of specular card border",
                 colors = colors,
                 backdrop = backdrop,
                 value = sheet.borderWidth,
@@ -72,7 +68,7 @@ fun LockScreenSheetScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Border Specular Alpha",
-                subtitle = "Fresnel specular frame opacity",
+                subtitle = "Opacity of specular card border",
                 colors = colors,
                 backdrop = backdrop,
                 value = sheet.borderAlpha,
@@ -98,7 +94,7 @@ fun LockScreenSheetScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Refraction Amount",
-                subtitle = "Strength of optical lens distortion along card edges",
+                subtitle = "Strength of refraction distortion along sheet boundaries",
                 colors = colors,
                 backdrop = backdrop,
                 value = sheet.refractionAmount,
@@ -111,7 +107,7 @@ fun LockScreenSheetScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "3D Depth Warp",
-                subtitle = "Spherical warp factor along signed distance fields",
+                subtitle = "Spherical optical depth warp along boundary edges",
                 colors = colors,
                 backdrop = backdrop,
                 value = sheet.depthEffect,
@@ -122,16 +118,12 @@ fun LockScreenSheetScreen(
                 enabled = sheet.enabled
             )
         }
-        SectionFooter(
-            "Uses Android 13+ RuntimeShader AGSL evaluation of sdRoundedRect SDF fields to cast true optical light bending onto keyguard elements.",
-            colors
-        )
 
         SectionHeader("Home Indicator Pill & Glass Lip", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Home Indicator Width",
-                subtitle = "Horizontal width of iOS home bar pill",
+                subtitle = "Horizontal width of home indicator pill",
                 colors = colors,
                 backdrop = backdrop,
                 value = sheet.pillWidth,
@@ -144,7 +136,7 @@ fun LockScreenSheetScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Home Indicator Height",
-                subtitle = "Vertical thickness of iOS home bar pill",
+                subtitle = "Vertical thickness of home indicator pill",
                 colors = colors,
                 backdrop = backdrop,
                 value = sheet.pillHeight,
@@ -157,7 +149,7 @@ fun LockScreenSheetScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Home Indicator Bottom Margin",
-                subtitle = "Distance from screen bottom edge",
+                subtitle = "Distance above bottom screen edge",
                 colors = colors,
                 backdrop = backdrop,
                 value = sheet.pillBottomMargin,
@@ -170,7 +162,7 @@ fun LockScreenSheetScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Bottom Glass Lip Height",
-                subtitle = "Height of frosted specular bottom lip area",
+                subtitle = "Height of bottom frosted glass lip",
                 colors = colors,
                 backdrop = backdrop,
                 value = sheet.lipHeight,
@@ -181,9 +173,5 @@ fun LockScreenSheetScreen(
                 enabled = sheet.enabled
             )
         }
-        SectionFooter(
-            "Injects a specular glass rim and dynamic rounded pill directly into KeyguardBottomAreaView.",
-            colors
-        )
     }
 }

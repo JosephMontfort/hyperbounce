@@ -336,7 +336,6 @@ fun RootScaffold(
                     ) {
                         MenuRow(
                             title = "Restart Scoped Apps",
-                            description = "System UI, Launcher & Reboot",
                             contentColor = menuContentColor,
                             secondaryColor = menuSecondaryColor,
                             isHovered = hoveredIndex == 0 && !isSubmenu,
@@ -351,8 +350,7 @@ fun RootScaffold(
                             enabled = !isSubmenu
                         )
                         MenuRow(
-                            title = "Copy Debug Info",
-                            description = "Version & current engine state",
+                            title = "Copy Diagnostic Info",
                             contentColor = menuContentColor,
                             secondaryColor = menuSecondaryColor,
                             isHovered = hoveredIndex == 1 && !isSubmenu,
@@ -367,7 +365,6 @@ fun RootScaffold(
                         )
                         MenuRow(
                             title = "About HyperBounce",
-                            description = "Credits and library versions",
                             contentColor = menuContentColor,
                             secondaryColor = menuSecondaryColor,
                             isHovered = hoveredIndex == 2 && !isSubmenu,
@@ -401,7 +398,6 @@ fun RootScaffold(
                     ) {
                         MenuRow(
                             title = "Back",
-                            description = "Return to main menu",
                             contentColor = menuContentColor,
                             secondaryColor = menuSecondaryColor,
                             isHovered = hoveredIndex == 0 && isSubmenu,
@@ -416,7 +412,6 @@ fun RootScaffold(
                         )
                         MenuRow(
                             title = "System UI",
-                            description = "Restart com.android.systemui",
                             contentColor = menuContentColor,
                             secondaryColor = menuSecondaryColor,
                             isHovered = hoveredIndex == 1 && isSubmenu,
@@ -431,7 +426,6 @@ fun RootScaffold(
                         )
                         MenuRow(
                             title = "System Launcher",
-                            description = "Restart com.miui.home",
                             contentColor = menuContentColor,
                             secondaryColor = menuSecondaryColor,
                             isHovered = hoveredIndex == 2 && isSubmenu,
@@ -446,7 +440,6 @@ fun RootScaffold(
                         )
                         MenuRow(
                             title = "System Reboot",
-                            description = "Full device system reboot",
                             contentColor = menuContentColor,
                             secondaryColor = menuSecondaryColor,
                             isHovered = hoveredIndex == 3 && isSubmenu,

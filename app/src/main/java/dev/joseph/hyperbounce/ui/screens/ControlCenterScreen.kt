@@ -102,10 +102,6 @@ fun ControlCenterScreen(
                 icon = { SlidersIcon(color = Color.White, size = 15.dp) }
             )
         }
-        SectionFooter(
-            "Enables genuine 2D bin-packed spanned grid layout, 4-tile (2x2) and 2-tile (2x1, 1x2) grouping, and bidirectional tile resizing.",
-            colors
-        )
 
         SectionHeader("LAYOUT ACTIONS", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -137,13 +133,12 @@ fun ControlCenterScreen(
                 icon = { ResetArrowIcon(color = Color.White, size = 15.dp) }
             )
         }
-        SectionFooter("Reverts all custom modular orderings and tile groupings to pure Xiaomi HyperOS defaults.", colors)
 
         SectionHeader("ENTRY DYNAMICS & SCALE", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Entry Initial Scale",
-                subtitle = "Initial scale of cards when pulled down from top (0.50 = 50%)",
+                subtitle = "Initial scale of cards when pulled down from top",
                 colors = colors,
                 backdrop = backdrop,
                 value = cc.entryInitialScale,
@@ -156,7 +151,7 @@ fun ControlCenterScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Entry Translation Y",
-                subtitle = "Vertical emergence start distance in dp",
+                subtitle = "Vertical emergence offset when starting shade drag",
                 colors = colors,
                 backdrop = backdrop,
                 value = cc.entryTranslationY,
@@ -167,13 +162,12 @@ fun ControlCenterScreen(
                 enabled = cc.animEnabled && !cc.lowEndAnim
             )
         }
-        SectionFooter("Controls initial geometric scale and emergence offset when dragging down the shade.", colors)
 
         SectionHeader("SPREAD & ROW SPRING PHYSICS", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Spread Spring Damping",
-                subtitle = "Damping friction for row spread spring dynamics",
+                subtitle = "Lower = more row bounce on drag, Higher = stiffer row settling",
                 colors = colors,
                 backdrop = backdrop,
                 value = cc.spreadDamping,
@@ -186,7 +180,7 @@ fun ControlCenterScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Spread Spring Response",
-                subtitle = "Response duration for row spread spring dynamics",
+                subtitle = "Lower = rows snap faster, Higher = rows float into position",
                 colors = colors,
                 backdrop = backdrop,
                 value = cc.spreadResponse,
@@ -199,7 +193,7 @@ fun ControlCenterScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Spread Release Bounce Damping",
-                subtitle = "Overshoot release bounce damping friction",
+                subtitle = "Lower = lively overshoot rebound, Higher = stiff rebound settling",
                 colors = colors,
                 backdrop = backdrop,
                 value = cc.spreadReleaseDamping,
@@ -212,7 +206,7 @@ fun ControlCenterScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Spread Release Bounce Response",
-                subtitle = "Overshoot release bounce response speed",
+                subtitle = "Lower = rapid bounce frequency, Higher = slower rebound motion",
                 colors = colors,
                 backdrop = backdrop,
                 value = cc.spreadReleaseResponse,
@@ -223,13 +217,12 @@ fun ControlCenterScreen(
                 enabled = cc.animEnabled
             )
         }
-        SectionFooter("Controls row-by-row harmonic spread and rubber-band rebound on pull-down release.", colors)
 
         SectionHeader("TILE SHOW & HIDE SPRINGS", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Tile Show Damping",
-                subtitle = "Damping for tile entry show spring animation",
+                subtitle = "Lower = more tile entrance bounce, Higher = rigid tile settling",
                 colors = colors,
                 backdrop = backdrop,
                 value = cc.tileShowDamping,
@@ -242,7 +235,7 @@ fun ControlCenterScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Tile Show Response",
-                subtitle = "Response time for tile entry show spring",
+                subtitle = "Lower = tiles pop in faster, Higher = tiles float in smoothly",
                 colors = colors,
                 backdrop = backdrop,
                 value = cc.tileShowResponse,
@@ -255,7 +248,7 @@ fun ControlCenterScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Tile Hide Damping",
-                subtitle = "Damping for tile collapse / hide spring",
+                subtitle = "Lower = bouncy tile exit, Higher = quick rigid dismissal",
                 colors = colors,
                 backdrop = backdrop,
                 value = cc.tileHideDamping,
@@ -268,7 +261,7 @@ fun ControlCenterScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Tile Hide Response",
-                subtitle = "Response time for tile collapse / hide spring",
+                subtitle = "Lower = tiles dismiss instantly, Higher = tiles fade out smoothly",
                 colors = colors,
                 backdrop = backdrop,
                 value = cc.tileHideResponse,
@@ -279,13 +272,12 @@ fun ControlCenterScreen(
                 enabled = cc.animEnabled
             )
         }
-        SectionFooter("Governs tile emergence and dismissal spring harmonics.", colors)
 
         SectionHeader("BLUR & SHADE RESPONSE", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Window Blur Damping",
-                subtitle = "Damping friction for background blur fade",
+                subtitle = "Lower = bouncy blur settling, Higher = smooth critical blur fade",
                 colors = colors,
                 backdrop = backdrop,
                 value = cc.blurDamping,
@@ -298,7 +290,7 @@ fun ControlCenterScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Window Blur Response",
-                subtitle = "Response time for background blur fade",
+                subtitle = "Lower = blur appears instantly, Higher = blur fades in smoothly",
                 colors = colors,
                 backdrop = backdrop,
                 value = cc.blurResponse,
@@ -309,6 +301,5 @@ fun ControlCenterScreen(
                 enabled = cc.animEnabled
             )
         }
-        SectionFooter("Controls the real-time background blur curve during shade expansion.", colors)
     }
 }

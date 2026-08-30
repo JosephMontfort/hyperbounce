@@ -64,11 +64,6 @@ fun AppsListScreen(
                 }
             }
         }
-        SectionFooter(
-            "Floating nav-bar glass for Instagram, WhatsApp, and YouTube — each app's " +
-                "settings are stored and applied independently.",
-            colors
-        )
     }
 }
 

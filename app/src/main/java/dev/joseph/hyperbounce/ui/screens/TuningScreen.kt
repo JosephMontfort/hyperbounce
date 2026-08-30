@@ -113,10 +113,6 @@ fun TuningScreen(
                 icon = { dev.joseph.hyperbounce.ui.components.SlidersIcon(color = Color.White, size = 15.dp) }
             )
         }
-        SectionFooter(
-            "Tap any section to configure its specific rendering engine and physical feel.",
-            colors
-        )
     }
 }
 

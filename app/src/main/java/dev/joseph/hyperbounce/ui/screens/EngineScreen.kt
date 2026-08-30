@@ -74,17 +74,9 @@ fun EngineScreen(
                 onSelect = repository::setSliderEngine
             )
         }
-        SectionFooter(
-            "Native Canvas is the original AGSL shader renderer. Liquid Glass renders " +
-                "through this library's Compose backdrop pipeline — same one used everywhere " +
-                "else in this app.",
-            colors
-        )
 
         GlassFeelSection(
             sectionTitle = "Toggle Glass",
-            footer = "Applies to every liquid glass toggle switch across HyperOS when the " +
-                "Toggle Switches engine above is set to Liquid Glass.",
             holder = repository.toggleGlass,
             colors = colors,
             backdrop = backdrop,
@@ -93,8 +85,6 @@ fun EngineScreen(
 
         GlassFeelSection(
             sectionTitle = "Slider Glass",
-            footer = "Applies to every liquid glass slider (brightness, volume, etc.) when " +
-                "the Sliders engine above is set to Liquid Glass.",
             holder = repository.sliderGlass,
             colors = colors,
             backdrop = backdrop,

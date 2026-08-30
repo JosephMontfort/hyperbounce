@@ -47,7 +47,6 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun MenuRow(
     title: String,
-    description: String,
     contentColor: Color,
     secondaryColor: Color,
     isHovered: Boolean,
@@ -55,6 +54,7 @@ fun MenuRow(
     globalTouchPosition: Offset,
     onClick: () -> Unit,
     icon: @Composable () -> Unit,
+    description: String? = null,
     trailingIcon: (@Composable () -> Unit)? = null,
     enabled: Boolean = true
 ) {
@@ -76,7 +76,7 @@ fun MenuRow(
             .clip(RoundedCornerShape(14.dp))
             .clickable(enabled = enabled) { onClick() }
             .background(contentColor.copy(alpha = hoverAlpha))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = if (description != null) 6.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -86,7 +86,9 @@ fun MenuRow(
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             BasicText(title, style = TextStyle(contentColor, 15.sp, FontWeight.SemiBold))
-            BasicText(description, style = TextStyle(secondaryColor, 12.sp), maxLines = 1)
+            if (description != null) {
+                BasicText(description, style = TextStyle(secondaryColor, 12.sp), maxLines = 1)
+            }
         }
         if (trailingIcon != null) {
             Box(

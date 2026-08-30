@@ -67,6 +67,7 @@ fun SettingsScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Blur",
+                subtitle = "Backdrop gaussian blur radius",
                 colors = colors,
                 backdrop = backdrop,
                 value = glass.blurDp,
@@ -79,6 +80,7 @@ fun SettingsScreen(
             RowDivider(colors.separator, insetStart = 16.dp)
             SettingsSliderRow(
                 title = "Refraction Height",
+                subtitle = "Optical boundary height for light refraction",
                 colors = colors,
                 backdrop = backdrop,
                 value = glass.refractionHeightDp,
@@ -91,6 +93,7 @@ fun SettingsScreen(
             RowDivider(colors.separator, insetStart = 16.dp)
             SettingsSliderRow(
                 title = "Refraction Amount",
+                subtitle = "Strength of edge light bending and distortion",
                 colors = colors,
                 backdrop = backdrop,
                 value = glass.refractionAmountDp,
@@ -103,6 +106,7 @@ fun SettingsScreen(
             RowDivider(colors.separator)
             SettingsToggleRow(
                 title = "Chromatic Aberration",
+                subtitle = "RGB spectral dispersion along refracted edges",
                 colors = colors,
                 iconTint = colors.accentOrange.copy(alpha = 0.85f),
                 backdrop = backdrop,
@@ -122,10 +126,6 @@ fun SettingsScreen(
                 icon = { PowerIcon(color = Color.White, size = 14.dp) }
             )
         }
-        SectionFooter(
-            "Applies to cards, buttons, previews, and the dropdown menu throughout the app. Toggles and sliders always render with full glass regardless of this switch.",
-            colors
-        )
 
         SectionHeader("About", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {

@@ -96,6 +96,7 @@ fun AppDetailScreen(
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Glass Intensity",
+                subtitle = "Overall refractive clarity and blur multiplier",
                 colors = colors,
                 backdrop = backdrop,
                 value = s.glassIntensity,
@@ -108,6 +109,7 @@ fun AppDetailScreen(
             RowDivider(colors.separator, insetStart = 16.dp)
             SettingsSliderRow(
                 title = "Container Opacity",
+                subtitle = "Translucent background tint opacity",
                 colors = colors,
                 backdrop = backdrop,
                 value = s.containerOpacity,
@@ -118,15 +120,12 @@ fun AppDetailScreen(
                 enabled = s.enabled
             )
         }
-        SectionFooter(
-            "Glass Intensity scales blur and refraction together. Container Opacity is the tint behind the glass.",
-            colors
-        )
 
         SectionHeader("Shape & Size", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsSliderRow(
                 title = "Corner Radius",
+                subtitle = "Corner rounding radius for floating bar",
                 colors = colors,
                 backdrop = backdrop,
                 value = s.cornerRadius,
@@ -139,6 +138,7 @@ fun AppDetailScreen(
             RowDivider(colors.separator, insetStart = 16.dp)
             SettingsSliderRow(
                 title = "Bar Height",
+                subtitle = "Vertical height of floating pill container",
                 colors = colors,
                 backdrop = backdrop,
                 value = s.barHeight,
@@ -151,6 +151,7 @@ fun AppDetailScreen(
             RowDivider(colors.separator, insetStart = 16.dp)
             SettingsSliderRow(
                 title = "Tab Width",
+                subtitle = "Width allocated per tab icon",
                 colors = colors,
                 backdrop = backdrop,
                 value = s.tabWidth,

@@ -23,7 +23,6 @@ import kotlin.math.roundToInt
 @Composable
 fun GlassFeelSection(
     sectionTitle: String,
-    footer: String,
     holder: SettingsRepository.GlassFeelHolder,
     colors: HyperBounceColors,
     backdrop: Backdrop,
@@ -35,6 +34,7 @@ fun GlassFeelSection(
     GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
         SettingsSliderRow(
             title = "Blur",
+            subtitle = "Backdrop gaussian blur radius",
             colors = colors,
             backdrop = backdrop,
             value = feel.blurDp,
@@ -47,6 +47,7 @@ fun GlassFeelSection(
         RowDivider(colors.separator, insetStart = 16.dp)
         SettingsSliderRow(
             title = "Lens Size",
+            subtitle = "Curvature radius of refraction lens",
             colors = colors,
             backdrop = backdrop,
             value = feel.lensSizeDp,
@@ -59,6 +60,7 @@ fun GlassFeelSection(
         RowDivider(colors.separator, insetStart = 16.dp)
         SettingsSliderRow(
             title = "Lens Depth",
+            subtitle = "Optical refraction extrusion depth",
             colors = colors,
             backdrop = backdrop,
             value = feel.lensDepthDp,
@@ -71,6 +73,7 @@ fun GlassFeelSection(
         RowDivider(colors.separator, insetStart = 16.dp)
         SettingsSliderRow(
             title = "Highlight Strength",
+            subtitle = "Specular Fresnel rim highlight intensity",
             colors = colors,
             backdrop = backdrop,
             value = feel.highlightStrength,
@@ -83,6 +86,7 @@ fun GlassFeelSection(
         RowDivider(colors.separator, insetStart = 16.dp)
         SettingsSliderRow(
             title = "Shadow Radius",
+            subtitle = "Diffusion radius of glass drop shadow",
             colors = colors,
             backdrop = backdrop,
             value = feel.shadowRadiusDp,
@@ -98,6 +102,7 @@ fun GlassFeelSection(
     GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
         SettingsSliderRow(
             title = "Drag Sensitivity",
+            subtitle = "Touch tracking movement ratio",
             colors = colors,
             backdrop = backdrop,
             value = feel.dragSensitivity,
@@ -110,7 +115,7 @@ fun GlassFeelSection(
         RowDivider(colors.separator, insetStart = 16.dp)
         SettingsSliderRow(
             title = "Spring Bounciness",
-            subtitle = "Lower damping = more bounce",
+            subtitle = "Lower = more overshoot bounce, Higher = stiffer vibration damping",
             colors = colors,
             backdrop = backdrop,
             value = feel.springDamping,
@@ -123,7 +128,7 @@ fun GlassFeelSection(
         RowDivider(colors.separator, insetStart = 16.dp)
         SettingsSliderRow(
             title = "Spring Stiffness",
-            subtitle = "How quickly it settles",
+            subtitle = "Lower = slower return oscillation, Higher = rapid snap settling",
             colors = colors,
             backdrop = backdrop,
             value = feel.springStiffness,
@@ -134,5 +139,4 @@ fun GlassFeelSection(
             enabled = enabled
         )
     }
-    SectionFooter(footer, colors)
 }
