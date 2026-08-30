@@ -103,6 +103,39 @@ fun SettingsNavRow(
     }
 }
 
+/** A tappable action row with a leading icon, title/subtitle, and no trailing chevron. */
+@Composable
+fun SettingsClickableRow(
+    title: String,
+    colors: HyperBounceColors,
+    iconTint: Color,
+    onClick: () -> Unit,
+    subtitle: String? = null,
+    titleColor: Color? = null,
+    icon: @Composable () -> Unit
+) {
+    Row(
+        Modifier
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        IconChip(iconTint) { icon() }
+        Column(Modifier.weight(1f)) {
+            BasicText(title, style = HyperBounceType.body.copy(color = titleColor ?: colors.label))
+            if (subtitle != null) {
+                BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
+            }
+        }
+    }
+}
+
 /** A row with a leading icon, title/subtitle, and a trailing [LiquidToggle]. */
 @Composable
 fun SettingsToggleRow(

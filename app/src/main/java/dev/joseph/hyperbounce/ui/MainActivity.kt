@@ -49,6 +49,7 @@ import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
 import dev.joseph.hyperbounce.ui.screens.AboutScreen
 import dev.joseph.hyperbounce.ui.screens.AppDetailScreen
 import dev.joseph.hyperbounce.ui.screens.AppTransitionsScreen
+import dev.joseph.hyperbounce.ui.screens.ControlCenterScreen
 import dev.joseph.hyperbounce.ui.screens.EngineScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadDelaysScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadScreen
@@ -221,6 +222,13 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                         )
 
                         Destination.AppTransitions -> AppTransitionsScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.ControlCenter -> ControlCenterScreen(
                             repository = repository,
                             colors = colors,
                             backdrop = backdrop,

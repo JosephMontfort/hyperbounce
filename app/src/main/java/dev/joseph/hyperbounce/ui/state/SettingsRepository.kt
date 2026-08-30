@@ -92,6 +92,7 @@ class SettingsRepository(context: Context) {
     val lockScreenKeypad = LockScreenKeypadHolder()
     val screenUnlock = ScreenUnlockHolder()
     val appTransition = AppTransitionHolder()
+    val controlCenter = ControlCenterHolder()
 
     @JvmName("setModuleEnabledPref")
     fun setModuleEnabled(value: Boolean) {
@@ -127,6 +128,7 @@ class SettingsRepository(context: Context) {
         lockScreenKeypad.reloadFromDefaults()
         screenUnlock.reloadFromDefaults()
         appTransition.reloadFromDefaults()
+        controlCenter.reloadFromDefaults()
         moduleEnabled = true
         toggleEngine = RenderEngine.LiquidGlass
         sliderEngine = RenderEngine.LiquidGlass
@@ -670,6 +672,97 @@ class SettingsRepository(context: Context) {
             appInterruptSmooth = defaults.appInterruptSmooth
             appIconPitchDeg = defaults.appIconPitchDeg
             appIconCameraDist = defaults.appIconCameraDist
+        }
+    }
+
+    // --- Control Center & Jelly Physics (Features 5, 6, 7, 8, 9) -----------------------
+
+    inner class ControlCenterHolder {
+        private val defaults = ControlCenterSettings()
+
+        var modularEditEnabled by prefsBooleanState("cc_modular_edit_enabled", defaults.modularEditEnabled); private set
+        var restartOnEditExit by prefsBooleanState("cc_restart_on_edit_exit", defaults.restartOnEditExit); private set
+        var animEnabled by prefsBooleanState("cc_anim_enabled", defaults.animEnabled); private set
+        var jellyEnabled by prefsBooleanState("cc_jelly_enabled", defaults.jellyEnabled); private set
+        var lowEndAnim by prefsBooleanState("cc_low_end_anim", defaults.lowEndAnim); private set
+        var entryInitialScale by prefsFloatState("cc_entry_initial_scale", defaults.entryInitialScale); private set
+        var entryTranslationY by prefsFloatState("cc_entry_translation_y", defaults.entryTranslationY); private set
+        var waterfallEnabled by prefsBooleanState("cc_waterfall_enabled", defaults.waterfallEnabled); private set
+        var waterfallDelayStep by prefsFloatState("cc_waterfall_delay_step", defaults.waterfallDelayStep); private set
+        var spreadRatio by prefsFloatState("cc_spread_ratio", defaults.spreadRatio); private set
+        var spreadResponse by prefsFloatState("cc_spread_response", defaults.spreadResponse); private set
+        var spreadDamping by prefsFloatState("cc_spread_damping", defaults.spreadDamping); private set
+        var spreadReleaseResponse by prefsFloatState("cc_spread_release_response", defaults.spreadReleaseResponse); private set
+        var spreadReleaseDamping by prefsFloatState("cc_spread_release_damping", defaults.spreadReleaseDamping); private set
+        var tileShowResponse by prefsFloatState("cc_tile_show_response", defaults.tileShowResponse); private set
+        var tileShowDamping by prefsFloatState("cc_tile_show_damping", defaults.tileShowDamping); private set
+        var tileHideResponse by prefsFloatState("cc_tile_hide_response", defaults.tileHideResponse); private set
+        var tileHideDamping by prefsFloatState("cc_tile_hide_damping", defaults.tileHideDamping); private set
+        var tileShrinkResponse by prefsFloatState("cc_tile_shrink_response", defaults.tileShrinkResponse); private set
+        var tileShrinkDamping by prefsFloatState("cc_tile_shrink_damping", defaults.tileShrinkDamping); private set
+        var tileDelayScale by prefsFloatState("cc_tile_delay_scale", defaults.tileDelayScale); private set
+        var blurResponse by prefsFloatState("cc_blur_response", defaults.blurResponse); private set
+        var blurDamping by prefsFloatState("cc_blur_damping", defaults.blurDamping); private set
+        var frictionMultiplier by prefsFloatState("cc_friction_multiplier", defaults.frictionMultiplier); private set
+
+        fun snapshot(): ControlCenterSettings = ControlCenterSettings(
+            modularEditEnabled, restartOnEditExit, animEnabled, jellyEnabled, lowEndAnim,
+            entryInitialScale, entryTranslationY, waterfallEnabled, waterfallDelayStep,
+            spreadRatio, spreadResponse, spreadDamping, spreadReleaseResponse, spreadReleaseDamping,
+            tileShowResponse, tileShowDamping, tileHideResponse, tileHideDamping,
+            tileShrinkResponse, tileShrinkDamping, tileDelayScale, blurResponse, blurDamping, frictionMultiplier
+        )
+
+        @JvmName("setCcModularEditEnabledPref") fun setModularEditEnabled(v: Boolean) { modularEditEnabled = v }
+        @JvmName("setCcRestartOnEditExitPref") fun setRestartOnEditExit(v: Boolean) { restartOnEditExit = v }
+        @JvmName("setCcAnimEnabledPref") fun setAnimEnabled(v: Boolean) { animEnabled = v }
+        @JvmName("setCcJellyEnabledPref") fun setJellyEnabled(v: Boolean) { jellyEnabled = v }
+        @JvmName("setCcLowEndAnimPref") fun setLowEndAnim(v: Boolean) { lowEndAnim = v }
+        @JvmName("setCcEntryInitialScalePref") fun setEntryInitialScale(v: Float) { entryInitialScale = v }
+        @JvmName("setCcEntryTranslationYPref") fun setEntryTranslationY(v: Float) { entryTranslationY = v }
+        @JvmName("setCcWaterfallEnabledPref") fun setWaterfallEnabled(v: Boolean) { waterfallEnabled = v }
+        @JvmName("setCcWaterfallDelayStepPref") fun setWaterfallDelayStep(v: Float) { waterfallDelayStep = v }
+        @JvmName("setCcSpreadRatioPref") fun setSpreadRatio(v: Float) { spreadRatio = v }
+        @JvmName("setCcSpreadResponsePref") fun setSpreadResponse(v: Float) { spreadResponse = v }
+        @JvmName("setCcSpreadDampingPref") fun setSpreadDamping(v: Float) { spreadDamping = v }
+        @JvmName("setCcSpreadReleaseResponsePref") fun setSpreadReleaseResponse(v: Float) { spreadReleaseResponse = v }
+        @JvmName("setCcSpreadReleaseDampingPref") fun setSpreadReleaseDamping(v: Float) { spreadReleaseDamping = v }
+        @JvmName("setCcTileShowResponsePref") fun setTileShowResponse(v: Float) { tileShowResponse = v }
+        @JvmName("setCcTileShowDampingPref") fun setTileShowDamping(v: Float) { tileShowDamping = v }
+        @JvmName("setCcTileHideResponsePref") fun setTileHideResponse(v: Float) { tileHideResponse = v }
+        @JvmName("setCcTileHideDampingPref") fun setTileHideDamping(v: Float) { tileHideDamping = v }
+        @JvmName("setCcTileShrinkResponsePref") fun setTileShrinkResponse(v: Float) { tileShrinkResponse = v }
+        @JvmName("setCcTileShrinkDampingPref") fun setTileShrinkDamping(v: Float) { tileShrinkDamping = v }
+        @JvmName("setCcTileDelayScalePref") fun setTileDelayScale(v: Float) { tileDelayScale = v }
+        @JvmName("setCcBlurResponsePref") fun setBlurResponse(v: Float) { blurResponse = v }
+        @JvmName("setCcBlurDampingPref") fun setBlurDamping(v: Float) { blurDamping = v }
+        @JvmName("setCcFrictionMultiplierPref") fun setFrictionMultiplier(v: Float) { frictionMultiplier = v }
+
+        fun reloadFromDefaults() {
+            modularEditEnabled = defaults.modularEditEnabled
+            restartOnEditExit = defaults.restartOnEditExit
+            animEnabled = defaults.animEnabled
+            jellyEnabled = defaults.jellyEnabled
+            lowEndAnim = defaults.lowEndAnim
+            entryInitialScale = defaults.entryInitialScale
+            entryTranslationY = defaults.entryTranslationY
+            waterfallEnabled = defaults.waterfallEnabled
+            waterfallDelayStep = defaults.waterfallDelayStep
+            spreadRatio = defaults.spreadRatio
+            spreadResponse = defaults.spreadResponse
+            spreadDamping = defaults.spreadDamping
+            spreadReleaseResponse = defaults.spreadReleaseResponse
+            spreadReleaseDamping = defaults.spreadReleaseDamping
+            tileShowResponse = defaults.tileShowResponse
+            tileShowDamping = defaults.tileShowDamping
+            tileHideResponse = defaults.tileHideResponse
+            tileHideDamping = defaults.tileHideDamping
+            tileShrinkResponse = defaults.tileShrinkResponse
+            tileShrinkDamping = defaults.tileShrinkDamping
+            tileDelayScale = defaults.tileDelayScale
+            blurResponse = defaults.blurResponse
+            blurDamping = defaults.blurDamping
+            frictionMultiplier = defaults.frictionMultiplier
         }
     }
 

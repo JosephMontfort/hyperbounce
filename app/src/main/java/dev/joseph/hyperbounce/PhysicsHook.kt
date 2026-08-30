@@ -33,14 +33,30 @@ class PhysicsHook : XposedModule() {
                     try {
                         val prefs = getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
                         dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
+                        dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
                         prefs.registerOnSharedPreferenceChangeListener { _, _ ->
                             dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
+                            dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
                         }
                     } catch (t: Throwable) {
                         Log.e("HyperBounce", "Failed to bind remote preferences in SystemUI", t)
                     }
                     dev.joseph.hyperbounce.lockscreen.LockScreenSheetHook.init(this, param.classLoader)
                     dev.joseph.hyperbounce.lockscreen.KeypadPhysicsHook.init(this, param.classLoader)
+                    dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initSystemUIHooks(this, param.classLoader)
+                }
+
+                param.packageName == "miui.systemui.plugin" -> {
+                    try {
+                        val prefs = getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
+                        dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
+                        prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                            dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
+                        }
+                    } catch (t: Throwable) {
+                        Log.e("HyperBounce", "Failed to bind remote preferences in Control Center Plugin", t)
+                    }
+                    dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initPluginHooks(this, param.classLoader)
                 }
 
                 param.packageName == "com.miui.home" -> {

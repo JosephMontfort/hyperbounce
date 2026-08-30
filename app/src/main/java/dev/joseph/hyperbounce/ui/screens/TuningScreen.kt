@@ -104,6 +104,15 @@ fun TuningScreen(
                 onClick = { onNavigate(Destination.AppTransitions) },
                 icon = { dev.joseph.hyperbounce.ui.components.SlidersIcon(color = Color.White, size = 15.dp) }
             )
+            RowDivider(colors.separator)
+            SettingsNavRow(
+                title = "Control Center",
+                subtitle = if (repository.controlCenter.modularEditEnabled || repository.controlCenter.animEnabled) "Modular Layout & Jelly Physics" else "Off",
+                colors = colors,
+                iconTint = colors.accentBlue,
+                onClick = { onNavigate(Destination.ControlCenter) },
+                icon = { dev.joseph.hyperbounce.ui.components.SlidersIcon(color = Color.White, size = 15.dp) }
+            )
         }
         SectionFooter(
             "Tap any section to configure its specific rendering engine and physical feel.",
