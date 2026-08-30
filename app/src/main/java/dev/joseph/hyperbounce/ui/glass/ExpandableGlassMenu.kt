@@ -202,9 +202,9 @@ fun ExpandableGlassMenu(
     val dialogProgress by animateFloatAsState(
         targetValue = if (activeDialog != null) 1f else 0f,
         animationSpec = spring(
-            dampingRatio = 0.76f,
-            stiffness = 220f * (animationSpeedMultiplier * animationSpeedMultiplier),
-            visibilityThreshold = 0.001f
+            dampingRatio = 0.85f,
+            stiffness = 25f,
+            visibilityThreshold = 0.0001f
         ),
         label = "menuDialogMorphProgress",
         finishedListener = { p ->
@@ -522,11 +522,8 @@ fun GlassEffectContainer(
                         recoil + springOvershoot
                     } else 0f
 
-                    val finalTargetW = baseMorphW * (1f + jellyOvershoot)
-                    val finalTargetH = baseMorphH * (1f + jellyOvershoot)
-
-                    currentWidthPx = lerp(menuWidthPx, finalTargetW, dp)
-                    currentHeightPx = lerp(menuHeightPx, finalTargetH, dp)
+                    currentWidthPx = baseMorphW * (1f + jellyOvershoot)
+                    currentHeightPx = baseMorphH * (1f + jellyOvershoot)
                 }
 
                 val placeable = measurable.measure(
