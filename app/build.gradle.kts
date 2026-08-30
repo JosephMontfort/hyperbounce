@@ -54,6 +54,8 @@ dependencies {
     // as a build-time dependency. This is a build-time-only change (compileOnly is not
     // packaged into the module) and does not affect compiled bytecode or runtime behavior.
     compileOnly(files("libs/api-102.0.0.aar"))
+    compileOnly("androidx.recyclerview:recyclerview:1.3.2")
+    compileOnly("androidx.constraintlayout:constraintlayout:2.1.4")
     // Phase 2: lets the companion app itself (not the hooks) write settings the hooks can
     // read back via XposedInterface.getRemotePreferences(group) — see
     // prefs/HyperBouncePrefs.kt and ui/state/XposedServiceBridge.kt for the full mechanism.
