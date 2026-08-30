@@ -231,3 +231,19 @@ data class ControlCenterSettings(
     val frictionMultiplier: Float = 0.40f
 )
 
+/** Feature 10: Dropdown Menu to Dialog Fluid Morph Physics */
+data class MorphPhysicsSettings(
+    val morphSpeedMultiplier: Float = 1.0f,
+    val circleCollapseRatio: Float = 0.35f,
+    val circleDiameterDp: Float = 44.0f,
+    val zPlungeDepth: Float = 0.25f,
+    val gravitySwoopDp: Float = 24.0f,
+    val yBounceAmountDp: Float = 16.0f,
+    val jellyOvershoot: Float = 0.05f,
+    val contentStretch: Float = 0.05f,
+    val springDamping: Float = 0.76f,
+    val springStiffness: Float = 220.0f,
+    val lensSurgeDp: Float = 8.0f,
+    val motionBlurSurgeDp: Float = 14.0f
+)
+

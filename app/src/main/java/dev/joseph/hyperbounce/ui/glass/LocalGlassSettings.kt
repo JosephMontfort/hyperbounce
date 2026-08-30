@@ -11,5 +11,7 @@ package dev.joseph.hyperbounce.ui.glass
 
 import androidx.compose.runtime.compositionLocalOf
 import dev.joseph.hyperbounce.ui.state.GlobalGlassSettings
+import dev.joseph.hyperbounce.ui.state.MorphPhysicsSettings
 
 val LocalGlassSettings = compositionLocalOf { GlobalGlassSettings() }
+val LocalMorphPhysics = compositionLocalOf { MorphPhysicsSettings() }

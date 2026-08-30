@@ -18,6 +18,7 @@ sealed interface Destination {
     data object ScreenUnlock : Destination
     data object AppTransitions : Destination
     data object ControlCenter : Destination
+    data object MorphPhysics : Destination
     data object About : Destination
 }
 

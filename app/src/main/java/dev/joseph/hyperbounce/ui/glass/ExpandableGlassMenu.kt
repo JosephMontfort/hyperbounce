@@ -199,11 +199,15 @@ fun ExpandableGlassMenu(
         activeDialog = null
     }
 
+    val morphSettings = dev.joseph.hyperbounce.ui.glass.LocalMorphPhysics.current
+    val morphSpeed = morphSettings.morphSpeedMultiplier
+    val effectiveSpeed = animationSpeedMultiplier * morphSpeed
+
     val dialogProgress by animateFloatAsState(
         targetValue = if (activeDialog != null) 1f else 0f,
         animationSpec = spring(
-            dampingRatio = 0.85f,
-            stiffness = 25f,
+            dampingRatio = morphSettings.springDamping,
+            stiffness = morphSettings.springStiffness * (effectiveSpeed * effectiveSpeed),
             visibilityThreshold = 0.0001f
         ),
         label = "menuDialogMorphProgress",
@@ -420,6 +424,17 @@ fun GlassEffectContainer(
     val density = LocalDensity.current
     val isLightTheme = !isSystemInDarkTheme()
 
+    val morphSettings = dev.joseph.hyperbounce.ui.glass.LocalMorphPhysics.current
+    val circleCollapseRatio = morphSettings.circleCollapseRatio
+    val circleDiameterPx = with(density) { morphSettings.circleDiameterDp.dp.toPx() }
+    val zPlungeDepth = morphSettings.zPlungeDepth
+    val gravitySwoopPx = with(density) { morphSettings.gravitySwoopDp.dp.toPx() }
+    val yBounceAmountPx = with(density) { morphSettings.yBounceAmountDp.dp.toPx() }
+    val jellyOvershootAmp = morphSettings.jellyOvershoot
+    val contentStretchAmp = morphSettings.contentStretch
+    val lensSurgePx = with(density) { morphSettings.lensSurgeDp.dp.toPx() }
+    val motionBlurSurgePx = with(density) { morphSettings.motionBlurSurgeDp.dp.toPx() }
+
     val animatedDragX by animateFloatAsState(dragOffset.x, spring(stiffness = 400f, dampingRatio = 0.6f))
     val animatedDragY by animateFloatAsState(dragOffset.y, spring(stiffness = 400f, dampingRatio = 0.6f))
 
@@ -454,18 +469,15 @@ fun GlassEffectContainer(
         dialogMeasuredHeightPx
     } else with(density) { 225.dp.toPx() }
 
-    // Intermediate collapsed circle diameter (~44dp)
-    val circleDiameterPx = with(density) { 44.dp.toPx() }
-
     // Dynamic corner radius: Menu Corner (22dp) -> Circle Pill Radius (22dp) -> Dialog Corner (32dp)
     val targetRadiusPx = if (dialogProgress <= 0.001f) {
         with(density) { cornerRadius.toPx() }
-    } else if (dialogProgress <= 0.5f) {
-        val u = (dialogProgress / 0.5f).coerceIn(0f, 1f)
+    } else if (dialogProgress <= circleCollapseRatio) {
+        val u = (dialogProgress / circleCollapseRatio).coerceIn(0f, 1f)
         val smoothU = u * u * (3f - 2f * u)
         lerp(with(density) { cornerRadius.toPx() }, circleDiameterPx / 2f, smoothU)
     } else {
-        val v = ((dialogProgress - 0.5f) / 0.5f).coerceIn(0f, 1f)
+        val v = ((dialogProgress - circleCollapseRatio) / (1f - circleCollapseRatio)).coerceIn(0f, 1f)
         val smoothV = v * v * (3f - 2f * v)
         lerp(circleDiameterPx / 2f, with(density) { 32.dp.toPx() }, smoothV)
     }
@@ -500,15 +512,15 @@ fun GlassEffectContainer(
                 } else {
                     val baseMorphW: Float
                     val baseMorphH: Float
-                    if (dp <= 0.5f) {
-                        // Phase 1: Rapidly collapse into intermediate small circle
-                        val u = (dp / 0.5f).coerceIn(0f, 1f)
+                    if (dp <= circleCollapseRatio) {
+                        // Phase 1: Heavy, viscous collapse into intermediate small circle
+                        val u = (dp / circleCollapseRatio).coerceIn(0f, 1f)
                         val smoothU = u * u * (3f - 2f * u)
                         baseMorphW = lerp(activeMenuW, circleDiameterPx, smoothU)
                         baseMorphH = lerp(activeMenuH, circleDiameterPx, smoothU)
                     } else {
-                        // Phase 2: Rapidly expand from circle into final dialog shape
-                        val v = ((dp - 0.5f) / 0.5f).coerceIn(0f, 1f)
+                        // Phase 2: Quick snappy expansion from circle into final dialog shape
+                        val v = ((dp - circleCollapseRatio) / (1f - circleCollapseRatio)).coerceIn(0f, 1f)
                         val smoothV = v * v * (3f - 2f * v)
                         baseMorphW = lerp(circleDiameterPx, targetDialogWidthPx, smoothV)
                         baseMorphH = lerp(circleDiameterPx, targetDialogHeightPx, smoothV)
@@ -517,7 +529,7 @@ fun GlassEffectContainer(
                     // 4-Edge Isotropic Jelly Overshoot Bounce (Expands all 4 edges equally on settling)
                     val jellyOvershoot = if (dp >= 0.80f) {
                         val landingPhase = ((dp - 0.80f) / 0.20f).coerceIn(0f, 1f)
-                        val recoil = sin(landingPhase * PI).toFloat() * 0.045f
+                        val recoil = sin(landingPhase * PI).toFloat() * jellyOvershootAmp
                         val springOvershoot = if (dp > 1f) (dp - 1f) * 0.22f else 0f
                         recoil + springOvershoot
                     } else 0f
@@ -590,13 +602,13 @@ fun GlassEffectContainer(
                 val flightProgress = dp.coerceIn(0f, 1f)
                 val smoothTravel = (1f - cos(flightProgress * PI).toFloat()) / 2f
 
-                // Z-Axis Depth Plunge: Punches 22% deep into screen Z-plane ONLY mid-flight; strictly 1.0 at rest, NO Z-axis bounce
+                // Z-Axis Depth Plunge: Punches into screen Z-plane ONLY mid-flight; strictly 1.0 at rest, NO Z-axis bounce
                 val zPlunge = sin(flightProgress * PI).toFloat() // 0.0 -> 1.0 -> 0.0
-                val zDepthScale = 1f - (zPlunge * 0.22f)
+                val zDepthScale = 1f - (zPlunge * zPlungeDepth)
 
                 // Y-Axis Downward Swoop + Y-Axis Landing Spring Bounce ONLY
-                val gravitySwoopY = zPlunge * with(density) { 24.dp.toPx() }
-                val yBounce = if (dp > 1f) (dp - 1f) * with(density) { 18.dp.toPx() } else 0f
+                val gravitySwoopY = zPlunge * gravitySwoopPx
+                val yBounce = if (dp > 1f) (dp - 1f) * yBounceAmountPx else 0f
 
                 translationX = lerp(menuTx, centerDeltaX, smoothTravel)
                 translationY = lerp(menuTy, centerDeltaY, smoothTravel) + gravitySwoopY + yBounce
@@ -617,10 +629,10 @@ fun GlassEffectContainer(
                         val flightPlunge = sin(dp.coerceIn(0f, 1f) * PI).toFloat()
                         vibrancy()
                         // Dynamic motion blur & lens refraction surge mid-flight
-                        blur(((blurRadius * effProgress) + flightPlunge * 14f).dp.toPx())
+                        blur(((blurRadius * effProgress) + flightPlunge * motionBlurSurgePx).dp.toPx())
                         lens(
-                            ((refractionHeight * effProgress) + flightPlunge * 8f).dp.toPx(),
-                            ((refractionAmount * effProgress) + flightPlunge * 6f).dp.toPx(),
+                            ((refractionHeight * effProgress) + flightPlunge * lensSurgePx).dp.toPx(),
+                            ((refractionAmount * effProgress) + flightPlunge * (lensSurgePx * 0.75f)).dp.toPx(),
                             depthEffect = true,
                             chromaticAberration = chromaticAberration
                         )
@@ -663,7 +675,7 @@ fun GlassEffectContainer(
             .clip(RoundedCornerShape(animatedRadius)),
         contentAlignment = alignment.composeAlignment
     ) {
-        // Menu Content Layer (collapses & dissolves rapidly as menu turns into circle)
+        // Menu Content Layer (implodes into circle center and dissolves as menu turns into circle)
         Box(
             modifier = Modifier
                 .wrapContentSize(unbounded = true, align = alignment.composeAlignment)
@@ -676,18 +688,20 @@ fun GlassEffectContainer(
 
                     val pop = sin(progress.coerceIn(0f, 1f) * PI).toFloat()
 
-                    alpha = (rawContentProgress.coerceIn(0f, 1f) * (1f - dp / 0.35f)).coerceIn(0f, 1f)
-                    translationX = -dp * 36.dp.toPx()
-                    scaleX = baseScale + pop * contentPopX
-                    scaleY = baseScale + pop * contentPopY
+                    val collapseProgress = (dp / circleCollapseRatio).coerceIn(0f, 1f)
+                    val exitScale = (1f - collapseProgress * 0.65f).coerceIn(0.35f, 1.0f)
+
+                    alpha = (rawContentProgress.coerceIn(0f, 1f) * (1f - collapseProgress * 1.5f)).coerceIn(0f, 1f)
+                    scaleX = (baseScale + pop * contentPopX) * exitScale
+                    scaleY = (baseScale + pop * contentPopY) * exitScale
                     this.transformOrigin = TransformOrigin.Center
                 }
-                .zIndex(if (dialogProgress < 0.4f && animatableProgress.value > 0.35f) 2f else 0f)
+                .zIndex(if (dialogProgress < circleCollapseRatio && animatableProgress.value > 0.35f) 2f else 0f)
         ) {
             content()
         }
 
-        // Morph Confirmation Dialog Content Layer (blooms as circle expands into final dialog)
+        // Morph Confirmation Dialog Content Layer (blooms from center with outward stretch and settling)
         if (activeDialog != null || dialogProgress > 0.001f) {
             val curDialog = activeDialog ?: lastDialog
             if (curDialog != null) {
@@ -701,18 +715,29 @@ fun GlassEffectContainer(
                             }
                         }
                         .graphicsLayer {
-                            val appearProgress = ((dialogProgress - 0.60f) / 0.40f).coerceIn(0f, 1f)
+                            val appearStart = circleCollapseRatio * 0.9f
+                            val appearProgress = ((dialogProgress - appearStart) / (1f - appearStart)).coerceIn(0f, 1f)
+                            
+                            // Center bloom with outward elastic stretch & recoil
+                            val contentStretch = if (appearProgress >= 0.70f) {
+                                val stretchPhase = ((appearProgress - 0.70f) / 0.30f).coerceIn(0f, 1f)
+                                sin(stretchPhase * PI).toFloat() * contentStretchAmp
+                            } else 0f
+
+                            val coreScale = (0.50f + 0.50f * appearProgress) * (1f + contentStretch)
+
                             alpha = appearProgress
-                            scaleX = 0.90f + 0.10f * appearProgress
-                            scaleY = 0.90f + 0.10f * appearProgress
+                            scaleX = coreScale
+                            scaleY = coreScale
                             this.transformOrigin = TransformOrigin.Center
                         }
-                        .zIndex(if (dialogProgress >= 0.4f) 3f else 0f),
+                        .zIndex(if (dialogProgress >= circleCollapseRatio) 3f else 0f),
                     contentAlignment = Alignment.Center
                 ) {
                     MenuDialogContent(
                         dialog = curDialog,
                         isDark = !isLightTheme,
+                        colors = null,
                         onCancel = onDismissDialog,
                         onConfirmAndClose = {
                             curDialog.onConfirm()

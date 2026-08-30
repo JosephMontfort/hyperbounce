@@ -94,6 +94,7 @@ class SettingsRepository(context: Context) {
     val screenUnlock = ScreenUnlockHolder()
     val appTransition = AppTransitionHolder()
     val controlCenter = ControlCenterHolder()
+    val morphPhysics = MorphPhysicsHolder()
 
     @JvmName("setModuleEnabledPref")
     fun setModuleEnabled(value: Boolean) {
@@ -130,6 +131,7 @@ class SettingsRepository(context: Context) {
         screenUnlock.reloadFromDefaults()
         appTransition.reloadFromDefaults()
         controlCenter.reloadFromDefaults()
+        morphPhysics.reloadFromDefaults()
         moduleEnabled = true
         toggleEngine = RenderEngine.LiquidGlass
         sliderEngine = RenderEngine.LiquidGlass
@@ -791,6 +793,71 @@ class SettingsRepository(context: Context) {
             blurResponse = defaults.blurResponse
             blurDamping = defaults.blurDamping
             frictionMultiplier = defaults.frictionMultiplier
+        }
+    }
+
+    // --- Feature 10: Morph Physics Settings ----------------------------------------------
+
+    inner class MorphPhysicsHolder {
+        private val defaults = MorphPhysicsSettings()
+
+        var morphSpeedMultiplier by prefsFloatState("morph_speed_multiplier", defaults.morphSpeedMultiplier)
+            private set
+        var circleCollapseRatio by prefsFloatState("morph_circle_collapse_ratio", defaults.circleCollapseRatio)
+            private set
+        var circleDiameterDp by prefsFloatState("morph_circle_diameter_dp", defaults.circleDiameterDp)
+            private set
+        var zPlungeDepth by prefsFloatState("morph_z_plunge_depth", defaults.zPlungeDepth)
+            private set
+        var gravitySwoopDp by prefsFloatState("morph_gravity_swoop_dp", defaults.gravitySwoopDp)
+            private set
+        var yBounceAmountDp by prefsFloatState("morph_y_bounce_amount_dp", defaults.yBounceAmountDp)
+            private set
+        var jellyOvershoot by prefsFloatState("morph_jelly_overshoot", defaults.jellyOvershoot)
+            private set
+        var contentStretch by prefsFloatState("morph_content_stretch", defaults.contentStretch)
+            private set
+        var springDamping by prefsFloatState("morph_spring_damping", defaults.springDamping)
+            private set
+        var springStiffness by prefsFloatState("morph_spring_stiffness", defaults.springStiffness)
+            private set
+        var lensSurgeDp by prefsFloatState("morph_lens_surge_dp", defaults.lensSurgeDp)
+            private set
+        var motionBlurSurgeDp by prefsFloatState("morph_motion_blur_surge_dp", defaults.motionBlurSurgeDp)
+            private set
+
+        fun snapshot(): MorphPhysicsSettings = MorphPhysicsSettings(
+            morphSpeedMultiplier, circleCollapseRatio, circleDiameterDp, zPlungeDepth,
+            gravitySwoopDp, yBounceAmountDp, jellyOvershoot, contentStretch,
+            springDamping, springStiffness, lensSurgeDp, motionBlurSurgeDp
+        )
+
+        @JvmName("setMorphSpeedMultiplierPref") fun setMorphSpeedMultiplier(v: Float) { morphSpeedMultiplier = v }
+        @JvmName("setCircleCollapseRatioPref") fun setCircleCollapseRatio(v: Float) { circleCollapseRatio = v }
+        @JvmName("setCircleDiameterDpPref") fun setCircleDiameterDp(v: Float) { circleDiameterDp = v }
+        @JvmName("setZPlungeDepthPref") fun setZPlungeDepth(v: Float) { zPlungeDepth = v }
+        @JvmName("setGravitySwoopDpPref") fun setGravitySwoopDp(v: Float) { gravitySwoopDp = v }
+        @JvmName("setYBounceAmountDpPref") fun setYBounceAmountDp(v: Float) { yBounceAmountDp = v }
+        @JvmName("setJellyOvershootPref") fun setJellyOvershoot(v: Float) { jellyOvershoot = v }
+        @JvmName("setContentStretchPref") fun setContentStretch(v: Float) { contentStretch = v }
+        @JvmName("setSpringDampingPref") fun setSpringDamping(v: Float) { springDamping = v }
+        @JvmName("setSpringStiffnessPref") fun setSpringStiffness(v: Float) { springStiffness = v }
+        @JvmName("setLensSurgeDpPref") fun setLensSurgeDp(v: Float) { lensSurgeDp = v }
+        @JvmName("setMotionBlurSurgeDpPref") fun setMotionBlurSurgeDp(v: Float) { motionBlurSurgeDp = v }
+
+        fun reloadFromDefaults() {
+            morphSpeedMultiplier = defaults.morphSpeedMultiplier
+            circleCollapseRatio = defaults.circleCollapseRatio
+            circleDiameterDp = defaults.circleDiameterDp
+            zPlungeDepth = defaults.zPlungeDepth
+            gravitySwoopDp = defaults.gravitySwoopDp
+            yBounceAmountDp = defaults.yBounceAmountDp
+            jellyOvershoot = defaults.jellyOvershoot
+            contentStretch = defaults.contentStretch
+            springDamping = defaults.springDamping
+            springStiffness = defaults.springStiffness
+            lensSurgeDp = defaults.lensSurgeDp
+            motionBlurSurgeDp = defaults.motionBlurSurgeDp
         }
     }
 

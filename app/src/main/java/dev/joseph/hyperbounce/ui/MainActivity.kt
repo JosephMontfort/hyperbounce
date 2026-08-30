@@ -109,7 +109,10 @@ private fun HyperBounceApp(repository: SettingsRepository) {
 
     BackHandler(enabled = backStack.isNotEmpty()) { pop() }
 
-    CompositionLocalProvider(LocalGlassSettings provides repository.globalGlass.snapshot()) {
+    CompositionLocalProvider(
+        LocalGlassSettings provides repository.globalGlass.snapshot(),
+        dev.joseph.hyperbounce.ui.glass.LocalMorphPhysics provides repository.morphPhysics.snapshot()
+    ) {
         dev.joseph.hyperbounce.ui.glass.CustomValueDialogHost(colors) {
         Box(Modifier.fillMaxSize()) {
             // Root is considered null in the backStack, or we can just use the current top of stack
@@ -230,6 +233,13 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                         )
 
                         Destination.ControlCenter -> ControlCenterScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.MorphPhysics -> dev.joseph.hyperbounce.ui.screens.MorphPhysicsScreen(
                             repository = repository,
                             colors = colors,
                             backdrop = backdrop,

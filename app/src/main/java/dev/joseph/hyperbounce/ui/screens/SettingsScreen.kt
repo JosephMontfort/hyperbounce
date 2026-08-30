@@ -127,6 +127,18 @@ fun SettingsScreen(
             )
         }
 
+        SectionHeader("Physics & Motion", colors)
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+            SettingsNavRow(
+                title = "Dialog Morph Physics",
+                subtitle = "Trajectories, mass, springs & curves",
+                colors = colors,
+                iconTint = colors.accentOrange.copy(alpha = 0.85f),
+                onClick = { onNavigate(Destination.MorphPhysics) },
+                icon = { SlidersIcon(color = Color.White, size = 14.dp) }
+            )
+        }
+
         SectionHeader("About", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsNavRow(
