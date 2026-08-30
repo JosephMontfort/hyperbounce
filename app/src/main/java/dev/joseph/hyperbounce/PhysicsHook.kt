@@ -42,6 +42,20 @@ class PhysicsHook : XposedModule() {
                     dev.joseph.hyperbounce.lockscreen.LockScreenSheetHook.init(this, param.classLoader)
                     dev.joseph.hyperbounce.lockscreen.KeypadPhysicsHook.init(this, param.classLoader)
                 }
+
+                param.packageName == "com.miui.home" -> {
+                    try {
+                        val prefs = getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
+                        dev.joseph.hyperbounce.launcher.LauncherConfigHolder.update(prefs)
+                        prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                            dev.joseph.hyperbounce.launcher.LauncherConfigHolder.update(prefs)
+                        }
+                    } catch (t: Throwable) {
+                        Log.e("HyperBounce", "Failed to bind remote preferences in MIUI Home", t)
+                    }
+                    dev.joseph.hyperbounce.launcher.ScreenUnlockHook.init(this, param.classLoader)
+                    dev.joseph.hyperbounce.launcher.AppTransitionHook.init(this, param.classLoader)
+                }
             }
         } catch (t: Throwable) {
             Log.e("HyperBounce", "PhysicsHook failed for ${param.packageName}, leaving stock UI untouched", t)

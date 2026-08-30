@@ -15,6 +15,8 @@ sealed interface Destination {
     data object LockScreenSheet : Destination
     data object Keypad : Destination
     data object KeypadDelays : Destination
+    data object ScreenUnlock : Destination
+    data object AppTransitions : Destination
     data object About : Destination
 }
 

@@ -86,6 +86,24 @@ fun TuningScreen(
                 onClick = { onNavigate(Destination.Keypad) },
                 icon = { dev.joseph.hyperbounce.ui.components.SlidersIcon(color = Color.White, size = 15.dp) }
             )
+            RowDivider(colors.separator)
+            SettingsNavRow(
+                title = "Screen Unlock",
+                subtitle = if (repository.screenUnlock.enabled) "Velocity Kinetics & Dispersion" else "Off",
+                colors = colors,
+                iconTint = colors.accentPurple,
+                onClick = { onNavigate(Destination.ScreenUnlock) },
+                icon = { dev.joseph.hyperbounce.ui.components.SlidersIcon(color = Color.White, size = 15.dp) }
+            )
+            RowDivider(colors.separator)
+            SettingsNavRow(
+                title = "App Transitions",
+                subtitle = if (repository.appTransition.enabled) "Open / Close Spring Channels" else "Off",
+                colors = colors,
+                iconTint = colors.accentGreen,
+                onClick = { onNavigate(Destination.AppTransitions) },
+                icon = { dev.joseph.hyperbounce.ui.components.SlidersIcon(color = Color.White, size = 15.dp) }
+            )
         }
         SectionFooter(
             "Tap any section to configure its specific rendering engine and physical feel.",

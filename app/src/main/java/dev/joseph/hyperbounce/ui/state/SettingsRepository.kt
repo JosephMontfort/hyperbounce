@@ -90,6 +90,8 @@ class SettingsRepository(context: Context) {
     val globalGlass = GlobalGlassHolder()
     val lockScreenSheet = LockScreenSheetHolder()
     val lockScreenKeypad = LockScreenKeypadHolder()
+    val screenUnlock = ScreenUnlockHolder()
+    val appTransition = AppTransitionHolder()
 
     @JvmName("setModuleEnabledPref")
     fun setModuleEnabled(value: Boolean) {
@@ -123,6 +125,8 @@ class SettingsRepository(context: Context) {
         globalGlass.reloadFromDefaults()
         lockScreenSheet.reloadFromDefaults()
         lockScreenKeypad.reloadFromDefaults()
+        screenUnlock.reloadFromDefaults()
+        appTransition.reloadFromDefaults()
         moduleEnabled = true
         toggleEngine = RenderEngine.LiquidGlass
         sliderEngine = RenderEngine.LiquidGlass
@@ -471,11 +475,212 @@ class SettingsRepository(context: Context) {
         }
     }
 
+    // --- screen unlock kinetics settings (Feature 3) --------------------------------------
+
+    inner class ScreenUnlockHolder {
+        private val defaults = ScreenUnlockSettings()
+
+        var enabled by prefsBooleanState("unlock_enabled", defaults.enabled); private set
+        var animMode by prefsIntState("unlock_anim_mode", defaults.animMode); private set
+        var gridColumns by prefsIntState("unlock_grid_columns", defaults.gridColumns); private set
+        var gridRows by prefsIntState("unlock_grid_rows", defaults.gridRows); private set
+
+        var dockDamping by prefsFloatState("unlock_dock_damping", defaults.dockDamping); private set
+        var dockResponse by prefsFloatState("unlock_dock_response", defaults.dockResponse); private set
+        var centerResponse by prefsFloatState("unlock_center_response", defaults.centerResponse); private set
+        var centerDamping by prefsFloatState("unlock_center_damping", defaults.centerDamping); private set
+        var edgeResponseDelay by prefsFloatState("unlock_edge_response_delay", defaults.edgeResponseDelay); private set
+        var edgeDampingDrop by prefsFloatState("unlock_edge_damping_drop", defaults.edgeDampingDrop); private set
+        var zDepthMultiplier by prefsFloatState("unlock_z_depth_multiplier", defaults.zDepthMultiplier); private set
+        var minResponse by prefsFloatState("unlock_min_response", defaults.minResponse); private set
+        var maxResponse by prefsFloatState("unlock_max_response", defaults.maxResponse); private set
+        var minDamping by prefsFloatState("unlock_min_damping", defaults.minDamping); private set
+        var maxDamping by prefsFloatState("unlock_max_damping", defaults.maxDamping); private set
+
+        var durationScale by prefsFloatState("unlock_duration_scale", defaults.durationScale); private set
+        var velocityInfluence by prefsFloatState("unlock_velocity_influence", defaults.velocityInfluence); private set
+        var maxVelocity by prefsFloatState("unlock_max_velocity", defaults.maxVelocity); private set
+        var cascadeDamping by prefsFloatState("unlock_cascade_damping", defaults.cascadeDamping); private set
+        var kineticDockDamping by prefsFloatState("unlock_kinetic_dock_damping", defaults.kineticDockDamping); private set
+        var kineticDockResponse by prefsFloatState("unlock_kinetic_dock_response", defaults.kineticDockResponse); private set
+        var kineticDockZDepth by prefsFloatState("unlock_kinetic_dock_z_depth", defaults.kineticDockZDepth); private set
+
+        fun getRowZ(row: Int): Float {
+            val defZ = (2000.0f - (row * 200.0f)).coerceAtLeast(100.0f)
+            return prefs.getFloat("unlock_r${row}_z", defZ)
+        }
+        fun setRowZ(row: Int, v: Float) {
+            val key = "unlock_r${row}_z"
+            prefs.edit().putFloat(key, v).apply()
+            XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
+        }
+
+        fun getRowCenterBounce(row: Int): Float {
+            val defBounce = (0.45f - (row * 0.05f)).coerceAtLeast(0.0f)
+            return prefs.getFloat("unlock_r${row}_center_bounce", defBounce)
+        }
+        fun setRowCenterBounce(row: Int, v: Float) {
+            val key = "unlock_r${row}_center_bounce"
+            prefs.edit().putFloat(key, v).apply()
+            XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
+        }
+
+        fun getRowOuterBounce(row: Int): Float {
+            val defBounce = (0.45f - (row * 0.05f)).coerceAtLeast(0.0f)
+            return prefs.getFloat("unlock_r${row}_outer_bounce", defBounce)
+        }
+        fun setRowOuterBounce(row: Int, v: Float) {
+            val key = "unlock_r${row}_outer_bounce"
+            prefs.edit().putFloat(key, v).apply()
+            XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
+        }
+
+        fun getRowCenterSettle(row: Int): Float {
+            val defSettle = 0.55f + (row * 0.04f)
+            return prefs.getFloat("unlock_r${row}_center_settle", defSettle)
+        }
+        fun setRowCenterSettle(row: Int, v: Float) {
+            val key = "unlock_r${row}_center_settle"
+            prefs.edit().putFloat(key, v).apply()
+            XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
+        }
+
+        fun getRowOuterSettle(row: Int): Float {
+            val defSettle = 0.55f + (row * 0.04f)
+            return prefs.getFloat("unlock_r${row}_outer_settle", defSettle)
+        }
+        fun setRowOuterSettle(row: Int, v: Float) {
+            val key = "unlock_r${row}_outer_settle"
+            prefs.edit().putFloat(key, v).apply()
+            XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
+        }
+
+        fun snapshot(): ScreenUnlockSettings = ScreenUnlockSettings(
+            enabled, animMode, gridColumns, gridRows, dockDamping, dockResponse,
+            centerResponse, centerDamping, edgeResponseDelay, edgeDampingDrop, zDepthMultiplier,
+            minResponse, maxResponse, minDamping, maxDamping, durationScale, velocityInfluence,
+            maxVelocity, cascadeDamping, kineticDockDamping, kineticDockResponse, kineticDockZDepth
+        )
+
+        @JvmName("setUnlockEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
+        @JvmName("setUnlockAnimModePref") fun setAnimMode(v: Int) { animMode = v }
+        @JvmName("setUnlockGridColumnsPref") fun setGridColumns(v: Int) { gridColumns = v }
+        @JvmName("setUnlockGridRowsPref") fun setGridRows(v: Int) { gridRows = v }
+        @JvmName("setUnlockDockDampingPref") fun setDockDamping(v: Float) { dockDamping = v }
+        @JvmName("setUnlockDockResponsePref") fun setDockResponse(v: Float) { dockResponse = v }
+        @JvmName("setUnlockCenterResponsePref") fun setCenterResponse(v: Float) { centerResponse = v }
+        @JvmName("setUnlockCenterDampingPref") fun setCenterDamping(v: Float) { centerDamping = v }
+        @JvmName("setUnlockEdgeResponseDelayPref") fun setEdgeResponseDelay(v: Float) { edgeResponseDelay = v }
+        @JvmName("setUnlockEdgeDampingDropPref") fun setEdgeDampingDrop(v: Float) { edgeDampingDrop = v }
+        @JvmName("setUnlockZDepthMultiplierPref") fun setZDepthMultiplier(v: Float) { zDepthMultiplier = v }
+        @JvmName("setUnlockMinResponsePref") fun setMinResponse(v: Float) { minResponse = v }
+        @JvmName("setUnlockMaxResponsePref") fun setMaxResponse(v: Float) { maxResponse = v }
+        @JvmName("setUnlockMinDampingPref") fun setMinDamping(v: Float) { minDamping = v }
+        @JvmName("setUnlockMaxDampingPref") fun setMaxDamping(v: Float) { maxDamping = v }
+        @JvmName("setUnlockDurationScalePref") fun setDurationScale(v: Float) { durationScale = v }
+        @JvmName("setUnlockVelocityInfluencePref") fun setVelocityInfluence(v: Float) { velocityInfluence = v }
+        @JvmName("setUnlockMaxVelocityPref") fun setMaxVelocity(v: Float) { maxVelocity = v }
+        @JvmName("setUnlockCascadeDampingPref") fun setCascadeDamping(v: Float) { cascadeDamping = v }
+        @JvmName("setUnlockKineticDockDampingPref") fun setKineticDockDamping(v: Float) { kineticDockDamping = v }
+        @JvmName("setUnlockKineticDockResponsePref") fun setKineticDockResponse(v: Float) { kineticDockResponse = v }
+        @JvmName("setUnlockKineticDockZDepthPref") fun setKineticDockZDepth(v: Float) { kineticDockZDepth = v }
+
+        fun reloadFromDefaults() {
+            enabled = defaults.enabled
+            animMode = defaults.animMode
+            gridColumns = defaults.gridColumns
+            gridRows = defaults.gridRows
+            dockDamping = defaults.dockDamping
+            dockResponse = defaults.dockResponse
+            centerResponse = defaults.centerResponse
+            centerDamping = defaults.centerDamping
+            edgeResponseDelay = defaults.edgeResponseDelay
+            edgeDampingDrop = defaults.edgeDampingDrop
+            zDepthMultiplier = defaults.zDepthMultiplier
+            minResponse = defaults.minResponse
+            maxResponse = defaults.maxResponse
+            minDamping = defaults.minDamping
+            maxDamping = defaults.maxDamping
+            durationScale = defaults.durationScale
+            velocityInfluence = defaults.velocityInfluence
+            maxVelocity = defaults.maxVelocity
+            cascadeDamping = defaults.cascadeDamping
+            kineticDockDamping = defaults.kineticDockDamping
+            kineticDockResponse = defaults.kineticDockResponse
+            kineticDockZDepth = defaults.kineticDockZDepth
+        }
+    }
+
+    // --- app open/close spring transitions (Feature 4) -----------------------------------
+
+    inner class AppTransitionHolder {
+        private val defaults = AppTransitionSettings()
+
+        var enabled by prefsBooleanState("app_anim_enabled", defaults.enabled); private set
+        var posDamping by prefsFloatState("app_pos_damping", defaults.posDamping); private set
+        var posResponse by prefsFloatState("app_pos_response", defaults.posResponse); private set
+        var scaleDamping by prefsFloatState("app_scale_damping", defaults.scaleDamping); private set
+        var scaleResponse by prefsFloatState("app_scale_response", defaults.scaleResponse); private set
+        var cornerDamping by prefsFloatState("app_corner_damping", defaults.cornerDamping); private set
+        var cornerResponse by prefsFloatState("app_corner_response", defaults.cornerResponse); private set
+        var alphaDamping by prefsFloatState("app_alpha_damping", defaults.alphaDamping); private set
+        var alphaResponse by prefsFloatState("app_alpha_response", defaults.alphaResponse); private set
+        var appYArc by prefsFloatState("app_y_arc", defaults.appYArc); private set
+        var appBottomZWarp by prefsFloatState("app_bottom_z_warp", defaults.appBottomZWarp); private set
+        var appXSway by prefsFloatState("app_x_sway", defaults.appXSway); private set
+        var appInterruptSmooth by prefsFloatState("app_interrupt_smooth", defaults.appInterruptSmooth); private set
+        var appIconPitchDeg by prefsFloatState("app_icon_pitch_deg", defaults.appIconPitchDeg); private set
+        var appIconCameraDist by prefsFloatState("app_icon_camera_dist", defaults.appIconCameraDist); private set
+
+        fun snapshot(): AppTransitionSettings = AppTransitionSettings(
+            enabled, posDamping, posResponse, scaleDamping, scaleResponse,
+            cornerDamping, cornerResponse, alphaDamping, alphaResponse,
+            appYArc, appBottomZWarp, appXSway, appInterruptSmooth, appIconPitchDeg, appIconCameraDist
+        )
+
+        @JvmName("setAppAnimEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
+        @JvmName("setAppPosDampingPref") fun setPosDamping(v: Float) { posDamping = v }
+        @JvmName("setAppPosResponsePref") fun setPosResponse(v: Float) { posResponse = v }
+        @JvmName("setScaleDampingPref") fun setScaleDamping(v: Float) { scaleDamping = v }
+        @JvmName("setScaleResponsePref") fun setScaleResponse(v: Float) { scaleResponse = v }
+        @JvmName("setCornerDampingPref") fun setCornerDamping(v: Float) { cornerDamping = v }
+        @JvmName("setCornerResponsePref") fun setCornerResponse(v: Float) { cornerResponse = v }
+        @JvmName("setAlphaDampingPref") fun setAlphaDamping(v: Float) { alphaDamping = v }
+        @JvmName("setAlphaResponsePref") fun setAlphaResponse(v: Float) { alphaResponse = v }
+        @JvmName("setAppYArcPref") fun setAppYArc(v: Float) { appYArc = v }
+        @JvmName("setAppBottomZWarpPref") fun setAppBottomZWarp(v: Float) { appBottomZWarp = v }
+        @JvmName("setAppXSwayPref") fun setAppXSway(v: Float) { appXSway = v }
+        @JvmName("setAppInterruptSmoothPref") fun setAppInterruptSmooth(v: Float) { appInterruptSmooth = v }
+        @JvmName("setAppIconPitchDegPref") fun setAppIconPitchDeg(v: Float) { appIconPitchDeg = v }
+        @JvmName("setAppIconCameraDistPref") fun setAppIconCameraDist(v: Float) { appIconCameraDist = v }
+
+        fun reloadFromDefaults() {
+            enabled = defaults.enabled
+            posDamping = defaults.posDamping
+            posResponse = defaults.posResponse
+            scaleDamping = defaults.scaleDamping
+            scaleResponse = defaults.scaleResponse
+            cornerDamping = defaults.cornerDamping
+            cornerResponse = defaults.cornerResponse
+            alphaDamping = defaults.alphaDamping
+            alphaResponse = defaults.alphaResponse
+            appYArc = defaults.appYArc
+            appBottomZWarp = defaults.appBottomZWarp
+            appXSway = defaults.appXSway
+            appInterruptSmooth = defaults.appInterruptSmooth
+            appIconPitchDeg = defaults.appIconPitchDeg
+            appIconCameraDist = defaults.appIconCameraDist
+        }
+    }
+
 
     // --- small property-delegate helpers over SharedPreferences --------------------------
 
     private fun prefsBooleanState(key: String, default: Boolean) =
         PrefBooleanDelegate(prefs, key, default)
+
+    private fun prefsIntState(key: String, default: Int) =
+        PrefIntDelegate(prefs, key, default)
 
     private fun prefsFloatState(key: String, default: Float) =
         PrefFloatDelegate(prefs, key, default)
@@ -495,6 +700,20 @@ private class PrefBooleanDelegate(
         state = value
         prefs.edit().putBoolean(key, value).apply()
         XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putBoolean(key, value)?.apply()
+    }
+}
+
+private class PrefIntDelegate(
+    private val prefs: SharedPreferences,
+    private val key: String,
+    default: Int
+) {
+    private var state by mutableStateOf(prefs.getInt(key, default))
+    operator fun getValue(thisRef: Any?, property: KProperty<*>): Int = state
+    operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Int) {
+        state = value
+        prefs.edit().putInt(key, value).apply()
+        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putInt(key, value)?.apply()
     }
 }
 

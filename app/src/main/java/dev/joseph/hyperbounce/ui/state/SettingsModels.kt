@@ -158,3 +158,47 @@ data class LockScreenKeypadSettings(
     val delayCancel: Float = -1f
 )
 
+/** Feature 3: Screen Unlock Velocity Kinetics Settings */
+data class ScreenUnlockSettings(
+    val enabled: Boolean = true,
+    val animMode: Int = 1,
+    val gridColumns: Int = 4,
+    val gridRows: Int = 7,
+    val dockDamping: Float = 0.70f,
+    val dockResponse: Float = 0.40f,
+    val centerResponse: Float = 0.48f,
+    val centerDamping: Float = 0.58f,
+    val edgeResponseDelay: Float = 0.22f,
+    val edgeDampingDrop: Float = 0.10f,
+    val zDepthMultiplier: Float = 1.60f,
+    val minResponse: Float = 0.45f,
+    val maxResponse: Float = 0.75f,
+    val minDamping: Float = 0.42f,
+    val maxDamping: Float = 0.65f,
+    val durationScale: Float = 1.0f,
+    val velocityInfluence: Float = 1.0f,
+    val maxVelocity: Float = 16000.0f,
+    val cascadeDamping: Float = 0.95f,
+    val kineticDockDamping: Float = 0.85f,
+    val kineticDockResponse: Float = 0.38f,
+    val kineticDockZDepth: Float = 800.0f
+)
+
+/** Feature 4: Launcher App Open / Close Spring Physics Settings */
+data class AppTransitionSettings(
+    val enabled: Boolean = true,
+    val posDamping: Float = 0.80f,
+    val posResponse: Float = 0.40f,
+    val scaleDamping: Float = 0.80f,
+    val scaleResponse: Float = 0.40f,
+    val cornerDamping: Float = 1.00f,
+    val cornerResponse: Float = 0.35f,
+    val alphaDamping: Float = 1.00f,
+    val alphaResponse: Float = 0.30f,
+    val appYArc: Float = 0.0f,
+    val appBottomZWarp: Float = 0.0f,
+    val appXSway: Float = 0.0f,
+    val appInterruptSmooth: Float = 1.0f,
+    val appIconPitchDeg: Float = 0.0f,
+    val appIconCameraDist: Float = 8000.0f
+)

@@ -48,10 +48,12 @@ import dev.joseph.hyperbounce.ui.glass.LiquidBottomTabs
 import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
 import dev.joseph.hyperbounce.ui.screens.AboutScreen
 import dev.joseph.hyperbounce.ui.screens.AppDetailScreen
+import dev.joseph.hyperbounce.ui.screens.AppTransitionsScreen
 import dev.joseph.hyperbounce.ui.screens.EngineScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadDelaysScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadScreen
 import dev.joseph.hyperbounce.ui.screens.LockScreenSheetScreen
+import dev.joseph.hyperbounce.ui.screens.ScreenUnlockScreen
 import dev.joseph.hyperbounce.ui.screens.SettingsScreen
 import dev.joseph.hyperbounce.ui.screens.TuningScreen
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
@@ -205,6 +207,20 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                         )
 
                         Destination.KeypadDelays -> KeypadDelaysScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.ScreenUnlock -> ScreenUnlockScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.AppTransitions -> AppTransitionsScreen(
                             repository = repository,
                             colors = colors,
                             backdrop = backdrop,
