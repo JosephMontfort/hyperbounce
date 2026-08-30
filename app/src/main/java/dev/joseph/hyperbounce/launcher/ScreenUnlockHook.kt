@@ -208,7 +208,15 @@ object ScreenUnlockHook {
                     val cfg = LauncherConfigHolder.unlockConfig
                     if (isAnimating.get() && cfg.enabled) {
                         val rawArgs = chain.args
-                        val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else (rawArgs as Array<*>).clone()
+                        val args: Array<Any?> = if (rawArgs is List<*>) {
+                            rawArgs.toTypedArray()
+                        } else if (rawArgs is Array<*>) {
+                            java.util.Arrays.copyOf(rawArgs, rawArgs.size, Array<Any?>::class.java)
+                        } else {
+                            arrayOf()
+                        }
+
+                        if (args.size < 4) return chain.proceed()
 
                         val startVal = (args[2] as? Number)?.toFloat() ?: 0.0f
                         val endVal = (args[3] as? Number)?.toFloat() ?: 0.0f
