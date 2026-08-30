@@ -37,6 +37,18 @@ public class DiagnosticConfig {
     public float pinColDelayStep = 20.0f;
     public float pinEntryOvershoot = 1.1f;
 
+
+    public float pinCircleDiameter = 82.0f;
+    public float pinCircleFillAlpha = 0.20f;
+    public float pinCircleStrokeWidth = 1.5f;
+    public float pinCircleStrokeAlpha = 0.47f;
+    public float pinJellyMaxStretch = 0.16f;
+    public float pinJellyElasticLimit = 0.40f;
+    public float pinSpringStiffness = 50.0f;
+    public float pinSpringDamping = 5.5f;
+    public float pinPressGlowAlpha = 0.35f;
+    public float pinGlowRadius = 1.4f;
+
     public boolean unlockEnabled = true;
 
     public void load(SharedPreferences prefs) {
@@ -71,6 +83,18 @@ public class DiagnosticConfig {
         pinColDelayStep = prefs.getFloat("diag_pinColDelayStep", pinColDelayStep);
         pinEntryOvershoot = prefs.getFloat("diag_pinEntryOvershoot", pinEntryOvershoot);
         
+
+        pinCircleDiameter = prefs.getFloat("diag_pinCircleDiameter", pinCircleDiameter);
+        pinCircleFillAlpha = prefs.getFloat("diag_pinCircleFillAlpha", pinCircleFillAlpha);
+        pinCircleStrokeWidth = prefs.getFloat("diag_pinCircleStrokeWidth", pinCircleStrokeWidth);
+        pinCircleStrokeAlpha = prefs.getFloat("diag_pinCircleStrokeAlpha", pinCircleStrokeAlpha);
+        pinJellyMaxStretch = prefs.getFloat("diag_pinJellyMaxStretch", pinJellyMaxStretch);
+        pinJellyElasticLimit = prefs.getFloat("diag_pinJellyElasticLimit", pinJellyElasticLimit);
+        pinSpringStiffness = prefs.getFloat("diag_pinSpringStiffness", pinSpringStiffness);
+        pinSpringDamping = prefs.getFloat("diag_pinSpringDamping", pinSpringDamping);
+        pinPressGlowAlpha = prefs.getFloat("diag_pinPressGlowAlpha", pinPressGlowAlpha);
+        pinGlowRadius = prefs.getFloat("diag_pinGlowRadius", pinGlowRadius);
+
         unlockEnabled = prefs.getBoolean("diag_unlockEnabled", unlockEnabled);
     }
 }
