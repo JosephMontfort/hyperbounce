@@ -1,26 +1,9 @@
 package dev.joseph.hyperbounce.ui.glass
 
 /*
- * Ported from the user-authored ExpandableGlassMenuContent catalog page (built against
- * this same AndroidLiquidGlass library) — MenuAlignment, MenuAnimationPreset,
- * ExpandableGlassMenu, and GlassEffectContainer below are carried over with their
- * animation/gesture/haptics logic unchanged: the long-press-or-tap-to-open gesture, the
- * drag-to-hover-then-release-to-select interaction, the per-frame jelly/squish
- * graphicsLayer math, the zero-recomposition width/height morph via Modifier.layout, and
- * the haptic tick on row hover are all byte-for-byte the same as the source, including the
- * later "advanced physics tuning" pass (spring overshoot bulge, motion blur peak, drag
- * jelly tension, content pop amplitude, arc Y offset, animation speed multiplier) that
- * replaced several previously-hardcoded constants with named parameters — those are code-
- * level tuning knobs: change the defaults below to retune the motion, no UI needed.
- *
- * Only the package changed, plus the demo-only "Properties"/"Advanced Physics Tuning"
- * editor screen (ExpandableGlassMenuContent, TuningControl) was not ported — this app
- * doesn't need a UI for live-tuning the menu's own parameters, it just calls
- * ExpandableGlassMenu directly (see ui/screens/RootScaffold.kt) with isGlassEnabled/
- * blurRadius/refractionHeight/refractionAmount/chromaticAberration/isHapticsEnabled
- * sourced from LocalGlassSettings — the component already exposes exactly those as hoisted
- * parameters, so no internal change was needed to wire it to this app's global glass
- * settings.
+ * Faithful port of com.kyant.backdrop.catalog.components.ExpandableGlassMenu from the
+ * AndroidLiquidGlass library with advanced physics tuning and seamless 2D shape morphing
+ * confirmation dialog support.
  */
 
 import androidx.compose.animation.core.Animatable
@@ -30,19 +13,27 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -70,11 +61,14 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.util.lerp
+import androidx.compose.ui.zIndex
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -83,6 +77,7 @@ import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
+import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.PI
@@ -93,6 +88,15 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.tanh
+
+data class MenuDialogData(
+    val title: String,
+    val message: String,
+    val confirmText: String = "Confirm",
+    val cancelText: String = "Cancel",
+    val confirmColor: Color? = null,
+    val onConfirm: () -> Unit
+)
 
 enum class MenuAlignment(val label: String) {
     TopLeading("T-Left"), TopTrailing("T-Right"), BottomLeading("B-Left"), BottomTrailing("B-Right");
@@ -125,7 +129,6 @@ enum class MenuAnimationPreset(val label: String) {
     Bouncy("Bouncy"), Smooth("Smooth"), Snappy("Snappy");
 
     fun getSpec(isClosing: Boolean = false, speedMultiplier: Float = 1f): AnimationSpec<Float> = when (this) {
-        // Ultra-soft settling via lower stiffness and precise threshold
         Bouncy -> if (isClosing) spring(dampingRatio = 0.8f, stiffness = 200f * (speedMultiplier * speedMultiplier), visibilityThreshold = 0.001f)
                   else spring(dampingRatio = 0.55f, stiffness = 120f * (speedMultiplier * speedMultiplier), visibilityThreshold = 0.001f)
         Smooth -> tween(durationMillis = (650f / speedMultiplier).toInt(), easing = FastOutSlowInEasing)
@@ -150,8 +153,6 @@ fun ExpandableGlassMenu(
     verticalOffset: Float,
     modifier: Modifier = Modifier,
     labelSize: Size = Size(55f, 55f),
-    // Advanced physics tuning — code-level knobs for the animation feel. Change these
-    // values directly to retune the motion; defaults match the reference implementation.
     animationSpeedMultiplier: Float = 1f,
     containerBulgeMultiplier: Float = 0.395f,
     contentBulgeMultiplier: Float = 0.15f,
@@ -160,13 +161,15 @@ fun ExpandableGlassMenu(
     dragJellyTension: Float = 0.05f,
     motionBlurAmount: Float = 25f,
     arcYOffsetDp: Float = 75f,
-    // Fires when the finger is released while hovering a row during a long-press-drag
-    // gesture (not a plain tap on the row — that's handled by MenuRow's own onClick).
-    // Called just before the menu closes, with the hovered row's index. Default no-op so
-    // existing callers that only want tap-to-select keep compiling unchanged.
-    onRowSelected: (index: Int) -> Boolean = { true },
+    onRowSelected: (index: Int, showDialog: (MenuDialogData) -> Unit) -> Boolean = { _, _ -> true },
     label: @Composable () -> Unit,
-    content: @Composable (globalTouchPosition: Offset, closeMenu: () -> Unit, hoveredIndex: Int?, setHovered: (Int?) -> Unit) -> Unit
+    content: @Composable (
+        globalTouchPosition: Offset,
+        closeMenu: () -> Unit,
+        hoveredIndex: Int?,
+        setHovered: (Int?) -> Unit,
+        showDialog: (MenuDialogData) -> Unit
+    ) -> Unit
 ) {
     val density = LocalDensity.current
     val viewConfiguration = LocalViewConfiguration.current
@@ -179,9 +182,35 @@ fun ExpandableGlassMenu(
     var isDragging by remember { mutableStateOf(false) }
     var globalTouchPosition by remember { mutableStateOf(Offset.Unspecified) }
     var labelCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var parentSize by remember { mutableStateOf(Size.Zero) }
 
     var hoveredIndex by remember { mutableStateOf<Int?>(null) }
     val setHovered: (Int?) -> Unit = { hoveredIndex = it }
+
+    var activeDialog by remember { mutableStateOf<MenuDialogData?>(null) }
+    var lastDialog by remember { mutableStateOf<MenuDialogData?>(null) }
+    val showDialog: (MenuDialogData) -> Unit = { data ->
+        activeDialog = data
+        lastDialog = data
+    }
+    val dismissDialog: () -> Unit = {
+        activeDialog = null
+    }
+
+    val dialogProgress by animateFloatAsState(
+        targetValue = if (activeDialog != null) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = 0.78f,
+            stiffness = 340f,
+            visibilityThreshold = 0.001f
+        ),
+        label = "menuDialogMorphProgress",
+        finishedListener = { p ->
+            if (p == 0f && activeDialog == null) {
+                lastDialog = null
+            }
+        }
+    )
 
     val labelSizePx = with(density) { Size(labelSize.width.dp.toPx(), labelSize.height.dp.toPx()) }
 
@@ -193,12 +222,44 @@ fun ExpandableGlassMenu(
 
     val closeMenu: () -> Unit = {
         hoveredIndex = null
+        activeDialog = null
         animationScope.launch { animatableProgress.animateTo(0f, animationPreset.getSpec(isClosing = true, speedMultiplier = animationSpeedMultiplier)) }
     }
 
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = alignment.composeAlignment) {
+    // Reset dialog when menu fully closes
+    LaunchedEffect(animatableProgress.targetValue) {
+        if (animatableProgress.targetValue == 0f) {
+            activeDialog = null
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .onSizeChanged { if (it.width > 0 && it.height > 0) parentSize = it.toSize() },
+        contentAlignment = alignment.composeAlignment
+    ) {
+        // Full-screen backdrop dimming scrim when confirmation dialog is active
+        if (dialogProgress > 0.001f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f * dialogProgress))
+                    .pointerInput(Unit) {
+                        detectTapGestures { dismissDialog() }
+                    }
+                    .zIndex(5f)
+            )
+        }
+
         GlassEffectContainer(
             animatableProgress = animatableProgress,
+            dialogProgress = dialogProgress,
+            activeDialog = activeDialog,
+            lastDialog = lastDialog,
+            onDismissDialog = dismissDialog,
+            closeMenu = closeMenu,
+            parentSize = parentSize,
             dragOffset = dragOffset,
             isPressed = isPressed,
             alignment = alignment,
@@ -220,6 +281,7 @@ fun ExpandableGlassMenu(
             arcYOffsetDp = arcYOffsetDp,
             labelSize = labelSizePx,
             contentSize = contentMeasuredSize,
+            modifier = Modifier.zIndex(10f),
             label = {
                 Box(
                     modifier = Modifier.size(with(density) { labelSizePx.width.toDp() }).onGloballyPositioned { labelCoordinates = it }
@@ -284,7 +346,7 @@ fun ExpandableGlassMenu(
                                     animationScope.launch { animatableProgress.animateTo(target, animationPreset.getSpec(isClosing = target == 0f, speedMultiplier = animationSpeedMultiplier)) }
                                 } else if (isSimpleDrag || isLongPress) {
                                     if (finalHoveredIndex != null) {
-                                        val shouldClose = onRowSelected(finalHoveredIndex)
+                                        val shouldClose = onRowSelected(finalHoveredIndex, showDialog)
                                         if (shouldClose) {
                                             closeMenu()
                                         }
@@ -308,7 +370,7 @@ fun ExpandableGlassMenu(
                         .onSizeChanged { if (it.width > 0 && it.height > 0) contentMeasuredSize = it.toSize() }
                         .padding(10f.dp)
                 ) {
-                    content(globalTouchPosition, closeMenu, hoveredIndex, setHovered)
+                    content(globalTouchPosition, closeMenu, hoveredIndex, setHovered, showDialog)
                 }
             }
         )
@@ -318,6 +380,12 @@ fun ExpandableGlassMenu(
 @Composable
 fun GlassEffectContainer(
     animatableProgress: Animatable<Float, *>,
+    dialogProgress: Float,
+    activeDialog: MenuDialogData?,
+    lastDialog: MenuDialogData?,
+    onDismissDialog: () -> Unit,
+    closeMenu: () -> Unit,
+    parentSize: Size,
     dragOffset: Offset,
     isPressed: Boolean,
     alignment: MenuAlignment,
@@ -339,6 +407,7 @@ fun GlassEffectContainer(
     arcYOffsetDp: Float,
     labelSize: Size,
     contentSize: Size,
+    modifier: Modifier = Modifier,
     label: @Composable () -> Unit,
     content: @Composable () -> Unit
 ) {
@@ -369,22 +438,39 @@ fun GlassEffectContainer(
     val isPressing = isPressed && animatableProgress.targetValue == 0f
     val buttonPressProgress by animateFloatAsState(if (isPressing) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 400f))
 
+    var dialogMeasuredSize by remember { mutableStateOf(Size.Zero) }
+
+    val targetDialogWidthPx = if (parentSize.width > 0f) {
+        min(parentSize.width * 0.88f, with(density) { 340.dp.toPx() })
+    } else with(density) { 320.dp.toPx() }
+
+    val targetDialogHeightPx = if (dialogMeasuredSize.height > 0f) {
+        dialogMeasuredSize.height
+    } else with(density) { 210.dp.toPx() }
+
+    val animatedRadius = lerp(cornerRadius, 32.dp, dialogProgress)
+
     Box(
-        modifier = Modifier
+        modifier = modifier
             .layout { measurable, constraints ->
                 val p = animatableProgress.value
-                val activeContentW = if (p > 0.5f) animatedContentWidth else contentSize.width
-                val activeContentH = if (p > 0.5f) animatedContentHeight else contentSize.height
+                val dp = dialogProgress
+
+                val activeMenuW = if (p > 0.5f) animatedContentWidth else contentSize.width
+                val activeMenuH = if (p > 0.5f) animatedContentHeight else contentSize.height
+
+                val activeContentW = lerp(activeMenuW, targetDialogWidthPx, dp)
+                val activeContentH = lerp(activeMenuH, targetDialogHeightPx, dp)
 
                 val widthDiff = (activeContentW - labelSize.width).coerceAtLeast(0f)
                 val heightDiff = (activeContentH - labelSize.height).coerceAtLeast(0f)
 
-                // Vertical Pill Morph (Height pops instantly, width follows softly)
+                // Vertical Pill Morph
                 val widthProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else (p * p)
                 val heightProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else sin(p * (PI / 2f)).toFloat()
 
-                val currentWidthPx = labelSize.width + widthDiff * widthProgress
-                val currentHeightPx = labelSize.height + heightDiff * heightProgress
+                val currentWidthPx = labelSize.width + widthDiff * lerp(widthProgress, 1f, dp)
+                val currentHeightPx = labelSize.height + heightDiff * lerp(heightProgress, 1f, dp)
 
                 val placeable = measurable.measure(
                     constraints.copy(
@@ -395,23 +481,22 @@ fun GlassEffectContainer(
                     )
                 )
 
-                // By fixing the layout size to labelSize, the parent NEVER re-measures or re-layouts
-                // during the animation. The expanded placeable is simply drawn outside these bounds.
                 val layoutW = labelSize.width.toInt()
                 val layoutH = labelSize.height.toInt()
-                
+
                 val offset = alignment.composeAlignment.align(
                     size = androidx.compose.ui.unit.IntSize(placeable.width, placeable.height),
                     space = androidx.compose.ui.unit.IntSize(layoutW, layoutH),
                     layoutDirection = layoutDirection
                 )
 
-                layout(layoutW, layoutH) { 
-                    placeable.placeWithLayer(offset.x, offset.y) 
+                layout(layoutW, layoutH) {
+                    placeable.placeWithLayer(offset.x, offset.y)
                 }
             }
             .graphicsLayer {
                 val progress = animatableProgress.value
+                val dp = dialogProgress
                 val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
                 val squishScale = 1f - (blurProgress.coerceIn(0f, 1f) * 0.05f)
 
@@ -440,38 +525,60 @@ fun GlassEffectContainer(
                 val expandedStretchX = (1f + abs(animatedDragX) * 0.00005f - abs(animatedDragY) * 0.00005f).coerceIn(0.99f, 1.01f)
                 val expandedStretchY = (1f + abs(animatedDragY) * 0.00005f - abs(animatedDragX) * 0.00005f).coerceIn(0.99f, 1.01f)
 
-                translationX = lerp(jellyTx, expandedTx, progress) + with(density) { horizontalOffset.dp.toPx() * progress }
-                translationY = offsetY + lerp(jellyTy, expandedTy, progress) + with(density) { verticalOffset.dp.toPx() * progress }
+                val menuTx = lerp(jellyTx, expandedTx, progress) + with(density) { horizontalOffset.dp.toPx() * progress }
+                val menuTy = offsetY + lerp(jellyTy, expandedTy, progress) + with(density) { verticalOffset.dp.toPx() * progress }
+
+                // Morph Translation: Moves smoothly from TopTrailing corner to exact Center of screen
+                val centerDeltaX = if (parentSize.width > 0f) {
+                    -(parentSize.width / 2f - size.width / 2f)
+                } else 0f
+                val centerDeltaY = if (parentSize.height > 0f) {
+                    (parentSize.height / 2f - size.height / 2f - with(density) { verticalOffset.dp.toPx() })
+                } else 0f
+
+                translationX = lerp(menuTx, centerDeltaX, dp)
+                translationY = lerp(menuTy, centerDeltaY, dp)
                 scaleX = squishScale * lerp(jellySx, expandedStretchX, progress)
                 scaleY = squishScale * lerp(jellySy, expandedStretchY, progress)
                 this.transformOrigin = alignment.transformOrigin
             }
             .drawBackdrop(
                 backdrop = backdrop,
-                shape = { RoundedCornerShape(cornerRadius) },
+                shape = { RoundedCornerShape(animatedRadius) },
                 effects = {
                     val progress = animatableProgress.value
-                    if (isGlassEnabled && progress > 0.01f) {
+                    val dp = dialogProgress
+                    if (isGlassEnabled && (progress > 0.01f || dp > 0.01f)) {
+                        val effProgress = max(progress, dp)
                         vibrancy()
-                        blur((blurRadius * progress).dp.toPx())
+                        blur((blurRadius * effProgress).dp.toPx())
                         lens(
-                            refractionHeight.dp.toPx() * progress, 
-                            refractionAmount.dp.toPx() * progress, 
-                            depthEffect = true, 
+                            refractionHeight.dp.toPx() * effProgress,
+                            refractionAmount.dp.toPx() * effProgress,
+                            depthEffect = true,
                             chromaticAberration = chromaticAberration
                         )
                     }
                 },
                 highlight = { null },
-                shadow = { Shadow(radius = 24f.dp, color = Color.Black.copy(alpha = 0.25f)) },
+                shadow = {
+                    val dp = dialogProgress
+                    Shadow(
+                        radius = lerp(24f.dp, 36f.dp, dp),
+                        color = Color.Black.copy(alpha = lerp(0.25f, 0.40f, dp))
+                    )
+                },
                 innerShadow = { null },
                 onDrawSurface = {
                     val progress = animatableProgress.value
-                    val cr = cornerRadius.toPx()
+                    val dp = dialogProgress
+                    val cr = animatedRadius.toPx()
                     val startColor = if (isLightTheme) Color(0xFFFFFFFF) else Color(0xFF1C1C1E)
-                    val endColor = if (isLightTheme) Color.White.copy(alpha = 0.6f) else Color(0xFF1E1E1E).copy(alpha = 0.6f)
-                    
-                    val outlineColor = if (isLightTheme) Color.Black.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.25f)
+                    val endColor = if (isLightTheme) Color.White.copy(alpha = lerp(0.60f, 0.95f, dp))
+                                   else Color(0xFF1E1E1E).copy(alpha = lerp(0.60f, 0.95f, dp))
+
+                    val outlineColor = if (isLightTheme) Color.Black.copy(alpha = lerp(0.15f, 0.10f, dp))
+                                       else Color.White.copy(alpha = lerp(0.25f, 0.20f, dp))
                     drawRoundRect(
                         color = outlineColor,
                         cornerRadius = CornerRadius(cr, cr),
@@ -482,36 +589,73 @@ fun GlassEffectContainer(
                         color = androidx.compose.ui.graphics.lerp(startColor, endColor, progress),
                         cornerRadius = CornerRadius(cr, cr)
                     )
-                    if (progress == 0f && buttonPressProgress > 0f) {
-                        drawRoundRect(color = Color.White.copy(alpha = 0.15f * buttonPressProgress), cornerRadius = CornerRadius(cr, cr), blendMode = androidx.compose.ui.graphics.BlendMode.Plus)
+                    if (progress == 0f && buttonPressProgress > 0f && dp == 0f) {
+                        drawRoundRect(color = Color.White.copy(alpha = 0.15f * buttonPressProgress), cornerRadius = CornerRadius(cr, cr), blendMode = BlendMode.Plus)
                     }
                 }
             )
-            .clip(RoundedCornerShape(cornerRadius)),
+            .clip(RoundedCornerShape(animatedRadius)),
         contentAlignment = alignment.composeAlignment
     ) {
+        // Menu Content Layer (fades out smoothly on dialog morph)
         Box(
             modifier = Modifier
                 .wrapContentSize(unbounded = true, align = alignment.composeAlignment)
                 .graphicsLayer {
                     val progress = animatableProgress.value
+                    val dp = dialogProgress
                     val rawContentProgress = if (progress > 1f) 1f + (progress - 1f) * contentBulgeMultiplier else (progress - 0.35f) / 0.65f
                     val minAspectScale = if (contentSize.width > 0f && contentSize.height > 0f) { min(labelSize.width / contentSize.width, labelSize.height / contentSize.height) } else 1f
                     val baseScale = minAspectScale + (1f - minAspectScale) * rawContentProgress
 
-                    // iOS Squish stretching from the absolute center
                     val pop = sin(progress.coerceIn(0f, 1f) * PI).toFloat()
 
-                    alpha = rawContentProgress.coerceIn(0f, 1f)
+                    alpha = (rawContentProgress.coerceIn(0f, 1f) * (1f - dp * 2.2f)).coerceIn(0f, 1f)
+                    translationX = -dp * 36.dp.toPx()
                     scaleX = baseScale + pop * contentPopX
                     scaleY = baseScale + pop * contentPopY
                     this.transformOrigin = TransformOrigin.Center
                 }
-                .zIndex(if (animatableProgress.value > 0.35f) 2f else 0f)
+                .zIndex(if (dialogProgress < 0.4f && animatableProgress.value > 0.35f) 2f else 0f)
         ) {
             content()
         }
 
+        // Morph Confirmation Dialog Content Layer (fades in softly as the card jumps & morphs to center)
+        if (activeDialog != null || dialogProgress > 0.001f) {
+            val curDialog = activeDialog ?: lastDialog
+            if (curDialog != null) {
+                Box(
+                    modifier = Modifier
+                        .width(with(density) { targetDialogWidthPx.toDp() })
+                        .onSizeChanged { size ->
+                            if (size.width > 0 && size.height > 0) {
+                                dialogMeasuredSize = size.toSize()
+                            }
+                        }
+                        .graphicsLayer {
+                            alpha = ((dialogProgress - 0.22f) / 0.78f).coerceIn(0f, 1f)
+                            scaleX = 0.88f + 0.12f * dialogProgress
+                            scaleY = 0.88f + 0.12f * dialogProgress
+                            this.transformOrigin = TransformOrigin.Center
+                        }
+                        .zIndex(if (dialogProgress >= 0.4f) 3f else 0f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    MenuDialogContent(
+                        dialog = curDialog,
+                        isDark = !isLightTheme,
+                        onCancel = onDismissDialog,
+                        onConfirmAndClose = {
+                            curDialog.onConfirm()
+                            closeMenu()
+                        }
+                    )
+                }
+            }
+        }
+
+        // 3-Dots Label Layer
         Box(
             modifier = Modifier
                 .graphicsLayer {
@@ -519,9 +663,99 @@ fun GlassEffectContainer(
                     val labelOpacity = (progress / 0.35f).coerceIn(0f, 1f)
                     alpha = 1f - labelOpacity
                 }
-                .zIndex(if (animatableProgress.value <= 0.35f) 2f else 0f)
+                .zIndex(if (animatableProgress.value <= 0.35f && dialogProgress == 0f) 2f else 0f)
         ) {
             label()
         }
     }
 }
+
+@Composable
+private fun MenuDialogContent(
+    dialog: MenuDialogData,
+    isDark: Boolean,
+    onCancel: () -> Unit,
+    onConfirmAndClose: () -> Unit
+) {
+    val titleColor = if (isDark) Color(0xFFFFFFFF) else Color(0xFF000000)
+    val subtitleColor = if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
+    val cancelBtnBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+    val defaultConfirmBg = if (isDark) Color(0xFF0A84FF) else Color(0xFF007AFF)
+    val confirmBtnBg = dialog.confirmColor ?: defaultConfirmBg
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        BasicText(
+            text = dialog.title,
+            style = HyperBounceType.headline.copy(
+                color = titleColor,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        )
+
+        BasicText(
+            text = dialog.message,
+            style = HyperBounceType.footnote.copy(
+                color = subtitleColor,
+                fontSize = 14.sp,
+                lineHeight = 19.sp
+            )
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Cancel capsule button
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .clip(CircleShape)
+                    .background(cancelBtnBg)
+                    .clickable { onCancel() },
+                contentAlignment = Alignment.Center
+            ) {
+                BasicText(
+                    text = dialog.cancelText,
+                    style = TextStyle(
+                        color = titleColor,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                )
+            }
+
+            // Confirm capsule button
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .clip(CircleShape)
+                    .background(confirmBtnBg)
+                    .clickable {
+                        onConfirmAndClose()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                BasicText(
+                    text = dialog.confirmText,
+                    style = TextStyle(
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+            }
+        }
+    }
+}
+

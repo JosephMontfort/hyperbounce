@@ -201,13 +201,34 @@ fun ScreenScaffold(
                         horizontalOffset = 0f,
                         verticalOffset = 10f,
                         labelSize = Size(44f, 44f),
-                        onRowSelected = { index ->
+                        onRowSelected = { index, showDialog ->
                             if (index == 0 && onResetPage != null) {
-                                onResetPage()
-                                true
+                                showDialog(
+                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                        title = "Reset All Settings?",
+                                        message = "This will restore all switches, sliders, and animation curves on this screen back to their default values.",
+                                        confirmText = "Reset",
+                                        confirmColor = Color(0xFFFF453A),
+                                        onConfirm = {
+                                            onResetPage()
+                                            android.widget.Toast.makeText(context, "Settings restored to defaults", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    )
+                                )
+                                false // Morph into confirmation dialog
                             } else if ((index == 1 || (index == 0 && onResetPage == null)) && onRestartApp != null) {
-                                onRestartApp()
-                                true
+                                showDialog(
+                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                        title = "${restartAppTitle ?: "Restart App"}?",
+                                        message = "This will force terminate and restart ${restartAppSubtitle ?: "the target process"}.",
+                                        confirmText = "Restart",
+                                        confirmColor = colors.accentBlue,
+                                        onConfirm = {
+                                            onRestartApp()
+                                        }
+                                    )
+                                )
+                                false // Morph into confirmation dialog
                             } else {
                                 true
                             }
@@ -225,7 +246,7 @@ fun ScreenScaffold(
                                 drawCircle(dotColor, r, Offset(x3, y))
                             }
                         }
-                    ) { globalTouch, closeMenuFromRow, hoveredIndex, setHovered ->
+                    ) { globalTouch, closeMenuFromRow, hoveredIndex, setHovered, showDialog ->
                         Column(
                             modifier = Modifier.width(IntrinsicSize.Max),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -241,8 +262,19 @@ fun ScreenScaffold(
                                     onHoverChange = { hovering -> if (hovering) setHovered(currentIdx) else if (hoveredIndex == currentIdx) setHovered(null) },
                                     globalTouchPosition = globalTouch,
                                     onClick = {
-                                        closeMenuFromRow()
-                                        onResetPage()
+                                        setHovered(null)
+                                        showDialog(
+                                            dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                                title = "Reset All Settings?",
+                                                message = "This will restore all switches, sliders, and animation curves on this screen back to their default values.",
+                                                confirmText = "Reset",
+                                                confirmColor = Color(0xFFFF453A),
+                                                onConfirm = {
+                                                    onResetPage()
+                                                    android.widget.Toast.makeText(context, "Settings restored to defaults", android.widget.Toast.LENGTH_SHORT).show()
+                                                }
+                                            )
+                                        )
                                     },
                                     icon = { ResetArrowIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) }
                                 )
@@ -257,8 +289,18 @@ fun ScreenScaffold(
                                     onHoverChange = { hovering -> if (hovering) setHovered(currentIdx) else if (hoveredIndex == currentIdx) setHovered(null) },
                                     globalTouchPosition = globalTouch,
                                     onClick = {
-                                        closeMenuFromRow()
-                                        onRestartApp()
+                                        setHovered(null)
+                                        showDialog(
+                                            dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                                title = "${restartAppTitle}?",
+                                                message = "This will force terminate and restart ${restartAppSubtitle ?: "the target process"}.",
+                                                confirmText = "Restart",
+                                                confirmColor = colors.accentBlue,
+                                                onConfirm = {
+                                                    onRestartApp()
+                                                }
+                                            )
+                                        )
                                     },
                                     icon = { SlidersIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) }
                                 )

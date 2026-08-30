@@ -240,7 +240,7 @@ fun RootScaffold(
                 horizontalOffset = 0f,
                 verticalOffset = 10f,
                 labelSize = Size(44f, 44f),
-                onRowSelected = { index ->
+                onRowSelected = { index, showDialog ->
                     if (menuPage == MenuPage.Main) {
                         when (index) {
                             0 -> {
@@ -264,16 +264,46 @@ fun RootScaffold(
                                 false // Morph back to main menu, keep open!
                             }
                             1 -> {
-                                RootUtils.restartSystemUI(context)
-                                true
+                                showDialog(
+                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                        title = "Restart System UI?",
+                                        message = "This will terminate and restart com.android.systemui.",
+                                        confirmText = "Restart",
+                                        confirmColor = colors.accentBlue,
+                                        onConfirm = {
+                                            RootUtils.restartSystemUI(context)
+                                        }
+                                    )
+                                )
+                                false // Morph into confirmation dialog
                             }
                             2 -> {
-                                RootUtils.restartLauncher(context)
-                                true
+                                showDialog(
+                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                        title = "Restart Launcher?",
+                                        message = "This will terminate and restart com.miui.home.",
+                                        confirmText = "Restart",
+                                        confirmColor = colors.accentPurple,
+                                        onConfirm = {
+                                            RootUtils.restartLauncher(context)
+                                        }
+                                    )
+                                )
+                                false // Morph into confirmation dialog
                             }
                             3 -> {
-                                RootUtils.rebootDevice(context)
-                                true
+                                showDialog(
+                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                        title = "Reboot Device?",
+                                        message = "This will perform a soft reboot of your device using root permissions. Any unsaved progress in active apps will be lost.",
+                                        confirmText = "Reboot",
+                                        confirmColor = Color(0xFFFF453A),
+                                        onConfirm = {
+                                            RootUtils.rebootDevice(context)
+                                        }
+                                    )
+                                )
+                                false // Morph into confirmation dialog
                             }
                             else -> true
                         }
@@ -294,7 +324,7 @@ fun RootScaffold(
                         drawCircle(dotColor, r, Offset(x3, y))
                     }
                 }
-            ) { globalTouch, closeMenuFromRow, hoveredIndex, setHovered ->
+            ) { globalTouch, closeMenuFromRow, hoveredIndex, setHovered, showDialog ->
                 androidx.compose.runtime.LaunchedEffect(menuPage) {
                     setHovered(null)
                 }
@@ -418,8 +448,18 @@ fun RootScaffold(
                             onHoverChange = { hovering -> if (isSubmenu) { if (hovering) setHovered(1) else if (hoveredIndex == 1) setHovered(null) } },
                             globalTouchPosition = if (isSubmenu) globalTouch else Offset.Unspecified,
                             onClick = {
-                                closeMenuFromRow()
-                                RootUtils.restartSystemUI(context)
+                                setHovered(null)
+                                showDialog(
+                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                        title = "Restart System UI?",
+                                        message = "This will terminate and restart com.android.systemui.",
+                                        confirmText = "Restart",
+                                        confirmColor = colors.accentBlue,
+                                        onConfirm = {
+                                            RootUtils.restartSystemUI(context)
+                                        }
+                                    )
+                                )
                             },
                             icon = { SlidersIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) },
                             enabled = isSubmenu
@@ -432,8 +472,18 @@ fun RootScaffold(
                             onHoverChange = { hovering -> if (isSubmenu) { if (hovering) setHovered(2) else if (hoveredIndex == 2) setHovered(null) } },
                             globalTouchPosition = if (isSubmenu) globalTouch else Offset.Unspecified,
                             onClick = {
-                                closeMenuFromRow()
-                                RootUtils.restartLauncher(context)
+                                setHovered(null)
+                                showDialog(
+                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                        title = "Restart Launcher?",
+                                        message = "This will terminate and restart com.miui.home.",
+                                        confirmText = "Restart",
+                                        confirmColor = colors.accentPurple,
+                                        onConfirm = {
+                                            RootUtils.restartLauncher(context)
+                                        }
+                                    )
+                                )
                             },
                             icon = { AppGridIcon(color = menuContentColor, size = 15.dp) },
                             enabled = isSubmenu
@@ -446,16 +496,25 @@ fun RootScaffold(
                             onHoverChange = { hovering -> if (isSubmenu) { if (hovering) setHovered(3) else if (hoveredIndex == 3) setHovered(null) } },
                             globalTouchPosition = if (isSubmenu) globalTouch else Offset.Unspecified,
                             onClick = {
-                                closeMenuFromRow()
-                                RootUtils.rebootDevice(context)
+                                setHovered(null)
+                                showDialog(
+                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                        title = "Reboot Device?",
+                                        message = "This will perform a soft reboot of your device using root permissions. Any unsaved progress in active apps will be lost.",
+                                        confirmText = "Reboot",
+                                        confirmColor = Color(0xFFFF453A),
+                                        onConfirm = {
+                                            RootUtils.rebootDevice(context)
+                                        }
+                                    )
+                                )
                             },
-                            icon = { PowerIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) },
+                            icon = { PowerIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.8.dp) },
                             enabled = isSubmenu
                         )
                     }
                 }
             }
-        }
         }
     }
 }
