@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -93,6 +94,7 @@ fun ScreenScaffold(
     val menuAnimationScope = rememberCoroutineScope()
     val menuProgress = remember { Animatable(0f) }
     val menuExpanded = menuProgress.value > 0.05f || menuProgress.targetValue > 0.5f
+    var dialogProgress by remember { androidx.compose.runtime.mutableStateOf(0f) }
 
     fun closeMenu() {
         menuAnimationScope.launch {
@@ -106,7 +108,8 @@ fun ScreenScaffold(
                 modifier = Modifier
                     .fillMaxSize()
                     .layerBackdrop(contentBackdrop)
-                    .safeDrawingPadding(),
+                    .safeDrawingPadding()
+                    .then(if (dialogProgress > 0.001f) Modifier.blur((24.dp * dialogProgress)) else Modifier),
                 state = lazyListState
             ) {
                 item {
@@ -144,6 +147,7 @@ fun ScreenScaffold(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(130.dp)
+                    .then(if (dialogProgress > 0.001f) Modifier.blur((24.dp * dialogProgress)) else Modifier)
             )
 
             // Dedicated top-left pinned back button and collapsed title
@@ -151,7 +155,8 @@ fun ScreenScaffold(
                 Modifier
                     .align(Alignment.TopStart)
                     .safeDrawingPadding()
-                    .padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 72.dp),
+                    .padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 72.dp)
+                    .then(if (dialogProgress > 0.001f) Modifier.blur((24.dp * dialogProgress)) else Modifier),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CircularGlassBackButton(onClick = onBack, backdrop = backdrop)
@@ -202,6 +207,7 @@ fun ScreenScaffold(
                         horizontalOffset = 0f,
                         verticalOffset = 10f,
                         labelSize = Size(44f, 44f),
+                        onDialogProgressChange = { dialogProgress = it },
                         onRowSelected = { index, showDialog ->
                             if (index == 0 && onResetPage != null) {
                                 showDialog(

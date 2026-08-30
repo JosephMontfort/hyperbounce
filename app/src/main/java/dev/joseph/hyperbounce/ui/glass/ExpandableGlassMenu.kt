@@ -161,6 +161,7 @@ fun ExpandableGlassMenu(
     dragJellyTension: Float = 0.05f,
     motionBlurAmount: Float = 25f,
     arcYOffsetDp: Float = 75f,
+    onDialogProgressChange: (Float) -> Unit = {},
     onRowSelected: (index: Int, showDialog: (MenuDialogData) -> Unit) -> Boolean = { _, _ -> true },
     label: @Composable () -> Unit,
     content: @Composable (
@@ -200,8 +201,8 @@ fun ExpandableGlassMenu(
     val dialogProgress by animateFloatAsState(
         targetValue = if (activeDialog != null) 1f else 0f,
         animationSpec = spring(
-            dampingRatio = 0.78f,
-            stiffness = 340f,
+            dampingRatio = 0.62f,
+            stiffness = 175f * (animationSpeedMultiplier * animationSpeedMultiplier),
             visibilityThreshold = 0.001f
         ),
         label = "menuDialogMorphProgress",
@@ -211,6 +212,10 @@ fun ExpandableGlassMenu(
             }
         }
     )
+
+    LaunchedEffect(dialogProgress) {
+        onDialogProgressChange(dialogProgress)
+    }
 
     val labelSizePx = with(density) { Size(labelSize.width.dp.toPx(), labelSize.height.dp.toPx()) }
 
@@ -438,15 +443,15 @@ fun GlassEffectContainer(
     val isPressing = isPressed && animatableProgress.targetValue == 0f
     val buttonPressProgress by animateFloatAsState(if (isPressing) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 400f))
 
-    var dialogMeasuredSize by remember { mutableStateOf(Size.Zero) }
+    var dialogMeasuredHeightPx by remember { mutableStateOf(0f) }
 
     val targetDialogWidthPx = if (parentSize.width > 0f) {
         min(parentSize.width * 0.88f, with(density) { 340.dp.toPx() })
     } else with(density) { 320.dp.toPx() }
 
-    val targetDialogHeightPx = if (dialogMeasuredSize.height > 0f) {
-        dialogMeasuredSize.height
-    } else with(density) { 210.dp.toPx() }
+    val targetDialogHeightPx = if (dialogMeasuredHeightPx > 0f) {
+        dialogMeasuredHeightPx
+    } else with(density) { 225.dp.toPx() }
 
     val animatedRadius = (cornerRadius.value + (32f - cornerRadius.value) * dialogProgress).dp
 
@@ -465,7 +470,7 @@ fun GlassEffectContainer(
                 val widthDiff = (activeContentW - labelSize.width).coerceAtLeast(0f)
                 val heightDiff = (activeContentH - labelSize.height).coerceAtLeast(0f)
 
-                // Vertical Pill Morph
+                // Vertical Pill Morph with spring overshoot response
                 val widthProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else (p * p)
                 val heightProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else sin(p * (PI / 2f)).toFloat()
 
@@ -528,18 +533,32 @@ fun GlassEffectContainer(
                 val menuTx = lerp(jellyTx, expandedTx, progress) + with(density) { horizontalOffset.dp.toPx() * progress }
                 val menuTy = offsetY + lerp(jellyTy, expandedTy, progress) + with(density) { verticalOffset.dp.toPx() * progress }
 
-                // Morph Translation: Moves smoothly from TopTrailing corner to exact Center of screen
-                val centerDeltaX = if (parentSize.width > 0f) {
-                    -(parentSize.width / 2f - size.width / 2f)
-                } else 0f
-                val centerDeltaY = if (parentSize.height > 0f) {
-                    (parentSize.height / 2f - size.height / 2f - with(density) { verticalOffset.dp.toPx() })
-                } else 0f
+                // Destination Center coordinates
+                val centerDeltaX = if (parentSize.width > 0f) -(parentSize.width / 2f - size.width / 2f) else 0f
+                val centerDeltaY = if (parentSize.height > 0f) (parentSize.height / 2f - size.height / 2f - with(density) { verticalOffset.dp.toPx() }) else 0f
 
-                translationX = lerp(menuTx, centerDeltaX, dp)
-                translationY = lerp(menuTy, centerDeltaY, dp)
-                scaleX = squishScale * lerp(jellySx, expandedStretchX, progress)
-                scaleY = squishScale * lerp(jellySy, expandedStretchY, progress)
+                // Z-Depth Plunge & Parabolic Arc Flight Physics Engine
+                val flightProgress = dp.coerceIn(0f, 1f)
+                val plungePeak = sin(flightProgress * PI).toFloat() // 0.0 -> 1.0 -> 0.0 mid-flight
+
+                // Sinks deep into the screen Z-plane by 15% mid-flight, emerges with spring bounce at destination
+                val zDepthScale = 1f - (plungePeak * 0.15f)
+
+                // 3D Parabolic Arc Trajectory (swoops gracefully rather than a flat diagonal line)
+                val arcSwoopX = plungePeak * with(density) { 18.dp.toPx() }
+                val arcSwoopY = plungePeak * with(density) { 32.dp.toPx() }
+
+                // Flight velocity jelly inertia squish
+                val velocitySquish = 1f + (plungePeak * 0.04f)
+
+                // Settling overshoot bulge (when dp > 1f during harmonic bounce)
+                val overshoot = if (dp > 1f) (dp - 1f) * 0.30f else 0f
+                val settleBulge = 1f + overshoot
+
+                translationX = lerp(menuTx, centerDeltaX, dp) + arcSwoopX
+                translationY = lerp(menuTy, centerDeltaY, dp) + arcSwoopY
+                scaleX = squishScale * lerp(jellySx, expandedStretchX, progress) * (zDepthScale * velocitySquish * settleBulge)
+                scaleY = squishScale * lerp(jellySy, expandedStretchY, progress) * (zDepthScale * (1f / velocitySquish) * settleBulge)
                 this.transformOrigin = alignment.transformOrigin
             }
             .drawBackdrop(
@@ -550,11 +569,13 @@ fun GlassEffectContainer(
                     val dp = dialogProgress
                     if (isGlassEnabled && (progress > 0.01f || dp > 0.01f)) {
                         val effProgress = max(progress, dp)
+                        val flightPlunge = sin(dp.coerceIn(0f, 1f) * PI).toFloat()
                         vibrancy()
-                        blur((blurRadius * effProgress).dp.toPx())
+                        // Motion blur and dynamic lens refraction surge mid-flight
+                        blur(((blurRadius * effProgress) + flightPlunge * 14f).dp.toPx())
                         lens(
-                            refractionHeight.dp.toPx() * effProgress,
-                            refractionAmount.dp.toPx() * effProgress,
+                            ((refractionHeight * effProgress) + flightPlunge * 8f).dp.toPx(),
+                            ((refractionAmount * effProgress) + flightPlunge * 6f).dp.toPx(),
                             depthEffect = true,
                             chromaticAberration = chromaticAberration
                         )
@@ -621,22 +642,23 @@ fun GlassEffectContainer(
             content()
         }
 
-        // Morph Confirmation Dialog Content Layer (fades in softly as the card jumps & morphs to center)
+        // Morph Confirmation Dialog Content Layer (Unconstrained measurement ensures full buttons & text visibility)
         if (activeDialog != null || dialogProgress > 0.001f) {
             val curDialog = activeDialog ?: lastDialog
             if (curDialog != null) {
                 Box(
                     modifier = Modifier
+                        .wrapContentSize(unbounded = true, align = Alignment.Center)
                         .width(with(density) { targetDialogWidthPx.toDp() })
                         .onSizeChanged { size ->
-                            if (size.width > 0 && size.height > 0) {
-                                dialogMeasuredSize = size.toSize()
+                            if (size.height > 0) {
+                                dialogMeasuredHeightPx = size.height.toFloat()
                             }
                         }
                         .graphicsLayer {
-                            alpha = ((dialogProgress - 0.22f) / 0.78f).coerceIn(0f, 1f)
-                            scaleX = 0.88f + 0.12f * dialogProgress
-                            scaleY = 0.88f + 0.12f * dialogProgress
+                            alpha = ((dialogProgress - 0.18f) / 0.82f).coerceIn(0f, 1f)
+                            scaleX = 0.90f + 0.10f * dialogProgress
+                            scaleY = 0.90f + 0.10f * dialogProgress
                             this.transformOrigin = TransformOrigin.Center
                         }
                         .zIndex(if (dialogProgress >= 0.4f) 3f else 0f),
@@ -686,8 +708,8 @@ private fun MenuDialogContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .padding(horizontal = 22.dp, vertical = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         BasicText(
             text = dialog.title,
@@ -707,10 +729,11 @@ private fun MenuDialogContent(
             )
         )
 
+        Spacer(Modifier.height(4.dp))
+
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 6.dp),
+                .fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -718,7 +741,7 @@ private fun MenuDialogContent(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(44.dp)
+                    .height(46.dp)
                     .clip(CircleShape)
                     .background(cancelBtnBg)
                     .clickable { onCancel() },
@@ -738,7 +761,7 @@ private fun MenuDialogContent(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(44.dp)
+                    .height(46.dp)
                     .clip(CircleShape)
                     .background(confirmBtnBg)
                     .clickable {
@@ -758,4 +781,5 @@ private fun MenuDialogContent(
         }
     }
 }
+
 

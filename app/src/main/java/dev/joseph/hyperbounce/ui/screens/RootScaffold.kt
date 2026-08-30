@@ -40,14 +40,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceIn
@@ -58,9 +57,6 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.layout
@@ -88,7 +84,7 @@ import dev.joseph.hyperbounce.ui.utils.RootUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private enum class MenuPage {
+enum class MenuPage {
     Main,
     RestartScopedApps
 }
@@ -109,6 +105,7 @@ fun RootScaffold(
     val menuAnimationScope = rememberCoroutineScope()
     val menuProgress = remember { Animatable(0f) }
     val menuExpanded = menuProgress.value > 0.05f || menuProgress.targetValue > 0.5f
+    var dialogProgress by remember { mutableStateOf(0f) }
 
     var menuPage by remember { mutableStateOf(MenuPage.Main) }
     val isSubmenu = menuPage == MenuPage.RestartScopedApps
@@ -156,6 +153,7 @@ fun RootScaffold(
                 .fillMaxSize()
                 .layerBackdrop(contentBackdrop)
                 .safeDrawingPadding()
+                .then(if (dialogProgress > 0.001f) Modifier.blur((24.dp * dialogProgress)) else Modifier)
                 .verticalScroll(scrollState)
         ) {
             Spacer(Modifier.height(56.dp))
@@ -192,6 +190,7 @@ fun RootScaffold(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(110.dp)
+                .then(if (dialogProgress > 0.001f) Modifier.blur((24.dp * dialogProgress)) else Modifier)
         )
 
         // Small collapsed title, fades in behind the menu as the large title scrolls away.
@@ -240,6 +239,7 @@ fun RootScaffold(
                 horizontalOffset = 0f,
                 verticalOffset = 10f,
                 labelSize = Size(44f, 44f),
+                onDialogProgressChange = { dialogProgress = it },
                 onRowSelected = { index, showDialog ->
                     if (menuPage == MenuPage.Main) {
                         when (index) {
