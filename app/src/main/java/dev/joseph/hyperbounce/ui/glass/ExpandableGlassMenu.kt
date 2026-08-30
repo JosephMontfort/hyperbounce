@@ -737,7 +737,6 @@ fun GlassEffectContainer(
                     MenuDialogContent(
                         dialog = curDialog,
                         isDark = !isLightTheme,
-                        colors = null,
                         onCancel = onDismissDialog,
                         onConfirmAndClose = {
                             curDialog.onConfirm()
