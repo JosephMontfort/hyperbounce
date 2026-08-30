@@ -2,8 +2,20 @@ package dev.joseph.hyperbounce.systemui;
 
 import android.content.Context;
 import android.view.View;
+import android.view.ViewGroup;
 import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
+import android.os.Build;
+import android.widget.FrameLayout;
+import android.graphics.RuntimeShader;
+import android.graphics.RenderEffect;
+import android.graphics.RectF;
+import android.graphics.ColorFilter;
+import android.graphics.PixelFormat;
+
+
+
+
 
 public class LockscreenHook {
         // 1. AndroidLiquidGlass: 4-Sided True Refraction Shader for Lockscreen Card
@@ -379,7 +391,7 @@ public class LockscreenHook {
             view.postOnAnimation(springStep);
         }
 
-    private static final Config config = new Config();
+    private static DiagnosticConfig config;
     private static boolean receiverRegistered = false;
 
     private static float latestVelocity = 0.0f;

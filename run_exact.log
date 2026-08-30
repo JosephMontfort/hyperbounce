@@ -1,0 +1,1158 @@
+build	Build Release APK	﻿2026-08-29T18:21:39.7306081Z ##[group]Run ./gradlew assembleRelease --stacktrace
+build	Build Release APK	2026-08-29T18:21:39.7306777Z ^[[36;1m./gradlew assembleRelease --stacktrace^[[0m
+build	Build Release APK	2026-08-29T18:21:39.7346254Z shell: /usr/bin/bash -e {0}
+build	Build Release APK	2026-08-29T18:21:39.7346551Z env:
+build	Build Release APK	2026-08-29T18:21:39.7346891Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+build	Build Release APK	2026-08-29T18:21:39.7347433Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+build	Build Release APK	2026-08-29T18:21:39.7348268Z   RELEASE_STORE_FILE: /home/runner/keystore/HyperBounce.jks
+build	Build Release APK	2026-08-29T18:21:39.7348649Z   RELEASE_KEY_ALIAS: hyperbounce
+build	Build Release APK	2026-08-29T18:21:39.7349022Z   RELEASE_STORE_PASSWORD: ***
+build	Build Release APK	2026-08-29T18:21:39.7349310Z   RELEASE_KEY_PASSWORD: ***
+build	Build Release APK	2026-08-29T18:21:39.7349599Z ##[endgroup]
+build	Build Release APK	2026-08-29T18:21:42.8770733Z Fetching distribution.
+build	Build Release APK	2026-08-29T18:21:42.8772324Z Downloading https://services.gradle.org/distributions/gradle-9.6.0-bin.zip
+build	Build Release APK	2026-08-29T18:21:45.9101491Z .............10%.............20%..............30%.............40%..............50%.............60%.............70%..............80%.............90%..............100%
+build	Build Release APK	2026-08-29T18:21:45.9118974Z Deleting directory /home/runner/.gradle/wrapper/dists/gradle-9.6.0-bin/42k10rwplmzkhuboz9kdazi7s/gradle-9.6.0
+build	Build Release APK	2026-08-29T18:21:47.7005105Z 
+build	Build Release APK	2026-08-29T18:21:47.7018869Z Welcome to Gradle 9.6.0!
+build	Build Release APK	2026-08-29T18:21:47.7028278Z 
+build	Build Release APK	2026-08-29T18:21:47.7028734Z Here are the highlights of this release:
+build	Build Release APK	2026-08-29T18:21:47.7029705Z  - Improved Configuration Cache hit rates
+build	Build Release APK	2026-08-29T18:21:47.7030733Z  - Additional CLI rendering options
+build	Build Release APK	2026-08-29T18:21:47.7031594Z  - Important project hierarchy lookup deprecations
+build	Build Release APK	2026-08-29T18:21:47.7032298Z 
+build	Build Release APK	2026-08-29T18:21:47.7032917Z For more details see https://docs.gradle.org/9.6.0/release-notes.html
+build	Build Release APK	2026-08-29T18:21:47.7033767Z 
+build	Build Release APK	2026-08-29T18:21:47.9003586Z Starting a Gradle Daemon (subsequent builds will be faster)
+build	Build Release APK	2026-08-29T18:22:01.5039270Z > Task :app:preBuild UP-TO-DATE
+build	Build Release APK	2026-08-29T18:22:01.5058800Z > Task :app:preReleaseBuild UP-TO-DATE
+build	Build Release APK	2026-08-29T18:22:01.7001919Z > Task :app:mergeReleaseJniLibFolders
+build	Build Release APK	2026-08-29T18:22:02.4012637Z > Task :app:mergeReleaseNativeLibs
+build	Build Release APK	2026-08-29T18:22:02.6029542Z > Task :app:checkReleaseDuplicateClasses
+build	Build Release APK	2026-08-29T18:22:02.6030627Z > Task :app:generateReleaseResources
+build	Build Release APK	2026-08-29T18:22:02.8004536Z > Task :app:packageReleaseResources
+build	Build Release APK	2026-08-29T18:22:02.9011923Z > Task :app:processReleaseNavigationResources
+build	Build Release APK	2026-08-29T18:22:03.0999532Z > Task :app:stripReleaseDebugSymbols
+build	Build Release APK	2026-08-29T18:22:05.6055469Z > Task :app:extractReleaseNativeSymbolTables
+build	Build Release APK	2026-08-29T18:22:05.7029291Z > Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+build	Build Release APK	2026-08-29T18:22:05.7049173Z > Task :app:javaPreCompileRelease
+build	Build Release APK	2026-08-29T18:22:05.8006479Z > Task :app:parseReleaseLocalResources
+build	Build Release APK	2026-08-29T18:22:05.9028350Z > Task :app:checkReleaseAarMetadata
+build	Build Release APK	2026-08-29T18:22:05.9048972Z > Task :app:mapReleaseSourceSetPaths
+build	Build Release APK	2026-08-29T18:22:05.9998907Z > Task :app:generateReleaseRFile
+build	Build Release APK	2026-08-29T18:22:06.0018847Z > Task :app:compileReleaseNavigationResources
+build	Build Release APK	2026-08-29T18:22:12.2011398Z > Task :app:mergeReleaseResources
+build	Build Release APK	2026-08-29T18:22:12.2069070Z > Task :app:createReleaseCompatibleScreenManifests
+build	Build Release APK	2026-08-29T18:22:12.2085902Z > Task :app:extractDeepLinksRelease
+build	Build Release APK	2026-08-29T18:22:12.9009152Z > Task :app:processReleaseMainManifest
+build	Build Release APK	2026-08-29T18:22:13.2999360Z > Task :app:processReleaseManifest
+build	Build Release APK	2026-08-29T18:22:13.3018968Z > Task :app:processReleaseManifestForPackage
+build	Build Release APK	2026-08-29T18:22:14.2999336Z > Task :app:processReleaseResources
+build	Build Release APK	2026-08-29T18:22:14.3999436Z > Task :app:desugarReleaseFileDependencies
+build	Build Release APK	2026-08-29T18:22:14.4028443Z > Task :app:mergeReleaseStartupProfile
+build	Build Release APK	2026-08-29T18:22:36.0018739Z > Task :app:compileReleaseKotlin
+build	Build Release APK	2026-08-29T18:22:41.5004747Z > Task :app:mergeExtDexRelease
+build	Build Release APK	2026-08-29T18:22:41.8000303Z > Task :app:mergeReleaseArtProfile
+build	Build Release APK	2026-08-29T18:22:41.8052640Z > Task :app:generateReleaseAssets UP-TO-DATE
+build	Build Release APK	2026-08-29T18:22:41.9028767Z > Task :app:mergeReleaseAssets
+build	Build Release APK	2026-08-29T18:22:41.9048492Z > Task :app:compressReleaseAssets
+build	Build Release APK	2026-08-29T18:22:42.1018117Z > Task :app:extractReleaseVersionControlInfo
+build	Build Release APK	2026-08-29T18:22:42.1048483Z > Task :app:extractProguardFiles
+build	Build Release APK	2026-08-29T18:22:42.2038893Z > Task :app:optimizeReleaseResources
+build	Build Release APK	2026-08-29T18:22:42.5008868Z > Task :app:collectReleaseDependencies
+build	Build Release APK	2026-08-29T18:22:42.8018857Z > Task :app:sdkReleaseDependencyData
+build	Build Release APK	2026-08-29T18:22:42.8019576Z > Task :app:validateSigningRelease
+build	Build Release APK	2026-08-29T18:22:42.8068098Z > Task :app:writeReleaseAppMetadata
+build	Build Release APK	2026-08-29T18:22:42.9041840Z > Task :app:writeReleaseSigningConfigVersions
+build	Build Release APK	2026-08-29T18:23:08.0028462Z 
+build	Build Release APK	2026-08-29T18:23:08.0042783Z > Task :app:compileReleaseKotlin
+build	Build Release APK	2026-08-29T18:23:08.0058299Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/nav/InstagramHook.kt:108:68 Unnecessary safe call on a non-null receiver of type 'View'.
+build	Build Release APK	2026-08-29T18:23:08.0073376Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/nav/InstagramNavBarHost.kt:113:129 Unnecessary safe call on a non-null receiver of type 'ViewGroup'.
+build	Build Release APK	2026-08-29T18:23:08.0115793Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidSliderViewBackdrop.kt:96:41 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:23:08.0151529Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidSliderViewBackdrop.kt:96:62 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:23:08.0153885Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidSliderViewBackdrop.kt:124:89 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:23:08.0156224Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidSliderViewBackdrop.kt:124:118 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:23:08.0158858Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidToggleViewBackdrop.kt:96:41 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:23:08.0161207Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidToggleViewBackdrop.kt:96:62 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:23:08.0163429Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidToggleViewBackdrop.kt:124:89 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:23:08.0165735Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/toggles/LiquidToggleViewBackdrop.kt:124:118 Redundant call of conversion method.
+build	Build Release APK	2026-08-29T18:23:08.0188924Z w: file:///home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/ui/screens/RootScaffold.kt:85:21 'val LocalClipboardManager: ProvidableCompositionLocal<ClipboardManager>' is deprecated. Use LocalClipboard instead which supports suspend functions.
+build	Build Release APK	2026-08-29T18:23:12.0041062Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:8: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:12.0042563Z 
+build	Build Release APK	2026-08-29T18:23:12.0078835Z import androidx.recyclerview.widget.GridLayoutManager;
+build	Build Release APK	2026-08-29T18:23:12.0079577Z > Task :app:compileReleaseJavaWithJavac
+build	Build Release APK	2026-08-29T18:23:12.0089709Z                                    ^
+build	Build Release APK	2026-08-29T18:23:12.0139427Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:9: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:12.0146001Z import androidx.recyclerview.widget.RecyclerView;
+build	Build Release APK	2026-08-29T18:23:12.0188471Z                                    ^
+build	Build Release APK	2026-08-29T18:23:12.0229431Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:14: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:12.0231855Z public class SpannedGridLayoutManager extends GridLayoutManager {
+build	Build Release APK	2026-08-29T18:23:12.0264160Z                                               ^
+build	Build Release APK	2026-08-29T18:23:12.0288767Z   symbol: class GridLayoutManager
+build	Build Release APK	2026-08-29T18:23:12.0309493Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:218: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:12.0311514Z     public void onLayoutChildren(RecyclerView.Recycler recycler, RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:12.0324308Z                                              ^
+build	Build Release APK	2026-08-29T18:23:12.0325942Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:218: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:12.0328072Z     public void onLayoutChildren(RecyclerView.Recycler recycler, RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:12.0329124Z                                                                              ^
+build	Build Release APK	2026-08-29T18:23:12.0330662Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:280: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:12.0340453Z     public int scrollVerticallyBy(int dy, RecyclerView.Recycler recycler, RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:12.0368415Z                                                       ^
+build	Build Release APK	2026-08-29T18:23:12.0370191Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:280: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:12.0379279Z     public int scrollVerticallyBy(int dy, RecyclerView.Recycler recycler, RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:12.0398612Z                                                                                       ^
+build	Build Release APK	2026-08-29T18:23:12.0420056Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:298: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:12.0421942Z     public int computeVerticalScrollOffset(RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:12.0438569Z                                                        ^
+build	Build Release APK	2026-08-29T18:23:12.0459482Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:303: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:12.0478720Z     public int computeVerticalScrollRange(RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:12.0495473Z                                                       ^
+build	Build Release APK	2026-08-29T18:23:12.0519417Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:308: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:12.0521302Z     public int computeVerticalScrollExtent(RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:12.0532763Z                                                        ^
+build	Build Release APK	2026-08-29T18:23:12.0534128Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:382: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:12.0558633Z     private static final Config config = new Config();
+build	Build Release APK	2026-08-29T18:23:12.0559464Z                          ^
+build	Build Release APK	2026-08-29T18:23:12.0578555Z   symbol:   class Config
+build	Build Release APK	2026-08-29T18:23:12.0598619Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:13.2010368Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/ControlCenterHook.java:4231: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:13.2048888Z                                 if (args != null && args.length > 0 && args[0] instanceof androidx.recyclerview.widget.RecyclerView) {
+build	Build Release APK	2026-08-29T18:23:13.2088579Z                                                                                                                       ^
+build	Build Release APK	2026-08-29T18:23:13.2109338Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/ControlCenterHook.java:4232: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:13.2148882Z                                     androidx.recyclerview.widget.RecyclerView rv = (androidx.recyclerview.widget.RecyclerView) args[0];
+build	Build Release APK	2026-08-29T18:23:13.2156974Z                                                                 ^
+build	Build Release APK	2026-08-29T18:23:13.2209341Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/ControlCenterHook.java:4232: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:13.2211461Z                                     androidx.recyclerview.widget.RecyclerView rv = (androidx.recyclerview.widget.RecyclerView) args[0];
+build	Build Release APK	2026-08-29T18:23:13.2248544Z                                                                                                                 ^
+build	Build Release APK	2026-08-29T18:23:13.3041900Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:39: error: package GridLayoutManager does not exist
+build	Build Release APK	2026-08-29T18:23:13.3074072Z         setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
+build	Build Release APK	2026-08-29T18:23:13.3108744Z                                                ^
+build	Build Release APK	2026-08-29T18:23:13.3129634Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:40: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:13.3146980Z             @Override
+build	Build Release APK	2026-08-29T18:23:13.3174436Z             ^
+build	Build Release APK	2026-08-29T18:23:13.3178523Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:46: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:13.3218505Z             @Override
+build	Build Release APK	2026-08-29T18:23:13.3259439Z             ^
+build	Build Release APK	2026-08-29T18:23:13.3279211Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:65: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:13.3308455Z         RecyclerView.Adapter adapter = null;
+build	Build Release APK	2026-08-29T18:23:13.3309326Z                     ^
+build	Build Release APK	2026-08-29T18:23:13.3326516Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:67: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:13.3346103Z             Field adapterField = RecyclerView.LayoutManager.class.getDeclaredField("mRecyclerView");
+build	Build Release APK	2026-08-29T18:23:13.3348520Z                                              ^
+build	Build Release APK	2026-08-29T18:23:13.3371395Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:69: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.3382435Z             RecyclerView rv = (RecyclerView) adapterField.get(this);
+build	Build Release APK	2026-08-29T18:23:13.3408488Z             ^
+build	Build Release APK	2026-08-29T18:23:13.3418554Z   symbol:   class RecyclerView
+build	Build Release APK	2026-08-29T18:23:13.3435377Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.3459199Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:69: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.3461143Z             RecyclerView rv = (RecyclerView) adapterField.get(this);
+build	Build Release APK	2026-08-29T18:23:13.3478362Z                                ^
+build	Build Release APK	2026-08-29T18:23:13.3499757Z   symbol:   class RecyclerView
+build	Build Release APK	2026-08-29T18:23:13.3518489Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.3519849Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:135: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.3538570Z         int paddingLeft = getPaddingLeft();
+build	Build Release APK	2026-08-29T18:23:13.3558488Z                           ^
+build	Build Release APK	2026-08-29T18:23:13.3568828Z   symbol:   method getPaddingLeft()
+build	Build Release APK	2026-08-29T18:23:13.3593948Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.3606978Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:136: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.3622273Z         int paddingRight = getPaddingRight();
+build	Build Release APK	2026-08-29T18:23:13.3644220Z                            ^
+build	Build Release APK	2026-08-29T18:23:13.3668731Z   symbol:   method getPaddingRight()
+build	Build Release APK	2026-08-29T18:23:13.3670108Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.3671603Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:137: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.3673119Z         int paddingTop = getPaddingTop();
+build	Build Release APK	2026-08-29T18:23:13.3673783Z                          ^
+build	Build Release APK	2026-08-29T18:23:13.3674471Z   symbol:   method getPaddingTop()
+build	Build Release APK	2026-08-29T18:23:13.3675120Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.3676682Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:138: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.3678764Z         int paddingBottom = getPaddingBottom();
+build	Build Release APK	2026-08-29T18:23:13.3679701Z                             ^
+build	Build Release APK	2026-08-29T18:23:13.3680328Z   symbol:   method getPaddingBottom()
+build	Build Release APK	2026-08-29T18:23:13.3681007Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.3682935Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:217: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:13.3684656Z     @Override
+build	Build Release APK	2026-08-29T18:23:13.3685321Z     ^
+build	Build Release APK	2026-08-29T18:23:13.3686613Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:219: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.3708817Z         if (getItemCount() == 0) {
+build	Build Release APK	2026-08-29T18:23:13.3709563Z             ^
+build	Build Release APK	2026-08-29T18:23:13.3710140Z   symbol:   method getItemCount()
+build	Build Release APK	2026-08-29T18:23:13.3710951Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.3712304Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:220: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.3713861Z             super.onLayoutChildren(recycler, state);
+build	Build Release APK	2026-08-29T18:23:13.3714495Z             ^
+build	Build Release APK	2026-08-29T18:23:13.3715108Z   symbol:   variable super
+build	Build Release APK	2026-08-29T18:23:13.3715826Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.3717192Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:226: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.3719092Z         int itemCount = getItemCount();
+build	Build Release APK	2026-08-29T18:23:13.3719663Z                         ^
+build	Build Release APK	2026-08-29T18:23:13.3720310Z   symbol:   method getItemCount()
+build	Build Release APK	2026-08-29T18:23:13.3720986Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.3722500Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:227: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.3723881Z         int width = getWidth();
+build	Build Release APK	2026-08-29T18:23:13.3724413Z                     ^
+build	Build Release APK	2026-08-29T18:23:13.3725044Z   symbol:   method getWidth()
+build	Build Release APK	2026-08-29T18:23:13.3725666Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.3727193Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:228: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.3739496Z         int height = getHeight();
+build	Build Release APK	2026-08-29T18:23:13.4039169Z                      ^
+build	Build Release APK	2026-08-29T18:23:13.4040828Z   symbol:   method getHeight()
+build	Build Release APK	2026-08-29T18:23:13.4048755Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.4069514Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:246: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.4078756Z                 addView(view);
+build	Build Release APK	2026-08-29T18:23:13.4098576Z                 ^
+build	Build Release APK	2026-08-29T18:23:13.4108560Z   symbol:   method addView(View)
+build	Build Release APK	2026-08-29T18:23:13.4128700Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.4139474Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:248: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:13.4142091Z                 RecyclerView.LayoutParams rlp = (RecyclerView.LayoutParams) view.getLayoutParams();
+build	Build Release APK	2026-08-29T18:23:13.4143233Z                             ^
+build	Build Release APK	2026-08-29T18:23:13.4144840Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:248: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:13.4147041Z                 RecyclerView.LayoutParams rlp = (RecyclerView.LayoutParams) view.getLayoutParams();
+build	Build Release APK	2026-08-29T18:23:13.4148469Z                                                              ^
+build	Build Release APK	2026-08-29T18:23:13.4150094Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:258: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.4151851Z                 layoutDecorated(view, r.left, viewTop, r.right, viewBottom);
+build	Build Release APK	2026-08-29T18:23:13.4152824Z                 ^
+build	Build Release APK	2026-08-29T18:23:13.4153491Z   symbol:   method layoutDecorated(View,int,int,int,int)
+build	Build Release APK	2026-08-29T18:23:13.4165925Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.4167751Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:263: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:13.4170056Z         List<RecyclerView.ViewHolder> scrapList = recycler.getScrapList();
+build	Build Release APK	2026-08-29T18:23:13.4171008Z                          ^
+build	Build Release APK	2026-08-29T18:23:13.4172556Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:266: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:13.4174356Z                 RecyclerView.ViewHolder vh = scrapList.get(i);
+build	Build Release APK	2026-08-29T18:23:13.4175177Z                             ^
+build	Build Release APK	2026-08-29T18:23:13.4177010Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:274: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:13.4202396Z     @Override
+build	Build Release APK	2026-08-29T18:23:13.4202999Z     ^
+build	Build Release APK	2026-08-29T18:23:13.4204672Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:279: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:13.4206448Z     @Override
+build	Build Release APK	2026-08-29T18:23:13.4207126Z     ^
+build	Build Release APK	2026-08-29T18:23:13.4208839Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:281: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.4210557Z         if (getItemCount() == 0 || dy == 0) return 0;
+build	Build Release APK	2026-08-29T18:23:13.4211323Z             ^
+build	Build Release APK	2026-08-29T18:23:13.4212118Z   symbol:   method getItemCount()
+build	Build Release APK	2026-08-29T18:23:13.4212920Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.4214560Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:283: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.4216284Z         int height = getHeight();
+build	Build Release APK	2026-08-29T18:23:13.4216949Z                      ^
+build	Build Release APK	2026-08-29T18:23:13.4217766Z   symbol:   method getHeight()
+build	Build Release APK	2026-08-29T18:23:13.4218754Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.4220481Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:290: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.4222146Z             offsetChildrenVertical(-consumed);
+build	Build Release APK	2026-08-29T18:23:13.4222928Z             ^
+build	Build Release APK	2026-08-29T18:23:13.4223705Z   symbol:   method offsetChildrenVertical(int)
+build	Build Release APK	2026-08-29T18:23:13.4224516Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.4226822Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:297: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:13.4261910Z     @Override
+build	Build Release APK	2026-08-29T18:23:13.4262646Z     ^
+build	Build Release APK	2026-08-29T18:23:13.4264394Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:302: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:13.4266250Z     @Override
+build	Build Release APK	2026-08-29T18:23:13.4267037Z     ^
+build	Build Release APK	2026-08-29T18:23:13.4288951Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:304: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.4290848Z         return Math.max(mTotalContentHeight, getHeight());
+build	Build Release APK	2026-08-29T18:23:13.4291725Z                                              ^
+build	Build Release APK	2026-08-29T18:23:13.4292572Z   symbol:   method getHeight()
+build	Build Release APK	2026-08-29T18:23:13.4293376Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.4295264Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:307: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:13.4297293Z     @Override
+build	Build Release APK	2026-08-29T18:23:13.4304396Z     ^
+build	Build Release APK	2026-08-29T18:23:13.4306063Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:309: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.4307481Z         return getHeight();
+build	Build Release APK	2026-08-29T18:23:13.4308374Z                ^
+build	Build Release APK	2026-08-29T18:23:13.4309183Z   symbol:   method getHeight()
+build	Build Release APK	2026-08-29T18:23:13.4309913Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:13.4311721Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:142: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:13.4313452Z                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:13.4314540Z                          ^
+build	Build Release APK	2026-08-29T18:23:13.4316025Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:142: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:13.4318038Z                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:13.4327363Z                                                   ^
+build	Build Release APK	2026-08-29T18:23:13.4339920Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:189: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:13.4342318Z                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && radialRuntimeShader instanceof android.graphics.RuntimeShader) {
+build	Build Release APK	2026-08-29T18:23:13.4343676Z                              ^
+build	Build Release APK	2026-08-29T18:23:13.4345365Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:189: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:13.4347573Z                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && radialRuntimeShader instanceof android.graphics.RuntimeShader) {
+build	Build Release APK	2026-08-29T18:23:13.4349407Z                                                       ^
+build	Build Release APK	2026-08-29T18:23:13.4351021Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:236: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:13.4352776Z                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:13.4353877Z                          ^
+build	Build Release APK	2026-08-29T18:23:13.4355300Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:236: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:13.4357147Z                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:13.4388774Z                                                   ^
+build	Build Release APK	2026-08-29T18:23:13.4390998Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:252: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:13.4393177Z                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && fresnelShader instanceof android.graphics.RuntimeShader) {
+build	Build Release APK	2026-08-29T18:23:13.4394751Z                          ^
+build	Build Release APK	2026-08-29T18:23:13.4396408Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:252: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:13.4418675Z                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && fresnelShader instanceof android.graphics.RuntimeShader) {
+build	Build Release APK	2026-08-29T18:23:13.4420092Z                                                   ^
+build	Build Release APK	2026-08-29T18:23:13.4421475Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:382: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.4423029Z     private static final Config config = new Config();
+build	Build Release APK	2026-08-29T18:23:13.4423837Z                                              ^
+build	Build Release APK	2026-08-29T18:23:13.4424466Z   symbol:   class Config
+build	Build Release APK	2026-08-29T18:23:13.4425166Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:13.5009383Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:442: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:13.5019408Z                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:13.5036563Z                                                  ^
+build	Build Release APK	2026-08-29T18:23:13.5049606Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:442: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:13.5068946Z                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:13.5088682Z                                                                           ^
+build	Build Release APK	2026-08-29T18:23:13.5109249Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:470: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.5177528Z                                         if (rootView instanceof ViewGroup) {
+build	Build Release APK	2026-08-29T18:23:13.5207753Z                                                                 ^
+build	Build Release APK	2026-08-29T18:23:13.5228598Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:13.5229919Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:13.5249421Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:471: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.5268634Z                                             ViewGroup rootGroup = (ViewGroup) rootView;
+build	Build Release APK	2026-08-29T18:23:13.5288510Z                                             ^
+build	Build Release APK	2026-08-29T18:23:13.5308444Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:13.5309203Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:13.5329208Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:471: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.5348611Z                                             ViewGroup rootGroup = (ViewGroup) rootView;
+build	Build Release APK	2026-08-29T18:23:13.5368526Z                                                                    ^
+build	Build Release APK	2026-08-29T18:23:13.5369403Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:13.5388567Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:13.5409332Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:486: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:13.5428844Z                                                     ViewGroup.MarginLayoutParams clp = (ViewGroup.MarginLayoutParams) clpCons.newInstance(
+build	Build Release APK	2026-08-29T18:23:13.5448517Z                                                              ^
+build	Build Release APK	2026-08-29T18:23:13.5449986Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:486: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:13.5469010Z                                                     ViewGroup.MarginLayoutParams clp = (ViewGroup.MarginLayoutParams) clpCons.newInstance(
+build	Build Release APK	2026-08-29T18:23:13.5488574Z                                                                                                  ^
+build	Build Release APK	2026-08-29T18:23:13.5494762Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:487: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:13.5508684Z                                                         ViewGroup.LayoutParams.MATCH_PARENT, 
+build	Build Release APK	2026-08-29T18:23:13.5528482Z                                                                  ^
+build	Build Release APK	2026-08-29T18:23:13.5549515Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:488: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:13.5568496Z                                                         ViewGroup.LayoutParams.MATCH_PARENT
+build	Build Release APK	2026-08-29T18:23:13.5569247Z                                                                  ^
+build	Build Release APK	2026-08-29T18:23:13.5589362Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:502: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:13.5608557Z                                                                 ViewGroup.LayoutParams.MATCH_PARENT, 
+build	Build Release APK	2026-08-29T18:23:13.5628315Z                                                                          ^
+build	Build Release APK	2026-08-29T18:23:13.5629964Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:503: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:13.5648665Z                                                                 ViewGroup.LayoutParams.MATCH_PARENT
+build	Build Release APK	2026-08-29T18:23:13.5668698Z                                                                          ^
+build	Build Release APK	2026-08-29T18:23:13.5689202Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:519: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.5690808Z                                                 ViewGroup bottomAreaView = (ViewGroup) bViewField.get(bottomAreaInjector);
+build	Build Release APK	2026-08-29T18:23:13.5708536Z                                                 ^
+build	Build Release APK	2026-08-29T18:23:13.5728700Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:13.5748489Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:13.5749989Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:519: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.5768984Z                                                 ViewGroup bottomAreaView = (ViewGroup) bViewField.get(bottomAreaInjector);
+build	Build Release APK	2026-08-29T18:23:13.5788556Z                                                                             ^
+build	Build Release APK	2026-08-29T18:23:13.5808463Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:13.5818375Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:13.5829397Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:549: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:13.5848605Z                                                                 ViewGroup.LayoutParams.MATCH_PARENT, 
+build	Build Release APK	2026-08-29T18:23:13.5868524Z                                                                          ^
+build	Build Release APK	2026-08-29T18:23:13.6014333Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:799: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.6019043Z                         if (keyView.getParent() instanceof ViewGroup) ((ViewGroup) keyView.getParent()).setClipChildren(false);
+build	Build Release APK	2026-08-29T18:23:13.6038650Z                                                            ^
+build	Build Release APK	2026-08-29T18:23:13.6055526Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:13.6064685Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:13.6079252Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:799: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.6098994Z                         if (keyView.getParent() instanceof ViewGroup) ((ViewGroup) keyView.getParent()).setClipChildren(false);
+build	Build Release APK	2026-08-29T18:23:13.6118539Z                                                                         ^
+build	Build Release APK	2026-08-29T18:23:13.6124306Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:13.6148572Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:13.6159189Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:800: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.6178734Z                         if (keyView.getParent() != null && keyView.getParent().getParent() instanceof ViewGroup) {
+build	Build Release APK	2026-08-29T18:23:13.6180135Z                                                                                                       ^
+build	Build Release APK	2026-08-29T18:23:13.6212445Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:13.6218611Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:13.6239231Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:801: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:13.6248621Z                             ((ViewGroup) keyView.getParent().getParent()).setClipChildren(false);
+build	Build Release APK	2026-08-29T18:23:13.6268406Z                               ^
+build	Build Release APK	2026-08-29T18:23:13.6273795Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:13.6298498Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:13.7998035Z Note: Some input files use or override a deprecated API.
+build	Build Release APK	2026-08-29T18:23:13.8014924Z Note: Recompile with -Xlint:deprecation for details.
+build	Build Release APK	2026-08-29T18:23:13.8028734Z Note: Some input files use unchecked or unsafe operations.
+build	Build Release APK	2026-08-29T18:23:13.8048621Z Note: Recompile with -Xlint:unchecked for details.
+build	Build Release APK	2026-08-29T18:23:13.8058653Z 74 errors
+build	Build Release APK	2026-08-29T18:23:13.9997567Z 
+build	Build Release APK	2026-08-29T18:23:14.0008794Z > Task :app:compileReleaseJavaWithJavac FAILED
+build	Build Release APK	2026-08-29T18:23:14.1024047Z 
+build	Build Release APK	2026-08-29T18:23:14.1024121Z 
+build	Build Release APK	2026-08-29T18:23:14.1044487Z FAILURE: Build failed with an exception.
+build	Build Release APK	2026-08-29T18:23:14.1045794Z [Incubating] Problems report is available at: file:///home/runner/work/hyperbounce/hyperbounce/build/reports/problems/problems-report.html
+build	Build Release APK	2026-08-29T18:23:14.1108163Z 
+build	Build Release APK	2026-08-29T18:23:14.1124823Z * What went wrong:
+build	Build Release APK	2026-08-29T18:23:14.1168890Z Execution failed for task ':app:compileReleaseJavaWithJavac' (registered by plugin 'com.android.internal.application').
+build	Build Release APK	2026-08-29T18:23:14.1188448Z > Compilation failed; see the compiler output below.
+build	Build Release APK	2026-08-29T18:23:14.1218503Z   Note: Recompile with -Xlint:deprecation for details.
+build	Build Release APK	2026-08-29T18:23:14.1220079Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:382: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1238215Z       private static final Config config = new Config();
+build	Build Release APK	2026-08-29T18:23:14.1252343Z                            ^
+build	Build Release APK	2026-08-29T18:23:14.1253093Z     symbol:   class Config
+build	Build Release APK	2026-08-29T18:23:14.1253770Z     location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.1255313Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:69: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1257058Z               RecyclerView rv = (RecyclerView) adapterField.get(this);
+build	Build Release APK	2026-08-29T18:23:14.1258229Z               ^
+build	Build Release APK	2026-08-29T18:23:14.1272772Z     symbol:   class RecyclerView
+build	Build Release APK	2026-08-29T18:23:14.1273861Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1275427Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:69: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1277138Z               RecyclerView rv = (RecyclerView) adapterField.get(this);
+build	Build Release APK	2026-08-29T18:23:14.1278247Z                                  ^
+build	Build Release APK	2026-08-29T18:23:14.1278926Z     symbol:   class RecyclerView
+build	Build Release APK	2026-08-29T18:23:14.1279665Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1281949Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:220: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1283857Z               super.onLayoutChildren(recycler, state);
+build	Build Release APK	2026-08-29T18:23:14.1284608Z               ^
+build	Build Release APK	2026-08-29T18:23:14.1285194Z     symbol:   variable super
+build	Build Release APK	2026-08-29T18:23:14.1285870Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1287329Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:382: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1289300Z       private static final Config config = new Config();
+build	Build Release APK	2026-08-29T18:23:14.1290125Z                                                ^
+build	Build Release APK	2026-08-29T18:23:14.1290833Z     symbol:   class Config
+build	Build Release APK	2026-08-29T18:23:14.1291464Z     location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.1292902Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:470: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1294486Z                                           if (rootView instanceof ViewGroup) {
+build	Build Release APK	2026-08-29T18:23:14.1295310Z                                                                   ^
+build	Build Release APK	2026-08-29T18:23:14.1296056Z     symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.1296738Z     location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.1298378Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:471: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1299977Z                                               ViewGroup rootGroup = (ViewGroup) rootView;
+build	Build Release APK	2026-08-29T18:23:14.1300853Z                                               ^
+build	Build Release APK	2026-08-29T18:23:14.1301560Z     symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.1302237Z     location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.1303654Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:471: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1305503Z                                               ViewGroup rootGroup = (ViewGroup) rootView;
+build	Build Release APK	2026-08-29T18:23:14.1306487Z                                                                      ^
+build	Build Release APK	2026-08-29T18:23:14.1307315Z     symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.1308450Z     location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.1316677Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:519: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1333831Z                                                   ViewGroup bottomAreaView = (ViewGroup) bViewField.get(bottomAreaInjector);
+build	Build Release APK	2026-08-29T18:23:14.1334964Z                                                   ^
+build	Build Release APK	2026-08-29T18:23:14.1335704Z     symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.1336454Z     location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.1338169Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:519: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1340073Z                                                   ViewGroup bottomAreaView = (ViewGroup) bViewField.get(bottomAreaInjector);
+build	Build Release APK	2026-08-29T18:23:14.1341274Z                                                                               ^
+build	Build Release APK	2026-08-29T18:23:14.1342083Z     symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.1343133Z     location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.1344613Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:799: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1346639Z                           if (keyView.getParent() instanceof ViewGroup) ((ViewGroup) keyView.getParent()).setClipChildren(false);
+build	Build Release APK	2026-08-29T18:23:14.1348311Z                                                              ^
+build	Build Release APK	2026-08-29T18:23:14.1349270Z     symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.1351678Z 37 actionable tasks: 37 executed
+build	Build Release APK	2026-08-29T18:23:14.1352759Z     location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.1354199Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:799: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1356341Z                           if (keyView.getParent() instanceof ViewGroup) ((ViewGroup) keyView.getParent()).setClipChildren(false);
+build	Build Release APK	2026-08-29T18:23:14.1357586Z                                                                           ^
+build	Build Release APK	2026-08-29T18:23:14.1358675Z     symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.1359377Z     location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.1360759Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:800: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1362553Z                           if (keyView.getParent() != null && keyView.getParent().getParent() instanceof ViewGroup) {
+build	Build Release APK	2026-08-29T18:23:14.1363742Z                                                                                                         ^
+build	Build Release APK	2026-08-29T18:23:14.1364650Z     symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.1365343Z     location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.1366727Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:801: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1368860Z                               ((ViewGroup) keyView.getParent().getParent()).setClipChildren(false);
+build	Build Release APK	2026-08-29T18:23:14.1408500Z                                 ^
+build	Build Release APK	2026-08-29T18:23:14.1428624Z     symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.1469153Z     location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.1473235Z   Note: Recompile with -Xlint:unchecked for details.
+build	Build Release APK	2026-08-29T18:23:14.1494516Z   Note: Some input files use or override a deprecated API.
+build	Build Release APK	2026-08-29T18:23:14.1519575Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:40: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.1534787Z               @Override
+build	Build Release APK	2026-08-29T18:23:14.1545833Z               ^
+build	Build Release APK	2026-08-29T18:23:14.1559604Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:46: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.1568630Z               @Override
+build	Build Release APK	2026-08-29T18:23:14.1569217Z               ^
+build	Build Release APK	2026-08-29T18:23:14.1570570Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:217: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.1571975Z       @Override
+build	Build Release APK	2026-08-29T18:23:14.1572428Z       ^
+build	Build Release APK	2026-08-29T18:23:14.1573687Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:274: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.1575086Z       @Override
+build	Build Release APK	2026-08-29T18:23:14.1575555Z       ^
+build	Build Release APK	2026-08-29T18:23:14.1576810Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:279: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.1578594Z       @Override
+build	Build Release APK	2026-08-29T18:23:14.1579116Z       ^
+build	Build Release APK	2026-08-29T18:23:14.1580587Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:297: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.1582010Z       @Override
+build	Build Release APK	2026-08-29T18:23:14.1582457Z       ^
+build	Build Release APK	2026-08-29T18:23:14.1583815Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:302: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.1585361Z       @Override
+build	Build Release APK	2026-08-29T18:23:14.1585704Z       ^
+build	Build Release APK	2026-08-29T18:23:14.1587077Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:307: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.1589260Z       @Override
+build	Build Release APK	2026-08-29T18:23:14.1589807Z       ^
+build	Build Release APK	2026-08-29T18:23:14.1590892Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:14: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1592308Z   public class SpannedGridLayoutManager extends GridLayoutManager {
+build	Build Release APK	2026-08-29T18:23:14.1592976Z                                                 ^
+build	Build Release APK	2026-08-29T18:23:14.1593460Z     symbol: class GridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1594021Z   Note: Some input files use unchecked or unsafe operations.
+build	Build Release APK	2026-08-29T18:23:14.1595396Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:135: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1596698Z           int paddingLeft = getPaddingLeft();
+build	Build Release APK	2026-08-29T18:23:14.1597233Z                             ^
+build	Build Release APK	2026-08-29T18:23:14.1597683Z     symbol:   method getPaddingLeft()
+build	Build Release APK	2026-08-29T18:23:14.1600379Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1601670Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:136: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1602960Z           int paddingRight = getPaddingRight();
+build	Build Release APK	2026-08-29T18:23:14.1603446Z                              ^
+build	Build Release APK	2026-08-29T18:23:14.1603846Z     symbol:   method getPaddingRight()
+build	Build Release APK	2026-08-29T18:23:14.1604369Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1605674Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:137: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1606973Z           int paddingTop = getPaddingTop();
+build	Build Release APK	2026-08-29T18:23:14.1607443Z                            ^
+build	Build Release APK	2026-08-29T18:23:14.1608144Z     symbol:   method getPaddingTop()
+build	Build Release APK	2026-08-29T18:23:14.1608691Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1609983Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:138: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1611307Z           int paddingBottom = getPaddingBottom();
+build	Build Release APK	2026-08-29T18:23:14.1611856Z                               ^
+build	Build Release APK	2026-08-29T18:23:14.1612304Z     symbol:   method getPaddingBottom()
+build	Build Release APK	2026-08-29T18:23:14.1612845Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1614167Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:219: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1615532Z           if (getItemCount() == 0) {
+build	Build Release APK	2026-08-29T18:23:14.1616002Z               ^
+build	Build Release APK	2026-08-29T18:23:14.1616388Z     symbol:   method getItemCount()
+build	Build Release APK	2026-08-29T18:23:14.1616907Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1618588Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:226: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1619937Z           int itemCount = getItemCount();
+build	Build Release APK	2026-08-29T18:23:14.1620447Z                           ^
+build	Build Release APK	2026-08-29T18:23:14.1620885Z     symbol:   method getItemCount()
+build	Build Release APK	2026-08-29T18:23:14.1621405Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1622719Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:227: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1624013Z           int width = getWidth();
+build	Build Release APK	2026-08-29T18:23:14.1624451Z                       ^
+build	Build Release APK	2026-08-29T18:23:14.1624844Z     symbol:   method getWidth()
+build	Build Release APK	2026-08-29T18:23:14.1625289Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1626365Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:228: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1628170Z           int height = getHeight();
+build	Build Release APK	2026-08-29T18:23:14.1628635Z                        ^
+build	Build Release APK	2026-08-29T18:23:14.1629036Z     symbol:   method getHeight()
+build	Build Release APK	2026-08-29T18:23:14.1629804Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1631124Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:246: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1632400Z                   addView(view);
+build	Build Release APK	2026-08-29T18:23:14.1632829Z                   ^
+build	Build Release APK	2026-08-29T18:23:14.1633203Z     symbol:   method addView(View)
+build	Build Release APK	2026-08-29T18:23:14.1633710Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1635066Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:258: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1636557Z                   layoutDecorated(view, r.left, viewTop, r.right, viewBottom);
+build	Build Release APK	2026-08-29T18:23:14.1637213Z                   ^
+build	Build Release APK	2026-08-29T18:23:14.1637678Z     symbol:   method layoutDecorated(View,int,int,int,int)
+build	Build Release APK	2026-08-29T18:23:14.1638668Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1640028Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:281: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1641454Z           if (getItemCount() == 0 || dy == 0) return 0;
+build	Build Release APK	2026-08-29T18:23:14.1642003Z               ^
+build	Build Release APK	2026-08-29T18:23:14.1642398Z     symbol:   method getItemCount()
+build	Build Release APK	2026-08-29T18:23:14.1642932Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1644267Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:283: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1645614Z           int height = getHeight();
+build	Build Release APK	2026-08-29T18:23:14.1646077Z                        ^
+build	Build Release APK	2026-08-29T18:23:14.1646523Z     symbol:   method getHeight()
+build	Build Release APK	2026-08-29T18:23:14.1647060Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1648569Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:290: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1649949Z               offsetChildrenVertical(-consumed);
+build	Build Release APK	2026-08-29T18:23:14.1650506Z               ^
+build	Build Release APK	2026-08-29T18:23:14.1650934Z     symbol:   method offsetChildrenVertical(int)
+build	Build Release APK	2026-08-29T18:23:14.1651545Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1652883Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:304: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1654290Z           return Math.max(mTotalContentHeight, getHeight());
+build	Build Release APK	2026-08-29T18:23:14.1654936Z                                                ^
+build	Build Release APK	2026-08-29T18:23:14.1655459Z     symbol:   method getHeight()
+build	Build Release APK	2026-08-29T18:23:14.1655952Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1657321Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:309: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1658959Z           return getHeight();
+build	Build Release APK	2026-08-29T18:23:14.1659425Z                  ^
+build	Build Release APK	2026-08-29T18:23:14.1659826Z     symbol:   method getHeight()
+build	Build Release APK	2026-08-29T18:23:14.1660349Z     location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.1661950Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:8: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:14.1663636Z   import androidx.recyclerview.widget.GridLayoutManager;
+build	Build Release APK	2026-08-29T18:23:14.1664263Z                                      ^
+build	Build Release APK	2026-08-29T18:23:14.1665714Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:9: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:14.1667206Z   import androidx.recyclerview.widget.RecyclerView;
+build	Build Release APK	2026-08-29T18:23:14.1668549Z                                      ^
+build	Build Release APK	2026-08-29T18:23:14.1669961Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:218: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.1671960Z       public void onLayoutChildren(RecyclerView.Recycler recycler, RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:14.1672833Z                                                ^
+build	Build Release APK	2026-08-29T18:23:14.1674260Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:218: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.1676041Z       public void onLayoutChildren(RecyclerView.Recycler recycler, RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:14.1676975Z                                                                                ^
+build	Build Release APK	2026-08-29T18:23:14.1678708Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:280: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.1680599Z       public int scrollVerticallyBy(int dy, RecyclerView.Recycler recycler, RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:14.1681530Z                                                         ^
+build	Build Release APK	2026-08-29T18:23:14.1682932Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:280: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.1684738Z       public int scrollVerticallyBy(int dy, RecyclerView.Recycler recycler, RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:14.1685702Z                                                                                         ^
+build	Build Release APK	2026-08-29T18:23:14.1687206Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:298: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.1689096Z       public int computeVerticalScrollOffset(RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:14.1689831Z                                                          ^
+build	Build Release APK	2026-08-29T18:23:14.1691307Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:303: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.1692924Z       public int computeVerticalScrollRange(RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:14.1693645Z                                                         ^
+build	Build Release APK	2026-08-29T18:23:14.1695061Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:308: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.1696689Z       public int computeVerticalScrollExtent(RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:14.1697410Z                                                          ^
+build	Build Release APK	2026-08-29T18:23:14.1699080Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/ControlCenterHook.java:4231: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:14.1700887Z                                   if (args != null && args.length > 0 && args[0] instanceof androidx.recyclerview.widget.RecyclerView) {
+build	Build Release APK	2026-08-29T18:23:14.1702020Z                                                                                                                         ^
+build	Build Release APK	2026-08-29T18:23:14.1703630Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/ControlCenterHook.java:4232: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:14.1705750Z                                       androidx.recyclerview.widget.RecyclerView rv = (androidx.recyclerview.widget.RecyclerView) args[0];
+build	Build Release APK	2026-08-29T18:23:14.1706822Z                                                                   ^
+build	Build Release APK	2026-08-29T18:23:14.1708596Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/ControlCenterHook.java:4232: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:14.1710827Z                                       androidx.recyclerview.widget.RecyclerView rv = (androidx.recyclerview.widget.RecyclerView) args[0];
+build	Build Release APK	2026-08-29T18:23:14.1712302Z                                                                                                                   ^
+build	Build Release APK	2026-08-29T18:23:14.1713932Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:39: error: package GridLayoutManager does not exist
+build	Build Release APK	2026-08-29T18:23:14.1715544Z           setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
+build	Build Release APK	2026-08-29T18:23:14.1716242Z                                                  ^
+build	Build Release APK	2026-08-29T18:23:14.1717658Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:65: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.1719441Z           RecyclerView.Adapter adapter = null;
+build	Build Release APK	2026-08-29T18:23:14.1719976Z                       ^
+build	Build Release APK	2026-08-29T18:23:14.1721286Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:67: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.1723115Z               Field adapterField = RecyclerView.LayoutManager.class.getDeclaredField("mRecyclerView");
+build	Build Release APK	2026-08-29T18:23:14.1724045Z                                                ^
+build	Build Release APK	2026-08-29T18:23:14.1725477Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:248: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.1727268Z                   RecyclerView.LayoutParams rlp = (RecyclerView.LayoutParams) view.getLayoutParams();
+build	Build Release APK	2026-08-29T18:23:14.1728393Z                               ^
+build	Build Release APK	2026-08-29T18:23:14.1729666Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:248: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.1731467Z                   RecyclerView.LayoutParams rlp = (RecyclerView.LayoutParams) view.getLayoutParams();
+build	Build Release APK	2026-08-29T18:23:14.1732395Z                                                                ^
+build	Build Release APK	2026-08-29T18:23:14.1733881Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:263: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.1735503Z           List<RecyclerView.ViewHolder> scrapList = recycler.getScrapList();
+build	Build Release APK	2026-08-29T18:23:14.1736217Z                            ^
+build	Build Release APK	2026-08-29T18:23:14.1737581Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:266: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.1739234Z                   RecyclerView.ViewHolder vh = scrapList.get(i);
+build	Build Release APK	2026-08-29T18:23:14.1739856Z                               ^
+build	Build Release APK	2026-08-29T18:23:14.1741117Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:142: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.1742600Z                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:14.1743277Z                            ^
+build	Build Release APK	2026-08-29T18:23:14.1744475Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:142: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.1745959Z                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:14.1746652Z                                                     ^
+build	Build Release APK	2026-08-29T18:23:14.1748168Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:189: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.1750109Z                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && radialRuntimeShader instanceof android.graphics.RuntimeShader) {
+build	Build Release APK	2026-08-29T18:23:14.1751517Z                                ^
+build	Build Release APK	2026-08-29T18:23:14.1752790Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:189: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.1754987Z                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && radialRuntimeShader instanceof android.graphics.RuntimeShader) {
+build	Build Release APK	2026-08-29T18:23:14.1756169Z                                                         ^
+build	Build Release APK	2026-08-29T18:23:14.1757497Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:236: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.1759271Z                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:14.1759975Z                            ^
+build	Build Release APK	2026-08-29T18:23:14.1761201Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:236: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.1762688Z                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:14.1763395Z                                                     ^
+build	Build Release APK	2026-08-29T18:23:14.1764654Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:252: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.1766527Z                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && fresnelShader instanceof android.graphics.RuntimeShader) {
+build	Build Release APK	2026-08-29T18:23:14.1767569Z                            ^
+build	Build Release APK	2026-08-29T18:23:14.1769011Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:252: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.1770773Z                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && fresnelShader instanceof android.graphics.RuntimeShader) {
+build	Build Release APK	2026-08-29T18:23:14.1771876Z                                                     ^
+build	Build Release APK	2026-08-29T18:23:14.1773162Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:442: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.1774693Z                                           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:14.1775442Z                                                    ^
+build	Build Release APK	2026-08-29T18:23:14.1776737Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:442: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.1778472Z                                           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:14.1779261Z                                                                             ^
+build	Build Release APK	2026-08-29T18:23:14.1780671Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:486: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:14.1782486Z                                                       ViewGroup.MarginLayoutParams clp = (ViewGroup.MarginLayoutParams) clpCons.newInstance(
+build	Build Release APK	2026-08-29T18:23:14.1783533Z                                                                ^
+build	Build Release APK	2026-08-29T18:23:14.1784916Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:486: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:14.1786728Z                                                       ViewGroup.MarginLayoutParams clp = (ViewGroup.MarginLayoutParams) clpCons.newInstance(
+build	Build Release APK	2026-08-29T18:23:14.1788074Z                                                                                                    ^
+build	Build Release APK	2026-08-29T18:23:14.1789559Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:487: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:14.1791408Z                                                           ViewGroup.LayoutParams.MATCH_PARENT, 
+build	Build Release APK	2026-08-29T18:23:14.1792136Z                                                                    ^
+build	Build Release APK	2026-08-29T18:23:14.1793811Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:488: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:14.1795298Z                                                           ViewGroup.LayoutParams.MATCH_PARENT
+build	Build Release APK	2026-08-29T18:23:14.1796011Z                                                                    ^
+build	Build Release APK	2026-08-29T18:23:14.1797393Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:502: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:14.1799182Z                                                                   ViewGroup.LayoutParams.MATCH_PARENT, 
+build	Build Release APK	2026-08-29T18:23:14.1799930Z                                                                            ^
+build	Build Release APK	2026-08-29T18:23:14.1801326Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:503: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:14.1802829Z                                                                   ViewGroup.LayoutParams.MATCH_PARENT
+build	Build Release APK	2026-08-29T18:23:14.1803586Z                                                                            ^
+build	Build Release APK	2026-08-29T18:23:14.1805086Z   /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:549: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:14.1806598Z                                                                   ViewGroup.LayoutParams.MATCH_PARENT, 
+build	Build Release APK	2026-08-29T18:23:14.1807332Z                                                                            ^
+build	Build Release APK	2026-08-29T18:23:14.1808143Z   74 errors
+build	Build Release APK	2026-08-29T18:23:14.1808372Z 
+build	Build Release APK	2026-08-29T18:23:14.1808508Z * Try:
+build	Build Release APK	2026-08-29T18:23:14.1809058Z > Check your code and dependencies to fix the compilation error(s)
+build	Build Release APK	2026-08-29T18:23:14.1809947Z > Run with --scan to get full insights from a Build Scan (powered by Develocity).
+build	Build Release APK	2026-08-29T18:23:14.1810541Z 
+build	Build Release APK	2026-08-29T18:23:14.1810704Z * Exception is:
+build	Build Release APK	2026-08-29T18:23:14.1811939Z org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:compileReleaseJavaWithJavac' (registered by plugin 'com.android.internal.application').
+build	Build Release APK	2026-08-29T18:23:14.1814093Z 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.lambda$executeIfValid$1(ExecuteActionsTaskExecuter.java:135)
+build	Build Release APK	2026-08-29T18:23:14.1815527Z 	at org.gradle.internal.Try$Failure.ifSuccessfulOrElse(Try.java:288)
+build	Build Release APK	2026-08-29T18:23:14.1817021Z 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:133)
+build	Build Release APK	2026-08-29T18:23:14.1819045Z 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.execute(ExecuteActionsTaskExecuter.java:121)
+build	Build Release APK	2026-08-29T18:23:14.1821039Z 	at org.gradle.api.internal.tasks.execution.ProblemsTaskPathTrackingTaskExecuter.execute(ProblemsTaskPathTrackingTaskExecuter.java:41)
+build	Build Release APK	2026-08-29T18:23:14.1822888Z 	at org.gradle.api.internal.tasks.execution.ResolveTaskExecutionModeExecuter.execute(ResolveTaskExecutionModeExecuter.java:51)
+build	Build Release APK	2026-08-29T18:23:14.1824762Z 	at org.gradle.api.internal.tasks.execution.FinalizePropertiesTaskExecuter.execute(FinalizePropertiesTaskExecuter.java:46)
+build	Build Release APK	2026-08-29T18:23:14.1826564Z 	at org.gradle.api.internal.tasks.execution.SkipTaskWithNoActionsExecuter.execute(SkipTaskWithNoActionsExecuter.java:57)
+build	Build Release APK	2026-08-29T18:23:14.1828498Z 	at org.gradle.api.internal.tasks.execution.SkipOnlyIfTaskExecuter.execute(SkipOnlyIfTaskExecuter.java:74)
+build	Build Release APK	2026-08-29T18:23:14.1830163Z 	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
+build	Build Release APK	2026-08-29T18:23:14.1831822Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.executeTask(EventFiringTaskExecuter.java:77)
+build	Build Release APK	2026-08-29T18:23:14.1833723Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:55)
+build	Build Release APK	2026-08-29T18:23:14.1835318Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:52)
+build	Build Release APK	2026-08-29T18:23:14.1837390Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
+build	Build Release APK	2026-08-29T18:23:14.1839695Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
+build	Build Release APK	2026-08-29T18:23:14.1841488Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+build	Build Release APK	2026-08-29T18:23:14.1843097Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:23:14.1844691Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+build	Build Release APK	2026-08-29T18:23:14.1846329Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:23:14.1848178Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
+build	Build Release APK	2026-08-29T18:23:14.1849773Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter.execute(EventFiringTaskExecuter.java:52)
+build	Build Release APK	2026-08-29T18:23:14.1851281Z 	at org.gradle.execution.plan.DefaultNodeExecutor.executeLocalTaskNode(DefaultNodeExecutor.java:55)
+build	Build Release APK	2026-08-29T18:23:14.1852597Z 	at org.gradle.execution.plan.DefaultNodeExecutor.execute(DefaultNodeExecutor.java:34)
+build	Build Release APK	2026-08-29T18:23:14.1854148Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:355)
+build	Build Release APK	2026-08-29T18:23:14.1856047Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:343)
+build	Build Release APK	2026-08-29T18:23:14.1858422Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.lambda$execute$0(DefaultTaskExecutionGraph.java:339)
+build	Build Release APK	2026-08-29T18:23:14.1860620Z 	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:84)
+build	Build Release APK	2026-08-29T18:23:14.1862407Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:339)
+build	Build Release APK	2026-08-29T18:23:14.1864437Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:328)
+build	Build Release APK	2026-08-29T18:23:14.1866197Z 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(DefaultPlanExecutor.java:459)
+build	Build Release APK	2026-08-29T18:23:14.1867606Z 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:376)
+build	Build Release APK	2026-08-29T18:23:14.1869037Z 	at org.gradle.execution.plan.DefaultPlanExecutor.process(DefaultPlanExecutor.java:111)
+build	Build Release APK	2026-08-29T18:23:14.1870437Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph.executeWithServices(DefaultTaskExecutionGraph.java:146)
+build	Build Release APK	2026-08-29T18:23:14.1872064Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph.execute(DefaultTaskExecutionGraph.java:131)
+build	Build Release APK	2026-08-29T18:23:14.1873537Z 	at org.gradle.execution.SelectedTaskExecutionAction.execute(SelectedTaskExecutionAction.java:35)
+build	Build Release APK	2026-08-29T18:23:14.1875237Z 	at org.gradle.execution.BuildOperationFiringBuildWorkerExecutor$ExecuteTasks.call(BuildOperationFiringBuildWorkerExecutor.java:54)
+build	Build Release APK	2026-08-29T18:23:14.1877186Z 	at org.gradle.execution.BuildOperationFiringBuildWorkerExecutor$ExecuteTasks.call(BuildOperationFiringBuildWorkerExecutor.java:43)
+build	Build Release APK	2026-08-29T18:23:14.1897165Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
+build	Build Release APK	2026-08-29T18:23:14.1899474Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
+build	Build Release APK	2026-08-29T18:23:14.1901519Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+build	Build Release APK	2026-08-29T18:23:14.1903064Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:23:14.1904842Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+build	Build Release APK	2026-08-29T18:23:14.1906354Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:23:14.1908040Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
+build	Build Release APK	2026-08-29T18:23:14.1909590Z 	at org.gradle.execution.BuildOperationFiringBuildWorkerExecutor.execute(BuildOperationFiringBuildWorkerExecutor.java:40)
+build	Build Release APK	2026-08-29T18:23:14.1911265Z 	at org.gradle.internal.build.DefaultBuildLifecycleController.lambda$executeTasks$11(DefaultBuildLifecycleController.java:323)
+build	Build Release APK	2026-08-29T18:23:14.1912827Z 	at org.gradle.internal.model.StateTransitionController.doTransition(StateTransitionController.java:304)
+build	Build Release APK	2026-08-29T18:23:14.1914300Z 	at org.gradle.internal.model.StateTransitionController.lambda$tryTransition$9(StateTransitionController.java:215)
+build	Build Release APK	2026-08-29T18:23:14.1915572Z 	at org.gradle.internal.work.DefaultSynchronizer.withLock(DefaultSynchronizer.java:45)
+build	Build Release APK	2026-08-29T18:23:14.1916826Z 	at org.gradle.internal.model.StateTransitionController.tryTransition(StateTransitionController.java:215)
+build	Build Release APK	2026-08-29T18:23:14.1939398Z 	at org.gradle.internal.build.DefaultBuildLifecycleController.executeTasks(DefaultBuildLifecycleController.java:314)
+build	Build Release APK	2026-08-29T18:23:14.1941309Z 	at org.gradle.internal.build.DefaultBuildWorkGraphController$DefaultBuildWorkGraph.runWork(DefaultBuildWorkGraphController.java:220)
+build	Build Release APK	2026-08-29T18:23:14.1943199Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.lambda$runAndReleaseLocks$0(DefaultWorkerLeaseService.java:300)
+build	Build Release APK	2026-08-29T18:23:14.1944755Z 	at org.gradle.internal.work.ResourceLockStatistics$1.measure(ResourceLockStatistics.java:43)
+build	Build Release APK	2026-08-29T18:23:14.1946267Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.runAndReleaseLocks(DefaultWorkerLeaseService.java:298)
+build	Build Release APK	2026-08-29T18:23:14.1948366Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocksAcquired(DefaultWorkerLeaseService.java:294)
+build	Build Release APK	2026-08-29T18:23:14.1951273Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:286)
+build	Build Release APK	2026-08-29T18:23:14.1952726Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:130)
+build	Build Release APK	2026-08-29T18:23:14.1954260Z 	at org.gradle.composite.internal.DefaultBuildController.doRun(DefaultBuildController.java:182)
+build	Build Release APK	2026-08-29T18:23:14.1955837Z 	at org.gradle.composite.internal.DefaultBuildController$BuildOpRunnable.lambda$run$0(DefaultBuildController.java:199)
+build	Build Release APK	2026-08-29T18:23:14.1957448Z 	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:84)
+build	Build Release APK	2026-08-29T18:23:14.1973062Z 	at org.gradle.composite.internal.DefaultBuildController$BuildOpRunnable.run(DefaultBuildController.java:199)
+build	Build Release APK	2026-08-29T18:23:14.1974555Z 	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+build	Build Release APK	2026-08-29T18:23:14.1975894Z 	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+build	Build Release APK	2026-08-29T18:23:14.1977371Z Caused by: org.gradle.api.internal.tasks.compile.CompilationFailedException: Compilation failed; see the compiler output below.
+build	Build Release APK	2026-08-29T18:23:14.1979753Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:8: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:14.1981398Z import androidx.recyclerview.widget.GridLayoutManager;
+build	Build Release APK	2026-08-29T18:23:14.1982014Z                                    ^
+build	Build Release APK	2026-08-29T18:23:14.1983451Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:9: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:14.1985389Z import androidx.recyclerview.widget.RecyclerView;
+build	Build Release APK	2026-08-29T18:23:14.1985965Z                                    ^
+build	Build Release APK	2026-08-29T18:23:14.1987377Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:14: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.1994163Z public class SpannedGridLayoutManager extends GridLayoutManager {
+build	Build Release APK	2026-08-29T18:23:14.1998540Z                                               ^
+build	Build Release APK	2026-08-29T18:23:14.1999140Z   symbol: class GridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2000563Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:218: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.2002325Z     public void onLayoutChildren(RecyclerView.Recycler recycler, RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:14.2003187Z                                              ^
+build	Build Release APK	2026-08-29T18:23:14.2004597Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:218: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.2006455Z     public void onLayoutChildren(RecyclerView.Recycler recycler, RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:14.2007362Z                                                                              ^
+build	Build Release APK	2026-08-29T18:23:14.2009164Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:280: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.2010968Z     public int scrollVerticallyBy(int dy, RecyclerView.Recycler recycler, RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:14.2011904Z                                                       ^
+build	Build Release APK	2026-08-29T18:23:14.2013314Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:280: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.2015148Z     public int scrollVerticallyBy(int dy, RecyclerView.Recycler recycler, RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:14.2016137Z                                                                                       ^
+build	Build Release APK	2026-08-29T18:23:14.2017654Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:298: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.2022346Z     public int computeVerticalScrollOffset(RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:14.2023099Z                                                        ^
+build	Build Release APK	2026-08-29T18:23:14.2024562Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:303: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.2026225Z     public int computeVerticalScrollRange(RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:14.2026957Z                                                       ^
+build	Build Release APK	2026-08-29T18:23:14.2028750Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:308: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.2030440Z     public int computeVerticalScrollExtent(RecyclerView.State state) {
+build	Build Release APK	2026-08-29T18:23:14.2031190Z                                                        ^
+build	Build Release APK	2026-08-29T18:23:14.2032444Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:382: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2033743Z     private static final Config config = new Config();
+build	Build Release APK	2026-08-29T18:23:14.2034342Z                          ^
+build	Build Release APK	2026-08-29T18:23:14.2034743Z   symbol:   class Config
+build	Build Release APK	2026-08-29T18:23:14.2035171Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.2036604Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/ControlCenterHook.java:4231: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:14.2044476Z                                 if (args != null && args.length > 0 && args[0] instanceof androidx.recyclerview.widget.RecyclerView) {
+build	Build Release APK	2026-08-29T18:23:14.2045868Z                                                                                                                       ^
+build	Build Release APK	2026-08-29T18:23:14.2047530Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/ControlCenterHook.java:4232: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:14.2049831Z                                     androidx.recyclerview.widget.RecyclerView rv = (androidx.recyclerview.widget.RecyclerView) args[0];
+build	Build Release APK	2026-08-29T18:23:14.2051767Z                                                                 ^
+build	Build Release APK	2026-08-29T18:23:14.2053396Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/ControlCenterHook.java:4232: error: package androidx.recyclerview.widget does not exist
+build	Build Release APK	2026-08-29T18:23:14.2055432Z                                     androidx.recyclerview.widget.RecyclerView rv = (androidx.recyclerview.widget.RecyclerView) args[0];
+build	Build Release APK	2026-08-29T18:23:14.2056595Z                                                                                                                 ^
+build	Build Release APK	2026-08-29T18:23:14.2058393Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:39: error: package GridLayoutManager does not exist
+build	Build Release APK	2026-08-29T18:23:14.2060015Z         setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
+build	Build Release APK	2026-08-29T18:23:14.2060688Z                                                ^
+build	Build Release APK	2026-08-29T18:23:14.2062252Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:40: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.2063814Z             @Override
+build	Build Release APK	2026-08-29T18:23:14.2064196Z             ^
+build	Build Release APK	2026-08-29T18:23:14.2065667Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:46: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.2067203Z             @Override
+build	Build Release APK	2026-08-29T18:23:14.2067574Z             ^
+build	Build Release APK	2026-08-29T18:23:14.2069181Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:65: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.2070680Z         RecyclerView.Adapter adapter = null;
+build	Build Release APK	2026-08-29T18:23:14.2071222Z                     ^
+build	Build Release APK	2026-08-29T18:23:14.2072548Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:67: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.2074417Z             Field adapterField = RecyclerView.LayoutManager.class.getDeclaredField("mRecyclerView");
+build	Build Release APK	2026-08-29T18:23:14.2075330Z                                              ^
+build	Build Release APK	2026-08-29T18:23:14.2076643Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:69: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2092820Z             RecyclerView rv = (RecyclerView) adapterField.get(this);
+build	Build Release APK	2026-08-29T18:23:14.2093536Z             ^
+build	Build Release APK	2026-08-29T18:23:14.2093932Z   symbol:   class RecyclerView
+build	Build Release APK	2026-08-29T18:23:14.2094444Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2095811Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:69: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2097290Z             RecyclerView rv = (RecyclerView) adapterField.get(this);
+build	Build Release APK	2026-08-29T18:23:14.2098166Z                                ^
+build	Build Release APK	2026-08-29T18:23:14.2098629Z   symbol:   class RecyclerView
+build	Build Release APK	2026-08-29T18:23:14.2099115Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2100449Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:135: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2102048Z         int paddingLeft = getPaddingLeft();
+build	Build Release APK	2026-08-29T18:23:14.2102567Z                           ^
+build	Build Release APK	2026-08-29T18:23:14.2103231Z   symbol:   method getPaddingLeft()
+build	Build Release APK	2026-08-29T18:23:14.2103762Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2105160Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:136: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2106540Z         int paddingRight = getPaddingRight();
+build	Build Release APK	2026-08-29T18:23:14.2107094Z                            ^
+build	Build Release APK	2026-08-29T18:23:14.2107541Z   symbol:   method getPaddingRight()
+build	Build Release APK	2026-08-29T18:23:14.2108380Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2109672Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:137: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2111002Z         int paddingTop = getPaddingTop();
+build	Build Release APK	2026-08-29T18:23:14.2111504Z                          ^
+build	Build Release APK	2026-08-29T18:23:14.2111933Z   symbol:   method getPaddingTop()
+build	Build Release APK	2026-08-29T18:23:14.2112445Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2113764Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:138: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2115141Z         int paddingBottom = getPaddingBottom();
+build	Build Release APK	2026-08-29T18:23:14.2115678Z                             ^
+build	Build Release APK	2026-08-29T18:23:14.2116153Z   symbol:   method getPaddingBottom()
+build	Build Release APK	2026-08-29T18:23:14.2116703Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2118556Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:217: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.2120098Z     @Override
+build	Build Release APK	2026-08-29T18:23:14.2120419Z     ^
+build	Build Release APK	2026-08-29T18:23:14.2121471Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:219: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2122837Z         if (getItemCount() == 0) {
+build	Build Release APK	2026-08-29T18:23:14.2123329Z             ^
+build	Build Release APK	2026-08-29T18:23:14.2123729Z   symbol:   method getItemCount()
+build	Build Release APK	2026-08-29T18:23:14.2124252Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2125576Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:220: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2127005Z             super.onLayoutChildren(recycler, state);
+build	Build Release APK	2026-08-29T18:23:14.2127551Z             ^
+build	Build Release APK	2026-08-29T18:23:14.2128206Z   symbol:   variable super
+build	Build Release APK	2026-08-29T18:23:14.2128695Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2130035Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:226: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2131404Z         int itemCount = getItemCount();
+build	Build Release APK	2026-08-29T18:23:14.2131893Z                         ^
+build	Build Release APK	2026-08-29T18:23:14.2132335Z   symbol:   method getItemCount()
+build	Build Release APK	2026-08-29T18:23:14.2132858Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2134228Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:227: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2135551Z         int width = getWidth();
+build	Build Release APK	2026-08-29T18:23:14.2135993Z                     ^
+build	Build Release APK	2026-08-29T18:23:14.2136404Z   symbol:   method getWidth()
+build	Build Release APK	2026-08-29T18:23:14.2136886Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2138432Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:228: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2139772Z         int height = getHeight();
+build	Build Release APK	2026-08-29T18:23:14.2140218Z                      ^
+build	Build Release APK	2026-08-29T18:23:14.2140622Z   symbol:   method getHeight()
+build	Build Release APK	2026-08-29T18:23:14.2141399Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2142723Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:246: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2144168Z                 addView(view);
+build	Build Release APK	2026-08-29T18:23:14.2144587Z                 ^
+build	Build Release APK	2026-08-29T18:23:14.2144976Z   symbol:   method addView(View)
+build	Build Release APK	2026-08-29T18:23:14.2145476Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2146930Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:248: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.2149031Z                 RecyclerView.LayoutParams rlp = (RecyclerView.LayoutParams) view.getLayoutParams();
+build	Build Release APK	2026-08-29T18:23:14.2149845Z                             ^
+build	Build Release APK	2026-08-29T18:23:14.2151276Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:248: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.2177714Z                 RecyclerView.LayoutParams rlp = (RecyclerView.LayoutParams) view.getLayoutParams();
+build	Build Release APK	2026-08-29T18:23:14.2178963Z                                                              ^
+build	Build Release APK	2026-08-29T18:23:14.2180543Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:258: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2182086Z                 layoutDecorated(view, r.left, viewTop, r.right, viewBottom);
+build	Build Release APK	2026-08-29T18:23:14.2182769Z                 ^
+build	Build Release APK	2026-08-29T18:23:14.2183280Z   symbol:   method layoutDecorated(View,int,int,int,int)
+build	Build Release APK	2026-08-29T18:23:14.2183924Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2185346Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:263: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.2187011Z         List<RecyclerView.ViewHolder> scrapList = recycler.getScrapList();
+build	Build Release APK	2026-08-29T18:23:14.2187726Z                          ^
+build	Build Release APK	2026-08-29T18:23:14.2189642Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:266: error: package RecyclerView does not exist
+build	Build Release APK	2026-08-29T18:23:14.2191183Z                 RecyclerView.ViewHolder vh = scrapList.get(i);
+build	Build Release APK	2026-08-29T18:23:14.2191758Z                             ^
+build	Build Release APK	2026-08-29T18:23:14.2193731Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:274: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.2195509Z     @Override
+build	Build Release APK	2026-08-29T18:23:14.2196058Z     ^
+build	Build Release APK	2026-08-29T18:23:14.2197609Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:279: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.2199789Z     @Override
+build	Build Release APK	2026-08-29T18:23:14.2200304Z     ^
+build	Build Release APK	2026-08-29T18:23:14.2201602Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:281: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2203170Z         if (getItemCount() == 0 || dy == 0) return 0;
+build	Build Release APK	2026-08-29T18:23:14.2203930Z             ^
+build	Build Release APK	2026-08-29T18:23:14.2235965Z   symbol:   method getItemCount()
+build	Build Release APK	2026-08-29T18:23:14.2236522Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2238171Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:283: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2239514Z         int height = getHeight();
+build	Build Release APK	2026-08-29T18:23:14.2239964Z                      ^
+build	Build Release APK	2026-08-29T18:23:14.2240372Z   symbol:   method getHeight()
+build	Build Release APK	2026-08-29T18:23:14.2240876Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2242216Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:290: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2243879Z             offsetChildrenVertical(-consumed);
+build	Build Release APK	2026-08-29T18:23:14.2244414Z             ^
+build	Build Release APK	2026-08-29T18:23:14.2245052Z   symbol:   method offsetChildrenVertical(int)
+build	Build Release APK	2026-08-29T18:23:14.2245654Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2247233Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:297: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.2269287Z     @Override
+build	Build Release APK	2026-08-29T18:23:14.2269674Z     ^
+build	Build Release APK	2026-08-29T18:23:14.2271107Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:302: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.2272757Z     @Override
+build	Build Release APK	2026-08-29T18:23:14.2273144Z     ^
+build	Build Release APK	2026-08-29T18:23:14.2274306Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:304: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2275797Z         return Math.max(mTotalContentHeight, getHeight());
+build	Build Release APK	2026-08-29T18:23:14.2276430Z                                              ^
+build	Build Release APK	2026-08-29T18:23:14.2276949Z   symbol:   method getHeight()
+build	Build Release APK	2026-08-29T18:23:14.2277462Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2279356Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:307: error: method does not override or implement a method from a supertype
+build	Build Release APK	2026-08-29T18:23:14.2280955Z     @Override
+build	Build Release APK	2026-08-29T18:23:14.2281295Z     ^
+build	Build Release APK	2026-08-29T18:23:14.2282417Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/SpannedGridLayoutManager.java:309: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2283725Z         return getHeight();
+build	Build Release APK	2026-08-29T18:23:14.2284147Z                ^
+build	Build Release APK	2026-08-29T18:23:14.2284545Z   symbol:   method getHeight()
+build	Build Release APK	2026-08-29T18:23:14.2285061Z   location: class SpannedGridLayoutManager
+build	Build Release APK	2026-08-29T18:23:14.2286387Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:142: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.2308222Z                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:14.2308976Z                          ^
+build	Build Release APK	2026-08-29T18:23:14.2310206Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:142: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.2311697Z                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:14.2312354Z                                                   ^
+build	Build Release APK	2026-08-29T18:23:14.2313634Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:189: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.2315511Z                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && radialRuntimeShader instanceof android.graphics.RuntimeShader) {
+build	Build Release APK	2026-08-29T18:23:14.2316609Z                              ^
+build	Build Release APK	2026-08-29T18:23:14.2318147Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:189: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.2320076Z                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && radialRuntimeShader instanceof android.graphics.RuntimeShader) {
+build	Build Release APK	2026-08-29T18:23:14.2321206Z                                                       ^
+build	Build Release APK	2026-08-29T18:23:14.2322517Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:236: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.2323967Z                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:14.2324645Z                          ^
+build	Build Release APK	2026-08-29T18:23:14.2325869Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:236: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.2327724Z                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:14.2349244Z                                                   ^
+build	Build Release APK	2026-08-29T18:23:14.2350567Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:252: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.2352463Z                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && fresnelShader instanceof android.graphics.RuntimeShader) {
+build	Build Release APK	2026-08-29T18:23:14.2353541Z                          ^
+build	Build Release APK	2026-08-29T18:23:14.2354783Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:252: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.2356664Z                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && fresnelShader instanceof android.graphics.RuntimeShader) {
+build	Build Release APK	2026-08-29T18:23:14.2357699Z                                                   ^
+build	Build Release APK	2026-08-29T18:23:14.2359159Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:382: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2360462Z     private static final Config config = new Config();
+build	Build Release APK	2026-08-29T18:23:14.2361048Z                                              ^
+build	Build Release APK	2026-08-29T18:23:14.2361553Z   symbol:   class Config
+build	Build Release APK	2026-08-29T18:23:14.2361996Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.2363247Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:442: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.2364760Z                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:14.2365505Z                                                  ^
+build	Build Release APK	2026-08-29T18:23:14.2366807Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:442: error: package Build does not exist
+build	Build Release APK	2026-08-29T18:23:14.2375553Z                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+build	Build Release APK	2026-08-29T18:23:14.2376389Z                                                                           ^
+build	Build Release APK	2026-08-29T18:23:14.2378153Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:470: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2389703Z                                         if (rootView instanceof ViewGroup) {
+build	Build Release APK	2026-08-29T18:23:14.2390354Z                                                                 ^
+build	Build Release APK	2026-08-29T18:23:14.2390922Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.2391359Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.2392492Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:471: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2393877Z                                             ViewGroup rootGroup = (ViewGroup) rootView;
+build	Build Release APK	2026-08-29T18:23:14.2394537Z                                             ^
+build	Build Release APK	2026-08-29T18:23:14.2395021Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.2395471Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.2396609Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:471: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2398479Z                                             ViewGroup rootGroup = (ViewGroup) rootView;
+build	Build Release APK	2026-08-29T18:23:14.2399181Z                                                                    ^
+build	Build Release APK	2026-08-29T18:23:14.2399739Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.2400177Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.2401444Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:486: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:14.2403440Z                                                     ViewGroup.MarginLayoutParams clp = (ViewGroup.MarginLayoutParams) clpCons.newInstance(
+build	Build Release APK	2026-08-29T18:23:14.2404430Z                                                              ^
+build	Build Release APK	2026-08-29T18:23:14.2406023Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:486: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:14.2408021Z                                                     ViewGroup.MarginLayoutParams clp = (ViewGroup.MarginLayoutParams) clpCons.newInstance(
+build	Build Release APK	2026-08-29T18:23:14.2409102Z                                                                                                  ^
+build	Build Release APK	2026-08-29T18:23:14.2410501Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:487: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:14.2411966Z                                                         ViewGroup.LayoutParams.MATCH_PARENT, 
+build	Build Release APK	2026-08-29T18:23:14.2412686Z                                                                  ^
+build	Build Release APK	2026-08-29T18:23:14.2414053Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:488: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:14.2415535Z                                                         ViewGroup.LayoutParams.MATCH_PARENT
+build	Build Release APK	2026-08-29T18:23:14.2416226Z                                                                  ^
+build	Build Release APK	2026-08-29T18:23:14.2417643Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:502: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:14.2419410Z                                                                 ViewGroup.LayoutParams.MATCH_PARENT, 
+build	Build Release APK	2026-08-29T18:23:14.2420158Z                                                                          ^
+build	Build Release APK	2026-08-29T18:23:14.2421500Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:503: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:14.2422960Z                                                                 ViewGroup.LayoutParams.MATCH_PARENT
+build	Build Release APK	2026-08-29T18:23:14.2423705Z                                                                          ^
+build	Build Release APK	2026-08-29T18:23:14.2424993Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:519: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2426582Z                                                 ViewGroup bottomAreaView = (ViewGroup) bViewField.get(bottomAreaInjector);
+build	Build Release APK	2026-08-29T18:23:14.2427418Z                                                 ^
+build	Build Release APK	2026-08-29T18:23:14.2428199Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.2428646Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.2429743Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:519: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2431263Z                                                 ViewGroup bottomAreaView = (ViewGroup) bViewField.get(bottomAreaInjector);
+build	Build Release APK	2026-08-29T18:23:14.2432177Z                                                                             ^
+build	Build Release APK	2026-08-29T18:23:14.2432772Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.2433247Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.2434526Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:549: error: package ViewGroup does not exist
+build	Build Release APK	2026-08-29T18:23:14.2436039Z                                                                 ViewGroup.LayoutParams.MATCH_PARENT, 
+build	Build Release APK	2026-08-29T18:23:14.2436755Z                                                                          ^
+build	Build Release APK	2026-08-29T18:23:14.2438467Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:799: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2440430Z                         if (keyView.getParent() instanceof ViewGroup) ((ViewGroup) keyView.getParent()).setClipChildren(false);
+build	Build Release APK	2026-08-29T18:23:14.2441674Z                                                            ^
+build	Build Release APK	2026-08-29T18:23:14.2442426Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.2442879Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.2444051Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:799: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2445707Z                         if (keyView.getParent() instanceof ViewGroup) ((ViewGroup) keyView.getParent()).setClipChildren(false);
+build	Build Release APK	2026-08-29T18:23:14.2446693Z                                                                         ^
+build	Build Release APK	2026-08-29T18:23:14.2447251Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.2447691Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.2449105Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:800: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2450663Z                         if (keyView.getParent() != null && keyView.getParent().getParent() instanceof ViewGroup) {
+build	Build Release APK	2026-08-29T18:23:14.2451618Z                                                                                                       ^
+build	Build Release APK	2026-08-29T18:23:14.2452240Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.2452677Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.2453825Z /home/runner/work/hyperbounce/hyperbounce/app/src/main/java/dev/joseph/hyperbounce/systemui/LockscreenHook.java:801: error: cannot find symbol
+build	Build Release APK	2026-08-29T18:23:14.2455260Z                             ((ViewGroup) keyView.getParent().getParent()).setClipChildren(false);
+build	Build Release APK	2026-08-29T18:23:14.2455996Z                               ^
+build	Build Release APK	2026-08-29T18:23:14.2456428Z   symbol:   class ViewGroup
+build	Build Release APK	2026-08-29T18:23:14.2456860Z   location: class LockscreenHook
+build	Build Release APK	2026-08-29T18:23:14.2457413Z Note: Some input files use or override a deprecated API.
+build	Build Release APK	2026-08-29T18:23:14.2458385Z Note: Recompile with -Xlint:deprecation for details.
+build	Build Release APK	2026-08-29T18:23:14.2459110Z Note: Some input files use unchecked or unsafe operations.
+build	Build Release APK	2026-08-29T18:23:14.2459766Z Note: Recompile with -Xlint:unchecked for details.
+build	Build Release APK	2026-08-29T18:23:14.2460322Z 74 errors
+build	Build Release APK	2026-08-29T18:23:14.2461060Z 	at org.gradle.api.internal.tasks.compile.JdkJavaCompiler.execute(JdkJavaCompiler.java:88)
+build	Build Release APK	2026-08-29T18:23:14.2462193Z 	at org.gradle.api.internal.tasks.compile.JdkJavaCompiler.execute(JdkJavaCompiler.java:49)
+build	Build Release APK	2026-08-29T18:23:14.2463653Z 	at org.gradle.api.internal.tasks.compile.NormalizingJavaCompiler.delegateAndHandleErrors(NormalizingJavaCompiler.java:98)
+build	Build Release APK	2026-08-29T18:23:14.2465393Z 	at org.gradle.api.internal.tasks.compile.NormalizingJavaCompiler.execute(NormalizingJavaCompiler.java:52)
+build	Build Release APK	2026-08-29T18:23:14.2466955Z 	at org.gradle.api.internal.tasks.compile.NormalizingJavaCompiler.execute(NormalizingJavaCompiler.java:38)
+build	Build Release APK	2026-08-29T18:23:14.2469153Z 	at org.gradle.api.internal.tasks.compile.AnnotationProcessorDiscoveringCompiler.execute(AnnotationProcessorDiscoveringCompiler.java:52)
+build	Build Release APK	2026-08-29T18:23:14.2471340Z 	at org.gradle.api.internal.tasks.compile.AnnotationProcessorDiscoveringCompiler.execute(AnnotationProcessorDiscoveringCompiler.java:38)
+build	Build Release APK	2026-08-29T18:23:14.2473468Z 	at org.gradle.api.internal.tasks.compile.ModuleApplicationNameWritingCompiler.execute(ModuleApplicationNameWritingCompiler.java:46)
+build	Build Release APK	2026-08-29T18:23:14.2475473Z 	at org.gradle.api.internal.tasks.compile.ModuleApplicationNameWritingCompiler.execute(ModuleApplicationNameWritingCompiler.java:36)
+build	Build Release APK	2026-08-29T18:23:14.2477328Z 	at org.gradle.jvm.toolchain.internal.DefaultToolchainJavaCompiler.execute(DefaultToolchainJavaCompiler.java:57)
+build	Build Release APK	2026-08-29T18:23:14.2479190Z 	at org.gradle.api.tasks.compile.JavaCompile.lambda$createToolchainCompiler$3(JavaCompile.java:206)
+build	Build Release APK	2026-08-29T18:23:14.2480662Z 	at org.gradle.api.internal.tasks.compile.CleaningJavaCompiler.execute(CleaningJavaCompiler.java:53)
+build	Build Release APK	2026-08-29T18:23:14.2482517Z 	at org.gradle.api.internal.tasks.compile.incremental.IncrementalCompilerFactory.lambda$createRebuildAllCompiler$0(IncrementalCompilerFactory.java:55)
+build	Build Release APK	2026-08-29T18:23:14.2484622Z 	at org.gradle.api.internal.tasks.compile.incremental.SelectiveCompiler.execute(SelectiveCompiler.java:70)
+build	Build Release APK	2026-08-29T18:23:14.2486280Z 	at org.gradle.api.internal.tasks.compile.incremental.SelectiveCompiler.execute(SelectiveCompiler.java:44)
+build	Build Release APK	2026-08-29T18:23:14.2488272Z 	at org.gradle.api.internal.tasks.compile.incremental.IncrementalResultStoringCompiler.execute(IncrementalResultStoringCompiler.java:66)
+build	Build Release APK	2026-08-29T18:23:14.2490389Z 	at org.gradle.api.internal.tasks.compile.incremental.IncrementalResultStoringCompiler.execute(IncrementalResultStoringCompiler.java:52)
+build	Build Release APK	2026-08-29T18:23:14.2492634Z 	at org.gradle.api.internal.tasks.compile.CompileJavaBuildOperationReportingCompiler$CompileOperation.call(CompileJavaBuildOperationReportingCompiler.java:78)
+build	Build Release APK	2026-08-29T18:23:14.2495056Z 	at org.gradle.api.internal.tasks.compile.CompileJavaBuildOperationReportingCompiler$CompileOperation.call(CompileJavaBuildOperationReportingCompiler.java:52)
+build	Build Release APK	2026-08-29T18:23:14.2497215Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
+build	Build Release APK	2026-08-29T18:23:14.2499383Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
+build	Build Release APK	2026-08-29T18:23:14.2501096Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+build	Build Release APK	2026-08-29T18:23:14.2502743Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:23:14.2504331Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+build	Build Release APK	2026-08-29T18:23:14.2506014Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:23:14.2507581Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
+build	Build Release APK	2026-08-29T18:23:14.2509771Z 	at org.gradle.api.internal.tasks.compile.CompileJavaBuildOperationReportingCompiler.execute(CompileJavaBuildOperationReportingCompiler.java:49)
+build	Build Release APK	2026-08-29T18:23:14.2511488Z 	at org.gradle.api.tasks.compile.JavaCompile.performCompilation(JavaCompile.java:224)
+build	Build Release APK	2026-08-29T18:23:14.2512732Z 	at org.gradle.api.tasks.compile.JavaCompile.performIncrementalCompilation(JavaCompile.java:165)
+build	Build Release APK	2026-08-29T18:23:14.2513882Z 	at org.gradle.api.tasks.compile.JavaCompile.compile(JavaCompile.java:150)
+build	Build Release APK	2026-08-29T18:23:14.2514819Z 	at org.gradle.internal.reflect.JavaMethod.invoke(JavaMethod.java:125)
+build	Build Release APK	2026-08-29T18:23:14.2516056Z 	at org.gradle.api.internal.project.taskfactory.IncrementalTaskAction.doExecute(IncrementalTaskAction.java:45)
+build	Build Release APK	2026-08-29T18:23:14.2517568Z 	at org.gradle.api.internal.project.taskfactory.StandardTaskAction.execute(StandardTaskAction.java:51)
+build	Build Release APK	2026-08-29T18:23:14.2519391Z 	at org.gradle.api.internal.project.taskfactory.IncrementalTaskAction.execute(IncrementalTaskAction.java:26)
+build	Build Release APK	2026-08-29T18:23:14.2520974Z 	at org.gradle.api.internal.project.taskfactory.StandardTaskAction.execute(StandardTaskAction.java:29)
+build	Build Release APK	2026-08-29T18:23:14.2522348Z 	at org.gradle.api.internal.tasks.execution.TaskExecution$3.run(TaskExecution.java:259)
+build	Build Release APK	2026-08-29T18:23:14.2523534Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:30)
+build	Build Release APK	2026-08-29T18:23:14.2525092Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:27)
+build	Build Release APK	2026-08-29T18:23:14.2526733Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+build	Build Release APK	2026-08-29T18:23:14.2528587Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:23:14.2530110Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+build	Build Release APK	2026-08-29T18:23:14.2531883Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:23:14.2533376Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:48)
+build	Build Release APK	2026-08-29T18:23:14.2534928Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.executeAction(TaskExecution.java:244)
+build	Build Release APK	2026-08-29T18:23:14.2536232Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.executeActions(TaskExecution.java:227)
+build	Build Release APK	2026-08-29T18:23:14.2537678Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.executeWithPreviousOutputFiles(TaskExecution.java:210)
+build	Build Release APK	2026-08-29T18:23:14.2539322Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.execute(TaskExecution.java:176)
+build	Build Release APK	2026-08-29T18:23:14.2540606Z 	at org.gradle.internal.execution.steps.ExecuteStep.executeInternal(ExecuteStep.java:167)
+build	Build Release APK	2026-08-29T18:23:14.2541826Z 	at org.gradle.internal.execution.steps.ExecuteStep.access$000(ExecuteStep.java:47)
+build	Build Release APK	2026-08-29T18:23:14.2542927Z 	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:137)
+build	Build Release APK	2026-08-29T18:23:14.2543992Z 	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:134)
+build	Build Release APK	2026-08-29T18:23:14.2545533Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
+build	Build Release APK	2026-08-29T18:23:14.2547537Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
+build	Build Release APK	2026-08-29T18:23:14.2549585Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+build	Build Release APK	2026-08-29T18:23:14.2551181Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:23:14.2552790Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+build	Build Release APK	2026-08-29T18:23:14.2554332Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+build	Build Release APK	2026-08-29T18:23:14.2555901Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
+build	Build Release APK	2026-08-29T18:23:14.2557239Z 	at org.gradle.internal.execution.steps.ExecuteStep.execute(ExecuteStep.java:134)
+build	Build Release APK	2026-08-29T18:23:14.2573002Z 	at org.gradle.internal.execution.steps.ExecuteStep$Mutable.execute(ExecuteStep.java:80)
+build	Build Release APK	2026-08-29T18:23:14.2574331Z 	at org.gradle.internal.execution.steps.CancelExecutionStep.execute(CancelExecutionStep.java:42)
+build	Build Release APK	2026-08-29T18:23:14.2575686Z 	at org.gradle.internal.execution.steps.TimeoutStep.executeWithoutTimeout(TimeoutStep.java:75)
+build	Build Release APK	2026-08-29T18:23:14.2576942Z 	at org.gradle.internal.execution.steps.TimeoutStep.execute(TimeoutStep.java:55)
+build	Build Release APK	2026-08-29T18:23:14.2578530Z 	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:51)
+build	Build Release APK	2026-08-29T18:23:14.2580129Z 	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:29)
+build	Build Release APK	2026-08-29T18:23:14.2581760Z 	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.executeMutable(RemovePreviousOutputsStep.java:67)
+build	Build Release APK	2026-08-29T18:23:14.2583406Z 	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.executeMutable(RemovePreviousOutputsStep.java:39)
+build	Build Release APK	2026-08-29T18:23:14.2584775Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:23:14.2586110Z 	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:42)
+build	Build Release APK	2026-08-29T18:23:14.2587729Z 	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:24)
+build	Build Release APK	2026-08-29T18:23:14.2589608Z 	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:69)
+build	Build Release APK	2026-08-29T18:23:14.2591369Z 	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:46)
+build	Build Release APK	2026-08-29T18:23:14.2593304Z 	at org.gradle.internal.execution.steps.ResolveInputChangesStep.executeMutable(ResolveInputChangesStep.java:39)
+build	Build Release APK	2026-08-29T18:23:14.2594872Z 	at org.gradle.internal.execution.steps.ResolveInputChangesStep.executeMutable(ResolveInputChangesStep.java:28)
+build	Build Release APK	2026-08-29T18:23:14.2596418Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:23:14.2597656Z 	at org.gradle.internal.execution.steps.BuildCacheStep.executeWithoutCache(BuildCacheStep.java:189)
+build	Build Release APK	2026-08-29T18:23:14.2599254Z 	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$execute$1(BuildCacheStep.java:76)
+build	Build Release APK	2026-08-29T18:23:14.2600330Z 	at org.gradle.internal.Either$Right.fold(Either.java:176)
+build	Build Release APK	2026-08-29T18:23:14.2601259Z 	at org.gradle.internal.execution.caching.CachingState.fold(CachingState.java:62)
+build	Build Release APK	2026-08-29T18:23:14.2602457Z 	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:74)
+build	Build Release APK	2026-08-29T18:23:14.2603678Z 	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:49)
+build	Build Release APK	2026-08-29T18:23:14.2605228Z 	at org.gradle.internal.execution.steps.StoreExecutionStateStep.executeMutable(StoreExecutionStateStep.java:46)
+build	Build Release APK	2026-08-29T18:23:14.2607035Z 	at org.gradle.internal.execution.steps.StoreExecutionStateStep.executeMutable(StoreExecutionStateStep.java:35)
+build	Build Release APK	2026-08-29T18:23:14.2608625Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:23:14.2609903Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.executeBecause(SkipUpToDateStep.java:75)
+build	Build Release APK	2026-08-29T18:23:14.2611283Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.lambda$execute$2(SkipUpToDateStep.java:53)
+build	Build Release APK	2026-08-29T18:23:14.2612670Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:53)
+build	Build Release APK	2026-08-29T18:23:14.2613934Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:35)
+build	Build Release APK	2026-08-29T18:23:14.2615584Z 	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:37)
+build	Build Release APK	2026-08-29T18:23:14.2617570Z 	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:27)
+build	Build Release APK	2026-08-29T18:23:14.2619660Z 	at org.gradle.internal.execution.steps.ResolveMutableCachingStateStep.executeDelegate(ResolveMutableCachingStateStep.java:70)
+build	Build Release APK	2026-08-29T18:23:14.2621522Z 	at org.gradle.internal.execution.steps.ResolveMutableCachingStateStep.executeDelegate(ResolveMutableCachingStateStep.java:32)
+build	Build Release APK	2026-08-29T18:23:14.2623317Z 	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:69)
+build	Build Release APK	2026-08-29T18:23:14.2625095Z 	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:37)
+build	Build Release APK	2026-08-29T18:23:14.2626707Z 	at org.gradle.internal.execution.steps.ResolveChangesStep.executeMutable(ResolveChangesStep.java:63)
+build	Build Release APK	2026-08-29T18:23:14.2628342Z 	at org.gradle.internal.execution.steps.ResolveChangesStep.executeMutable(ResolveChangesStep.java:34)
+build	Build Release APK	2026-08-29T18:23:14.2629682Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:23:14.2630962Z 	at org.gradle.internal.execution.steps.ValidateStep$Mutable.executeDelegate(ValidateStep.java:79)
+build	Build Release APK	2026-08-29T18:23:14.2632302Z 	at org.gradle.internal.execution.steps.ValidateStep$Mutable.executeDelegate(ValidateStep.java:65)
+build	Build Release APK	2026-08-29T18:23:14.2633582Z 	at org.gradle.internal.execution.steps.ValidateStep.execute(ValidateStep.java:105)
+build	Build Release APK	2026-08-29T18:23:14.2634759Z 	at org.gradle.internal.execution.steps.ValidateStep$Mutable.execute(ValidateStep.java:65)
+build	Build Release APK	2026-08-29T18:23:14.2636469Z 	at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.executeMutable(CaptureMutableStateBeforeExecutionStep.java:86)
+build	Build Release APK	2026-08-29T18:23:14.2639902Z 	at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.execute(CaptureMutableStateBeforeExecutionStep.java:65)
+build	Build Release APK	2026-08-29T18:23:14.2642277Z 	at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.execute(CaptureMutableStateBeforeExecutionStep.java:45)
+build	Build Release APK	2026-08-29T18:23:14.2653776Z 	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeWithNonEmptySources(SkipEmptyMutableWorkStep.java:210)
+build	Build Release APK	2026-08-29T18:23:14.2655963Z 	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeMutable(SkipEmptyMutableWorkStep.java:90)
+build	Build Release APK	2026-08-29T18:23:14.2657610Z 	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeMutable(SkipEmptyMutableWorkStep.java:53)
+build	Build Release APK	2026-08-29T18:23:14.2659697Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:23:14.2661314Z 	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsStartedStep.execute(MarkSnapshottingInputsStartedStep.java:38)
+build	Build Release APK	2026-08-29T18:23:14.2663354Z 	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.executeMutable(LoadPreviousExecutionStateStep.java:36)
+build	Build Release APK	2026-08-29T18:23:14.2665276Z 	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.executeMutable(LoadPreviousExecutionStateStep.java:23)
+build	Build Release APK	2026-08-29T18:23:14.2666834Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:23:14.2668513Z 	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:77)
+build	Build Release APK	2026-08-29T18:23:14.2670169Z 	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:43)
+build	Build Release APK	2026-08-29T18:23:14.2678713Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:23:14.2680199Z 	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.lambda$executeMutable$0(AssignMutableWorkspaceStep.java:34)
+build	Build Release APK	2026-08-29T18:23:14.2681773Z 	at org.gradle.api.internal.tasks.execution.TaskExecution$4.withWorkspace(TaskExecution.java:305)
+build	Build Release APK	2026-08-29T18:23:14.2683282Z 	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.executeMutable(AssignMutableWorkspaceStep.java:30)
+build	Build Release APK	2026-08-29T18:23:14.2685038Z 	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.executeMutable(AssignMutableWorkspaceStep.java:21)
+build	Build Release APK	2026-08-29T18:23:14.2686463Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+build	Build Release APK	2026-08-29T18:23:14.2687672Z 	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:40)
+build	Build Release APK	2026-08-29T18:23:14.2689234Z 	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:23)
+build	Build Release APK	2026-08-29T18:23:14.2690973Z 	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.lambda$execute$2(ExecuteWorkBuildOperationFiringStep.java:67)
+build	Build Release APK	2026-08-29T18:23:14.2693005Z 	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:67)
+build	Build Release APK	2026-08-29T18:23:14.2694911Z 	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:39)
+build	Build Release APK	2026-08-29T18:23:14.2696452Z 	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:46)
+build	Build Release APK	2026-08-29T18:23:14.2697705Z 	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:34)
+build	Build Release APK	2026-08-29T18:23:14.2699153Z 	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:56)
+build	Build Release APK	2026-08-29T18:23:14.2700328Z 	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:38)
+build	Build Release APK	2026-08-29T18:23:14.2701637Z 	at org.gradle.internal.execution.impl.DefaultExecutionEngine$1.execute(DefaultExecutionEngine.java:68)
+build	Build Release APK	2026-08-29T18:23:14.2703294Z 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:132)
+build	Build Release APK	2026-08-29T18:23:14.2704440Z 	... 61 more
+build	Build Release APK	2026-08-29T18:23:14.2704663Z 
+build	Build Release APK	2026-08-29T18:23:14.2704673Z 
+build	Build Release APK	2026-08-29T18:23:14.2704844Z BUILD FAILED in 1m 31s
+build	Build Release APK	2026-08-29T18:23:14.6969891Z ##[error]Process completed with exit code 1.
