@@ -39,7 +39,11 @@ fun ControlCenterScreen(
         subtitle = "Modular customizer, tile grouping & iOS 26 jelly physics",
         colors = colors,
         backdrop = backdrop,
-        onBack = onBack
+        onBack = onBack,
+        onResetPage = cc::reloadFromDefaults,
+        restartAppTitle = "Restart System UI",
+        restartAppSubtitle = "Restart com.android.systemui",
+        onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartSystemUI(context) }
     ) { _ ->
         SectionHeader("MASTER SWITCHES", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -145,6 +149,7 @@ fun ControlCenterScreen(
                 value = cc.entryInitialScale,
                 onValueChange = cc::setEntryInitialScale,
                 valueRange = 0.10f..1.00f,
+                defaultValue = 0.50f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = cc.animEnabled && !cc.lowEndAnim
             )
@@ -157,6 +162,7 @@ fun ControlCenterScreen(
                 value = cc.entryTranslationY,
                 onValueChange = cc::setEntryTranslationY,
                 valueRange = 0.0f..300.0f,
+                defaultValue = 75.0f,
                 valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                 enabled = cc.animEnabled && !cc.lowEndAnim
             )
@@ -173,6 +179,7 @@ fun ControlCenterScreen(
                 value = cc.spreadDamping,
                 onValueChange = cc::setSpreadDamping,
                 valueRange = 0.30f..1.50f,
+                defaultValue = 0.85f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = cc.animEnabled
             )
@@ -185,6 +192,7 @@ fun ControlCenterScreen(
                 value = cc.spreadResponse,
                 onValueChange = cc::setSpreadResponse,
                 valueRange = 0.20f..1.50f,
+                defaultValue = 0.55f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = cc.animEnabled
             )
@@ -197,6 +205,7 @@ fun ControlCenterScreen(
                 value = cc.spreadReleaseDamping,
                 onValueChange = cc::setSpreadReleaseDamping,
                 valueRange = 0.30f..1.50f,
+                defaultValue = 0.78f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = cc.animEnabled
             )
@@ -209,6 +218,7 @@ fun ControlCenterScreen(
                 value = cc.spreadReleaseResponse,
                 onValueChange = cc::setSpreadReleaseResponse,
                 valueRange = 0.20f..1.50f,
+                defaultValue = 0.48f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = cc.animEnabled
             )
@@ -225,6 +235,7 @@ fun ControlCenterScreen(
                 value = cc.tileShowDamping,
                 onValueChange = cc::setTileShowDamping,
                 valueRange = 0.30f..1.50f,
+                defaultValue = 0.80f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = cc.animEnabled
             )
@@ -237,6 +248,7 @@ fun ControlCenterScreen(
                 value = cc.tileShowResponse,
                 onValueChange = cc::setTileShowResponse,
                 valueRange = 0.20f..1.50f,
+                defaultValue = 0.50f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = cc.animEnabled
             )
@@ -249,6 +261,7 @@ fun ControlCenterScreen(
                 value = cc.tileHideDamping,
                 onValueChange = cc::setTileHideDamping,
                 valueRange = 0.30f..1.50f,
+                defaultValue = 0.90f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = cc.animEnabled
             )
@@ -261,6 +274,7 @@ fun ControlCenterScreen(
                 value = cc.tileHideResponse,
                 onValueChange = cc::setTileHideResponse,
                 valueRange = 0.20f..1.50f,
+                defaultValue = 0.35f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = cc.animEnabled
             )
@@ -277,6 +291,7 @@ fun ControlCenterScreen(
                 value = cc.blurDamping,
                 onValueChange = cc::setBlurDamping,
                 valueRange = 0.30f..1.50f,
+                defaultValue = 0.80f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = cc.animEnabled
             )
@@ -289,6 +304,7 @@ fun ControlCenterScreen(
                 value = cc.blurResponse,
                 onValueChange = cc::setBlurResponse,
                 valueRange = 0.20f..1.50f,
+                defaultValue = 0.45f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = cc.animEnabled
             )

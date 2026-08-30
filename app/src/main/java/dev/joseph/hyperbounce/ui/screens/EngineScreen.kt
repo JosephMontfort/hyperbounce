@@ -33,12 +33,26 @@ fun EngineScreen(
     onBack: () -> Unit,
     onNavigate: (Destination) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     ScreenScaffold(
         title = "Toggles & Sliders",
         subtitle = "HyperOS system toggles, sliders, and keypad",
         colors = colors,
         backdrop = backdrop,
-        onBack = onBack
+        onBack = onBack,
+        onResetPage = {
+            repository.toggleGlass.reloadFromDefaults()
+            repository.sliderGlass.reloadFromDefaults()
+            repository.setToggleEngine(RenderEngine.LiquidGlass)
+            repository.setSliderEngine(RenderEngine.LiquidGlass)
+        },
+        restartAppTitle = "Restart All Scoped Apps",
+        restartAppSubtitle = "Restart all apps in active scope",
+        onRestartApp = {
+            val pkgs = dev.joseph.hyperbounce.ui.state.XposedServiceBridge.getScopedPackages(context)
+            dev.joseph.hyperbounce.ui.utils.RootUtils.restartScopedApps(context, pkgs)
+        }
     ) { contentBackdrop ->
         val combinedBackdrop = rememberCombinedBackdrop(backdrop, contentBackdrop)
 

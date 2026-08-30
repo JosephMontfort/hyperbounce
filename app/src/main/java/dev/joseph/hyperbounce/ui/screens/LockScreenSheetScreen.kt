@@ -25,13 +25,18 @@ fun LockScreenSheetScreen(
     onBack: () -> Unit
 ) {
     val sheet = repository.lockScreenSheet
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     ScreenScaffold(
         title = "Lock Screen Sheet",
         subtitle = "AGSL Liquid Glass & sheet translation",
         colors = colors,
         backdrop = backdrop,
-        onBack = onBack
+        onBack = onBack,
+        onResetPage = sheet::reloadFromDefaults,
+        restartAppTitle = "Restart System UI",
+        restartAppSubtitle = "Restart com.android.systemui",
+        onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartSystemUI(context) }
     ) { _ ->
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsToggleRow(
@@ -60,6 +65,7 @@ fun LockScreenSheetScreen(
                 value = sheet.borderWidth,
                 onValueChange = sheet::setBorderWidth,
                 valueRange = 0.5f..8.0f,
+                defaultValue = 2.5f,
                 valueLabel = { String.format(Locale.US, "%.1f dp", it) },
                 enabled = sheet.enabled
             )
@@ -72,6 +78,7 @@ fun LockScreenSheetScreen(
                 value = sheet.borderAlpha,
                 onValueChange = sheet::setBorderAlpha,
                 valueRange = 0.0f..1.0f,
+                defaultValue = 0.47f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = sheet.enabled
             )
@@ -84,6 +91,7 @@ fun LockScreenSheetScreen(
                 value = sheet.refractionHeight,
                 onValueChange = sheet::setRefractionHeight,
                 valueRange = 0.0f..60.0f,
+                defaultValue = 24.0f,
                 valueLabel = { String.format(Locale.US, "%.1f dp", it) },
                 enabled = sheet.enabled
             )
@@ -96,6 +104,7 @@ fun LockScreenSheetScreen(
                 value = sheet.refractionAmount,
                 onValueChange = sheet::setRefractionAmount,
                 valueRange = 0.0f..80.0f,
+                defaultValue = 32.0f,
                 valueLabel = { String.format(Locale.US, "%.1f dp", it) },
                 enabled = sheet.enabled
             )
@@ -108,6 +117,7 @@ fun LockScreenSheetScreen(
                 value = sheet.depthEffect,
                 onValueChange = sheet::setDepthEffect,
                 valueRange = 0.0f..0.40f,
+                defaultValue = 0.12f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = sheet.enabled
             )
@@ -127,6 +137,7 @@ fun LockScreenSheetScreen(
                 value = sheet.pillWidth,
                 onValueChange = sheet::setPillWidth,
                 valueRange = 40.0f..280.0f,
+                defaultValue = 156.0f,
                 valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                 enabled = sheet.enabled
             )
@@ -139,6 +150,7 @@ fun LockScreenSheetScreen(
                 value = sheet.pillHeight,
                 onValueChange = sheet::setPillHeight,
                 valueRange = 2.0f..16.0f,
+                defaultValue = 6.0f,
                 valueLabel = { String.format(Locale.US, "%.1f dp", it) },
                 enabled = sheet.enabled
             )
@@ -151,6 +163,7 @@ fun LockScreenSheetScreen(
                 value = sheet.pillBottomMargin,
                 onValueChange = sheet::setPillBottomMargin,
                 valueRange = 0.0f..35.0f,
+                defaultValue = 9.0f,
                 valueLabel = { String.format(Locale.US, "%.1f dp", it) },
                 enabled = sheet.enabled
             )
@@ -163,6 +176,7 @@ fun LockScreenSheetScreen(
                 value = sheet.lipHeight,
                 onValueChange = sheet::setLipHeight,
                 valueRange = 10.0f..70.0f,
+                defaultValue = 28.0f,
                 valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                 enabled = sheet.enabled
             )

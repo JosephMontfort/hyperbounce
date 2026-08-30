@@ -25,13 +25,18 @@ fun AppTransitionsScreen(
     onBack: () -> Unit
 ) {
     val trans = repository.appTransition
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     ScreenScaffold(
         title = "App Transitions",
         subtitle = "Launcher app open & close spring channel physics",
         colors = colors,
         backdrop = backdrop,
-        onBack = onBack
+        onBack = onBack,
+        onResetPage = trans::reloadFromDefaults,
+        restartAppTitle = "Restart Launcher",
+        restartAppSubtitle = "Restart com.miui.home",
+        onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartLauncher(context) }
     ) { _ ->
         SectionHeader("MASTER SWITCH", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -61,6 +66,7 @@ fun AppTransitionsScreen(
                 value = trans.posDamping,
                 onValueChange = trans::setPosDamping,
                 valueRange = 0.30f..1.0f,
+                defaultValue = 0.80f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = trans.enabled
             )
@@ -73,6 +79,7 @@ fun AppTransitionsScreen(
                 value = trans.posResponse,
                 onValueChange = trans::setPosResponse,
                 valueRange = 0.10f..1.50f,
+                defaultValue = 0.40f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = trans.enabled
             )
@@ -89,6 +96,7 @@ fun AppTransitionsScreen(
                 value = trans.scaleDamping,
                 onValueChange = trans::setScaleDamping,
                 valueRange = 0.30f..1.0f,
+                defaultValue = 0.80f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = trans.enabled
             )
@@ -101,6 +109,7 @@ fun AppTransitionsScreen(
                 value = trans.scaleResponse,
                 onValueChange = trans::setScaleResponse,
                 valueRange = 0.10f..1.50f,
+                defaultValue = 0.40f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = trans.enabled
             )
@@ -117,6 +126,7 @@ fun AppTransitionsScreen(
                 value = trans.cornerDamping,
                 onValueChange = trans::setCornerDamping,
                 valueRange = 0.30f..1.0f,
+                defaultValue = 1.00f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = trans.enabled
             )
@@ -129,6 +139,7 @@ fun AppTransitionsScreen(
                 value = trans.cornerResponse,
                 onValueChange = trans::setCornerResponse,
                 valueRange = 0.10f..1.50f,
+                defaultValue = 0.35f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = trans.enabled
             )
@@ -145,6 +156,7 @@ fun AppTransitionsScreen(
                 value = trans.alphaDamping,
                 onValueChange = trans::setAlphaDamping,
                 valueRange = 0.30f..1.0f,
+                defaultValue = 1.00f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = trans.enabled
             )
@@ -157,6 +169,7 @@ fun AppTransitionsScreen(
                 value = trans.alphaResponse,
                 onValueChange = trans::setAlphaResponse,
                 valueRange = 0.10f..1.50f,
+                defaultValue = 0.30f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = trans.enabled
             )
@@ -173,6 +186,7 @@ fun AppTransitionsScreen(
                 value = trans.appYArc,
                 onValueChange = trans::setAppYArc,
                 valueRange = -200f..300f,
+                defaultValue = 0.0f,
                 valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                 enabled = trans.enabled
             )
@@ -185,6 +199,7 @@ fun AppTransitionsScreen(
                 value = trans.appBottomZWarp,
                 onValueChange = trans::setAppBottomZWarp,
                 valueRange = 0.0f..0.70f,
+                defaultValue = 0.0f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = trans.enabled
             )
@@ -197,6 +212,7 @@ fun AppTransitionsScreen(
                 value = trans.appXSway,
                 onValueChange = trans::setAppXSway,
                 valueRange = -150f..150f,
+                defaultValue = 0.0f,
                 valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                 enabled = trans.enabled
             )
@@ -209,6 +225,7 @@ fun AppTransitionsScreen(
                 value = trans.appInterruptSmooth,
                 onValueChange = trans::setAppInterruptSmooth,
                 valueRange = 0.1f..1.5f,
+                defaultValue = 1.0f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = trans.enabled
             )
@@ -221,6 +238,7 @@ fun AppTransitionsScreen(
                 value = trans.appIconPitchDeg,
                 onValueChange = trans::setAppIconPitchDeg,
                 valueRange = 0.0f..45.0f,
+                defaultValue = 0.0f,
                 valueLabel = { String.format(Locale.US, "%.0f°", it) },
                 enabled = trans.enabled
             )
@@ -233,6 +251,7 @@ fun AppTransitionsScreen(
                 value = trans.appIconCameraDist,
                 onValueChange = trans::setAppIconCameraDist,
                 valueRange = 2000f..15000f,
+                defaultValue = 8000.0f,
                 valueLabel = { String.format(Locale.US, "%.0f", it) },
                 enabled = trans.enabled
             )

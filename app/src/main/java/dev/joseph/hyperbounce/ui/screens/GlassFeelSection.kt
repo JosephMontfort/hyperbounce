@@ -40,6 +40,7 @@ fun GlassFeelSection(
             value = feel.blurDp,
             onValueChange = holder::setBlurDp,
             valueRange = 0f..16f,
+            defaultValue = holder.defaults.blurDp,
             valueLabel = { "${it.roundToInt()}dp" },
             enabled = enabled
         )
@@ -51,6 +52,7 @@ fun GlassFeelSection(
             value = feel.lensSizeDp,
             onValueChange = holder::setLensSizeDp,
             valueRange = 0f..18f,
+            defaultValue = holder.defaults.lensSizeDp,
             valueLabel = { "${it.roundToInt()}dp" },
             enabled = enabled
         )
@@ -62,6 +64,7 @@ fun GlassFeelSection(
             value = feel.lensDepthDp,
             onValueChange = holder::setLensDepthDp,
             valueRange = 0f..26f,
+            defaultValue = holder.defaults.lensDepthDp,
             valueLabel = { "${it.roundToInt()}dp" },
             enabled = enabled
         )
@@ -73,6 +76,7 @@ fun GlassFeelSection(
             value = feel.highlightStrength,
             onValueChange = holder::setHighlightStrength,
             valueRange = 0f..1f,
+            defaultValue = holder.defaults.highlightStrength,
             valueLabel = { "${(it * 100).roundToInt()}%" },
             enabled = enabled
         )
@@ -84,6 +88,7 @@ fun GlassFeelSection(
             value = feel.shadowRadiusDp,
             onValueChange = holder::setShadowRadiusDp,
             valueRange = 0f..10f,
+            defaultValue = holder.defaults.shadowRadiusDp,
             valueLabel = { "${it.roundToInt()}dp" },
             enabled = enabled
         )
@@ -98,6 +103,7 @@ fun GlassFeelSection(
             value = feel.dragSensitivity,
             onValueChange = holder::setDragSensitivity,
             valueRange = 0.2f..1.5f,
+            defaultValue = holder.defaults.dragSensitivity,
             valueLabel = { String.format("%.2f", it) },
             enabled = enabled
         )
@@ -110,6 +116,7 @@ fun GlassFeelSection(
             value = feel.springDamping,
             onValueChange = holder::setSpringDamping,
             valueRange = 0.3f..1.0f,
+            defaultValue = holder.defaults.springDamping,
             valueLabel = { String.format("%.2f", it) },
             enabled = enabled
         )
@@ -122,6 +129,7 @@ fun GlassFeelSection(
             value = feel.springStiffness,
             onValueChange = holder::setSpringStiffness,
             valueRange = 100f..1000f,
+            defaultValue = holder.defaults.springStiffness,
             valueLabel = { "${it.roundToInt()}" },
             enabled = enabled
         )

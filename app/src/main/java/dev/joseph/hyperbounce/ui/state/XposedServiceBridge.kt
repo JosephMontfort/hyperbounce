@@ -66,4 +66,21 @@ object XposedServiceBridge {
             Log.w(TAG, "Failed to get remote preferences: ${t.message}")
             null
         }
+
+    fun getScopedPackages(context: android.content.Context): List<String> {
+        val dynamicScope = try {
+            service?.scope
+        } catch (t: Throwable) {
+            null
+        }
+        if (!dynamicScope.isNullOrEmpty()) {
+            return dynamicScope
+        }
+        return try {
+            val resId = context.resources.getIdentifier("xposed_scope", "array", context.packageName)
+            if (resId != 0) context.resources.getStringArray(resId).toList() else emptyList()
+        } catch (t: Throwable) {
+            emptyList()
+        }
+    }
 }

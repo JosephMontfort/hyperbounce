@@ -28,13 +28,18 @@ fun KeypadScreen(
     onNavigate: (Destination) -> Unit
 ) {
     val keypad = repository.lockScreenKeypad
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     ScreenScaffold(
         title = "PIN Pad Physics",
         subtitle = "Fluid iOS geometry & jelly engine",
         colors = colors,
         backdrop = backdrop,
-        onBack = onBack
+        onBack = onBack,
+        onResetPage = keypad::reloadFromDefaults,
+        restartAppTitle = "Restart System UI",
+        restartAppSubtitle = "Restart com.android.systemui",
+        onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartSystemUI(context) }
     ) { _ ->
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsToggleRow(
@@ -63,6 +68,7 @@ fun KeypadScreen(
                 value = keypad.circleDiameter,
                 onValueChange = keypad::setCircleDiameter,
                 valueRange = 60.0f..94.0f,
+                defaultValue = 82.0f,
                 valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                 enabled = keypad.enabled
             )
@@ -75,6 +81,7 @@ fun KeypadScreen(
                 value = keypad.fillAlpha,
                 onValueChange = keypad::setFillAlpha,
                 valueRange = 0.0f..0.90f,
+                defaultValue = 0.20f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = keypad.enabled
             )
@@ -87,6 +94,7 @@ fun KeypadScreen(
                 value = keypad.strokeWidth,
                 onValueChange = keypad::setStrokeWidth,
                 valueRange = 0.5f..4.0f,
+                defaultValue = 1.5f,
                 valueLabel = { String.format(Locale.US, "%.1f dp", it) },
                 enabled = keypad.enabled
             )
@@ -99,6 +107,7 @@ fun KeypadScreen(
                 value = keypad.strokeAlpha,
                 onValueChange = keypad::setStrokeAlpha,
                 valueRange = 0.0f..1.0f,
+                defaultValue = 0.47f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = keypad.enabled
             )
@@ -111,6 +120,7 @@ fun KeypadScreen(
                 value = keypad.digitTextSize,
                 onValueChange = keypad::setDigitTextSize,
                 valueRange = 18.0f..48.0f,
+                defaultValue = 36.0f,
                 valueLabel = { String.format(Locale.US, "%.0f sp", it) },
                 enabled = keypad.enabled
             )
@@ -137,6 +147,7 @@ fun KeypadScreen(
                 value = keypad.row0Offset,
                 onValueChange = keypad::setRow0Offset,
                 valueRange = -180.0f..0.0f,
+                defaultValue = -115.0f,
                 valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                 enabled = keypad.enabled
             )
@@ -148,6 +159,7 @@ fun KeypadScreen(
                 value = keypad.row1Offset,
                 onValueChange = keypad::setRow1Offset,
                 valueRange = -160.0f..0.0f,
+                defaultValue = -90.0f,
                 valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                 enabled = keypad.enabled
             )
@@ -159,6 +171,7 @@ fun KeypadScreen(
                 value = keypad.row2Offset,
                 onValueChange = keypad::setRow2Offset,
                 valueRange = -140.0f..0.0f,
+                defaultValue = -60.0f,
                 valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                 enabled = keypad.enabled
             )
@@ -170,6 +183,7 @@ fun KeypadScreen(
                 value = keypad.row3Offset,
                 onValueChange = keypad::setRow3Offset,
                 valueRange = -120.0f..0.0f,
+                defaultValue = -30.0f,
                 valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                 enabled = keypad.enabled
             )
@@ -185,6 +199,7 @@ fun KeypadScreen(
                 value = keypad.tapSquishScale,
                 onValueChange = keypad::setTapSquishScale,
                 valueRange = 0.65f..0.98f,
+                defaultValue = 0.88f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = keypad.enabled
             )
@@ -197,6 +212,7 @@ fun KeypadScreen(
                 value = keypad.releasePlunge,
                 onValueChange = keypad::setReleasePlunge,
                 valueRange = 0.0f..0.25f,
+                defaultValue = 0.10f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = keypad.enabled
             )
@@ -209,6 +225,7 @@ fun KeypadScreen(
                 value = keypad.jellyMaxStretch,
                 onValueChange = keypad::setJellyMaxStretch,
                 valueRange = 0.0f..0.35f,
+                defaultValue = 0.16f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = keypad.enabled
             )
@@ -221,6 +238,7 @@ fun KeypadScreen(
                 value = keypad.jellyElasticLimit,
                 onValueChange = keypad::setJellyElasticLimit,
                 valueRange = 0.10f..0.80f,
+                defaultValue = 0.40f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = keypad.enabled
             )
@@ -233,6 +251,7 @@ fun KeypadScreen(
                 value = keypad.springStiffness,
                 onValueChange = keypad::setSpringStiffness,
                 valueRange = 5.0f..150.0f,
+                defaultValue = 50.0f,
                 valueLabel = { String.format(Locale.US, "%.0f", it) },
                 enabled = keypad.enabled
             )
@@ -245,6 +264,7 @@ fun KeypadScreen(
                 value = keypad.springDamping,
                 onValueChange = keypad::setSpringDamping,
                 valueRange = 0.5f..15.0f,
+                defaultValue = 5.5f,
                 valueLabel = { String.format(Locale.US, "%.1f", it) },
                 enabled = keypad.enabled
             )
@@ -257,6 +277,7 @@ fun KeypadScreen(
                 value = keypad.pressGlowAlpha,
                 onValueChange = keypad::setPressGlowAlpha,
                 valueRange = 0.0f..0.80f,
+                defaultValue = 0.35f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = keypad.enabled
             )
@@ -269,6 +290,7 @@ fun KeypadScreen(
                 value = keypad.glowRadius,
                 onValueChange = keypad::setGlowRadius,
                 valueRange = 0.5f..2.5f,
+                defaultValue = 1.4f,
                 valueLabel = { String.format(Locale.US, "%.1f", it) },
                 enabled = keypad.enabled
             )
@@ -284,6 +306,7 @@ fun KeypadScreen(
                 value = keypad.entryTranslationY,
                 onValueChange = keypad::setEntryTranslationY,
                 valueRange = 20.0f..300.0f,
+                defaultValue = 90.0f,
                 valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                 enabled = keypad.enabled
             )
@@ -296,6 +319,7 @@ fun KeypadScreen(
                 value = keypad.entryInitialScale,
                 onValueChange = keypad::setEntryInitialScale,
                 valueRange = 0.20f..1.0f,
+                defaultValue = 0.50f,
                 valueLabel = { String.format(Locale.US, "%.2f", it) },
                 enabled = keypad.enabled
             )
@@ -308,6 +332,7 @@ fun KeypadScreen(
                 value = keypad.entryDuration,
                 onValueChange = keypad::setEntryDuration,
                 valueRange = 150.0f..850.0f,
+                defaultValue = 420.0f,
                 valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                 enabled = keypad.enabled
             )
@@ -320,6 +345,7 @@ fun KeypadScreen(
                 value = keypad.rowDelayStep,
                 onValueChange = keypad::setRowDelayStep,
                 valueRange = 0.0f..150.0f,
+                defaultValue = 55.0f,
                 valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                 enabled = keypad.enabled
             )
@@ -332,6 +358,7 @@ fun KeypadScreen(
                 value = keypad.colDelayStep,
                 onValueChange = keypad::setColDelayStep,
                 valueRange = 0.0f..100.0f,
+                defaultValue = 25.0f,
                 valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                 enabled = keypad.enabled
             )
@@ -344,6 +371,7 @@ fun KeypadScreen(
                 value = keypad.entryOvershoot,
                 onValueChange = keypad::setEntryOvershoot,
                 valueRange = 0.0f..5.0f,
+                defaultValue = 1.8f,
                 valueLabel = { String.format(Locale.US, "%.1f", it) },
                 enabled = keypad.enabled
             )

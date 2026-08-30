@@ -49,13 +49,24 @@ fun AppDetailScreen(
     val holder = repository.appSettings(app)
     val s = holder.snapshot()
     val accentColor = accentColorFor(s.accent, colors)
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val defaultCornerRadius = if (app == NavApp.WhatsApp) 36f else 32f
+    val defaultBarHeight = if (app == NavApp.WhatsApp) 70f else 64f
+    val defaultTabWidth = if (app == NavApp.WhatsApp) 92f else 64f
 
     ScreenScaffold(
         title = app.displayName,
         subtitle = app.packageName,
         colors = colors,
         backdrop = backdrop,
-        onBack = onBack
+        onBack = onBack,
+        onResetPage = holder::reloadFromDefaults,
+        restartAppTitle = "Restart ${app.displayName}",
+        restartAppSubtitle = "Restart ${app.packageName}",
+        onRestartApp = {
+            dev.joseph.hyperbounce.ui.utils.RootUtils.restartApp(context, app.packageName, app.displayName)
+        }
     ) { _ ->
         NavBarPreview(
             backdrop = backdrop,
@@ -90,6 +101,7 @@ fun AppDetailScreen(
                 value = s.glassIntensity,
                 onValueChange = holder::setGlassIntensity,
                 valueRange = 0.4f..2.0f,
+                defaultValue = 1.0f,
                 valueLabel = { "${(it * 100).roundToInt()}%" },
                 enabled = s.enabled
             )
@@ -101,6 +113,7 @@ fun AppDetailScreen(
                 value = s.containerOpacity,
                 onValueChange = holder::setContainerOpacity,
                 valueRange = 0f..1f,
+                defaultValue = 0.4f,
                 valueLabel = { "${(it * 100).roundToInt()}%" },
                 enabled = s.enabled
             )
@@ -119,6 +132,7 @@ fun AppDetailScreen(
                 value = s.cornerRadius,
                 onValueChange = holder::setCornerRadius,
                 valueRange = 12f..40f,
+                defaultValue = defaultCornerRadius,
                 valueLabel = { "${it.roundToInt()}dp" },
                 enabled = s.enabled
             )
@@ -130,6 +144,7 @@ fun AppDetailScreen(
                 value = s.barHeight,
                 onValueChange = holder::setBarHeight,
                 valueRange = 48f..88f,
+                defaultValue = defaultBarHeight,
                 valueLabel = { "${it.roundToInt()}dp" },
                 enabled = s.enabled
             )
@@ -141,6 +156,7 @@ fun AppDetailScreen(
                 value = s.tabWidth,
                 onValueChange = holder::setTabWidth,
                 valueRange = 48f..88f,
+                defaultValue = defaultTabWidth,
                 valueLabel = { "${it.roundToInt()}dp" },
                 enabled = s.enabled
             )

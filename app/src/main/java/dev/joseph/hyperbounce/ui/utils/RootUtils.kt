@@ -32,6 +32,29 @@ object RootUtils {
         )
     }
 
+    fun restartApp(context: Context, packageName: String, label: String) {
+        runCommand(
+            context = context,
+            command = "killall $packageName || pkill -f $packageName || am force-stop $packageName",
+            label = label
+        )
+    }
+
+    fun restartScopedApps(context: Context, packages: List<String>) {
+        if (packages.isEmpty()) {
+            Toast.makeText(context, "No scoped apps found", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val cmd = packages.joinToString(" ; ") { pkg ->
+            "killall $pkg || pkill -f $pkg || am force-stop $pkg"
+        }
+        runCommand(
+            context = context,
+            command = cmd,
+            label = "All Scoped Apps (${packages.size} apps)"
+        )
+    }
+
     private fun runCommand(context: Context, command: String, label: String) {
         Thread {
             var success = false

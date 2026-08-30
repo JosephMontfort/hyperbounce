@@ -24,13 +24,31 @@ fun KeypadDelaysScreen(
     onBack: () -> Unit
 ) {
     val keypad = repository.lockScreenKeypad
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     ScreenScaffold(
         title = "Per-Key Delay Tuning",
         subtitle = "Custom sequential entry timing offsets",
         colors = colors,
         backdrop = backdrop,
-        onBack = onBack
+        onBack = onBack,
+        onResetPage = {
+            keypad.setDelayKey1(-1f)
+            keypad.setDelayKey2(-1f)
+            keypad.setDelayKey3(-1f)
+            keypad.setDelayKey4(-1f)
+            keypad.setDelayKey5(-1f)
+            keypad.setDelayKey6(-1f)
+            keypad.setDelayKey7(-1f)
+            keypad.setDelayKey8(-1f)
+            keypad.setDelayKey9(-1f)
+            keypad.setDelayKey0(-1f)
+            keypad.setDelayEmergency(-1f)
+            keypad.setDelayCancel(-1f)
+        },
+        restartAppTitle = "Restart System UI",
+        restartAppSubtitle = "Restart com.android.systemui",
+        onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartSystemUI(context) }
     ) { _ ->
         SectionHeader("Numeric Keys (Row 1)", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {

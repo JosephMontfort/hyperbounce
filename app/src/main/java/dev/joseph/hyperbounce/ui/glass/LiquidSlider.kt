@@ -86,8 +86,8 @@ fun LiquidSlider(
 
         val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
         val animationScope = rememberCoroutineScope()
-        var didDrag by remember { mutableStateOf(false) }
-        var currentVal by remember { mutableFloatStateOf(value()) }
+        val clampedInitial = value().coerceIn(valueRange)
+        var currentVal by remember { mutableFloatStateOf(clampedInitial) }
         
         // -1 for left edge, 1 for right edge, 0 for none
         var lastHapticEdge by remember { 
@@ -149,9 +149,10 @@ fun LiquidSlider(
         LaunchedEffect(value) {
             snapshotFlow { value() }
                 .collectLatest { externalVal ->
-                    if (!didDrag && abs(externalVal - currentVal) > visibilityThreshold) {
-                        currentVal = externalVal
-                        dampedDragAnimation.animateToValue(externalVal)
+                    val clamped = externalVal.coerceIn(valueRange)
+                    if (!didDrag && abs(clamped - currentVal) > visibilityThreshold) {
+                        currentVal = clamped
+                        dampedDragAnimation.animateToValue(clamped)
                     }
                 }
         }

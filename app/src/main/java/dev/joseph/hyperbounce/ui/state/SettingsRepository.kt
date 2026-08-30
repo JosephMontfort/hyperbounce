@@ -27,6 +27,7 @@ package dev.joseph.hyperbounce.ui.state
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlin.jvm.JvmName
@@ -201,7 +202,7 @@ class SettingsRepository(context: Context) {
 
     // --- glass "feel" settings shared per engine ------------------------------------------
 
-    inner class GlassFeelHolder(private val prefix: String, private val defaults: GlassFeel) {
+    inner class GlassFeelHolder(val prefix: String, val defaults: GlassFeel) {
         var blurDp by prefsFloatState("${prefix}_blur", defaults.blurDp)
             private set
         var lensSizeDp by prefsFloatState("${prefix}_lens_size", defaults.lensSizeDp)
@@ -507,51 +508,72 @@ class SettingsRepository(context: Context) {
         var kineticDockResponse by prefsFloatState("unlock_kinetic_dock_response", defaults.kineticDockResponse); private set
         var kineticDockZDepth by prefsFloatState("unlock_kinetic_dock_z_depth", defaults.kineticDockZDepth); private set
 
+        private val rowZStates = mutableStateMapOf<Int, Float>()
+        private val rowCenterBounceStates = mutableStateMapOf<Int, Float>()
+        private val rowOuterBounceStates = mutableStateMapOf<Int, Float>()
+        private val rowCenterSettleStates = mutableStateMapOf<Int, Float>()
+        private val rowOuterSettleStates = mutableStateMapOf<Int, Float>()
+
         fun getRowZ(row: Int): Float {
-            val defZ = (2000.0f - (row * 200.0f)).coerceAtLeast(100.0f)
-            return prefs.getFloat("unlock_r${row}_z", defZ)
+            return rowZStates.getOrPut(row) {
+                val defZ = (2000.0f - (row * 200.0f)).coerceAtLeast(100.0f)
+                prefs.getFloat("unlock_r${row}_z", defZ)
+            }
         }
         fun setRowZ(row: Int, v: Float) {
+            rowZStates[row] = v
             val key = "unlock_r${row}_z"
             prefs.edit().putFloat(key, v).apply()
             XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
         }
 
         fun getRowCenterBounce(row: Int): Float {
-            val defBounce = (0.45f - (row * 0.05f)).coerceAtLeast(0.0f)
-            return prefs.getFloat("unlock_r${row}_center_bounce", defBounce)
+            return rowCenterBounceStates.getOrPut(row) {
+                val defBounce = (0.45f - (row * 0.05f)).coerceAtLeast(0.0f)
+                prefs.getFloat("unlock_r${row}_center_bounce", defBounce)
+            }
         }
         fun setRowCenterBounce(row: Int, v: Float) {
+            rowCenterBounceStates[row] = v
             val key = "unlock_r${row}_center_bounce"
             prefs.edit().putFloat(key, v).apply()
             XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
         }
 
         fun getRowOuterBounce(row: Int): Float {
-            val defBounce = (0.45f - (row * 0.05f)).coerceAtLeast(0.0f)
-            return prefs.getFloat("unlock_r${row}_outer_bounce", defBounce)
+            return rowOuterBounceStates.getOrPut(row) {
+                val defBounce = (0.45f - (row * 0.05f)).coerceAtLeast(0.0f)
+                prefs.getFloat("unlock_r${row}_outer_bounce", defBounce)
+            }
         }
         fun setRowOuterBounce(row: Int, v: Float) {
+            rowOuterBounceStates[row] = v
             val key = "unlock_r${row}_outer_bounce"
             prefs.edit().putFloat(key, v).apply()
             XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
         }
 
         fun getRowCenterSettle(row: Int): Float {
-            val defSettle = 0.55f + (row * 0.04f)
-            return prefs.getFloat("unlock_r${row}_center_settle", defSettle)
+            return rowCenterSettleStates.getOrPut(row) {
+                val defSettle = 0.55f + (row * 0.04f)
+                prefs.getFloat("unlock_r${row}_center_settle", defSettle)
+            }
         }
         fun setRowCenterSettle(row: Int, v: Float) {
+            rowCenterSettleStates[row] = v
             val key = "unlock_r${row}_center_settle"
             prefs.edit().putFloat(key, v).apply()
             XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
         }
 
         fun getRowOuterSettle(row: Int): Float {
-            val defSettle = 0.55f + (row * 0.04f)
-            return prefs.getFloat("unlock_r${row}_outer_settle", defSettle)
+            return rowOuterSettleStates.getOrPut(row) {
+                val defSettle = 0.55f + (row * 0.04f)
+                prefs.getFloat("unlock_r${row}_outer_settle", defSettle)
+            }
         }
         fun setRowOuterSettle(row: Int, v: Float) {
+            rowOuterSettleStates[row] = v
             val key = "unlock_r${row}_outer_settle"
             prefs.edit().putFloat(key, v).apply()
             XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
@@ -610,6 +632,12 @@ class SettingsRepository(context: Context) {
             kineticDockDamping = defaults.kineticDockDamping
             kineticDockResponse = defaults.kineticDockResponse
             kineticDockZDepth = defaults.kineticDockZDepth
+
+            rowZStates.clear()
+            rowCenterBounceStates.clear()
+            rowOuterBounceStates.clear()
+            rowCenterSettleStates.clear()
+            rowOuterSettleStates.clear()
         }
     }
 

@@ -37,13 +37,18 @@ fun ScreenUnlockScreen(
     onBack: () -> Unit
 ) {
     val unlock = repository.screenUnlock
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     ScreenScaffold(
         title = "Screen Unlock",
         subtitle = "Velocity-coupled kinetic grid & radial dispersion",
         colors = colors,
         backdrop = backdrop,
-        onBack = onBack
+        onBack = onBack,
+        onResetPage = unlock::reloadFromDefaults,
+        restartAppTitle = "Restart Launcher",
+        restartAppSubtitle = "Restart com.miui.home",
+        onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartLauncher(context) }
     ) { _ ->
         SectionHeader("MASTER SWITCH", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -97,6 +102,7 @@ fun ScreenUnlockScreen(
                 value = unlock.gridColumns.toFloat(),
                 onValueChange = { unlock.setGridColumns(it.toInt()) },
                 valueRange = 2f..8f,
+                defaultValue = 4f,
                 valueLabel = { String.format(Locale.US, "%.0f cols", it) },
                 enabled = unlock.enabled
             )
@@ -109,6 +115,7 @@ fun ScreenUnlockScreen(
                 value = unlock.gridRows.toFloat(),
                 onValueChange = { unlock.setGridRows(it.toInt()) },
                 valueRange = 3f..12f,
+                defaultValue = 7f,
                 valueLabel = { String.format(Locale.US, "%.0f rows", it) },
                 enabled = unlock.enabled
             )
@@ -126,6 +133,7 @@ fun ScreenUnlockScreen(
                     value = unlock.centerDamping,
                     onValueChange = unlock::setCenterDamping,
                     valueRange = 0.1f..1.0f,
+                    defaultValue = 0.58f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -138,6 +146,7 @@ fun ScreenUnlockScreen(
                     value = unlock.centerResponse,
                     onValueChange = unlock::setCenterResponse,
                     valueRange = 0.1f..1.5f,
+                    defaultValue = 0.48f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -150,6 +159,7 @@ fun ScreenUnlockScreen(
                     value = unlock.edgeDampingDrop,
                     onValueChange = unlock::setEdgeDampingDrop,
                     valueRange = 0.0f..0.5f,
+                    defaultValue = 0.10f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -162,6 +172,7 @@ fun ScreenUnlockScreen(
                     value = unlock.edgeResponseDelay,
                     onValueChange = unlock::setEdgeResponseDelay,
                     valueRange = 0.0f..1.0f,
+                    defaultValue = 0.22f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -174,6 +185,7 @@ fun ScreenUnlockScreen(
                     value = unlock.zDepthMultiplier,
                     onValueChange = unlock::setZDepthMultiplier,
                     valueRange = 1.0f..4.0f,
+                    defaultValue = 1.60f,
                     valueLabel = { String.format(Locale.US, "%.2fx", it) },
                     enabled = unlock.enabled
                 )
@@ -186,6 +198,7 @@ fun ScreenUnlockScreen(
                     value = unlock.dockDamping,
                     onValueChange = unlock::setDockDamping,
                     valueRange = 0.1f..1.0f,
+                    defaultValue = 0.70f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -198,6 +211,7 @@ fun ScreenUnlockScreen(
                     value = unlock.dockResponse,
                     onValueChange = unlock::setDockResponse,
                     valueRange = 0.1f..1.5f,
+                    defaultValue = 0.40f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -214,6 +228,7 @@ fun ScreenUnlockScreen(
                     value = unlock.durationScale,
                     onValueChange = unlock::setDurationScale,
                     valueRange = 0.1f..3.0f,
+                    defaultValue = 1.0f,
                     valueLabel = { String.format(Locale.US, "%.2fx", it) },
                     enabled = unlock.enabled
                 )
@@ -226,6 +241,7 @@ fun ScreenUnlockScreen(
                     value = unlock.velocityInfluence,
                     onValueChange = unlock::setVelocityInfluence,
                     valueRange = 0.0f..2.0f,
+                    defaultValue = 1.0f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -238,6 +254,7 @@ fun ScreenUnlockScreen(
                     value = unlock.maxVelocity,
                     onValueChange = unlock::setMaxVelocity,
                     valueRange = 5000f..30000f,
+                    defaultValue = 16000.0f,
                     valueLabel = { String.format(Locale.US, "%.0f px/s", it) },
                     enabled = unlock.enabled
                 )
@@ -250,6 +267,7 @@ fun ScreenUnlockScreen(
                     value = unlock.cascadeDamping,
                     onValueChange = unlock::setCascadeDamping,
                     valueRange = 0.5f..1.0f,
+                    defaultValue = 0.95f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -266,6 +284,7 @@ fun ScreenUnlockScreen(
                     value = unlock.kineticDockDamping,
                     onValueChange = unlock::setKineticDockDamping,
                     valueRange = 0.1f..1.0f,
+                    defaultValue = 0.85f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -278,6 +297,7 @@ fun ScreenUnlockScreen(
                     value = unlock.kineticDockResponse,
                     onValueChange = unlock::setKineticDockResponse,
                     valueRange = 0.1f..1.5f,
+                    defaultValue = 0.38f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -290,6 +310,7 @@ fun ScreenUnlockScreen(
                     value = unlock.kineticDockZDepth,
                     onValueChange = unlock::setKineticDockZDepth,
                     valueRange = 0f..4000f,
+                    defaultValue = 800.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = unlock.enabled
                 )
@@ -303,6 +324,7 @@ fun ScreenUnlockScreen(
                 for (r in 0 until rows) {
                     if (r > 0) RowDivider(colors.separator)
                     val currentZ = unlock.getRowZ(r)
+                    val defZ = (2000.0f - (r * 200.0f)).coerceAtLeast(100.0f)
                     SettingsSliderRow(
                         title = "Row $r Z-Depth",
                         subtitle = "Starting 3D perspective depth",
@@ -311,6 +333,7 @@ fun ScreenUnlockScreen(
                         value = currentZ,
                         onValueChange = { unlock.setRowZ(r, it) },
                         valueRange = 100f..4000f,
+                        defaultValue = defZ,
                         valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                         enabled = unlock.enabled
                     )
@@ -324,6 +347,7 @@ fun ScreenUnlockScreen(
                     if (r > 0) RowDivider(colors.separator)
                     val cBounce = unlock.getRowCenterBounce(r)
                     val oBounce = unlock.getRowOuterBounce(r)
+                    val defBounce = (0.45f - (r * 0.05f)).coerceAtLeast(0.0f)
                     SettingsSliderRow(
                         title = "Row $r Center Bounce",
                         subtitle = "Overshoot for inner columns",
@@ -332,6 +356,7 @@ fun ScreenUnlockScreen(
                         value = cBounce,
                         onValueChange = { unlock.setRowCenterBounce(r, it) },
                         valueRange = 0.0f..1.0f,
+                        defaultValue = defBounce,
                         valueLabel = { String.format(Locale.US, "%.2f", it) },
                         enabled = unlock.enabled
                     )
@@ -344,6 +369,7 @@ fun ScreenUnlockScreen(
                         value = oBounce,
                         onValueChange = { unlock.setRowOuterBounce(r, it) },
                         valueRange = 0.0f..1.0f,
+                        defaultValue = defBounce,
                         valueLabel = { String.format(Locale.US, "%.2f", it) },
                         enabled = unlock.enabled
                     )
@@ -357,6 +383,7 @@ fun ScreenUnlockScreen(
                     if (r > 0) RowDivider(colors.separator)
                     val cSettle = unlock.getRowCenterSettle(r)
                     val oSettle = unlock.getRowOuterSettle(r)
+                    val defSettle = 0.55f + (r * 0.04f)
                     SettingsSliderRow(
                         title = "Row $r Center Settling",
                         subtitle = "Settling response for center columns",
@@ -365,6 +392,7 @@ fun ScreenUnlockScreen(
                         value = cSettle,
                         onValueChange = { unlock.setRowCenterSettle(r, it) },
                         valueRange = 0.1f..1.5f,
+                        defaultValue = defSettle,
                         valueLabel = { String.format(Locale.US, "%.2f", it) },
                         enabled = unlock.enabled
                     )
@@ -377,6 +405,7 @@ fun ScreenUnlockScreen(
                         value = oSettle,
                         onValueChange = { unlock.setRowOuterSettle(r, it) },
                         valueRange = 0.1f..1.5f,
+                        defaultValue = defSettle,
                         valueLabel = { String.format(Locale.US, "%.2f", it) },
                         enabled = unlock.enabled
                     )
