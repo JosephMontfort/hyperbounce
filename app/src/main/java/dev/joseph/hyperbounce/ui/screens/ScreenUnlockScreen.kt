@@ -24,7 +24,6 @@ import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
-import dev.joseph.hyperbounce.ui.components.SubpageScaffold
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
@@ -39,13 +38,13 @@ fun ScreenUnlockScreen(
 ) {
     val unlock = repository.screenUnlock
 
-    SubpageScaffold(
+    ScreenScaffold(
         title = "Screen Unlock",
         subtitle = "Velocity-coupled kinetic grid & radial dispersion",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack
-    ) {
+    ) { _ ->
         SectionHeader("MASTER SWITCH", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsToggleRow(

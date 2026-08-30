@@ -13,7 +13,6 @@ import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
 import dev.joseph.hyperbounce.ui.components.SlidersIcon
-import dev.joseph.hyperbounce.ui.components.SubpageScaffold
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import java.util.Locale
@@ -27,13 +26,13 @@ fun AppTransitionsScreen(
 ) {
     val trans = repository.appTransition
 
-    SubpageScaffold(
+    ScreenScaffold(
         title = "App Transitions",
         subtitle = "Launcher app open & close spring channel physics",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack
-    ) {
+    ) { _ ->
         SectionHeader("MASTER SWITCH", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsToggleRow(
