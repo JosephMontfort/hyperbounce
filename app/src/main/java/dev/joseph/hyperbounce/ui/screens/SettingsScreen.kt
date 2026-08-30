@@ -72,6 +72,7 @@ fun SettingsScreen(
                 value = glass.blurDp,
                 onValueChange = repository.globalGlass::setBlurDp,
                 valueRange = 0f..16f,
+                defaultValue = 6f,
                 valueLabel = { "${it.roundToInt()}dp" },
                 enabled = glass.enabled
             )
@@ -83,6 +84,7 @@ fun SettingsScreen(
                 value = glass.refractionHeightDp,
                 onValueChange = repository.globalGlass::setRefractionHeightDp,
                 valueRange = 0f..24f,
+                defaultValue = 10f,
                 valueLabel = { "${it.roundToInt()}dp" },
                 enabled = glass.enabled
             )
@@ -94,6 +96,7 @@ fun SettingsScreen(
                 value = glass.refractionAmountDp,
                 onValueChange = repository.globalGlass::setRefractionAmountDp,
                 valueRange = 0f..30f,
+                defaultValue = 16f,
                 valueLabel = { "${it.roundToInt()}dp" },
                 enabled = glass.enabled
             )

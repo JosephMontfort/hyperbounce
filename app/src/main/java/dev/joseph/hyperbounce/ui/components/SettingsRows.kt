@@ -6,6 +6,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -33,10 +35,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.glass.LiquidSlider
 import dev.joseph.hyperbounce.ui.glass.LiquidToggle
@@ -344,91 +351,175 @@ fun CustomValueDialog(
         )
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    var isClosing by remember { mutableStateOf(false) }
+    var pendingApplyValue by remember { mutableStateOf<Float?>(null) }
+
+    val animProgress by animateFloatAsState(
+        targetValue = if (isClosing) 0f else 1f,
+        animationSpec = spring(dampingRatio = 0.82f, stiffness = 420f),
+        label = "dialogAnimProgress",
+        finishedListener = { progress ->
+            if (progress == 0f && isClosing) {
+                val pending = pendingApplyValue
+                if (pending != null) {
+                    onApply(pending)
+                } else {
+                    onDismiss()
+                }
+            }
+        }
+    )
+
+    fun requestClose() {
+        if (!isClosing) {
+            isClosing = true
+        }
+    }
+
+    fun requestApply(value: Float) {
+        if (!isClosing) {
+            pendingApplyValue = value
+            isClosing = true
+        }
+    }
+
+    Dialog(
+        onDismissRequest = { requestClose() },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
         val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-        val cardBg = if (isDark) Color(0xFF242426) else Color(0xFFF2F2F7)
-        val inputBg = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+        val cardBg = if (isDark) Color(0xFF1E1E20) else Color(0xFFFFFFFF)
+        val inputBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+        val cancelBtnBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+        val accentColor = colors.accentBlue
 
         Box(
             modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .clip(RoundedCornerShape(22.dp))
-                .background(cardBg)
-                .padding(20.dp)
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.42f * animProgress))
+                .pointerInput(Unit) {
+                    detectTapGestures { requestClose() }
+                },
+            contentAlignment = Alignment.Center
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.88f)
+                    .graphicsLayer {
+                        alpha = animProgress
+                        scaleX = 0.85f + 0.15f * animProgress
+                        scaleY = 0.85f + 0.15f * animProgress
+                    }
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(cardBg)
+                    .pointerInput(Unit) {
+                        detectTapGestures { /* consume taps inside dialog */ }
+                    }
+                    .padding(24.dp)
             ) {
-                BasicText(
-                    text = "Custom Value",
-                    style = HyperBounceType.headline.copy(color = colors.label)
-                )
-
-                BasicText(
-                    text = "$title\nStock Range: [${valueRange.start} .. ${valueRange.endInclusive}]  •  Default: $defaultValue",
-                    style = HyperBounceType.footnote.copy(color = colors.secondaryLabel)
-                )
-
-                // Input box
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(inputBg)
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                ) {
-                    BasicTextField(
-                        value = textValue,
-                        onValueChange = { textValue = it },
-                        textStyle = HyperBounceType.body.copy(color = colors.label),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number
-                        ),
-                        singleLine = true,
-                        cursorBrush = SolidColor(colors.accentBlue),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                // Action buttons
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    BasicText(
+                        text = "Custom Value",
+                        style = HyperBounceType.headline.copy(
+                            color = colors.label,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+
+                    BasicText(
+                        text = "$title\nStock Range: [${valueRange.start} .. ${valueRange.endInclusive}]  •  Default: $defaultValue",
+                        style = HyperBounceType.footnote.copy(
+                            color = colors.secondaryLabel,
+                            lineHeight = 18.sp
+                        )
+                    )
+
+                    // Input box
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable(onClick = onDismiss)
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(inputBg)
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
                     ) {
-                        BasicText(
-                            text = "Cancel",
-                            style = HyperBounceType.body.copy(color = colors.secondaryLabel)
+                        BasicTextField(
+                            value = textValue,
+                            onValueChange = { textValue = it },
+                            textStyle = HyperBounceType.body.copy(
+                                color = colors.label,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number
+                            ),
+                            singleLine = true,
+                            cursorBrush = SolidColor(accentColor),
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Box(
+                    // AndroidLiquidGlass Capsule Buttons Row
+                    Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.accentBlue)
-                            .clickable {
-                                val parsed = textValue.toFloatOrNull()
-                                if (parsed != null) {
-                                    onApply(parsed)
-                                } else {
-                                    onDismiss()
-                                }
-                            }
-                            .padding(horizontal = 18.dp, vertical = 8.dp)
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        BasicText(
-                            text = "Apply",
-                            style = HyperBounceType.body.copy(color = Color.White)
-                        )
+                        // Cancel Capsule Button
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .clip(CircleShape)
+                                .background(cancelBtnBg)
+                                .clickable { requestClose() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            BasicText(
+                                text = "Cancel",
+                                style = TextStyle(
+                                    color = colors.label,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            )
+                        }
+
+                        // Apply Capsule Button
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .clip(CircleShape)
+                                .background(accentColor)
+                                .clickable {
+                                    val parsed = textValue.toFloatOrNull()
+                                    if (parsed != null) {
+                                        requestApply(parsed)
+                                    } else {
+                                        requestClose()
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            BasicText(
+                                text = "Apply",
+                                style = TextStyle(
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                        }
                     }
                 }
             }
