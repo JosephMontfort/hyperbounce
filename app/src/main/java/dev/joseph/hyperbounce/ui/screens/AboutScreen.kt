@@ -1,5 +1,6 @@
 package dev.joseph.hyperbounce.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -13,7 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
@@ -22,6 +25,7 @@ import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.Shadow
+import dev.joseph.hyperbounce.R
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
@@ -35,39 +39,20 @@ fun AboutScreen(
     backdrop: Backdrop,
     onBack: () -> Unit
 ) {
-    val glass = LocalGlassSettings.current
-    val isDark = isSystemInDarkTheme()
     ScreenScaffold(
         title = "About",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack
     ) { _ ->
-        Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-            val shape = RoundedCornerShape(28.dp)
-            Box(
-                Modifier
+        Box(Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
+            val shape = RoundedCornerShape(20.dp)
+            Image(
+                painter = painterResource(R.drawable.ic_app_icon),
+                contentDescription = "HyperBounce Icon",
+                modifier = Modifier
                     .size(88.dp)
-                    .then(
-                        if (glass.enabled) {
-                            Modifier.drawBackdrop(
-                                backdrop = backdrop,
-                                shape = { shape },
-                                effects = {
-                                    vibrancy()
-                                    blur((glass.blurDp / 3f).dp.toPx())
-                                    lens((glass.refractionHeightDp / 1.2f).dp.toPx(), (glass.refractionAmountDp / 1.2f).dp.toPx())
-                                },
-                                highlight = { Highlight.Ambient },
-                                shadow = { Shadow(radius = 12f.dp, color = Color.Black.copy(alpha = 0.18f)) },
-                                onDrawSurface = { drawRect(colors.accentBlue.copy(alpha = 0.16f)) }
-                            )
-                        } else {
-                            Modifier
-                                .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
-                                .background(colors.accentBlue.copy(alpha = 0.18f))
-                        }
-                    )
+                    .shadow(12.dp, shape = shape, clip = false)
                     .clip(shape)
             )
         }
