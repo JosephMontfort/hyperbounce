@@ -54,9 +54,8 @@ fun EngineScreen(
             dev.joseph.hyperbounce.ui.utils.RootUtils.restartScopedApps(context, pkgs)
         }
     ) { contentBackdrop ->
-        val combinedBackdrop = rememberCombinedBackdrop(backdrop, contentBackdrop)
-
         item {
+            val combinedBackdrop = rememberCombinedBackdrop(backdrop, contentBackdrop)
             SectionHeader("Rendering Engine", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 EngineRow(

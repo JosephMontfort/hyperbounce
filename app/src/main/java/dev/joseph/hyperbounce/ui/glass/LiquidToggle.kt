@@ -6,6 +6,7 @@ package dev.joseph.hyperbounce.ui.glass
  * only the package changed. Used for every on/off switch in the HyperBounce settings UI.
  */
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
