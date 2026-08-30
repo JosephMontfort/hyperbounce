@@ -86,6 +86,7 @@ fun LiquidSlider(
 
         val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
         val animationScope = rememberCoroutineScope()
+        var didDrag by remember { mutableStateOf(false) }
         val clampedInitial = value().coerceIn(valueRange)
         var currentVal by remember { mutableFloatStateOf(clampedInitial) }
         
