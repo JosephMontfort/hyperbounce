@@ -283,6 +283,7 @@ private fun HyperBounceApp(repository: SettingsRepository) {
         }
     }
 }
+}
 
 @Composable
 private fun TabIcon(icon: ImageVector, color: Color = Color.White) {
