@@ -26,6 +26,8 @@ data class HyperBounceColors(
     val accentGreen: Color,
     val accentOrange: Color,
     val accentRed: Color,
+    val accentPurple: Color,
+    val accentPink: Color,
     val wallpaperTop: Color,
     val wallpaperBottom: Color,
     val glassSurfaceTint: Color
@@ -43,6 +45,8 @@ private val LightColors = HyperBounceColors(
     accentGreen = Color(0xFF34C759),
     accentOrange = Color(0xFFFF9500),
     accentRed = Color(0xFFFF3B30),
+    accentPurple = Color(0xFFAF52DE),
+    accentPink = Color(0xFFFF2D78),
     wallpaperTop = Color(0xFF7FB2E5),
     wallpaperBottom = Color(0xFFE8C9A8),
     glassSurfaceTint = Color.White
@@ -60,6 +64,8 @@ private val DarkColors = HyperBounceColors(
     accentGreen = Color(0xFF30D158),
     accentOrange = Color(0xFFFF9F0A),
     accentRed = Color(0xFFFF453A),
+    accentPurple = Color(0xFFBF5AF2),
+    accentPink = Color(0xFFFF375F),
     wallpaperTop = Color(0xFF141A33),
     wallpaperBottom = Color(0xFF2B1F3D),
     glassSurfaceTint = Color(0xFF1C1C1E)
