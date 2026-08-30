@@ -66,6 +66,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.zIndex
 import dev.joseph.hyperbounce.ui.components.AppGridIcon
 import dev.joseph.hyperbounce.ui.components.ChevronIcon
 import dev.joseph.hyperbounce.ui.components.CopyIcon
@@ -236,8 +237,8 @@ fun RootScaffold(
                 refractionHeight = glass.refractionHeightDp,
                 refractionAmount = glass.refractionAmountDp,
                 chromaticAberration = glass.chromaticAberration,
-                horizontalOffset = -16f,
-                verticalOffset = 30f,
+                horizontalOffset = 0f,
+                verticalOffset = 10f,
                 labelSize = Size(44f, 44f),
                 onRowSelected = { index ->
                     if (menuPage == MenuPage.Main) {
@@ -319,6 +320,7 @@ fun RootScaffold(
                     // Main Menu Page
                     Column(
                         modifier = Modifier
+                            .zIndex(if (!isSubmenu) 2f else 0f)
                             .onSizeChanged { size ->
                                 if (size.width > 0 && size.height > 0) {
                                     mainPageWidth = size.width.toFloat()
@@ -383,6 +385,7 @@ fun RootScaffold(
                     // Submenu Page ("Restart Scoped Apps")
                     Column(
                         modifier = Modifier
+                            .zIndex(if (isSubmenu) 2f else 0f)
                             .onSizeChanged { size ->
                                 if (size.width > 0 && size.height > 0) {
                                     subPageWidth = size.width.toFloat()

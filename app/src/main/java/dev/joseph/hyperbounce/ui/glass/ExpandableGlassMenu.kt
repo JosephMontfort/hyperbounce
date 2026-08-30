@@ -73,6 +73,7 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
@@ -506,16 +507,19 @@ fun GlassEffectContainer(
                     scaleY = baseScale + pop * contentPopY
                     this.transformOrigin = TransformOrigin.Center
                 }
+                .zIndex(if (animatableProgress.value > 0.35f) 2f else 0f)
         ) {
             content()
         }
 
         Box(
-            modifier = Modifier.graphicsLayer {
-                val progress = animatableProgress.value
-                val labelOpacity = (progress / 0.35f).coerceIn(0f, 1f)
-                alpha = 1f - labelOpacity
-            }
+            modifier = Modifier
+                .graphicsLayer {
+                    val progress = animatableProgress.value
+                    val labelOpacity = (progress / 0.35f).coerceIn(0f, 1f)
+                    alpha = 1f - labelOpacity
+                }
+                .zIndex(if (animatableProgress.value <= 0.35f) 2f else 0f)
         ) {
             label()
         }
