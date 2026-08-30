@@ -33,6 +33,7 @@ fun ControlCenterScreen(
 ) {
     val cc = repository.controlCenter
     val context = LocalContext.current
+    val dialogHost = dev.joseph.hyperbounce.ui.glass.LocalGlassDialogHost.current
 
     ScreenScaffold(
         title = "Control Center",
@@ -43,14 +44,16 @@ fun ControlCenterScreen(
         onResetPage = cc::reloadFromDefaults,
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
-        onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartSystemUI(context) }
+        onRestartApp = {
+            dev.joseph.hyperbounce.ui.utils.RootUtils.restartApp(context, "com.android.systemui", "System UI")
+        }
     ) { _ ->
         item {
-            SectionHeader("MASTER SWITCHES", colors)
+            SectionHeader("CUSTOMIZER ENGINE", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
-                    title = "Modular Customizer (iOS Edit Mode)",
-                    subtitle = "Unlocks major cards and enables cross-component reordering",
+                    title = "Enable Modular Customizer",
+                    subtitle = "Allows resizing tiles to 2x2, 2x1, 1x2, and rearranging Control Center elements",
                     colors = colors,
                     iconTint = colors.accentBlue,
                     backdrop = backdrop,
@@ -58,49 +61,29 @@ fun ControlCenterScreen(
                     onCheckedChange = cc::setModularEditEnabled,
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
-                RowDivider(colors.separator)
+                RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsToggleRow(
-                    title = "Center Bounce Animation",
-                    subtitle = "Emerge outward from screen center with harmonic spring physics",
-                    colors = colors,
-                    iconTint = colors.accentPink,
-                    backdrop = backdrop,
-                    checked = cc.animEnabled,
-                    onCheckedChange = cc::setAnimEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
-                )
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "iOS 26 Jelly Physics Engine",
-                    subtitle = "Velocity-coupled Poisson lateral squish & top-anchored stretch",
-                    colors = colors,
-                    iconTint = colors.accentOrange,
-                    backdrop = backdrop,
-                    checked = cc.jellyEnabled,
-                    onCheckedChange = cc::setJellyEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
-                )
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "Xiaomi Native Low-End Engine",
-                    subtitle = "Enables stock low-end rendering switch for ultra smoothness",
+                    title = "Lock CC Edit Layout",
+                    subtitle = "Prevents entering tile edit mode on long press",
                     colors = colors,
                     iconTint = colors.accentPurple,
                     backdrop = backdrop,
-                    checked = cc.lowEndAnim,
-                    onCheckedChange = cc::setLowEndAnim,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    checked = cc.lockEditLayout,
+                    onCheckedChange = cc::setLockEditLayout,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) },
+                    enabled = cc.modularEditEnabled
                 )
-                RowDivider(colors.separator)
+                RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsToggleRow(
-                    title = "Auto-Restart System UI on Edit Exit",
-                    subtitle = "Rebinds 100% clean touch targets after saving new tile groups",
+                    title = "Haptic Vibration",
+                    subtitle = "Subtle click feedback when snapping, moving, or expanding tiles",
                     colors = colors,
-                    iconTint = colors.accentGreen,
+                    iconTint = colors.accentOrange,
                     backdrop = backdrop,
-                    checked = cc.restartOnEditExit,
-                    onCheckedChange = cc::setRestartOnEditExit,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    checked = cc.vibrationEnabled,
+                    onCheckedChange = cc::setVibrationEnabled,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) },
+                    enabled = cc.modularEditEnabled
                 )
             }
         }
@@ -115,10 +98,12 @@ fun ControlCenterScreen(
                     iconTint = Color(0xFFE53935),
                     titleColor = Color(0xFFFF453A),
                     onClick = {
-                        AlertDialog.Builder(context)
-                            .setTitle("Reset Layout to Stock?")
-                            .setMessage("This will dissolve all 2x2, 2x1, and 1x2 tile groups, restore stock Wi-Fi/Mobile Data expansion, and reset all component positions to stock.")
-                            .setPositiveButton("Reset") { _, _ ->
+                        dialogHost.showConfirmation(
+                            title = "Reset Layout to Stock?",
+                            message = "This will dissolve all 2x2, 2x1, and 1x2 tile groups, restore stock Wi-Fi/Mobile Data expansion, and reset all component positions to stock.",
+                            confirmText = "Reset",
+                            confirmColor = Color(0xFFFF453A),
+                            onConfirm = {
                                 try {
                                     context.sendBroadcast(Intent("dev.joseph.hyperbounce.RESET_CC_LAYOUT"))
                                     context.contentResolver.call(
@@ -130,8 +115,7 @@ fun ControlCenterScreen(
                                     Toast.makeText(context, "Failed to reset layout: ${e.message}", Toast.LENGTH_SHORT).show()
                                 }
                             }
-                            .setNegativeButton("Cancel", null)
-                            .show()
+                        )
                     },
                     icon = { ResetArrowIcon(color = Color.White, size = 15.dp) }
                 )

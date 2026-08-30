@@ -84,7 +84,7 @@ fun ScreenUnlockScreen(
                         onClick = { unlock.setAnimMode(0) }
                     )
                     ModeSegment(
-                        title = "Mode 1: Y Cascade",
+                        title = "Mode 1: Y-axis Cascade",
                         subtitle = "Velocity kinetics",
                         selected = unlock.animMode == 1,
                         colors = colors,

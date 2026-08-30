@@ -44,16 +44,36 @@ import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import java.util.Locale
 
-class CustomValueRequest(
-    val title: String,
-    val currentValue: Float,
-    val defaultValue: Float,
-    val valueRange: ClosedFloatingPointRange<Float>,
-    val onApply: (Float) -> Unit
-)
+sealed class GlassDialogRequest {
+    class CustomValue(
+        val title: String,
+        val currentValue: Float,
+        val defaultValue: Float,
+        val valueRange: ClosedFloatingPointRange<Float>,
+        val onApply: (Float) -> Unit
+    ) : GlassDialogRequest()
 
-class CustomValueHostState {
-    var activeRequest by mutableStateOf<CustomValueRequest?>(null)
+    class Confirmation(
+        val title: String,
+        val message: String,
+        val confirmText: String = "Confirm",
+        val cancelText: String = "Cancel",
+        val confirmColor: Color? = null,
+        val onConfirm: () -> Unit,
+        val onCancel: (() -> Unit)? = null
+    ) : GlassDialogRequest()
+
+    class Custom(
+        val title: String,
+        val content: @Composable (dismiss: () -> Unit) -> Unit
+    ) : GlassDialogRequest()
+}
+
+// Backward compatibility alias for custom value requests
+typealias CustomValueRequest = GlassDialogRequest.CustomValue
+
+class GlassDialogHostState {
+    var activeRequest by mutableStateOf<GlassDialogRequest?>(null)
         private set
 
     fun show(
@@ -63,7 +83,44 @@ class CustomValueHostState {
         valueRange: ClosedFloatingPointRange<Float>,
         onApply: (Float) -> Unit
     ) {
-        activeRequest = CustomValueRequest(title, currentValue, defaultValue, valueRange, onApply)
+        activeRequest = GlassDialogRequest.CustomValue(title, currentValue, defaultValue, valueRange, onApply)
+    }
+
+    fun showCustomValue(
+        title: String,
+        currentValue: Float,
+        defaultValue: Float,
+        valueRange: ClosedFloatingPointRange<Float>,
+        onApply: (Float) -> Unit
+    ) {
+        activeRequest = GlassDialogRequest.CustomValue(title, currentValue, defaultValue, valueRange, onApply)
+    }
+
+    fun showConfirmation(
+        title: String,
+        message: String,
+        confirmText: String = "Confirm",
+        cancelText: String = "Cancel",
+        confirmColor: Color? = null,
+        onConfirm: () -> Unit,
+        onCancel: (() -> Unit)? = null
+    ) {
+        activeRequest = GlassDialogRequest.Confirmation(
+            title = title,
+            message = message,
+            confirmText = confirmText,
+            cancelText = cancelText,
+            confirmColor = confirmColor,
+            onConfirm = onConfirm,
+            onCancel = onCancel
+        )
+    }
+
+    fun showCustom(
+        title: String,
+        content: @Composable (dismiss: () -> Unit) -> Unit
+    ) {
+        activeRequest = GlassDialogRequest.Custom(title, content)
     }
 
     fun dismiss() {
@@ -71,19 +128,23 @@ class CustomValueHostState {
     }
 }
 
-val LocalCustomValueHost = compositionLocalOf<CustomValueHostState> {
-    CustomValueHostState()
+typealias CustomValueHostState = GlassDialogHostState
+
+val LocalGlassDialogHost = compositionLocalOf<GlassDialogHostState> {
+    GlassDialogHostState()
 }
 
+val LocalCustomValueHost = LocalGlassDialogHost
+
 @Composable
-fun CustomValueDialogHost(
+fun GlassDialogHost(
     colors: HyperBounceColors,
     content: @Composable () -> Unit
 ) {
-    val hostState = remember { CustomValueHostState() }
+    val hostState = remember { GlassDialogHostState() }
     val currentRequest = hostState.activeRequest
 
-    var displayedRequest by remember { mutableStateOf<CustomValueRequest?>(null) }
+    var displayedRequest by remember { mutableStateOf<GlassDialogRequest?>(null) }
     var isClosing by remember { mutableStateOf(false) }
 
     LaunchedEffect(currentRequest) {
@@ -99,7 +160,7 @@ fun CustomValueDialogHost(
     val animProgress by animateFloatAsState(
         targetValue = if (isVisible) 1f else 0f,
         animationSpec = spring(dampingRatio = 0.85f, stiffness = 380f),
-        label = "customValueAnimProgress",
+        label = "glassDialogAnimProgress",
         finishedListener = { progress ->
             if (progress == 0f && isClosing) {
                 displayedRequest = null
@@ -108,7 +169,9 @@ fun CustomValueDialogHost(
         }
     )
 
-    CompositionLocalProvider(LocalCustomValueHost provides hostState) {
+    CompositionLocalProvider(
+        LocalGlassDialogHost provides hostState
+    ) {
         Box(Modifier.fillMaxSize()) {
             // Main content underneath with dynamic smooth animated blur
             Box(
@@ -134,24 +197,9 @@ fun CustomValueDialogHost(
                 val cancelBtnBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
                 val accentColor = colors.accentBlue
 
-                var textValue by remember(req) {
-                    mutableStateOf(
-                        if (req.currentValue % 1f == 0f && req.valueRange.endInclusive > 10f) {
-                            req.currentValue.toInt().toString()
-                        } else {
-                            String.format(Locale.US, "%.3f", req.currentValue).trimEnd('0').trimEnd('.')
-                        }
-                    )
-                }
-
                 fun requestClose() {
-                    hostState.dismiss()
-                }
-
-                fun requestApply() {
-                    val parsed = textValue.toFloatOrNull()
-                    if (parsed != null) {
-                        req.onApply(parsed)
+                    if (req is GlassDialogRequest.Confirmation) {
+                        req.onCancel?.invoke()
                     }
                     hostState.dismiss()
                 }
@@ -182,98 +230,211 @@ fun CustomValueDialogHost(
                             }
                             .padding(24.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            BasicText(
-                                text = "Custom Value",
-                                style = HyperBounceType.headline.copy(
-                                    color = colors.label,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            )
-
-                            BasicText(
-                                text = "${req.title}\nStock Range: [${req.valueRange.start} .. ${req.valueRange.endInclusive}]  •  Default: ${req.defaultValue}",
-                                style = HyperBounceType.footnote.copy(
-                                    color = colors.secondaryLabel,
-                                    lineHeight = 18.sp
-                                )
-                            )
-
-                            // Input box
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(inputBg)
-                                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                            ) {
-                                BasicTextField(
-                                    value = textValue,
-                                    onValueChange = { textValue = it },
-                                    textStyle = HyperBounceType.body.copy(
-                                        color = colors.label,
-                                        fontSize = 17.sp,
-                                        fontWeight = FontWeight.Medium
-                                    ),
-                                    keyboardOptions = KeyboardOptions(
-                                        keyboardType = KeyboardType.Number
-                                    ),
-                                    singleLine = true,
-                                    cursorBrush = SolidColor(accentColor),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-
-                            // AndroidLiquidGlass Capsule Buttons Row
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Cancel Capsule Button
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(48.dp)
-                                        .clip(CircleShape)
-                                        .background(cancelBtnBg)
-                                        .clickable { requestClose() },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    BasicText(
-                                        text = "Cancel",
-                                        style = TextStyle(
-                                            color = colors.label,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
+                        when (req) {
+                            is GlassDialogRequest.CustomValue -> {
+                                var textValue by remember(req) {
+                                    mutableStateOf(
+                                        if (req.currentValue % 1f == 0f && req.valueRange.endInclusive > 10f) {
+                                            req.currentValue.toInt().toString()
+                                        } else {
+                                            String.format(Locale.US, "%.3f", req.currentValue).trimEnd('0').trimEnd('.')
+                                        }
                                     )
                                 }
 
-                                // Apply Capsule Button
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(48.dp)
-                                        .clip(CircleShape)
-                                        .background(accentColor)
-                                        .clickable { requestApply() },
-                                    contentAlignment = Alignment.Center
+                                fun requestApply() {
+                                    val parsed = textValue.toFloatOrNull()
+                                    if (parsed != null) {
+                                        req.onApply(parsed)
+                                    }
+                                    hostState.dismiss()
+                                }
+
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
                                     BasicText(
-                                        text = "Apply",
-                                        style = TextStyle(
-                                            color = Color.White,
-                                            fontSize = 16.sp,
+                                        text = "Custom Value",
+                                        style = HyperBounceType.headline.copy(
+                                            color = colors.label,
+                                            fontSize = 20.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                     )
+
+                                    BasicText(
+                                        text = "${req.title}\nStock Range: [${req.valueRange.start} .. ${req.valueRange.endInclusive}]  •  Default: ${req.defaultValue}",
+                                        style = HyperBounceType.footnote.copy(
+                                            color = colors.secondaryLabel,
+                                            lineHeight = 18.sp
+                                        )
+                                    )
+
+                                    // Input box
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(inputBg)
+                                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                                    ) {
+                                        BasicTextField(
+                                            value = textValue,
+                                            onValueChange = { textValue = it },
+                                            textStyle = HyperBounceType.body.copy(
+                                                color = colors.label,
+                                                fontSize = 17.sp,
+                                                fontWeight = FontWeight.Medium
+                                            ),
+                                            keyboardOptions = KeyboardOptions(
+                                                keyboardType = KeyboardType.Number
+                                            ),
+                                            singleLine = true,
+                                            cursorBrush = SolidColor(accentColor),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+
+                                    // AndroidLiquidGlass Capsule Buttons Row
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(48.dp)
+                                                .clip(CircleShape)
+                                                .background(cancelBtnBg)
+                                                .clickable { requestClose() },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            BasicText(
+                                                text = "Cancel",
+                                                style = TextStyle(
+                                                    color = colors.label,
+                                                    fontSize = 16.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            )
+                                        }
+
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(48.dp)
+                                                .clip(CircleShape)
+                                                .background(accentColor)
+                                                .clickable { requestApply() },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            BasicText(
+                                                text = "Apply",
+                                                style = TextStyle(
+                                                    color = Color.White,
+                                                    fontSize = 16.sp,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            is GlassDialogRequest.Confirmation -> {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    BasicText(
+                                        text = req.title,
+                                        style = HyperBounceType.headline.copy(
+                                            color = colors.label,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    )
+
+                                    BasicText(
+                                        text = req.message,
+                                        style = HyperBounceType.footnote.copy(
+                                            color = colors.secondaryLabel,
+                                            fontSize = 15.sp,
+                                            lineHeight = 20.sp
+                                        )
+                                    )
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(48.dp)
+                                                .clip(CircleShape)
+                                                .background(cancelBtnBg)
+                                                .clickable { requestClose() },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            BasicText(
+                                                text = req.cancelText,
+                                                style = TextStyle(
+                                                    color = colors.label,
+                                                    fontSize = 16.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            )
+                                        }
+
+                                        val btnConfirmColor = req.confirmColor ?: accentColor
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(48.dp)
+                                                .clip(CircleShape)
+                                                .background(btnConfirmColor)
+                                                .clickable {
+                                                    req.onConfirm()
+                                                    hostState.dismiss()
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            BasicText(
+                                                text = req.confirmText,
+                                                style = TextStyle(
+                                                    color = Color.White,
+                                                    fontSize = 16.sp,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            is GlassDialogRequest.Custom -> {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    BasicText(
+                                        text = req.title,
+                                        style = HyperBounceType.headline.copy(
+                                            color = colors.label,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    )
+
+                                    req.content { hostState.dismiss() }
                                 }
                             }
                         }
@@ -282,4 +443,13 @@ fun CustomValueDialogHost(
             }
         }
     }
+}
+
+// Backward compatibility alias for CustomValueDialogHost
+@Composable
+fun CustomValueDialogHost(
+    colors: HyperBounceColors,
+    content: @Composable () -> Unit
+) {
+    GlassDialogHost(colors = colors, content = content)
 }
