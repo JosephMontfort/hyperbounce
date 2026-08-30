@@ -55,10 +55,27 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import android.widget.Toast
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import dev.joseph.hyperbounce.ui.components.AppGridIcon
+import dev.joseph.hyperbounce.ui.components.ChevronIcon
 import dev.joseph.hyperbounce.ui.components.CopyIcon
 import dev.joseph.hyperbounce.ui.components.InfoIcon
 import dev.joseph.hyperbounce.ui.components.MenuRow
+import dev.joseph.hyperbounce.ui.components.PowerIcon
 import dev.joseph.hyperbounce.ui.components.ResetArrowIcon
+import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.glass.DropdownOverlayHost
 import dev.joseph.hyperbounce.ui.glass.ExpandableGlassMenu
 import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
@@ -68,7 +85,14 @@ import dev.joseph.hyperbounce.ui.glass.ProgressiveBlurHeader
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
+import dev.joseph.hyperbounce.ui.utils.RootUtils
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+private enum class MenuPage {
+    Main,
+    RestartScopedApps
+}
 
 @Composable
 fun RootScaffold(
@@ -77,15 +101,25 @@ fun RootScaffold(
     colors: HyperBounceColors,
     backdrop: Backdrop,
     repository: SettingsRepository,
-    onReset: () -> Unit,
     onAbout: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val context = LocalContext.current
     val glass = LocalGlassSettings.current
     val clipboard = LocalClipboardManager.current
     val menuAnimationScope = rememberCoroutineScope()
     val menuProgress = remember { Animatable(0f) }
     val menuExpanded = menuProgress.value > 0.05f || menuProgress.targetValue > 0.5f
+
+    var menuPage by remember { mutableStateOf(MenuPage.Main) }
+
+    // Silently reset submenu state back to root page after the menu finishes closing
+    androidx.compose.runtime.LaunchedEffect(menuProgress.targetValue) {
+        if (menuProgress.targetValue == 0f) {
+            delay(350)
+            menuPage = MenuPage.Main
+        }
+    }
 
     val scrollState = rememberScrollState()
     val collapseProgress = (scrollState.value / 160f).fastCoerceIn(0f, 1f)
@@ -106,6 +140,7 @@ fun RootScaffold(
             append("Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
         }
         clipboard.setText(AnnotatedString(text))
+        Toast.makeText(context, "Debug info copied to clipboard", Toast.LENGTH_SHORT).show()
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -163,9 +198,7 @@ fun RootScaffold(
             style = HyperBounceType.headline.copy(color = colors.label)
         )
 
-        // Full-screen scrim to dismiss the menu when tapping outside it — declared after
-        // the scrollable content but BEFORE the menu itself, so it sits above the list and
-        // below the menu in z-order (later declarations draw on top in a Box).
+        // Full-screen scrim to dismiss the menu when tapping outside it
         if (menuExpanded) {
             Box(
                 Modifier
@@ -176,9 +209,7 @@ fun RootScaffold(
             )
         }
 
-        // Top-right expandable glass menu overlay. verticalOffset = 30dp drops the
-        // expanded panel a deliberate gap below the button rather than growing flush
-        // against it.
+        // Top-right expandable glass menu overlay with sub-menu morphing support
         Box(
             Modifier
                 .align(Alignment.TopEnd)
@@ -204,10 +235,34 @@ fun RootScaffold(
                 verticalOffset = 30f,
                 labelSize = Size(44f, 44f),
                 onRowSelected = { index ->
-                    when (index) {
-                        0 -> onReset()
-                        1 -> copyDebugInfo()
-                        2 -> onAbout()
+                    if (menuPage == MenuPage.Main) {
+                        when (index) {
+                            0 -> menuPage = MenuPage.RestartScopedApps
+                            1 -> {
+                                copyDebugInfo()
+                                closeMenu()
+                            }
+                            2 -> {
+                                onAbout()
+                                closeMenu()
+                            }
+                        }
+                    } else {
+                        when (index) {
+                            0 -> menuPage = MenuPage.Main
+                            1 -> {
+                                RootUtils.restartSystemUI(context)
+                                closeMenu()
+                            }
+                            2 -> {
+                                RootUtils.restartLauncher(context)
+                                closeMenu()
+                            }
+                            3 -> {
+                                RootUtils.rebootDevice(context)
+                                closeMenu()
+                            }
+                        }
                     }
                 },
                 label = {
@@ -226,48 +281,125 @@ fun RootScaffold(
                     }
                 }
             ) { globalTouch, closeMenuFromRow, hoveredIndex, setHovered ->
-                MenuRow(
-                    title = "Reset to Defaults",
-                    description = "Restore every slider and toggle",
-                    contentColor = menuContentColor,
-                    secondaryColor = menuSecondaryColor,
-                    isHovered = hoveredIndex == 0,
-                    onHoverChange = { hovering -> if (hovering) setHovered(0) else if (hoveredIndex == 0) setHovered(null) },
-                    globalTouchPosition = globalTouch,
-                    onClick = {
-                        closeMenuFromRow()
-                        onReset()
+                AnimatedContent(
+                    targetState = menuPage,
+                    transitionSpec = {
+                        if (targetState == MenuPage.RestartScopedApps) {
+                            (slideInHorizontally { width -> width / 3 } + fadeIn(tween(220)))
+                                .togetherWith(slideOutHorizontally { width -> -width / 3 } + fadeOut(tween(160)))
+                        } else {
+                            (slideInHorizontally { width -> -width / 3 } + fadeIn(tween(220)))
+                                .togetherWith(slideOutHorizontally { width -> width / 3 } + fadeOut(tween(160)))
+                        }
                     },
-                    icon = { ResetArrowIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) }
-                )
-                MenuRow(
-                    title = "Copy Debug Info",
-                    description = "Version & current engine state",
-                    contentColor = menuContentColor,
-                    secondaryColor = menuSecondaryColor,
-                    isHovered = hoveredIndex == 1,
-                    onHoverChange = { hovering -> if (hovering) setHovered(1) else if (hoveredIndex == 1) setHovered(null) },
-                    globalTouchPosition = globalTouch,
-                    onClick = {
-                        closeMenuFromRow()
-                        copyDebugInfo()
-                    },
-                    icon = { CopyIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.6.dp) }
-                )
-                MenuRow(
-                    title = "About HyperBounce",
-                    description = "Credits and library versions",
-                    contentColor = menuContentColor,
-                    secondaryColor = menuSecondaryColor,
-                    isHovered = hoveredIndex == 2,
-                    onHoverChange = { hovering -> if (hovering) setHovered(2) else if (hoveredIndex == 2) setHovered(null) },
-                    globalTouchPosition = globalTouch,
-                    onClick = {
-                        closeMenuFromRow()
-                        onAbout()
-                    },
-                    icon = { InfoIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.6.dp) }
-                )
+                    label = "menuPageMorph"
+                ) { page ->
+                    Column(
+                        modifier = Modifier.width(IntrinsicSize.Max),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (page == MenuPage.Main) {
+                            MenuRow(
+                                title = "Restart Scoped Apps",
+                                description = "System UI, Launcher & Reboot",
+                                contentColor = menuContentColor,
+                                secondaryColor = menuSecondaryColor,
+                                isHovered = hoveredIndex == 0,
+                                onHoverChange = { hovering -> if (hovering) setHovered(0) else if (hoveredIndex == 0) setHovered(null) },
+                                globalTouchPosition = globalTouch,
+                                onClick = {
+                                    menuPage = MenuPage.RestartScopedApps
+                                },
+                                icon = { ResetArrowIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) },
+                                trailingIcon = { ChevronIcon(pointingLeft = false, size = 10.dp, strokeWidth = 2.dp, color = menuSecondaryColor) }
+                            )
+                            MenuRow(
+                                title = "Copy Debug Info",
+                                description = "Version & current engine state",
+                                contentColor = menuContentColor,
+                                secondaryColor = menuSecondaryColor,
+                                isHovered = hoveredIndex == 1,
+                                onHoverChange = { hovering -> if (hovering) setHovered(1) else if (hoveredIndex == 1) setHovered(null) },
+                                globalTouchPosition = globalTouch,
+                                onClick = {
+                                    closeMenuFromRow()
+                                    copyDebugInfo()
+                                },
+                                icon = { CopyIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.6.dp) }
+                            )
+                            MenuRow(
+                                title = "About HyperBounce",
+                                description = "Credits and library versions",
+                                contentColor = menuContentColor,
+                                secondaryColor = menuSecondaryColor,
+                                isHovered = hoveredIndex == 2,
+                                onHoverChange = { hovering -> if (hovering) setHovered(2) else if (hoveredIndex == 2) setHovered(null) },
+                                globalTouchPosition = globalTouch,
+                                onClick = {
+                                    closeMenuFromRow()
+                                    onAbout()
+                                },
+                                icon = { InfoIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.6.dp) }
+                            )
+                        } else {
+                            MenuRow(
+                                title = "Back",
+                                description = "Return to main menu",
+                                contentColor = menuContentColor,
+                                secondaryColor = menuSecondaryColor,
+                                isHovered = hoveredIndex == 0,
+                                onHoverChange = { hovering -> if (hovering) setHovered(0) else if (hoveredIndex == 0) setHovered(null) },
+                                globalTouchPosition = globalTouch,
+                                onClick = {
+                                    menuPage = MenuPage.Main
+                                },
+                                icon = { ChevronIcon(pointingLeft = true, size = 13.dp, strokeWidth = 2.2.dp, color = menuContentColor) }
+                            )
+                            MenuRow(
+                                title = "System UI",
+                                description = "Restart com.android.systemui",
+                                contentColor = menuContentColor,
+                                secondaryColor = menuSecondaryColor,
+                                isHovered = hoveredIndex == 1,
+                                onHoverChange = { hovering -> if (hovering) setHovered(1) else if (hoveredIndex == 1) setHovered(null) },
+                                globalTouchPosition = globalTouch,
+                                onClick = {
+                                    closeMenuFromRow()
+                                    RootUtils.restartSystemUI(context)
+                                },
+                                icon = { SlidersIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) }
+                            )
+                            MenuRow(
+                                title = "System Launcher",
+                                description = "Restart com.miui.home",
+                                contentColor = menuContentColor,
+                                secondaryColor = menuSecondaryColor,
+                                isHovered = hoveredIndex == 2,
+                                onHoverChange = { hovering -> if (hovering) setHovered(2) else if (hoveredIndex == 2) setHovered(null) },
+                                globalTouchPosition = globalTouch,
+                                onClick = {
+                                    closeMenuFromRow()
+                                    RootUtils.restartLauncher(context)
+                                },
+                                icon = { AppGridIcon(color = menuContentColor, size = 15.dp) }
+                            )
+                            MenuRow(
+                                title = "System Reboot",
+                                description = "Full device system reboot",
+                                contentColor = menuContentColor,
+                                secondaryColor = menuSecondaryColor,
+                                isHovered = hoveredIndex == 3,
+                                onHoverChange = { hovering -> if (hovering) setHovered(3) else if (hoveredIndex == 3) setHovered(null) },
+                                globalTouchPosition = globalTouch,
+                                onClick = {
+                                    closeMenuFromRow()
+                                    RootUtils.rebootDevice(context)
+                                },
+                                icon = { PowerIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) }
+                            )
+                        }
+                    }
+                }
             }
         }
         }

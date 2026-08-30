@@ -46,7 +46,6 @@ fun TuningScreen(
         colors = colors,
         backdrop = backdrop,
         repository = repository,
-        onReset = repository::resetToDefaults,
         onAbout = { onNavigate(Destination.About) }
     ) {
         SectionHeader("Features", colors)

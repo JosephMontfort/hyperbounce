@@ -54,7 +54,8 @@ fun MenuRow(
     onHoverChange: (Boolean) -> Unit,
     globalTouchPosition: Offset,
     onClick: () -> Unit,
-    icon: @Composable () -> Unit
+    icon: @Composable () -> Unit,
+    trailingIcon: (@Composable () -> Unit)? = null
 ) {
     var rowCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
@@ -68,14 +69,31 @@ fun MenuRow(
     val hoverAlpha by animateFloatAsState(if (isHovered) 0.1f else 0f, tween(150))
 
     Row(
-        modifier = Modifier.fillMaxWidth().onGloballyPositioned { rowCoords = it }.clip(RoundedCornerShape(14.dp)).clickable { onClick() }.background(contentColor.copy(alpha = hoverAlpha)).padding(horizontal = 10.dp, vertical = 6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .onGloballyPositioned { rowCoords = it }
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { onClick() }
+            .background(contentColor.copy(alpha = hoverAlpha))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) { icon() }
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(
+            modifier = Modifier.weight(1f, fill = false),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
             BasicText(title, style = TextStyle(contentColor, 15.sp, FontWeight.SemiBold))
             BasicText(description, style = TextStyle(secondaryColor, 12.sp), maxLines = 1)
+        }
+        if (trailingIcon != null) {
+            Box(
+                modifier = Modifier.size(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                trailingIcon()
+            }
         }
     }
 }

@@ -348,6 +348,18 @@ fun GlassEffectContainer(
     val animatedDragX by animateFloatAsState(dragOffset.x, spring(stiffness = 400f, dampingRatio = 0.6f))
     val animatedDragY by animateFloatAsState(dragOffset.y, spring(stiffness = 400f, dampingRatio = 0.6f))
 
+    // Smooth content morph animation for sub-page transitions inside expanded menu
+    val animatedContentWidth by animateFloatAsState(
+        targetValue = if (contentSize.width > 0f) contentSize.width else labelSize.width,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = 380f),
+        label = "menuContentWidth"
+    )
+    val animatedContentHeight by animateFloatAsState(
+        targetValue = if (contentSize.height > 0f) contentSize.height else labelSize.height,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = 380f),
+        label = "menuContentHeight"
+    )
+
     // Press illumination progress
     val isPressing = isPressed && animatableProgress.targetValue == 0f
     val buttonPressProgress by animateFloatAsState(if (isPressing) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 400f))
@@ -356,8 +368,11 @@ fun GlassEffectContainer(
         modifier = Modifier
             .layout { measurable, constraints ->
                 val p = animatableProgress.value
-                val widthDiff = (contentSize.width - labelSize.width).coerceAtLeast(0f)
-                val heightDiff = (contentSize.height - labelSize.height).coerceAtLeast(0f)
+                val activeContentW = if (p > 0.5f) animatedContentWidth else contentSize.width
+                val activeContentH = if (p > 0.5f) animatedContentHeight else contentSize.height
+
+                val widthDiff = (activeContentW - labelSize.width).coerceAtLeast(0f)
+                val heightDiff = (activeContentH - labelSize.height).coerceAtLeast(0f)
 
                 // Vertical Pill Morph (Height pops instantly, width follows softly)
                 val widthProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else (p * p)
@@ -368,10 +383,10 @@ fun GlassEffectContainer(
 
                 val placeable = measurable.measure(
                     constraints.copy(
-                        minWidth = currentWidthPx.toInt(),
-                        maxWidth = currentWidthPx.toInt(),
-                        minHeight = currentHeightPx.toInt(),
-                        maxHeight = currentHeightPx.toInt()
+                        minWidth = currentWidthPx.toInt().coerceAtLeast(0),
+                        maxWidth = currentWidthPx.toInt().coerceAtLeast(0),
+                        minHeight = currentHeightPx.toInt().coerceAtLeast(0),
+                        maxHeight = currentHeightPx.toInt().coerceAtLeast(0)
                     )
                 )
 

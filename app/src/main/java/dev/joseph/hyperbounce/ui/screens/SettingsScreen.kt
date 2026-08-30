@@ -37,7 +37,6 @@ fun SettingsScreen(
         colors = colors,
         backdrop = backdrop,
         repository = repository,
-        onReset = repository::resetToDefaults,
         onAbout = { onNavigate(Destination.About) }
     ) {
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
