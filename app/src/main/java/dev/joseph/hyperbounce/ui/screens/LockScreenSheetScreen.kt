@@ -38,140 +38,146 @@ fun LockScreenSheetScreen(
         restartAppSubtitle = "Restart com.android.systemui",
         onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartSystemUI(context) }
     ) { _ ->
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-            SettingsToggleRow(
-                title = "Lock Screen Sheet",
-                subtitle = if (sheet.enabled) "120Hz translation & AGSL active" else "Disabled (Stock)",
-                colors = colors,
-                iconTint = colors.accentBlue,
-                backdrop = backdrop,
-                checked = sheet.enabled,
-                onCheckedChange = sheet::setEnabled,
-                icon = { LockIcon(color = Color.White, size = 15.dp) }
-            )
+        item {
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "Lock Screen Sheet",
+                    subtitle = if (sheet.enabled) "120Hz translation & AGSL active" else "Disabled (Stock)",
+                    colors = colors,
+                    iconTint = colors.accentBlue,
+                    backdrop = backdrop,
+                    checked = sheet.enabled,
+                    onCheckedChange = sheet::setEnabled,
+                    icon = { LockIcon(color = Color.White, size = 15.dp) }
+                )
+            }
         }
 
-        SectionHeader("4-Sided AGSL Refraction Shader", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-            SettingsSliderRow(
-                title = "Border Width",
-                subtitle = "Thickness of specular card border",
-                colors = colors,
-                backdrop = backdrop,
-                value = sheet.borderWidth,
-                onValueChange = sheet::setBorderWidth,
-                valueRange = 0.5f..8.0f,
-                defaultValue = 2.5f,
-                valueLabel = { String.format(Locale.US, "%.1f dp", it) },
-                enabled = sheet.enabled
-            )
-            RowDivider(colors.separator)
-            SettingsSliderRow(
-                title = "Border Specular Alpha",
-                subtitle = "Opacity of specular card border",
-                colors = colors,
-                backdrop = backdrop,
-                value = sheet.borderAlpha,
-                onValueChange = sheet::setBorderAlpha,
-                valueRange = 0.0f..1.0f,
-                defaultValue = 0.47f,
-                valueLabel = { String.format(Locale.US, "%.2f", it) },
-                enabled = sheet.enabled
-            )
-            RowDivider(colors.separator)
-            SettingsSliderRow(
-                title = "Refraction Height",
-                subtitle = "Optical light bending boundary height",
-                colors = colors,
-                backdrop = backdrop,
-                value = sheet.refractionHeight,
-                onValueChange = sheet::setRefractionHeight,
-                valueRange = 0.0f..60.0f,
-                defaultValue = 24.0f,
-                valueLabel = { String.format(Locale.US, "%.1f dp", it) },
-                enabled = sheet.enabled
-            )
-            RowDivider(colors.separator)
-            SettingsSliderRow(
-                title = "Refraction Amount",
-                subtitle = "Strength of refraction distortion along sheet boundaries",
-                colors = colors,
-                backdrop = backdrop,
-                value = sheet.refractionAmount,
-                onValueChange = sheet::setRefractionAmount,
-                valueRange = 0.0f..80.0f,
-                defaultValue = 32.0f,
-                valueLabel = { String.format(Locale.US, "%.1f dp", it) },
-                enabled = sheet.enabled
-            )
-            RowDivider(colors.separator)
-            SettingsSliderRow(
-                title = "3D Depth Warp",
-                subtitle = "Spherical optical depth warp along boundary edges",
-                colors = colors,
-                backdrop = backdrop,
-                value = sheet.depthEffect,
-                onValueChange = sheet::setDepthEffect,
-                valueRange = 0.0f..0.40f,
-                defaultValue = 0.12f,
-                valueLabel = { String.format(Locale.US, "%.2f", it) },
-                enabled = sheet.enabled
-            )
+        item {
+            SectionHeader("4-Sided AGSL Refraction Shader", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsSliderRow(
+                    title = "Border Width",
+                    subtitle = "Thickness of specular card border",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.borderWidth,
+                    onValueChange = sheet::setBorderWidth,
+                    valueRange = 0.5f..8.0f,
+                    defaultValue = 2.5f,
+                    valueLabel = { String.format(Locale.US, "%.1f dp", it) },
+                    enabled = sheet.enabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Border Specular Alpha",
+                    subtitle = "Opacity of specular card border",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.borderAlpha,
+                    onValueChange = sheet::setBorderAlpha,
+                    valueRange = 0.0f..1.0f,
+                    defaultValue = 0.47f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = sheet.enabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Refraction Height",
+                    subtitle = "Optical light bending boundary height",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.refractionHeight,
+                    onValueChange = sheet::setRefractionHeight,
+                    valueRange = 0.0f..60.0f,
+                    defaultValue = 24.0f,
+                    valueLabel = { String.format(Locale.US, "%.1f dp", it) },
+                    enabled = sheet.enabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Refraction Amount",
+                    subtitle = "Strength of refraction distortion along sheet boundaries",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.refractionAmount,
+                    onValueChange = sheet::setRefractionAmount,
+                    valueRange = 0.0f..80.0f,
+                    defaultValue = 32.0f,
+                    valueLabel = { String.format(Locale.US, "%.1f dp", it) },
+                    enabled = sheet.enabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "3D Depth Warp",
+                    subtitle = "Spherical optical depth warp along boundary edges",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.depthEffect,
+                    onValueChange = sheet::setDepthEffect,
+                    valueRange = 0.0f..0.40f,
+                    defaultValue = 0.12f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = sheet.enabled
+                )
+            }
         }
 
-        SectionHeader("Home Indicator Pill & Glass Lip", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-            SettingsSliderRow(
-                title = "Home Indicator Width",
-                subtitle = "Horizontal width of home indicator pill",
-                colors = colors,
-                backdrop = backdrop,
-                value = sheet.pillWidth,
-                onValueChange = sheet::setPillWidth,
-                valueRange = 40.0f..280.0f,
-                defaultValue = 156.0f,
-                valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                enabled = sheet.enabled
-            )
-            RowDivider(colors.separator)
-            SettingsSliderRow(
-                title = "Home Indicator Height",
-                subtitle = "Vertical thickness of home indicator pill",
-                colors = colors,
-                backdrop = backdrop,
-                value = sheet.pillHeight,
-                onValueChange = sheet::setPillHeight,
-                valueRange = 2.0f..16.0f,
-                defaultValue = 6.0f,
-                valueLabel = { String.format(Locale.US, "%.1f dp", it) },
-                enabled = sheet.enabled
-            )
-            RowDivider(colors.separator)
-            SettingsSliderRow(
-                title = "Home Indicator Bottom Margin",
-                subtitle = "Distance above bottom screen edge",
-                colors = colors,
-                backdrop = backdrop,
-                value = sheet.pillBottomMargin,
-                onValueChange = sheet::setPillBottomMargin,
-                valueRange = 0.0f..35.0f,
-                defaultValue = 9.0f,
-                valueLabel = { String.format(Locale.US, "%.1f dp", it) },
-                enabled = sheet.enabled
-            )
-            RowDivider(colors.separator)
-            SettingsSliderRow(
-                title = "Bottom Glass Lip Height",
-                subtitle = "Height of bottom frosted glass lip",
-                colors = colors,
-                backdrop = backdrop,
-                value = sheet.lipHeight,
-                onValueChange = sheet::setLipHeight,
-                valueRange = 10.0f..70.0f,
-                defaultValue = 28.0f,
-                valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                enabled = sheet.enabled
-            )
+        item {
+            SectionHeader("Home Indicator Pill & Glass Lip", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsSliderRow(
+                    title = "Home Indicator Width",
+                    subtitle = "Horizontal width of home indicator pill",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.pillWidth,
+                    onValueChange = sheet::setPillWidth,
+                    valueRange = 40.0f..280.0f,
+                    defaultValue = 156.0f,
+                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
+                    enabled = sheet.enabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Home Indicator Height",
+                    subtitle = "Vertical thickness of home indicator pill",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.pillHeight,
+                    onValueChange = sheet::setPillHeight,
+                    valueRange = 2.0f..16.0f,
+                    defaultValue = 6.0f,
+                    valueLabel = { String.format(Locale.US, "%.1f dp", it) },
+                    enabled = sheet.enabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Home Indicator Bottom Margin",
+                    subtitle = "Distance above bottom screen edge",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.pillBottomMargin,
+                    onValueChange = sheet::setPillBottomMargin,
+                    valueRange = 0.0f..35.0f,
+                    defaultValue = 9.0f,
+                    valueLabel = { String.format(Locale.US, "%.1f dp", it) },
+                    enabled = sheet.enabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Bottom Glass Lip Height",
+                    subtitle = "Height of bottom frosted glass lip",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.lipHeight,
+                    onValueChange = sheet::setLipHeight,
+                    valueRange = 10.0f..70.0f,
+                    defaultValue = 28.0f,
+                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
+                    enabled = sheet.enabled
+                )
+            }
         }
     }
 }

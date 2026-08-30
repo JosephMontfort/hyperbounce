@@ -68,134 +68,144 @@ fun AppDetailScreen(
             dev.joseph.hyperbounce.ui.utils.RootUtils.restartApp(context, app.packageName, app.displayName)
         }
     ) { _ ->
-        NavBarPreview(
-            backdrop = backdrop,
-            accentColor = accentColor,
-            glassIntensity = s.glassIntensity,
-            containerOpacity = s.containerOpacity,
-            cornerRadiusDp = s.cornerRadius,
-            barHeightDp = s.barHeight,
-            tabWidthDp = s.tabWidth,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            SettingsToggleRow(
-                title = "Floating Nav Bar",
-                subtitle = if (s.enabled) "Liquid glass replaces the stock bar" else "Stock nav bar restored",
-                colors = colors,
-                iconTint = accentColor.copy(alpha = 0.85f),
+        item {
+            NavBarPreview(
                 backdrop = backdrop,
-                checked = s.enabled,
-                onCheckedChange = holder::setEnabled,
-                icon = { PowerIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
+                accentColor = accentColor,
+                glassIntensity = s.glassIntensity,
+                containerOpacity = s.containerOpacity,
+                cornerRadiusDp = s.cornerRadius,
+                barHeightDp = s.barHeight,
+                tabWidthDp = s.tabWidth,
+                modifier = Modifier.padding(horizontal = 16.dp)
             )
         }
 
-        SectionHeader("Glass Effect", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-            SettingsSliderRow(
-                title = "Glass Intensity",
-                subtitle = "Overall refractive clarity and blur multiplier",
-                colors = colors,
-                backdrop = backdrop,
-                value = s.glassIntensity,
-                onValueChange = holder::setGlassIntensity,
-                valueRange = 0.4f..2.0f,
-                defaultValue = 1.0f,
-                valueLabel = { "${(it * 100).roundToInt()}%" },
-                enabled = s.enabled
-            )
-            RowDivider(colors.separator, insetStart = 16.dp)
-            SettingsSliderRow(
-                title = "Container Opacity",
-                subtitle = "Translucent background tint opacity",
-                colors = colors,
-                backdrop = backdrop,
-                value = s.containerOpacity,
-                onValueChange = holder::setContainerOpacity,
-                valueRange = 0f..1f,
-                defaultValue = 0.4f,
-                valueLabel = { "${(it * 100).roundToInt()}%" },
-                enabled = s.enabled
-            )
-        }
-
-        SectionHeader("Shape & Size", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-            SettingsSliderRow(
-                title = "Corner Radius",
-                subtitle = "Corner rounding radius for floating bar",
-                colors = colors,
-                backdrop = backdrop,
-                value = s.cornerRadius,
-                onValueChange = holder::setCornerRadius,
-                valueRange = 12f..40f,
-                defaultValue = defaultCornerRadius,
-                valueLabel = { "${it.roundToInt()}dp" },
-                enabled = s.enabled
-            )
-            RowDivider(colors.separator, insetStart = 16.dp)
-            SettingsSliderRow(
-                title = "Bar Height",
-                subtitle = "Vertical height of floating pill container",
-                colors = colors,
-                backdrop = backdrop,
-                value = s.barHeight,
-                onValueChange = holder::setBarHeight,
-                valueRange = 48f..88f,
-                defaultValue = defaultBarHeight,
-                valueLabel = { "${it.roundToInt()}dp" },
-                enabled = s.enabled
-            )
-            RowDivider(colors.separator, insetStart = 16.dp)
-            SettingsSliderRow(
-                title = "Tab Width",
-                subtitle = "Width allocated per tab icon",
-                colors = colors,
-                backdrop = backdrop,
-                value = s.tabWidth,
-                onValueChange = holder::setTabWidth,
-                valueRange = 48f..88f,
-                defaultValue = defaultTabWidth,
-                valueLabel = { "${it.roundToInt()}dp" },
-                enabled = s.enabled
-            )
-        }
-
-        SectionHeader("Appearance", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                BasicText("Theme", style = HyperBounceType.body.copy(color = colors.label))
-                DropdownPicker(
-                    options = listOf("System", "Light", "Dark"),
-                    selectedIndex = ThemeMode.entries.indexOf(s.themeMode),
-                    onSelect = { holder.setThemeMode(ThemeMode.entries[it]) },
-                    backdrop = backdrop
+        item {
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                SettingsToggleRow(
+                    title = "Floating Nav Bar",
+                    subtitle = if (s.enabled) "Liquid glass replaces the stock bar" else "Stock nav bar restored",
+                    colors = colors,
+                    iconTint = accentColor.copy(alpha = 0.85f),
+                    backdrop = backdrop,
+                    checked = s.enabled,
+                    onCheckedChange = holder::setEnabled,
+                    icon = { PowerIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
                 )
             }
-            RowDivider(colors.separator, insetStart = 16.dp)
+        }
 
-            BasicText(
-                "Accent Color",
-                modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 14.dp, bottom = 10.dp),
-                style = HyperBounceType.footnote.copy(color = colors.secondaryLabel)
-            )
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                AccentPreset.entries.forEach { preset ->
-                    AccentSwatch(
-                        preset = preset,
-                        colors = colors,
-                        selected = preset == s.accent,
-                        onClick = { holder.setAccent(preset) }
+        item {
+            SectionHeader("Glass Effect", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsSliderRow(
+                    title = "Glass Intensity",
+                    subtitle = "Overall refractive clarity and blur multiplier",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.glassIntensity,
+                    onValueChange = holder::setGlassIntensity,
+                    valueRange = 0.4f..2.0f,
+                    defaultValue = 1.0f,
+                    valueLabel = { "${(it * 100).roundToInt()}%" },
+                    enabled = s.enabled
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsSliderRow(
+                    title = "Container Opacity",
+                    subtitle = "Translucent background tint opacity",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.containerOpacity,
+                    onValueChange = holder::setContainerOpacity,
+                    valueRange = 0f..1f,
+                    defaultValue = 0.4f,
+                    valueLabel = { "${(it * 100).roundToInt()}%" },
+                    enabled = s.enabled
+                )
+            }
+        }
+
+        item {
+            SectionHeader("Shape & Size", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsSliderRow(
+                    title = "Corner Radius",
+                    subtitle = "Corner rounding radius for floating bar",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.cornerRadius,
+                    onValueChange = holder::setCornerRadius,
+                    valueRange = 12f..40f,
+                    defaultValue = defaultCornerRadius,
+                    valueLabel = { "${it.roundToInt()}dp" },
+                    enabled = s.enabled
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsSliderRow(
+                    title = "Bar Height",
+                    subtitle = "Vertical height of floating pill container",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.barHeight,
+                    onValueChange = holder::setBarHeight,
+                    valueRange = 48f..88f,
+                    defaultValue = defaultBarHeight,
+                    valueLabel = { "${it.roundToInt()}dp" },
+                    enabled = s.enabled
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsSliderRow(
+                    title = "Tab Width",
+                    subtitle = "Width allocated per tab icon",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.tabWidth,
+                    onValueChange = holder::setTabWidth,
+                    valueRange = 48f..88f,
+                    defaultValue = defaultTabWidth,
+                    valueLabel = { "${it.roundToInt()}dp" },
+                    enabled = s.enabled
+                )
+            }
+        }
+
+        item {
+            SectionHeader("Appearance", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BasicText("Theme", style = HyperBounceType.body.copy(color = colors.label))
+                    DropdownPicker(
+                        options = listOf("System", "Light", "Dark"),
+                        selectedIndex = ThemeMode.entries.indexOf(s.themeMode),
+                        onSelect = { holder.setThemeMode(ThemeMode.entries[it]) },
+                        backdrop = backdrop
                     )
+                }
+                RowDivider(colors.separator, insetStart = 16.dp)
+
+                BasicText(
+                    "Accent Color",
+                    modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 14.dp, bottom = 10.dp),
+                    style = HyperBounceType.footnote.copy(color = colors.secondaryLabel)
+                )
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    AccentPreset.entries.forEach { preset ->
+                        AccentSwatch(
+                            preset = preset,
+                            colors = colors,
+                            selected = preset == s.accent,
+                            onClick = { holder.setAccent(preset) }
+                        )
+                    }
                 }
             }
         }

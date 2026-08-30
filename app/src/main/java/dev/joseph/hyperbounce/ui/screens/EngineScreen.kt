@@ -56,40 +56,46 @@ fun EngineScreen(
     ) { contentBackdrop ->
         val combinedBackdrop = rememberCombinedBackdrop(backdrop, contentBackdrop)
 
-        SectionHeader("Rendering Engine", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-            EngineRow(
-                title = "Toggle Switches",
+        item {
+            SectionHeader("Rendering Engine", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                EngineRow(
+                    title = "Toggle Switches",
+                    colors = colors,
+                    backdrop = combinedBackdrop,
+                    selected = repository.toggleEngine,
+                    onSelect = repository::setToggleEngine
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                EngineRow(
+                    title = "Sliders",
+                    colors = colors,
+                    backdrop = combinedBackdrop,
+                    selected = repository.sliderEngine,
+                    onSelect = repository::setSliderEngine
+                )
+            }
+        }
+
+        item {
+            GlassFeelSection(
+                sectionTitle = "Toggle Glass",
+                holder = repository.toggleGlass,
                 colors = colors,
-                backdrop = combinedBackdrop,
-                selected = repository.toggleEngine,
-                onSelect = repository::setToggleEngine
-            )
-            RowDivider(colors.separator, insetStart = 16.dp)
-            EngineRow(
-                title = "Sliders",
-                colors = colors,
-                backdrop = combinedBackdrop,
-                selected = repository.sliderEngine,
-                onSelect = repository::setSliderEngine
+                backdrop = backdrop,
+                enabled = repository.toggleEngine == RenderEngine.LiquidGlass
             )
         }
 
-        GlassFeelSection(
-            sectionTitle = "Toggle Glass",
-            holder = repository.toggleGlass,
-            colors = colors,
-            backdrop = backdrop,
-            enabled = repository.toggleEngine == RenderEngine.LiquidGlass
-        )
-
-        GlassFeelSection(
-            sectionTitle = "Slider Glass",
-            holder = repository.sliderGlass,
-            colors = colors,
-            backdrop = backdrop,
-            enabled = repository.sliderEngine == RenderEngine.LiquidGlass
-        )
+        item {
+            GlassFeelSection(
+                sectionTitle = "Slider Glass",
+                holder = repository.sliderGlass,
+                colors = colors,
+                backdrop = backdrop,
+                enabled = repository.sliderEngine == RenderEngine.LiquidGlass
+            )
+        }
     }
 }
 

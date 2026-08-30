@@ -48,19 +48,21 @@ fun AppsListScreen(
         backdrop = backdrop,
         onBack = onBack
     ) { contentBackdrop ->
-        SectionHeader("Apps", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-            NavApp.entries.forEachIndexed { index, app ->
-                SettingsNavRow(
-                    title = app.displayName,
-                    subtitle = navSummary(repository, app),
-                    colors = colors,
-                    iconTint = appTint(app),
-                    onClick = { onNavigate(Destination.AppDetail(app)) },
-                    icon = { AppIcon(app) }
-                )
-                if (index != NavApp.entries.lastIndex) {
-                    RowDivider(colors.separator)
+        item {
+            SectionHeader("Apps", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                NavApp.entries.forEachIndexed { index, app ->
+                    SettingsNavRow(
+                        title = app.displayName,
+                        subtitle = navSummary(repository, app),
+                        colors = colors,
+                        iconTint = appTint(app),
+                        onClick = { onNavigate(Destination.AppDetail(app)) },
+                        icon = { AppIcon(app) }
+                    )
+                    if (index != NavApp.entries.lastIndex) {
+                        RowDivider(colors.separator)
+                    }
                 }
             }
         }

@@ -27,9 +27,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -72,10 +73,15 @@ fun ScreenScaffold(
     restartAppTitle: String? = null,
     restartAppSubtitle: String? = null,
     onRestartApp: (() -> Unit)? = null,
-    content: @Composable ColumnScope.(contentBackdrop: Backdrop) -> Unit
+    content: LazyListScope.(contentBackdrop: Backdrop) -> Unit
 ) {
-    val scrollState = rememberScrollState()
-    val collapseProgress = (scrollState.value / 220f).fastCoerceIn(0f, 1f)
+    val lazyListState = rememberLazyListState()
+    val collapseProgress by remember {
+        derivedStateOf {
+            if (lazyListState.firstVisibleItemIndex > 0) 1f
+            else (lazyListState.firstVisibleItemScrollOffset / 220f).fastCoerceIn(0f, 1f)
+        }
+    }
     // A separate, local backdrop tagging just this screen's scrolling content — kept apart
     // from the app-wide `backdrop` (which the toggles/sliders/menus sample) so the
     // progressive blur below reflects the actual list content passing underneath it, not
@@ -94,36 +100,40 @@ fun ScreenScaffold(
 
     Box(Modifier.fillMaxSize()) {
         DropdownOverlayHost {
-            Column(
-                Modifier
+            LazyColumn(
+                modifier = Modifier
                     .fillMaxSize()
                     .layerBackdrop(contentBackdrop)
-                    .safeDrawingPadding()
-                    .verticalScroll(scrollState)
+                    .safeDrawingPadding(),
+                state = lazyListState
             ) {
-                Spacer(Modifier.height(64.dp))
-                BasicText(
-                    title,
-                    modifier = Modifier
-                        .padding(horizontal = 20.dp)
-                        .graphicsLayer {
-                            alpha = 1f - collapseProgress * 0.85f
-                            translationY = -collapseProgress * 6.dp.toPx()
-                        },
-                    style = HyperBounceType.largeTitle.copy(color = colors.label)
-                )
-                if (subtitle != null) {
+                item {
+                    Spacer(Modifier.height(64.dp))
                     BasicText(
-                        subtitle,
+                        title,
                         modifier = Modifier
-                            .padding(horizontal = 20.dp, vertical = 4.dp)
-                            .graphicsLayer { alpha = 1f - collapseProgress },
-                        style = HyperBounceType.subhead.copy(color = colors.secondaryLabel)
+                            .padding(horizontal = 20.dp)
+                            .graphicsLayer {
+                                alpha = 1f - collapseProgress * 0.85f
+                                translationY = -collapseProgress * 6.dp.toPx()
+                            },
+                        style = HyperBounceType.largeTitle.copy(color = colors.label)
                     )
+                    if (subtitle != null) {
+                        BasicText(
+                            subtitle,
+                            modifier = Modifier
+                                .padding(horizontal = 20.dp, vertical = 4.dp)
+                                .graphicsLayer { alpha = 1f - collapseProgress },
+                            style = HyperBounceType.subhead.copy(color = colors.secondaryLabel)
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
                 }
-                Spacer(Modifier.height(16.dp))
                 content(contentBackdrop)
-                Spacer(Modifier.height(56.dp))
+                item {
+                    Spacer(Modifier.height(56.dp))
+                }
             }
 
             ProgressiveBlurHeader(
