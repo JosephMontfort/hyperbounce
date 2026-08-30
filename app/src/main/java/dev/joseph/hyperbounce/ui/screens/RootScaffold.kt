@@ -294,6 +294,10 @@ fun RootScaffold(
                     }
                 }
             ) { globalTouch, closeMenuFromRow, hoveredIndex, setHovered ->
+                androidx.compose.runtime.LaunchedEffect(menuPage) {
+                    setHovered(null)
+                }
+
                 var mainPageWidth by remember { mutableStateOf(0f) }
                 var mainPageHeight by remember { mutableStateOf(0f) }
                 var subPageWidth by remember { mutableStateOf(0f) }
@@ -337,10 +341,12 @@ fun RootScaffold(
                             onHoverChange = { hovering -> if (!isSubmenu) { if (hovering) setHovered(0) else if (hoveredIndex == 0) setHovered(null) } },
                             globalTouchPosition = if (!isSubmenu) globalTouch else Offset.Unspecified,
                             onClick = {
+                                setHovered(null)
                                 menuPage = MenuPage.RestartScopedApps
                             },
                             icon = { ResetArrowIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) },
-                            trailingIcon = { ChevronIcon(pointingLeft = false, size = 10.dp, strokeWidth = 2.dp, color = menuSecondaryColor) }
+                            trailingIcon = { ChevronIcon(pointingLeft = false, size = 10.dp, strokeWidth = 2.dp, color = menuSecondaryColor) },
+                            enabled = !isSubmenu
                         )
                         MenuRow(
                             title = "Copy Debug Info",
@@ -354,7 +360,8 @@ fun RootScaffold(
                                 closeMenuFromRow()
                                 copyDebugInfo()
                             },
-                            icon = { CopyIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.6.dp) }
+                            icon = { CopyIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.6.dp) },
+                            enabled = !isSubmenu
                         )
                         MenuRow(
                             title = "About HyperBounce",
@@ -368,7 +375,8 @@ fun RootScaffold(
                                 closeMenuFromRow()
                                 onAbout()
                             },
-                            icon = { InfoIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.6.dp) }
+                            icon = { InfoIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.6.dp) },
+                            enabled = !isSubmenu
                         )
                     }
 
@@ -397,9 +405,11 @@ fun RootScaffold(
                             onHoverChange = { hovering -> if (isSubmenu) { if (hovering) setHovered(0) else if (hoveredIndex == 0) setHovered(null) } },
                             globalTouchPosition = if (isSubmenu) globalTouch else Offset.Unspecified,
                             onClick = {
+                                setHovered(null)
                                 menuPage = MenuPage.Main
                             },
-                            icon = { ChevronIcon(pointingLeft = true, size = 13.dp, strokeWidth = 2.2.dp, color = menuContentColor) }
+                            icon = { ChevronIcon(pointingLeft = true, size = 13.dp, strokeWidth = 2.2.dp, color = menuContentColor) },
+                            enabled = isSubmenu
                         )
                         MenuRow(
                             title = "System UI",
@@ -413,7 +423,8 @@ fun RootScaffold(
                                 closeMenuFromRow()
                                 RootUtils.restartSystemUI(context)
                             },
-                            icon = { SlidersIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) }
+                            icon = { SlidersIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) },
+                            enabled = isSubmenu
                         )
                         MenuRow(
                             title = "System Launcher",
@@ -427,7 +438,8 @@ fun RootScaffold(
                                 closeMenuFromRow()
                                 RootUtils.restartLauncher(context)
                             },
-                            icon = { AppGridIcon(color = menuContentColor, size = 15.dp) }
+                            icon = { AppGridIcon(color = menuContentColor, size = 15.dp) },
+                            enabled = isSubmenu
                         )
                         MenuRow(
                             title = "System Reboot",
@@ -441,7 +453,8 @@ fun RootScaffold(
                                 closeMenuFromRow()
                                 RootUtils.rebootDevice(context)
                             },
-                            icon = { PowerIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) }
+                            icon = { PowerIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) },
+                            enabled = isSubmenu
                         )
                     }
                 }

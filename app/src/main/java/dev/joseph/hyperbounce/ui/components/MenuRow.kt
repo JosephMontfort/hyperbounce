@@ -55,25 +55,26 @@ fun MenuRow(
     globalTouchPosition: Offset,
     onClick: () -> Unit,
     icon: @Composable () -> Unit,
-    trailingIcon: (@Composable () -> Unit)? = null
+    trailingIcon: (@Composable () -> Unit)? = null,
+    enabled: Boolean = true
 ) {
     var rowCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
-    val contains = remember(globalTouchPosition, rowCoords) {
-        if (globalTouchPosition.isUnspecified || rowCoords == null) false
+    val contains = remember(globalTouchPosition, rowCoords, enabled) {
+        if (!enabled || globalTouchPosition.isUnspecified || rowCoords == null) false
         else rowCoords!!.boundsInWindow().contains(globalTouchPosition)
     }
 
     LaunchedEffect(contains) { onHoverChange(contains) }
 
-    val hoverAlpha by animateFloatAsState(if (isHovered) 0.1f else 0f, tween(150))
+    val hoverAlpha by animateFloatAsState(if (isHovered && enabled) 0.1f else 0f, tween(150))
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .onGloballyPositioned { rowCoords = it }
             .clip(RoundedCornerShape(14.dp))
-            .clickable { onClick() }
+            .clickable(enabled = enabled) { onClick() }
             .background(contentColor.copy(alpha = hoverAlpha))
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -294,7 +294,7 @@ fun ExpandableGlassMenu(
 
                                 dragOffset = Offset.Zero
                                 globalTouchPosition = Offset.Unspecified
-                                if (animatableProgress.targetValue == 0f) hoveredIndex = null
+                                hoveredIndex = null
                             }
                         },
                     contentAlignment = Alignment.Center
