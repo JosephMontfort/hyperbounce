@@ -1449,7 +1449,7 @@ object ControlCenterHook {
 
                                                         try {
                                                             val modeClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController\$Mode", false, classLoader)
-                                                            val currentMode = if (isEdit) java.lang.Enum.valueOf(modeClass as Class<Enum<*>>, "EDIT") else java.lang.Enum.valueOf(modeClass as Class<Enum<*>>, "NORMAL")
+                                                            val currentMode = modeClass.getMethod("valueOf", String::class.java).invoke(null, if (isEdit) "EDIT" else "NORMAL")
                                                             val updateModeMethod = childRecord.javaClass.getMethod("updateMode", modeClass, Boolean::class.javaPrimitiveType)
                                                             updateModeMethod.invoke(childRecord, currentMode, false)
                                                         } catch (t: Throwable) {}
