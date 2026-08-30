@@ -163,7 +163,7 @@ fun ExpandableGlassMenu(
     // gesture (not a plain tap on the row — that's handled by MenuRow's own onClick).
     // Called just before the menu closes, with the hovered row's index. Default no-op so
     // existing callers that only want tap-to-select keep compiling unchanged.
-    onRowSelected: (index: Int) -> Unit = {},
+    onRowSelected: (index: Int) -> Boolean = { true },
     label: @Composable () -> Unit,
     content: @Composable (globalTouchPosition: Offset, closeMenu: () -> Unit, hoveredIndex: Int?, setHovered: (Int?) -> Unit) -> Unit
 ) {
@@ -282,14 +282,11 @@ fun ExpandableGlassMenu(
                                     val target = if (isExpanded) 0f else 1f
                                     animationScope.launch { animatableProgress.animateTo(target, animationPreset.getSpec(isClosing = target == 0f, speedMultiplier = animationSpeedMultiplier)) }
                                 } else if (isSimpleDrag || isLongPress) {
-                                    // Deliberately not gated on the pre-gesture `isExpanded` value: a
-                                    // single continuous long-press-then-drag-then-release starting from
-                                    // the closed state must still be able to select whatever row the
-                                    // finger was over when it lifted, not just a drag that started on an
-                                    // already-open menu.
                                     if (finalHoveredIndex != null) {
-                                        onRowSelected(finalHoveredIndex)
-                                        closeMenu()
+                                        val shouldClose = onRowSelected(finalHoveredIndex)
+                                        if (shouldClose) {
+                                            closeMenu()
+                                        }
                                     } else if (dragOffset.getDistance() > 20f) {
                                         closeMenu()
                                     }
@@ -304,9 +301,11 @@ fun ExpandableGlassMenu(
                 ) { label() }
             },
             content = {
-                Column(
-                    modifier = Modifier.width(IntrinsicSize.Max).onSizeChanged { if (it.width > 0 && it.height > 0) contentMeasuredSize = it.toSize() }.padding(10f.dp),
-                    verticalArrangement = Arrangement.spacedBy(12f.dp)
+                Box(
+                    modifier = Modifier
+                        .width(IntrinsicSize.Max)
+                        .onSizeChanged { if (it.width > 0 && it.height > 0) contentMeasuredSize = it.toSize() }
+                        .padding(10f.dp)
                 ) {
                     content(globalTouchPosition, closeMenu, hoveredIndex, setHovered)
                 }
