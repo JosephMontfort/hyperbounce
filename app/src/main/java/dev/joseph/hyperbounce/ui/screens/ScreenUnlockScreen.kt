@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.components.GlassCard
+import dev.joseph.hyperbounce.ui.components.LockIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
@@ -27,6 +28,7 @@ import dev.joseph.hyperbounce.ui.components.SubpageScaffold
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
+import java.util.Locale
 
 @Composable
 fun ScreenUnlockScreen(
@@ -49,9 +51,12 @@ fun ScreenUnlockScreen(
             SettingsToggleRow(
                 title = "Enable Unlock Kinetics",
                 subtitle = "Custom spring physics on MIUI Launcher when unlocking",
-                checked = unlock.enabled,
                 colors = colors,
-                onCheckedChange = unlock::setEnabled
+                iconTint = colors.accentPurple,
+                backdrop = backdrop,
+                checked = unlock.enabled,
+                onCheckedChange = unlock::setEnabled,
+                icon = { LockIcon(color = Color.White, size = 15.dp) }
             )
         }
         SectionFooter(
@@ -87,24 +92,26 @@ fun ScreenUnlockScreen(
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Grid Columns",
-                subtitle = "${unlock.gridColumns} columns",
-                value = unlock.gridColumns.toFloat(),
-                valueRange = 2f..8f,
-                steps = 5,
-                valueFormat = "%.0f",
+                subtitle = "Column detection on home screen",
                 colors = colors,
-                onValueChange = { unlock.setGridColumns(it.toInt()) }
+                backdrop = backdrop,
+                value = unlock.gridColumns.toFloat(),
+                onValueChange = { unlock.setGridColumns(it.toInt()) },
+                valueRange = 2f..8f,
+                valueLabel = { String.format(Locale.US, "%.0f cols", it) },
+                enabled = unlock.enabled
             )
             RowDivider(colors.separator)
             SettingsSliderRow(
                 title = "Grid Rows",
-                subtitle = "${unlock.gridRows} rows",
-                value = unlock.gridRows.toFloat(),
-                valueRange = 3f..12f,
-                steps = 8,
-                valueFormat = "%.0f",
+                subtitle = "Row detection on home screen",
                 colors = colors,
-                onValueChange = { unlock.setGridRows(it.toInt()) }
+                backdrop = backdrop,
+                value = unlock.gridRows.toFloat(),
+                onValueChange = { unlock.setGridRows(it.toInt()) },
+                valueRange = 3f..12f,
+                valueLabel = { String.format(Locale.US, "%.0f rows", it) },
+                enabled = unlock.enabled
             )
         }
         SectionFooter("Configures grid size for column and row detection.", colors)
@@ -115,64 +122,85 @@ fun ScreenUnlockScreen(
                 SettingsSliderRow(
                     title = "Center Damping",
                     subtitle = "Lower = rubber-band bouncy | Higher = firm",
-                    value = unlock.centerDamping,
-                    valueRange = 0.1f..1.0f,
                     colors = colors,
-                    onValueChange = unlock::setCenterDamping
+                    backdrop = backdrop,
+                    value = unlock.centerDamping,
+                    onValueChange = unlock::setCenterDamping,
+                    valueRange = 0.1f..1.0f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = unlock.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Center Response",
                     subtitle = "Lower = snaps faster | Higher = floats",
-                    value = unlock.centerResponse,
-                    valueRange = 0.1f..1.5f,
                     colors = colors,
-                    onValueChange = unlock::setCenterResponse
+                    backdrop = backdrop,
+                    value = unlock.centerResponse,
+                    onValueChange = unlock::setCenterResponse,
+                    valueRange = 0.1f..1.5f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = unlock.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Edge Damping Drop",
                     subtitle = "Higher = edges become more bouncy than center",
-                    value = unlock.edgeDampingDrop,
-                    valueRange = 0.0f..0.5f,
                     colors = colors,
-                    onValueChange = unlock::setEdgeDampingDrop
+                    backdrop = backdrop,
+                    value = unlock.edgeDampingDrop,
+                    onValueChange = unlock::setEdgeDampingDrop,
+                    valueRange = 0.0f..0.5f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = unlock.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Edge Response Delay",
                     subtitle = "Higher = outer edges lag behind center",
-                    value = unlock.edgeResponseDelay,
-                    valueRange = 0.0f..1.0f,
                     colors = colors,
-                    onValueChange = unlock::setEdgeResponseDelay
+                    backdrop = backdrop,
+                    value = unlock.edgeResponseDelay,
+                    onValueChange = unlock::setEdgeResponseDelay,
+                    valueRange = 0.0f..1.0f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = unlock.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Z-Depth Scale",
                     subtitle = "Starting 3D depth multiplier",
-                    value = unlock.zDepthMultiplier,
-                    valueRange = 1.0f..4.0f,
                     colors = colors,
-                    onValueChange = unlock::setZDepthMultiplier
+                    backdrop = backdrop,
+                    value = unlock.zDepthMultiplier,
+                    onValueChange = unlock::setZDepthMultiplier,
+                    valueRange = 1.0f..4.0f,
+                    valueLabel = { String.format(Locale.US, "%.2fx", it) },
+                    enabled = unlock.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Dock Damping",
                     subtitle = "Damping for dock view and indicators",
-                    value = unlock.dockDamping,
-                    valueRange = 0.1f..1.0f,
                     colors = colors,
-                    onValueChange = unlock::setDockDamping
+                    backdrop = backdrop,
+                    value = unlock.dockDamping,
+                    onValueChange = unlock::setDockDamping,
+                    valueRange = 0.1f..1.0f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = unlock.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Dock Response",
                     subtitle = "Response for dock view and indicators",
-                    value = unlock.dockResponse,
-                    valueRange = 0.1f..1.5f,
                     colors = colors,
-                    onValueChange = unlock::setDockResponse
+                    backdrop = backdrop,
+                    value = unlock.dockResponse,
+                    onValueChange = unlock::setDockResponse,
+                    valueRange = 0.1f..1.5f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = unlock.enabled
                 )
             }
             SectionFooter("Radial dispersion calculates optical distance from screen center (0.42 Y).", colors)
@@ -182,38 +210,49 @@ fun ScreenUnlockScreen(
                 SettingsSliderRow(
                     title = "Global Anim Duration",
                     subtitle = "Lower = faster animation | Higher = slower settling",
-                    value = unlock.durationScale,
-                    valueRange = 0.1f..3.0f,
                     colors = colors,
-                    onValueChange = unlock::setDurationScale
+                    backdrop = backdrop,
+                    value = unlock.durationScale,
+                    onValueChange = unlock::setDurationScale,
+                    valueRange = 0.1f..3.0f,
+                    valueLabel = { String.format(Locale.US, "%.2fx", it) },
+                    enabled = unlock.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Velocity Impact",
                     subtitle = "Coupling between swipe-up speed and kinetic bounce",
-                    value = unlock.velocityInfluence,
-                    valueRange = 0.0f..2.0f,
                     colors = colors,
-                    onValueChange = unlock::setVelocityInfluence
+                    backdrop = backdrop,
+                    value = unlock.velocityInfluence,
+                    onValueChange = unlock::setVelocityInfluence,
+                    valueRange = 0.0f..2.0f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = unlock.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Max Swipe Normalizer",
                     subtitle = "Velocity ceiling for maximum bounce scaling",
-                    value = unlock.maxVelocity,
-                    valueRange = 5000f..30000f,
-                    valueFormat = "%.0f px/s",
                     colors = colors,
-                    onValueChange = unlock::setMaxVelocity
+                    backdrop = backdrop,
+                    value = unlock.maxVelocity,
+                    onValueChange = unlock::setMaxVelocity,
+                    valueRange = 5000f..30000f,
+                    valueLabel = { String.format(Locale.US, "%.0f px/s", it) },
+                    enabled = unlock.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Resting Damping",
                     subtitle = "Baseline damping when settling",
-                    value = unlock.cascadeDamping,
-                    valueRange = 0.5f..1.0f,
                     colors = colors,
-                    onValueChange = unlock::setCascadeDamping
+                    backdrop = backdrop,
+                    value = unlock.cascadeDamping,
+                    onValueChange = unlock::setCascadeDamping,
+                    valueRange = 0.5f..1.0f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = unlock.enabled
                 )
             }
             SectionFooter("Velocity influence dynamically scales row spring properties based on flick speed.", colors)
@@ -223,29 +262,37 @@ fun ScreenUnlockScreen(
                 SettingsSliderRow(
                     title = "Dock Damping",
                     subtitle = "Lower = bouncier dock | Higher = stiffer dock",
-                    value = unlock.kineticDockDamping,
-                    valueRange = 0.1f..1.0f,
                     colors = colors,
-                    onValueChange = unlock::setKineticDockDamping
+                    backdrop = backdrop,
+                    value = unlock.kineticDockDamping,
+                    onValueChange = unlock::setKineticDockDamping,
+                    valueRange = 0.1f..1.0f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = unlock.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Dock Response",
                     subtitle = "Lower = snaps faster | Higher = floats into place",
-                    value = unlock.kineticDockResponse,
-                    valueRange = 0.1f..1.5f,
                     colors = colors,
-                    onValueChange = unlock::setKineticDockResponse
+                    backdrop = backdrop,
+                    value = unlock.kineticDockResponse,
+                    onValueChange = unlock::setKineticDockResponse,
+                    valueRange = 0.1f..1.5f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = unlock.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Dock Z-Depth",
                     subtitle = "Starting 3D perspective depth for dock",
-                    value = unlock.kineticDockZDepth,
-                    valueRange = 0f..4000f,
-                    valueFormat = "%.0f dp",
                     colors = colors,
-                    onValueChange = unlock::setKineticDockZDepth
+                    backdrop = backdrop,
+                    value = unlock.kineticDockZDepth,
+                    onValueChange = unlock::setKineticDockZDepth,
+                    valueRange = 0f..4000f,
+                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
+                    enabled = unlock.enabled
                 )
             }
             SectionFooter("Dedicated motion curve for the bottom dock bar and page indicator.", colors)
@@ -260,11 +307,13 @@ fun ScreenUnlockScreen(
                     SettingsSliderRow(
                         title = "Row $r Z-Depth",
                         subtitle = "Starting 3D perspective depth",
-                        value = currentZ,
-                        valueRange = 100f..4000f,
-                        valueFormat = "%.0f dp",
                         colors = colors,
-                        onValueChange = { unlock.setRowZ(r, it) }
+                        backdrop = backdrop,
+                        value = currentZ,
+                        onValueChange = { unlock.setRowZ(r, it) },
+                        valueRange = 100f..4000f,
+                        valueLabel = { String.format(Locale.US, "%.0f dp", it) },
+                        enabled = unlock.enabled
                     )
                 }
             }
@@ -279,19 +328,25 @@ fun ScreenUnlockScreen(
                     SettingsSliderRow(
                         title = "Row $r Center Bounce",
                         subtitle = "Overshoot for inner columns",
-                        value = cBounce,
-                        valueRange = 0.0f..1.0f,
                         colors = colors,
-                        onValueChange = { unlock.setRowCenterBounce(r, it) }
+                        backdrop = backdrop,
+                        value = cBounce,
+                        onValueChange = { unlock.setRowCenterBounce(r, it) },
+                        valueRange = 0.0f..1.0f,
+                        valueLabel = { String.format(Locale.US, "%.2f", it) },
+                        enabled = unlock.enabled
                     )
                     RowDivider(colors.separator)
                     SettingsSliderRow(
                         title = "Row $r Outer Bounce",
                         subtitle = "Overshoot for outer columns",
-                        value = oBounce,
-                        valueRange = 0.0f..1.0f,
                         colors = colors,
-                        onValueChange = { unlock.setRowOuterBounce(r, it) }
+                        backdrop = backdrop,
+                        value = oBounce,
+                        onValueChange = { unlock.setRowOuterBounce(r, it) },
+                        valueRange = 0.0f..1.0f,
+                        valueLabel = { String.format(Locale.US, "%.2f", it) },
+                        enabled = unlock.enabled
                     )
                 }
             }
@@ -306,19 +361,25 @@ fun ScreenUnlockScreen(
                     SettingsSliderRow(
                         title = "Row $r Center Settling",
                         subtitle = "Settling response for center columns",
-                        value = cSettle,
-                        valueRange = 0.1f..1.5f,
                         colors = colors,
-                        onValueChange = { unlock.setRowCenterSettle(r, it) }
+                        backdrop = backdrop,
+                        value = cSettle,
+                        onValueChange = { unlock.setRowCenterSettle(r, it) },
+                        valueRange = 0.1f..1.5f,
+                        valueLabel = { String.format(Locale.US, "%.2f", it) },
+                        enabled = unlock.enabled
                     )
                     RowDivider(colors.separator)
                     SettingsSliderRow(
                         title = "Row $r Outer Settling",
                         subtitle = "Settling response for outer columns",
-                        value = oSettle,
-                        valueRange = 0.1f..1.5f,
                         colors = colors,
-                        onValueChange = { unlock.setRowOuterSettle(r, it) }
+                        backdrop = backdrop,
+                        value = oSettle,
+                        onValueChange = { unlock.setRowOuterSettle(r, it) },
+                        valueRange = 0.1f..1.5f,
+                        valueLabel = { String.format(Locale.US, "%.2f", it) },
+                        enabled = unlock.enabled
                     )
                 }
             }
@@ -337,7 +398,6 @@ private fun ModeSegment(
     onClick: () -> Unit
 ) {
     val bg = if (selected) colors.accentBlue.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.05f)
-    val borderCol = if (selected) colors.accentBlue else colors.separator
 
     Box(
         modifier = modifier
@@ -352,13 +412,13 @@ private fun ModeSegment(
         ) {
             BasicText(
                 text = title,
-                style = HyperBounceType.Body.copy(
+                style = HyperBounceType.body.copy(
                     color = if (selected) colors.accentBlue else colors.label
                 )
             )
             BasicText(
                 text = subtitle,
-                style = HyperBounceType.Caption1.copy(color = colors.secondaryLabel),
+                style = HyperBounceType.caption.copy(color = colors.secondaryLabel),
                 modifier = Modifier.padding(top = 2.dp)
             )
         }
