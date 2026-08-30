@@ -284,18 +284,29 @@ fun RootScaffold(
                 AnimatedContent(
                     targetState = menuPage,
                     transitionSpec = {
-                        if (targetState == MenuPage.RestartScopedApps) {
-                            (slideInHorizontally { width -> width / 3 } + fadeIn(tween(220)))
-                                .togetherWith(slideOutHorizontally { width -> -width / 3 } + fadeOut(tween(160)))
-                        } else {
-                            (slideInHorizontally { width -> -width / 3 } + fadeIn(tween(220)))
-                                .togetherWith(slideOutHorizontally { width -> width / 3 } + fadeOut(tween(160)))
-                        }
+                        val forward = targetState == MenuPage.RestartScopedApps
+                        val slideOffset: (Int) -> Int = { width -> if (forward) width / 4 else -width / 4 }
+                        (slideInHorizontally(
+                            animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.76f, stiffness = 420f),
+                            initialOffsetX = slideOffset
+                        ) + fadeIn(
+                            animationSpec = tween(durationMillis = 180, easing = androidx.compose.animation.core.LinearOutSlowInEasing)
+                        )).togetherWith(
+                            slideOutHorizontally(
+                                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.76f, stiffness = 420f),
+                                targetOffsetX = { width -> -slideOffset(width) }
+                            ) + fadeOut(
+                                animationSpec = tween(durationMillis = 140, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+                            )
+                        ).using(
+                            // Disable internal staggered size animation so the outer GlassEffectContainer
+                            // morphs both width and height simultaneously in all directions on the exact same frame!
+                            sizeTransform = null
+                        )
                     },
                     label = "menuPageMorph"
                 ) { page ->
                     Column(
-                        modifier = Modifier.width(IntrinsicSize.Max),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         if (page == MenuPage.Main) {

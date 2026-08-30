@@ -348,15 +348,20 @@ fun GlassEffectContainer(
     val animatedDragX by animateFloatAsState(dragOffset.x, spring(stiffness = 400f, dampingRatio = 0.6f))
     val animatedDragY by animateFloatAsState(dragOffset.y, spring(stiffness = 400f, dampingRatio = 0.6f))
 
-    // Smooth content morph animation for sub-page transitions inside expanded menu
+    // Smooth 2D content morph animation for sub-page transitions inside expanded menu (simultaneous XY resize)
+    val morphSpring = spring<Float>(
+        dampingRatio = 0.76f,
+        stiffness = 420f,
+        visibilityThreshold = 0.05f
+    )
     val animatedContentWidth by animateFloatAsState(
         targetValue = if (contentSize.width > 0f) contentSize.width else labelSize.width,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 380f),
+        animationSpec = morphSpring,
         label = "menuContentWidth"
     )
     val animatedContentHeight by animateFloatAsState(
         targetValue = if (contentSize.height > 0f) contentSize.height else labelSize.height,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 380f),
+        animationSpec = morphSpring,
         label = "menuContentHeight"
     )
 

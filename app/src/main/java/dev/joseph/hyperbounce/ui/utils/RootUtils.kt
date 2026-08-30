@@ -1,9 +1,13 @@
 package dev.joseph.hyperbounce.ui.utils
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.widget.Toast
 
 object RootUtils {
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     fun restartSystemUI(context: Context) {
         runCommand(
             context = context,
@@ -24,20 +28,27 @@ object RootUtils {
         runCommand(
             context = context,
             command = "reboot || /system/bin/reboot",
-            label = "Device Reboot"
+            label = "Device"
         )
     }
 
     private fun runCommand(context: Context, command: String, label: String) {
-        Toast.makeText(context, "Restarting $label...", Toast.LENGTH_SHORT).show()
         Thread {
+            var success = false
             try {
                 val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
-                proc.waitFor()
+                val exitCode = proc.waitFor()
+                success = (exitCode == 0)
             } catch (t: Throwable) {
-                try {
-                    Runtime.getRuntime().exec(command)
-                } catch (ignored: Throwable) {}
+                success = false
+            }
+
+            mainHandler.post {
+                if (success) {
+                    Toast.makeText(context, "Restarting $label...", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Cannot restart scoped app: Root missing?", Toast.LENGTH_LONG).show()
+                }
             }
         }.start()
     }
