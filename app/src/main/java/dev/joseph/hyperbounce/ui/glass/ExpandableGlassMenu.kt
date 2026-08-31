@@ -418,7 +418,7 @@ fun GlassEffectContainer(
     dragOffset: Offset,
     isPressed: Boolean,
     alignment: MenuAlignment,
-    backdrop: BackdropState,
+    backdrop: Backdrop,
     isGlassEnabled: Boolean,
     cornerRadius: Dp,
     blurRadius: Float,
