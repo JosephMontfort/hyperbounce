@@ -44,9 +44,7 @@ object ControlCenterHook {
                                 val pluginLoader = plugin.javaClass.classLoader
                                 Log.d(TAG, "PluginFactory.createPlugin returned $plugin with loader: $pluginLoader")
                                 if (pluginLoader != null) {
-                                    Handler(Looper.getMainLooper()).post {
-                                        initPluginHooks(module, pluginLoader)
-                                    }
+                                    initPluginHooks(module, pluginLoader)
                                 }
                             }
                             plugin
@@ -74,9 +72,7 @@ object ControlCenterHook {
                                         val pluginLoader = plugin.javaClass.classLoader
                                         Log.d(TAG, "PluginActionManager.onPluginConnected plugin=$plugin, loader=$pluginLoader")
                                         if (pluginLoader != null) {
-                                            Handler(Looper.getMainLooper()).post {
-                                                initPluginHooks(module, pluginLoader)
-                                            }
+                                            initPluginHooks(module, pluginLoader)
                                         }
                                     }
                                 }
@@ -102,9 +98,7 @@ object ControlCenterHook {
                                     val pluginLoader = args[0]!!.javaClass.classLoader
                                     Log.d(TAG, "ControlCenterContentController.${m.name} loader=$pluginLoader")
                                     if (pluginLoader != null) {
-                                        Handler(Looper.getMainLooper()).post {
-                                            initPluginHooks(module, pluginLoader)
-                                        }
+                                        initPluginHooks(module, pluginLoader)
                                     }
                                 }
                             } catch (t: Throwable) {}
@@ -1929,6 +1923,56 @@ object ControlCenterHook {
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to hook MainPanelAdapter", t)
             }
+
+            try {
+                val controllerClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController", false, classLoader)
+                for (m in controllerClass.declaredMethods) {
+                    if (m.name == "onCreate") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            try {
+                                val controller = chain.thisObject
+                                val rightRvField = controllerClass.getDeclaredField("rightMainPanel")
+                                rightRvField.isAccessible = true
+                                val rightRv = rightRvField.get(controller) as? RecyclerView
+                                if (rightRv != null) {
+                                    val customLm = SpannedGridLayoutManager(rightRv.context, 4)
+                                    rightRv.layoutManager = customLm
+                                    val adapter = rightRv.adapter
+                                    if (adapter != null) {
+                                        try {
+                                            val lmField = adapter.javaClass.getDeclaredField("layoutManager")
+                                            lmField.isAccessible = true
+                                            lmField.set(adapter, customLm)
+                                        } catch (t: Throwable) {}
+                                    }
+                                    Log.d(TAG, "Feature #16: Injected SpannedGridLayoutManager into rightMainPanel from MainPanelController.onCreate")
+                                }
+                                val leftRvField = controllerClass.getDeclaredField("leftMainPanel")
+                                leftRvField.isAccessible = true
+                                val leftRv = leftRvField.get(controller) as? RecyclerView
+                                if (leftRv != null) {
+                                    val customLm = SpannedGridLayoutManager(leftRv.context, 4)
+                                    leftRv.layoutManager = customLm
+                                    val adapter = leftRv.adapter
+                                    if (adapter != null) {
+                                        try {
+                                            val lmField = adapter.javaClass.getDeclaredField("layoutManager")
+                                            lmField.isAccessible = true
+                                            lmField.set(adapter, customLm)
+                                        } catch (t: Throwable) {}
+                                    }
+                                    Log.d(TAG, "Feature #16: Injected SpannedGridLayoutManager into leftMainPanel from MainPanelController.onCreate")
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "Feature #16: Failed in MainPanelController.onCreate hook", t)
+                            }
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
 
             // 17. Dynamic Cross-Component Drag & Drop (Zero Boundaries)
             try {
