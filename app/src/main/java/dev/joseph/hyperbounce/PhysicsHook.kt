@@ -19,6 +19,7 @@ class PhysicsHook : XposedModule() {
         // app's own process (Instagram/WhatsApp/YouTube), so an uncaught exception here
         // risks crashing that app, not just this module.
         try {
+            Log.i("HyperBounce", "PhysicsHook onPackageReady: packageName=${param.packageName}, loader=${param.classLoader}")
             when {
                 param.packageName.contains("instagram") ->
                     InstagramHook(this, param).onPackageReady()
@@ -29,7 +30,7 @@ class PhysicsHook : XposedModule() {
                 param.packageName == "com.google.android.youtube" ->
                     YouTubeHook(this, param).onPackageReady()
 
-                param.packageName == "com.android.systemui" -> {
+                param.packageName == "com.android.systemui" || param.packageName == "miui.systemui.plugin" -> {
                     try {
                         val prefs = getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
                         dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
@@ -41,22 +42,43 @@ class PhysicsHook : XposedModule() {
                     } catch (t: Throwable) {
                         Log.e("HyperBounce", "Failed to bind remote preferences in SystemUI", t)
                     }
-                    dev.joseph.hyperbounce.lockscreen.LockScreenSheetHook.init(this, param.classLoader)
-                    dev.joseph.hyperbounce.lockscreen.KeypadPhysicsHook.init(this, param.classLoader)
-                    dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initSystemUIHooks(this, param.classLoader)
-                }
 
-                param.packageName == "miui.systemui.plugin" -> {
                     try {
-                        val prefs = getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
-                        dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
-                        prefs.registerOnSharedPreferenceChangeListener { _, _ ->
-                            dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
+                        dev.joseph.hyperbounce.lockscreen.LockScreenSheetHook.init(this, param.classLoader)
+                    } catch (t: Throwable) {
+                        Log.e("HyperBounce", "LockScreenSheetHook.init failed", t)
+                    }
+
+                    try {
+                        dev.joseph.hyperbounce.lockscreen.KeypadPhysicsHook.init(this, param.classLoader)
+                    } catch (t: Throwable) {
+                        Log.e("HyperBounce", "KeypadPhysicsHook.init failed", t)
+                    }
+
+                    try {
+                        dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initSystemUIHooks(this, param.classLoader)
+                    } catch (t: Throwable) {
+                        Log.e("HyperBounce", "ControlCenterHook.initSystemUIHooks failed", t)
+                    }
+
+                    try {
+                        val loadClassMethod = ClassLoader::class.java.getDeclaredMethod("loadClass", String::class.java, Boolean::class.javaPrimitiveType)
+                        loadClassMethod.isAccessible = true
+                        hook(loadClassMethod).intercept { chain ->
+                            val result = chain.proceed()
+                            if (result is Class<*>) {
+                                val name = result.name
+                                if (name == "miui.systemui.controlcenter.panel.main.recyclerview.MainPanelAdapter" ||
+                                    name == "miui.systemui.controlcenter.panel.main.MainPanelController" ||
+                                    name == "miui.systemui.controlcenter.MiuiControlCenter") {
+                                    dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initPluginHooks(this, result.classLoader)
+                                }
+                            }
+                            result
                         }
                     } catch (t: Throwable) {
-                        Log.e("HyperBounce", "Failed to bind remote preferences in Control Center Plugin", t)
+                        Log.e("HyperBounce", "Failed to hook ClassLoader.loadClass for plugin detection", t)
                     }
-                    dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initPluginHooks(this, param.classLoader)
                 }
 
                 param.packageName == "com.miui.home" -> {
