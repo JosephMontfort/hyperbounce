@@ -153,7 +153,6 @@ fun RootScaffold(
                 .fillMaxSize()
                 .layerBackdrop(contentBackdrop)
                 .safeDrawingPadding()
-                .then(if (dialogProgress > 0.001f) Modifier.blur((24.dp * dialogProgress)) else Modifier)
                 .verticalScroll(scrollState)
         ) {
             Spacer(Modifier.height(56.dp))
@@ -190,7 +189,6 @@ fun RootScaffold(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(110.dp)
-                .then(if (dialogProgress > 0.001f) Modifier.blur((24.dp * dialogProgress)) else Modifier)
         )
 
         // Small collapsed title, fades in behind the menu as the large title scrolls away.
@@ -211,6 +209,20 @@ fun RootScaffold(
                     .pointerInput(Unit) {
                         detectTapGestures { closeMenu() }
                     }
+            )
+        }
+
+        // GPU-efficient full-screen dialog dim layer (zero shader compilation overhead)
+        if (dialogProgress > 0.001f) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = (dialogProgress * 0.45f).coerceIn(0f, 0.45f)
+                    }
+                    .background(Color.Black)
+                    .pointerInput(Unit) {}
+                    .zIndex(1.5f)
             )
         }
 

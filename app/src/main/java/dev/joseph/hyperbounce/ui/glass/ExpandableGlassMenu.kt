@@ -247,7 +247,7 @@ fun ExpandableGlassMenu(
         activeDialog = null
         onConfirmCallback()
         animationScope.launch {
-            animatableProgress.animateTo(0f, animationPreset.getSpec(isClosing = true, speedMultiplier = animationSpeedMultiplier))
+            animatableProgress.snapTo(0f)
         }
     }
 
@@ -420,6 +420,7 @@ fun GlassEffectContainer(
     alignment: MenuAlignment,
     backdrop: Backdrop,
     isGlassEnabled: Boolean,
+    isLightTheme: Boolean,
     cornerRadius: Dp,
     blurRadius: Float,
     refractionHeight: Float,
@@ -441,7 +442,6 @@ fun GlassEffectContainer(
     content: @Composable () -> Unit
 ) {
     val density = LocalDensity.current
-    val isLightTheme = !isSystemInDarkTheme()
 
     val morphSettings = dev.joseph.hyperbounce.ui.glass.LocalMorphPhysics.current
     val circleCollapseRatio = morphSettings.circleCollapseRatio
@@ -633,9 +633,9 @@ fun GlassEffectContainer(
                     scaleY = squishScale * lerp(jellySy, expandedStretchY, progress)
                     this.transformOrigin = alignment.transformOrigin
                 } else {
-                    // Physical Center of Menu in Layout Space
-                    val startCenterX = labelSize.width - effectiveMenuW / 2f
-                    val startCenterY = effectiveMenuH / 2f
+                    // Physical Center of Menu in Layout Space (locks to 3-dots center if returning on confirm)
+                    val startCenterX = if (isConfirmedClose) (labelSize.width / 2f) else (labelSize.width - effectiveMenuW / 2f)
+                    val startCenterY = if (isConfirmedClose) (labelSize.height / 2f) else (effectiveMenuH / 2f)
 
                     // True Center of Parent Screen in Layout Space
                     val screenCenterX = if (parentSize.width > 0f) -(parentSize.width / 2f - labelSize.width) else 0f

@@ -110,8 +110,7 @@ fun ScreenScaffold(
                 modifier = Modifier
                     .fillMaxSize()
                     .layerBackdrop(contentBackdrop)
-                    .safeDrawingPadding()
-                    .then(if (dialogProgress > 0.001f) Modifier.blur((24.dp * dialogProgress)) else Modifier),
+                    .safeDrawingPadding(),
                 state = lazyListState
             ) {
                 item {
@@ -149,7 +148,6 @@ fun ScreenScaffold(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(130.dp)
-                    .then(if (dialogProgress > 0.001f) Modifier.blur((24.dp * dialogProgress)) else Modifier)
             )
 
             // Dedicated top-left pinned back button and collapsed title
@@ -157,8 +155,7 @@ fun ScreenScaffold(
                 Modifier
                     .align(Alignment.TopStart)
                     .safeDrawingPadding()
-                    .padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 72.dp)
-                    .then(if (dialogProgress > 0.001f) Modifier.blur((24.dp * dialogProgress)) else Modifier),
+                    .padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 72.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CircularGlassBackButton(onClick = onBack, backdrop = backdrop)
@@ -178,6 +175,20 @@ fun ScreenScaffold(
                         .pointerInput(Unit) {
                             detectTapGestures { closeMenu() }
                         }
+                )
+            }
+
+            // GPU-efficient full-screen dialog dim layer (zero shader compilation overhead)
+            if (dialogProgress > 0.001f) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            alpha = (dialogProgress * 0.45f).coerceIn(0f, 0.45f)
+                        }
+                        .background(Color.Black)
+                        .pointerInput(Unit) {}
+                        .zIndex(1.5f)
                 )
             }
 
