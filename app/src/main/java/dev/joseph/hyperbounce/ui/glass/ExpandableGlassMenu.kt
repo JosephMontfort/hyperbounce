@@ -474,6 +474,15 @@ fun GlassEffectContainer(
         label = "menuContentHeight"
     )
 
+    // Cache the expanded menu dimensions so removing content() during morph does not cause size collapse
+    var cachedMenuSize by remember { mutableStateOf(Size(220f, 160f)) }
+    if (contentSize.width > 0f && contentSize.height > 0f) {
+        cachedMenuSize = contentSize
+    }
+
+    val effectiveMenuW = if (contentSize.width > 0f) (if (animatableProgress.value > 0.5f) animatedContentWidth else contentSize.width) else cachedMenuSize.width
+    val effectiveMenuH = if (contentSize.height > 0f) (if (animatableProgress.value > 0.5f) animatedContentHeight else contentSize.height) else cachedMenuSize.height
+
     // Press illumination progress
     val isPressing = isPressed && animatableProgress.targetValue == 0f
     val buttonPressProgress by animateFloatAsState(if (isPressing) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 400f))
@@ -510,12 +519,9 @@ fun GlassEffectContainer(
                 val p = animatableProgress.value
                 val dp = dialogProgress
 
-                val activeMenuW = if (p > 0.5f) animatedContentWidth else contentSize.width
-                val activeMenuH = if (p > 0.5f) animatedContentHeight else contentSize.height
-
                 // 1. Normal Menu Expansion Physics (Circular 3-Dot Button at p=0 -> Expanded Rectangle Menu at p=1)
-                val widthDiff = (activeMenuW - labelSize.width).coerceAtLeast(0f)
-                val heightDiff = (activeMenuH - labelSize.height).coerceAtLeast(0f)
+                val widthDiff = (effectiveMenuW - labelSize.width).coerceAtLeast(0f)
+                val heightDiff = (effectiveMenuH - labelSize.height).coerceAtLeast(0f)
 
                 val widthProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else (p * p)
                 val heightProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else sin(p * (PI / 2f)).toFloat()
@@ -533,8 +539,8 @@ fun GlassEffectContainer(
                 } else {
                     val baseMorphW: Float
                     val baseMorphH: Float
-                    val startMorphW = if (isConfirmedClose) labelSize.width else activeMenuW
-                    val startMorphH = if (isConfirmedClose) labelSize.height else activeMenuH
+                    val startMorphW = if (isConfirmedClose) labelSize.width else effectiveMenuW
+                    val startMorphH = if (isConfirmedClose) labelSize.height else effectiveMenuH
 
                     if (dp <= circleCollapseRatio) {
                         // Stage 1: Continuous fluid suction into dense singularity droplet
@@ -616,46 +622,51 @@ fun GlassEffectContainer(
                 val expandedStretchX = (1f + abs(animatedDragX) * 0.00005f - abs(animatedDragY) * 0.00005f).coerceIn(0.99f, 1.01f)
                 val expandedStretchY = (1f + abs(animatedDragY) * 0.00005f - abs(animatedDragX) * 0.00005f).coerceIn(0.99f, 1.01f)
 
-                val activeMenuW = if (progress > 0.5f) animatedContentWidth else contentSize.width
-                val activeMenuH = if (progress > 0.5f) animatedContentHeight else contentSize.height
+                val menuTx = lerp(jellyTx, expandedTx, progress) + with(density) { horizontalOffset.dp.toPx() * progress }
+                val menuTy = offsetY + lerp(jellyTy, expandedTy, progress) + with(density) { verticalOffset.dp.toPx() * progress }
 
-                // Physical Center of Menu in Layout Space
-                val startCenterX = labelSize.width - activeMenuW / 2f
-                val startCenterY = activeMenuH / 2f
+                if (dp <= 0.001f) {
+                    // Strict resting state positioning — zero displacement at top-right
+                    translationX = menuTx
+                    translationY = menuTy
+                    scaleX = squishScale * lerp(jellySx, expandedStretchX, progress)
+                    scaleY = squishScale * lerp(jellySy, expandedStretchY, progress)
+                    this.transformOrigin = alignment.transformOrigin
+                } else {
+                    // Physical Center of Menu in Layout Space
+                    val startCenterX = labelSize.width - effectiveMenuW / 2f
+                    val startCenterY = effectiveMenuH / 2f
 
-                // True Center of Parent Screen in Layout Space
-                val screenCenterX = if (parentSize.width > 0f) -(parentSize.width / 2f - labelSize.width) else 0f
-                val screenCenterY = if (parentSize.height > 0f) (parentSize.height / 2f) - with(density) { verticalOffset.dp.toPx() } else 0f
+                    // True Center of Parent Screen in Layout Space
+                    val screenCenterX = if (parentSize.width > 0f) -(parentSize.width / 2f - labelSize.width) else 0f
+                    val screenCenterY = if (parentSize.height > 0f) (parentSize.height / 2f) - with(density) { verticalOffset.dp.toPx() } else 0f
 
-                // Instantaneous Center of current placeable
-                val currentLocalCenterX = labelSize.width - size.width / 2f
-                val currentLocalCenterY = size.height / 2f
+                    // Instantaneous Center of current placeable
+                    val currentLocalCenterX = labelSize.width - size.width / 2f
+                    val currentLocalCenterY = size.height / 2f
 
-                // Strictly Monotonic Leftward & Downward Curved Trajectory (Zero Rightward Drift)
-                val flightProgress = dp.coerceIn(0f, 1f)
-                val smoothTravel = (1f - cos(flightProgress * PI).toFloat()) / 2f
+                    // Strictly Monotonic Leftward & Downward Curved Trajectory
+                    val flightProgress = dp.coerceIn(0f, 1f)
+                    val smoothTravel = (1f - cos(flightProgress * PI).toFloat()) / 2f
 
-                // 3D Z-Axis Depth Plunge: Punches deep into screen Z-plane mid-flight; strictly 1.0 at rest
-                val zPlunge = sin(flightProgress * PI).toFloat() // 0.0 -> 1.0 -> 0.0
-                val zDepthScale = 1f - (zPlunge * (zPlungeDepth * 1.35f))
+                    // 3D Z-Axis Depth Plunge: Punches deep into screen Z-plane mid-flight; strictly 1.0 at rest
+                    val zPlunge = sin(flightProgress * PI).toFloat()
+                    val zDepthScale = 1f - (zPlunge * (zPlungeDepth * 1.25f))
 
-                // Gravitational Swoop Y + Landing Harmonic Vertical Bounce ONLY
-                val gravitySwoopY = zPlunge * (gravitySwoopPx * 1.5f)
-                val yBounce = if (dp > 1f) (dp - 1f) * (yBounceAmountPx * 1.4f) else 0f
+                    // Gravitational Swoop Y + Landing Harmonic Vertical Bounce ONLY
+                    val gravitySwoopY = zPlunge * (gravitySwoopPx * 1.4f)
+                    val yBounce = if (dp > 1f) (dp - 1f) * (yBounceAmountPx * 1.2f) else 0f
 
-                // Target center point along the trajectory path
-                val pathCenterX = lerp(startCenterX, screenCenterX, smoothTravel)
-                val pathCenterY = lerp(startCenterY, screenCenterY, smoothTravel) + gravitySwoopY + yBounce
+                    val pathCenterX = lerp(startCenterX, screenCenterX, smoothTravel)
+                    val pathCenterY = lerp(startCenterY, screenCenterY, smoothTravel) + gravitySwoopY + yBounce
 
-                // Set exact translations to keep container center locked to pathCenter
-                translationX = (pathCenterX - currentLocalCenterX) + lerp(jellyTx, expandedTx, progress) + with(density) { horizontalOffset.dp.toPx() * progress * (1f - dp) }
-                translationY = (pathCenterY - currentLocalCenterY) + offsetY + lerp(jellyTy, expandedTy, progress) + with(density) { verticalOffset.dp.toPx() * progress * (1f - dp) }
+                    translationX = (pathCenterX - currentLocalCenterX) + menuTx * (1f - dp)
+                    translationY = (pathCenterY - currentLocalCenterY) + menuTy * (1f - dp)
 
-                scaleX = squishScale * lerp(jellySx, expandedStretchX, progress) * zDepthScale
-                scaleY = squishScale * lerp(jellySy, expandedStretchY, progress) * zDepthScale
-                
-                // Center-anchored transforms during morph flight to prevent corner pulling
-                this.transformOrigin = if (dp > 0.001f) TransformOrigin.Center else alignment.transformOrigin
+                    scaleX = squishScale * zDepthScale
+                    scaleY = squishScale * zDepthScale
+                    this.transformOrigin = TransformOrigin.Center
+                }
             }
             .drawBackdrop(
                 backdrop = backdrop,
@@ -669,10 +680,10 @@ fun GlassEffectContainer(
                         val spitPulse = sin(((dp - circleCollapseRatio) / (1f - circleCollapseRatio)).coerceIn(0f, 1f) * PI).toFloat()
 
                         vibrancy()
-                        // Split-second radial suction & spit shockwave optical motion blur surge
-                        val dynamicBlur = ((blurRadius * effProgress) + suctionPulse * (motionBlurSurgePx * 0.7f) + spitPulse * motionBlurSurgePx).dp.toPx()
-                        val dynamicLens = ((refractionHeight * effProgress) + suctionPulse * (lensSurgePx * 0.6f) + spitPulse * lensSurgePx).dp.toPx()
-                        val dynamicRefract = ((refractionAmount * effProgress) + suctionPulse * 4f + spitPulse * 8f).dp.toPx()
+                        // Split-second optical motion blur surge
+                        val dynamicBlur = ((blurRadius * effProgress) + suctionPulse * (motionBlurSurgePx * 0.6f) + spitPulse * motionBlurSurgePx).dp.toPx()
+                        val dynamicLens = ((refractionHeight * effProgress) + suctionPulse * (lensSurgePx * 0.5f) + spitPulse * lensSurgePx).dp.toPx()
+                        val dynamicRefract = ((refractionAmount * effProgress) + suctionPulse * 3f + spitPulse * 6f).dp.toPx()
 
                         blur(dynamicBlur)
                         lens(
@@ -713,27 +724,6 @@ fun GlassEffectContainer(
                         cornerRadius = CornerRadius(cr, cr)
                     )
 
-                    // Vortex Suction Halo & Spit Shockwave Optical Ring
-                    val suctionPulse = sin((dp / circleCollapseRatio).coerceIn(0f, 1f) * PI).toFloat()
-                    val spitPulse = sin(((dp - circleCollapseRatio) / (1f - circleCollapseRatio)).coerceIn(0f, 1f) * PI).toFloat()
-
-                    if (suctionPulse > 0.05f) {
-                        drawCircle(
-                            color = Color.White.copy(alpha = 0.15f * suctionPulse),
-                            radius = cr * (1f + suctionPulse * 0.35f),
-                            blendMode = BlendMode.Plus
-                        )
-                    }
-
-                    if (spitPulse > 0.05f) {
-                        drawRoundRect(
-                            color = Color.White.copy(alpha = 0.20f * spitPulse),
-                            cornerRadius = CornerRadius(cr, cr),
-                            style = androidx.compose.ui.graphics.drawscope.Stroke((2f + 4f * spitPulse).dp.toPx()),
-                            blendMode = BlendMode.Plus
-                        )
-                    }
-
                     if (progress == 0f && buttonPressProgress > 0f && dp == 0f) {
                         drawRoundRect(color = Color.White.copy(alpha = 0.15f * buttonPressProgress), cornerRadius = CornerRadius(cr, cr), blendMode = BlendMode.Plus)
                     }
@@ -743,7 +733,7 @@ fun GlassEffectContainer(
         contentAlignment = if (dialogProgress > 0.001f) Alignment.Center else alignment.composeAlignment
     ) {
         // Menu Content Layer (smoothly and visibly compresses directly into the center of the shrinking container)
-        if (dialogProgress < 0.45f) {
+        if (dialogProgress < 0.50f) {
             Box(
                 modifier = Modifier
                     .wrapContentSize(unbounded = true, align = if (dialogProgress > 0.001f) Alignment.Center else alignment.composeAlignment)
@@ -756,7 +746,7 @@ fun GlassEffectContainer(
 
                         val pop = sin(progress.coerceIn(0f, 1f) * PI).toFloat()
 
-                        val collapseProgress = (dp / 0.40f).coerceIn(0f, 1f)
+                        val collapseProgress = (dp / 0.45f).coerceIn(0f, 1f)
                         val uSmooth = collapseProgress * collapseProgress * (3f - 2f * collapseProgress)
                         
                         // Continuous suction scale down to the core

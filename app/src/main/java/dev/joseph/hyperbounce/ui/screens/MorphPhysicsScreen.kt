@@ -73,7 +73,7 @@ fun MorphPhysicsScreen(
                     value = morph.springStiffness,
                     onValueChange = morph::setSpringStiffness,
                     valueRange = 20f..600f,
-                    defaultValue = 220f,
+                    defaultValue = 110f,
                     valueLabel = { "${it.roundToInt()}f" }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -85,7 +85,7 @@ fun MorphPhysicsScreen(
                     value = morph.springDamping,
                     onValueChange = morph::setSpringDamping,
                     valueRange = 0.40f..1.00f,
-                    defaultValue = 0.76f,
+                    defaultValue = 0.80f,
                     valueLabel = { String.format("%.2f", it) }
                 )
             }

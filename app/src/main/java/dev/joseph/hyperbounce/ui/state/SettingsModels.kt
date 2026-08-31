@@ -241,8 +241,8 @@ data class MorphPhysicsSettings(
     val yBounceAmountDp: Float = 16.0f,
     val jellyOvershoot: Float = 0.05f,
     val contentStretch: Float = 0.05f,
-    val springDamping: Float = 0.76f,
-    val springStiffness: Float = 220.0f,
+    val springDamping: Float = 0.80f,
+    val springStiffness: Float = 110.0f,
     val lensSurgeDp: Float = 8.0f,
     val motionBlurSurgeDp: Float = 14.0f
 )
