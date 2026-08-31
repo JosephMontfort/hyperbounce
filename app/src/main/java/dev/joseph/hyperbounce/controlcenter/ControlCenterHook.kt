@@ -42,6 +42,7 @@ object ControlCenterHook {
                             val plugin = chain.proceed()
                             if (plugin != null) {
                                 val pluginLoader = plugin.javaClass.classLoader
+                                Log.d(TAG, "PluginFactory.createPlugin returned $plugin with loader: $pluginLoader")
                                 if (pluginLoader != null) {
                                     Handler(Looper.getMainLooper()).post {
                                         initPluginHooks(module, pluginLoader)
@@ -55,9 +56,9 @@ object ControlCenterHook {
             } catch (t: Throwable) {}
 
             try {
-                val cccClass = Class.forName("com.miui.systemui.controlcenter.container.ControlCenterContentController", false, classLoader)
-                for (m in cccClass.declaredMethods) {
-                    if (m.name == "setPlugin" || m.name == "onPluginLoaded") {
+                val actionManagerClass = Class.forName("com.android.systemui.shared.plugins.PluginActionManager", false, classLoader)
+                for (m in actionManagerClass.declaredMethods) {
+                    if (m.name == "onPluginConnected") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
@@ -65,7 +66,41 @@ object ControlCenterHook {
                                 val rawArgs = chain.args
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                                 if (args != null && args.isNotEmpty() && args[0] != null) {
+                                    val pluginInstance = args[0]
+                                    val pluginField = pluginInstance!!.javaClass.getDeclaredField("mPlugin")
+                                    pluginField.isAccessible = true
+                                    val plugin = pluginField.get(pluginInstance)
+                                    if (plugin != null) {
+                                        val pluginLoader = plugin.javaClass.classLoader
+                                        Log.d(TAG, "PluginActionManager.onPluginConnected plugin=$plugin, loader=$pluginLoader")
+                                        if (pluginLoader != null) {
+                                            Handler(Looper.getMainLooper()).post {
+                                                initPluginHooks(module, pluginLoader)
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (t: Throwable) {}
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val cccClass = Class.forName("com.miui.systemui.controlcenter.container.ControlCenterContentController", false, classLoader)
+                for (m in cccClass.declaredMethods) {
+                    if (m.name == "setPlugin" || m.name == "onPluginLoaded") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val rawArgs = chain.args
+                            val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                            Log.d(TAG, "ControlCenterContentController.${m.name} called, args=$args")
+                            val result = chain.proceed()
+                            try {
+                                if (args != null && args.isNotEmpty() && args[0] != null) {
                                     val pluginLoader = args[0]!!.javaClass.classLoader
+                                    Log.d(TAG, "ControlCenterContentController.${m.name} loader=$pluginLoader")
                                     if (pluginLoader != null) {
                                         Handler(Looper.getMainLooper()).post {
                                             initPluginHooks(module, pluginLoader)
@@ -74,6 +109,21 @@ object ControlCenterHook {
                                 }
                             } catch (t: Throwable) {}
                             result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val injectorClass = Class.forName("com.miui.systemui.plugin.PluginInstanceInjector", false, classLoader)
+                val sClassLoadersField = injectorClass.getDeclaredField("sClassLoaders")
+                sClassLoadersField.isAccessible = true
+                val map = sClassLoadersField.get(null) as? Map<*, *>
+                if (map != null) {
+                    for ((pkg, loader) in map) {
+                        Log.d(TAG, "Found existing PluginInstanceInjector loader for $pkg: $loader")
+                        if (loader is ClassLoader) {
+                            initPluginHooks(module, loader)
                         }
                     }
                 }
@@ -136,6 +186,14 @@ object ControlCenterHook {
     @Synchronized
     fun initPluginHooks(module: XposedModule, classLoader: ClassLoader?) {
         if (classLoader == null || hookedPluginLoaders.contains(classLoader)) return
+
+        // Verify that this classLoader actually contains the Control Center classes before proceeding
+        try {
+            Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelAdapter", false, classLoader)
+        } catch (t: Throwable) {
+            Log.d(TAG, "MainPanelAdapter not present in ClassLoader $classLoader - skipping non-CC plugin loader")
+            return
+        }
 
         try {
             Log.i(TAG, "Initializing Control Center Plugin hooks on ClassLoader: $classLoader")
@@ -1805,22 +1863,61 @@ object ControlCenterHook {
             // 16. Attach SpannedGridLayoutManager
             try {
                 val adapterClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelAdapter", false, classLoader)
+                for (c in adapterClass.declaredConstructors) {
+                    c.isAccessible = true
+                    module.hook(c).intercept { chain ->
+                        val result = chain.proceed()
+                        try {
+                            val adapter = chain.thisObject
+                            val ctxField = adapterClass.getDeclaredField("context")
+                            ctxField.isAccessible = true
+                            val ctx = ctxField.get(adapter) as? Context
+                            if (ctx != null) {
+                                val customLm = SpannedGridLayoutManager(ctx, 4)
+                                val lmField = adapterClass.getDeclaredField("layoutManager")
+                                lmField.isAccessible = true
+                                val lmBefore = lmField.get(adapter)
+                                Log.d(TAG, "Feature #16 constructor (a): layoutManager before reflective set = ${lmBefore?.javaClass?.name}@${System.identityHashCode(lmBefore)}")
+                                lmField.set(adapter, customLm)
+                                val lmAfter = lmField.get(adapter)
+                                Log.d(TAG, "Feature #16 constructor (a): layoutManager after reflective set = ${lmAfter?.javaClass?.name}@${System.identityHashCode(lmAfter)}, target customLm=${customLm.javaClass.name}@${System.identityHashCode(customLm)}")
+                            }
+                        } catch (t: Throwable) {
+                            Log.e(TAG, "Feature #16 constructor: Failed to set customLm in constructor", t)
+                        }
+                        result
+                    }
+                }
+
                 for (m in adapterClass.declaredMethods) {
                     if (m.name == "onAttachedToRecyclerView") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
+                            val rawArgs = chain.args
+                            val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                            val arg0 = if (args != null && args.isNotEmpty()) args[0] else null
+                            Log.d(TAG, "Feature #16 intercept: onAttachedToRecyclerView called, thisObject=${chain.thisObject?.javaClass?.name}, arg0=${arg0?.javaClass?.name}, arg0 is RecyclerView=${arg0 is RecyclerView}")
                             val result = chain.proceed()
                             try {
                                 val adapter = chain.thisObject
-                                val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                                 if (args != null && args.isNotEmpty() && args[0] is RecyclerView) {
                                     val rv = args[0] as RecyclerView
                                     val customLm = SpannedGridLayoutManager(rv.context, 4)
                                     val lmField = adapterClass.getDeclaredField("layoutManager")
                                     lmField.isAccessible = true
+                                    val lmBefore = lmField.get(adapter)
+                                    Log.d(TAG, "Feature #16 (a): layoutManager before reflective set = ${lmBefore?.javaClass?.name}@${System.identityHashCode(lmBefore)}")
                                     lmField.set(adapter, customLm)
+                                    val lmAfter = lmField.get(adapter)
+                                    Log.d(TAG, "Feature #16 (a): layoutManager after reflective set = ${lmAfter?.javaClass?.name}@${System.identityHashCode(lmAfter)}, target customLm=${customLm.javaClass.name}@${System.identityHashCode(customLm)}")
                                     rv.layoutManager = customLm
+                                    try {
+                                        customLm.spanSizeLookup.invalidateSpanIndexCache()
+                                        customLm.spanSizeLookup.invalidateSpanGroupIndexCache()
+                                    } catch (t: Throwable) {}
+                                    Log.d(TAG, "Feature #16 (b): rv.getLayoutManager() = ${rv.layoutManager?.javaClass?.name}@${System.identityHashCode(rv.layoutManager)}")
+                                } else {
+                                    Log.w(TAG, "Feature #16: args check failed! args=$args, arg0=$arg0")
                                 }
                             } catch (t: Throwable) {
                                 Log.e(TAG, "Failed to attach SpannedGridLayoutManager", t)
@@ -1829,7 +1926,9 @@ object ControlCenterHook {
                         }
                     }
                 }
-            } catch (t: Throwable) {}
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to hook MainPanelAdapter", t)
+            }
 
             // 17. Dynamic Cross-Component Drag & Drop (Zero Boundaries)
             try {

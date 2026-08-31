@@ -29,7 +29,7 @@ android {
             storeFile = file(System.getenv("RELEASE_STORE_FILE") ?: "debug.keystore")
             storePassword = System.getenv("RELEASE_STORE_PASSWORD") ?: "android"
             keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: "androiddebugkey"
-            keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: "androiddebugkey"
+            keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: "android"
         }
     }
 

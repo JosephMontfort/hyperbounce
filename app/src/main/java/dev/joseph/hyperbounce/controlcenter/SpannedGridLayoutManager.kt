@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.util.AttributeSet
+import android.util.Log
 import android.util.TypedValue
 import android.view.View
 import androidx.recyclerview.widget.GridLayoutManager
@@ -18,6 +19,7 @@ class SpannedGridLayoutManager : GridLayoutManager {
         private const val TAG = "SpannedGridLayoutManager"
         private const val SPAN_COUNT = 4
         private const val MAX_ROWS = 50
+        private var layoutChildrenHitCount = 0
     }
 
     private val mContext: Context
@@ -217,6 +219,8 @@ class SpannedGridLayoutManager : GridLayoutManager {
     }
 
     override fun onLayoutChildren(recycler: RecyclerView.Recycler, state: RecyclerView.State) {
+        layoutChildrenHitCount++
+        Log.d(TAG, "SpannedGridLayoutManager (c): onLayoutChildren hit-count=$layoutChildrenHitCount, itemCount=$itemCount, state=$state")
         if (itemCount == 0) {
             super.onLayoutChildren(recycler, state)
             return
