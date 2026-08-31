@@ -214,7 +214,7 @@ fun RootScaffold(
             )
         }
 
-        // GPU-efficient full-screen dialog dim layer (zero shader compilation overhead)
+        // GPU-efficient background dim layer (sits strictly beneath the dialog)
         if (dialogProgress > 0.001f) {
             Box(
                 Modifier
@@ -223,17 +223,17 @@ fun RootScaffold(
                         alpha = (dialogProgress * 0.45f).coerceIn(0f, 0.45f)
                     }
                     .background(Color.Black)
-                    .pointerInput(Unit) {}
-                    .zIndex(1.5f)
+                    .zIndex(1f)
             )
         }
 
-        // Top-right expandable glass menu overlay with synchronized 2D sub-menu morphing support
+        // Top-right expandable glass menu overlay (sits ABOVE dim layer at zIndex 10f)
         Box(
             Modifier
                 .align(Alignment.TopEnd)
                 .safeDrawingPadding()
                 .padding(top = 8.dp, end = 20.dp)
+                .zIndex(10f)
         ) {
             val menuContentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
             val menuSecondaryColor = menuContentColor.copy(alpha = 0.7f)

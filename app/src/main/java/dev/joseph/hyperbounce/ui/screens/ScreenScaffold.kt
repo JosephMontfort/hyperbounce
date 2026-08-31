@@ -180,7 +180,7 @@ fun ScreenScaffold(
                 )
             }
 
-            // GPU-efficient full-screen dialog dim layer (zero shader compilation overhead)
+            // GPU-efficient background dim layer (sits strictly beneath the dialog)
             if (dialogProgress > 0.001f) {
                 Box(
                     Modifier
@@ -189,12 +189,11 @@ fun ScreenScaffold(
                             alpha = (dialogProgress * 0.45f).coerceIn(0f, 0.45f)
                         }
                         .background(Color.Black)
-                        .pointerInput(Unit) {}
-                        .zIndex(1.5f)
+                        .zIndex(1f)
                 )
             }
 
-            // Dedicated top-right pinned expandable glass menu overlay
+            // Dedicated top-right pinned expandable glass menu overlay (sits ABOVE dim layer at zIndex 10f)
             if (onResetPage != null || onRestartApp != null) {
                 val glass = LocalGlassSettings.current
                 val isDark = isSystemInDarkTheme()
@@ -206,6 +205,7 @@ fun ScreenScaffold(
                         .align(Alignment.TopEnd)
                         .safeDrawingPadding()
                         .padding(top = 8.dp, end = 16.dp)
+                        .zIndex(10f)
                 ) {
                     ExpandableGlassMenu(
                         animatableProgress = menuProgress,
