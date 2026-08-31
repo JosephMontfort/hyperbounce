@@ -1884,6 +1884,26 @@ object ControlCenterHook {
                 }
 
                 for (m in adapterClass.declaredMethods) {
+                    if (m.name == "notifyChanged" || m.name == "changeItemVisible") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            try {
+                                val adapter = chain.thisObject
+                                val rvField = adapterClass.getDeclaredField("recyclerView")
+                                rvField.isAccessible = true
+                                val rv = rvField.get(adapter) as? RecyclerView
+                                if (rv != null && rv.layoutManager !is SpannedGridLayoutManager) {
+                                    val customLm = SpannedGridLayoutManager(rv.context, 4)
+                                    val lmField = adapterClass.getDeclaredField("layoutManager")
+                                    lmField.isAccessible = true
+                                    lmField.set(adapter, customLm)
+                                    rv.layoutManager = customLm
+                                    Log.d(TAG, "Feature #16: Hot-swapped SpannedGridLayoutManager during ${m.name}")
+                                }
+                            } catch (t: Throwable) {}
+                            chain.proceed()
+                        }
+                    }
                     if (m.name == "onAttachedToRecyclerView") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
@@ -1925,9 +1945,38 @@ object ControlCenterHook {
             }
 
             try {
+                val factoryClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelAdapter\$Factory", false, classLoader)
+                for (m in factoryClass.declaredMethods) {
+                    if (m.name == "create") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val adapter = chain.proceed()
+                            if (adapter != null) {
+                                try {
+                                    val ctxField = adapter.javaClass.getDeclaredField("context")
+                                    ctxField.isAccessible = true
+                                    val ctx = ctxField.get(adapter) as? Context
+                                    if (ctx != null) {
+                                        val customLm = SpannedGridLayoutManager(ctx, 4)
+                                        val lmField = adapter.javaClass.getDeclaredField("layoutManager")
+                                        lmField.isAccessible = true
+                                        lmField.set(adapter, customLm)
+                                        Log.d(TAG, "Feature #16: Set customLm from MainPanelAdapter.Factory.create")
+                                    }
+                                } catch (t: Throwable) {
+                                    Log.e(TAG, "Feature #16: Failed in MainPanelAdapter.Factory.create hook", t)
+                                }
+                            }
+                            adapter
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
                 val controllerClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController", false, classLoader)
                 for (m in controllerClass.declaredMethods) {
-                    if (m.name == "onCreate") {
+                    if (m.name == "onCreate" || m.name == "onResume" || m.name == "onChildrenCreated" || m.name == "updateResources") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
@@ -1936,7 +1985,7 @@ object ControlCenterHook {
                                 val rightRvField = controllerClass.getDeclaredField("rightMainPanel")
                                 rightRvField.isAccessible = true
                                 val rightRv = rightRvField.get(controller) as? RecyclerView
-                                if (rightRv != null) {
+                                if (rightRv != null && rightRv.layoutManager !is SpannedGridLayoutManager) {
                                     val customLm = SpannedGridLayoutManager(rightRv.context, 4)
                                     rightRv.layoutManager = customLm
                                     val adapter = rightRv.adapter
@@ -1947,12 +1996,12 @@ object ControlCenterHook {
                                             lmField.set(adapter, customLm)
                                         } catch (t: Throwable) {}
                                     }
-                                    Log.d(TAG, "Feature #16: Injected SpannedGridLayoutManager into rightMainPanel from MainPanelController.onCreate")
+                                    Log.d(TAG, "Feature #16: Injected SpannedGridLayoutManager into rightMainPanel from MainPanelController.${m.name}")
                                 }
                                 val leftRvField = controllerClass.getDeclaredField("leftMainPanel")
                                 leftRvField.isAccessible = true
                                 val leftRv = leftRvField.get(controller) as? RecyclerView
-                                if (leftRv != null) {
+                                if (leftRv != null && leftRv.layoutManager !is SpannedGridLayoutManager) {
                                     val customLm = SpannedGridLayoutManager(leftRv.context, 4)
                                     leftRv.layoutManager = customLm
                                     val adapter = leftRv.adapter
@@ -1963,10 +2012,10 @@ object ControlCenterHook {
                                             lmField.set(adapter, customLm)
                                         } catch (t: Throwable) {}
                                     }
-                                    Log.d(TAG, "Feature #16: Injected SpannedGridLayoutManager into leftMainPanel from MainPanelController.onCreate")
+                                    Log.d(TAG, "Feature #16: Injected SpannedGridLayoutManager into leftMainPanel from MainPanelController.${m.name}")
                                 }
                             } catch (t: Throwable) {
-                                Log.e(TAG, "Feature #16: Failed in MainPanelController.onCreate hook", t)
+                                Log.e(TAG, "Feature #16: Failed in MainPanelController.${m.name} hook", t)
                             }
                             result
                         }

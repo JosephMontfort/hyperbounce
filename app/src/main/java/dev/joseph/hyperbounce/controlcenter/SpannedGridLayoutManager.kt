@@ -68,20 +68,35 @@ class SpannedGridLayoutManager : GridLayoutManager {
         ).toInt()
     }
 
+    private var mAdapter: RecyclerView.Adapter<*>? = null
+
+    override fun onAdapterChanged(oldAdapter: RecyclerView.Adapter<*>?, newAdapter: RecyclerView.Adapter<*>?) {
+        super.onAdapterChanged(oldAdapter, newAdapter)
+        mAdapter = newAdapter
+    }
+
+    override fun onAttachedToWindow(view: RecyclerView?) {
+        super.onAttachedToWindow(view)
+        mAdapter = view?.adapter
+    }
+
     /**
      * Returns [widthSpans, heightSpans] for item at adapter position.
      * widthSpans in [1..4], heightSpans in [1..2].
      */
     fun getItemSpans(position: Int): IntArray {
-        var adapter: RecyclerView.Adapter<*>? = null
-        try {
-            val adapterField = RecyclerView.LayoutManager::class.java.getDeclaredField("mRecyclerView")
-            adapterField.isAccessible = true
-            val rv = adapterField.get(this) as? RecyclerView
-            if (rv != null) {
-                adapter = rv.adapter
-            }
-        } catch (t: Throwable) {}
+        var adapter: RecyclerView.Adapter<*>? = mAdapter
+        if (adapter == null) {
+            try {
+                val adapterField = RecyclerView.LayoutManager::class.java.getDeclaredField("mRecyclerView")
+                adapterField.isAccessible = true
+                val rv = adapterField.get(this) as? RecyclerView
+                if (rv != null) {
+                    adapter = rv.adapter
+                    mAdapter = adapter
+                }
+            } catch (t: Throwable) {}
+        }
 
         if (adapter != null && position in 0 until adapter.itemCount) {
             val viewType = adapter.getItemViewType(position)
