@@ -228,7 +228,7 @@ fun GlassDialogHost(
                             .pointerInput(Unit) {
                                 detectTapGestures { /* consume taps inside */ }
                             }
-                            .padding(24.dp)
+                            .padding(26.dp)
                     ) {
                         when (req) {
                             is GlassDialogRequest.CustomValue -> {
@@ -252,14 +252,14 @@ fun GlassDialogHost(
 
                                 Column(
                                     modifier = Modifier.fillMaxWidth(),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    verticalArrangement = Arrangement.spacedBy(18.dp)
                                 ) {
                                     BasicText(
                                         text = "Custom Value",
                                         style = HyperBounceType.headline.copy(
                                             color = colors.label,
                                             fontSize = 20.sp,
-                                            fontWeight = FontWeight.SemiBold
+                                            fontWeight = FontWeight.Bold
                                         )
                                     )
 
@@ -267,7 +267,7 @@ fun GlassDialogHost(
                                         text = "${req.title}\nStock Range: [${req.valueRange.start} .. ${req.valueRange.endInclusive}]  •  Default: ${req.defaultValue}",
                                         style = HyperBounceType.footnote.copy(
                                             color = colors.secondaryLabel,
-                                            lineHeight = 18.sp
+                                            lineHeight = 20.sp
                                         )
                                     )
 
@@ -277,7 +277,7 @@ fun GlassDialogHost(
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(14.dp))
                                             .background(inputBg)
-                                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                                            .padding(horizontal = 16.dp, vertical = 14.dp)
                                     ) {
                                         BasicTextField(
                                             value = textValue,
@@ -307,7 +307,7 @@ fun GlassDialogHost(
                                         Box(
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .height(48.dp)
+                                                .height(50.dp)
                                                 .clip(CircleShape)
                                                 .background(cancelBtnBg)
                                                 .clickable { requestClose() },
@@ -317,7 +317,7 @@ fun GlassDialogHost(
                                                 text = "Cancel",
                                                 style = TextStyle(
                                                     color = colors.label,
-                                                    fontSize = 16.sp,
+                                                    fontSize = 15.5.sp,
                                                     fontWeight = FontWeight.Medium
                                                 )
                                             )
@@ -326,7 +326,7 @@ fun GlassDialogHost(
                                         Box(
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .height(48.dp)
+                                                .height(50.dp)
                                                 .clip(CircleShape)
                                                 .background(accentColor)
                                                 .clickable { requestApply() },
@@ -336,7 +336,7 @@ fun GlassDialogHost(
                                                 text = "Apply",
                                                 style = TextStyle(
                                                     color = Color.White,
-                                                    fontSize = 16.sp,
+                                                    fontSize = 15.5.sp,
                                                     fontWeight = FontWeight.SemiBold
                                                 )
                                             )
@@ -355,7 +355,7 @@ fun GlassDialogHost(
                                         style = HyperBounceType.headline.copy(
                                             color = colors.label,
                                             fontSize = 20.sp,
-                                            fontWeight = FontWeight.SemiBold
+                                            fontWeight = FontWeight.Bold
                                         )
                                     )
 
@@ -363,8 +363,8 @@ fun GlassDialogHost(
                                         text = req.message,
                                         style = HyperBounceType.footnote.copy(
                                             color = colors.secondaryLabel,
-                                            fontSize = 15.sp,
-                                            lineHeight = 20.sp
+                                            fontSize = 14.5.sp,
+                                            lineHeight = 21.sp
                                         )
                                     )
 
@@ -378,7 +378,7 @@ fun GlassDialogHost(
                                         Box(
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .height(48.dp)
+                                                .height(50.dp)
                                                 .clip(CircleShape)
                                                 .background(cancelBtnBg)
                                                 .clickable { requestClose() },
@@ -388,7 +388,7 @@ fun GlassDialogHost(
                                                 text = req.cancelText,
                                                 style = TextStyle(
                                                     color = colors.label,
-                                                    fontSize = 16.sp,
+                                                    fontSize = 15.5.sp,
                                                     fontWeight = FontWeight.Medium
                                                 )
                                             )
@@ -398,7 +398,7 @@ fun GlassDialogHost(
                                         Box(
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .height(48.dp)
+                                                .height(50.dp)
                                                 .clip(CircleShape)
                                                 .background(btnConfirmColor)
                                                 .clickable {
@@ -411,7 +411,7 @@ fun GlassDialogHost(
                                                 text = req.confirmText,
                                                 style = TextStyle(
                                                     color = Color.White,
-                                                    fontSize = 16.sp,
+                                                    fontSize = 15.5.sp,
                                                     fontWeight = FontWeight.SemiBold
                                                 )
                                             )
