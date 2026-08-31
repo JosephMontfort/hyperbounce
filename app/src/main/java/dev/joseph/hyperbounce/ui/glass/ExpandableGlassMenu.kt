@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -153,6 +154,7 @@ fun ExpandableGlassMenu(
     horizontalOffset: Float,
     verticalOffset: Float,
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(top = 8.dp, end = 16.dp),
     labelSize: Size = Size(55f, 55f),
     animationSpeedMultiplier: Float = 1f,
     containerBulgeMultiplier: Float = 0.395f,
@@ -264,12 +266,15 @@ fun ExpandableGlassMenu(
             .onSizeChanged { if (it.width > 0 && it.height > 0) parentSize = it.toSize() },
         contentAlignment = alignment.composeAlignment
     ) {
-        // Full-screen backdrop dimming scrim when confirmation dialog is active
+        // Full-screen backdrop dimming scrim covering 100% of screen
         if (dialogProgress > 0.001f) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f * dialogProgress))
+                    .graphicsLayer {
+                        alpha = (dialogProgress * 0.45f).coerceIn(0f, 0.45f)
+                    }
+                    .background(Color.Black)
                     .pointerInput(Unit) {
                         detectTapGestures { dismissDialog() }
                     }
@@ -308,7 +313,12 @@ fun ExpandableGlassMenu(
             arcYOffsetDp = arcYOffsetDp,
             labelSize = labelSizePx,
             contentSize = contentMeasuredSize,
-            modifier = Modifier.zIndex(10f),
+            labelCoordinates = labelCoordinates,
+            modifier = Modifier
+                .align(alignment.composeAlignment)
+                .safeDrawingPadding()
+                .padding(contentPadding)
+                .zIndex(10f),
             label = {
                 Box(
                     modifier = Modifier.size(with(density) { labelSizePx.width.toDp() }).onGloballyPositioned { labelCoordinates = it }
@@ -436,6 +446,7 @@ fun GlassEffectContainer(
     arcYOffsetDp: Float,
     labelSize: Size,
     contentSize: Size,
+    labelCoordinates: LayoutCoordinates?,
     modifier: Modifier = Modifier,
     label: @Composable () -> Unit,
     content: @Composable () -> Unit
@@ -633,19 +644,19 @@ fun GlassEffectContainer(
                     scaleY = squishScale * lerp(jellySy, expandedStretchY, progress)
                     this.transformOrigin = alignment.transformOrigin
                 } else {
-                    // Physical Center of Menu in Layout Space (locks to 3-dots center if returning on confirm)
-                    val startCenterX = if (isConfirmedClose) (labelSize.width / 2f) else (labelSize.width - effectiveMenuW / 2f)
-                    val startCenterY = if (isConfirmedClose) (labelSize.height / 2f) else (effectiveMenuH / 2f)
+                    // Physical position of label in root window
+                    val labelPosInRoot = labelCoordinates?.positionInRoot() ?: Offset.Zero
+                    val containerRightOnScreen = if (labelPosInRoot != Offset.Zero) (labelPosInRoot.x + labelSize.width) else (parentSize.width - with(density) { 16.dp.toPx() })
+                    val containerTopOnScreen = if (labelPosInRoot != Offset.Zero) labelPosInRoot.y else with(density) { 8.dp.toPx() }
 
-                    // True Center of Parent Screen in Layout Space
-                    val screenCenterX = if (parentSize.width > 0f) -(parentSize.width / 2f - labelSize.width) else 0f
-                    val screenCenterY = if (parentSize.height > 0f) (parentSize.height / 2f) - with(density) { verticalOffset.dp.toPx() } else 0f
+                    // True dead-center translation to (parentSize.width / 2, parentSize.height / 2)
+                    val targetCenterTx = (parentSize.width / 2f) - (containerRightOnScreen - size.width / 2f)
+                    val targetCenterTy = (parentSize.height / 2f) - (containerTopOnScreen + size.height / 2f)
 
-                    // Instantaneous Center of current placeable
-                    val currentLocalCenterX = labelSize.width - size.width / 2f
-                    val currentLocalCenterY = size.height / 2f
+                    // Starting delta when morph starts
+                    val startTx = if (isConfirmedClose) ((labelSize.width / 2f) - (labelSize.width - size.width / 2f)) else 0f
+                    val startTy = if (isConfirmedClose) ((labelSize.height / 2f) - (size.height / 2f)) else 0f
 
-                    // Strictly Monotonic Leftward & Downward Curved Trajectory
                     val flightProgress = dp.coerceIn(0f, 1f)
                     val smoothTravel = (1f - cos(flightProgress * PI).toFloat()) / 2f
 
@@ -657,11 +668,11 @@ fun GlassEffectContainer(
                     val gravitySwoopY = zPlunge * (gravitySwoopPx * 1.4f)
                     val yBounce = if (dp > 1f) (dp - 1f) * (yBounceAmountPx * 1.2f) else 0f
 
-                    val pathCenterX = lerp(startCenterX, screenCenterX, smoothTravel)
-                    val pathCenterY = lerp(startCenterY, screenCenterY, smoothTravel) + gravitySwoopY + yBounce
+                    val pathTx = lerp(startTx, targetCenterTx, smoothTravel)
+                    val pathTy = lerp(startTy, targetCenterTy, smoothTravel) + gravitySwoopY + yBounce
 
-                    translationX = (pathCenterX - currentLocalCenterX) + menuTx * (1f - dp)
-                    translationY = (pathCenterY - currentLocalCenterY) + menuTy * (1f - dp)
+                    translationX = pathTx + menuTx * (1f - dp)
+                    translationY = pathTy + menuTy * (1f - dp)
 
                     scaleX = squishScale * zDepthScale
                     scaleY = squishScale * zDepthScale

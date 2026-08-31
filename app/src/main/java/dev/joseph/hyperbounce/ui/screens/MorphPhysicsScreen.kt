@@ -48,8 +48,8 @@ fun MorphPhysicsScreen(
                     backdrop = backdrop,
                     value = morph.morphSpeedMultiplier,
                     onValueChange = morph::setMorphSpeedMultiplier,
-                    valueRange = 0.1f..3.0f,
-                    defaultValue = 1.0f,
+                    valueRange = 0.10f..2.00f,
+                    defaultValue = 0.78f,
                     valueLabel = { String.format("%.2fx", it) }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -73,7 +73,7 @@ fun MorphPhysicsScreen(
                     value = morph.springStiffness,
                     onValueChange = morph::setSpringStiffness,
                     valueRange = 20f..600f,
-                    defaultValue = 110f,
+                    defaultValue = 220f,
                     valueLabel = { "${it.roundToInt()}f" }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -85,7 +85,7 @@ fun MorphPhysicsScreen(
                     value = morph.springDamping,
                     onValueChange = morph::setSpringDamping,
                     valueRange = 0.40f..1.00f,
-                    defaultValue = 0.80f,
+                    defaultValue = 0.70f,
                     valueLabel = { String.format("%.2f", it) }
                 )
             }
@@ -114,7 +114,7 @@ fun MorphPhysicsScreen(
                     value = morph.zPlungeDepth,
                     onValueChange = morph::setZPlungeDepth,
                     valueRange = 0.00f..0.50f,
-                    defaultValue = 0.25f,
+                    defaultValue = 0.50f,
                     valueLabel = { String.format("%.0f%%", it * 100f) }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -126,7 +126,7 @@ fun MorphPhysicsScreen(
                     value = morph.gravitySwoopDp,
                     onValueChange = morph::setGravitySwoopDp,
                     valueRange = 0f..60f,
-                    defaultValue = 24f,
+                    defaultValue = 60f,
                     valueLabel = { "${it.roundToInt()}dp" }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -138,7 +138,7 @@ fun MorphPhysicsScreen(
                     value = morph.yBounceAmountDp,
                     onValueChange = morph::setYBounceAmountDp,
                     valueRange = 0f..40f,
-                    defaultValue = 16f,
+                    defaultValue = 0f,
                     valueLabel = { "${it.roundToInt()}dp" }
                 )
             }
@@ -155,7 +155,7 @@ fun MorphPhysicsScreen(
                     value = morph.jellyOvershoot,
                     onValueChange = morph::setJellyOvershoot,
                     valueRange = 0.00f..0.15f,
-                    defaultValue = 0.05f,
+                    defaultValue = 0.00f,
                     valueLabel = { String.format("%.1f%%", it * 100f) }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -167,7 +167,7 @@ fun MorphPhysicsScreen(
                     value = morph.contentStretch,
                     onValueChange = morph::setContentStretch,
                     valueRange = 0.00f..0.15f,
-                    defaultValue = 0.05f,
+                    defaultValue = 0.00f,
                     valueLabel = { String.format("%.1f%%", it * 100f) }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -179,7 +179,7 @@ fun MorphPhysicsScreen(
                     value = morph.lensSurgeDp,
                     onValueChange = morph::setLensSurgeDp,
                     valueRange = 0f..20f,
-                    defaultValue = 8f,
+                    defaultValue = 20f,
                     valueLabel = { "${it.roundToInt()}dp" }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -191,7 +191,7 @@ fun MorphPhysicsScreen(
                     value = morph.motionBlurSurgeDp,
                     onValueChange = morph::setMotionBlurSurgeDp,
                     valueRange = 0f..30f,
-                    defaultValue = 14f,
+                    defaultValue = 30f,
                     valueLabel = { "${it.roundToInt()}dp" }
                 )
             }

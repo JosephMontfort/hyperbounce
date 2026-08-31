@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -214,46 +216,28 @@ fun RootScaffold(
             )
         }
 
-        // GPU-efficient background dim layer (sits strictly beneath the dialog)
-        if (dialogProgress > 0.001f) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        alpha = (dialogProgress * 0.45f).coerceIn(0f, 0.45f)
-                    }
-                    .background(Color.Black)
-                    .zIndex(1f)
-            )
-        }
-
-        // Top-right expandable glass menu overlay (sits ABOVE dim layer at zIndex 10f)
-        Box(
-            Modifier
-                .align(Alignment.TopEnd)
-                .safeDrawingPadding()
-                .padding(top = 8.dp, end = 20.dp)
-                .zIndex(10f)
-        ) {
-            val menuContentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
-            val menuSecondaryColor = menuContentColor.copy(alpha = 0.7f)
-            
-            ExpandableGlassMenu(
-                animatableProgress = menuProgress,
-                animationPreset = MenuAnimationPreset.Bouncy,
-                alignment = MenuAlignment.TopTrailing,
-                backdrop = rememberCombinedBackdrop(backdrop, contentBackdrop),
-                isGlassEnabled = true,
-                isHapticsEnabled = glass.hapticsEnabled,
-                cornerRadius = 22.dp,
-                blurRadius = glass.blurDp,
-                refractionHeight = glass.refractionHeightDp,
-                refractionAmount = glass.refractionAmountDp,
-                chromaticAberration = glass.chromaticAberration,
-                horizontalOffset = 0f,
-                verticalOffset = 10f,
-                labelSize = Size(44f, 44f),
-                onDialogProgressChange = { dialogProgress = it },
+        // Top-right expandable glass menu overlay (full-screen overlay with edge-to-edge dimming)
+        val menuContentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
+        val menuSecondaryColor = menuContentColor.copy(alpha = 0.7f)
+        
+        ExpandableGlassMenu(
+            animatableProgress = menuProgress,
+            animationPreset = MenuAnimationPreset.Bouncy,
+            alignment = MenuAlignment.TopTrailing,
+            backdrop = rememberCombinedBackdrop(backdrop, contentBackdrop),
+            isGlassEnabled = true,
+            isHapticsEnabled = glass.hapticsEnabled,
+            cornerRadius = 22.dp,
+            blurRadius = glass.blurDp,
+            refractionHeight = glass.refractionHeightDp,
+            refractionAmount = glass.refractionAmountDp,
+            chromaticAberration = glass.chromaticAberration,
+            horizontalOffset = 0f,
+            verticalOffset = 10f,
+            modifier = Modifier.fillMaxSize().zIndex(10f),
+            contentPadding = PaddingValues(top = 8.dp, end = 20.dp),
+            labelSize = Size(44f, 44f),
+            onDialogProgressChange = { dialogProgress = it },
                 onRowSelected = { index, showDialog ->
                     if (menuPage == MenuPage.Main) {
                         when (index) {
@@ -529,7 +513,6 @@ fun RootScaffold(
                     }
                 }
             }
-        }
         }
     }
 }
