@@ -418,9 +418,8 @@ fun GlassEffectContainer(
     dragOffset: Offset,
     isPressed: Boolean,
     alignment: MenuAlignment,
-    backdrop: Backdrop,
+    backdrop: BackdropState,
     isGlassEnabled: Boolean,
-    isLightTheme: Boolean,
     cornerRadius: Dp,
     blurRadius: Float,
     refractionHeight: Float,
@@ -442,6 +441,7 @@ fun GlassEffectContainer(
     content: @Composable () -> Unit
 ) {
     val density = LocalDensity.current
+    val isLightTheme = !isSystemInDarkTheme()
 
     val morphSettings = dev.joseph.hyperbounce.ui.glass.LocalMorphPhysics.current
     val circleCollapseRatio = morphSettings.circleCollapseRatio
