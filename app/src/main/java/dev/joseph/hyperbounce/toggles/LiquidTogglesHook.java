@@ -1210,6 +1210,11 @@ public class LiquidTogglesHook extends XposedModule {
                                 name.equals("com.miui.systemui.widget.SlidingButton")) {
                             applyUnifiedToggleEngine(name, clazz.getClassLoader());
                         }
+                        if (name.equals("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelAdapter") ||
+                                name.equals("miui.systemui.controlcenter.panel.main.MainPanelController") ||
+                                name.equals("miui.systemui.controlcenter.MiuiControlCenter")) {
+                            dev.joseph.hyperbounce.controlcenter.ControlCenterHook.INSTANCE.initPluginHooks(this, clazz.getClassLoader());
+                        }
                     }
                     return result;
                 });

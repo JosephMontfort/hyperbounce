@@ -1899,6 +1899,7 @@ object ControlCenterHook {
                                     lmField.set(adapter, customLm)
                                     rv.layoutManager = customLm
                                     Log.d(TAG, "Feature #16: Hot-swapped SpannedGridLayoutManager during ${m.name}")
+                                    try { module.log(4, TAG, "Feature #16: Hot-swapped SpannedGridLayoutManager during ${m.name}") } catch (_: Throwable) {}
                                 }
                             } catch (t: Throwable) {}
                             chain.proceed()
@@ -1911,6 +1912,7 @@ object ControlCenterHook {
                             val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                             val arg0 = if (args != null && args.isNotEmpty()) args[0] else null
                             Log.d(TAG, "Feature #16 intercept: onAttachedToRecyclerView called, thisObject=${chain.thisObject?.javaClass?.name}, arg0=${arg0?.javaClass?.name}, arg0 is RecyclerView=${arg0 is RecyclerView}")
+                            try { module.log(4, TAG, "Feature #16 intercept: onAttachedToRecyclerView called, thisObject=${chain.thisObject?.javaClass?.name}, arg0=${arg0?.javaClass?.name}") } catch (_: Throwable) {}
                             val result = chain.proceed()
                             try {
                                 val adapter = chain.thisObject
@@ -1930,6 +1932,7 @@ object ControlCenterHook {
                                         customLm.spanSizeLookup.invalidateSpanGroupIndexCache()
                                     } catch (t: Throwable) {}
                                     Log.d(TAG, "Feature #16 (b): rv.getLayoutManager() = ${rv.layoutManager?.javaClass?.name}@${System.identityHashCode(rv.layoutManager)}")
+                                    try { module.log(4, TAG, "Feature #16 (b): rv.getLayoutManager() = ${rv.layoutManager?.javaClass?.name}") } catch (_: Throwable) {}
                                 } else {
                                     Log.w(TAG, "Feature #16: args check failed! args=$args, arg0=$arg0")
                                 }
@@ -1962,6 +1965,7 @@ object ControlCenterHook {
                                         lmField.isAccessible = true
                                         lmField.set(adapter, customLm)
                                         Log.d(TAG, "Feature #16: Set customLm from MainPanelAdapter.Factory.create")
+                                        try { module.log(4, TAG, "Feature #16: Set customLm from MainPanelAdapter.Factory.create") } catch (_: Throwable) {}
                                     }
                                 } catch (t: Throwable) {
                                     Log.e(TAG, "Feature #16: Failed in MainPanelAdapter.Factory.create hook", t)
@@ -1997,6 +2001,7 @@ object ControlCenterHook {
                                         } catch (t: Throwable) {}
                                     }
                                     Log.d(TAG, "Feature #16: Injected SpannedGridLayoutManager into rightMainPanel from MainPanelController.${m.name}")
+                                    try { module.log(4, TAG, "Feature #16: Injected SpannedGridLayoutManager into rightMainPanel from MainPanelController.${m.name}") } catch (_: Throwable) {}
                                 }
                                 val leftRvField = controllerClass.getDeclaredField("leftMainPanel")
                                 leftRvField.isAccessible = true
@@ -2013,6 +2018,7 @@ object ControlCenterHook {
                                         } catch (t: Throwable) {}
                                     }
                                     Log.d(TAG, "Feature #16: Injected SpannedGridLayoutManager into leftMainPanel from MainPanelController.${m.name}")
+                                    try { module.log(4, TAG, "Feature #16: Injected SpannedGridLayoutManager into leftMainPanel from MainPanelController.${m.name}") } catch (_: Throwable) {}
                                 }
                             } catch (t: Throwable) {
                                 Log.e(TAG, "Feature #16: Failed in MainPanelController.${m.name} hook", t)
