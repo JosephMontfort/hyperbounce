@@ -168,9 +168,18 @@ class SettingsRepository(context: Context) {
             private set
         var accent by prefsEnumState("${prefix}_accent", defaults.accent)
             private set
+        var pillGlassIntensity by prefsFloatState("${prefix}_pill_glass_intensity", defaults.pillGlassIntensity)
+            private set
+        var pillContainerOpacity by prefsFloatState("${prefix}_pill_container_opacity", defaults.pillContainerOpacity)
+            private set
+        var pillChromaticAberration by prefsBooleanState("${prefix}_pill_chromatic_aberration", defaults.pillChromaticAberration)
+            private set
+        var pillShadow by prefsBooleanState("${prefix}_pill_shadow", defaults.pillShadow)
+            private set
 
         fun snapshot(): NavBarAppSettings = NavBarAppSettings(
-            enabled, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, themeMode, accent
+            enabled, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, themeMode, accent,
+            pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow
         )
 
         @JvmName("setEnabledPref")
@@ -189,6 +198,14 @@ class SettingsRepository(context: Context) {
         fun setThemeMode(v: ThemeMode) { themeMode = v }
         @JvmName("setAccentPref")
         fun setAccent(v: AccentPreset) { accent = v }
+        @JvmName("setPillGlassIntensityPref")
+        fun setPillGlassIntensity(v: Float) { pillGlassIntensity = v }
+        @JvmName("setPillContainerOpacityPref")
+        fun setPillContainerOpacity(v: Float) { pillContainerOpacity = v }
+        @JvmName("setPillChromaticAberrationPref")
+        fun setPillChromaticAberration(v: Boolean) { pillChromaticAberration = v }
+        @JvmName("setPillShadowPref")
+        fun setPillShadow(v: Boolean) { pillShadow = v }
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
@@ -199,6 +216,10 @@ class SettingsRepository(context: Context) {
             tabWidth = defaults.tabWidth
             themeMode = defaults.themeMode
             accent = defaults.accent
+            pillGlassIntensity = defaults.pillGlassIntensity
+            pillContainerOpacity = defaults.pillContainerOpacity
+            pillChromaticAberration = defaults.pillChromaticAberration
+            pillShadow = defaults.pillShadow
         }
     }
 

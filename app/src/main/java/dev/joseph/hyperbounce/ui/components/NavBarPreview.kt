@@ -40,6 +40,10 @@ fun NavBarPreview(
     cornerRadiusDp: Float,
     barHeightDp: Float,
     tabWidthDp: Float,
+    pillGlassIntensity: Float = 1.0f,
+    pillContainerOpacity: Float = 1.0f,
+    pillChromaticAberration: Boolean = true,
+    pillShadow: Boolean = true,
     tabCount: Int = 4,
     selectedIndex: Int = 1,
     modifier: Modifier = Modifier
@@ -84,17 +88,56 @@ fun NavBarPreview(
             verticalAlignment = Alignment.CenterVertically
         ) {
             repeat(tabCount) { index ->
+                val isSelected = index == selectedIndex
                 Box(
                     Modifier
                         .size(width = tabWidthDp.dp, height = (barHeightDp - 16f).dp.coerceAtLeast(20.dp)),
                     contentAlignment = Alignment.Center
                 ) {
+                    if (isSelected) {
+                        val pillShape = RoundedCornerShape((cornerRadiusDp * 0.8f).dp)
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height((barHeightDp - 20f).dp.coerceAtLeast(16.dp))
+                                .then(
+                                    if (glass.enabled && pillGlassIntensity > 0.001f) {
+                                        Modifier.drawBackdrop(
+                                            backdrop = backdrop,
+                                            shape = { pillShape },
+                                            effects = {
+                                                lens(
+                                                    (glass.refractionHeightDp / 2.5f).dp.toPx() * pillGlassIntensity,
+                                                    (glass.refractionAmountDp / 2.5f).dp.toPx() * pillGlassIntensity,
+                                                    chromaticAberration = pillChromaticAberration
+                                                )
+                                            },
+                                            highlight = { Highlight.Default },
+                                            shadow = if (pillShadow) {
+                                                { Shadow(radius = 4f.dp, color = Color.Black.copy(alpha = 0.12f)) }
+                                            } else null,
+                                            onDrawSurface = {
+                                                if (pillContainerOpacity > 0.001f) {
+                                                    drawRect(Color.White.copy(alpha = pillContainerOpacity * 0.18f))
+                                                }
+                                            }
+                                        )
+                                    } else if (pillContainerOpacity > 0.001f) {
+                                        Modifier.background(
+                                            Color.White.copy(alpha = pillContainerOpacity * 0.18f),
+                                            shape = pillShape
+                                        )
+                                    } else Modifier
+                                )
+                                .clip(pillShape)
+                        )
+                    }
                     Box(
                         Modifier
                             .size(9.dp)
                             .clip(CircleShape)
                             .background(
-                                if (index == selectedIndex) accentColor else Color.White.copy(alpha = 0.55f)
+                                if (isSelected) accentColor else Color.White.copy(alpha = 0.55f)
                             )
                     )
                 }

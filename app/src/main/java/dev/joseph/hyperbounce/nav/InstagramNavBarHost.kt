@@ -125,6 +125,10 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
         cornerRadius = live.cornerRadius.dp,
         barHeight = live.barHeight.dp,
         tabWidth = live.tabWidth.dp,
+        pillGlassIntensity = live.pillGlassIntensity,
+        pillContainerOpacity = live.pillContainerOpacity,
+        pillChromaticAberration = live.pillChromaticAberration,
+        pillShadow = live.pillShadow,
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index

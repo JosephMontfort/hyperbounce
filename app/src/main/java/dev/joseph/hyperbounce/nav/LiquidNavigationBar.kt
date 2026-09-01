@@ -6,6 +6,7 @@ import androidx.compose.animation.core.EaseOut
 import androidx.compose.ui.util.lerp
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -77,6 +78,10 @@ fun LiquidNavigationBar(
     barHeight: Dp = 64.dp,
     tabWidth: Dp = 64.dp,
     cornerRadius: Dp = 32.dp,
+    pillGlassIntensity: Float = 1f,
+    pillContainerOpacity: Float = 1f,
+    pillChromaticAberration: Boolean = true,
+    pillShadow: Boolean = true,
 ) {
     if (tabs.isEmpty()) return
 
@@ -317,51 +322,100 @@ fun LiquidNavigationBar(
                     }
                 }
 
-                Box(
-                    Modifier
-                        .padding(horizontal = 4.dp)
-                        .graphicsLayer {
-                            translationX =
-                                if (isLtr) {
-                                    dampedDragAnimation.value * tabWidthPx + panelOffset
-                                } else {
-                                    size.width -
-                                        (dampedDragAnimation.value + 1f) * tabWidthPx +
-                                        panelOffset
-                                }
-                        }
-                        .then(interactiveHighlight.gestureModifier)
-                        .then(dampedDragAnimation.modifier)
-                        .drawBackdrop(
-                            backdrop = rememberCombinedBackdrop(
-                                liveBackdrop,
-                                tabsBackdrop,
-                            ),
-                            shape = { androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius) },
-                            effects = {
-                                val progress = dampedDragAnimation.pressProgress
-                                lens(
-                                    8f.dp.toPx() * progress * effectMultiplier,
-                                    11f.dp.toPx() * progress * effectMultiplier,
-                                    chromaticAberration = true,
-                                )
-                            },
-                            highlight = {
-                                val progress = dampedDragAnimation.pressProgress
-                                Highlight.Default.copy(alpha = progress)
-                            },
-                            shadow = {
-                                val progress = dampedDragAnimation.pressProgress
-                                Shadow(alpha = progress)
-                            },
-                            innerShadow = {
-                                val progress = dampedDragAnimation.pressProgress
-                                InnerShadow(
-                                    radius = 8f.dp * progress,
-                                    alpha = progress,
-                                )
-                            },
-                            layerBlock = {
+                val pillShape = androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius)
+
+                if (pillGlassIntensity > 0.001f) {
+                    Box(
+                        Modifier
+                            .padding(horizontal = 4.dp)
+                            .graphicsLayer {
+                                translationX =
+                                    if (isLtr) {
+                                        dampedDragAnimation.value * tabWidthPx + panelOffset
+                                    } else {
+                                        size.width -
+                                            (dampedDragAnimation.value + 1f) * tabWidthPx +
+                                            panelOffset
+                                    }
+                            }
+                            .then(interactiveHighlight.gestureModifier)
+                            .then(dampedDragAnimation.modifier)
+                            .drawBackdrop(
+                                backdrop = rememberCombinedBackdrop(
+                                    liveBackdrop,
+                                    tabsBackdrop,
+                                ),
+                                shape = { pillShape },
+                                effects = {
+                                    val progress = dampedDragAnimation.pressProgress
+                                    lens(
+                                        8f.dp.toPx() * progress * pillGlassIntensity,
+                                        11f.dp.toPx() * progress * pillGlassIntensity,
+                                        chromaticAberration = pillChromaticAberration,
+                                    )
+                                },
+                                highlight = {
+                                    val progress = dampedDragAnimation.pressProgress
+                                    Highlight.Default.copy(alpha = progress)
+                                },
+                                shadow = {
+                                    if (pillShadow) {
+                                        val progress = dampedDragAnimation.pressProgress
+                                        Shadow(alpha = progress)
+                                    } else null
+                                },
+                                innerShadow = {
+                                    if (pillShadow) {
+                                        val progress = dampedDragAnimation.pressProgress
+                                        InnerShadow(
+                                            radius = 8f.dp * progress,
+                                            alpha = progress,
+                                        )
+                                    } else null
+                                },
+                                layerBlock = {
+                                    scaleX = dampedDragAnimation.scaleX
+                                    scaleY = dampedDragAnimation.scaleY
+
+                                    val velocity = dampedDragAnimation.velocity / 10f
+                                    scaleX /= 1f -
+                                        (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
+                                    scaleY *= 1f -
+                                        (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+                                },
+                                onDrawSurface = {
+                                    val progress = dampedDragAnimation.pressProgress
+                                    if (pillContainerOpacity > 0.001f) {
+                                        drawRect(
+                                            if (isLightTheme) {
+                                                Color.Black.copy(0.1f * pillContainerOpacity)
+                                            } else {
+                                                Color.White.copy(0.1f * pillContainerOpacity)
+                                            },
+                                            alpha = 1f - progress,
+                                        )
+                                        drawRect(
+                                            Color.Black.copy(alpha = 0.03f * progress * pillContainerOpacity)
+                                        )
+                                    }
+                                },
+                            )
+                            .height(barHeight - 8.dp)
+                            .fillMaxWidth(1f / tabCount),
+                    )
+                } else {
+                    Box(
+                        Modifier
+                            .padding(horizontal = 4.dp)
+                            .graphicsLayer {
+                                translationX =
+                                    if (isLtr) {
+                                        dampedDragAnimation.value * tabWidthPx + panelOffset
+                                    } else {
+                                        size.width -
+                                            (dampedDragAnimation.value + 1f) * tabWidthPx +
+                                            panelOffset
+                                    }
                                 scaleX = dampedDragAnimation.scaleX
                                 scaleY = dampedDragAnimation.scaleY
 
@@ -370,25 +424,24 @@ fun LiquidNavigationBar(
                                     (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
                                 scaleY *= 1f -
                                     (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
-                            },
-                            onDrawSurface = {
-                                val progress = dampedDragAnimation.pressProgress
-                                drawRect(
-                                    if (isLightTheme) {
-                                        Color.Black.copy(0.1f)
-                                    } else {
-                                        Color.White.copy(0.1f)
-                                    },
-                                    alpha = 1f - progress,
-                                )
-                                drawRect(
-                                    Color.Black.copy(alpha = 0.03f * progress)
-                                )
-                            },
-                        )
-                        .height(barHeight - 8.dp)
-                        .fillMaxWidth(1f / tabCount),
-                )
+                                clip = true
+                                shape = pillShape
+                            }
+                            .then(interactiveHighlight.gestureModifier)
+                            .then(dampedDragAnimation.modifier)
+                            .then(
+                                if (pillContainerOpacity > 0.001f) {
+                                    Modifier.background(
+                                        if (isLightTheme) Color.Black.copy(0.1f * pillContainerOpacity)
+                                        else Color.White.copy(0.1f * pillContainerOpacity),
+                                        shape = pillShape
+                                    )
+                                } else Modifier
+                            )
+                            .height(barHeight - 8.dp)
+                            .fillMaxWidth(1f / tabCount),
+                    )
+                }
             }
         }
     }

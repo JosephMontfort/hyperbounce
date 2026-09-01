@@ -25,7 +25,11 @@ data class NavBarLiveSettings(
     val barHeight: Float,
     val tabWidth: Float,
     val themeMode: String,
-    val accent: String
+    val accent: String,
+    val pillGlassIntensity: Float,
+    val pillContainerOpacity: Float,
+    val pillChromaticAberration: Boolean,
+    val pillShadow: Boolean
 )
 
 private fun readNavBarSettings(hyperBouncePrefs: HyperBouncePrefs, appKey: String) = NavBarLiveSettings(
@@ -35,7 +39,11 @@ private fun readNavBarSettings(hyperBouncePrefs: HyperBouncePrefs, appKey: Strin
     barHeight = hyperBouncePrefs.appBarHeight(appKey),
     tabWidth = hyperBouncePrefs.appTabWidth(appKey),
     themeMode = hyperBouncePrefs.appThemeMode(appKey),
-    accent = hyperBouncePrefs.appAccent(appKey)
+    accent = hyperBouncePrefs.appAccent(appKey),
+    pillGlassIntensity = hyperBouncePrefs.appPillGlassIntensity(appKey),
+    pillContainerOpacity = hyperBouncePrefs.appPillContainerOpacity(appKey),
+    pillChromaticAberration = hyperBouncePrefs.appPillChromaticAberration(appKey),
+    pillShadow = hyperBouncePrefs.appPillShadow(appKey)
 )
 
 @Composable

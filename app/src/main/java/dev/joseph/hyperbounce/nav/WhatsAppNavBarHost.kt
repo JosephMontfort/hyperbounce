@@ -126,6 +126,10 @@ fun WhatsAppNavBarHost(
         barHeight = live.barHeight.dp,
         tabWidth = live.tabWidth.dp,
         cornerRadius = live.cornerRadius.dp,
+        pillGlassIntensity = live.pillGlassIntensity,
+        pillContainerOpacity = live.pillContainerOpacity,
+        pillChromaticAberration = live.pillChromaticAberration,
+        pillShadow = live.pillShadow,
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index
