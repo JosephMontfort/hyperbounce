@@ -6,6 +6,7 @@ import androidx.compose.animation.core.EaseOut
 import androidx.compose.ui.util.lerp
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -72,6 +73,15 @@ fun LiquidNavigationBar(
     forceDarkTheme: Boolean = false,
     containerAlpha: Float = 0.4f,
     effectMultiplier: Float = 1f,
+    barGlassEnabled: Boolean = true,
+    pillGlassEnabled: Boolean = true,
+    reflectionLayerEnabled: Boolean = true,
+    barBlurDp: Float = 8f,
+    barLensAmount: Float = 18f,
+    pillLensAmount: Float = 11f,
+    pillHighlight: Float = 0.8f,
+    pillShadow: Float = 0.6f,
+    pillOpacity: Float = 0.1f,
     labels: List<String> = emptyList(),
     customAccentColor: Color? = null,
     barHeight: Dp = 64.dp,
@@ -93,19 +103,21 @@ fun LiquidNavigationBar(
         if (isLightTheme) Color(0xFFFAFAFA).copy(containerAlpha)
         else Color(0xFF121212).copy(containerAlpha)
 
+    val isBackdropActive = (barGlassEnabled || pillGlassEnabled) && effectMultiplier > 0.001f
     val density = LocalDensity.current
     val liveBackdrop = remember(sourceView) {
         LiquidGlassViewBackdrop(sourceView)
     }
-    // Do not read capturedFrame during composition. The custom Backdrop reads the
-    // snapshot state from its DrawScope, which invalidates only the render pass for
-    // each live frame instead of recomposing the entire navigation bar at 60 Hz.
     val capturePaddingPx = remember(density) {
         with(density) { 24.dp.toPx().toInt() }
     }
 
-    DisposableEffect(liveBackdrop) {
-        sourceView.post { liveBackdrop.start() }
+    DisposableEffect(liveBackdrop, isBackdropActive) {
+        if (isBackdropActive) {
+            sourceView.post { liveBackdrop.start() }
+        } else {
+            liveBackdrop.stop()
+        }
         onDispose { liveBackdrop.release() }
     }
 
@@ -205,42 +217,54 @@ fun LiquidNavigationBar(
                     )
                 }
 
+                val barShape = androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius)
+
                 Row(
                     Modifier
                         .graphicsLayer {
                             translationX = panelOffset
                         }
                         .onGloballyPositioned { coordinates ->
-                            val position = coordinates.positionInWindow()
-                            liveBackdrop.setTargetBounds(
-                                left = position.x,
-                                top = position.y,
-                                width = coordinates.size.width,
-                                height = coordinates.size.height,
-                                paddingPx = capturePaddingPx,
-                            )
-                        }
-                        .drawBackdrop(
-                            backdrop = liveBackdrop,
-                            shape = { androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius) },
-                            effects = {
-                                vibrancy()
-                                blur(8f.dp.toPx() * effectMultiplier)
-                                lens(18f.dp.toPx() * effectMultiplier, 18f.dp.toPx() * effectMultiplier)
-                            },
-                            layerBlock = {
-                                val progress = dampedDragAnimation.pressProgress
-                                val scale = lerp(
-                                    1f,
-                                    1f + 16f.dp.toPx() / size.width,
-                                    progress,
+                            if (isBackdropActive) {
+                                val position = coordinates.positionInWindow()
+                                liveBackdrop.setTargetBounds(
+                                    left = position.x,
+                                    top = position.y,
+                                    width = coordinates.size.width,
+                                    height = coordinates.size.height,
+                                    paddingPx = capturePaddingPx,
                                 )
-                                scaleX = scale
-                                scaleY = scale
-                            },
-                            onDrawSurface = {
-                                drawRect(containerColor)
-                            },
+                            }
+                        }
+                        .then(
+                            if (barGlassEnabled && effectMultiplier > 0.001f) {
+                                Modifier.drawBackdrop(
+                                    backdrop = liveBackdrop,
+                                    shape = { barShape },
+                                    effects = {
+                                        vibrancy()
+                                        blur(barBlurDp.dp.toPx() * effectMultiplier)
+                                        lens(barLensAmount.dp.toPx() * effectMultiplier, barLensAmount.dp.toPx() * effectMultiplier)
+                                    },
+                                    layerBlock = {
+                                        val progress = dampedDragAnimation.pressProgress
+                                        val scale = lerp(
+                                            1f,
+                                            1f + 16f.dp.toPx() / size.width,
+                                            progress,
+                                        )
+                                        scaleX = scale
+                                        scaleY = scale
+                                    },
+                                    onDrawSurface = {
+                                        drawRect(containerColor)
+                                    },
+                                )
+                            } else {
+                                Modifier
+                                    .background(containerColor, barShape)
+                                    .clip(barShape)
+                            }
                         )
                         .then(interactiveHighlight.modifier)
                         .height(barHeight)
@@ -262,60 +286,64 @@ fun LiquidNavigationBar(
                     }
                 }
 
-                // Exact library trick: record tab contents separately so that the
-                // selected liquid capsule refracts the icons themselves as well.
+                // Record tab contents separately when reflection layer is enabled
                 val tabsBackdrop = rememberLayerBackdrop()
+                val showReflectionLayer = reflectionLayerEnabled && barGlassEnabled && pillGlassEnabled && effectMultiplier > 0.001f
 
-                CompositionLocalProvider(
-                    LocalLiquidBottomTabScale provides {
-                        lerp(1f, 1.2f, dampedDragAnimation.pressProgress)
-                    },
-                ) {
-                    Row(
-                        Modifier
-                            .clearAndSetSemantics {}
-                            .alpha(0f)
-                            .layerBackdrop(tabsBackdrop)
-                            .graphicsLayer {
-                                translationX = panelOffset
-                            }
-                            .drawBackdrop(
-                                backdrop = liveBackdrop,
-                                shape = { androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius) },
-                                effects = {
-                                    val progress = dampedDragAnimation.pressProgress
-                                    vibrancy()
-                                    blur(8f.dp.toPx() * effectMultiplier)
-                                    lens(
-                                        18f.dp.toPx() * progress * effectMultiplier,
-                                        18f.dp.toPx() * progress * effectMultiplier,
-                                    )
-                                },
-                                highlight = {
-                                    val progress = dampedDragAnimation.pressProgress
-                                    Highlight.Default.copy(alpha = progress)
-                                },
-                            )
-                            .height(barHeight - 8.dp)
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                if (showReflectionLayer) {
+                    CompositionLocalProvider(
+                        LocalLiquidBottomTabScale provides {
+                            lerp(1f, 1.2f, dampedDragAnimation.pressProgress)
+                        },
                     ) {
-                        tabs.forEachIndexed { index, _ ->
-                            val bitmap = activeTabs.getOrNull(index) ?: tabs.getOrNull(index)
-                            LiquidBottomTab(
-                                bitmap = bitmap,
-                                isCircular = index in circularIndices,
-                                accentColor = accentColor,
-                                label = labels.getOrNull(index),
-                                onClick = {
-                                    onTabSelected(index)
-                                    dampedDragAnimation.animateToValue(index.toFloat())
-                                },
-                            )
+                        Row(
+                            Modifier
+                                .clearAndSetSemantics {}
+                                .alpha(0f)
+                                .layerBackdrop(tabsBackdrop)
+                                .graphicsLayer {
+                                    translationX = panelOffset
+                                }
+                                .drawBackdrop(
+                                    backdrop = liveBackdrop,
+                                    shape = { barShape },
+                                    effects = {
+                                        val progress = dampedDragAnimation.pressProgress
+                                        vibrancy()
+                                        blur(barBlurDp.dp.toPx() * effectMultiplier)
+                                        lens(
+                                            barLensAmount.dp.toPx() * progress * effectMultiplier,
+                                            barLensAmount.dp.toPx() * progress * effectMultiplier,
+                                        )
+                                    },
+                                    highlight = {
+                                        val progress = dampedDragAnimation.pressProgress
+                                        Highlight.Default.copy(alpha = progress)
+                                    },
+                                )
+                                .height(barHeight - 8.dp)
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            tabs.forEachIndexed { index, _ ->
+                                val bitmap = activeTabs.getOrNull(index) ?: tabs.getOrNull(index)
+                                LiquidBottomTab(
+                                    bitmap = bitmap,
+                                    isCircular = index in circularIndices,
+                                    accentColor = accentColor,
+                                    label = labels.getOrNull(index),
+                                    onClick = {
+                                        onTabSelected(index)
+                                        dampedDragAnimation.animateToValue(index.toFloat())
+                                    },
+                                )
+                            }
                         }
                     }
                 }
+
+                val pillShape = androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius)
 
                 Box(
                     Modifier
@@ -332,59 +360,81 @@ fun LiquidNavigationBar(
                         }
                         .then(interactiveHighlight.gestureModifier)
                         .then(dampedDragAnimation.modifier)
-                        .drawBackdrop(
-                            backdrop = rememberCombinedBackdrop(
-                                liveBackdrop,
-                                tabsBackdrop,
-                            ),
-                            shape = { androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius) },
-                            effects = {
-                                val progress = dampedDragAnimation.pressProgress
-                                lens(
-                                    8f.dp.toPx() * progress * effectMultiplier,
-                                    11f.dp.toPx() * progress * effectMultiplier,
-                                    chromaticAberration = true,
-                                )
-                            },
-                            highlight = {
-                                val progress = dampedDragAnimation.pressProgress
-                                Highlight.Default.copy(alpha = progress)
-                            },
-                            shadow = {
-                                val progress = dampedDragAnimation.pressProgress
-                                Shadow(alpha = progress)
-                            },
-                            innerShadow = {
-                                val progress = dampedDragAnimation.pressProgress
-                                InnerShadow(
-                                    radius = 8f.dp * progress,
-                                    alpha = progress,
-                                )
-                            },
-                            layerBlock = {
-                                scaleX = dampedDragAnimation.scaleX
-                                scaleY = dampedDragAnimation.scaleY
-
-                                val velocity = dampedDragAnimation.velocity / 10f
-                                scaleX /= 1f -
-                                    (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
-                                scaleY *= 1f -
-                                    (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
-                            },
-                            onDrawSurface = {
-                                val progress = dampedDragAnimation.pressProgress
-                                drawRect(
-                                    if (isLightTheme) {
-                                        Color.Black.copy(0.1f)
-                                    } else {
-                                        Color.White.copy(0.1f)
+                        .then(
+                            if (pillGlassEnabled && effectMultiplier > 0.001f) {
+                                Modifier.drawBackdrop(
+                                    backdrop = if (showReflectionLayer) rememberCombinedBackdrop(liveBackdrop, tabsBackdrop) else liveBackdrop,
+                                    shape = { pillShape },
+                                    effects = {
+                                        val progress = dampedDragAnimation.pressProgress
+                                        lens(
+                                            (pillLensAmount * 0.72f).dp.toPx() * progress * effectMultiplier,
+                                            pillLensAmount.dp.toPx() * progress * effectMultiplier,
+                                            chromaticAberration = true,
+                                        )
                                     },
-                                    alpha = 1f - progress,
+                                    highlight = {
+                                        val progress = dampedDragAnimation.pressProgress
+                                        Highlight.Default.copy(alpha = progress * pillHighlight)
+                                    },
+                                    shadow = {
+                                        val progress = dampedDragAnimation.pressProgress
+                                        Shadow(alpha = progress * pillShadow)
+                                    },
+                                    innerShadow = {
+                                        val progress = dampedDragAnimation.pressProgress
+                                        InnerShadow(
+                                            radius = 8f.dp * progress,
+                                            alpha = progress * pillShadow,
+                                        )
+                                    },
+                                    layerBlock = {
+                                        scaleX = dampedDragAnimation.scaleX
+                                        scaleY = dampedDragAnimation.scaleY
+
+                                        val velocity = dampedDragAnimation.velocity / 10f
+                                        scaleX /= 1f -
+                                            (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
+                                        scaleY *= 1f -
+                                            (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+                                    },
+                                    onDrawSurface = {
+                                        val progress = dampedDragAnimation.pressProgress
+                                        drawRect(
+                                            if (isLightTheme) {
+                                                Color.Black.copy(pillOpacity)
+                                            } else {
+                                                Color.White.copy(pillOpacity)
+                                            },
+                                            alpha = 1f - progress,
+                                        )
+                                        drawRect(
+                                            Color.Black.copy(alpha = 0.03f * progress)
+                                        )
+                                    },
                                 )
-                                drawRect(
-                                    Color.Black.copy(alpha = 0.03f * progress)
-                                )
-                            },
+                            } else {
+                                Modifier
+                                    .graphicsLayer {
+                                        scaleX = dampedDragAnimation.scaleX
+                                        scaleY = dampedDragAnimation.scaleY
+
+                                        val velocity = dampedDragAnimation.velocity / 10f
+                                        scaleX /= 1f -
+                                            (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
+                                        scaleY *= 1f -
+                                            (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+                                    }
+                                    .background(
+                                        if (isLightTheme) {
+                                            Color.Black.copy(pillOpacity)
+                                        } else {
+                                            Color.White.copy((pillOpacity * 1.5f).coerceIn(0f, 1f))
+                                        },
+                                        shape = pillShape
+                                    )
+                                    .clip(pillShape)
+                            }
                         )
                         .height(barHeight - 8.dp)
                         .fillMaxWidth(1f / tabCount),

@@ -154,9 +154,27 @@ class SettingsRepository(context: Context) {
 
         var enabled by prefsBooleanState("${prefix}_enabled", defaults.enabled)
             private set
+        var barGlassEnabled by prefsBooleanState("${prefix}_bar_glass_enabled", defaults.barGlassEnabled)
+            private set
+        var pillGlassEnabled by prefsBooleanState("${prefix}_pill_glass_enabled", defaults.pillGlassEnabled)
+            private set
+        var reflectionLayerEnabled by prefsBooleanState("${prefix}_reflection_layer_enabled", defaults.reflectionLayerEnabled)
+            private set
         var glassIntensity by prefsFloatState("${prefix}_glass_intensity", defaults.glassIntensity)
             private set
+        var barBlurDp by prefsFloatState("${prefix}_bar_blur_dp", defaults.barBlurDp)
+            private set
+        var barLensAmount by prefsFloatState("${prefix}_bar_lens_amount", defaults.barLensAmount)
+            private set
+        var pillLensAmount by prefsFloatState("${prefix}_pill_lens_amount", defaults.pillLensAmount)
+            private set
+        var pillHighlight by prefsFloatState("${prefix}_pill_highlight", defaults.pillHighlight)
+            private set
+        var pillShadow by prefsFloatState("${prefix}_pill_shadow", defaults.pillShadow)
+            private set
         var containerOpacity by prefsFloatState("${prefix}_container_opacity", defaults.containerOpacity)
+            private set
+        var pillOpacity by prefsFloatState("${prefix}_pill_opacity", defaults.pillOpacity)
             private set
         var cornerRadius by prefsFloatState("${prefix}_corner_radius", defaults.cornerRadius)
             private set
@@ -170,15 +188,49 @@ class SettingsRepository(context: Context) {
             private set
 
         fun snapshot(): NavBarAppSettings = NavBarAppSettings(
-            enabled, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, themeMode, accent
+            enabled = enabled,
+            barGlassEnabled = barGlassEnabled,
+            pillGlassEnabled = pillGlassEnabled,
+            reflectionLayerEnabled = reflectionLayerEnabled,
+            glassIntensity = glassIntensity,
+            barBlurDp = barBlurDp,
+            barLensAmount = barLensAmount,
+            pillLensAmount = pillLensAmount,
+            pillHighlight = pillHighlight,
+            pillShadow = pillShadow,
+            containerOpacity = containerOpacity,
+            pillOpacity = pillOpacity,
+            cornerRadius = cornerRadius,
+            barHeight = barHeight,
+            tabWidth = tabWidth,
+            themeMode = themeMode,
+            accent = accent
         )
 
         @JvmName("setEnabledPref")
         fun setEnabled(v: Boolean) { enabled = v }
+        @JvmName("setBarGlassEnabledPref")
+        fun setBarGlassEnabled(v: Boolean) { barGlassEnabled = v }
+        @JvmName("setPillGlassEnabledPref")
+        fun setPillGlassEnabled(v: Boolean) { pillGlassEnabled = v }
+        @JvmName("setReflectionLayerEnabledPref")
+        fun setReflectionLayerEnabled(v: Boolean) { reflectionLayerEnabled = v }
         @JvmName("setGlassIntensityPref")
         fun setGlassIntensity(v: Float) { glassIntensity = v }
+        @JvmName("setBarBlurDpPref")
+        fun setBarBlurDp(v: Float) { barBlurDp = v }
+        @JvmName("setBarLensAmountPref")
+        fun setBarLensAmount(v: Float) { barLensAmount = v }
+        @JvmName("setPillLensAmountPref")
+        fun setPillLensAmount(v: Float) { pillLensAmount = v }
+        @JvmName("setPillHighlightPref")
+        fun setPillHighlight(v: Float) { pillHighlight = v }
+        @JvmName("setPillShadowPref")
+        fun setPillShadow(v: Float) { pillShadow = v }
         @JvmName("setContainerOpacityPref")
         fun setContainerOpacity(v: Float) { containerOpacity = v }
+        @JvmName("setPillOpacityPref")
+        fun setPillOpacity(v: Float) { pillOpacity = v }
         @JvmName("setCornerRadiusPref")
         fun setCornerRadius(v: Float) { cornerRadius = v }
         @JvmName("setBarHeightPref")
@@ -192,8 +244,17 @@ class SettingsRepository(context: Context) {
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
+            barGlassEnabled = defaults.barGlassEnabled
+            pillGlassEnabled = defaults.pillGlassEnabled
+            reflectionLayerEnabled = defaults.reflectionLayerEnabled
             glassIntensity = defaults.glassIntensity
+            barBlurDp = defaults.barBlurDp
+            barLensAmount = defaults.barLensAmount
+            pillLensAmount = defaults.pillLensAmount
+            pillHighlight = defaults.pillHighlight
+            pillShadow = defaults.pillShadow
             containerOpacity = defaults.containerOpacity
+            pillOpacity = defaults.pillOpacity
             cornerRadius = defaults.cornerRadius
             barHeight = defaults.barHeight
             tabWidth = defaults.tabWidth

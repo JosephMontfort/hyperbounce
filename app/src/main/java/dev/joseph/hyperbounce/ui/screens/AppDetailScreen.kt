@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.joseph.hyperbounce.ui.components.AppGridIcon
 import dev.joseph.hyperbounce.ui.components.CheckmarkIcon
 import dev.joseph.hyperbounce.ui.components.DropdownPicker
 import dev.joseph.hyperbounce.ui.components.GlassCard
@@ -30,6 +31,7 @@ import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
+import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.state.AccentPreset
 import dev.joseph.hyperbounce.ui.state.NavApp
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
@@ -73,7 +75,10 @@ fun AppDetailScreen(
                 backdrop = backdrop,
                 accentColor = accentColor,
                 glassIntensity = s.glassIntensity,
+                barGlassEnabled = s.barGlassEnabled,
+                pillGlassEnabled = s.pillGlassEnabled,
                 containerOpacity = s.containerOpacity,
+                pillOpacity = s.pillOpacity,
                 cornerRadiusDp = s.cornerRadius,
                 barHeightDp = s.barHeight,
                 tabWidthDp = s.tabWidth,
@@ -97,8 +102,41 @@ fun AppDetailScreen(
         }
 
         item {
-            SectionHeader("Glass Effect", colors)
+            SectionHeader("Glass & Backdrop Effects", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "Bar Glass Effect",
+                    subtitle = if (s.barGlassEnabled) "Liquid glass & live backdrop blur enabled" else "Flat translucent background (Zero GPU overhead)",
+                    colors = colors,
+                    iconTint = accentColor.copy(alpha = 0.85f),
+                    backdrop = backdrop,
+                    checked = s.barGlassEnabled,
+                    onCheckedChange = holder::setBarGlassEnabled,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsToggleRow(
+                    title = "Tab Pill Glass Effect",
+                    subtitle = if (s.pillGlassEnabled) "Refraction & lens shader on active tab indicator" else "Clean native translucent pill indicator",
+                    colors = colors,
+                    iconTint = accentColor.copy(alpha = 0.85f),
+                    backdrop = backdrop,
+                    checked = s.pillGlassEnabled,
+                    onCheckedChange = holder::setPillGlassEnabled,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsToggleRow(
+                    title = "Icon Reflection Layer",
+                    subtitle = if (s.reflectionLayerEnabled) "Refracts tab icons through liquid pill glass" else "Skips extra icon reflection render pass",
+                    colors = colors,
+                    iconTint = accentColor.copy(alpha = 0.85f),
+                    backdrop = backdrop,
+                    checked = s.reflectionLayerEnabled,
+                    onCheckedChange = holder::setReflectionLayerEnabled,
+                    icon = { AppGridIcon(color = Color.White, size = 15.dp) }
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsSliderRow(
                     title = "Glass Intensity",
                     subtitle = "Overall refractive clarity and blur multiplier",
@@ -106,21 +144,104 @@ fun AppDetailScreen(
                     backdrop = backdrop,
                     value = s.glassIntensity,
                     onValueChange = holder::setGlassIntensity,
-                    valueRange = 0.4f..2.0f,
+                    valueRange = 0.0f..2.0f,
                     defaultValue = 1.0f,
                     valueLabel = { "${(it * 100).roundToInt()}%" },
-                    enabled = s.enabled
+                    enabled = s.enabled && (s.barGlassEnabled || s.pillGlassEnabled)
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsSliderRow(
+                    title = "Bar Blur Radius",
+                    subtitle = "Background blur radius for floating bar",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.barBlurDp,
+                    onValueChange = holder::setBarBlurDp,
+                    valueRange = 0f..24f,
+                    defaultValue = 8f,
+                    valueLabel = { "${it.roundToInt()}dp" },
+                    enabled = s.enabled && s.barGlassEnabled
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsSliderRow(
+                    title = "Bar Lens Refraction",
+                    subtitle = "AGSL edge refraction height for bar container",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.barLensAmount,
+                    onValueChange = holder::setBarLensAmount,
+                    valueRange = 0f..32f,
+                    defaultValue = 18f,
+                    valueLabel = { "${it.roundToInt()}dp" },
+                    enabled = s.enabled && s.barGlassEnabled
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsSliderRow(
+                    title = "Pill Lens Refraction",
+                    subtitle = "AGSL edge refraction height on active tab pill",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.pillLensAmount,
+                    onValueChange = holder::setPillLensAmount,
+                    valueRange = 0f..24f,
+                    defaultValue = 11f,
+                    valueLabel = { "${it.roundToInt()}dp" },
+                    enabled = s.enabled && s.pillGlassEnabled
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsSliderRow(
+                    title = "Pill Highlight",
+                    subtitle = "Specular highlight strength on active tab pill",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.pillHighlight,
+                    onValueChange = holder::setPillHighlight,
+                    valueRange = 0f..1f,
+                    defaultValue = 0.8f,
+                    valueLabel = { "${(it * 100).roundToInt()}%" },
+                    enabled = s.enabled && s.pillGlassEnabled
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsSliderRow(
+                    title = "Pill Shadow Depth",
+                    subtitle = "Drop and inner shadow depth on active tab pill",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.pillShadow,
+                    onValueChange = holder::setPillShadow,
+                    valueRange = 0f..1f,
+                    defaultValue = 0.6f,
+                    valueLabel = { "${(it * 100).roundToInt()}%" },
+                    enabled = s.enabled && s.pillGlassEnabled
+                )
+            }
+        }
+
+        item {
+            SectionHeader("Opacity & Tint", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsSliderRow(
                     title = "Container Opacity",
-                    subtitle = "Translucent background tint opacity",
+                    subtitle = "Translucent background tint opacity for bar",
                     colors = colors,
                     backdrop = backdrop,
                     value = s.containerOpacity,
                     onValueChange = holder::setContainerOpacity,
                     valueRange = 0f..1f,
                     defaultValue = 0.4f,
+                    valueLabel = { "${(it * 100).roundToInt()}%" },
+                    enabled = s.enabled
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsSliderRow(
+                    title = "Tab Pill Opacity",
+                    subtitle = "Resting background tint opacity for active tab pill",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.pillOpacity,
+                    onValueChange = holder::setPillOpacity,
+                    valueRange = 0.02f..0.50f,
+                    defaultValue = 0.10f,
                     valueLabel = { "${(it * 100).roundToInt()}%" },
                     enabled = s.enabled
                 )

@@ -36,7 +36,10 @@ fun NavBarPreview(
     backdrop: Backdrop,
     accentColor: Color,
     glassIntensity: Float,
+    barGlassEnabled: Boolean = true,
+    pillGlassEnabled: Boolean = true,
     containerOpacity: Float,
+    pillOpacity: Float = 0.1f,
     cornerRadiusDp: Float,
     barHeightDp: Float,
     tabWidthDp: Float,
@@ -52,11 +55,11 @@ fun NavBarPreview(
         contentAlignment = Alignment.Center
     ) {
         val shape = RoundedCornerShape(cornerRadiusDp.dp)
-        Row(
+        Box(
             Modifier
                 .height(barHeightDp.dp)
                 .then(
-                    if (glass.enabled) {
+                    if (glass.enabled && barGlassEnabled) {
                         Modifier.drawBackdrop(
                             backdrop = backdrop,
                             shape = { shape },
@@ -76,27 +79,62 @@ fun NavBarPreview(
                             }
                         )
                     } else {
-                        Modifier.background(Color(0xFF3A3A3C).copy(alpha = (0.35f + containerOpacity * 0.5f).coerceIn(0f, 1f)))
+                        Modifier.background(Color(0xFF3A3A3C).copy(alpha = (0.35f + containerOpacity * 0.5f).coerceIn(0f, 1f)), shape)
                     }
                 )
                 .clip(shape)
-                .padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(4.dp),
+            contentAlignment = Alignment.CenterStart
         ) {
-            repeat(tabCount) { index ->
-                Box(
-                    Modifier
-                        .size(width = tabWidthDp.dp, height = (barHeightDp - 16f).dp.coerceAtLeast(20.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
+            // Pill indicator preview
+            val pillShape = RoundedCornerShape(cornerRadiusDp.dp)
+            Box(
+                Modifier
+                    .padding(start = (selectedIndex * tabWidthDp).dp)
+                    .size(width = tabWidthDp.dp, height = (barHeightDp - 8f).dp.coerceAtLeast(20.dp))
+                    .then(
+                        if (glass.enabled && pillGlassEnabled) {
+                            Modifier.drawBackdrop(
+                                backdrop = backdrop,
+                                shape = { pillShape },
+                                effects = {
+                                    lens(
+                                        (glass.refractionHeightDp / 2.5f).dp.toPx() * glassIntensity,
+                                        (glass.refractionAmountDp / 2.5f).dp.toPx() * glassIntensity,
+                                        chromaticAberration = true
+                                    )
+                                },
+                                highlight = { Highlight.Default.copy(alpha = 0.6f) },
+                                shadow = { Shadow(radius = 4f.dp, color = Color.Black.copy(alpha = 0.2f)) },
+                                onDrawSurface = {
+                                    drawRect(Color.White.copy(alpha = pillOpacity))
+                                }
+                            )
+                        } else {
+                            Modifier.background(Color.White.copy(alpha = (pillOpacity * 1.5f).coerceIn(0f, 1f)), pillShape)
+                        }
+                    )
+                    .clip(pillShape)
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                repeat(tabCount) { index ->
                     Box(
                         Modifier
-                            .size(9.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (index == selectedIndex) accentColor else Color.White.copy(alpha = 0.55f)
-                            )
-                    )
+                            .size(width = tabWidthDp.dp, height = (barHeightDp - 8f).dp.coerceAtLeast(20.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            Modifier
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (index == selectedIndex) accentColor else Color.White.copy(alpha = 0.55f)
+                                )
+                        )
+                    }
                 }
             }
         }

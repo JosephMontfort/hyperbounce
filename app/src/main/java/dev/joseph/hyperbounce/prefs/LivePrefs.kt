@@ -19,8 +19,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 
 data class NavBarLiveSettings(
+    val enabled: Boolean,
+    val barGlassEnabled: Boolean,
+    val pillGlassEnabled: Boolean,
+    val reflectionLayerEnabled: Boolean,
     val glassIntensity: Float,
+    val barBlurDp: Float,
+    val barLensAmount: Float,
+    val pillLensAmount: Float,
+    val pillHighlight: Float,
+    val pillShadow: Float,
     val containerOpacity: Float,
+    val pillOpacity: Float,
     val cornerRadius: Float,
     val barHeight: Float,
     val tabWidth: Float,
@@ -29,8 +39,18 @@ data class NavBarLiveSettings(
 )
 
 private fun readNavBarSettings(hyperBouncePrefs: HyperBouncePrefs, appKey: String) = NavBarLiveSettings(
+    enabled = hyperBouncePrefs.appEnabled(appKey),
+    barGlassEnabled = hyperBouncePrefs.appBarGlassEnabled(appKey),
+    pillGlassEnabled = hyperBouncePrefs.appPillGlassEnabled(appKey),
+    reflectionLayerEnabled = hyperBouncePrefs.appReflectionLayerEnabled(appKey),
     glassIntensity = hyperBouncePrefs.appGlassIntensity(appKey),
+    barBlurDp = hyperBouncePrefs.appBarBlurDp(appKey),
+    barLensAmount = hyperBouncePrefs.appBarLensAmount(appKey),
+    pillLensAmount = hyperBouncePrefs.appPillLensAmount(appKey),
+    pillHighlight = hyperBouncePrefs.appPillHighlight(appKey),
+    pillShadow = hyperBouncePrefs.appPillShadow(appKey),
     containerOpacity = hyperBouncePrefs.appContainerOpacity(appKey),
+    pillOpacity = hyperBouncePrefs.appPillOpacity(appKey),
     cornerRadius = hyperBouncePrefs.appCornerRadius(appKey),
     barHeight = hyperBouncePrefs.appBarHeight(appKey),
     tabWidth = hyperBouncePrefs.appTabWidth(appKey),

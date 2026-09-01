@@ -42,11 +42,38 @@ class HyperBouncePrefs(module: XposedInterface) {
     fun appEnabled(appKey: String): Boolean =
         prefs.getBoolean("app_${appKey}_enabled", true)
 
+    fun appBarGlassEnabled(appKey: String): Boolean =
+        prefs.getBoolean("app_${appKey}_bar_glass_enabled", true)
+
+    fun appPillGlassEnabled(appKey: String): Boolean =
+        prefs.getBoolean("app_${appKey}_pill_glass_enabled", true)
+
+    fun appReflectionLayerEnabled(appKey: String): Boolean =
+        prefs.getBoolean("app_${appKey}_reflection_layer_enabled", true)
+
     fun appGlassIntensity(appKey: String): Float =
         prefs.getFloat("app_${appKey}_glass_intensity", 1.0f)
 
+    fun appBarBlurDp(appKey: String): Float =
+        prefs.getFloat("app_${appKey}_bar_blur_dp", 8f)
+
+    fun appBarLensAmount(appKey: String): Float =
+        prefs.getFloat("app_${appKey}_bar_lens_amount", 18f)
+
+    fun appPillLensAmount(appKey: String): Float =
+        prefs.getFloat("app_${appKey}_pill_lens_amount", 11f)
+
+    fun appPillHighlight(appKey: String): Float =
+        prefs.getFloat("app_${appKey}_pill_highlight", 0.8f)
+
+    fun appPillShadow(appKey: String): Float =
+        prefs.getFloat("app_${appKey}_pill_shadow", 0.6f)
+
     fun appContainerOpacity(appKey: String): Float =
         prefs.getFloat("app_${appKey}_container_opacity", 0.4f)
+
+    fun appPillOpacity(appKey: String): Float =
+        prefs.getFloat("app_${appKey}_pill_opacity", 0.1f)
 
     fun appCornerRadius(appKey: String): Float =
         prefs.getFloat("app_${appKey}_corner_radius", if (appKey == "whatsapp") 36f else 32f)
