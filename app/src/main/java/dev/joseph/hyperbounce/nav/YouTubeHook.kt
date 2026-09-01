@@ -140,7 +140,14 @@ class YouTubeHook(
         } catch (t: Throwable) {}
     }
 
+    private var lastCheckedUiMode = -1
+    private var cachedDarkMode = false
+
     private fun isYouTubeInDarkMode(activity: Activity): Boolean {
+        val uiMode = activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        if (uiMode == lastCheckedUiMode) return cachedDarkMode
+        lastCheckedUiMode = uiMode
+
         val typedValue = TypedValue()
         activity.theme.resolveAttribute(android.R.attr.colorBackground, typedValue, true)
         if (typedValue.type in TypedValue.TYPE_FIRST_COLOR_INT..TypedValue.TYPE_LAST_COLOR_INT) {
@@ -149,10 +156,11 @@ class YouTubeHook(
             val g = Color.green(color)
             val b = Color.blue(color)
             val luminance = 0.299 * r + 0.587 * g + 0.114 * b
-            return luminance < 128
+            cachedDarkMode = luminance < 128
+            return cachedDarkMode
         }
-        val uiMode = activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-        return uiMode == Configuration.UI_MODE_NIGHT_YES
+        cachedDarkMode = uiMode == Configuration.UI_MODE_NIGHT_YES
+        return cachedDarkMode
     }
 
     private fun executeUIHeist(activity: Activity, rootGroup: ViewGroup, pivotBar: ViewGroup) {

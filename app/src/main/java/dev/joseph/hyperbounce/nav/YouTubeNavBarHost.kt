@@ -126,10 +126,14 @@ fun YouTubeNavBarHost(
     var selectedIndex by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(pivotBar, isDark) {
+        tabs = extractYouTubeTabs(pivotBar, isDark)
+
         while (true) {
-            val extracted = extractYouTubeTabs(pivotBar, isDark)
-            if (extracted.isNotEmpty() && extracted.size != tabs.size) {
-                tabs = extracted
+            if (tabs.isEmpty() || tabs.any { it.inactiveBitmap == null }) {
+                val extracted = extractYouTubeTabs(pivotBar, isDark)
+                if (extracted.isNotEmpty()) {
+                    tabs = extracted
+                }
             }
             if (tabs.isNotEmpty()) {
                 for (i in tabs.indices) {
@@ -139,7 +143,7 @@ fun YouTubeNavBarHost(
                     }
                 }
             }
-            delay(500)
+            delay(150)
         }
     }
 

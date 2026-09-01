@@ -94,6 +94,15 @@ class InstagramHook(
 
                                     injectLiquidGlass(activity, view as ViewGroup, stockBar as? ViewGroup, hyperBouncePrefs)
 
+                                    val res = activity.resources
+                                    val pkg = activity.packageName
+                                    val clipsTabId = res.getIdentifier("clips_tab", "id", pkg)
+                                    val clipsGradientId = res.getIdentifier("clips_bottom_legibility_gradient_component", "id", pkg)
+                                    val clipsTouchBgId = res.getIdentifier("clips_touchable_background", "id", pkg)
+                                    val clipsOverlayCompId = res.getIdentifier("clips_item_overlay_component", "id", pkg)
+                                    val clipsPauseMuteId = res.getIdentifier("clips_pause_and_mute_component", "id", pkg)
+                                    val scrubberId = res.getIdentifier("scrubber", "id", pkg)
+
                                     decorView.viewTreeObserver.addOnGlobalLayoutListener {
                                         val injectedBar = decorView.findViewWithTag<View>("LiquidGlassInjected")
                                         val isTabBarActive = (stockBar != null && stockBar.visibility == View.VISIBLE)
@@ -103,8 +112,7 @@ class InstagramHook(
                                         }
 
                                         var isReelsTabActive = false
-                                        if (isTabBarActive) {
-                                            val clipsTabId = activity.resources.getIdentifier("clips_tab", "id", activity.packageName)
+                                        if (isTabBarActive && clipsTabId != 0) {
                                             val clipsTab = stockBar?.findViewById<View>(clipsTabId)
                                             if (clipsTab != null && (clipsTab.isSelected || clipsTab.isActivated)) {
                                                 isReelsTabActive = true
@@ -118,22 +126,17 @@ class InstagramHook(
                                                 for (c in 0 until overlayParent.childCount) {
                                                     val sibling = overlayParent.getChildAt(c)
                                                     val sibId = sibling.id
-                                                    var sibName = ""
-                                                    if (sibId != View.NO_ID && sibling.resources != null) {
-                                                        try {
-                                                            sibName = sibling.resources.getResourceEntryName(sibId)
-                                                        } catch (e: Exception) {}
+                                                    if (sibId != View.NO_ID) {
+                                                        if (sibId == clipsGradientId ||
+                                                            sibId == clipsTouchBgId ||
+                                                            sibId == clipsOverlayCompId ||
+                                                            sibId == clipsPauseMuteId
+                                                        ) {
+                                                            continue
+                                                        }
                                                     }
 
-                                                    if (sibName == "clips_bottom_legibility_gradient_component" ||
-                                                        sibName == "clips_touchable_background" ||
-                                                        sibName == "clips_item_overlay_component" ||
-                                                        sibName == "clips_pause_and_mute_component"
-                                                    ) {
-                                                        continue
-                                                    }
-
-                                                    if (containsScrubber(sibling, 0)) continue
+                                                    if (containsScrubber(sibling, 0, scrubberId)) continue
 
                                                     if (sibling.translationY != shiftY) {
                                                         sibling.translationY = shiftY
@@ -183,17 +186,20 @@ class InstagramHook(
         } catch (t: Throwable) {}
     }
 
-    private fun containsScrubber(view: View?, depth: Int): Boolean {
+    private fun containsScrubber(view: View?, depth: Int, scrubberId: Int): Boolean {
         if (view == null || depth > 4) return false
         val id = view.id
-        if (id != View.NO_ID && view.resources != null) {
-            try {
-                if (view.resources.getResourceEntryName(id) == "scrubber") return true
-            } catch (e: Exception) {}
+        if (id != View.NO_ID) {
+            if (scrubberId != 0 && id == scrubberId) return true
+            if (view.resources != null) {
+                try {
+                    if (view.resources.getResourceEntryName(id) == "scrubber") return true
+                } catch (e: Exception) {}
+            }
         }
         if (view is ViewGroup) {
             for (i in 0 until view.childCount) {
-                if (containsScrubber(view.getChildAt(i), depth + 1)) return true
+                if (containsScrubber(view.getChildAt(i), depth + 1, scrubberId)) return true
             }
         }
         return false

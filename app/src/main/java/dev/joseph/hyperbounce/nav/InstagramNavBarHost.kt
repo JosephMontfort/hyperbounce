@@ -20,7 +20,12 @@ import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
 import dev.joseph.hyperbounce.prefs.rememberLiveNavBarSettings
 import kotlinx.coroutines.delay
 
-private data class InstagramTabData(val resId: Int, val inactiveBitmap: Bitmap?, val activeBitmap: Bitmap?)
+private data class InstagramTabData(
+    val resId: Int,
+    val inactiveBitmap: Bitmap?,
+    val activeBitmap: Bitmap?,
+    val tabView: View? = null,
+)
 
 private val instagramOrderedTabNames = listOf("feed_tab", "clips_tab", "direct_tab", "search_tab", "profile_tab")
 
@@ -76,7 +81,7 @@ private fun extractInstagramTabs(stockBar: ViewGroup, tabNames: List<String>, is
             }
         }
 
-        InstagramTabData(resId, inactiveBmp, activeBmp)
+        InstagramTabData(resId, inactiveBmp, activeBmp, tabView)
     }
 }
 
@@ -93,20 +98,27 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
     var tabs by remember { mutableStateOf(emptyList<InstagramTabData>()) }
 
     LaunchedEffect(stockBar, isDark) {
+        if (stockBar == null) return@LaunchedEffect
+        tabs = extractInstagramTabs(stockBar, instagramOrderedTabNames, isDark)
+
         while (true) {
-            if (stockBar != null) {
-                tabs = extractInstagramTabs(stockBar, instagramOrderedTabNames, isDark)
-                for (i in tabs.indices) {
-                    val view = stockBar.findViewById<View>(tabs[i].resId)
-                    if (view != null && (view.isSelected || view.isActivated)) {
-                        if (selectedIndex != i) {
-                            selectedIndex = i
-                        }
-                        break
-                    }
+            if (tabs.isEmpty() || tabs.any { it.inactiveBitmap == null }) {
+                val extracted = extractInstagramTabs(stockBar, instagramOrderedTabNames, isDark)
+                if (extracted.isNotEmpty()) {
+                    tabs = extracted
                 }
             }
-            delay(500)
+
+            for (i in tabs.indices) {
+                val view = tabs[i].tabView ?: stockBar.findViewById(tabs[i].resId)
+                if (view != null && (view.isSelected || view.isActivated)) {
+                    if (selectedIndex != i) {
+                        selectedIndex = i
+                    }
+                    break
+                }
+            }
+            delay(150)
         }
     }
 
