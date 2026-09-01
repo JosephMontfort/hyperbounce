@@ -108,6 +108,7 @@ fun LiquidNavigationBar(
         else Color(0xFF121212).copy(containerAlpha)
 
     val density = LocalDensity.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val liveBackdrop = if (liquidGlass) {
         remember(sourceView) {
             LiquidGlassViewBackdrop(sourceView)
@@ -160,6 +161,9 @@ fun LiquidNavigationBar(
                 }
 
                 val animationScope = rememberCoroutineScope()
+                var lastHapticIndex by remember(selectedIndex) {
+                    mutableIntStateOf(selectedIndex)
+                }
 
                 val dampedDragAnimation = remember(animationScope, tabCount) {
                     LiquidGlassDampedDragAnimation(
@@ -174,6 +178,7 @@ fun LiquidNavigationBar(
                             val index = kotlin.math.round(value)
                                 .toInt()
                                 .coerceIn(0, tabCount - 1)
+                            lastHapticIndex = index
                             animateToValue(index.toFloat())
                             animationScope.launch {
                                 offsetAnimation.animateTo(
@@ -184,13 +189,19 @@ fun LiquidNavigationBar(
                             onTabSelected(index)
                         },
                         onDrag = { _, dragAmount ->
-                            updateValue(
-                                (
-                                    targetValue +
-                                        dragAmount.x / tabWidthPx *
-                                        if (isLtr) 1f else -1f
-                                    ).fastCoerceIn(0f, (tabCount - 1).toFloat())
-                            )
+                            val newVal = (
+                                targetValue +
+                                    dragAmount.x / tabWidthPx *
+                                    if (isLtr) 1f else -1f
+                                ).fastCoerceIn(0f, (tabCount - 1).toFloat())
+                            updateValue(newVal)
+
+                            val newIndex = kotlin.math.round(newVal).toInt().coerceIn(0, tabCount - 1)
+                            if (newIndex != lastHapticIndex) {
+                                lastHapticIndex = newIndex
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                            }
+
                             animationScope.launch {
                                 offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x)
                             }
@@ -200,6 +211,7 @@ fun LiquidNavigationBar(
 
                 // Mirror external/native tab selection into the exact damped animation.
                 LaunchedEffect(selectedIndex, tabCount) {
+                    lastHapticIndex = selectedIndex.coerceIn(0, tabCount - 1)
                     dampedDragAnimation.animateToValue(
                         selectedIndex.coerceIn(0, tabCount - 1).toFloat()
                     )
@@ -261,7 +273,7 @@ fun LiquidNavigationBar(
                             .fillMaxWidth()
                             .padding(4.dp),
                     ) {
-                        // Layer 1: Inactive unaccented tab items
+                        // Layer 1: Inactive unaccented tab items (handles direct tapping on any tab)
                         Row(
                             Modifier.fillMaxSize(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -280,7 +292,7 @@ fun LiquidNavigationBar(
                             }
                         }
 
-                        // Layer 2: Moving Tab Indicator Pill (Horizontal Bloom only)
+                        // Layer 2: Moving Tab Indicator Pill Surface (Horizontal Bloom only)
                         Box(
                             Modifier
                                 .graphicsLayer {
@@ -292,15 +304,13 @@ fun LiquidNavigationBar(
                                     scaleX = dampedDragAnimation.scaleX
                                     scaleY = 1f // Horizontal bloom only in non-liquid mode
                                 }
-                                .then(interactiveHighlight.gestureModifier)
-                                .then(dampedDragAnimation.modifier)
                                 .background(classicPillBg, pillShape)
                                 .border(0.5.dp, classicPillBorder, pillShape)
                                 .fillMaxHeight()
                                 .width(with(density) { tabWidthPx.toDp() })
                         )
 
-                        // Layer 3: Active accented tab items, dynamically clipped strictly to the moving pill shape
+                        // Layer 3: Active accented tab items, dynamically clipped strictly to the moving pill shape (no onClick so touches pass through)
                         Row(
                             Modifier
                                 .fillMaxSize()
@@ -340,13 +350,28 @@ fun LiquidNavigationBar(
                                     isCircular = index in circularIndices,
                                     accentColor = accentColor,
                                     label = labels.getOrNull(index),
-                                    onClick = {
-                                        onTabSelected(index)
-                                        dampedDragAnimation.animateToValue(index.toFloat())
-                                    },
+                                    onClick = null,
                                 )
                             }
                         }
+
+                        // Layer 4: Topmost Interactive Gesture Box for the Pill (receives long-press & pull)
+                        Box(
+                            Modifier
+                                .graphicsLayer {
+                                    translationX = if (isLtr) {
+                                        dampedDragAnimation.value * tabWidthPx
+                                    } else {
+                                        (tabCount - 1 - dampedDragAnimation.value) * tabWidthPx
+                                    }
+                                    scaleX = dampedDragAnimation.scaleX
+                                    scaleY = 1f
+                                }
+                                .then(interactiveHighlight.gestureModifier)
+                                .then(dampedDragAnimation.modifier)
+                                .fillMaxHeight()
+                                .width(with(density) { tabWidthPx.toDp() })
+                        )
                     }
                 } else if (liveBackdrop != null) {
                     Row(

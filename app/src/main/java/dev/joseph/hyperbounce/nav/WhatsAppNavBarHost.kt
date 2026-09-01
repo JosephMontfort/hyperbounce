@@ -130,6 +130,7 @@ fun WhatsAppNavBarHost(
         pillContainerOpacity = live.pillContainerOpacity,
         pillChromaticAberration = live.pillChromaticAberration,
         pillShadow = live.pillShadow,
+        liquidGlass = live.liquidGlass,
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index
