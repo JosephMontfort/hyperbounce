@@ -621,15 +621,19 @@ private fun RowScope.LiquidBottomTab(
     isCircular: Boolean,
     label: String?,
     accentColor: Color? = null,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)? = null,
 ) {
     val scale = LocalLiquidBottomTabScale.current
     Column(
         Modifier
-            .clickable(
-                interactionSource = null,
-                indication = null,
-                onClick = onClick,
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(
+                        interactionSource = null,
+                        indication = null,
+                        onClick = onClick,
+                    )
+                } else Modifier
             )
             .fillMaxHeight()
             .weight(1f)
