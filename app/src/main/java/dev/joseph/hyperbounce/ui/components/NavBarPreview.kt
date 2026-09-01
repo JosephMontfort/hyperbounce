@@ -118,13 +118,15 @@ fun NavBarPreview(
                                             } else null,
                                             onDrawSurface = {
                                                 if (pillContainerOpacity > 0.001f) {
-                                                    drawRect(Color.White.copy(alpha = pillContainerOpacity * 0.18f))
+                                                    val alpha = if (pillContainerOpacity >= 0.999f) 1f else pillContainerOpacity.coerceIn(0f, 1f)
+                                                    drawRect(Color.White.copy(alpha = alpha))
                                                 }
                                             }
                                         )
                                     } else if (pillContainerOpacity > 0.001f) {
+                                        val alpha = if (pillContainerOpacity >= 0.999f) 1f else pillContainerOpacity.coerceIn(0f, 1f)
                                         Modifier.background(
-                                            Color.White.copy(alpha = pillContainerOpacity * 0.18f),
+                                            Color.White.copy(alpha = alpha),
                                             shape = pillShape
                                         )
                                     } else Modifier

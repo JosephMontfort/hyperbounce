@@ -149,14 +149,14 @@ fun AppDetailScreen(
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsSliderRow(
-                    title = "Pill Tint Opacity",
-                    subtitle = "Surface tint opacity for the indicator pill",
+                    title = "Pill Opacity",
+                    subtitle = "Surface tint opacity for the indicator pill (100% = fully opaque)",
                     colors = colors,
                     backdrop = backdrop,
                     value = s.pillContainerOpacity,
                     onValueChange = holder::setPillContainerOpacity,
                     valueRange = 0f..1f,
-                    defaultValue = 1.0f,
+                    defaultValue = 0.15f,
                     valueLabel = { "${(it * 100).roundToInt()}%" },
                     enabled = s.enabled
                 )

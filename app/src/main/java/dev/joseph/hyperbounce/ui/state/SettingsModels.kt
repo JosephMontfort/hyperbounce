@@ -51,7 +51,7 @@ data class NavBarAppSettings(
     val themeMode: ThemeMode = ThemeMode.System,
     val accent: AccentPreset = AccentPreset.Auto,
     val pillGlassIntensity: Float = 1.0f,
-    val pillContainerOpacity: Float = 1.0f,
+    val pillContainerOpacity: Float = 0.15f,
     val pillChromaticAberration: Boolean = true,
     val pillShadow: Boolean = true
 )
