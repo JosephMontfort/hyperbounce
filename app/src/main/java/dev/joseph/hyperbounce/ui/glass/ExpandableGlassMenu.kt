@@ -520,12 +520,13 @@ fun GlassEffectContainer(
     } else with(density) { 265.dp.toPx() }
 
     // Dynamic corner radius: Menu Corner (22dp) -> Singularity Core (19dp) -> Dialog Corner (36dp)
+    val menuRadiusPx = lerp(with(density) { (labelSize.height / 2f) }, with(density) { cornerRadius.toPx() }, animatableProgress.value.coerceIn(0f, 1f))
     val targetRadiusPx = if (dialogProgress <= 0.001f) {
-        with(density) { cornerRadius.toPx() }
+        menuRadiusPx
     } else if (dialogProgress <= circleCollapseRatio) {
         val u = (dialogProgress / circleCollapseRatio).coerceIn(0f, 1f)
         val uSmooth = u * u * (3f - 2f * u)
-        val startRadius = if (isConfirmedClose) with(density) { (labelSize.height / 2f) } else with(density) { cornerRadius.toPx() }
+        val startRadius = if (isConfirmedClose) with(density) { (labelSize.height / 2f) } else menuRadiusPx
         lerp(startRadius, circleDiameterPx / 2f, uSmooth)
     } else {
         val v = ((dialogProgress - circleCollapseRatio) / (1f - circleCollapseRatio)).coerceIn(0f, 1f)
@@ -550,7 +551,7 @@ fun GlassEffectContainer(
                 val menuWidthPx = labelSize.width + widthDiff * widthProgress
                 val menuHeightPx = labelSize.height + heightDiff * heightProgress
 
-                // 2. Continuous Fluid Morphing: Menu Rectangle -> Dense Liquid Droplet -> Full Center Dialog
+                // 2. Continuous Fluid Morphing with True iOS Concurrent Interruptibility
                 val currentWidthPx: Float
                 val currentHeightPx: Float
 
@@ -560,8 +561,8 @@ fun GlassEffectContainer(
                 } else {
                     val baseMorphW: Float
                     val baseMorphH: Float
-                    val startMorphW = if (isConfirmedClose) labelSize.width else effectiveMenuW
-                    val startMorphH = if (isConfirmedClose) labelSize.height else effectiveMenuH
+                    val startMorphW = if (isConfirmedClose) labelSize.width else menuWidthPx
+                    val startMorphH = if (isConfirmedClose) labelSize.height else menuHeightPx
 
                     if (dp <= circleCollapseRatio) {
                         // Stage 1: Continuous fluid suction into dense singularity droplet
@@ -724,7 +725,9 @@ fun GlassEffectContainer(
                 onDrawSurface = {
                     val progress = animatableProgress.value
                     val dp = dialogProgress
-                    val cr = targetRadiusPx
+                    val cr = with(density) { animatedRadius.toPx() }
+
+                    // Surface illumination & background matching
                     val startColor = if (isLightTheme) Color(0xFFFFFFFF) else Color(0xFF1C1C1E)
                     val endColor = if (isLightTheme) Color.White.copy(alpha = lerp(0.60f, 0.96f, dp))
                                    else Color(0xFF1C1C1E).copy(alpha = lerp(0.60f, 0.96f, dp))
@@ -794,6 +797,9 @@ fun GlassEffectContainer(
                                 dialogMeasuredHeightPx = size.height.toFloat()
                             }
                         }
+                        .pointerInput(Unit) {
+                            detectTapGestures { /* Consume clicks inside the dialog card */ }
+                        }
                         .graphicsLayer {
                             val appearProgress = ((dialogProgress - 0.35f) / 0.65f).coerceIn(0f, 1f)
                             val vBurst = 1f - (1f - appearProgress) * (1f - appearProgress) * (1f - appearProgress)
@@ -833,7 +839,7 @@ fun GlassEffectContainer(
                 .graphicsLayer {
                     val progress = animatableProgress.value
                     val labelOpacity = (progress / 0.35f).coerceIn(0f, 1f)
-                    alpha = 1f - labelOpacity
+                    alpha = (1f - labelOpacity) * (1f - (dialogProgress / 0.35f).coerceIn(0f, 1f))
                 }
                 .zIndex(if (animatableProgress.value <= 0.35f && dialogProgress == 0f) 2f else 0f)
         ) {
@@ -858,6 +864,9 @@ private fun MenuDialogContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectTapGestures { /* Consume clicks inside the dialog card so they never close the dialog */ }
+            }
             .padding(horizontal = 24.dp, vertical = 26.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
