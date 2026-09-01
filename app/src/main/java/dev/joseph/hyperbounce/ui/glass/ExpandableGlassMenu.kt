@@ -59,6 +59,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -196,6 +197,7 @@ fun ExpandableGlassMenu(
     var activeDialog by remember { mutableStateOf<MenuDialogData?>(null) }
     var lastDialog by remember { mutableStateOf<MenuDialogData?>(null) }
     var isConfirmedClose by remember { mutableStateOf(false) }
+    var containerPosition by remember { mutableStateOf(Offset.Zero) }
 
     val showDialog: (MenuDialogData) -> Unit = { data ->
         isConfirmedClose = false
@@ -315,11 +317,17 @@ fun ExpandableGlassMenu(
             arcYOffsetDp = arcYOffsetDp,
             labelSize = labelSizePx,
             contentSize = contentMeasuredSize,
-            labelCoordinates = labelCoordinates,
+            containerPosition = containerPosition,
             modifier = Modifier
                 .align(alignment.composeAlignment)
                 .safeDrawingPadding()
                 .padding(contentPadding)
+                .onGloballyPositioned { coords ->
+                    val pos = coords.positionInParent()
+                    if (pos != Offset.Zero && !pos.x.isNaN() && !pos.y.isNaN()) {
+                        containerPosition = pos
+                    }
+                }
                 .zIndex(10f),
             label = {
                 Box(
@@ -448,7 +456,7 @@ fun GlassEffectContainer(
     arcYOffsetDp: Float,
     labelSize: Size,
     contentSize: Size,
-    labelCoordinates: LayoutCoordinates?,
+    containerPosition: Offset,
     modifier: Modifier = Modifier,
     label: @Composable () -> Unit,
     content: @Composable () -> Unit
@@ -646,18 +654,15 @@ fun GlassEffectContainer(
                     scaleY = squishScale * lerp(jellySy, expandedStretchY, progress)
                     this.transformOrigin = alignment.transformOrigin
                 } else {
-                    // Physical position of label in root window
-                    val labelPosInRoot = labelCoordinates?.positionInRoot() ?: Offset.Zero
-                    val containerRightOnScreen = if (labelPosInRoot != Offset.Zero) (labelPosInRoot.x + labelSize.width) else (parentSize.width - with(density) { 16.dp.toPx() })
-                    val containerTopOnScreen = if (labelPosInRoot != Offset.Zero) labelPosInRoot.y else with(density) { 8.dp.toPx() }
+                    // Effective position of GlassEffectContainer in parent screen coordinate space
+                    val effectiveContainerX = if (containerPosition != Offset.Zero) containerPosition.x else (parentSize.width - labelSize.width - with(density) { 16.dp.toPx() })
+                    val effectiveContainerY = if (containerPosition != Offset.Zero) containerPosition.y else with(density) { 48.dp.toPx() }
+                    val containerRightOnScreen = effectiveContainerX + labelSize.width
+                    val containerTopOnScreen = effectiveContainerY
 
-                    // True dead-center translation to (parentSize.width / 2, parentSize.height / 2)
+                    // True dead-center translation: aligns horizontal and vertical center of placeable with center of device screen
                     val targetCenterTx = (parentSize.width / 2f) - (containerRightOnScreen - size.width / 2f)
                     val targetCenterTy = (parentSize.height / 2f) - (containerTopOnScreen + size.height / 2f)
-
-                    // Starting delta when morph starts
-                    val startTx = if (isConfirmedClose) ((labelSize.width / 2f) - (labelSize.width - size.width / 2f)) else 0f
-                    val startTy = if (isConfirmedClose) ((labelSize.height / 2f) - (size.height / 2f)) else 0f
 
                     val flightProgress = dp.coerceIn(0f, 1f)
                     val smoothTravel = (1f - cos(flightProgress * PI).toFloat()) / 2f
@@ -670,8 +675,8 @@ fun GlassEffectContainer(
                     val gravitySwoopY = zPlunge * (gravitySwoopPx * 1.4f)
                     val yBounce = if (dp > 1f) (dp - 1f) * (yBounceAmountPx * 1.2f) else 0f
 
-                    val pathTx = lerp(startTx, targetCenterTx, smoothTravel)
-                    val pathTy = lerp(startTy, targetCenterTy, smoothTravel) + gravitySwoopY + yBounce
+                    val pathTx = lerp(0f, targetCenterTx, smoothTravel)
+                    val pathTy = lerp(0f, targetCenterTy, smoothTravel) + gravitySwoopY + yBounce
 
                     translationX = pathTx + menuTx * (1f - dp)
                     translationY = pathTy + menuTy * (1f - dp)
