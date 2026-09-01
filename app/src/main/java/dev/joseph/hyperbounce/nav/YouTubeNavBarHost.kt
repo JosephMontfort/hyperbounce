@@ -151,7 +151,7 @@ fun YouTubeNavBarHost(
     val profileIndex = if (tabs.isNotEmpty()) tabs.size - 1 else -1
 
     LiquidNavigationBar(
-        bottomPadding = 28.dp,
+        bottomPadding = live.bottomMargin.dp,
         tabs = tabs.map { it.inactiveBitmap },
         activeTabs = tabs.map { it.activeBitmap },
         customAccentColor = accent,
@@ -164,6 +164,7 @@ fun YouTubeNavBarHost(
         pillContainerOpacity = live.pillContainerOpacity,
         pillChromaticAberration = live.pillChromaticAberration,
         pillShadow = live.pillShadow,
+        liquidGlass = live.liquidGlass,
         circularIndices = if (profileIndex >= 0) setOf(profileIndex) else emptySet(),
         selectedIndex = selectedIndex,
         onTabSelected = { index ->

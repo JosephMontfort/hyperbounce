@@ -44,6 +44,7 @@ fun NavBarPreview(
     pillContainerOpacity: Float = 1.0f,
     pillChromaticAberration: Boolean = true,
     pillShadow: Boolean = true,
+    liquidGlass: Boolean = true,
     tabCount: Int = 4,
     selectedIndex: Int = 1,
     modifier: Modifier = Modifier
@@ -60,7 +61,7 @@ fun NavBarPreview(
             Modifier
                 .height(barHeightDp.dp)
                 .then(
-                    if (glass.enabled) {
+                    if (glass.enabled && liquidGlass) {
                         Modifier.drawBackdrop(
                             backdrop = backdrop,
                             shape = { shape },
@@ -80,7 +81,7 @@ fun NavBarPreview(
                             }
                         )
                     } else {
-                        Modifier.background(Color(0xFF3A3A3C).copy(alpha = (0.35f + containerOpacity * 0.5f).coerceIn(0f, 1f)))
+                        Modifier.background(Color(0xFF161618).copy(alpha = (0.2f + containerOpacity * 0.7f).coerceIn(0.05f, 1f)), shape)
                     }
                 )
                 .clip(shape)
@@ -101,7 +102,7 @@ fun NavBarPreview(
                                 .fillMaxWidth()
                                 .height((barHeightDp - 20f).dp.coerceAtLeast(16.dp))
                                 .then(
-                                    if (glass.enabled && pillGlassIntensity > 0.001f) {
+                                    if (glass.enabled && liquidGlass && pillGlassIntensity > 0.001f) {
                                         Modifier.drawBackdrop(
                                             backdrop = backdrop,
                                             shape = { pillShape },
@@ -121,6 +122,11 @@ fun NavBarPreview(
                                                     drawRect(Color.White.copy(alpha = pillContainerOpacity * 0.18f))
                                                 }
                                             }
+                                        )
+                                    } else if (!liquidGlass) {
+                                        Modifier.background(
+                                            Color(0xFF3A3A3C).copy(alpha = (0.35f + pillContainerOpacity * 0.5f).coerceIn(0.1f, 1f)),
+                                            shape = pillShape
                                         )
                                     } else if (pillContainerOpacity > 0.001f) {
                                         Modifier.background(

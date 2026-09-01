@@ -126,7 +126,7 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
     val accent = accentColorFor(live.accent, isDark)
 
     LiquidNavigationBar(
-        bottomPadding = 40.dp,
+        bottomPadding = live.bottomMargin.dp,
         tabs = tabs.map { it.inactiveBitmap },
         activeTabs = tabs.map { it.activeBitmap },
         customAccentColor = accent,
@@ -141,6 +141,7 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
         pillContainerOpacity = live.pillContainerOpacity,
         pillChromaticAberration = live.pillChromaticAberration,
         pillShadow = live.pillShadow,
+        liquidGlass = live.liquidGlass,
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index

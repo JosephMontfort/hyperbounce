@@ -19,11 +19,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 
 data class NavBarLiveSettings(
+    val liquidGlass: Boolean,
     val glassIntensity: Float,
     val containerOpacity: Float,
     val cornerRadius: Float,
     val barHeight: Float,
     val tabWidth: Float,
+    val bottomMargin: Float,
     val themeMode: String,
     val accent: String,
     val pillGlassIntensity: Float,
@@ -33,11 +35,13 @@ data class NavBarLiveSettings(
 )
 
 private fun readNavBarSettings(hyperBouncePrefs: HyperBouncePrefs, appKey: String) = NavBarLiveSettings(
+    liquidGlass = hyperBouncePrefs.appLiquidGlass(appKey),
     glassIntensity = hyperBouncePrefs.appGlassIntensity(appKey),
     containerOpacity = hyperBouncePrefs.appContainerOpacity(appKey),
     cornerRadius = hyperBouncePrefs.appCornerRadius(appKey),
     barHeight = hyperBouncePrefs.appBarHeight(appKey),
     tabWidth = hyperBouncePrefs.appTabWidth(appKey),
+    bottomMargin = hyperBouncePrefs.appBottomMargin(appKey),
     themeMode = hyperBouncePrefs.appThemeMode(appKey),
     accent = hyperBouncePrefs.appAccent(appKey),
     pillGlassIntensity = hyperBouncePrefs.appPillGlassIntensity(appKey),

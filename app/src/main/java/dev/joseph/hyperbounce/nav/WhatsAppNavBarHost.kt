@@ -114,7 +114,7 @@ fun WhatsAppNavBarHost(
     }
 
     LiquidNavigationBar(
-        bottomPadding = 40.dp,
+        bottomPadding = live.bottomMargin.dp,
         tabs = tabs.map { it.inactiveBitmap },
         activeTabs = tabs.map { it.activeBitmap },
         labels = tabs.map { it.label },

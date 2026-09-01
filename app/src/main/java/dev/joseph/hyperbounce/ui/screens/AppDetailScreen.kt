@@ -55,6 +55,7 @@ fun AppDetailScreen(
     val defaultCornerRadius = if (app == NavApp.WhatsApp) 36f else 32f
     val defaultBarHeight = if (app == NavApp.WhatsApp) 70f else 64f
     val defaultTabWidth = if (app == NavApp.WhatsApp) 92f else 64f
+    val defaultBottomMargin = if (app == NavApp.YouTube) 28f else 40f
 
     ScreenScaffold(
         title = app.displayName,
@@ -82,6 +83,7 @@ fun AppDetailScreen(
                 pillContainerOpacity = s.pillContainerOpacity,
                 pillChromaticAberration = s.pillChromaticAberration,
                 pillShadow = s.pillShadow,
+                liquidGlass = s.liquidGlass,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
         }
@@ -104,6 +106,18 @@ fun AppDetailScreen(
         item {
             SectionHeader("Nav Bar Glass", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "Liquid Glass Engine",
+                    subtitle = if (s.liquidGlass) "Dynamic liquid refraction, lens and blur" else "Translucent iOS-style bar (zero backdrop lag)",
+                    colors = colors,
+                    iconTint = accentColor.copy(alpha = 0.85f),
+                    backdrop = backdrop,
+                    checked = s.liquidGlass,
+                    onCheckedChange = holder::setLiquidGlass,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
+                    enabled = s.enabled
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsSliderRow(
                     title = "Bar Glass Intensity",
                     subtitle = "Refractive clarity and blur multiplier for the nav bar container",
@@ -114,7 +128,7 @@ fun AppDetailScreen(
                     valueRange = 0f..2.0f,
                     defaultValue = 1.0f,
                     valueLabel = { "${(it * 100).roundToInt()}%" },
-                    enabled = s.enabled
+                    enabled = s.enabled && s.liquidGlass
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsSliderRow(
@@ -145,7 +159,7 @@ fun AppDetailScreen(
                     valueRange = 0f..2.0f,
                     defaultValue = 1.0f,
                     valueLabel = { "${(it * 100).roundToInt()}%" },
-                    enabled = s.enabled
+                    enabled = s.enabled && s.liquidGlass
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsSliderRow(
@@ -169,7 +183,8 @@ fun AppDetailScreen(
                     backdrop = backdrop,
                     checked = s.pillChromaticAberration,
                     onCheckedChange = holder::setPillChromaticAberration,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
+                    enabled = s.enabled && s.liquidGlass
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsToggleRow(
@@ -180,7 +195,8 @@ fun AppDetailScreen(
                     backdrop = backdrop,
                     checked = s.pillShadow,
                     onCheckedChange = holder::setPillShadow,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
+                    enabled = s.enabled && s.liquidGlass
                 )
             }
         }
@@ -223,6 +239,19 @@ fun AppDetailScreen(
                     onValueChange = holder::setTabWidth,
                     valueRange = 48f..88f,
                     defaultValue = defaultTabWidth,
+                    valueLabel = { "${it.roundToInt()}dp" },
+                    enabled = s.enabled
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsSliderRow(
+                    title = "Bottom Margin",
+                    subtitle = "Distance of floating bar above bottom of screen",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.bottomMargin,
+                    onValueChange = holder::setBottomMargin,
+                    valueRange = 0f..80f,
+                    defaultValue = defaultBottomMargin,
                     valueLabel = { "${it.roundToInt()}dp" },
                     enabled = s.enabled
                 )

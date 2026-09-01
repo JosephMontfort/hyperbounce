@@ -43,11 +43,13 @@ enum class NavApp(val displayName: String, val packageName: String) {
  *  WhatsApp's values never touches Instagram's or YouTube's stored state. */
 data class NavBarAppSettings(
     val enabled: Boolean = true,
+    val liquidGlass: Boolean = true,
     val glassIntensity: Float = 1.0f,
     val containerOpacity: Float = 0.4f,
     val cornerRadius: Float = 32f,
     val barHeight: Float = 64f,
     val tabWidth: Float = 64f,
+    val bottomMargin: Float = 40f,
     val themeMode: ThemeMode = ThemeMode.System,
     val accent: AccentPreset = AccentPreset.Auto,
     val pillGlassIntensity: Float = 1.0f,

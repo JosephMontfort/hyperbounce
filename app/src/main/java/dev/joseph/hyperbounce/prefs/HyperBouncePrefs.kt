@@ -42,6 +42,9 @@ class HyperBouncePrefs(module: XposedInterface) {
     fun appEnabled(appKey: String): Boolean =
         prefs.getBoolean("app_${appKey}_enabled", true)
 
+    fun appLiquidGlass(appKey: String): Boolean =
+        prefs.getBoolean("app_${appKey}_liquid_glass", true)
+
     fun appGlassIntensity(appKey: String): Float =
         prefs.getFloat("app_${appKey}_glass_intensity", 1.0f)
 
@@ -56,6 +59,9 @@ class HyperBouncePrefs(module: XposedInterface) {
 
     fun appTabWidth(appKey: String): Float =
         prefs.getFloat("app_${appKey}_tab_width", if (appKey == "whatsapp") 92f else 64f)
+
+    fun appBottomMargin(appKey: String): Float =
+        prefs.getFloat("app_${appKey}_bottom_margin", if (appKey == "youtube") 28f else 40f)
 
     /** One of "System" | "Light" | "Dark" — matches ui.state.ThemeMode's enum names. */
     fun appThemeMode(appKey: String): String =

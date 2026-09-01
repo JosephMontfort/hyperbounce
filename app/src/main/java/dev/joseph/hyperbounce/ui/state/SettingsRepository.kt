@@ -148,11 +148,14 @@ class SettingsRepository(context: Context) {
         // current behavior — WhatsApp in particular used a taller/wider/more-rounded bar
         // (70/92/36) than Instagram and YouTube's shared defaults (64/64/32).
         private val defaults = when (app) {
-            NavApp.WhatsApp -> NavBarAppSettings(barHeight = 70f, tabWidth = 92f, cornerRadius = 36f)
-            else -> NavBarAppSettings()
+            NavApp.WhatsApp -> NavBarAppSettings(barHeight = 70f, tabWidth = 92f, cornerRadius = 36f, bottomMargin = 40f)
+            NavApp.YouTube -> NavBarAppSettings(bottomMargin = 28f)
+            NavApp.Instagram -> NavBarAppSettings(bottomMargin = 40f)
         }
 
         var enabled by prefsBooleanState("${prefix}_enabled", defaults.enabled)
+            private set
+        var liquidGlass by prefsBooleanState("${prefix}_liquid_glass", defaults.liquidGlass)
             private set
         var glassIntensity by prefsFloatState("${prefix}_glass_intensity", defaults.glassIntensity)
             private set
@@ -163,6 +166,8 @@ class SettingsRepository(context: Context) {
         var barHeight by prefsFloatState("${prefix}_bar_height", defaults.barHeight)
             private set
         var tabWidth by prefsFloatState("${prefix}_tab_width", defaults.tabWidth)
+            private set
+        var bottomMargin by prefsFloatState("${prefix}_bottom_margin", defaults.bottomMargin)
             private set
         var themeMode by prefsEnumState("${prefix}_theme_mode", defaults.themeMode)
             private set
@@ -178,12 +183,14 @@ class SettingsRepository(context: Context) {
             private set
 
         fun snapshot(): NavBarAppSettings = NavBarAppSettings(
-            enabled, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, themeMode, accent,
-            pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow
+            enabled, liquidGlass, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, bottomMargin,
+            themeMode, accent, pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow
         )
 
         @JvmName("setEnabledPref")
         fun setEnabled(v: Boolean) { enabled = v }
+        @JvmName("setLiquidGlassPref")
+        fun setLiquidGlass(v: Boolean) { liquidGlass = v }
         @JvmName("setGlassIntensityPref")
         fun setGlassIntensity(v: Float) { glassIntensity = v }
         @JvmName("setContainerOpacityPref")
@@ -194,6 +201,8 @@ class SettingsRepository(context: Context) {
         fun setBarHeight(v: Float) { barHeight = v }
         @JvmName("setTabWidthPref")
         fun setTabWidth(v: Float) { tabWidth = v }
+        @JvmName("setBottomMarginPref")
+        fun setBottomMargin(v: Float) { bottomMargin = v }
         @JvmName("setThemeModePref")
         fun setThemeMode(v: ThemeMode) { themeMode = v }
         @JvmName("setAccentPref")
@@ -209,11 +218,13 @@ class SettingsRepository(context: Context) {
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
+            liquidGlass = defaults.liquidGlass
             glassIntensity = defaults.glassIntensity
             containerOpacity = defaults.containerOpacity
             cornerRadius = defaults.cornerRadius
             barHeight = defaults.barHeight
             tabWidth = defaults.tabWidth
+            bottomMargin = defaults.bottomMargin
             themeMode = defaults.themeMode
             accent = defaults.accent
             pillGlassIntensity = defaults.pillGlassIntensity
