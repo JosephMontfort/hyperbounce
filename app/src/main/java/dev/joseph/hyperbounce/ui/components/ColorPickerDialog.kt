@@ -120,7 +120,7 @@ fun ColorPickerDialog(
                                         val center = Offset(size.width / 2f, size.height / 2f)
                                         val dx = pos.x - center.x
                                         val dy = pos.y - center.y
-                                        val radius = size.minDimension / 2f
+                                        val radius = minOf(size.width, size.height) / 2f
                                         val dist = (sqrt(dx * dx + dy * dy) / radius).coerceIn(0f, 1f)
                                         val angle = (Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat() + 360f) % 360f
                                         hue = angle
@@ -137,7 +137,7 @@ fun ColorPickerDialog(
                                         val center = Offset(size.width / 2f, size.height / 2f)
                                         val dx = change.position.x - center.x
                                         val dy = change.position.y - center.y
-                                        val radius = size.minDimension / 2f
+                                        val radius = minOf(size.width, size.height) / 2f
                                         val dist = (sqrt(dx * dx + dy * dy) / radius).coerceIn(0f, 1f)
                                         val angle = (Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat() + 360f) % 360f
                                         hue = angle
@@ -213,13 +213,14 @@ fun ColorPickerDialog(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            BasicText("Brightness", style = HyperBounceType.subheadline.copy(color = colors.secondaryLabel))
-                            BasicText("${(value * 100).toInt()}%", style = HyperBounceType.subheadline.copy(color = colors.label))
+                            BasicText("Brightness", style = HyperBounceType.subhead.copy(color = colors.secondaryLabel))
+                            BasicText("${(value * 100).toInt()}%", style = HyperBounceType.subhead.copy(color = colors.label))
                         }
                         LiquidSlider(
                             value = { value },
                             onValueChange = { value = it },
                             valueRange = 0.1f..1f,
+                            visibilityThreshold = 0.01f,
                             backdrop = backdrop
                         )
                     }
@@ -228,7 +229,7 @@ fun ColorPickerDialog(
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .background(colors.cardBackground, RoundedCornerShape(12.dp))
+                            .background(colors.elevatedSurfaceTint.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
                             .border(0.5.dp, colors.separator, RoundedCornerShape(12.dp))
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,

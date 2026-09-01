@@ -907,6 +907,9 @@ class SettingsRepository(context: Context) {
     private fun prefsIntState(key: String, default: Int) =
         PrefIntDelegate(prefs, key, default)
 
+    private fun prefsLongState(key: String, default: Long) =
+        PrefLongDelegate(prefs, key, default)
+
     private fun prefsFloatState(key: String, default: Float) =
         PrefFloatDelegate(prefs, key, default)
 
@@ -925,6 +928,20 @@ private class PrefBooleanDelegate(
         state = value
         prefs.edit().putBoolean(key, value).apply()
         XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putBoolean(key, value)?.apply()
+    }
+}
+
+private class PrefLongDelegate(
+    private val prefs: SharedPreferences,
+    private val key: String,
+    default: Long
+) {
+    private var state by mutableStateOf(prefs.getLong(key, default))
+    operator fun getValue(thisRef: Any?, property: KProperty<*>): Long = state
+    operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Long) {
+        state = value
+        prefs.edit().putLong(key, value).apply()
+        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putLong(key, value)?.apply()
     }
 }
 
