@@ -237,7 +237,7 @@ fun LiquidNavigationBar(
 
                 if (!liquidGlass) {
                     val barShape = RoundedCornerShape(cornerRadius)
-                    val pillShape = RoundedCornerShape(cornerRadius)
+                    val pillShape = CircleShape
 
                     val classicBarBg = if (isLightTheme) {
                         Color(0xFFE5E5EA).copy(alpha = containerAlpha.coerceIn(0.05f, 1f))
@@ -261,10 +261,42 @@ fun LiquidNavigationBar(
                         Color(0xFF545458).copy(alpha = 0.45f)
                     }
 
+                    val progress = dampedDragAnimation.pressProgress
+                    val velocity = dampedDragAnimation.velocity / 10f
+                    val squishX = 1f / (1f - (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f))
+                    val squishY = 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+
+                    val pillW = tabWidthPx * dampedDragAnimation.scaleX * squishX
+                    val basePillH = with(density) { (barHeight - 8.dp).toPx() }
+                    val maxPillH = with(density) { (barHeight - 2.dp).toPx() }
+                    val bloomedPillH = lerp(basePillH, maxPillH, progress)
+                    val pillH = (bloomedPillH * squishY).coerceIn(with(density) { 16.dp.toPx() }, maxPillH)
+
+                    val pillX = if (isLtr) {
+                        dampedDragAnimation.value * tabWidthPx
+                    } else {
+                        (tabCount - 1 - dampedDragAnimation.value) * tabWidthPx
+                    }
+                    val pillCenter = pillX + tabWidthPx / 2f
+                    val pLeft = pillCenter - pillW / 2f
+                    val pRight = pillCenter + pillW / 2f
+
                     Box(
                         Modifier
                             .graphicsLayer {
                                 translationX = panelOffset
+                                scaleX = lerp(
+                                    1f,
+                                    1f + 16f.dp.toPx() / size.width,
+                                    progress,
+                                )
+                                scaleY = lerp(
+                                    1f,
+                                    1f + 2f.dp.toPx() / size.height,
+                                    progress,
+                                )
+                                clip = true
+                                shape = barShape
                             }
                             .background(classicBarBg, barShape)
                             .border(0.75.dp, classicBarBorder, barShape)
@@ -292,22 +324,17 @@ fun LiquidNavigationBar(
                             }
                         }
 
-                        // Layer 2: Moving Tab Indicator Pill Surface (Horizontal Bloom only)
+                        // Layer 2: Moving Tab Indicator Pill Surface (Horizontal Bloom & Jelly velocity stretch with fixed rounded caps)
                         Box(
                             Modifier
                                 .graphicsLayer {
-                                    translationX = if (isLtr) {
-                                        dampedDragAnimation.value * tabWidthPx
-                                    } else {
-                                        (tabCount - 1 - dampedDragAnimation.value) * tabWidthPx
-                                    }
-                                    scaleX = dampedDragAnimation.scaleX
-                                    scaleY = 1f // Horizontal bloom only in non-liquid mode
+                                    translationX = pLeft
+                                    translationY = ((size.height - pillH) / 2f)
                                 }
+                                .width(with(density) { pillW.toDp() })
+                                .height(with(density) { pillH.toDp() })
                                 .background(classicPillBg, pillShape)
                                 .border(0.5.dp, classicPillBorder, pillShape)
-                                .fillMaxHeight()
-                                .width(with(density) { tabWidthPx.toDp() })
                         )
 
                         // Layer 3: Active accented tab items, dynamically clipped strictly to the moving pill shape (no onClick so touches pass through)
@@ -316,23 +343,16 @@ fun LiquidNavigationBar(
                                 .fillMaxSize()
                                 .clip(object : Shape {
                                     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-                                        val pillX = if (isLtr) {
-                                            dampedDragAnimation.value * tabWidthPx
-                                        } else {
-                                            (tabCount - 1 - dampedDragAnimation.value) * tabWidthPx
-                                        }
-                                        val pillW = tabWidthPx * dampedDragAnimation.scaleX
-                                        val pillCenter = pillX + tabWidthPx / 2f
-                                        val pLeft = (pillCenter - pillW / 2f).coerceAtLeast(0f)
-                                        val pRight = (pillCenter + pillW / 2f).coerceAtMost(size.width)
-                                        val r = with(density) { cornerRadius.toPx() }
+                                        val pTop = (size.height - pillH) / 2f
+                                        val pBottom = pTop + pillH
+                                        val r = pillH / 2f
                                         val path = Path().apply {
                                             addRoundRect(
                                                 RoundRect(
                                                     left = pLeft,
-                                                    top = 0f,
+                                                    top = pTop,
                                                     right = pRight,
-                                                    bottom = size.height,
+                                                    bottom = pBottom,
                                                     radiusX = r,
                                                     radiusY = r,
                                                 )
@@ -359,18 +379,13 @@ fun LiquidNavigationBar(
                         Box(
                             Modifier
                                 .graphicsLayer {
-                                    translationX = if (isLtr) {
-                                        dampedDragAnimation.value * tabWidthPx
-                                    } else {
-                                        (tabCount - 1 - dampedDragAnimation.value) * tabWidthPx
-                                    }
-                                    scaleX = dampedDragAnimation.scaleX
-                                    scaleY = 1f
+                                    translationX = pLeft
+                                    translationY = ((size.height - pillH) / 2f)
                                 }
+                                .width(with(density) { pillW.toDp() })
+                                .height(with(density) { pillH.toDp() })
                                 .then(interactiveHighlight.gestureModifier)
                                 .then(dampedDragAnimation.modifier)
-                                .fillMaxHeight()
-                                .width(with(density) { tabWidthPx.toDp() })
                         )
                     }
                 } else if (liveBackdrop != null) {
@@ -406,6 +421,8 @@ fun LiquidNavigationBar(
                                     )
                                     scaleX = scale
                                     scaleY = scale
+                                    clip = true
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius)
                                 },
                                 onDrawSurface = {
                                     drawRect(containerColor)
