@@ -173,6 +173,8 @@ class SettingsRepository(context: Context) {
             private set
         var accent by prefsEnumState("${prefix}_accent", defaults.accent)
             private set
+        var customAccentColor by prefsLongState("${prefix}_custom_accent_color", defaults.customAccentColor)
+            private set
         var pillGlassIntensity by prefsFloatState("${prefix}_pill_glass_intensity", defaults.pillGlassIntensity)
             private set
         var pillContainerOpacity by prefsFloatState("${prefix}_pill_container_opacity", defaults.pillContainerOpacity)
@@ -184,7 +186,7 @@ class SettingsRepository(context: Context) {
 
         fun snapshot(): NavBarAppSettings = NavBarAppSettings(
             enabled, liquidGlass, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, bottomMargin,
-            themeMode, accent, pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow
+            themeMode, accent, customAccentColor, pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow
         )
 
         @JvmName("setEnabledPref")
@@ -207,6 +209,8 @@ class SettingsRepository(context: Context) {
         fun setThemeMode(v: ThemeMode) { themeMode = v }
         @JvmName("setAccentPref")
         fun setAccent(v: AccentPreset) { accent = v }
+        @JvmName("setCustomAccentColorPref")
+        fun setCustomAccentColor(v: Long) { customAccentColor = v }
         @JvmName("setPillGlassIntensityPref")
         fun setPillGlassIntensity(v: Float) { pillGlassIntensity = v }
         @JvmName("setPillContainerOpacityPref")
@@ -227,6 +231,7 @@ class SettingsRepository(context: Context) {
             bottomMargin = defaults.bottomMargin
             themeMode = defaults.themeMode
             accent = defaults.accent
+            customAccentColor = defaults.customAccentColor
             pillGlassIntensity = defaults.pillGlassIntensity
             pillContainerOpacity = defaults.pillContainerOpacity
             pillChromaticAberration = defaults.pillChromaticAberration

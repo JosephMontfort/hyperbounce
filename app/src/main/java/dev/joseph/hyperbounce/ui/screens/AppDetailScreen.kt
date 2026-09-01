@@ -1,6 +1,7 @@
 package dev.joseph.hyperbounce.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -13,14 +14,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.components.CheckmarkIcon
+import dev.joseph.hyperbounce.ui.components.ColorPickerDialog
 import dev.joseph.hyperbounce.ui.components.DropdownPicker
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.NavBarPreview
@@ -49,13 +55,27 @@ fun AppDetailScreen(
 ) {
     val holder = repository.appSettings(app)
     val s = holder.snapshot()
-    val accentColor = accentColorFor(s.accent, colors)
+    val accentColor = accentColorFor(s.accent, s.customAccentColor, colors)
     val context = androidx.compose.ui.platform.LocalContext.current
+    var showColorPicker by remember { mutableStateOf(false) }
 
     val defaultCornerRadius = if (app == NavApp.WhatsApp) 36f else 32f
     val defaultBarHeight = if (app == NavApp.WhatsApp) 70f else 64f
     val defaultTabWidth = if (app == NavApp.WhatsApp) 92f else 64f
     val defaultBottomMargin = if (app == NavApp.YouTube) 28f else 40f
+
+    if (showColorPicker) {
+        ColorPickerDialog(
+            initialColor = s.customAccentColor,
+            colors = colors,
+            backdrop = backdrop,
+            onDismiss = { showColorPicker = false },
+            onColorSelected = { newColor ->
+                holder.setCustomAccentColor(newColor)
+                holder.setAccent(AccentPreset.Custom)
+            }
+        )
+    }
 
     ScreenScaffold(
         title = app.displayName,
@@ -104,7 +124,7 @@ fun AppDetailScreen(
         }
 
         item {
-            SectionHeader("Nav Bar Glass", colors)
+            SectionHeader("Liquid Glass Engine", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Liquid Glass Engine",
@@ -114,7 +134,8 @@ fun AppDetailScreen(
                     backdrop = backdrop,
                     checked = s.liquidGlass,
                     onCheckedChange = holder::setLiquidGlass,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
+                    enabled = s.enabled
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsSliderRow(
@@ -131,24 +152,6 @@ fun AppDetailScreen(
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsSliderRow(
-                    title = "Bar Container Opacity",
-                    subtitle = "Translucent background tint opacity for the floating bar",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = s.containerOpacity,
-                    onValueChange = holder::setContainerOpacity,
-                    valueRange = 0f..1f,
-                    defaultValue = 0.4f,
-                    valueLabel = { "${(it * 100).roundToInt()}%" },
-                    enabled = s.enabled
-                )
-            }
-        }
-
-        item {
-            SectionHeader("Tab Indicator Pill", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsSliderRow(
                     title = "Pill Glass Intensity",
                     subtitle = "Refraction lens strength for the moving tab indicator pill",
                     colors = colors,
@@ -159,6 +162,48 @@ fun AppDetailScreen(
                     defaultValue = 1.0f,
                     valueLabel = { "${(it * 100).roundToInt()}%" },
                     enabled = s.enabled && s.liquidGlass
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsToggleRow(
+                    title = "Pill Chromatic Aberration",
+                    subtitle = "Color dispersion fringe around pill refraction edges",
+                    colors = colors,
+                    iconTint = accentColor.copy(alpha = 0.85f),
+                    backdrop = backdrop,
+                    checked = s.pillChromaticAberration,
+                    onCheckedChange = holder::setPillChromaticAberration,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
+                    enabled = s.enabled && s.liquidGlass
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsToggleRow(
+                    title = "Pill Shadows & Depth",
+                    subtitle = "Drop shadow and inner depth shadow on the indicator pill",
+                    colors = colors,
+                    iconTint = accentColor.copy(alpha = 0.85f),
+                    backdrop = backdrop,
+                    checked = s.pillShadow,
+                    onCheckedChange = holder::setPillShadow,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
+                    enabled = s.enabled && s.liquidGlass
+                )
+            }
+        }
+
+        item {
+            SectionHeader("Surface Opacity", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsSliderRow(
+                    title = "Bar Container Opacity",
+                    subtitle = "Translucent background tint opacity for the floating bar",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.containerOpacity,
+                    onValueChange = holder::setContainerOpacity,
+                    valueRange = 0f..1f,
+                    defaultValue = 0.4f,
+                    valueLabel = { "${(it * 100).roundToInt()}%" },
+                    enabled = s.enabled
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsSliderRow(
@@ -172,28 +217,6 @@ fun AppDetailScreen(
                     defaultValue = 1.0f,
                     valueLabel = { "${(it * 100).roundToInt()}%" },
                     enabled = s.enabled
-                )
-                RowDivider(colors.separator, insetStart = 16.dp)
-                SettingsToggleRow(
-                    title = "Pill Chromatic Aberration",
-                    subtitle = "Color dispersion fringe around pill refraction edges",
-                    colors = colors,
-                    iconTint = accentColor.copy(alpha = 0.85f),
-                    backdrop = backdrop,
-                    checked = s.pillChromaticAberration,
-                    onCheckedChange = holder::setPillChromaticAberration,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
-                )
-                RowDivider(colors.separator, insetStart = 16.dp)
-                SettingsToggleRow(
-                    title = "Pill Shadows & Depth",
-                    subtitle = "Drop shadow and inner depth shadow on the indicator pill",
-                    colors = colors,
-                    iconTint = accentColor.copy(alpha = 0.85f),
-                    backdrop = backdrop,
-                    checked = s.pillShadow,
-                    onCheckedChange = holder::setPillShadow,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
                 )
             }
         }
@@ -285,9 +308,15 @@ fun AppDetailScreen(
                     AccentPreset.entries.forEach { preset ->
                         AccentSwatch(
                             preset = preset,
+                            customColor = s.customAccentColor,
                             colors = colors,
                             selected = preset == s.accent,
-                            onClick = { holder.setAccent(preset) }
+                            onClick = {
+                                holder.setAccent(preset)
+                                if (preset == AccentPreset.Custom) {
+                                    showColorPicker = true
+                                }
+                            }
                         )
                     }
                 }
@@ -299,16 +328,36 @@ fun AppDetailScreen(
 @Composable
 private fun AccentSwatch(
     preset: AccentPreset,
+    customColor: Long,
     colors: HyperBounceColors,
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val color = accentColorFor(preset, colors)
+    val color = accentColorFor(preset, customColor, colors)
+    val isCustom = preset == AccentPreset.Custom
+    val rainbowBrush = Brush.sweepGradient(
+        listOf(
+            Color.Red,
+            Color.Yellow,
+            Color.Green,
+            Color.Cyan,
+            Color.Blue,
+            Color.Magenta,
+            Color.Red
+        )
+    )
+
     Box(
         Modifier
             .size(34.dp)
             .clip(CircleShape)
-            .background(color)
+            .then(
+                if (isCustom) {
+                    Modifier.background(rainbowBrush)
+                } else {
+                    Modifier.background(color)
+                }
+            )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -316,11 +365,28 @@ private fun AccentSwatch(
             ),
         contentAlignment = Alignment.Center
     ) {
-        if (selected) {
+        if (isCustom) {
+            Box(
+                Modifier
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(Color(customColor))
+                    .border(1.dp, Color.White.copy(alpha = 0.5f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                if (selected) {
+                    CheckmarkIcon(color = Color.White, size = 12.dp, strokeWidth = 2.dp)
+                }
+            }
+        } else if (selected) {
             CheckmarkIcon(color = Color.White, size = 14.dp, strokeWidth = 2.dp)
         }
     }
 }
 
-private fun accentColorFor(preset: AccentPreset, colors: HyperBounceColors): Color =
-    preset.argb?.let { Color(it) } ?: colors.accentBlue
+private fun accentColorFor(preset: AccentPreset, customColor: Long, colors: HyperBounceColors): Color =
+    when (preset) {
+        AccentPreset.Custom -> Color(customColor)
+        AccentPreset.Auto -> colors.accentBlue
+        else -> preset.argb?.let { Color(it) } ?: colors.accentBlue
+    }

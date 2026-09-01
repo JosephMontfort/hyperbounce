@@ -25,7 +25,8 @@ enum class AccentPreset(val label: String, val argb: Long?) {
     Pink("Pink", 0xFFFF2D78L),
     Purple("Purple", 0xFFAF52DEL),
     Orange("Orange", 0xFFFF9500L),
-    Green("Green", 0xFF34C759L)
+    Green("Green", 0xFF34C759L),
+    Custom("Custom", null)
 }
 
 enum class RenderEngine(val label: String) {
@@ -52,6 +53,7 @@ data class NavBarAppSettings(
     val bottomMargin: Float = 40f,
     val themeMode: ThemeMode = ThemeMode.System,
     val accent: AccentPreset = AccentPreset.Auto,
+    val customAccentColor: Long = 0xFF0088FFL,
     val pillGlassIntensity: Float = 1.0f,
     val pillContainerOpacity: Float = 1.0f,
     val pillChromaticAberration: Boolean = true,

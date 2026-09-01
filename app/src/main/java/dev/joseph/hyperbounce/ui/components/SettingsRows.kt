@@ -167,12 +167,15 @@ fun SettingsToggleRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     subtitle: String? = null,
+    enabled: Boolean = true,
     icon: @Composable () -> Unit
 ) {
+    val displayAlpha = if (enabled) 1f else 0.35f
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .graphicsLayer { alpha = displayAlpha },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -189,7 +192,7 @@ fun SettingsToggleRow(
         
         LiquidToggle(
             selected = { checked },
-            onSelect = onCheckedChange,
+            onSelect = { if (enabled) onCheckedChange(it) },
             backdrop = localBackdrop
         )
     }

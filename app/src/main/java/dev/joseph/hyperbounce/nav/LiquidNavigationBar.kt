@@ -327,9 +327,9 @@ fun LiquidNavigationBar(
                         // Layer 2: Moving Tab Indicator Pill Surface (Horizontal Bloom & Jelly velocity stretch with fixed rounded caps)
                         Box(
                             Modifier
+                                .align(Alignment.CenterStart)
                                 .graphicsLayer {
                                     translationX = pLeft
-                                    translationY = ((size.height - pillH) / 2f)
                                 }
                                 .width(with(density) { pillW.toDp() })
                                 .height(with(density) { pillH.toDp() })
@@ -378,9 +378,9 @@ fun LiquidNavigationBar(
                         // Layer 4: Topmost Interactive Gesture Box for the Pill (receives long-press & pull)
                         Box(
                             Modifier
+                                .align(Alignment.CenterStart)
                                 .graphicsLayer {
                                     translationX = pLeft
-                                    translationY = ((size.height - pillH) / 2f)
                                 }
                                 .width(with(density) { pillW.toDp() })
                                 .height(with(density) { pillH.toDp() })

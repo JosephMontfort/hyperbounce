@@ -118,7 +118,7 @@ fun WhatsAppNavBarHost(
         tabs = tabs.map { it.inactiveBitmap },
         activeTabs = tabs.map { it.activeBitmap },
         labels = tabs.map { it.label },
-        customAccentColor = accentColorFor(live.accent),
+        customAccentColor = accentColorFor(live.accent, live.customAccentColor),
         forceLightTheme = live.themeMode == "Light",
         forceDarkTheme = live.themeMode == "Dark",
         effectMultiplier = live.glassIntensity,
@@ -146,11 +146,12 @@ fun WhatsAppNavBarHost(
 /** WhatsApp's "Auto" accent is its own brand green — that's what this bar always used
  *  before this setting existed, so it stays the default rather than falling back to a
  *  generic black/white adaptive color. */
-private fun accentColorFor(preset: String): androidx.compose.ui.graphics.Color = when (preset) {
+private fun accentColorFor(preset: String, customColor: Long): androidx.compose.ui.graphics.Color = when (preset) {
     "Blue" -> androidx.compose.ui.graphics.Color(0xFF0088FF)
     "Pink" -> androidx.compose.ui.graphics.Color(0xFFFF2D78)
     "Purple" -> androidx.compose.ui.graphics.Color(0xFFAF52DE)
     "Orange" -> androidx.compose.ui.graphics.Color(0xFFFF9500)
     "Green" -> androidx.compose.ui.graphics.Color(0xFF34C759)
+    "Custom" -> androidx.compose.ui.graphics.Color(customColor)
     else -> androidx.compose.ui.graphics.Color(0xFF21C063)
 }

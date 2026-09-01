@@ -147,7 +147,7 @@ fun YouTubeNavBarHost(
         }
     }
 
-    val accent = accentColorFor(live.accent, isDark)
+    val accent = accentColorFor(live.accent, live.customAccentColor, isDark)
     val profileIndex = if (tabs.isNotEmpty()) tabs.size - 1 else -1
 
     LiquidNavigationBar(
@@ -177,11 +177,12 @@ fun YouTubeNavBarHost(
     )
 }
 
-private fun accentColorFor(preset: String, isDark: Boolean): androidx.compose.ui.graphics.Color = when (preset) {
+private fun accentColorFor(preset: String, customColor: Long, isDark: Boolean): androidx.compose.ui.graphics.Color = when (preset) {
     "Blue" -> androidx.compose.ui.graphics.Color(0xFF0088FF)
     "Pink" -> androidx.compose.ui.graphics.Color(0xFFFF2D78)
     "Purple" -> androidx.compose.ui.graphics.Color(0xFFAF52DE)
     "Orange" -> androidx.compose.ui.graphics.Color(0xFFFF9500)
     "Green" -> androidx.compose.ui.graphics.Color(0xFF34C759)
+    "Custom" -> androidx.compose.ui.graphics.Color(customColor)
     else -> if (isDark) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black
 }

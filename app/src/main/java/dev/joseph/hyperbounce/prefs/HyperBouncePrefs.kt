@@ -67,10 +67,13 @@ class HyperBouncePrefs(module: XposedInterface) {
     fun appThemeMode(appKey: String): String =
         prefs.getString("app_${appKey}_theme_mode", "System") ?: "System"
 
-    /** One of "Auto" | "Blue" | "Pink" | "Purple" | "Orange" | "Green" — matches
+    /** One of "Auto" | "Blue" | "Pink" | "Purple" | "Orange" | "Green" | "Custom" — matches
      *  ui.state.AccentPreset's enum names. */
     fun appAccent(appKey: String): String =
         prefs.getString("app_${appKey}_accent", "Auto") ?: "Auto"
+
+    fun appCustomAccentColor(appKey: String): Long =
+        prefs.getLong("app_${appKey}_custom_accent_color", 0xFF0088FFL)
 
     fun appPillGlassIntensity(appKey: String): Float =
         prefs.getFloat("app_${appKey}_pill_glass_intensity", 1.0f)

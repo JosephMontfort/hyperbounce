@@ -123,7 +123,7 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
     }
 
     val profileIndex = tabs.indexOfFirst { it.resId == stockBar?.context?.resources?.getIdentifier("profile_tab", "id", stockBar?.context?.packageName) }
-    val accent = accentColorFor(live.accent, isDark)
+    val accent = accentColorFor(live.accent, live.customAccentColor, isDark)
 
     LiquidNavigationBar(
         bottomPadding = live.bottomMargin.dp,
@@ -154,12 +154,13 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
     )
 }
 
-private fun accentColorFor(preset: String, isDark: Boolean): androidx.compose.ui.graphics.Color = when (preset) {
+private fun accentColorFor(preset: String, customColor: Long, isDark: Boolean): androidx.compose.ui.graphics.Color = when (preset) {
     "Blue" -> androidx.compose.ui.graphics.Color(0xFF0088FF)
     "Pink" -> androidx.compose.ui.graphics.Color(0xFFFF2D78)
     "Purple" -> androidx.compose.ui.graphics.Color(0xFFAF52DE)
     "Orange" -> androidx.compose.ui.graphics.Color(0xFFFF9500)
     "Green" -> androidx.compose.ui.graphics.Color(0xFF34C759)
+    "Custom" -> androidx.compose.ui.graphics.Color(customColor)
     else -> if (isDark) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black
 }
 
