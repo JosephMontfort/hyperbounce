@@ -78,6 +78,12 @@ class HyperBouncePrefs(module: XposedInterface) {
     fun appPillShadow(appKey: String): Boolean =
         prefs.getBoolean("app_${appKey}_pill_shadow", true)
 
+    fun appPillBloomRatioX(appKey: String): Float =
+        prefs.getFloat("app_${appKey}_pill_bloom_ratio_x", 1.39f)
+
+    fun appPillBloomRatioY(appKey: String): Float =
+        prefs.getFloat("app_${appKey}_pill_bloom_ratio_y", 1.39f)
+
     // --- toggle/slider engine --------------------------------------------------------------
 
     /** true = Liquid Glass engine, false = the original native Canvas/AGSL engine. */

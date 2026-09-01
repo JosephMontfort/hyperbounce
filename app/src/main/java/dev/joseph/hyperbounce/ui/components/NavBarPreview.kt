@@ -41,7 +41,7 @@ fun NavBarPreview(
     barHeightDp: Float,
     tabWidthDp: Float,
     pillGlassIntensity: Float = 1.0f,
-    pillContainerOpacity: Float = 1.0f,
+    pillContainerOpacity: Float = 0.15f,
     pillChromaticAberration: Boolean = true,
     pillShadow: Boolean = true,
     tabCount: Int = 4,

@@ -79,9 +79,11 @@ fun LiquidNavigationBar(
     tabWidth: Dp = 64.dp,
     cornerRadius: Dp = 32.dp,
     pillGlassIntensity: Float = 1f,
-    pillContainerOpacity: Float = 1f,
+    pillContainerOpacity: Float = 0.15f,
     pillChromaticAberration: Boolean = true,
     pillShadow: Boolean = true,
+    pillBloomRatioX: Float = 1.39f,
+    pillBloomRatioY: Float = 1.39f,
 ) {
     if (tabs.isEmpty()) return
 
@@ -148,14 +150,15 @@ fun LiquidNavigationBar(
 
                 val animationScope = rememberCoroutineScope()
 
-                val dampedDragAnimation = remember(animationScope, tabCount) {
+                val dampedDragAnimation = remember(animationScope, tabCount, pillBloomRatioX, pillBloomRatioY) {
                     LiquidGlassDampedDragAnimation(
                         animationScope = animationScope,
                         initialValue = selectedIndex.coerceIn(0, tabCount - 1).toFloat(),
                         valueRange = 0f..(tabCount - 1).toFloat(),
                         visibilityThreshold = 0.001f,
                         initialScale = 1f,
-                        pressedScale = 78f / 56f,
+                        pressedScaleX = pillBloomRatioX,
+                        pressedScaleY = pillBloomRatioY,
                         onDragStarted = {},
                         onDragStopped = {
                             val index = kotlin.math.round(value)
@@ -284,32 +287,9 @@ fun LiquidNavigationBar(
                             .graphicsLayer {
                                 translationX = panelOffset
                             }
-                            .drawBackdrop(
-                                backdrop = liveBackdrop,
-                                shape = { androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius) },
-                                effects = {
-                                    if (effectMultiplier > 0f) {
-                                        val progress = dampedDragAnimation.pressProgress
-                                        vibrancy()
-                                        blur(8f.dp.toPx() * effectMultiplier)
-                                        lens(
-                                            18f.dp.toPx() * progress * effectMultiplier,
-                                            18f.dp.toPx() * progress * effectMultiplier,
-                                        )
-                                    }
-                                },
-                                highlight = {
-                                    val progress = dampedDragAnimation.pressProgress
-                                    Highlight.Default.copy(alpha = progress)
-                                },
-                                onDrawSurface = {
-                                    drawRect(containerColor)
-                                },
-                            )
-                            .then(interactiveHighlight.modifier)
-                            .height(barHeight - 8.dp)
+                            .height(barHeight)
                             .fillMaxWidth()
-                            .padding(horizontal = 4.dp),
+                            .padding(4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         tabs.forEachIndexed { index, _ ->

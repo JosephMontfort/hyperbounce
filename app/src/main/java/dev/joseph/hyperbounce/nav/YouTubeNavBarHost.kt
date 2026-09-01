@@ -160,6 +160,8 @@ fun YouTubeNavBarHost(
         pillContainerOpacity = live.pillContainerOpacity,
         pillChromaticAberration = live.pillChromaticAberration,
         pillShadow = live.pillShadow,
+        pillBloomRatioX = live.pillBloomRatioX,
+        pillBloomRatioY = live.pillBloomRatioY,
         circularIndices = if (profileIndex >= 0) setOf(profileIndex) else emptySet(),
         selectedIndex = selectedIndex,
         onTabSelected = { index ->

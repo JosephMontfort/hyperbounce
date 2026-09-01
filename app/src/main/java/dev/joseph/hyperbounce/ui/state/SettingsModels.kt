@@ -53,7 +53,9 @@ data class NavBarAppSettings(
     val pillGlassIntensity: Float = 1.0f,
     val pillContainerOpacity: Float = 0.15f,
     val pillChromaticAberration: Boolean = true,
-    val pillShadow: Boolean = true
+    val pillShadow: Boolean = true,
+    val pillBloomRatioX: Float = 1.39f,
+    val pillBloomRatioY: Float = 1.39f
 )
 
 /** The blur/lens/highlight/shadow/spring "feel" of one glass control (toggle or slider). */

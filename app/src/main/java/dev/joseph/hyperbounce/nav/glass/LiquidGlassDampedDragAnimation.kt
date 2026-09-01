@@ -28,7 +28,8 @@ internal class LiquidGlassDampedDragAnimation(
     valueRange: ClosedRange<Float>,
     visibilityThreshold: Float,
     initialScale: Float,
-    private val pressedScale: Float,
+    private val pressedScaleX: Float,
+    private val pressedScaleY: Float,
     onDragStarted: LiquidGlassDampedDragAnimation.(position: Offset) -> Unit,
     onDragStopped: LiquidGlassDampedDragAnimation.() -> Unit,
     onDrag: LiquidGlassDampedDragAnimation.(size: IntSize, dragAmount: Offset) -> Unit,
@@ -80,8 +81,8 @@ internal class LiquidGlassDampedDragAnimation(
         velocityTracker.resetTracking()
         animationScope.launch {
             launch { pressProgressAnimation.animateTo(1f, pressProgressAnimationSpec) }
-            launch { scaleXAnimation.animateTo(pressedScale, scaleXAnimationSpec) }
-            launch { scaleYAnimation.animateTo(pressedScale, scaleYAnimationSpec) }
+            launch { scaleXAnimation.animateTo(pressedScaleX, scaleXAnimationSpec) }
+            launch { scaleYAnimation.animateTo(pressedScaleY, scaleYAnimationSpec) }
         }
     }
 

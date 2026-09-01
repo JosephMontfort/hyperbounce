@@ -176,10 +176,15 @@ class SettingsRepository(context: Context) {
             private set
         var pillShadow by prefsBooleanState("${prefix}_pill_shadow", defaults.pillShadow)
             private set
+        var pillBloomRatioX by prefsFloatState("${prefix}_pill_bloom_ratio_x", defaults.pillBloomRatioX)
+            private set
+        var pillBloomRatioY by prefsFloatState("${prefix}_pill_bloom_ratio_y", defaults.pillBloomRatioY)
+            private set
 
         fun snapshot(): NavBarAppSettings = NavBarAppSettings(
             enabled, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, themeMode, accent,
-            pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow
+            pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow,
+            pillBloomRatioX, pillBloomRatioY
         )
 
         @JvmName("setEnabledPref")
@@ -206,6 +211,10 @@ class SettingsRepository(context: Context) {
         fun setPillChromaticAberration(v: Boolean) { pillChromaticAberration = v }
         @JvmName("setPillShadowPref")
         fun setPillShadow(v: Boolean) { pillShadow = v }
+        @JvmName("setPillBloomRatioXPref")
+        fun setPillBloomRatioX(v: Float) { pillBloomRatioX = v }
+        @JvmName("setPillBloomRatioYPref")
+        fun setPillBloomRatioY(v: Float) { pillBloomRatioY = v }
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
@@ -220,6 +229,8 @@ class SettingsRepository(context: Context) {
             pillContainerOpacity = defaults.pillContainerOpacity
             pillChromaticAberration = defaults.pillChromaticAberration
             pillShadow = defaults.pillShadow
+            pillBloomRatioX = defaults.pillBloomRatioX
+            pillBloomRatioY = defaults.pillBloomRatioY
         }
     }
 

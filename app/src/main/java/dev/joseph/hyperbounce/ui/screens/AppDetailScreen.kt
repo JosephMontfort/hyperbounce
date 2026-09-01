@@ -182,6 +182,32 @@ fun AppDetailScreen(
                     onCheckedChange = holder::setPillShadow,
                     icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
                 )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsSliderRow(
+                    title = "Pill Horizontal Bloom",
+                    subtitle = "Horizontal expansion scale ratio on long press",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.pillBloomRatioX,
+                    onValueChange = holder::setPillBloomRatioX,
+                    valueRange = 1.0f..2.0f,
+                    defaultValue = 1.39f,
+                    valueLabel = { "${(it * 100).roundToInt()}%" },
+                    enabled = s.enabled
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsSliderRow(
+                    title = "Pill Vertical Bloom",
+                    subtitle = "Vertical expansion scale ratio on long press",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.pillBloomRatioY,
+                    onValueChange = holder::setPillBloomRatioY,
+                    valueRange = 1.0f..2.0f,
+                    defaultValue = 1.39f,
+                    valueLabel = { "${(it * 100).roundToInt()}%" },
+                    enabled = s.enabled
+                )
             }
         }
 
