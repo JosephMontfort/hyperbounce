@@ -114,8 +114,7 @@ fun AppDetailScreen(
                     backdrop = backdrop,
                     checked = s.liquidGlass,
                     onCheckedChange = holder::setLiquidGlass,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
-                    enabled = s.enabled
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsSliderRow(
@@ -183,8 +182,7 @@ fun AppDetailScreen(
                     backdrop = backdrop,
                     checked = s.pillChromaticAberration,
                     onCheckedChange = holder::setPillChromaticAberration,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
-                    enabled = s.enabled && s.liquidGlass
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsToggleRow(
@@ -195,8 +193,7 @@ fun AppDetailScreen(
                     backdrop = backdrop,
                     checked = s.pillShadow,
                     onCheckedChange = holder::setPillShadow,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
-                    enabled = s.enabled && s.liquidGlass
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
                 )
             }
         }
