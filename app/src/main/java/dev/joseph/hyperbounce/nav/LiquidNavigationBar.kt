@@ -94,6 +94,7 @@ fun LiquidNavigationBar(
     liquidGlass: Boolean = true,
     isShrunk: Boolean = false,
     shrinkScale: Float = 0.70f,
+    scrollShrinkState: ScrollShrinkState? = null,
 ) {
     if (tabs.isEmpty()) return
 
@@ -164,6 +165,15 @@ fun LiquidNavigationBar(
                 .padding(bottom = bottomPadding)
                 .graphicsLayer {
                     translationY = currentShiftY
+                }
+                .onGloballyPositioned { coordinates ->
+                    val position = coordinates.positionInWindow()
+                    scrollShrinkState?.updateBounds(
+                        l = position.x,
+                        t = position.y,
+                        r = position.x + coordinates.size.width,
+                        b = position.y + coordinates.size.height,
+                    )
                 }
                 .width((tabs.size * currentTabWidth.value).dp)
                 .height(currentBarHeight),
@@ -246,6 +256,8 @@ fun LiquidNavigationBar(
                         selectedIndex.coerceIn(0, tabCount - 1).toFloat()
                     )
                 }
+
+                scrollShrinkState?.isInteracting = (dampedDragAnimation.pressProgress > 0.01f)
 
                 val interactiveHighlight = remember(animationScope, tabCount) {
                     LiquidGlassInteractiveHighlight(

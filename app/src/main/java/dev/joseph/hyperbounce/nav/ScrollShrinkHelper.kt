@@ -11,13 +11,39 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import kotlin.math.abs
 
+class ScrollShrinkState(
+    val isShrunk: MutableState<Boolean>,
+) {
+    var left = 0f
+    var top = 0f
+    var right = 0f
+    var bottom = 0f
+    var hasBounds = false
+    var isInteracting = false
+
+    fun updateBounds(l: Float, t: Float, r: Float, b: Float) {
+        left = l
+        top = t
+        right = r
+        bottom = b
+        hasBounds = true
+    }
+
+    fun isInsideNavBar(x: Float, y: Float, marginPx: Float = 0f): Boolean {
+        if (!hasBounds) return false
+        return x >= (left - marginPx) && x <= (right + marginPx) &&
+               y >= (top - marginPx) && y <= (bottom + marginPx)
+    }
+}
+
 @Composable
 fun rememberScrollShrinkState(
     activity: Activity?,
     enabled: Boolean,
     sensitivity: Float = 1.0f,
-): MutableState<Boolean> {
+): ScrollShrinkState {
     val isShrunk = remember { mutableStateOf(false) }
+    val state = remember { ScrollShrinkState(isShrunk) }
 
     DisposableEffect(activity, enabled, sensitivity) {
         if (activity == null || !enabled) {
@@ -40,12 +66,18 @@ fun rememberScrollShrinkState(
                 if (event != null) {
                     when (event.actionMasked) {
                         MotionEvent.ACTION_DOWN -> {
-                            startY = event.rawY
-                            startX = event.rawX
-                            isTracking = true
+                            // If touch starts on the floating nav bar or user is interacting with it, ignore scroll shrink
+                            val onNavBar = state.isInsideNavBar(event.rawX, event.rawY, marginPx = 24f) || state.isInteracting
+                            if (onNavBar) {
+                                isTracking = false
+                            } else {
+                                startY = event.rawY
+                                startX = event.rawX
+                                isTracking = true
+                            }
                         }
                         MotionEvent.ACTION_MOVE -> {
-                            if (isTracking) {
+                            if (isTracking && !state.isInteracting) {
                                 val dy = event.rawY - startY
                                 val dx = event.rawX - startX
                                 val absDy = abs(dy)
@@ -86,5 +118,5 @@ fun rememberScrollShrinkState(
         }
     }
 
-    return isShrunk
+    return state
 }

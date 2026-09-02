@@ -106,7 +106,7 @@ fun WhatsAppNavBarHost(
     val tabs = remember(stockBar, isDark) { extractWhatsAppTabs(stockBar, isDark) }
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
     val activity = (backdropSource.context as? Activity) ?: (stockBar.context as? Activity)
-    val isShrunkState = rememberScrollShrinkState(
+    val scrollShrinkState = rememberScrollShrinkState(
         activity = activity,
         enabled = live.autoShrink,
         sensitivity = live.autoShrinkSensitivity
@@ -138,13 +138,14 @@ fun WhatsAppNavBarHost(
         pillChromaticAberration = live.pillChromaticAberration,
         pillShadow = live.pillShadow,
         liquidGlass = live.liquidGlass,
-        isShrunk = isShrunkState.value,
+        isShrunk = scrollShrinkState.isShrunk.value,
         shrinkScale = live.autoShrinkScale,
+        scrollShrinkState = scrollShrinkState,
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index
             if (index == 0) {
-                isShrunkState.value = false
+                scrollShrinkState.isShrunk.value = false
             }
             // Fix: Trigger the actual WhatsApp tab switch only if it isn't already there
             if (externalTabState.value != index) {
