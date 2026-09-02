@@ -67,10 +67,10 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
         if (w <= 0 || h <= 0) return
 
         val density = resources.displayMetrics.density
-        val cornerRadius = 36f * density
-        val bevelWidth = 32f * density
-        val refractAmount = 36f * density
-        val margin = (40f * density).toInt()
+        val cornerRadius = 38f * density
+        val bevelWidth = 38f * density
+        val refractAmount = 68f * density
+        val margin = (50f * density).toInt()
 
         val wp = getWallpaper()
         val screenW = resources.displayMetrics.widthPixels
@@ -85,7 +85,7 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
                 cornerRadius = cornerRadius,
                 bevel = bevelWidth,
                 refract = refractAmount,
-                dispersion = 0.24f,
+                dispersion = 0.09f,
                 lightX = 0f,
                 lightY = 1f,
                 spec = 0.95f,

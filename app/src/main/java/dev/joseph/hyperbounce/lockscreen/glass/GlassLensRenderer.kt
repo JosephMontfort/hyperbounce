@@ -1,15 +1,19 @@
 package dev.joseph.hyperbounce.lockscreen.glass
 
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.RenderEffect
 import android.graphics.RenderNode
 import android.graphics.RuntimeShader
-import android.graphics.Shader
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
 
+/**
+ * Liquid Glass 2.0 AGSL Lens Pipeline for Lock Screen Sheet.
+ * Implements Apple iOS Liquid Glass 2.0 optical model:
+ * 3-sided SDF -> Numerical Normal Field -> Real-time Inward Refraction -> Chromatic Dispersion
+ * -> Directional Specular Highlight -> Inner Shadow -> Vibrancy Saturation.
+ */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 class GlassLensRenderer {
 
@@ -31,7 +35,7 @@ class GlassLensRenderer {
             uniform float  innerShadow;
             uniform float  satFactor;
 
-            // Exact 3-sided SDF (Left, Right, Bottom edges with rounded bottom corners, open top)
+            // Liquid Glass 2.0 Exact 3-sided SDF (Left, Right, Bottom with rounded bottom corners, open top)
             float sd3SidedSheet(float2 p, float2 size, float r) {
                 // Bottom-left rounded corner
                 if (p.x < r && p.y > (size.y - r)) {
@@ -58,7 +62,7 @@ class GlassLensRenderer {
                     return half4(0.0);
                 }
 
-                // SDF gradient for outward surface normal
+                // SDF gradient for outward surface normal (N)
                 float2 n = float2(
                     sd3SidedSheet(p + float2(1.0, 0.0), viewSize, cornerRadius) - sd3SidedSheet(p - float2(1.0, 0.0), viewSize, cornerRadius),
                     sd3SidedSheet(p + float2(0.0, 1.0), viewSize, cornerRadius) - sd3SidedSheet(p - float2(0.0, 1.0), viewSize, cornerRadius)
@@ -70,38 +74,38 @@ class GlassLensRenderer {
                     n = float2(0.0, 1.0);
                 }
 
-                // Thickness slope: 1 at edge, 0 inside the sheet
+                // Thickness slope: 1.0 at outer edge, 0.0 inside the flat sheet
                 float dist = -d;
                 float t = clamp(dist / max(bevel, 1.0), 0.0, 1.0);
                 float edge = 1.0 - t;
                 float slope = edge * edge;
 
-                // 3-Edge Specular highlight along outer rim and rounded bottom corners
+                // Specular highlight: dot(N, -L) main lobe + opposite side bounce + hair edge
                 float facing = dot(n, -lightDir);
                 float facingPos = max(facing, 0.0);
                 float facingNeg = max(-facing, 0.0);
 
-                float bandW = clamp(bevel * 0.35, 2.0, 12.0);
+                float bandW = clamp(bevel * 0.30, 2.0, 9.0);
                 float rim = clamp(1.0 - (dist - 0.5) / bandW, 0.0, 1.0) * cov;
-                float lobe = 0.65 * pow(facingPos, 5.0) + 0.20 * pow(facingNeg, 5.0) + 0.05;
+                float lobe = 0.55 * pow(facingPos, 5.0) + 0.18 * pow(facingNeg, 5.0) + 0.05;
                 float hair = clamp(1.0 - abs(d + 1.0) / 1.5, 0.0, 1.0);
-                float spec = (rim * lobe + hair * (0.35 + 0.55 * facingPos)) * specStrength;
+                float spec = (rim * lobe + hair * (0.22 + 0.35 * facingPos)) * specStrength;
 
-                // Center of the screen has zero glass effect (100% crystal-clear wallpaper transparency)
+                // Center of screen is completely untouched (100% crystal-clear wallpaper transparency)
                 if (slope <= 0.001 && spec <= 0.005) {
                     return half4(0.0);
                 }
 
-                // Real-time inward refraction along the 3 edges
+                // Liquid Glass 2.0 Inward Refraction (intensified lens magnification along the 3 edges)
                 float refr = refractPx;
                 float2 offset = -n * (slope * refr);
 
-                // Physical chromatic dispersion (per-channel RGB refraction)
+                // Liquid Glass 2.0 Physical Chromatic Dispersion (calibrated R/G/B normal separation)
                 float2 cR = coord + offset * (1.0 - dispersion * slope);
                 float2 cG = coord + offset;
                 float2 cB = coord + offset * (1.0 + dispersion * slope);
 
-                // Safe clamping within recorded content buffer
+                // Safe clamping to avoid transparent black borders
                 float2 lo = float2(margin + 1.0, margin + 1.0);
                 float2 hi = lo + viewSize - float2(2.0, 2.0);
                 cR = clamp(cR, lo, hi);
@@ -114,7 +118,7 @@ class GlassLensRenderer {
 
                 float3 col = float3(sR.r, sG.g, sB.b);
 
-                // Vibrancy curve
+                // Liquid Glass 2.0 Vibrancy Saturation Curve
                 float lum = dot(col, float3(0.2126, 0.7152, 0.0722));
                 float satNow = max(col.r, max(col.g, col.b)) - min(col.r, min(col.g, col.b));
                 float room = 1.0 - smoothstep(0.2, 0.85, satNow);
@@ -122,13 +126,13 @@ class GlassLensRenderer {
                 float amount = 1.0 + (satFactor - 1.0) * mix(0.3, 1.0, room * hl);
                 col = clamp(mix(float3(lum), col, amount), float3(0.0), float3(1.0));
 
-                // Backside inner shadow on bevel transition
-                float shadowW = clamp(bevel, 4.0, 36.0);
+                // Backside Inner Shadow on bevel transition
+                float shadowW = clamp(bevel, 4.0, 28.0);
                 float shadowBand = pow(clamp(1.0 + d / shadowW, 0.0, 1.0), 1.5);
                 float ish = shadowBand * facingNeg * innerShadow;
-                col = col * (1.0 - 0.40 * ish);
+                col = col * (1.0 - 0.45 * ish);
 
-                // Add specular rim reflection
+                // Add specular reflection
                 col += float3(spec);
                 col = clamp(col, float3(0.0), float3(1.0));
 
@@ -141,10 +145,10 @@ class GlassLensRenderer {
     }
 
     data class LensParams(
-        val cornerRadius: Float = 36f,
-        val bevel: Float = 32f,
-        val refract: Float = 38f,
-        val dispersion: Float = 0.24f,
+        val cornerRadius: Float = 38f,
+        val bevel: Float = 38f,
+        val refract: Float = 68f,
+        val dispersion: Float = 0.09f,
         val lightX: Float = 0f,
         val lightY: Float = 1f,
         val spec: Float = 0.95f,
@@ -152,7 +156,7 @@ class GlassLensRenderer {
         val saturation: Float = 125f
     )
 
-    private val renderNode = RenderNode("HyperBounceLockSheetLens")
+    private val renderNode = RenderNode("LiquidGlass20Lens")
     private var shader: RuntimeShader? = null
     private var shaderBroken = false
     private var lastParams: LensParams? = null
@@ -176,7 +180,7 @@ class GlassLensRenderer {
         val sh = shader ?: try {
             RuntimeShader(LENS_AGSL).also { shader = it }
         } catch (e: Exception) {
-            Log.e(TAG, "AGSL compilation failed", e)
+            Log.e(TAG, "Lens 2.0 AGSL compilation failed", e)
             shaderBroken = true
             return false
         }
@@ -185,7 +189,7 @@ class GlassLensRenderer {
             try {
                 renderNode.setRenderEffect(buildEffect(sh, params, margin, width, height))
             } catch (e: Exception) {
-                Log.e(TAG, "RenderEffect build failed", e)
+                Log.e(TAG, "Lens 2.0 RenderEffect build failed", e)
                 shaderBroken = true
                 return false
             }
