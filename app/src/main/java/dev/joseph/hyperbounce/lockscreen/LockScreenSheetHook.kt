@@ -1,8 +1,6 @@
 package dev.joseph.hyperbounce.lockscreen
 
 import android.content.Context
-import android.graphics.RenderEffect
-import android.graphics.RuntimeShader
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
@@ -13,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
+import dev.joseph.hyperbounce.lockscreen.glass.LockScreenGlassSheetView
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Constructor
@@ -20,8 +19,9 @@ import java.lang.reflect.Field
 import java.lang.reflect.Method
 
 /**
- * Feature 1: Lock Screen Sheet & AGSL Liquid Glass Shaders Hook.
- * Intercepts KeyguardPanelViewController and KeyguardClockContainer in com.android.systemui.
+ * Feature 1: Lock Screen Liquid Glass Sheet Hook.
+ * Injects a real-time AGSL Liquid Glass Sheet with 3-edge refraction & chromatic aberration
+ * behind the lockscreen elements, synchronized to 120Hz swipe translation.
  */
 object LockScreenSheetHook {
 
@@ -69,7 +69,16 @@ object LockScreenSheetHook {
 
                                 if (rootView != null) {
                                     val cfg = LockScreenConfigHolder.sheet
-                                    if (!cfg.enabled) return result
+                                    if (!cfg.enabled) {
+                                        // Cleanup if previously injected
+                                        if (rootView is ViewGroup) {
+                                            val existingSheet = rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
+                                            if (existingSheet != null) {
+                                                rootView.removeView(existingSheet)
+                                            }
+                                        }
+                                        return result
+                                    }
 
                                     val fraction = f.coerceIn(0.0f, 1.0f)
                                     var viewHeight = rootView.height.toFloat()
@@ -77,49 +86,19 @@ object LockScreenSheetHook {
                                     val upwardOffset = (1.0f - fraction) * -viewHeight
 
                                     val updateUI = Runnable {
-                                        // 1. Move root lockscreen layer upward smoothly (120Hz native performance, zero lag)
+                                        // 1. Move root lockscreen layer upward smoothly (120Hz native performance)
                                         rootView.translationY = upwardOffset
                                         rootView.scaleX = 1.0f
                                         rootView.scaleY = 1.0f
 
-                                        // AndroidLiquidGlass: 4-Sided True Refraction Shader on Lockscreen Card Sheet
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                            try {
-                                                val cardW = if (rootView.width > 0) rootView.width.toFloat() else 1080f
-                                                val cardH = if (rootView.height > 0) rootView.height.toFloat() else 2400f
-                                                val density = rootView.context.resources.displayMetrics.density
-                                                val cornerR = 28f * density
-
-                                                val refractionShader = RuntimeShader(LockScreenShaders.REFRACTION_SHADER_SRC)
-                                                refractionShader.setFloatUniform("size", cardW, cardH)
-                                                refractionShader.setFloatUniform("offset", 0f, 0f)
-                                                refractionShader.setFloatUniform("cornerRadii", 0f, 0f, cornerR, cornerR)
-                                                refractionShader.setFloatUniform("refractionHeight", cfg.refractionHeight.coerceAtLeast(1f) * density)
-                                                refractionShader.setFloatUniform("refractionAmount", cfg.refractionAmount.coerceAtLeast(1f) * density)
-                                                refractionShader.setFloatUniform("depthEffect", cfg.depthEffect.coerceAtLeast(0f))
-
-                                                val shaderEffect = RenderEffect.createRuntimeShaderEffect(refractionShader, "content")
-                                                rootView.setRenderEffect(shaderEffect)
-                                            } catch (_: Throwable) {}
-                                        }
-
-                                        // 2. Move notification container upward in sync
-                                        if (finalNotifView != null) {
-                                            finalNotifView.translationY = upwardOffset
-                                            finalNotifView.scaleX = 1.0f
-                                            finalNotifView.scaleY = 1.0f
-                                        }
-
-                                        // 3. Inject Full Container Sheet Outline with Physical Fresnel Specular Highlights
+                                        // 2. Inject real-time AGSL Liquid Glass Sheet Card at index 0 (behind clock & notifs)
                                         if (rootView is ViewGroup) {
-                                            var fullFrame = rootView.findViewWithTag<View>("hyperbounce_full_sheet_frame")
-                                            if (fullFrame == null) {
+                                            var glassSheet = rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
+                                            if (glassSheet == null) {
                                                 val context = rootView.context
-                                                fullFrame = View(context).apply {
+                                                glassSheet = LockScreenGlassSheetView(context).apply {
                                                     id = View.generateViewId()
-                                                    tag = "hyperbounce_full_sheet_frame"
-                                                    val density = context.resources.displayMetrics.density
-                                                    background = LiquidGlassFrameDrawable(density)
+                                                    tag = "hyperbounce_lock_glass_sheet"
                                                 }
 
                                                 var added = false
@@ -131,20 +110,29 @@ object LockScreenSheetHook {
                                                     clpClass.getField("bottomToBottom").set(clp, 0)
                                                     clpClass.getField("startToStart").set(clp, 0)
                                                     clpClass.getField("endToEnd").set(clp, 0)
-                                                    rootView.addView(fullFrame, 0, clp)
+                                                    rootView.addView(glassSheet, 0, clp)
                                                     added = true
                                                 } catch (_: Throwable) {}
 
                                                 if (!added) {
                                                     try {
                                                         val flp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                                                        rootView.addView(fullFrame, 0, flp)
+                                                        rootView.addView(glassSheet, 0, flp)
                                                     } catch (_: Throwable) {}
                                                 }
+                                            } else {
+                                                glassSheet.invalidate()
                                             }
                                         }
 
-                                        // 4. Inject Bottom Glass Lip & Dynamic Pill into KeyguardBottomAreaView
+                                        // 3. Move notification container upward in sync
+                                        if (finalNotifView != null) {
+                                            finalNotifView.translationY = upwardOffset
+                                            finalNotifView.scaleX = 1.0f
+                                            finalNotifView.scaleY = 1.0f
+                                        }
+
+                                        // 4. Dynamic iOS Home Indicator Bar in KeyguardBottomAreaView
                                         try {
                                             val bottomAreaField: Field = kpvc.javaClass.getDeclaredField("keyguardBottomAreaInjector")
                                             bottomAreaField.isAccessible = true
@@ -157,40 +145,6 @@ object LockScreenSheetHook {
                                                     val context = bottomAreaView.context
                                                     val density = context.resources.displayMetrics.density
 
-                                                    // A. Bottom Specular Glass Lip
-                                                    var glassRim = bottomAreaView.findViewWithTag<View>("hyperbounce_glass_rim")
-                                                    if (glassRim == null) {
-                                                        glassRim = View(context).apply {
-                                                            id = View.generateViewId()
-                                                            tag = "hyperbounce_glass_rim"
-
-                                                            val rimHeight = (cfg.lipHeight.coerceAtLeast(10f) * density).toInt()
-                                                            val cornerR = (28 * density).toInt()
-                                                            val strokeA = (cfg.borderAlpha.coerceIn(0f, 1f) * 255).toInt()
-                                                            val strokeColor = 0x00FFFFFF or (strokeA shl 24)
-                                                            val strokeW = (cfg.borderWidth.coerceAtLeast(0.5f) * density).toInt()
-
-                                                            val rimDrawable = GradientDrawable().apply {
-                                                                shape = GradientDrawable.RECTANGLE
-                                                                colors = intArrayOf(0x03FFFFFF, 0x25FFFFFF)
-                                                                orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                                                                cornerRadii = floatArrayOf(0f, 0f, 0f, 0f, cornerR.toFloat(), cornerR.toFloat(), cornerR.toFloat(), cornerR.toFloat())
-                                                                setStroke(strokeW, strokeColor)
-                                                            }
-
-                                                            background = rimDrawable
-                                                            elevation = 4 * density
-                                                        }
-
-                                                        val rlp = FrameLayout.LayoutParams(
-                                                            ViewGroup.LayoutParams.MATCH_PARENT,
-                                                            (cfg.lipHeight.coerceAtLeast(10f) * density).toInt(),
-                                                            Gravity.BOTTOM
-                                                        )
-                                                        bottomAreaView.addView(glassRim, 0, rlp)
-                                                    }
-
-                                                    // B. Dynamic iOS Home Indicator Bar
                                                     var pill = bottomAreaView.findViewWithTag<View>("hyperbounce_home_pill")
                                                     if (pill == null) {
                                                         val pillW = (cfg.pillWidth.coerceAtLeast(40f) * density).toInt()
@@ -223,7 +177,7 @@ object LockScreenSheetHook {
                                                 }
                                             }
                                         } catch (t: Throwable) {
-                                            Log.e(TAG, "Rim/Pill injection error", t)
+                                            Log.e(TAG, "Pill injection error", t)
                                         }
                                     }
 
@@ -241,7 +195,7 @@ object LockScreenSheetHook {
                     })
                 }
 
-                // Hook doScale / doScale$1 to completely disable shrinking towards center
+                // Hook doScale / doScale$1 to disable shrinking towards center
                 if (m.name.startsWith("doScale") &&
                     m.parameterTypes.size == 2 &&
                     m.parameterTypes[0] == Float::class.javaPrimitiveType &&
