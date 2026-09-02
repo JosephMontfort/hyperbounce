@@ -33,6 +33,7 @@ fun rememberScrollShrinkState(
         var startY = 0f
         var startX = 0f
         var isTracking = false
+        var currentShrunk = isShrunk.value
 
         val wrappedCallback = object : Window.Callback by originalCallback {
             override fun dispatchTouchEvent(event: MotionEvent?): Boolean {
@@ -47,13 +48,21 @@ fun rememberScrollShrinkState(
                             if (isTracking) {
                                 val dy = event.rawY - startY
                                 val dx = event.rawX - startX
-                                if (abs(dy) > touchSlop && abs(dy) > abs(dx) * 1.2f) {
-                                    if (dy < -touchSlop) {
+                                val absDy = abs(dy)
+                                val absDx = abs(dx)
+                                if (absDy > touchSlop && absDy > absDx * 1.2f) {
+                                    if (dy < 0f) {
                                         // Scrolling DOWN into feed -> shrink
-                                        if (!isShrunk.value) isShrunk.value = true
-                                    } else if (dy > touchSlop) {
+                                        if (!currentShrunk) {
+                                            currentShrunk = true
+                                            isShrunk.value = true
+                                        }
+                                    } else {
                                         // Scrolling UP to top -> expand
-                                        if (isShrunk.value) isShrunk.value = false
+                                        if (currentShrunk) {
+                                            currentShrunk = false
+                                            isShrunk.value = false
+                                        }
                                     }
                                     startY = event.rawY
                                     startX = event.rawX

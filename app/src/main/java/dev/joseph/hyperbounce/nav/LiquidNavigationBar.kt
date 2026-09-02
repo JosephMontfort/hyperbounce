@@ -142,12 +142,12 @@ fun LiquidNavigationBar(
             )
         )
     }
-    val shrinkProgress = shrinkAnim.value
-    val currentScale = lerp(1f, shrinkScale.coerceIn(0.3f, 0.95f), shrinkProgress)
-    val maxShiftY = with(density) {
-        ((bottomPadding - 4.dp).coerceAtLeast(0.dp) * 0.55f).toPx()
+    val maxShiftY = remember(density, bottomPadding) {
+        with(density) {
+            ((bottomPadding - 4.dp).coerceAtLeast(0.dp) * 0.55f).toPx()
+        }
     }
-    val currentShiftY = lerp(0f, maxShiftY, shrinkProgress)
+    val targetShrunkScale = shrinkScale.coerceIn(0.3f, 0.95f)
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -157,9 +157,11 @@ fun LiquidNavigationBar(
             modifier = Modifier
                 .padding(bottom = bottomPadding)
                 .graphicsLayer {
-                    scaleX = currentScale
-                    scaleY = currentScale
-                    translationY = currentShiftY
+                    val progress = shrinkAnim.value
+                    val scale = lerp(1f, targetShrunkScale, progress)
+                    scaleX = scale
+                    scaleY = scale
+                    translationY = lerp(0f, maxShiftY, progress)
                     transformOrigin = TransformOrigin(0.5f, 1f)
                 }
                 .width((tabs.size * tabWidth.value).dp)
