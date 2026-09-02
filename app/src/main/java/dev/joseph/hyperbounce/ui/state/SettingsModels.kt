@@ -114,41 +114,44 @@ data class GlobalGlassSettings(
     val hapticsEnabled: Boolean = true
 )
 
-/** Feature 1: Lock Screen Sheet & 4-Sided AGSL Liquid Glass Refraction Settings */
+/** Feature 1: Lock Screen Sheet & Liquid Glass 2.0 3-Edge Refraction Settings */
 data class LockScreenSheetSettings(
     val enabled: Boolean = true,
-    val borderWidth: Float = 2.5f,
-    val borderAlpha: Float = 0.47f,
-    val refractionHeight: Float = 24.0f,
-    val refractionAmount: Float = 32.0f,
-    val depthEffect: Float = 0.12f,
+    val refractionHeight: Float = 68.0f,
+    val bevelWidth: Float = 38.0f,
+    val leftBevelWidth: Float = 38.0f,
+    val rightBevelWidth: Float = 38.0f,
+    val bottomBevelWidth: Float = 38.0f,
+    val dispersionStrength: Float = 0.09f,
+    val specularStrength: Float = 0.95f,
+    val innerShadow: Float = 0.45f,
+    val saturationFactor: Float = 125.0f,
+    val blurRadius: Float = 0.0f,
+    val cornerRadius: Float = 38.0f,
     val pillWidth: Float = 156.0f,
     val pillHeight: Float = 6.0f,
-    val pillBottomMargin: Float = 9.0f,
-    val lipHeight: Float = 28.0f
+    val pillBottomMargin: Float = 9.0f
 )
 
-/** Feature 2: Fluid iOS PIN Pad Geometry & Jelly Squish Engine Settings */
+/** Feature 2: Liquid Glass 2.0 Button PIN Pad Engine Settings */
 data class LockScreenKeypadSettings(
     val enabled: Boolean = true,
+    val buttonRefraction: Float = 48.0f,
+    val buttonBevel: Float = 24.0f,
+    val buttonDispersion: Float = 0.09f,
+    val buttonSpecular: Float = 0.95f,
+    val buttonInnerShadow: Float = 0.40f,
+    val buttonBlur: Float = 0.0f,
+    val buttonSaturation: Float = 125.0f,
     val circleDiameter: Float = 82.0f,
-    val fillAlpha: Float = 0.20f,
-    val strokeWidth: Float = 1.5f,
-    val strokeAlpha: Float = 0.47f,
-    val showKlondike: Boolean = false,
     val digitTextSize: Float = 36.0f,
+    val showKlondike: Boolean = false,
+    val pressLiquidScale: Float = 0.88f,
+    val pressLiquidAmp: Float = 0.60f,
     val row0Offset: Float = -115.0f,
     val row1Offset: Float = -90.0f,
     val row2Offset: Float = -60.0f,
     val row3Offset: Float = -30.0f,
-    val tapSquishScale: Float = 0.88f,
-    val releasePlunge: Float = 0.10f,
-    val jellyMaxStretch: Float = 0.16f,
-    val jellyElasticLimit: Float = 0.40f,
-    val springStiffness: Float = 50.0f,
-    val springDamping: Float = 5.5f,
-    val pressGlowAlpha: Float = 0.35f,
-    val glowRadius: Float = 1.4f,
     val entryTranslationY: Float = 90.0f,
     val entryInitialScale: Float = 0.50f,
     val entryDuration: Float = 420.0f,

@@ -4,15 +4,15 @@ import android.graphics.Canvas
 import android.graphics.RenderEffect
 import android.graphics.RenderNode
 import android.graphics.RuntimeShader
+import android.graphics.Shader
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
 
 /**
  * Liquid Glass 2.0 AGSL Lens Pipeline for Lock Screen Sheet.
- * Implements Apple iOS Liquid Glass 2.0 optical model:
- * 3-sided SDF -> Numerical Normal Field -> Real-time Inward Refraction -> Chromatic Dispersion
- * -> Directional Specular Highlight -> Inner Shadow -> Vibrancy Saturation.
+ * Implements Apple iOS Liquid Glass 2.0 optical model with per-edge bevel control:
+ * Left, Right, and Bottom edges independently configurable.
  */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 class GlassLensRenderer {
@@ -27,7 +27,7 @@ class GlassLensRenderer {
             uniform float  margin;
             uniform float2 viewSize;
             uniform float  cornerRadius;
-            uniform float  bevel;
+            uniform float3 edgeBevels; // x = left, y = right, z = bottom
             uniform float  refractPx;
             uniform float  dispersion;
             uniform float2 lightDir;
@@ -35,17 +35,13 @@ class GlassLensRenderer {
             uniform float  innerShadow;
             uniform float  satFactor;
 
-            // Liquid Glass 2.0 Exact 3-sided SDF (Left, Right, Bottom with rounded bottom corners, open top)
             float sd3SidedSheet(float2 p, float2 size, float r) {
-                // Bottom-left rounded corner
                 if (p.x < r && p.y > (size.y - r)) {
                     return length(p - float2(r, size.y - r)) - r;
                 }
-                // Bottom-right rounded corner
                 if (p.x > (size.x - r) && p.y > (size.y - r)) {
                     return length(p - float2(size.x - r, size.y - r)) - r;
                 }
-                // Straight 3-sided borders
                 float dLeft = -p.x;
                 float dRight = -(size.x - p.x);
                 float dBottom = -(size.y - p.y);
@@ -56,13 +52,11 @@ class GlassLensRenderer {
                 float2 p = coord - float2(margin, margin);
                 float d = sd3SidedSheet(p, viewSize, cornerRadius);
 
-                // Anti-aliased feathering: 1.5px along outer boundary
                 float cov = clamp(0.5 - d / 1.5, 0.0, 1.0);
                 if (cov <= 0.004) {
                     return half4(0.0);
                 }
 
-                // SDF gradient for outward surface normal (N)
                 float2 n = float2(
                     sd3SidedSheet(p + float2(1.0, 0.0), viewSize, cornerRadius) - sd3SidedSheet(p - float2(1.0, 0.0), viewSize, cornerRadius),
                     sd3SidedSheet(p + float2(0.0, 1.0), viewSize, cornerRadius) - sd3SidedSheet(p - float2(0.0, 1.0), viewSize, cornerRadius)
@@ -74,38 +68,55 @@ class GlassLensRenderer {
                     n = float2(0.0, 1.0);
                 }
 
-                // Thickness slope: 1.0 at outer edge, 0.0 inside the flat sheet
-                float dist = -d;
-                float t = clamp(dist / max(bevel, 1.0), 0.0, 1.0);
-                float edge = 1.0 - t;
-                float slope = edge * edge;
+                // Independent per-edge bevel slopes
+                float slopeLeft = edgeBevels.x > 0.5 ? pow(clamp(1.0 - p.x / edgeBevels.x, 0.0, 1.0), 2.0) : 0.0;
+                float slopeRight = edgeBevels.y > 0.5 ? pow(clamp(1.0 - (viewSize.x - p.x) / edgeBevels.y, 0.0, 1.0), 2.0) : 0.0;
+                float slopeBottom = edgeBevels.z > 0.5 ? pow(clamp(1.0 - (viewSize.y - p.y) / edgeBevels.z, 0.0, 1.0), 2.0) : 0.0;
 
-                // Specular highlight: dot(N, -L) main lobe + opposite side bounce + hair edge
+                float slopeCorner = 0.0;
+                if (p.x < cornerRadius && p.y > (viewSize.y - cornerRadius)) {
+                    float cd = length(p - float2(cornerRadius, viewSize.y - cornerRadius)) - cornerRadius;
+                    float cornerBevel = max(edgeBevels.x, edgeBevels.z);
+                    if (cornerBevel > 0.5) {
+                        slopeCorner = pow(clamp(-cd / cornerBevel, 0.0, 1.0), 2.0);
+                    }
+                } else if (p.x > (viewSize.x - cornerRadius) && p.y > (viewSize.y - cornerRadius)) {
+                    float cd = length(p - float2(viewSize.x - cornerRadius, viewSize.y - cornerRadius)) - cornerRadius;
+                    float cornerBevel = max(edgeBevels.y, edgeBevels.z);
+                    if (cornerBevel > 0.5) {
+                        slopeCorner = pow(clamp(-cd / cornerBevel, 0.0, 1.0), 2.0);
+                    }
+                }
+
+                float slope = max(max(max(slopeLeft, slopeRight), slopeBottom), slopeCorner);
+
+                // Specular highlight
                 float facing = dot(n, -lightDir);
                 float facingPos = max(facing, 0.0);
                 float facingNeg = max(-facing, 0.0);
 
-                float bandW = clamp(bevel * 0.30, 2.0, 9.0);
+                float maxBevel = max(max(edgeBevels.x, edgeBevels.y), edgeBevels.z);
+                float dist = -d;
+                float bandW = clamp(maxBevel * 0.30, 2.0, 9.0);
                 float rim = clamp(1.0 - (dist - 0.5) / bandW, 0.0, 1.0) * cov;
                 float lobe = 0.55 * pow(facingPos, 5.0) + 0.18 * pow(facingNeg, 5.0) + 0.05;
                 float hair = clamp(1.0 - abs(d + 1.0) / 1.5, 0.0, 1.0);
-                float spec = (rim * lobe + hair * (0.22 + 0.35 * facingPos)) * specStrength;
+                float spec = (rim * lobe + hair * (0.22 + 0.35 * facingPos)) * specStrength * (slope > 0.01 ? 1.0 : 0.0);
 
-                // Center of screen is completely untouched (100% crystal-clear wallpaper transparency)
+                // Center is completely transparent
                 if (slope <= 0.001 && spec <= 0.005) {
                     return half4(0.0);
                 }
 
-                // Liquid Glass 2.0 Inward Refraction (intensified lens magnification along the 3 edges)
+                // Inward refraction along the 3 edges
                 float refr = refractPx;
                 float2 offset = -n * (slope * refr);
 
-                // Liquid Glass 2.0 Physical Chromatic Dispersion (calibrated R/G/B normal separation)
+                // Physical chromatic dispersion
                 float2 cR = coord + offset * (1.0 - dispersion * slope);
                 float2 cG = coord + offset;
                 float2 cB = coord + offset * (1.0 + dispersion * slope);
 
-                // Safe clamping to avoid transparent black borders
                 float2 lo = float2(margin + 1.0, margin + 1.0);
                 float2 hi = lo + viewSize - float2(2.0, 2.0);
                 cR = clamp(cR, lo, hi);
@@ -118,7 +129,7 @@ class GlassLensRenderer {
 
                 float3 col = float3(sR.r, sG.g, sB.b);
 
-                // Liquid Glass 2.0 Vibrancy Saturation Curve
+                // Vibrancy curve
                 float lum = dot(col, float3(0.2126, 0.7152, 0.0722));
                 float satNow = max(col.r, max(col.g, col.b)) - min(col.r, min(col.g, col.b));
                 float room = 1.0 - smoothstep(0.2, 0.85, satNow);
@@ -126,17 +137,15 @@ class GlassLensRenderer {
                 float amount = 1.0 + (satFactor - 1.0) * mix(0.3, 1.0, room * hl);
                 col = clamp(mix(float3(lum), col, amount), float3(0.0), float3(1.0));
 
-                // Backside Inner Shadow on bevel transition
-                float shadowW = clamp(bevel, 4.0, 28.0);
+                // Backside inner shadow
+                float shadowW = clamp(maxBevel, 4.0, 28.0);
                 float shadowBand = pow(clamp(1.0 + d / shadowW, 0.0, 1.0), 1.5);
                 float ish = shadowBand * facingNeg * innerShadow;
                 col = col * (1.0 - 0.45 * ish);
 
-                // Add specular reflection
                 col += float3(spec);
                 col = clamp(col, float3(0.0), float3(1.0));
 
-                // Alpha of the glass edge: 1.0 on bevel rim, smoothly dropping to 0.0 inside
                 float edgeAlpha = clamp(slope + spec * 0.85, 0.0, 1.0) * cov;
 
                 return half4(col * edgeAlpha, edgeAlpha);
@@ -146,14 +155,17 @@ class GlassLensRenderer {
 
     data class LensParams(
         val cornerRadius: Float = 38f,
-        val bevel: Float = 38f,
+        val leftBevel: Float = 38f,
+        val rightBevel: Float = 38f,
+        val bottomBevel: Float = 38f,
         val refract: Float = 68f,
         val dispersion: Float = 0.09f,
         val lightX: Float = 0f,
         val lightY: Float = 1f,
         val spec: Float = 0.95f,
         val innerShadow: Float = 0.45f,
-        val saturation: Float = 125f
+        val saturation: Float = 125f,
+        val blurRadius: Float = 0f
     )
 
     private val renderNode = RenderNode("LiquidGlass20Lens")
@@ -221,7 +233,7 @@ class GlassLensRenderer {
         sh.setFloatUniform("margin", margin.toFloat())
         sh.setFloatUniform("viewSize", width.toFloat(), height.toFloat())
         sh.setFloatUniform("cornerRadius", p.cornerRadius)
-        sh.setFloatUniform("bevel", p.bevel)
+        sh.setFloatUniform("edgeBevels", p.leftBevel, p.rightBevel, p.bottomBevel)
         sh.setFloatUniform("refractPx", p.refract)
         sh.setFloatUniform("dispersion", p.dispersion)
         sh.setFloatUniform("lightDir", p.lightX, p.lightY)
@@ -229,7 +241,15 @@ class GlassLensRenderer {
         sh.setFloatUniform("innerShadow", p.innerShadow)
         sh.setFloatUniform("satFactor", p.saturation / 100f)
 
-        return RenderEffect.createRuntimeShaderEffect(sh, "content")
+        val lensEffect = RenderEffect.createRuntimeShaderEffect(sh, "content")
+        return if (p.blurRadius > 0.01f) {
+            RenderEffect.createChainEffect(
+                lensEffect,
+                RenderEffect.createBlurEffect(p.blurRadius, p.blurRadius, Shader.TileMode.CLAMP)
+            )
+        } else {
+            lensEffect
+        }
     }
 
     fun release() {

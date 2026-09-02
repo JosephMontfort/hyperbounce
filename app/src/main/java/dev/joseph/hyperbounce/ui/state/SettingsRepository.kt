@@ -360,43 +360,59 @@ class SettingsRepository(context: Context) {
         private val defaults = LockScreenSheetSettings()
 
         var enabled by prefsBooleanState("lock_sheet_enabled", defaults.enabled); private set
-        var borderWidth by prefsFloatState("lock_card_border_width", defaults.borderWidth); private set
-        var borderAlpha by prefsFloatState("lock_card_border_alpha", defaults.borderAlpha); private set
         var refractionHeight by prefsFloatState("lock_card_refraction_height", defaults.refractionHeight); private set
-        var refractionAmount by prefsFloatState("lock_card_refraction_amount", defaults.refractionAmount); private set
-        var depthEffect by prefsFloatState("lock_card_depth_effect", defaults.depthEffect); private set
+        var bevelWidth by prefsFloatState("lock_card_bevel_width", defaults.bevelWidth); private set
+        var leftBevelWidth by prefsFloatState("lock_card_left_bevel", defaults.leftBevelWidth); private set
+        var rightBevelWidth by prefsFloatState("lock_card_right_bevel", defaults.rightBevelWidth); private set
+        var bottomBevelWidth by prefsFloatState("lock_card_bottom_bevel", defaults.bottomBevelWidth); private set
+        var dispersionStrength by prefsFloatState("lock_card_dispersion", defaults.dispersionStrength); private set
+        var specularStrength by prefsFloatState("lock_card_specular", defaults.specularStrength); private set
+        var innerShadow by prefsFloatState("lock_card_inner_shadow", defaults.innerShadow); private set
+        var saturationFactor by prefsFloatState("lock_card_saturation", defaults.saturationFactor); private set
+        var blurRadius by prefsFloatState("lock_card_blur_radius", defaults.blurRadius); private set
+        var cornerRadius by prefsFloatState("lock_card_corner_radius", defaults.cornerRadius); private set
         var pillWidth by prefsFloatState("lock_pill_width", defaults.pillWidth); private set
         var pillHeight by prefsFloatState("lock_pill_height", defaults.pillHeight); private set
         var pillBottomMargin by prefsFloatState("lock_pill_bottom_margin", defaults.pillBottomMargin); private set
-        var lipHeight by prefsFloatState("lock_lip_height", defaults.lipHeight); private set
 
         fun snapshot(): LockScreenSheetSettings = LockScreenSheetSettings(
-            enabled, borderWidth, borderAlpha, refractionHeight, refractionAmount, depthEffect,
-            pillWidth, pillHeight, pillBottomMargin, lipHeight
+            enabled, refractionHeight, bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
+            dispersionStrength, specularStrength, innerShadow, saturationFactor, blurRadius,
+            cornerRadius, pillWidth, pillHeight, pillBottomMargin
         )
 
         @JvmName("setSheetEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
-        @JvmName("setSheetBorderWidthPref") fun setBorderWidth(v: Float) { borderWidth = v }
-        @JvmName("setSheetBorderAlphaPref") fun setBorderAlpha(v: Float) { borderAlpha = v }
         @JvmName("setSheetRefractionHeightPref") fun setRefractionHeight(v: Float) { refractionHeight = v }
-        @JvmName("setSheetRefractionAmountPref") fun setRefractionAmount(v: Float) { refractionAmount = v }
-        @JvmName("setSheetDepthEffectPref") fun setDepthEffect(v: Float) { depthEffect = v }
+        @JvmName("setSheetBevelWidthPref") fun setBevelWidth(v: Float) { bevelWidth = v }
+        @JvmName("setSheetLeftBevelWidthPref") fun setLeftBevelWidth(v: Float) { leftBevelWidth = v }
+        @JvmName("setSheetRightBevelWidthPref") fun setRightBevelWidth(v: Float) { rightBevelWidth = v }
+        @JvmName("setSheetBottomBevelWidthPref") fun setBottomBevelWidth(v: Float) { bottomBevelWidth = v }
+        @JvmName("setSheetDispersionStrengthPref") fun setDispersionStrength(v: Float) { dispersionStrength = v }
+        @JvmName("setSheetSpecularStrengthPref") fun setSpecularStrength(v: Float) { specularStrength = v }
+        @JvmName("setSheetInnerShadowPref") fun setInnerShadow(v: Float) { innerShadow = v }
+        @JvmName("setSheetSaturationFactorPref") fun setSaturationFactor(v: Float) { saturationFactor = v }
+        @JvmName("setSheetBlurRadiusPref") fun setBlurRadius(v: Float) { blurRadius = v }
+        @JvmName("setSheetCornerRadiusPref") fun setCornerRadius(v: Float) { cornerRadius = v }
         @JvmName("setSheetPillWidthPref") fun setPillWidth(v: Float) { pillWidth = v }
         @JvmName("setSheetPillHeightPref") fun setPillHeight(v: Float) { pillHeight = v }
         @JvmName("setSheetPillBottomMarginPref") fun setPillBottomMargin(v: Float) { pillBottomMargin = v }
-        @JvmName("setSheetLipHeightPref") fun setLipHeight(v: Float) { lipHeight = v }
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
-            borderWidth = defaults.borderWidth
-            borderAlpha = defaults.borderAlpha
             refractionHeight = defaults.refractionHeight
-            refractionAmount = defaults.refractionAmount
-            depthEffect = defaults.depthEffect
+            bevelWidth = defaults.bevelWidth
+            leftBevelWidth = defaults.leftBevelWidth
+            rightBevelWidth = defaults.rightBevelWidth
+            bottomBevelWidth = defaults.bottomBevelWidth
+            dispersionStrength = defaults.dispersionStrength
+            specularStrength = defaults.specularStrength
+            innerShadow = defaults.innerShadow
+            saturationFactor = defaults.saturationFactor
+            blurRadius = defaults.blurRadius
+            cornerRadius = defaults.cornerRadius
             pillWidth = defaults.pillWidth
             pillHeight = defaults.pillHeight
             pillBottomMargin = defaults.pillBottomMargin
-            lipHeight = defaults.lipHeight
         }
     }
 
@@ -406,24 +422,24 @@ class SettingsRepository(context: Context) {
         private val defaults = LockScreenKeypadSettings()
 
         var enabled by prefsBooleanState("engine_keypad_enabled", defaults.enabled); private set
+        var buttonRefraction by prefsFloatState("pin_btn_refraction", defaults.buttonRefraction); private set
+        var buttonBevel by prefsFloatState("pin_btn_bevel", defaults.buttonBevel); private set
+        var buttonDispersion by prefsFloatState("pin_btn_dispersion", defaults.buttonDispersion); private set
+        var buttonSpecular by prefsFloatState("pin_btn_specular", defaults.buttonSpecular); private set
+        var buttonInnerShadow by prefsFloatState("pin_btn_inner_shadow", defaults.buttonInnerShadow); private set
+        var buttonBlur by prefsFloatState("pin_btn_blur", defaults.buttonBlur); private set
+        var buttonSaturation by prefsFloatState("pin_btn_saturation", defaults.buttonSaturation); private set
         var circleDiameter by prefsFloatState("pin_circle_diameter", defaults.circleDiameter); private set
-        var fillAlpha by prefsFloatState("pin_circle_fill_alpha", defaults.fillAlpha); private set
-        var strokeWidth by prefsFloatState("pin_circle_stroke_width", defaults.strokeWidth); private set
-        var strokeAlpha by prefsFloatState("pin_circle_stroke_alpha", defaults.strokeAlpha); private set
-        var showKlondike by prefsBooleanState("pin_show_klondike", defaults.showKlondike); private set
         var digitTextSize by prefsFloatState("pin_digit_text_size", defaults.digitTextSize); private set
+        var showKlondike by prefsBooleanState("pin_show_klondike", defaults.showKlondike); private set
+        var pressLiquidScale by prefsFloatState("pin_press_liquid_scale", defaults.pressLiquidScale); private set
+        var pressLiquidAmp by prefsFloatState("pin_press_liquid_amp", defaults.pressLiquidAmp); private set
+
         var row0Offset by prefsFloatState("pin_row0_offset", defaults.row0Offset); private set
         var row1Offset by prefsFloatState("pin_row1_offset", defaults.row1Offset); private set
         var row2Offset by prefsFloatState("pin_row2_offset", defaults.row2Offset); private set
         var row3Offset by prefsFloatState("pin_row3_offset", defaults.row3Offset); private set
-        var tapSquishScale by prefsFloatState("pin_tap_squish_scale", defaults.tapSquishScale); private set
-        var releasePlunge by prefsFloatState("pin_release_plunge", defaults.releasePlunge); private set
-        var jellyMaxStretch by prefsFloatState("pin_jelly_max_stretch", defaults.jellyMaxStretch); private set
-        var jellyElasticLimit by prefsFloatState("pin_jelly_elastic_limit", defaults.jellyElasticLimit); private set
-        var springStiffness by prefsFloatState("pin_spring_stiffness", defaults.springStiffness); private set
-        var springDamping by prefsFloatState("pin_spring_damping", defaults.springDamping); private set
-        var pressGlowAlpha by prefsFloatState("pin_press_glow_alpha", defaults.pressGlowAlpha); private set
-        var glowRadius by prefsFloatState("pin_glow_radius", defaults.glowRadius); private set
+
         var entryTranslationY by prefsFloatState("pin_entry_translation_y", defaults.entryTranslationY); private set
         var entryInitialScale by prefsFloatState("pin_entry_initial_scale", defaults.entryInitialScale); private set
         var entryDuration by prefsFloatState("pin_entry_duration", defaults.entryDuration); private set
@@ -445,33 +461,31 @@ class SettingsRepository(context: Context) {
         var delayCancel by prefsFloatState("pin_delay_cancel", defaults.delayCancel); private set
 
         fun snapshot(): LockScreenKeypadSettings = LockScreenKeypadSettings(
-            enabled, circleDiameter, fillAlpha, strokeWidth, strokeAlpha, showKlondike, digitTextSize,
-            row0Offset, row1Offset, row2Offset, row3Offset, tapSquishScale, releasePlunge,
-            jellyMaxStretch, jellyElasticLimit, springStiffness, springDamping, pressGlowAlpha,
-            glowRadius, entryTranslationY, entryInitialScale, entryDuration, rowDelayStep, colDelayStep,
-            entryOvershoot, delayKey1, delayKey2, delayKey3, delayKey4, delayKey5, delayKey6,
-            delayKey7, delayKey8, delayKey9, delayKey0, delayEmergency, delayCancel
+            enabled, buttonRefraction, buttonBevel, buttonDispersion, buttonSpecular, buttonInnerShadow,
+            buttonBlur, buttonSaturation, circleDiameter, digitTextSize, showKlondike, pressLiquidScale,
+            pressLiquidAmp, row0Offset, row1Offset, row2Offset, row3Offset, entryTranslationY,
+            entryInitialScale, entryDuration, rowDelayStep, colDelayStep, entryOvershoot, delayKey1,
+            delayKey2, delayKey3, delayKey4, delayKey5, delayKey6, delayKey7, delayKey8, delayKey9,
+            delayKey0, delayEmergency, delayCancel
         )
 
         @JvmName("setKeypadEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
+        @JvmName("setButtonRefractionPref") fun setButtonRefraction(v: Float) { buttonRefraction = v }
+        @JvmName("setButtonBevelPref") fun setButtonBevel(v: Float) { buttonBevel = v }
+        @JvmName("setButtonDispersionPref") fun setButtonDispersion(v: Float) { buttonDispersion = v }
+        @JvmName("setButtonSpecularPref") fun setButtonSpecular(v: Float) { buttonSpecular = v }
+        @JvmName("setButtonInnerShadowPref") fun setButtonInnerShadow(v: Float) { buttonInnerShadow = v }
+        @JvmName("setButtonBlurPref") fun setButtonBlur(v: Float) { buttonBlur = v }
+        @JvmName("setButtonSaturationPref") fun setButtonSaturation(v: Float) { buttonSaturation = v }
         @JvmName("setCircleDiameterPref") fun setCircleDiameter(v: Float) { circleDiameter = v }
-        @JvmName("setFillAlphaPref") fun setFillAlpha(v: Float) { fillAlpha = v }
-        @JvmName("setStrokeWidthPref") fun setStrokeWidth(v: Float) { strokeWidth = v }
-        @JvmName("setStrokeAlphaPref") fun setStrokeAlpha(v: Float) { strokeAlpha = v }
-        @JvmName("setShowKlondikePref") fun setShowKlondike(v: Boolean) { showKlondike = v }
         @JvmName("setDigitTextSizePref") fun setDigitTextSize(v: Float) { digitTextSize = v }
+        @JvmName("setShowKlondikePref") fun setShowKlondike(v: Boolean) { showKlondike = v }
+        @JvmName("setPressLiquidScalePref") fun setPressLiquidScale(v: Float) { pressLiquidScale = v }
+        @JvmName("setPressLiquidAmpPref") fun setPressLiquidAmp(v: Float) { pressLiquidAmp = v }
         @JvmName("setRow0OffsetPref") fun setRow0Offset(v: Float) { row0Offset = v }
         @JvmName("setRow1OffsetPref") fun setRow1Offset(v: Float) { row1Offset = v }
         @JvmName("setRow2OffsetPref") fun setRow2Offset(v: Float) { row2Offset = v }
         @JvmName("setRow3OffsetPref") fun setRow3Offset(v: Float) { row3Offset = v }
-        @JvmName("setTapSquishScalePref") fun setTapSquishScale(v: Float) { tapSquishScale = v }
-        @JvmName("setReleasePlungePref") fun setReleasePlunge(v: Float) { releasePlunge = v }
-        @JvmName("setJellyMaxStretchPref") fun setJellyMaxStretch(v: Float) { jellyMaxStretch = v }
-        @JvmName("setJellyElasticLimitPref") fun setJellyElasticLimit(v: Float) { jellyElasticLimit = v }
-        @JvmName("setSpringStiffnessPref") fun setSpringStiffness(v: Float) { springStiffness = v }
-        @JvmName("setSpringDampingPref") fun setSpringDamping(v: Float) { springDamping = v }
-        @JvmName("setPressGlowAlphaPref") fun setPressGlowAlpha(v: Float) { pressGlowAlpha = v }
-        @JvmName("setGlowRadiusPref") fun setGlowRadius(v: Float) { glowRadius = v }
         @JvmName("setEntryTranslationYPref") fun setEntryTranslationY(v: Float) { entryTranslationY = v }
         @JvmName("setEntryInitialScalePref") fun setEntryInitialScale(v: Float) { entryInitialScale = v }
         @JvmName("setEntryDurationPref") fun setEntryDuration(v: Float) { entryDuration = v }
@@ -494,24 +508,22 @@ class SettingsRepository(context: Context) {
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
+            buttonRefraction = defaults.buttonRefraction
+            buttonBevel = defaults.buttonBevel
+            buttonDispersion = defaults.buttonDispersion
+            buttonSpecular = defaults.buttonSpecular
+            buttonInnerShadow = defaults.buttonInnerShadow
+            buttonBlur = defaults.buttonBlur
+            buttonSaturation = defaults.buttonSaturation
             circleDiameter = defaults.circleDiameter
-            fillAlpha = defaults.fillAlpha
-            strokeWidth = defaults.strokeWidth
-            strokeAlpha = defaults.strokeAlpha
-            showKlondike = defaults.showKlondike
             digitTextSize = defaults.digitTextSize
+            showKlondike = defaults.showKlondike
+            pressLiquidScale = defaults.pressLiquidScale
+            pressLiquidAmp = defaults.pressLiquidAmp
             row0Offset = defaults.row0Offset
             row1Offset = defaults.row1Offset
             row2Offset = defaults.row2Offset
             row3Offset = defaults.row3Offset
-            tapSquishScale = defaults.tapSquishScale
-            releasePlunge = defaults.releasePlunge
-            jellyMaxStretch = defaults.jellyMaxStretch
-            jellyElasticLimit = defaults.jellyElasticLimit
-            springStiffness = defaults.springStiffness
-            springDamping = defaults.springDamping
-            pressGlowAlpha = defaults.pressGlowAlpha
-            glowRadius = defaults.glowRadius
             entryTranslationY = defaults.entryTranslationY
             entryInitialScale = defaults.entryInitialScale
             entryDuration = defaults.entryDuration

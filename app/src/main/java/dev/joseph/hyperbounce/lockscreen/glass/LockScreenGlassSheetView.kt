@@ -14,6 +14,8 @@ import android.os.SystemClock
 import android.util.AttributeSet
 import android.util.Log
 import android.view.View
+import dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder
+import kotlin.math.max
 
 class LockScreenGlassSheetView @JvmOverloads constructor(
     context: Context,
@@ -67,10 +69,15 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
         if (w <= 0 || h <= 0) return
 
         val density = resources.displayMetrics.density
-        val cornerRadius = 38f * density
-        val bevelWidth = 38f * density
-        val refractAmount = 68f * density
-        val margin = (50f * density).toInt()
+        val cfg = LockScreenConfigHolder.sheet
+
+        val leftBevel = cfg.leftBevelWidth * density
+        val rightBevel = cfg.rightBevelWidth * density
+        val bottomBevel = cfg.bottomBevelWidth * density
+        val maxBevel = max(max(leftBevel, rightBevel), bottomBevel)
+        val refractAmount = cfg.refractionHeight * density
+        val cornerRadius = cfg.cornerRadius * density
+        val margin = ((maxBevel + refractAmount * 0.4f) + 16f * density).toInt().coerceAtLeast(32)
 
         val wp = getWallpaper()
         val screenW = resources.displayMetrics.widthPixels
@@ -83,14 +90,17 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderer != null) {
             val params = GlassLensRenderer.LensParams(
                 cornerRadius = cornerRadius,
-                bevel = bevelWidth,
+                leftBevel = leftBevel,
+                rightBevel = rightBevel,
+                bottomBevel = bottomBevel,
                 refract = refractAmount,
-                dispersion = 0.09f,
+                dispersion = cfg.dispersionStrength,
                 lightX = 0f,
                 lightY = 1f,
-                spec = 0.95f,
-                innerShadow = 0.45f,
-                saturation = 125f
+                spec = cfg.specularStrength,
+                innerShadow = cfg.innerShadow,
+                saturation = cfg.saturationFactor,
+                blurRadius = cfg.blurRadius * density
             )
 
             val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
