@@ -15,10 +15,11 @@ import kotlin.math.abs
 fun rememberScrollShrinkState(
     activity: Activity?,
     enabled: Boolean,
+    sensitivity: Float = 1.0f,
 ): MutableState<Boolean> {
     val isShrunk = remember { mutableStateOf(false) }
 
-    DisposableEffect(activity, enabled) {
+    DisposableEffect(activity, enabled, sensitivity) {
         if (activity == null || !enabled) {
             isShrunk.value = false
             return@DisposableEffect onDispose {}
@@ -26,7 +27,8 @@ fun rememberScrollShrinkState(
 
         val window = activity.window ?: return@DisposableEffect onDispose {}
         val originalCallback = window.callback ?: return@DisposableEffect onDispose {}
-        val touchSlop = ViewConfiguration.get(activity).scaledTouchSlop * 1.5f
+        val baseTouchSlop = ViewConfiguration.get(activity).scaledTouchSlop.toFloat()
+        val touchSlop = baseTouchSlop * (1.5f / sensitivity.coerceIn(0.2f, 5.0f))
 
         var startY = 0f
         var startX = 0f

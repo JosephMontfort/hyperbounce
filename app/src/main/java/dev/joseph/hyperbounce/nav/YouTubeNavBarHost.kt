@@ -126,7 +126,11 @@ fun YouTubeNavBarHost(
     var tabs by remember { mutableStateOf(emptyList<YouTubeTabData>()) }
     var selectedIndex by remember { mutableIntStateOf(0) }
     val activity = (backdropSource.context as? Activity) ?: (pivotBar.context as? Activity)
-    val isShrunkState = rememberScrollShrinkState(activity = activity, enabled = live.autoShrink)
+    val isShrunkState = rememberScrollShrinkState(
+        activity = activity,
+        enabled = live.autoShrink,
+        sensitivity = live.autoShrinkSensitivity
+    )
 
     LaunchedEffect(pivotBar, isDark) {
         tabs = extractYouTubeTabs(pivotBar, isDark)
@@ -169,6 +173,7 @@ fun YouTubeNavBarHost(
         pillShadow = live.pillShadow,
         liquidGlass = live.liquidGlass,
         isShrunk = isShrunkState.value,
+        shrinkScale = live.autoShrinkScale,
         circularIndices = if (profileIndex >= 0) setOf(profileIndex) else emptySet(),
         selectedIndex = selectedIndex,
         onTabSelected = { index ->

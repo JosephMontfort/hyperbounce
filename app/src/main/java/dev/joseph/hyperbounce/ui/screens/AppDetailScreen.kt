@@ -278,7 +278,7 @@ fun AppDetailScreen(
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsToggleRow(
                     title = "Auto-Shrink on Scroll",
-                    subtitle = "Shrinks to 70% and docks down when scrolling feeds",
+                    subtitle = "Shrinks and docks down when scrolling feeds",
                     colors = colors,
                     iconTint = accentColor.copy(alpha = 0.85f),
                     backdrop = backdrop,
@@ -286,6 +286,32 @@ fun AppDetailScreen(
                     onCheckedChange = holder::setAutoShrink,
                     icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
                     enabled = s.enabled
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsSliderRow(
+                    title = "Shrunk Scale",
+                    subtitle = "Percentage size when auto-shrunken on scroll",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.autoShrinkScale,
+                    onValueChange = holder::setAutoShrinkScale,
+                    valueRange = 0.50f..0.90f,
+                    defaultValue = 0.70f,
+                    valueLabel = { "${(it * 100).roundToInt()}%" },
+                    enabled = s.enabled && s.autoShrink
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsSliderRow(
+                    title = "Scroll Sensitivity",
+                    subtitle = "Swipe distance required to trigger shrink/restore",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = s.autoShrinkSensitivity,
+                    onValueChange = holder::setAutoShrinkSensitivity,
+                    valueRange = 0.5f..2.5f,
+                    defaultValue = 1.0f,
+                    valueLabel = { "${(it * 100).roundToInt()}%" },
+                    enabled = s.enabled && s.autoShrink
                 )
             }
         }

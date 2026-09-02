@@ -106,7 +106,11 @@ fun WhatsAppNavBarHost(
     val tabs = remember(stockBar, isDark) { extractWhatsAppTabs(stockBar, isDark) }
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
     val activity = (backdropSource.context as? Activity) ?: (stockBar.context as? Activity)
-    val isShrunkState = rememberScrollShrinkState(activity = activity, enabled = live.autoShrink)
+    val isShrunkState = rememberScrollShrinkState(
+        activity = activity,
+        enabled = live.autoShrink,
+        sensitivity = live.autoShrinkSensitivity
+    )
 
     // Sync WhatsApp swipe navigation to our indicator
     val externalIdx by externalTabState
@@ -135,6 +139,7 @@ fun WhatsAppNavBarHost(
         pillShadow = live.pillShadow,
         liquidGlass = live.liquidGlass,
         isShrunk = isShrunkState.value,
+        shrinkScale = live.autoShrinkScale,
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index

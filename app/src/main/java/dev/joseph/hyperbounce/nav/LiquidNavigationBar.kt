@@ -93,6 +93,7 @@ fun LiquidNavigationBar(
     pillShadow: Boolean = true,
     liquidGlass: Boolean = true,
     isShrunk: Boolean = false,
+    shrinkScale: Float = 0.70f,
 ) {
     if (tabs.isEmpty()) return
 
@@ -142,7 +143,7 @@ fun LiquidNavigationBar(
         )
     }
     val shrinkProgress = shrinkAnim.value
-    val currentScale = lerp(1f, 0.70f, shrinkProgress)
+    val currentScale = lerp(1f, shrinkScale.coerceIn(0.3f, 0.95f), shrinkProgress)
     val maxShiftY = with(density) {
         ((bottomPadding - 4.dp).coerceAtLeast(0.dp) * 0.55f).toPx()
     }

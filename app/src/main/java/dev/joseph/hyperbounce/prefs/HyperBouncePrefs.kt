@@ -90,6 +90,12 @@ class HyperBouncePrefs(module: XposedInterface) {
     fun appAutoShrink(appKey: String): Boolean =
         prefs.getBoolean("app_${appKey}_auto_shrink", true)
 
+    fun appAutoShrinkScale(appKey: String): Float =
+        prefs.getFloat("app_${appKey}_auto_shrink_scale", 0.70f)
+
+    fun appAutoShrinkSensitivity(appKey: String): Float =
+        prefs.getFloat("app_${appKey}_auto_shrink_sensitivity", 1.0f)
+
     // --- toggle/slider engine --------------------------------------------------------------
 
     /** true = Liquid Glass engine, false = the original native Canvas/AGSL engine. */

@@ -33,7 +33,9 @@ data class NavBarLiveSettings(
     val pillContainerOpacity: Float,
     val pillChromaticAberration: Boolean,
     val pillShadow: Boolean,
-    val autoShrink: Boolean
+    val autoShrink: Boolean,
+    val autoShrinkScale: Float,
+    val autoShrinkSensitivity: Float
 )
 
 private fun readNavBarSettings(hyperBouncePrefs: HyperBouncePrefs, appKey: String) = NavBarLiveSettings(
@@ -51,7 +53,9 @@ private fun readNavBarSettings(hyperBouncePrefs: HyperBouncePrefs, appKey: Strin
     pillContainerOpacity = hyperBouncePrefs.appPillContainerOpacity(appKey),
     pillChromaticAberration = hyperBouncePrefs.appPillChromaticAberration(appKey),
     pillShadow = hyperBouncePrefs.appPillShadow(appKey),
-    autoShrink = hyperBouncePrefs.appAutoShrink(appKey)
+    autoShrink = hyperBouncePrefs.appAutoShrink(appKey),
+    autoShrinkScale = hyperBouncePrefs.appAutoShrinkScale(appKey),
+    autoShrinkSensitivity = hyperBouncePrefs.appAutoShrinkSensitivity(appKey)
 )
 
 @Composable
