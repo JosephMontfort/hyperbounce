@@ -116,28 +116,23 @@ class YouTubeHook(
                                     activity.window.decorView.viewTreeObserver.addOnPreDrawListener {
                                         val customBar = activity.window.decorView.findViewWithTag<View>("HyperFloatingBar")
                                         if (customBar != null) {
-                                            val watchPanel = findViewByName(activity.window.decorView, "watch_panel")
-                                                ?: findViewByName(activity.window.decorView, "player_fragment_container")
-                                                ?: findViewByName(activity.window.decorView, "watch_layer")
-                                                ?: findViewByName(activity.window.decorView, "reel_watch_fragment_root")
+                                            val decor = activity.window.decorView as? ViewGroup
+                                            val isWatchActive = decor != null && isWatchPageExpanded(decor)
 
-                                            val isPlayerActive = watchPanel != null &&
-                                                watchPanel.visibility == View.VISIBLE &&
-                                                watchPanel.height > 200 &&
-                                                watchPanel.alpha > 0.5f
-
-                                            val isHomeTab = (pivotBar.getChildAt(0) as? ViewGroup)?.getChildAt(0)?.let { firstTab ->
-                                                firstTab.isSelected || firstTab.isActivated
-                                            } ?: false
-
-                                            if (isPlayerActive) {
-                                                customBar.visibility = View.GONE
-                                            } else if (isHomeTab) {
-                                                customBar.visibility = View.VISIBLE
-                                            } else if (pivotBar.visibility != View.VISIBLE && pivotBar.translationY == 0f) {
+                                            if (isWatchActive) {
                                                 customBar.visibility = View.GONE
                                             } else {
-                                                customBar.visibility = View.VISIBLE
+                                                val isHomeTab = (pivotBar.getChildAt(0) as? ViewGroup)?.getChildAt(0)?.let { firstTab ->
+                                                    firstTab.isSelected || firstTab.isActivated
+                                                } ?: false
+
+                                                if (isHomeTab) {
+                                                    customBar.visibility = View.VISIBLE
+                                                } else if (pivotBar.visibility != View.VISIBLE && pivotBar.translationY == 0f) {
+                                                    customBar.visibility = View.GONE
+                                                } else {
+                                                    customBar.visibility = View.VISIBLE
+                                                }
                                             }
                                         }
 
@@ -156,6 +151,39 @@ class YouTubeHook(
                 result
             }
         } catch (t: Throwable) {}
+    }
+
+    private fun isWatchPageExpanded(decorView: ViewGroup): Boolean {
+        try {
+            val screenHeight = decorView.height.takeIf { it > 0 } ?: return false
+
+            // 1. Check Shorts / Reels viewer
+            val reelWatch = findViewByName(decorView, "reel_watch_fragment_root")
+            if (reelWatch != null && reelWatch.visibility == View.VISIBLE && reelWatch.isAttachedToWindow && reelWatch.height >= screenHeight * 0.7f) {
+                val loc = IntArray(2)
+                reelWatch.getLocationOnScreen(loc)
+                if (loc[1] <= 150) return true
+            }
+
+            // 2. Check full-screen watch panel
+            val watchPanel = findViewByName(decorView, "watch_panel")
+                ?: findViewByName(decorView, "sliding_panel_layout")
+            if (watchPanel != null && watchPanel.visibility == View.VISIBLE && watchPanel.isAttachedToWindow && watchPanel.height >= screenHeight * 0.7f) {
+                val loc = IntArray(2)
+                watchPanel.getLocationOnScreen(loc)
+                if (loc[1] <= 150) return true
+            }
+
+            // 3. Check comments / engagement panel
+            val engagementPanel = findViewByName(decorView, "engagement_panel")
+                ?: findViewByName(decorView, "bottom_sheet")
+            if (engagementPanel != null && engagementPanel.visibility == View.VISIBLE && engagementPanel.isAttachedToWindow && engagementPanel.height >= screenHeight * 0.3f) {
+                val loc = IntArray(2)
+                engagementPanel.getLocationOnScreen(loc)
+                if (loc[1] < screenHeight * 0.8f) return true
+            }
+        } catch (e: Exception) {}
+        return false
     }
 
     private fun findViewByName(view: View?, name: String): View? {
