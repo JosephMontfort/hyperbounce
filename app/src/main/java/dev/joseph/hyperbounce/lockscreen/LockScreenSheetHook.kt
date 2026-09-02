@@ -70,7 +70,6 @@ object LockScreenSheetHook {
                                 if (rootView != null) {
                                     val cfg = LockScreenConfigHolder.sheet
                                     if (!cfg.enabled) {
-                                        // Cleanup if previously injected
                                         if (rootView is ViewGroup) {
                                             val existingSheet = rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
                                             if (existingSheet != null) {
@@ -91,39 +90,8 @@ object LockScreenSheetHook {
                                         rootView.scaleX = 1.0f
                                         rootView.scaleY = 1.0f
 
-                                        // 2. Inject real-time AGSL Liquid Glass Sheet Card at index 0 (behind clock & notifs)
-                                        if (rootView is ViewGroup) {
-                                            var glassSheet = rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
-                                            if (glassSheet == null) {
-                                                val context = rootView.context
-                                                glassSheet = LockScreenGlassSheetView(context).apply {
-                                                    id = View.generateViewId()
-                                                    tag = "hyperbounce_lock_glass_sheet"
-                                                }
-
-                                                var added = false
-                                                try {
-                                                    val clpClass = Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams", false, rootView.context.classLoader)
-                                                    val clpCons: Constructor<*> = clpClass.getConstructor(Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-                                                    val clp = clpCons.newInstance(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT) as ViewGroup.MarginLayoutParams
-                                                    clpClass.getField("topToTop").set(clp, 0)
-                                                    clpClass.getField("bottomToBottom").set(clp, 0)
-                                                    clpClass.getField("startToStart").set(clp, 0)
-                                                    clpClass.getField("endToEnd").set(clp, 0)
-                                                    rootView.addView(glassSheet, 0, clp)
-                                                    added = true
-                                                } catch (_: Throwable) {}
-
-                                                if (!added) {
-                                                    try {
-                                                        val flp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                                                        rootView.addView(glassSheet, 0, flp)
-                                                    } catch (_: Throwable) {}
-                                                }
-                                            } else {
-                                                glassSheet.invalidate()
-                                            }
-                                        }
+                                        // 2. Ensure real-time AGSL Liquid Glass Sheet Card is at index 0 (behind clock & notifs)
+                                        ensureInjected(kpvc)
 
                                         // 3. Move notification container upward in sync
                                         if (finalNotifView != null) {
@@ -190,6 +158,25 @@ object LockScreenSheetHook {
                             } catch (t: Throwable) {
                                 Log.e(TAG, "KPVC expansion hook error", t)
                             }
+                            return result
+                        }
+                    })
+                }
+
+                // Hook onViewAttachedToWindow or updateKeyguardElementsVisibility to ensure instant injection on lockscreen display
+                if (m.name == "onViewAttachedToWindow" || m.name == "updateKeyguardElementsVisibility") {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val result = chain.proceed()
+                            try {
+                                val kpvc = chain.thisObject
+                                val attachUI = Runnable { ensureInjected(kpvc) }
+                                if (Looper.myLooper() == Looper.getMainLooper()) {
+                                    attachUI.run()
+                                } else {
+                                    Handler(Looper.getMainLooper()).post(attachUI)
+                                }
+                            } catch (_: Throwable) {}
                             return result
                         }
                     })
@@ -302,6 +289,51 @@ object LockScreenSheetHook {
                         }
                     })
                 }
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun ensureInjected(kpvc: Any) {
+        try {
+            val rootViewField: Field = kpvc.javaClass.getDeclaredField("keyguardRootView")
+            rootViewField.isAccessible = true
+            val rootView = rootViewField.get(kpvc) as? ViewGroup ?: return
+            val cfg = LockScreenConfigHolder.sheet
+            if (!cfg.enabled) {
+                val existing = rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
+                if (existing != null) rootView.removeView(existing)
+                return
+            }
+
+            var glassSheet = rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
+            if (glassSheet == null) {
+                val context = rootView.context
+                glassSheet = LockScreenGlassSheetView(context).apply {
+                    id = View.generateViewId()
+                    tag = "hyperbounce_lock_glass_sheet"
+                }
+
+                var added = false
+                try {
+                    val clpClass = Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams", false, rootView.context.classLoader)
+                    val clpCons: Constructor<*> = clpClass.getConstructor(Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                    val clp = clpCons.newInstance(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT) as ViewGroup.MarginLayoutParams
+                    clpClass.getField("topToTop").set(clp, 0)
+                    clpClass.getField("bottomToBottom").set(clp, 0)
+                    clpClass.getField("startToStart").set(clp, 0)
+                    clpClass.getField("endToEnd").set(clp, 0)
+                    rootView.addView(glassSheet, 0, clp)
+                    added = true
+                } catch (_: Throwable) {}
+
+                if (!added) {
+                    try {
+                        val flp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                        rootView.addView(glassSheet, 0, flp)
+                    } catch (_: Throwable) {}
+                }
+            } else {
+                glassSheet.invalidate()
             }
         } catch (_: Throwable) {}
     }

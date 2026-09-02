@@ -23,8 +23,7 @@ class GlassLensRenderer {
             uniform shader content;
             uniform float  margin;
             uniform float2 viewSize;
-            uniform float4 shape;
-            uniform float4 cornerRadii;
+            uniform float  cornerRadius;
             uniform float  bevel;
             uniform float  refractPx;
             uniform float  dispersion;
@@ -36,27 +35,26 @@ class GlassLensRenderer {
             uniform float  dimAmount;
             uniform float  satFactor;
 
-            float radiusAt(float2 coord, float4 radii) {
-                if (coord.x >= 0.0) {
-                    if (coord.y <= 0.0) return radii.y;
-                    else return radii.z;
-                } else {
-                    if (coord.y <= 0.0) return radii.x;
-                    else return radii.w;
+            // Exact 3-sided SDF (Left, Right, Bottom edges with rounded bottom corners, open top)
+            float sd3SidedSheet(float2 p, float2 size, float r) {
+                // Bottom-left corner region
+                if (p.x < r && p.y > (size.y - r)) {
+                    return length(p - float2(r, size.y - r)) - r;
                 }
-            }
-
-            float sdRoundedBox(float2 p, float2 b, float4 radii) {
-                float r = radiusAt(p, radii);
-                float2 q = abs(p) - b + float2(r);
-                return length(max(q, float2(0.0))) + min(max(q.x, q.y), 0.0) - r;
+                // Bottom-right corner region
+                if (p.x > (size.x - r) && p.y > (size.y - r)) {
+                    return length(p - float2(size.x - r, size.y - r)) - r;
+                }
+                // Edges
+                float dLeft = -p.x;
+                float dRight = -(size.x - p.x);
+                float dBottom = -(size.y - p.y);
+                return max(max(dLeft, dRight), dBottom);
             }
 
             half4 main(float2 coord) {
                 float2 p = coord - float2(margin, margin);
-                float2 halfSize = shape.zw;
-                float2 centered = p - shape.xy;
-                float d = sdRoundedBox(centered, halfSize, cornerRadii);
+                float d = sd3SidedSheet(p, viewSize, cornerRadius);
 
                 // Anti-aliased feathering: 1.5px
                 float cov = clamp(0.5 - d / 1.5, 0.0, 1.0);
@@ -66,14 +64,14 @@ class GlassLensRenderer {
 
                 // SDF gradient for surface normal
                 float2 n = float2(
-                    sdRoundedBox(centered + float2(1.0, 0.0), halfSize, cornerRadii) - sdRoundedBox(centered - float2(1.0, 0.0), halfSize, cornerRadii),
-                    sdRoundedBox(centered + float2(0.0, 1.0), halfSize, cornerRadii) - sdRoundedBox(centered - float2(0.0, 1.0), halfSize, cornerRadii)
+                    sd3SidedSheet(p + float2(1.0, 0.0), viewSize, cornerRadius) - sd3SidedSheet(p - float2(1.0, 0.0), viewSize, cornerRadius),
+                    sd3SidedSheet(p + float2(0.0, 1.0), viewSize, cornerRadius) - sd3SidedSheet(p - float2(0.0, 1.0), viewSize, cornerRadius)
                 );
                 float nLen = length(n);
                 if (nLen > 0.0001) {
                     n = n / nLen;
                 } else {
-                    n = float2(0.0, -1.0);
+                    n = float2(0.0, 1.0);
                 }
 
                 // Thickness slope
@@ -81,16 +79,16 @@ class GlassLensRenderer {
                 float edge = 1.0 - t;
                 float slope = edge * edge;
 
-                // Real-time inward refraction
+                // Real-time inward refraction along Left, Right, Bottom edges
                 float refr = refractPx;
                 float2 offset = -n * (slope * refr);
 
-                // Chromatic dispersion (per-channel RGB refraction)
+                // Chromatic dispersion (per-channel RGB separation)
                 float2 cR = coord + offset * (1.0 - dispersion * slope);
                 float2 cG = coord + offset;
                 float2 cB = coord + offset * (1.0 + dispersion * slope);
 
-                // Clamp to safe content bounds to prevent transparent black border
+                // Safe clamping within sampled content margins
                 float2 lo = float2(margin + 1.0, margin + 1.0);
                 float2 hi = lo + viewSize - float2(2.0, 2.0);
                 cR = clamp(cR, lo, hi);
@@ -126,74 +124,51 @@ class GlassLensRenderer {
                     col = mix(col, clamp(absorbed + scattered, float3(0.0), float3(1.0)), glassTint.a);
                 }
 
-                // Specular highlight
+                // Specular highlight along 3 edges
                 float facing = dot(n, -lightDir);
                 float facingPos = max(facing, 0.0);
                 float facingNeg = max(-facing, 0.0);
 
-                float bandW = clamp(bevel * 0.35, 2.0, 10.0);
+                float bandW = clamp(bevel * 0.35, 2.0, 12.0);
                 float rim = clamp(1.0 - (-d - 0.5) / bandW, 0.0, 1.0) * cov;
                 float lobe = 0.55 * pow(facingPos, 5.0) + 0.18 * pow(facingNeg, 5.0) + 0.05;
                 float hair = clamp(1.0 - abs(d + 1.0) / 1.5, 0.0, 1.0);
-                float spec = (rim * lobe + hair * (0.25 + 0.38 * facingPos)) * specStrength;
+                float spec = (rim * lobe + hair * (0.35 + 0.50 * facingPos)) * specStrength;
                 col += float3(spec);
 
                 // Backside inner shadow
-                float shadowW = clamp(bevel, 4.0, 32.0);
+                float shadowW = clamp(bevel, 4.0, 36.0);
                 float shadowBand = pow(clamp(1.0 + d / shadowW, 0.0, 1.0), 1.5);
                 float ish = shadowBand * facingNeg * innerShadow;
                 col = col * (1.0 - 0.45 * ish);
 
                 col = clamp(col, float3(0.0), float3(1.0));
-                return half4(half3(col * cov), half(cov));
+
+                // Premultiplied alpha: base frosted opacity in center, thick opaque rim on edges
+                float baseAlpha = clamp(tintColor.a, 0.22, 0.55);
+                float edgeAlpha = mix(baseAlpha, 0.88, slope);
+                float alpha = edgeAlpha * cov;
+
+                return half4(col * alpha, alpha);
             }
         """
     }
 
     data class LensParams(
-        val blurRadius: Float = 24f,
-        val shapeCX: Float,
-        val shapeCY: Float,
-        val shapeHW: Float,
-        val shapeHH: Float,
-        val cornerRadii: FloatArray, // (topLeft, topRight, bottomRight, bottomLeft)
-        val bevel: Float = 36f,
-        val refract: Float = 40f,
-        val dispersion: Float = 0.20f,
+        val blurRadius: Float = 22f,
+        val cornerRadius: Float = 36f,
+        val bevel: Float = 34f,
+        val refract: Float = 38f,
+        val dispersion: Float = 0.22f,
         val lightX: Float = 0f,
         val lightY: Float = 1f,
-        val spec: Float = 0.85f,
+        val spec: Float = 0.90f,
         val innerShadow: Float = 0.40f,
-        val tint: Int = 0x1AFFFFFF,
+        val tint: Int = 0x33FFFFFF,
         val glassTint: Int = 0x00000000,
-        val dim: Float = 0.05f,
+        val dim: Float = 0.04f,
         val saturation: Float = 125f
-    ) {
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (other !is LensParams) return false
-            return blurRadius == other.blurRadius &&
-                    shapeCX == other.shapeCX && shapeCY == other.shapeCY &&
-                    shapeHW == other.shapeHW && shapeHH == other.shapeHH &&
-                    cornerRadii.contentEquals(other.cornerRadii) &&
-                    bevel == other.bevel && refract == other.refract &&
-                    dispersion == other.dispersion &&
-                    lightX == other.lightX && lightY == other.lightY &&
-                    spec == other.spec && innerShadow == other.innerShadow &&
-                    tint == other.tint && glassTint == other.glassTint &&
-                    dim == other.dim && saturation == other.saturation
-        }
-
-        override fun hashCode(): Int {
-            var result = blurRadius.hashCode()
-            result = 31 * result + shapeCX.hashCode()
-            result = 31 * result + shapeCY.hashCode()
-            result = 31 * result + shapeHW.hashCode()
-            result = 31 * result + shapeHH.hashCode()
-            result = 31 * result + cornerRadii.contentHashCode()
-            return result
-        }
-    }
+    )
 
     private val renderNode = RenderNode("HyperBounceLockSheetLens")
     private var shader: RuntimeShader? = null
@@ -203,21 +178,17 @@ class GlassLensRenderer {
     private var lastHeight = 0
     private var lastMargin = -1
 
-    private val location = IntArray(2)
-    private val parentLocation = IntArray(2)
-
     val isAvailable: Boolean get() = !shaderBroken
 
     fun draw(
         canvas: Canvas,
-        glassView: View,
-        backdropSource: View,
+        width: Int,
+        height: Int,
         params: LensParams,
-        margin: Int
+        margin: Int,
+        recordContent: (recordingCanvas: Canvas) -> Unit
     ): Boolean {
         if (shaderBroken || !canvas.isHardwareAccelerated) return false
-        val width = glassView.width
-        val height = glassView.height
         if (width <= 0 || height <= 0) return false
 
         val sh = shader ?: try {
@@ -242,21 +213,10 @@ class GlassLensRenderer {
             lastMargin = margin
         }
 
-        glassView.getLocationOnScreen(location)
-        backdropSource.getLocationOnScreen(parentLocation)
-        val offsetX = (location[0] - parentLocation[0]).toFloat()
-        val offsetY = (location[1] - parentLocation[1]).toFloat()
-
-        renderNode.setPosition(-margin, -margin, width + margin, height + margin)
+        renderNode.setPosition(0, 0, width, height)
         val recordingCanvas = renderNode.beginRecording(width + 2 * margin, height + 2 * margin)
         try {
-            recordingCanvas.translate(margin - offsetX, margin - offsetY)
-            glassView.visibility = View.INVISIBLE
-            try {
-                backdropSource.draw(recordingCanvas)
-            } finally {
-                glassView.visibility = View.VISIBLE
-            }
+            recordContent(recordingCanvas)
         } finally {
             renderNode.endRecording()
         }
@@ -274,14 +234,7 @@ class GlassLensRenderer {
     ): RenderEffect {
         sh.setFloatUniform("margin", margin.toFloat())
         sh.setFloatUniform("viewSize", width.toFloat(), height.toFloat())
-        sh.setFloatUniform("shape", p.shapeCX, p.shapeCY, p.shapeHW, p.shapeHH)
-        sh.setFloatUniform(
-            "cornerRadii",
-            p.cornerRadii[0],
-            p.cornerRadii[1],
-            p.cornerRadii[2],
-            p.cornerRadii[3]
-        )
+        sh.setFloatUniform("cornerRadius", p.cornerRadius)
         sh.setFloatUniform("bevel", p.bevel)
         sh.setFloatUniform("refractPx", p.refract)
         sh.setFloatUniform("dispersion", p.dispersion)
