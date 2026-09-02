@@ -142,12 +142,18 @@ fun LiquidNavigationBar(
             )
         )
     }
+    val shrinkProgress = shrinkAnim.value
+    val currentScale = lerp(1f, shrinkScale.coerceIn(0.3f, 0.95f), shrinkProgress)
     val maxShiftY = remember(density, bottomPadding) {
         with(density) {
             ((bottomPadding - 4.dp).coerceAtLeast(0.dp) * 0.55f).toPx()
         }
     }
-    val targetShrunkScale = shrinkScale.coerceIn(0.3f, 0.95f)
+    val currentShiftY = lerp(0f, maxShiftY, shrinkProgress)
+
+    val currentBarHeight = barHeight * currentScale
+    val currentTabWidth = tabWidth * currentScale
+    val currentCornerRadius = cornerRadius * currentScale
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -157,15 +163,10 @@ fun LiquidNavigationBar(
             modifier = Modifier
                 .padding(bottom = bottomPadding)
                 .graphicsLayer {
-                    val progress = shrinkAnim.value
-                    val scale = lerp(1f, targetShrunkScale, progress)
-                    scaleX = scale
-                    scaleY = scale
-                    translationY = lerp(0f, maxShiftY, progress)
-                    transformOrigin = TransformOrigin(0.5f, 1f)
+                    translationY = currentShiftY
                 }
-                .width((tabs.size * tabWidth.value).dp)
-                .height(barHeight),
+                .width((tabs.size * currentTabWidth.value).dp)
+                .height(currentBarHeight),
         ) {
             BoxWithConstraints(
                 modifier = Modifier.fillMaxSize(),
@@ -173,7 +174,7 @@ fun LiquidNavigationBar(
             ) {
                 val tabCount = tabs.size
                 val tabWidthPx =
-                    (constraints.maxWidth.toFloat() - with(density) { 8.dp.toPx() }) /
+                    (constraints.maxWidth.toFloat() - with(density) { (8.dp * currentScale).toPx() }) /
                         tabCount.coerceAtLeast(1)
 
                 val offsetAnimation = remember { Animatable(0f) }
@@ -265,7 +266,7 @@ fun LiquidNavigationBar(
                 }
 
                 if (!liquidGlass) {
-                    val barShape = RoundedCornerShape(cornerRadius)
+                    val barShape = RoundedCornerShape(currentCornerRadius)
                     val pillShape = CircleShape
 
                     val classicBarBg = if (isLightTheme) {
@@ -296,10 +297,10 @@ fun LiquidNavigationBar(
                     val squishY = 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
 
                     val pillW = tabWidthPx * dampedDragAnimation.scaleX * squishX
-                    val basePillH = with(density) { (barHeight - 8.dp).toPx() }
-                    val maxPillH = with(density) { (barHeight - 2.dp).toPx() }
+                    val basePillH = with(density) { (currentBarHeight - 8.dp * currentScale).toPx() }
+                    val maxPillH = with(density) { (currentBarHeight - 2.dp * currentScale).toPx() }
                     val bloomedPillH = lerp(basePillH, maxPillH, progress)
-                    val pillH = (bloomedPillH * squishY).coerceIn(with(density) { 16.dp.toPx() }, maxPillH)
+                    val pillH = (bloomedPillH * squishY).coerceIn(with(density) { (16.dp * currentScale).toPx() }, maxPillH)
 
                     val pillX = if (isLtr) {
                         dampedDragAnimation.value * tabWidthPx
@@ -316,23 +317,23 @@ fun LiquidNavigationBar(
                                 translationX = panelOffset
                                 scaleX = lerp(
                                     1f,
-                                    1f + 16f.dp.toPx() / size.width,
+                                    1f + (16f.dp * currentScale).toPx() / size.width,
                                     progress,
                                 )
                                 scaleY = lerp(
                                     1f,
-                                    1f + 2f.dp.toPx() / size.height,
+                                    1f + (2f.dp * currentScale).toPx() / size.height,
                                     progress,
                                 )
                                 clip = true
                                 shape = barShape
                             }
                             .background(classicBarBg, barShape)
-                            .border(0.75.dp, classicBarBorder, barShape)
+                            .border(0.75.dp * currentScale, classicBarBorder, barShape)
                             .then(interactiveHighlight.modifier)
-                            .height(barHeight)
+                            .height(currentBarHeight)
                             .fillMaxWidth()
-                            .padding(4.dp),
+                            .padding(4.dp * currentScale),
                     ) {
                         // Layer 1: Inactive unaccented tab items (handles direct tapping on any tab)
                         Row(
@@ -345,6 +346,7 @@ fun LiquidNavigationBar(
                                     isCircular = index in circularIndices,
                                     accentColor = null,
                                     label = labels.getOrNull(index),
+                                    scaleFactor = currentScale,
                                     onClick = {
                                         onTabSelected(index)
                                         dampedDragAnimation.animateToValue(index.toFloat())
@@ -363,7 +365,7 @@ fun LiquidNavigationBar(
                                 .width(with(density) { pillW.toDp() })
                                 .height(with(density) { pillH.toDp() })
                                 .background(classicPillBg, pillShape)
-                                .border(0.5.dp, classicPillBorder, pillShape)
+                                .border(0.5.dp * currentScale, classicPillBorder, pillShape)
                         )
 
                         // Layer 3: Active accented tab items, dynamically clipped strictly to the moving pill shape (no onClick so touches pass through)
@@ -399,6 +401,7 @@ fun LiquidNavigationBar(
                                     isCircular = index in circularIndices,
                                     accentColor = accentColor,
                                     label = labels.getOrNull(index),
+                                    scaleFactor = currentScale,
                                     onClick = null,
                                 )
                             }
@@ -435,7 +438,7 @@ fun LiquidNavigationBar(
                             }
                             .drawBackdrop(
                                 backdrop = liveBackdrop,
-                                shape = { androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius) },
+                                shape = { androidx.compose.foundation.shape.RoundedCornerShape(currentCornerRadius) },
                                 effects = {
                                     vibrancy()
                                     blur(8f.dp.toPx() * effectMultiplier)
@@ -445,22 +448,22 @@ fun LiquidNavigationBar(
                                     val progress = dampedDragAnimation.pressProgress
                                     val scale = lerp(
                                         1f,
-                                        1f + 16f.dp.toPx() / size.width,
+                                        1f + (16f.dp * currentScale).toPx() / size.width,
                                         progress,
                                     )
                                     scaleX = scale
                                     scaleY = scale
                                     clip = true
-                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius)
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(currentCornerRadius)
                                 },
                                 onDrawSurface = {
                                     drawRect(containerColor)
                                 },
                             )
                             .then(interactiveHighlight.modifier)
-                            .height(barHeight)
+                            .height(currentBarHeight)
                             .fillMaxWidth()
-                            .padding(4.dp),
+                            .padding(4.dp * currentScale),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         tabs.forEachIndexed { index, bitmap ->
@@ -469,6 +472,7 @@ fun LiquidNavigationBar(
                                 isCircular = index in circularIndices,
                                 accentColor = null,
                                 label = labels.getOrNull(index),
+                                scaleFactor = currentScale,
                                 onClick = {
                                     onTabSelected(index)
                                     dampedDragAnimation.animateToValue(index.toFloat())
@@ -496,7 +500,7 @@ fun LiquidNavigationBar(
                                 }
                                 .drawBackdrop(
                                     backdrop = liveBackdrop,
-                                    shape = { androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius) },
+                                    shape = { androidx.compose.foundation.shape.RoundedCornerShape(currentCornerRadius) },
                                     effects = {
                                         val progress = dampedDragAnimation.pressProgress
                                         vibrancy()
@@ -511,9 +515,9 @@ fun LiquidNavigationBar(
                                         Highlight.Default.copy(alpha = progress)
                                     },
                                 )
-                                .height(barHeight - 8.dp)
+                                .height(currentBarHeight - 8.dp * currentScale)
                                 .fillMaxWidth()
-                                .padding(horizontal = 4.dp),
+                                .padding(horizontal = 4.dp * currentScale),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             tabs.forEachIndexed { index, _ ->
@@ -523,6 +527,7 @@ fun LiquidNavigationBar(
                                     isCircular = index in circularIndices,
                                     accentColor = accentColor,
                                     label = labels.getOrNull(index),
+                                    scaleFactor = currentScale,
                                     onClick = {
                                         onTabSelected(index)
                                         dampedDragAnimation.animateToValue(index.toFloat())
@@ -532,16 +537,16 @@ fun LiquidNavigationBar(
                         }
                     }
 
-                    val pillShape = androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius)
+                    val pillShape = androidx.compose.foundation.shape.RoundedCornerShape(currentCornerRadius)
 
                     if (pillGlassIntensity > 0.001f) {
                         Box(
                             Modifier
-                                .padding(horizontal = 4.dp)
+                                .padding(horizontal = 4.dp * currentScale)
                                 .graphicsLayer {
                                     translationX =
                                         if (isLtr) {
-                                            dampedDragAnimation.value * tabWidthPx + panelOffset
+                                             dampedDragAnimation.value * tabWidthPx + panelOffset
                                         } else {
                                             size.width -
                                                 (dampedDragAnimation.value + 1f) * tabWidthPx +
@@ -610,13 +615,13 @@ fun LiquidNavigationBar(
                                         }
                                     },
                                 )
-                                .height(barHeight - 8.dp)
+                                .height(currentBarHeight - 8.dp * currentScale)
                                 .fillMaxWidth(1f / tabCount),
                         )
                     } else {
                         Box(
                             Modifier
-                                .padding(horizontal = 4.dp)
+                                .padding(horizontal = 4.dp * currentScale)
                                 .graphicsLayer {
                                     translationX =
                                         if (isLtr) {
@@ -648,7 +653,7 @@ fun LiquidNavigationBar(
                                         )
                                     } else Modifier
                                 )
-                                .height(barHeight - 8.dp)
+                                .height(currentBarHeight - 8.dp * currentScale)
                                 .fillMaxWidth(1f / tabCount),
                         )
                     }
@@ -667,6 +672,7 @@ private fun RowScope.LiquidBottomTab(
     isCircular: Boolean,
     label: String?,
     accentColor: Color? = null,
+    scaleFactor: Float = 1f,
     onClick: (() -> Unit)? = null,
 ) {
     val scale = LocalLiquidBottomTabScale.current
@@ -688,26 +694,27 @@ private fun RowScope.LiquidBottomTab(
                 scaleX = value
                 scaleY = value
             },
-        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy((2 * scaleFactor).dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (bitmap != null) {
+            val baseSize = if (label.isNullOrEmpty()) 28.dp else 24.dp
             Image(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = null,
                 colorFilter = if (isCircular || accentColor == null) null else ColorFilter.tint(accentColor),
                 modifier = Modifier
-                    .size(if (label.isNullOrEmpty()) 28.dp else 24.dp)
+                    .size(baseSize * scaleFactor)
                     .then(
                         if (isCircular) Modifier.clip(CircleShape) else Modifier
                     ),
             )
             if (!label.isNullOrEmpty()) {
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height((2 * scaleFactor).dp))
                 androidx.compose.foundation.text.BasicText(
                     text = label,
                     style = androidx.compose.ui.text.TextStyle(
-                        fontSize = 13.sp,
+                        fontSize = (13 * scaleFactor).sp,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                         color = accentColor ?: if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White else Color.Black
                     ),
