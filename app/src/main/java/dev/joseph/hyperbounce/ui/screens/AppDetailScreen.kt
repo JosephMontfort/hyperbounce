@@ -275,6 +275,18 @@ fun AppDetailScreen(
                     valueLabel = { "${it.roundToInt()}dp" },
                     enabled = s.enabled
                 )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsToggleRow(
+                    title = "Auto-Shrink on Scroll",
+                    subtitle = "Shrinks to 70% and docks down when scrolling feeds",
+                    colors = colors,
+                    iconTint = accentColor.copy(alpha = 0.85f),
+                    backdrop = backdrop,
+                    checked = s.autoShrink,
+                    onCheckedChange = holder::setAutoShrink,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
+                    enabled = s.enabled
+                )
             }
         }
 

@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -91,6 +92,7 @@ fun LiquidNavigationBar(
     pillChromaticAberration: Boolean = true,
     pillShadow: Boolean = true,
     liquidGlass: Boolean = true,
+    isShrunk: Boolean = false,
 ) {
     if (tabs.isEmpty()) return
 
@@ -128,6 +130,24 @@ fun LiquidNavigationBar(
         }
     }
 
+    val shrinkAnim = remember { Animatable(if (isShrunk) 1f else 0f) }
+    LaunchedEffect(isShrunk) {
+        shrinkAnim.animateTo(
+            targetValue = if (isShrunk) 1f else 0f,
+            animationSpec = spring(
+                dampingRatio = 0.82f,
+                stiffness = 380f,
+                visibilityThreshold = 0.001f
+            )
+        )
+    }
+    val shrinkProgress = shrinkAnim.value
+    val currentScale = lerp(1f, 0.70f, shrinkProgress)
+    val maxShiftY = with(density) {
+        ((bottomPadding - 4.dp).coerceAtLeast(0.dp) * 0.55f).toPx()
+    }
+    val currentShiftY = lerp(0f, maxShiftY, shrinkProgress)
+
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter,
@@ -135,6 +155,12 @@ fun LiquidNavigationBar(
         Box(
             modifier = Modifier
                 .padding(bottom = bottomPadding)
+                .graphicsLayer {
+                    scaleX = currentScale
+                    scaleY = currentScale
+                    translationY = currentShiftY
+                    transformOrigin = TransformOrigin(0.5f, 1f)
+                }
                 .width((tabs.size * tabWidth.value).dp)
                 .height(barHeight),
         ) {

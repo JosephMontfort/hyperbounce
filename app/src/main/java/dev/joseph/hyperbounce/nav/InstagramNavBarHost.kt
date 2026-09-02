@@ -124,6 +124,8 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
 
     val profileIndex = tabs.indexOfFirst { it.resId == stockBar?.context?.resources?.getIdentifier("profile_tab", "id", stockBar?.context?.packageName) }
     val accent = accentColorFor(live.accent, live.customAccentColor, isDark)
+    val activity = (backdropSource.context as? Activity) ?: (stockBar?.context as? Activity)
+    val isShrunkState = rememberScrollShrinkState(activity = activity, enabled = live.autoShrink)
 
     LiquidNavigationBar(
         bottomPadding = live.bottomMargin.dp,
@@ -142,9 +144,13 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
         pillChromaticAberration = live.pillChromaticAberration,
         pillShadow = live.pillShadow,
         liquidGlass = live.liquidGlass,
+        isShrunk = isShrunkState.value,
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index
+            if (index == 0) {
+                isShrunkState.value = false
+            }
             if (tabs.isNotEmpty()) {
                 stockBar?.findViewById<View>(tabs[index].resId)?.performClick()
             }

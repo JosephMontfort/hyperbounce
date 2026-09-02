@@ -183,10 +183,13 @@ class SettingsRepository(context: Context) {
             private set
         var pillShadow by prefsBooleanState("${prefix}_pill_shadow", defaults.pillShadow)
             private set
+        var autoShrink by prefsBooleanState("${prefix}_auto_shrink", defaults.autoShrink)
+            private set
 
         fun snapshot(): NavBarAppSettings = NavBarAppSettings(
             enabled, liquidGlass, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, bottomMargin,
-            themeMode, accent, customAccentColor, pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow
+            themeMode, accent, customAccentColor, pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow,
+            autoShrink
         )
 
         @JvmName("setEnabledPref")
@@ -219,6 +222,8 @@ class SettingsRepository(context: Context) {
         fun setPillChromaticAberration(v: Boolean) { pillChromaticAberration = v }
         @JvmName("setPillShadowPref")
         fun setPillShadow(v: Boolean) { pillShadow = v }
+        @JvmName("setAutoShrinkPref")
+        fun setAutoShrink(v: Boolean) { autoShrink = v }
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
@@ -236,6 +241,7 @@ class SettingsRepository(context: Context) {
             pillContainerOpacity = defaults.pillContainerOpacity
             pillChromaticAberration = defaults.pillChromaticAberration
             pillShadow = defaults.pillShadow
+            autoShrink = defaults.autoShrink
         }
     }
 

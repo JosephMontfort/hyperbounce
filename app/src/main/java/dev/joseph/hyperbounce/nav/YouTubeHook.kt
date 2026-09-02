@@ -116,7 +116,25 @@ class YouTubeHook(
                                     activity.window.decorView.viewTreeObserver.addOnPreDrawListener {
                                         val customBar = activity.window.decorView.findViewWithTag<View>("HyperFloatingBar")
                                         if (customBar != null) {
-                                            if (pivotBar.visibility != View.VISIBLE && pivotBar.translationY == 0f) {
+                                            val watchPanel = findViewByName(activity.window.decorView, "watch_panel")
+                                                ?: findViewByName(activity.window.decorView, "player_fragment_container")
+                                                ?: findViewByName(activity.window.decorView, "watch_layer")
+                                                ?: findViewByName(activity.window.decorView, "reel_watch_fragment_root")
+
+                                            val isPlayerActive = watchPanel != null &&
+                                                watchPanel.visibility == View.VISIBLE &&
+                                                watchPanel.height > 200 &&
+                                                watchPanel.alpha > 0.5f
+
+                                            val isHomeTab = (pivotBar.getChildAt(0) as? ViewGroup)?.getChildAt(0)?.let { firstTab ->
+                                                firstTab.isSelected || firstTab.isActivated
+                                            } ?: false
+
+                                            if (isPlayerActive) {
+                                                customBar.visibility = View.GONE
+                                            } else if (isHomeTab) {
+                                                customBar.visibility = View.VISIBLE
+                                            } else if (pivotBar.visibility != View.VISIBLE && pivotBar.translationY == 0f) {
                                                 customBar.visibility = View.GONE
                                             } else {
                                                 customBar.visibility = View.VISIBLE
@@ -138,6 +156,21 @@ class YouTubeHook(
                 result
             }
         } catch (t: Throwable) {}
+    }
+
+    private fun findViewByName(view: View?, name: String): View? {
+        if (view == null) return null
+        if (view.id != View.NO_ID && view.resources != null) {
+            try {
+                if (view.resources.getResourceEntryName(view.id) == name) return view
+            } catch (e: Exception) {}
+        }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                findViewByName(view.getChildAt(i), name)?.let { return it }
+            }
+        }
+        return null
     }
 
     private var lastCheckedUiMode = -1

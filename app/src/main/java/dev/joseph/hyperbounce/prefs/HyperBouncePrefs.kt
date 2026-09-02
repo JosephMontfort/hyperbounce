@@ -87,6 +87,9 @@ class HyperBouncePrefs(module: XposedInterface) {
     fun appPillShadow(appKey: String): Boolean =
         prefs.getBoolean("app_${appKey}_pill_shadow", true)
 
+    fun appAutoShrink(appKey: String): Boolean =
+        prefs.getBoolean("app_${appKey}_auto_shrink", true)
+
     // --- toggle/slider engine --------------------------------------------------------------
 
     /** true = Liquid Glass engine, false = the original native Canvas/AGSL engine. */

@@ -1,5 +1,6 @@
 package dev.joseph.hyperbounce.nav
 
+import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.View
@@ -104,6 +105,8 @@ fun WhatsAppNavBarHost(
 
     val tabs = remember(stockBar, isDark) { extractWhatsAppTabs(stockBar, isDark) }
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
+    val activity = (backdropSource.context as? Activity) ?: (stockBar.context as? Activity)
+    val isShrunkState = rememberScrollShrinkState(activity = activity, enabled = live.autoShrink)
 
     // Sync WhatsApp swipe navigation to our indicator
     val externalIdx by externalTabState
@@ -131,9 +134,13 @@ fun WhatsAppNavBarHost(
         pillChromaticAberration = live.pillChromaticAberration,
         pillShadow = live.pillShadow,
         liquidGlass = live.liquidGlass,
+        isShrunk = isShrunkState.value,
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index
+            if (index == 0) {
+                isShrunkState.value = false
+            }
             // Fix: Trigger the actual WhatsApp tab switch only if it isn't already there
             if (externalTabState.value != index) {
                 clickStockTab(stockBar, index)

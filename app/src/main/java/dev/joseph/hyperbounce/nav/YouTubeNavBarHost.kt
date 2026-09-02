@@ -1,5 +1,6 @@
 package dev.joseph.hyperbounce.nav
 
+import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.View
@@ -124,6 +125,8 @@ fun YouTubeNavBarHost(
 
     var tabs by remember { mutableStateOf(emptyList<YouTubeTabData>()) }
     var selectedIndex by remember { mutableIntStateOf(0) }
+    val activity = (backdropSource.context as? Activity) ?: (pivotBar.context as? Activity)
+    val isShrunkState = rememberScrollShrinkState(activity = activity, enabled = live.autoShrink)
 
     LaunchedEffect(pivotBar, isDark) {
         tabs = extractYouTubeTabs(pivotBar, isDark)
@@ -165,10 +168,14 @@ fun YouTubeNavBarHost(
         pillChromaticAberration = live.pillChromaticAberration,
         pillShadow = live.pillShadow,
         liquidGlass = live.liquidGlass,
+        isShrunk = isShrunkState.value,
         circularIndices = if (profileIndex >= 0) setOf(profileIndex) else emptySet(),
         selectedIndex = selectedIndex,
         onTabSelected = { index ->
             selectedIndex = index
+            if (index == 0) {
+                isShrunkState.value = false
+            }
             clickStockTab(pivotBar, index)
         },
         sourceView = backdropSource,
