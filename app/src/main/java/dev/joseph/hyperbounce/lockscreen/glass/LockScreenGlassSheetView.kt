@@ -30,11 +30,11 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
     private var lastWallpaperFetchTime = 0L
 
     private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x30FFFFFF
+        color = 0x38FFFFFF
         style = Paint.Style.FILL
     }
     private val fallbackBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x80FFFFFF.toInt()
+        color = 0xB0FFFFFF.toInt()
         style = Paint.Style.STROKE
     }
     private val boundsRect = RectF()
@@ -54,16 +54,24 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
         return wallpaperDrawable
     }
 
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val parent = parent as? View
+        val w = if (parent != null && parent.width > 0) parent.width else resources.displayMetrics.widthPixels
+        val h = if (parent != null && parent.height > 0) parent.height else resources.displayMetrics.heightPixels
+        setMeasuredDimension(w, h)
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val w = width
-        val h = height
+        val parent = parent as? View
+        val w = if (width > 0) width else (parent?.width ?: resources.displayMetrics.widthPixels)
+        val h = if (height > 0) height else (parent?.height ?: resources.displayMetrics.heightPixels)
         if (w <= 0 || h <= 0) return
 
         val density = resources.displayMetrics.density
-        val cornerRadius = 38f * density
-        val bevelWidth = 34f * density
-        val refractAmount = 38f * density
+        val cornerRadius = 40f * density
+        val bevelWidth = 36f * density
+        val refractAmount = 42f * density
         val margin = (36f * density).toInt()
 
         val wp = getWallpaper()
@@ -76,19 +84,19 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderer != null) {
             val params = GlassLensRenderer.LensParams(
-                blurRadius = 22f * density,
+                blurRadius = 24f * density,
                 cornerRadius = cornerRadius,
                 bevel = bevelWidth,
                 refract = refractAmount,
-                dispersion = 0.22f,
+                dispersion = 0.25f,
                 lightX = 0f,
                 lightY = 1f,
-                spec = 0.90f,
-                innerShadow = 0.40f,
-                tint = 0x2AFFFFFF,
+                spec = 0.95f,
+                innerShadow = 0.45f,
+                tint = 0x3DFFFFFF,
                 glassTint = 0x00000000,
                 dim = 0.04f,
-                saturation = 125f
+                saturation = 130f
             )
 
             val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
@@ -97,7 +105,6 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
                     wp.setBounds(0, 0, screenW, screenH)
                     wp.draw(recordingCanvas)
                 } else {
-                    // Fallback rich backdrop gradient if wallpaper is protected
                     val p = Paint().apply {
                         shader = LinearGradient(
                             0f, 0f, 0f, screenH.toFloat(),
@@ -118,7 +125,7 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
             addRoundRect(boundsRect, radii, Path.Direction.CW)
         }
         canvas.drawPath(path, fallbackPaint)
-        fallbackBorderPaint.strokeWidth = 2.5f * density
+        fallbackBorderPaint.strokeWidth = 3f * density
         canvas.drawPath(path, fallbackBorderPaint)
     }
 

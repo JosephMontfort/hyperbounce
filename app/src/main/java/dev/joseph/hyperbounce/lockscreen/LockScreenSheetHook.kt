@@ -271,7 +271,35 @@ object LockScreenSheetHook {
             Log.e(TAG, "KPVC class hook error", t)
         }
 
-        // 2. Disable clock scaling flag in KeyguardClockContainer
+        // 2. Hook KeyguardRootView & HyperOSKeyguardRootView onLayout to maintain full bounds
+        val rootViewClasses = arrayOf(
+            "com.android.keyguard.widget.HyperOSKeyguardRootView",
+            "com.android.systemui.keyguard.ui.view.KeyguardRootView"
+        )
+        for (className in rootViewClasses) {
+            try {
+                val clazz = Class.forName(className, false, classLoader)
+                for (m: Method in clazz.declaredMethods) {
+                    if (m.name == "onLayout") {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val result = chain.proceed()
+                                try {
+                                    val v = chain.thisObject as? ViewGroup ?: return result
+                                    val sheet = v.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
+                                    if (sheet != null && v.width > 0 && v.height > 0) {
+                                        sheet.layout(0, 0, v.width, v.height)
+                                    }
+                                } catch (_: Throwable) {}
+                                return result
+                            }
+                        })
+                    }
+                }
+            } catch (_: Throwable) {}
+        }
+
+        // 3. Disable clock scaling flag in KeyguardClockContainer
         try {
             val clockContainerClass = Class.forName("com.android.keyguard.clock.KeyguardClockContainer", false, classLoader)
             for (m: Method in clockContainerClass.declaredMethods) {
@@ -332,9 +360,12 @@ object LockScreenSheetHook {
                         rootView.addView(glassSheet, 0, flp)
                     } catch (_: Throwable) {}
                 }
-            } else {
-                glassSheet.invalidate()
             }
+
+            if (rootView.width > 0 && rootView.height > 0) {
+                glassSheet.layout(0, 0, rootView.width, rootView.height)
+            }
+            glassSheet.invalidate()
         } catch (_: Throwable) {}
     }
 }

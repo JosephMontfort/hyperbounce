@@ -8,7 +8,6 @@ import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.os.Build
 import android.util.Log
-import android.view.View
 import androidx.annotation.RequiresApi
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -37,15 +36,12 @@ class GlassLensRenderer {
 
             // Exact 3-sided SDF (Left, Right, Bottom edges with rounded bottom corners, open top)
             float sd3SidedSheet(float2 p, float2 size, float r) {
-                // Bottom-left corner region
                 if (p.x < r && p.y > (size.y - r)) {
                     return length(p - float2(r, size.y - r)) - r;
                 }
-                // Bottom-right corner region
                 if (p.x > (size.x - r) && p.y > (size.y - r)) {
                     return length(p - float2(size.x - r, size.y - r)) - r;
                 }
-                // Edges
                 float dLeft = -p.x;
                 float dRight = -(size.x - p.x);
                 float dBottom = -(size.y - p.y);
@@ -95,11 +91,11 @@ class GlassLensRenderer {
                 cG = clamp(cG, lo, hi);
                 cB = clamp(cB, lo, hi);
 
-                float3 col = float3(
-                    content.eval(cR).r,
-                    content.eval(cG).g,
-                    content.eval(cB).b
-                );
+                half4 sR = content.eval(cR);
+                half4 sG = content.eval(cG);
+                half4 sB = content.eval(cB);
+
+                float3 col = float3(sR.r, sG.g, sB.b);
 
                 // Vibrancy saturation curve
                 float lum = dot(col, float3(0.2126, 0.7152, 0.0722));
@@ -129,24 +125,24 @@ class GlassLensRenderer {
                 float facingPos = max(facing, 0.0);
                 float facingNeg = max(-facing, 0.0);
 
-                float bandW = clamp(bevel * 0.35, 2.0, 12.0);
+                float bandW = clamp(bevel * 0.40, 2.0, 16.0);
                 float rim = clamp(1.0 - (-d - 0.5) / bandW, 0.0, 1.0) * cov;
-                float lobe = 0.55 * pow(facingPos, 5.0) + 0.18 * pow(facingNeg, 5.0) + 0.05;
-                float hair = clamp(1.0 - abs(d + 1.0) / 1.5, 0.0, 1.0);
-                float spec = (rim * lobe + hair * (0.35 + 0.50 * facingPos)) * specStrength;
+                float lobe = 0.65 * pow(facingPos, 4.0) + 0.25 * pow(facingNeg, 4.0) + 0.10;
+                float hair = clamp(1.0 - abs(d + 1.0) / 1.8, 0.0, 1.0);
+                float spec = (rim * lobe + hair * (0.45 + 0.55 * facingPos)) * specStrength;
                 col += float3(spec);
 
                 // Backside inner shadow
-                float shadowW = clamp(bevel, 4.0, 36.0);
+                float shadowW = clamp(bevel, 4.0, 40.0);
                 float shadowBand = pow(clamp(1.0 + d / shadowW, 0.0, 1.0), 1.5);
                 float ish = shadowBand * facingNeg * innerShadow;
                 col = col * (1.0 - 0.45 * ish);
 
                 col = clamp(col, float3(0.0), float3(1.0));
 
-                // Premultiplied alpha: base frosted opacity in center, thick opaque rim on edges
-                float baseAlpha = clamp(tintColor.a, 0.22, 0.55);
-                float edgeAlpha = mix(baseAlpha, 0.88, slope);
+                // Noticeable glass presence: 30% body opacity, 92% bevel edge opacity
+                float baseAlpha = clamp(tintColor.a, 0.28, 0.60);
+                float edgeAlpha = mix(baseAlpha, 0.92, slope);
                 float alpha = edgeAlpha * cov;
 
                 return half4(col * alpha, alpha);
@@ -155,19 +151,19 @@ class GlassLensRenderer {
     }
 
     data class LensParams(
-        val blurRadius: Float = 22f,
-        val cornerRadius: Float = 36f,
-        val bevel: Float = 34f,
-        val refract: Float = 38f,
-        val dispersion: Float = 0.22f,
+        val blurRadius: Float = 24f,
+        val cornerRadius: Float = 40f,
+        val bevel: Float = 36f,
+        val refract: Float = 42f,
+        val dispersion: Float = 0.25f,
         val lightX: Float = 0f,
         val lightY: Float = 1f,
-        val spec: Float = 0.90f,
-        val innerShadow: Float = 0.40f,
-        val tint: Int = 0x33FFFFFF,
+        val spec: Float = 0.95f,
+        val innerShadow: Float = 0.45f,
+        val tint: Int = 0x3DFFFFFF,
         val glassTint: Int = 0x00000000,
         val dim: Float = 0.04f,
-        val saturation: Float = 125f
+        val saturation: Float = 130f
     )
 
     private val renderNode = RenderNode("HyperBounceLockSheetLens")
