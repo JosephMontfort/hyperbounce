@@ -29,12 +29,8 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
     private var wallpaperDrawable: Drawable? = null
     private var lastWallpaperFetchTime = 0L
 
-    private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x38FFFFFF
-        style = Paint.Style.FILL
-    }
     private val fallbackBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xB0FFFFFF.toInt()
+        color = 0x80FFFFFF.toInt()
         style = Paint.Style.STROKE
     }
     private val boundsRect = RectF()
@@ -63,16 +59,18 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        if (visibility != VISIBLE) return
+
         val parent = parent as? View
         val w = if (width > 0) width else (parent?.width ?: resources.displayMetrics.widthPixels)
         val h = if (height > 0) height else (parent?.height ?: resources.displayMetrics.heightPixels)
         if (w <= 0 || h <= 0) return
 
         val density = resources.displayMetrics.density
-        val cornerRadius = 40f * density
-        val bevelWidth = 36f * density
-        val refractAmount = 42f * density
-        val margin = (36f * density).toInt()
+        val cornerRadius = 36f * density
+        val bevelWidth = 32f * density
+        val refractAmount = 36f * density
+        val margin = (40f * density).toInt()
 
         val wp = getWallpaper()
         val screenW = resources.displayMetrics.widthPixels
@@ -84,19 +82,15 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderer != null) {
             val params = GlassLensRenderer.LensParams(
-                blurRadius = 24f * density,
                 cornerRadius = cornerRadius,
                 bevel = bevelWidth,
                 refract = refractAmount,
-                dispersion = 0.25f,
+                dispersion = 0.24f,
                 lightX = 0f,
                 lightY = 1f,
                 spec = 0.95f,
                 innerShadow = 0.45f,
-                tint = 0x3DFFFFFF,
-                glassTint = 0x00000000,
-                dim = 0.04f,
-                saturation = 130f
+                saturation = 125f
             )
 
             val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
@@ -124,8 +118,7 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
         val path = Path().apply {
             addRoundRect(boundsRect, radii, Path.Direction.CW)
         }
-        canvas.drawPath(path, fallbackPaint)
-        fallbackBorderPaint.strokeWidth = 3f * density
+        fallbackBorderPaint.strokeWidth = 2.5f * density
         canvas.drawPath(path, fallbackBorderPaint)
     }
 

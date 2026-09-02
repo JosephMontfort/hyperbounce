@@ -20,8 +20,8 @@ import java.lang.reflect.Method
 
 /**
  * Feature 1: Lock Screen Liquid Glass Sheet Hook.
- * Injects a real-time AGSL Liquid Glass Sheet with 3-edge refraction & chromatic aberration
- * behind the lockscreen elements, synchronized to 120Hz swipe translation.
+ * Injects a real-time AGSL Liquid Glass Sheet with 3-edge true refraction & chromatic aberration
+ * strictly on the Lock Screen, hidden in Unlocked Notification Shade and Control Center.
  */
 object LockScreenSheetHook {
 
@@ -69,12 +69,10 @@ object LockScreenSheetHook {
 
                                 if (rootView != null) {
                                     val cfg = LockScreenConfigHolder.sheet
-                                    if (!cfg.enabled) {
+                                    if (!cfg.enabled || !isLockScreenActive(kpvc)) {
                                         if (rootView is ViewGroup) {
                                             val existingSheet = rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
-                                            if (existingSheet != null) {
-                                                rootView.removeView(existingSheet)
-                                            }
+                                            existingSheet?.visibility = View.GONE
                                         }
                                         return result
                                     }
@@ -163,8 +161,11 @@ object LockScreenSheetHook {
                     })
                 }
 
-                // Hook onViewAttachedToWindow or updateKeyguardElementsVisibility to ensure instant injection on lockscreen display
-                if (m.name == "onViewAttachedToWindow" || m.name == "updateKeyguardElementsVisibility") {
+                // Hook onViewAttachedToWindow, updateKeyguardElementsVisibility, and updateVisibility to ensure state synchronization
+                if (m.name == "onViewAttachedToWindow" ||
+                    m.name == "updateKeyguardElementsVisibility" ||
+                    m.name == "updateVisibility"
+                ) {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
@@ -321,19 +322,42 @@ object LockScreenSheetHook {
         } catch (_: Throwable) {}
     }
 
+    private fun isLockScreenActive(kpvc: Any): Boolean {
+        return try {
+            val stateField = kpvc.javaClass.getDeclaredField("statusBarState")
+            stateField.isAccessible = true
+            val state = stateField.getInt(kpvc)
+            // 1 is StatusBarState.KEYGUARD
+            if (state != 1) return false
+
+            val kscField = kpvc.javaClass.getDeclaredField("keyguardStateController")
+            kscField.isAccessible = true
+            val ksc = kscField.get(kpvc)
+            if (ksc != null) {
+                val isShowingMethod = ksc.javaClass.getMethod("isShowing")
+                val isShowing = isShowingMethod.invoke(ksc) as? Boolean ?: true
+                if (!isShowing) return false
+            }
+            true
+        } catch (_: Throwable) {
+            true
+        }
+    }
+
     private fun ensureInjected(kpvc: Any) {
         try {
             val rootViewField: Field = kpvc.javaClass.getDeclaredField("keyguardRootView")
             rootViewField.isAccessible = true
             val rootView = rootViewField.get(kpvc) as? ViewGroup ?: return
             val cfg = LockScreenConfigHolder.sheet
-            if (!cfg.enabled) {
-                val existing = rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
-                if (existing != null) rootView.removeView(existing)
+            val active = cfg.enabled && isLockScreenActive(kpvc)
+
+            var glassSheet = rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
+            if (!active) {
+                glassSheet?.visibility = View.GONE
                 return
             }
 
-            var glassSheet = rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
             if (glassSheet == null) {
                 val context = rootView.context
                 glassSheet = LockScreenGlassSheetView(context).apply {
@@ -362,6 +386,7 @@ object LockScreenSheetHook {
                 }
             }
 
+            glassSheet.visibility = View.VISIBLE
             if (rootView.width > 0 && rootView.height > 0) {
                 glassSheet.layout(0, 0, rootView.width, rootView.height)
             }
