@@ -349,8 +349,9 @@ fun KeypadScreen(
                     title = "Custom Key Delays",
                     subtitle = "Fine-tune individual start delays for keys 0-9",
                     colors = colors,
-                    backdrop = backdrop,
-                    onClick = { onNavigate(Destination.KeypadDelays) }
+                    iconTint = colors.accentOrange,
+                    onClick = { onNavigate(Destination.KeypadDelays) },
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
             }
             SectionFooter(

@@ -13,8 +13,7 @@ import android.graphics.drawable.Drawable
 import android.os.Build
 
 /**
- * Pure Canvas + AGSL RuntimeShader Circle Glass Drawable for PIN Pad keys.
- * Implements 45-degree sweep gradient specular rim lighting and localized touch radial highlight.
+ * Pure Canvas + AGSL RuntimeShader Circle Glass Drawable for PIN Pad keys (Legacy Fallback).
  */
 class CircleGlassDrawable(
     private val density: Float
@@ -53,16 +52,15 @@ class CircleGlassDrawable(
         var radius = (cfg.circleDiameter / 2.0f) * density
         if (radius <= 0f) radius = 41f * density
 
-        val baseFill = cfg.fillAlpha.coerceIn(0f, 1f)
-        val boost = cfg.pressGlowAlpha.coerceIn(0f, 1f) * highlightAlpha
+        val baseFill = 0.20f
+        val boost = 0.35f * highlightAlpha
         val totalFill = (baseFill + boost).coerceAtMost(1.0f)
 
         val fillA = (totalFill * 255).toInt()
         fillPaint.color = 0x00FFFFFF or (fillA shl 24)
 
-        // Fresnel specular rim lighting with 45-degree top-left light source
-        val strokeA = (cfg.strokeAlpha.coerceIn(0f, 1f) * 255).toInt()
-        strokePaint.strokeWidth = cfg.strokeWidth.coerceAtLeast(0.5f) * density
+        val strokeA = (0.47f * 255).toInt()
+        strokePaint.strokeWidth = 1.5f * density
         val sweepGrad = SweepGradient(
             cx, cy,
             intArrayOf(
@@ -78,18 +76,17 @@ class CircleGlassDrawable(
         canvas.drawCircle(cx, cy, radius, fillPaint)
         canvas.drawCircle(cx, cy, radius, strokePaint)
 
-        // Localized Radial Specular Highlight on touch contact
-        if (highlightAlpha > 0.01f && cfg.pressGlowAlpha > 0.01f) {
+        if (highlightAlpha > 0.01f) {
             val pX = if (touchX >= 0) touchX else cx
             val pY = if (touchY >= 0) touchY else cy
-            val glowA = (cfg.pressGlowAlpha.coerceIn(0f, 1f) * highlightAlpha * 255).toInt()
+            val glowA = (0.35f * highlightAlpha * 255).toInt()
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && radialRuntimeShader is RuntimeShader) {
                 try {
                     val shader = radialRuntimeShader as RuntimeShader
                     shader.setFloatUniform("size", bounds.width().toFloat(), bounds.height().toFloat())
                     shader.setColorUniform("color", 0x00FFFFFF or (glowA shl 24))
-                    shader.setFloatUniform("radius", radius * cfg.glowRadius.coerceAtLeast(0.5f))
+                    shader.setFloatUniform("radius", radius * 1.4f)
                     shader.setFloatUniform("position", pX, pY)
                     glowPaint.shader = shader
                     canvas.drawCircle(cx, cy, radius, glowPaint)
@@ -100,7 +97,7 @@ class CircleGlassDrawable(
                 }
             } else {
                 val radGrad = RadialGradient(
-                    pX, pY, radius * (cfg.glowRadius * 0.8f).coerceAtLeast(0.5f),
+                    pX, pY, radius * 1.12f,
                     0x00FFFFFF or (glowA shl 24),
                     0x00FFFFFF,
                     Shader.TileMode.CLAMP

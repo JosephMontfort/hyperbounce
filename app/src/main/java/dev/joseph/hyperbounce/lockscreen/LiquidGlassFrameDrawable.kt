@@ -12,19 +12,16 @@ import android.os.Build
 import kotlin.math.PI
 
 /**
- * Specular Fresnel Frame Drawable for 4-Sided Lock Screen Card Sheet.
- * Renders directional specular highlights using AGSL RuntimeShader on Android 13+ with smooth falloff.
+ * AGSL Fresnel border frame drawable (Legacy Fallback).
  */
 class LiquidGlassFrameDrawable(
     private val density: Float
 ) : Drawable() {
 
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-    }
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
     }
+
     private var fresnelShader: Any? = null
 
     init {
@@ -40,9 +37,9 @@ class LiquidGlassFrameDrawable(
         if (bounds.width() <= 0 || bounds.height() <= 0) return
 
         val cfg = LockScreenConfigHolder.sheet
-        val strokeA = (cfg.borderAlpha.coerceIn(0f, 1f) * 255).toInt()
-        val strokeW = cfg.borderWidth.coerceAtLeast(0.5f) * density
-        val cornerR = 28f * density
+        val strokeA = (0.47f * 255).toInt()
+        val strokeW = 2.5f * density
+        val cornerR = cfg.cornerRadius * density
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && fresnelShader is RuntimeShader) {
             try {
@@ -68,11 +65,14 @@ class LiquidGlassFrameDrawable(
         canvas.drawRoundRect(rf, cornerR, cornerR, strokePaint)
     }
 
-    override fun setAlpha(alpha: Int) {}
+    override fun setAlpha(alpha: Int) {
+        strokePaint.alpha = alpha
+    }
+
     override fun setColorFilter(colorFilter: ColorFilter?) {
-        paint.colorFilter = colorFilter
         strokePaint.colorFilter = colorFilter
     }
+
     @Deprecated("Deprecated in Java")
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
