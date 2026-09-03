@@ -36,30 +36,8 @@ data class ScreenUnlockConfig(
     fun getDyn(key: String, defVal: Float): Float = dyn[key] ?: defVal
 }
 
-data class OriginOSTransitionConfig(
-    val enabled: Boolean = true,
-    val curveProfile: Int = 0, // 0 = Gentle (柔和 - OriginOS 6 Signature), 1 = Comfort (舒适), 2 = Swift (轻快), 3 = Custom Tuner
-    val parallelAnimEnabled: Boolean = true, // OriginOS multiple.close interrupt dynamics
-    val unlockHighEndCapabilities: Boolean = true, // Force unlock flagship capabilities & bypass lite device throttling
-    val delayedAlphaClose: Boolean = true, // OriginOS 120ms alpha hold for solid card collapse
-
-    // Custom Tuner Parameters (Active when curveProfile == 3, or customized)
-    val customOpenDamping: Float = 1.00f,
-    val customOpenResponse: Float = 0.444f, // k = 200.0f (Gentle Signature)
-    val customCloseDamping: Float = 0.88f,  // k = 150.0f (Underdamped Organic Cushion)
-    val customCloseResponse: Float = 0.513f, // k = 150.0f
-    val customRecentsDamping: Float = 0.95f,
-    val customRecentsResponse: Float = 0.419f, // k = 224.0f
-    val customParallelDamping: Float = 0.95f,
-    val customParallelResponse: Float = 0.419f, // k = 224.0f
-    val customCornerDamping: Float = 1.15f,
-    val customCornerResponse: Float = 0.256f, // k = 600.0f
-    val customAlphaDamping: Float = 0.60f,
-    val customAlphaResponse: Float = 0.268f, // k = 550.0f
-
-    // Spatial & Environmental Parameters
-    val wallpaperScaleZoom: Float = 1.15f, // OriginOS wallpaper zoom (1.0 -> 1.15)
-    val dragLayerEndScale: Float = 0.90f   // OriginOS desktop scale (1.0 -> 0.90)
+data class IOSTransitionConfig(
+    val enabled: Boolean = true
 )
 
 object LauncherConfigHolder {
@@ -68,12 +46,12 @@ object LauncherConfigHolder {
         private set
 
     @Volatile
-    var originOSConfig: OriginOSTransitionConfig = OriginOSTransitionConfig()
+    var iosAnimConfig: IOSTransitionConfig = IOSTransitionConfig()
         private set
 
     // Backward compatibility accessor
-    val transitionConfig: OriginOSTransitionConfig
-        get() = originOSConfig
+    val transitionConfig: IOSTransitionConfig
+        get() = iosAnimConfig
 
     fun update(prefs: SharedPreferences) {
         val rows = prefs.getInt("unlock_grid_rows", 7).coerceIn(1, 32)
@@ -118,26 +96,8 @@ object LauncherConfigHolder {
             dyn = dynMap
         )
 
-        originOSConfig = OriginOSTransitionConfig(
-            enabled = prefs.getBoolean("originos_anim_enabled", true),
-            curveProfile = prefs.getInt("originos_curve_profile", 0),
-            parallelAnimEnabled = prefs.getBoolean("originos_parallel_enabled", true),
-            unlockHighEndCapabilities = prefs.getBoolean("originos_unlock_highend", true),
-            delayedAlphaClose = prefs.getBoolean("originos_delayed_alpha", true),
-            customOpenDamping = prefs.getFloat("originos_open_damping", 1.00f),
-            customOpenResponse = prefs.getFloat("originos_open_response", 0.444f),
-            customCloseDamping = prefs.getFloat("originos_close_damping", 0.88f),
-            customCloseResponse = prefs.getFloat("originos_close_response", 0.513f),
-            customRecentsDamping = prefs.getFloat("originos_recents_damping", 0.95f),
-            customRecentsResponse = prefs.getFloat("originos_recents_response", 0.419f),
-            customParallelDamping = prefs.getFloat("originos_parallel_damping", 0.95f),
-            customParallelResponse = prefs.getFloat("originos_parallel_response", 0.419f),
-            customCornerDamping = prefs.getFloat("originos_corner_damping", 1.15f),
-            customCornerResponse = prefs.getFloat("originos_corner_response", 0.256f),
-            customAlphaDamping = prefs.getFloat("originos_alpha_damping", 0.60f),
-            customAlphaResponse = prefs.getFloat("originos_alpha_response", 0.268f),
-            wallpaperScaleZoom = prefs.getFloat("originos_wallpaper_zoom", 1.15f),
-            dragLayerEndScale = prefs.getFloat("originos_draglayer_scale", 0.90f)
+        iosAnimConfig = IOSTransitionConfig(
+            enabled = prefs.getBoolean("ios_anim_enabled", true)
         )
     }
 }

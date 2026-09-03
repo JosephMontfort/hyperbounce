@@ -198,32 +198,11 @@ data class ScreenUnlockSettings(
     val kineticDockZDepth: Float = 800.0f
 )
 
-/** Feature 4: OriginOS 6 App Transition & Physics Settings */
-data class OriginOSTransitionSettings(
-    val enabled: Boolean = true,
-    val curveProfile: Int = 0, // 0 = Gentle (柔和 - OriginOS 6 Signature), 1 = Comfort (舒适), 2 = Swift (轻快), 3 = Custom Tuner
-    val parallelAnimEnabled: Boolean = true,
-    val unlockHighEndCapabilities: Boolean = true,
-    val delayedAlphaClose: Boolean = true,
-
-    // Custom Tuner Parameters
-    val customOpenDamping: Float = 1.00f,
-    val customOpenResponse: Float = 0.444f, // k = 200.0f
-    val customCloseDamping: Float = 0.88f,  // k = 150.0f (underdamped cushion)
-    val customCloseResponse: Float = 0.513f, // k = 150.0f
-    val customRecentsDamping: Float = 0.95f,
-    val customRecentsResponse: Float = 0.419f, // k = 224.0f
-    val customParallelDamping: Float = 0.95f,
-    val customParallelResponse: Float = 0.419f, // k = 224.0f
-    val customCornerDamping: Float = 1.15f,
-    val customCornerResponse: Float = 0.256f, // k = 600.0f
-    val customAlphaDamping: Float = 0.60f,
-    val customAlphaResponse: Float = 0.268f, // k = 550.0f
-
-    // Spatial & Environmental
-    val wallpaperScaleZoom: Float = 1.15f,
-    val dragLayerEndScale: Float = 0.90f
+/** Feature 4: iOS App Transition & Physics Settings */
+data class IOSTransitionSettings(
+    val enabled: Boolean = true
 )
+
 
 /** Features 5, 6, 7, 8, 9: Control Center Modular Customization, Jelly Physics & Dynamics */
 data class ControlCenterSettings(

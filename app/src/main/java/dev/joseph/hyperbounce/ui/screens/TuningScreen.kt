@@ -96,8 +96,8 @@ fun TuningScreen(
             )
             RowDivider(colors.separator)
             SettingsNavRow(
-                title = "OriginOS Transitions",
-                subtitle = if (repository.appTransition.enabled) "OriginOS 6 Physics & Parallel Launch" else "Off",
+                title = "iOS App Transitions",
+                subtitle = if (repository.appTransition.enabled) "Weightless Physics & Row Flight Arcs" else "Off",
                 colors = colors,
                 iconTint = colors.accentGreen,
                 onClick = { onNavigate(Destination.AppTransitions) },
