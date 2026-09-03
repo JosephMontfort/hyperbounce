@@ -115,6 +115,12 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
         canvas.drawPath(path, fallbackBorderPaint)
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        LockScreenWallpaperHelper.registerIfNeeded(context)
+        LockScreenWallpaperHelper.triggerAsyncWallpaperLoad(context)
+    }
+
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
