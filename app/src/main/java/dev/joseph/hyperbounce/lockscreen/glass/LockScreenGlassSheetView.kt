@@ -61,6 +61,7 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
+        if (LiquidGlassKeyDrawable.isCapturingGlobalBackdrop) return
         super.onDraw(canvas)
         if (visibility != VISIBLE) return
 
@@ -115,6 +116,7 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
 
                     recordingCanvas.save()
                     recordingCanvas.translate(margin.toFloat() - offsetX, margin.toFloat() - offsetY)
+                    LiquidGlassKeyDrawable.isCapturingGlobalBackdrop = true
                     LiquidGlassKeyDrawable.setTransitionVisibilitySafe(this, View.INVISIBLE)
                     try {
                         backdrop.draw(recordingCanvas)
@@ -123,6 +125,7 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
                         Log.w("HyperBounce_LockSheet", "Live backdrop capture error", t)
                     } finally {
                         LiquidGlassKeyDrawable.setTransitionVisibilitySafe(this, View.VISIBLE)
+                        LiquidGlassKeyDrawable.isCapturingGlobalBackdrop = false
                         recordingCanvas.restore()
                     }
                 }

@@ -67,7 +67,7 @@ object KeypadPhysicsHook {
     // =========================================================================
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
-        // 1. Hook MiuiNumPadKey touch events and measure sizing for Liquid Glass 2.0
+        // 1. Hook MiuiNumPadKey touch events for Liquid Glass 2.0 Press Optics & Liquid Bulge
         try {
             val numPadKeyClass = Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)
             for (m: Method in numPadKeyClass.declaredMethods) {
@@ -112,31 +112,6 @@ object KeypadPhysicsHook {
                                 }
                             }
                             return chain.proceed()
-                        }
-                    })
-                }
-
-                if (m.name == "onMeasure") {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
-                            val result = chain.proceed()
-                            val view = chain.thisObject as? View ?: return result
-                            val cfg = LockScreenConfigHolder.keypad
-                            if (cfg.enabled) {
-                                val density = view.resources.displayMetrics.density
-                                val sizePx = (cfg.circleDiameter * density).toInt()
-                                if (sizePx > 0) {
-                                    try {
-                                        val setMeasuredDimensionMethod = View::class.java.getDeclaredMethod(
-                                            "setMeasuredDimension",
-                                            Int::class.javaPrimitiveType,
-                                            Int::class.javaPrimitiveType
-                                        ).apply { isAccessible = true }
-                                        setMeasuredDimensionMethod.invoke(view, sizePx, sizePx)
-                                    } catch (_: Throwable) {}
-                                }
-                            }
-                            return result
                         }
                     })
                 }
