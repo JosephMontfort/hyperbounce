@@ -13,12 +13,22 @@ import java.lang.reflect.Method
  *
  * Implements pure iOS physical dynamics and weightless trajectory equations:
  *
- * 1. Zero Drag Resistance (Feather-Light Pull-Up):
+ * 1. Zero Drag Resistance & Progressive Scale-Down:
  *    - Replaces HyperOS's heavy rubber-band friction curve (laterFriction / afterFrictionValue)
  *      in TaskStackLayoutAlgorithm with a fluid, 1:1 direct tracking displacement.
- *    - Users can pull an app up freely from any height without feeling artificial drag resistance.
+ *    - Progressively scales the app down as it is pulled up, keeping it completely on screen
+ *      rather than allowing it to shoot off-screen into the void.
+ *    - Even when pulled high towards the top edge or top-right corner, the app scales into a
+ *      compact floating card with zero drag resistance.
  *
- * 2. Velocity-Dependent Flight & Row-Adaptive Trajectories:
+ * 2. Recents Current Task Centering:
+ *    - Overrides TaskStackViewsAlgorithmHorizontal, TaskStackViewsAlgorithmStack, and TaskViewsElement.
+ *    - Eliminates the intentional HyperOS offset that shifted the current app to the right to focus
+ *      the previous app.
+ *    - Keeps the active running app perfectly centered on screen when opening Recents, matching iOS
+ *      behavior, while preserving Quick Switch app cycling.
+ *
+ * 3. Velocity-Dependent Flight & Row-Adaptive Trajectories:
  *    - Captures live gesture flick velocity (px/ms) via GestureHomeCalculator.updateVelocity.
  *    - For apps in the lower half of the screen and dock (Row 4..6 + Dock):
  *      When flicked upward, the window carries upward momentum into a graceful, soaring parabolic
@@ -27,10 +37,14 @@ import java.lang.reflect.Method
  *    - For top-row apps (Row 0..2): smoothly guides the window directly to the top icon with
  *      crisp critical damping, preventing excessive overshoot beyond the screen top edge.
  *
- * 3. SurfaceFlinger Hardware Upward Momentum Injection:
+ * 4. SurfaceFlinger Hardware Upward Momentum Injection:
  *    - Injects calculated upward flight velocity into SfAnimParam.centerY on hardware-accelerated transitions.
  *
- * 4. Feather-Light Expansive App Opening:
+ * 5. Multi-Scenario Resistance Reduction:
+ *    - Fluid back gesture indicator tracking in BackGestureUtils.
+ *    - Feather-light swipe dismissal in VerticalSwipe.
+ *
+ * 6. Feather-Light Expansive App Opening:
  *    - Organic, critically damped (zeta=1.00, T0=0.410s) expansive flight from squircle to full screen.
  */
 object AppTransitionHook {
@@ -53,7 +67,9 @@ object AppTransitionHook {
         if (classLoader == null) return
 
         hookGestureVelocityTracking(module, classLoader)
-        hookDragResistance(module, classLoader)
+        hookDragResistanceAndScaling(module, classLoader)
+        hookRecentsCurrentTaskCentering(module, classLoader)
+        hookExtraInteractionsFriction(module, classLoader)
         hookSpringParamsProvider(module, classLoader)
         hookSfAnimImplementor(module, classLoader)
         hookHomeLayerScaling(module, classLoader)
@@ -94,17 +110,56 @@ object AppTransitionHook {
     }
 
     /**
-     * Hook 2: Eliminates the heavy rubber-band drag resistance when pulling an app up.
-     * In stock HyperOS, TaskStackLayoutAlgorithm.calculateTaskY clamps upward drag with heavy friction.
+     * Hook 2: Eliminates the heavy rubber-band drag resistance AND ensures the app scales down
+     * progressively so it never shoots off-screen.
      */
-    private fun hookDragResistance(module: XposedInterface, classLoader: ClassLoader) {
+    private fun hookDragResistanceAndScaling(module: XposedInterface, classLoader: ClassLoader) {
         try {
             val algoClass = Class.forName("com.miui.home.recents.views.TaskStackLayoutAlgorithm", false, classLoader)
 
-            // 1. Hook calculateTaskY(int i, float f, float f2, float f3)
+            // 1. Hook calculateTaskWidth(float f, float f2)
+            // f = base width (screen width)
+            // f2 = drag progress mPer (0.0 to 1.0+)
+            val calcWidthMethod = algoClass.getDeclaredMethod(
+                "calculateTaskWidth",
+                Float::class.javaPrimitiveType,
+                Float::class.javaPrimitiveType
+            )
+
+            module.hook(calcWidthMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (!cfg.enabled) {
+                        return chain.proceed()
+                    }
+
+                    val baseWidth = (chain.args[0] as? Number)?.toFloat() ?: return chain.proceed()
+                    val progress = (chain.args[1] as? Number)?.toFloat()?.coerceAtLeast(0f) ?: 0f
+
+                    // As the app is lifted higher, scale down smoothly so it stays on screen:
+                    val scale: Float = when {
+                        progress <= 0.04f -> 1.0f
+                        progress <= 0.60f -> {
+                            // Initial progressive shrinkage: 1.0 -> 0.60
+                            1.0f - (progress - 0.04f) * (0.40f / 0.56f)
+                        }
+                        progress <= 1.00f -> {
+                            // Mid flight shrinkage: 0.60 -> 0.38
+                            0.60f - (progress - 0.60f) * (0.22f / 0.40f)
+                        }
+                        else -> {
+                            // Pulled high up towards top / top-right: scales down to compact card (down to 0.22)
+                            0.38f / (1.0f + (progress - 1.00f) * 0.90f)
+                        }
+                    }
+                    return baseWidth * scale.coerceIn(0.22f, 1.0f)
+                }
+            })
+
+            // 2. Hook calculateTaskY(int i, float f, float f2, float f3)
             // i = gesture position (1 = bottom up)
             // f = screen height
-            // f2 = task height
+            // f2 = current task height (already scaled by calculateTaskWidth!)
             // f3 = drag progress mPer
             val calcYMethod = algoClass.getDeclaredMethod(
                 "calculateTaskY",
@@ -124,46 +179,31 @@ object AppTransitionHook {
                     val i = (chain.args[0] as? Number)?.toInt() ?: 1
                     val screenH = (chain.args[1] as? Number)?.toFloat() ?: 0f
                     val taskH = (chain.args[2] as? Number)?.toFloat() ?: 0f
-                    val progress = (chain.args[3] as? Number)?.toFloat() ?: 0f
+                    val progress = (chain.args[3] as? Number)?.toFloat()?.coerceAtLeast(0f) ?: 0f
 
                     // If upward gesture from bottom (i == 1):
                     if (i == 1 && screenH > 0f) {
-                        // In iOS, there is zero resistance when pulling up:
-                        // The card follows the finger smoothly without artificial clamping
-                        val unconstrainedY = (1.0f - progress) * screenH - taskH
-                        return unconstrainedY
+                        // Safe top margin (status bar / camera cutout clearance)
+                        val topMargin = screenH * 0.035f
+
+                        // Bottom of the card follows the finger upward with zero resistance:
+                        val bottomY = screenH * (1.0f - (progress * 0.72f))
+                        val desiredTop = bottomY - taskH
+
+                        // Cushion at the top edge so the window NEVER shoots off screen into the void!
+                        val finalY = if (desiredTop < topMargin) {
+                            topMargin - ((topMargin - desiredTop) * 0.08f)
+                        } else {
+                            desiredTop
+                        }
+                        return finalY
                     }
 
                     return chain.proceed()
                 }
             })
 
-            // 2. Hook calculateTaskWidth(float f, float f2)
-            // In stock HyperOS, width is crushed with laterFriction by up to 60%.
-            // In iOS, the width stays broad, solid, and lightweight during flight.
-            val calcWidthMethod = algoClass.getDeclaredMethod(
-                "calculateTaskWidth",
-                Float::class.javaPrimitiveType,
-                Float::class.javaPrimitiveType
-            )
-
-            module.hook(calcWidthMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
-                        return chain.proceed()
-                    }
-
-                    val baseWidth = (chain.args[0] as? Number)?.toFloat() ?: return chain.proceed()
-                    val progress = (chain.args[1] as? Number)?.toFloat() ?: 0f
-
-                    // Proportional, feather-light scaling (max 30% reduction even when pulled high)
-                    val scaleFactor = (1.0f - (progress.coerceAtLeast(0f) * 0.18f)).coerceIn(0.70f, 1.0f)
-                    return baseWidth * scaleFactor
-                }
-            })
-
-            Log.i(TAG, "Hooked TaskStackLayoutAlgorithm for zero-drag feather-light pulling")
+            Log.i(TAG, "Hooked TaskStackLayoutAlgorithm for zero-drag pull up and on-screen scaling")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook TaskStackLayoutAlgorithm drag calculations", t)
         }
@@ -190,7 +230,7 @@ object AppTransitionHook {
                         }
                         val f = (chain.args[0] as? Number)?.toFloat() ?: 0f
                         // Return fluid linear movement instead of asymptotic flattening
-                        return f * 0.92f
+                        return f * 0.94f
                     }
                 })
             } catch (_: Throwable) {}
@@ -198,7 +238,146 @@ object AppTransitionHook {
     }
 
     /**
-     * Hook 3: Row-Dependent Parabolic Trajectory Physics in SpringParamsProvider.
+     * Hook 3: Centers the current running task in Recents Overview instead of pushing it to the right.
+     * Overrides getDefaultCenterTaskViewIndex, getTargetTaskViewIndex, and getCenterTaskViewIndex.
+     */
+    private fun hookRecentsCurrentTaskCentering(module: XposedInterface, classLoader: ClassLoader) {
+        val targetAlgorithms = listOf(
+            "com.miui.home.recents.views.TaskStackViewsAlgorithmHorizontal",
+            "com.miui.home.recents.views.TaskStackViewsAlgorithmStack"
+        )
+
+        for (algoName in targetAlgorithms) {
+            try {
+                val clazz = Class.forName(algoName, false, classLoader)
+
+                // 1. getDefaultCenterTaskViewIndex() -> return 0 (instead of stock 1)
+                val defaultCenterMethod = clazz.getDeclaredMethod("getDefaultCenterTaskViewIndex")
+                module.hook(defaultCenterMethod).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        val cfg = LauncherConfigHolder.iosAnimConfig
+                        if (!cfg.enabled) {
+                            return chain.proceed()
+                        }
+                        return 0 // Current task stays in the center!
+                    }
+                })
+
+                // 2. getTargetTaskViewIndex(boolean z, int i, int i2)
+                // z = isQuickSwitchMode
+                // i = quickSwitchTaskIndex
+                // i2 = runningTaskIndex (0)
+                val targetIndexMethod = clazz.getDeclaredMethod(
+                    "getTargetTaskViewIndex",
+                    Boolean::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType
+                )
+                module.hook(targetIndexMethod).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        val cfg = LauncherConfigHolder.iosAnimConfig
+                        if (!cfg.enabled) {
+                            return chain.proceed()
+                        }
+
+                        val isQuickSwitch = chain.args[0] as? Boolean ?: false
+                        if (isQuickSwitch) {
+                            // In quick switch mode, maintain sequential app cycling!
+                            return chain.proceed()
+                        }
+
+                        // Entering Recents from an app: center the current task (index 0)
+                        return 0
+                    }
+                })
+                Log.i(TAG, "Hooked $algoName for Recents current task centering")
+            } catch (t: Throwable) {
+                Log.w(TAG, "Failed to hook Recents task index on $algoName", t)
+            }
+        }
+
+        // 3. Hook TaskViewsElement.getCenterTaskViewIndex()
+        try {
+            val elemClass = Class.forName("com.miui.home.recents.anim.TaskViewsElement", false, classLoader)
+            val centerMethod = elemClass.getDeclaredMethod("getCenterTaskViewIndex").apply { isAccessible = true }
+
+            module.hook(centerMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (!cfg.enabled) {
+                        return chain.proceed()
+                    }
+
+                    try {
+                        val currentParams = chain.thisObject.javaClass.getDeclaredField("currentTaskViewParams").apply { isAccessible = true }.get(chain.thisObject)
+                        val isQuickSwitch = (currentParams?.javaClass?.getMethod("isQuickSwitchMode")?.invoke(currentParams) as? Boolean) ?: false
+                        if (!isQuickSwitch) {
+                            return 0 // Center current task during transition
+                        }
+                    } catch (_: Throwable) {}
+
+                    return chain.proceed()
+                }
+            })
+            Log.i(TAG, "Hooked TaskViewsElement.getCenterTaskViewIndex for direct center leash binding")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to hook TaskViewsElement.getCenterTaskViewIndex", t)
+        }
+    }
+
+    /**
+     * Hook 4: Eliminates artificial resistance in other core navigation interactions:
+     * - Fluid back gesture indicator tracking in BackGestureUtils
+     * - Lightweight card dismiss gesture in VerticalSwipe
+     */
+    private fun hookExtraInteractionsFriction(module: XposedInterface, classLoader: ClassLoader) {
+        // Back gesture indicator friction
+        try {
+            val backClass = Class.forName("com.android.systemui.fsgesture.BackGestureUtils", false, classLoader)
+            val convertOffsetMethod = backClass.getDeclaredMethod("convertOffset", Float::class.javaPrimitiveType)
+
+            module.hook(convertOffsetMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (!cfg.enabled) {
+                        return chain.proceed()
+                    }
+                    val f = (chain.args[0] as? Number)?.toFloat() ?: 0f
+                    if (f <= 0f) return 0f
+                    // Responsive, fluid back indicator motion:
+                    return (f / 12.0f).coerceAtMost(36.0f)
+                }
+            })
+            Log.i(TAG, "Hooked BackGestureUtils.convertOffset for feather-light edge back gestures")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to hook BackGestureUtils", t)
+        }
+
+        // Recents card dismiss swipe friction
+        try {
+            val swipeClass = Class.forName("com.miui.home.recents.views.VerticalSwipe", false, classLoader)
+            val frictionMethod = swipeClass.getDeclaredMethod("afterFrictionValue", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType).apply {
+                isAccessible = true
+            }
+
+            module.hook(frictionMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (!cfg.enabled) {
+                        return chain.proceed()
+                    }
+                    val f = (chain.args[0] as? Number)?.toFloat() ?: 0f
+                    return f * 0.94f
+                }
+            })
+            Log.i(TAG, "Hooked VerticalSwipe.afterFrictionValue for feather-light recents dismissal")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to hook VerticalSwipe", t)
+        }
+    }
+
+    /**
+     * Hook 5: Row-Dependent Parabolic Trajectory Physics in SpringParamsProvider.
      * Computes spring damping & response dynamically based on target icon row position and flick velocity.
      */
     private fun hookSpringParamsProvider(module: XposedInterface, classLoader: ClassLoader) {
@@ -239,7 +418,6 @@ object AppTransitionHook {
                     }
 
                     val animType = (chain.args[0] as? Enum<*>)?.name ?: ""
-                    val startRect = chain.args[1] as? RectF
                     val targetRect = chain.args[2] as? RectF
 
                     try {
@@ -390,7 +568,7 @@ object AppTransitionHook {
     }
 
     /**
-     * Hook 4: Injects live upward gesture momentum directly into SurfaceFlinger's hardware animation parameters.
+     * Hook 6: Injects live upward gesture momentum directly into SurfaceFlinger's hardware animation parameters.
      * Hooks SfWindowAnimImplementor.buildSfAnimParam(RectFParams) to set CenterY upward velocity on flick.
      */
     private fun hookSfAnimImplementor(module: XposedInterface, classLoader: ClassLoader) {
@@ -438,7 +616,7 @@ object AppTransitionHook {
                             if (normY > 0.45f) {
                                 val rowMomentumMultiplier = 0.50f + ((normY - 0.45f) * 1.50f) // stronger for dock apps
 
-                                var upwardVelocity = if (isRecentFlick && vy < -0.2f) {
+                                val upwardVelocity = if (isRecentFlick && vy < -0.2f) {
                                     // Scale gesture velocity (px/ms -> px/s) with row momentum
                                     (vy * 1000f * rowMomentumMultiplier).coerceIn(-12000f, -800f)
                                 } else {
@@ -472,7 +650,7 @@ object AppTransitionHook {
     }
 
     /**
-     * Hook 5: Desktop Grid HomeLayer scaling.
+     * Hook 7: Desktop Grid HomeLayer scaling.
      * Keeps desktop grid breathing smoothly during app open/close transitions.
      */
     private fun hookHomeLayerScaling(module: XposedInterface, classLoader: ClassLoader) {
@@ -532,7 +710,7 @@ object AppTransitionHook {
     }
 
     /**
-     * Hook 6: Wallpaper depth zoom staging.
+     * Hook 8: Wallpaper depth zoom staging.
      */
     private fun hookWallpaperDynamics(module: XposedInterface, classLoader: ClassLoader) {
         try {
@@ -575,7 +753,7 @@ object AppTransitionHook {
     }
 
     /**
-     * Hook 7: Forces high animation capabilities and bypasses low-tier device throttling in DeviceLevelUtils.
+     * Hook 9: Forces high animation capabilities and bypasses low-tier device throttling in DeviceLevelUtils.
      */
     private fun hookDeviceLevelUtils(module: XposedInterface, classLoader: ClassLoader) {
         try {
