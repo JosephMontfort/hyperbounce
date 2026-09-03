@@ -53,181 +53,189 @@ fun SafeModeScreen(
         colors = colors,
         backdrop = backdrop,
         onBack = onBack
-    ) {
+    ) { _ ->
         // --- Live Status Banner ---
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-            Column(Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(12.dp)
-                            .clip(CircleShape)
-                            .background(if (isAnyActive) colors.accentRed else colors.accentGreen)
-                    )
-                    Spacer(Modifier.width(10.dp))
+        item {
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(12.dp)
+                                .clip(CircleShape)
+                                .background(if (isAnyActive) colors.accentRed else colors.accentGreen)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = if (isAnyActive) "SAFE MODE ENGAGED" else "ALL SUBSYSTEMS PROTECTED",
+                            color = if (isAnyActive) colors.accentRed else colors.accentGreen,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
                     Text(
-                        text = if (isAnyActive) "SAFE MODE ENGAGED" else "ALL SUBSYSTEMS PROTECTED",
-                        color = if (isAnyActive) colors.accentRed else colors.accentGreen,
+                        text = if (isAnyActive) {
+                            "One or more subsystems are currently bypassed due to crash watchdog triggers or manual bypass. Hooks will NOT execute for: " +
+                                    (if (safe.globalSafeMode || activeAliases.contains("all")) "ALL APPS (Global)" else activeAliases.joinToString(", ").ifEmpty { "Selected apps" })
+                        } else {
+                            "Automatic crash watchdog is active. If any system app crashes twice within 60s of launch, Safe Mode engages automatically to prevent bootloops."
+                        },
+                        color = colors.textSecondary,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                        lineHeight = 18.sp
                     )
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = if (isAnyActive) {
-                        "One or more subsystems are currently bypassed due to crash watchdog triggers or manual bypass. Hooks will NOT execute for: " +
-                                (if (safe.globalSafeMode || activeAliases.contains("all")) "ALL APPS (Global)" else activeAliases.joinToString(", ").ifEmpty { "Selected apps" })
-                    } else {
-                        "Automatic crash watchdog is active. If any system app crashes twice within 60s of launch, Safe Mode engages automatically to prevent bootloops."
-                    },
-                    color = colors.textSecondary,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp
-                )
 
-                if (isAnyActive) {
-                    Spacer(Modifier.height(14.dp))
-                    Button(
-                        onClick = { safe.clearAll() },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colors.accentRed.copy(alpha = 0.85f),
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Reset Crash Flags & Disable Safe Mode", fontWeight = FontWeight.SemiBold)
+                    if (isAnyActive) {
+                        Spacer(Modifier.height(14.dp))
+                        Button(
+                            onClick = { safe.clearAll() },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.accentRed.copy(alpha = 0.85f),
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Reset Crash Flags & Disable Safe Mode", fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
             }
         }
 
         // --- Master Kill Switch ---
-        SectionHeader("Master Kill Switch", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-            SettingsToggleRow(
-                title = "Global Safe Mode",
-                subtitle = if (safe.globalSafeMode) "All LSPosed hooks bypassed system-wide" else "Normal operation",
-                colors = colors,
-                iconTint = colors.accentRed.copy(alpha = 0.85f),
-                backdrop = backdrop,
-                checked = safe.globalSafeMode,
-                onCheckedChange = safe::setGlobalSafeMode,
-                icon = { PowerIcon(color = Color.White, size = 14.dp) }
-            )
+        item {
+            SectionHeader("Master Kill Switch", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "Global Safe Mode",
+                    subtitle = if (safe.globalSafeMode) "All LSPosed hooks bypassed system-wide" else "Normal operation",
+                    colors = colors,
+                    iconTint = colors.accentRed.copy(alpha = 0.85f),
+                    backdrop = backdrop,
+                    checked = safe.globalSafeMode,
+                    onCheckedChange = safe::setGlobalSafeMode,
+                    icon = { PowerIcon(color = Color.White, size = 14.dp) }
+                )
+            }
+            SectionFooter("Bypasses all hooks across SystemUI, Launcher, and third-party apps instantly.", colors)
         }
-        SectionFooter("Bypasses all hooks across SystemUI, Launcher, and third-party apps instantly.", colors)
 
         // --- Per-Subsystem Safe Mode Toggles ---
-        SectionHeader("Subsystem Bypass Toggles", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-            SettingsToggleRow(
-                title = "System UI Safe Mode",
-                subtitle = if (safe.systemUiSafeMode || activeAliases.contains("systemui")) "SystemUI hooks DISABLED" else "Lockscreen sheet, PIN keys, Control Center active",
-                colors = colors,
-                iconTint = colors.accentOrange.copy(alpha = 0.85f),
-                backdrop = backdrop,
-                checked = safe.systemUiSafeMode || activeAliases.contains("systemui"),
-                onCheckedChange = safe::setSystemUiSafeMode,
-                icon = { SlidersIcon(color = Color.White, size = 14.dp) }
-            )
-            RowDivider(colors.separator)
-            SettingsToggleRow(
-                title = "HyperOS Launcher Safe Mode",
-                subtitle = if (safe.launcherSafeMode || activeAliases.contains("home")) "Launcher hooks DISABLED" else "Unlock grid kinetics & app open/close active",
-                colors = colors,
-                iconTint = colors.accentOrange.copy(alpha = 0.85f),
-                backdrop = backdrop,
-                checked = safe.launcherSafeMode || activeAliases.contains("home"),
-                onCheckedChange = safe::setLauncherSafeMode,
-                icon = { SlidersIcon(color = Color.White, size = 14.dp) }
-            )
-            RowDivider(colors.separator)
-            SettingsToggleRow(
-                title = "Instagram Safe Mode",
-                subtitle = if (safe.instagramSafeMode || activeAliases.contains("instagram")) "Instagram nav hook DISABLED" else "Liquid floating nav bar active",
-                colors = colors,
-                iconTint = colors.accentBlue.copy(alpha = 0.85f),
-                backdrop = backdrop,
-                checked = safe.instagramSafeMode || activeAliases.contains("instagram"),
-                onCheckedChange = safe::setInstagramSafeMode,
-                icon = { SlidersIcon(color = Color.White, size = 14.dp) }
-            )
-            RowDivider(colors.separator)
-            SettingsToggleRow(
-                title = "WhatsApp Safe Mode",
-                subtitle = if (safe.whatsappSafeMode || activeAliases.contains("whatsapp")) "WhatsApp nav hook DISABLED" else "Liquid floating nav bar active",
-                colors = colors,
-                iconTint = colors.accentGreen.copy(alpha = 0.85f),
-                backdrop = backdrop,
-                checked = safe.whatsappSafeMode || activeAliases.contains("whatsapp"),
-                onCheckedChange = safe::setWhatsappSafeMode,
-                icon = { SlidersIcon(color = Color.White, size = 14.dp) }
-            )
-            RowDivider(colors.separator)
-            SettingsToggleRow(
-                title = "YouTube Safe Mode",
-                subtitle = if (safe.youtubeSafeMode || activeAliases.contains("youtube")) "YouTube nav hook DISABLED" else "Liquid floating nav bar active",
-                colors = colors,
-                iconTint = colors.accentRed.copy(alpha = 0.85f),
-                backdrop = backdrop,
-                checked = safe.youtubeSafeMode || activeAliases.contains("youtube"),
-                onCheckedChange = safe::setYoutubeSafeMode,
-                icon = { SlidersIcon(color = Color.White, size = 14.dp) }
-            )
+        item {
+            SectionHeader("Subsystem Bypass Toggles", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "System UI Safe Mode",
+                    subtitle = if (safe.systemUiSafeMode || activeAliases.contains("systemui")) "SystemUI hooks DISABLED" else "Lockscreen sheet, PIN keys, Control Center active",
+                    colors = colors,
+                    iconTint = colors.accentOrange.copy(alpha = 0.85f),
+                    backdrop = backdrop,
+                    checked = safe.systemUiSafeMode || activeAliases.contains("systemui"),
+                    onCheckedChange = safe::setSystemUiSafeMode,
+                    icon = { SlidersIcon(color = Color.White, size = 14.dp) }
+                )
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "HyperOS Launcher Safe Mode",
+                    subtitle = if (safe.launcherSafeMode || activeAliases.contains("home")) "Launcher hooks DISABLED" else "Unlock grid kinetics & app open/close active",
+                    colors = colors,
+                    iconTint = colors.accentOrange.copy(alpha = 0.85f),
+                    backdrop = backdrop,
+                    checked = safe.launcherSafeMode || activeAliases.contains("home"),
+                    onCheckedChange = safe::setLauncherSafeMode,
+                    icon = { SlidersIcon(color = Color.White, size = 14.dp) }
+                )
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "Instagram Safe Mode",
+                    subtitle = if (safe.instagramSafeMode || activeAliases.contains("instagram")) "Instagram nav hook DISABLED" else "Liquid floating nav bar active",
+                    colors = colors,
+                    iconTint = colors.accentBlue.copy(alpha = 0.85f),
+                    backdrop = backdrop,
+                    checked = safe.instagramSafeMode || activeAliases.contains("instagram"),
+                    onCheckedChange = safe::setInstagramSafeMode,
+                    icon = { SlidersIcon(color = Color.White, size = 14.dp) }
+                )
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "WhatsApp Safe Mode",
+                    subtitle = if (safe.whatsappSafeMode || activeAliases.contains("whatsapp")) "WhatsApp nav hook DISABLED" else "Liquid floating nav bar active",
+                    colors = colors,
+                    iconTint = colors.accentGreen.copy(alpha = 0.85f),
+                    backdrop = backdrop,
+                    checked = safe.whatsappSafeMode || activeAliases.contains("whatsapp"),
+                    onCheckedChange = safe::setWhatsappSafeMode,
+                    icon = { SlidersIcon(color = Color.White, size = 14.dp) }
+                )
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "YouTube Safe Mode",
+                    subtitle = if (safe.youtubeSafeMode || activeAliases.contains("youtube")) "YouTube nav hook DISABLED" else "Liquid floating nav bar active",
+                    colors = colors,
+                    iconTint = colors.accentRed.copy(alpha = 0.85f),
+                    backdrop = backdrop,
+                    checked = safe.youtubeSafeMode || activeAliases.contains("youtube"),
+                    onCheckedChange = safe::setYoutubeSafeMode,
+                    icon = { SlidersIcon(color = Color.White, size = 14.dp) }
+                )
+            }
         }
 
         // --- Emergency Recovery Instructions ---
-        SectionHeader("Emergency Shell Rescue", colors)
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    text = "If SystemUI or Launcher ever crashes repeatedly, you can clear safe mode or manually engage it via Termux or ADB shell:",
-                    color = colors.textSecondary,
-                    fontSize = 12.sp,
-                    lineHeight = 17.sp
-                )
-                Spacer(Modifier.height(10.dp))
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF141416))
-                        .padding(12.dp)
-                ) {
-                    Column {
-                        Text(
-                            text = "# Clear all safe modes (Restore normal operation):",
-                            color = Color(0xFF8E8E93),
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text(
-                            text = "su -c setprop persist.hyperbounce.safemode \"\"",
-                            color = Color(0xFF30D158),
-                            fontSize = 12.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = "# Emergency disable SystemUI hooks:",
-                            color = Color(0xFF8E8E93),
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text(
-                            text = "su -c setprop persist.hyperbounce.safemode \"systemui\"",
-                            color = Color(0xFFFF9F0A),
-                            fontSize = 12.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Medium
-                        )
+        item {
+            SectionHeader("Emergency Shell Rescue", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        text = "If SystemUI or Launcher ever crashes repeatedly, you can clear safe mode or manually engage it via Termux or ADB shell:",
+                        color = colors.textSecondary,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF141416))
+                            .padding(12.dp)
+                    ) {
+                        Column {
+                            Text(
+                                text = "# Clear all safe modes (Restore normal operation):",
+                                color = Color(0xFF8E8E93),
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Text(
+                                text = "su -c setprop persist.hyperbounce.safemode \"\"",
+                                color = Color(0xFF30D158),
+                                fontSize = 12.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = "# Emergency disable SystemUI hooks:",
+                                color = Color(0xFF8E8E93),
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Text(
+                                text = "su -c setprop persist.hyperbounce.safemode \"systemui\"",
+                                color = Color(0xFFFF9F0A),
+                                fontSize = 12.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
+            SectionFooter("Changes to system properties take effect on the next app or SystemUI process restart.", colors)
         }
-        SectionFooter("Changes to system properties take effect on the next app or SystemUI process restart.", colors)
     }
 }
