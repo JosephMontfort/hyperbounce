@@ -20,13 +20,6 @@ import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.util.WeakHashMap
-import kotlin.math.abs
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.hypot
-import kotlin.math.min
-import kotlin.math.sin
-import kotlin.math.tanh
 
 /**
  * Feature 2: Liquid Glass 2.0 Lockscreen PIN Pad Engine.
@@ -74,7 +67,7 @@ object KeypadPhysicsHook {
     // =========================================================================
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
-        // 1. Hook MiuiNumPadKey touch events to drive Liquid Glass 2.0 Press Optics
+        // 1. Hook MiuiNumPadKey touch events to drive Liquid Glass 2.0 Press Optics & Liquid Bulge
         try {
             val numPadKeyClass = Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)
             for (m: Method in numPadKeyClass.declaredMethods) {
@@ -94,7 +87,7 @@ object KeypadPhysicsHook {
                                 val liquidDrawable = view.background as? LiquidGlassKeyDrawable
                                 when (event.actionMasked) {
                                     MotionEvent.ACTION_DOWN -> {
-                                        liquidDrawable?.setPressedState(true)
+                                        liquidDrawable?.onTouchDown(event.x, event.y)
                                         // Dynamic smooth liquid scale on press
                                         view.animate()
                                             .scaleX(cfg.pressLiquidScale)
@@ -103,8 +96,11 @@ object KeypadPhysicsHook {
                                             .setInterpolator(DecelerateInterpolator(1.5f))
                                             .start()
                                     }
+                                    MotionEvent.ACTION_MOVE -> {
+                                        liquidDrawable?.onTouchMove(event.x, event.y)
+                                    }
                                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                                        liquidDrawable?.setPressedState(false)
+                                        liquidDrawable?.onTouchUp()
                                         // Spring back smoothly
                                         view.animate()
                                             .scaleX(1.0f)
@@ -124,7 +120,7 @@ object KeypadPhysicsHook {
             Log.e(TAG, "MiuiNumPadKey Liquid Glass touch hook error", t)
         }
 
-        // 2. Hook MiuiKeyguardPINView for Liquid Glass 2.0 Button Injection & Layout
+        // 2. Hook MiuiKeyguardPINView for Liquid Glass 2.0 Button Injection, Sizing & Layout
         try {
             val pinViewClass = Class.forName("com.android.keyguard.widget.MiuiKeyguardPINView", false, classLoader)
 
@@ -145,8 +141,19 @@ object KeypadPhysicsHook {
                         (keyView.parent as? ViewGroup)?.clipChildren = false
                         (keyView.parent?.parent as? ViewGroup)?.clipChildren = false
 
+                        // Apply custom button diameter to layout params
+                        val customDiameterPx = (cfg.circleDiameter * density).toInt()
+                        val lp = keyView.layoutParams
+                        if (lp != null && (lp.width != customDiameterPx || lp.height != customDiameterPx)) {
+                            lp.width = customDiameterPx
+                            lp.height = customDiameterPx
+                            keyView.layoutParams = lp
+                        }
+
                         // Set Liquid Glass 2.0 Circular Button Lens Background
-                        keyView.background = LiquidGlassKeyDrawable(density)
+                        if (keyView.background !is LiquidGlassKeyDrawable) {
+                            keyView.background = LiquidGlassKeyDrawable(keyView, density)
+                        }
                         keyView.elevation = 6 * density
 
                         // Letters text (Klondike)
@@ -230,7 +237,7 @@ object KeypadPhysicsHook {
             }
 
             for (m: Method in pinViewClass.declaredMethods) {
-                if (m.name == "onFinishInflate" || m.name == "updatePositionForFod" || m.name == "updateLayoutParams") {
+                if (m.name == "onFinishInflate" || m.name == "updatePositionForFod" || m.name == "updateLayoutParams" || m.name == "onAttachedToWindow") {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
