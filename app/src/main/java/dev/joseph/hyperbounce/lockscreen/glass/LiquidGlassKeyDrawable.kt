@@ -19,18 +19,20 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import androidx.annotation.RequiresApi
 import dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder
+import java.lang.reflect.Method
 import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Authentic Liquid Glass 2.0 Circular Button Lens for Lock Screen PIN Pad.
- * Implements Apple Liquid Glass 2.0 optical model with live wallpaper backdrop sampling:
- * sdCircle SDF -> Normal Field -> Real-time Inward Refraction -> Chromatic Dispersion
- * -> Adaptive Luminous Tint -> Directional Specular Reflection -> Touch Localized Liquid Bulge.
+ * 100% Real-Time Liquid Glass 2.0 Circular Lens for Lock Screen PIN Pad Keys.
+ * Captures the exact live lockscreen background hierarchy under the key on every frame:
+ * Live Backdrop Recording -> sdCircle SDF -> Numerical Normal Field -> Real-time Inward Refraction
+ * -> Physical Chromatic Dispersion -> Adaptive Luminous Tint -> Vibrancy Curve -> Specular Reflection.
  */
 class LiquidGlassKeyDrawable(
     private val view: View,
@@ -38,9 +40,33 @@ class LiquidGlassKeyDrawable(
 ) : Drawable() {
 
     companion object {
-        private const val TAG = "LiquidGlassKey"
+        private const val TAG = "HyperBounce_KeyLens"
 
-        // Cache shared wallpaper across all 10 PIN keys to avoid redundant IPC calls
+        private var setTransitionVisibilityMethod: Method? = null
+        private var methodLookedUp = false
+
+        fun setTransitionVisibilitySafe(targetView: View, visibility: Int) {
+            if (!methodLookedUp) {
+                methodLookedUp = true
+                try {
+                    setTransitionVisibilityMethod = View::class.java.getMethod(
+                        "setTransitionVisibility",
+                        Int::class.javaPrimitiveType
+                    ).apply { isAccessible = true }
+                } catch (_: Throwable) {}
+            }
+            val m = setTransitionVisibilityMethod
+            if (m != null) {
+                try {
+                    m.invoke(targetView, visibility)
+                    return
+                } catch (_: Throwable) {}
+            }
+            // Fallback: transient alpha switch without triggering layout pass
+            targetView.alpha = if (visibility == View.VISIBLE) 1f else 0f
+        }
+
+        // Shared wallpaper cache as safety fallback if backdrop capture is unavailable
         private var cachedWallpaper: Drawable? = null
         private var lastWallpaperFetchTime = 0L
 
@@ -52,7 +78,7 @@ class LiquidGlassKeyDrawable(
                     val wm = WallpaperManager.getInstance(context)
                     cachedWallpaper = wm.drawable ?: wm.peekDrawable()
                 } catch (t: Throwable) {
-                    Log.w(TAG, "Failed to fetch wallpaper for PIN pad keys", t)
+                    Log.w(TAG, "Wallpaper fetch fallback error", t)
                 }
             }
             return cachedWallpaper
@@ -84,7 +110,7 @@ class LiquidGlassKeyDrawable(
                 float2 relP = p - circleCenter;
                 float d = sdCircle(relP, radius);
 
-                // Anti-aliased feathering: 1.5px boundary
+                // 1.5px Anti-aliased feathering: completely transparent outside the circle
                 float cov = clamp(0.5 - d / 1.5, 0.0, 1.0);
                 if (cov <= 0.004) {
                     return half4(0.0);
@@ -100,11 +126,11 @@ class LiquidGlassKeyDrawable(
                 float edge = 1.0 - t;
                 float slope = edge * edge;
 
-                // Press response: refraction amplifies by 60% when pressed
+                // Press response: refraction increases by 60% when pressed
                 float refr = refractPx * (1.0 + 0.60 * press);
                 float2 offset = -n * (slope * refr);
 
-                // Localized touch liquid bulge under finger
+                // Localized touch liquid bulge directly under finger
                 if (touchAmp > 0.001) {
                     float2 tp = relP - touchPos;
                     float tr = length(tp);
@@ -133,18 +159,19 @@ class LiquidGlassKeyDrawable(
 
                 float3 col = float3(sR.r, sG.g, sB.b);
 
-                // Liquid Glass 2.0 Vibrancy Saturation Curve
+                // Liquid Glass 2.0 Non-linear Vibrancy Saturation
                 float lum = dot(col, float3(0.2126, 0.7152, 0.0722));
                 float satNow = max(col.r, max(col.g, col.b)) - min(col.r, min(col.g, col.b));
-                float room = 1.0 - smoothstep(0.2, 0.85, satNow);
+                float room = 1.0 - smoothstep(0.20, 0.85, satNow);
                 float hl = 1.0 - smoothstep(0.75, 0.98, lum);
-                float amount = 1.0 + (satFactor - 1.0) * mix(0.3, 1.0, room * hl);
+                float amount = 1.0 + (satFactor - 1.0) * mix(0.30, 1.0, room * hl);
                 col = clamp(mix(float3(lum), col, amount), float3(0.0), float3(1.0));
 
-                // Adaptive Luminous Glass Tint (Radiant white glass glow on dark lockscreen)
-                float e = smoothstep(0.30, 0.75, lum);
-                float tintAlpha = mix(0.22, 0.40, press);
-                col = mix(col, float3(1.0 - e), tintAlpha * (0.50 + 0.50 * slope));
+                // Adaptive Luminous Glass Tint (Radiant crystal glow on dark backgrounds)
+                float lumT = dot(col, float3(0.2126, 0.7152, 0.0722));
+                float e = smoothstep(0.30, 0.75, lumT);
+                float tintAlpha = mix(0.18, 0.38, press);
+                col = mix(col, float3(1.0 - e), tintAlpha * (0.60 + 0.40 * slope));
 
                 // Directional Specular Reflection
                 float facing = dot(n, -lightDir);
@@ -157,7 +184,7 @@ class LiquidGlassKeyDrawable(
                 float spec = (rim * lobe + hair * (0.28 + 0.45 * facingPos)) * specStrength * (1.0 - 0.30 * press);
                 col += float3(spec);
 
-                // Backside Inner Shadow
+                // Backside Inner Shadow for physical lens depth
                 float shadowW = clamp(bevel, 4.0, 24.0);
                 float shadowBand = pow(clamp(1.0 + d / shadowW, 0.0, 1.0), 1.5);
                 float ish = shadowBand * facingNeg * innerShadow;
@@ -165,10 +192,8 @@ class LiquidGlassKeyDrawable(
 
                 col = clamp(col, float3(0.0), float3(1.0));
 
-                // True glass transparency in flat center, solid on bevel rim
-                float edgeAlpha = clamp(mix(0.85, 1.0, slope) + spec * 0.5, 0.0, 1.0) * cov;
-
-                return half4(col * edgeAlpha, edgeAlpha);
+                // Output premultiplied RGBA with feathered boundary
+                return half4(col * cov, cov);
             }
         """
     }
@@ -179,6 +204,7 @@ class LiquidGlassKeyDrawable(
 
     private var shader: RuntimeShader? = null
     private val location = IntArray(2)
+    private val parentLocation = IntArray(2)
 
     private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
@@ -246,13 +272,12 @@ class LiquidGlassKeyDrawable(
 
         val margin = ((cfg.buttonBevel + cfg.buttonRefraction * 0.5f) * density + 16f * density).toInt().coerceAtLeast(32)
 
-        val wp = getSharedWallpaper(view.context)
-        val screenW = view.resources.displayMetrics.widthPixels
-        val screenH = view.resources.displayMetrics.heightPixels
-
         view.getLocationOnScreen(location)
-        val viewX = location[0].toFloat()
-        val viewY = location[1].toFloat()
+        val viewX = location[0]
+        val viewY = location[1]
+
+        // 100% Live Real-Time Backdrop: Find root lockscreen window / shade container
+        val backdrop = view.rootView ?: (view.parent?.parent?.parent as? View) ?: (view.parent as? View)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderNode != null && canvas.isHardwareAccelerated) {
             val sh = shader ?: try {
@@ -290,20 +315,52 @@ class LiquidGlassKeyDrawable(
                 renderNode.setPosition(-margin, -margin, (w + margin).toInt(), (h + margin).toInt())
 
                 val recordingCanvas = renderNode.beginRecording((w + 2 * margin).toInt(), (h + 2 * margin).toInt())
+                var capturedLiveBackdrop = false
+
                 try {
-                    recordingCanvas.translate(margin.toFloat() - viewX, margin.toFloat() - viewY)
-                    if (wp != null) {
-                        wp.setBounds(0, 0, screenW, screenH)
-                        wp.draw(recordingCanvas)
-                    } else {
-                        val p = Paint().apply {
-                            shader = LinearGradient(
-                                0f, 0f, 0f, screenH.toFloat(),
-                                0xFF2C2C2E.toInt(), 0xFF121214.toInt(),
-                                Shader.TileMode.CLAMP
-                            )
+                    if (backdrop != null && backdrop.width > 0 && backdrop.height > 0) {
+                        backdrop.getLocationOnScreen(parentLocation)
+                        val offsetX = (viewX - parentLocation[0]).toFloat()
+                        val offsetY = (viewY - parentLocation[1]).toFloat()
+
+                        recordingCanvas.save()
+                        recordingCanvas.translate(margin.toFloat() - offsetX, margin.toFloat() - offsetY)
+
+                        // Hide this key during backdrop capture to avoid recursive self-capture
+                        setTransitionVisibilitySafe(view, View.INVISIBLE)
+                        try {
+                            backdrop.draw(recordingCanvas)
+                            capturedLiveBackdrop = true
+                        } catch (t: Throwable) {
+                            Log.w(TAG, "Live backdrop recording failed, falling back to wallpaper", t)
+                        } finally {
+                            setTransitionVisibilitySafe(view, View.VISIBLE)
+                            recordingCanvas.restore()
                         }
-                        recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), p)
+                    }
+
+                    // Fallback to WallpaperManager if backdrop drawing failed
+                    if (!capturedLiveBackdrop) {
+                        val wp = getSharedWallpaper(view.context)
+                        val screenW = view.resources.displayMetrics.widthPixels
+                        val screenH = view.resources.displayMetrics.heightPixels
+
+                        recordingCanvas.save()
+                        recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
+                        if (wp != null) {
+                            wp.setBounds(0, 0, screenW, screenH)
+                            wp.draw(recordingCanvas)
+                        } else {
+                            val p = Paint().apply {
+                                shader = LinearGradient(
+                                    0f, 0f, 0f, screenH.toFloat(),
+                                    0xFF2C2C2E.toInt(), 0xFF121214.toInt(),
+                                    Shader.TileMode.CLAMP
+                                )
+                            }
+                            recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), p)
+                        }
+                        recordingCanvas.restore()
                     }
                 } finally {
                     renderNode.endRecording()
