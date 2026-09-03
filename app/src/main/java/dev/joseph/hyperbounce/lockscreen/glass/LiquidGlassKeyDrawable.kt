@@ -9,7 +9,6 @@ import android.graphics.ColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.PixelFormat
-import android.graphics.Rect
 import android.graphics.RenderEffect
 import android.graphics.RenderNode
 import android.graphics.RuntimeShader
@@ -19,15 +18,15 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
-import androidx.annotation.RequiresApi
 import dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder
 import kotlin.math.min
 
 /**
  * Authentic Liquid Glass 2.0 Circular Lens for Lock Screen PIN Pad Keys.
- * Samples live lockscreen wallpaper with real-time motion coordinate tracking:
+ * Captures 100% real-time backdrop directly beneath each button (live lockscreen blur, animations, and wallpaper):
  * sdCircle SDF -> Numerical Normal Field -> Real-time Inward Refraction
  * -> Physical Chromatic Dispersion -> Adaptive Luminous Tint -> Vibrancy Curve -> Specular Reflection.
  */
@@ -38,6 +37,30 @@ class LiquidGlassKeyDrawable(
 
     companion object {
         private const val TAG = "HyperBounce_KeyLens"
+
+        @Volatile
+        var isCapturingBackdrop: Boolean = false
+
+        private val setTransitionVisibilityMethod by lazy {
+            try {
+                val method = View::class.java.getDeclaredMethod("setTransitionVisibility", Int::class.javaPrimitiveType)
+                method.isAccessible = true
+                method
+            } catch (_: Throwable) {
+                null
+            }
+        }
+
+        fun setTransitionVisibilitySafe(v: View?, visibility: Int) {
+            if (v == null) return
+            try {
+                setTransitionVisibilityMethod?.invoke(v, visibility)
+            } catch (_: Throwable) {
+                try {
+                    v.visibility = visibility
+                } catch (_: Throwable) {}
+            }
+        }
 
         private var cachedWallpaper: Drawable? = null
         private var lastWallpaperFetchTime = 0L
@@ -168,6 +191,7 @@ class LiquidGlassKeyDrawable(
 
     private var shader: RuntimeShader? = null
     private val location = IntArray(2)
+    private val parentLocation = IntArray(2)
 
     private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
@@ -222,6 +246,8 @@ class LiquidGlassKeyDrawable(
     }
 
     override fun draw(canvas: Canvas) {
+        if (isCapturingBackdrop) return
+
         val bounds = bounds
         val w = bounds.width().toFloat()
         val h = bounds.height().toFloat()
@@ -274,12 +300,41 @@ class LiquidGlassKeyDrawable(
                 renderNode.setRenderEffect(effect)
                 renderNode.setPosition(-margin, -margin, (w + margin).toInt(), (h + margin).toInt())
 
-                val wp = getSharedWallpaper(view.context)
-                val screenW = view.resources.displayMetrics.widthPixels
-                val screenH = view.resources.displayMetrics.heightPixels
-
                 val recordingCanvas = renderNode.beginRecording((w + 2 * margin).toInt(), (h + 2 * margin).toInt())
-                try {
+
+                var capturedLive = false
+                val pinContainer = (view.parent as? ViewGroup)
+                val backdropSource = (pinContainer?.parent as? View) ?: pinContainer?.rootView
+
+                if (backdropSource != null && backdropSource.width > 0 && backdropSource.height > 0) {
+                    backdropSource.getLocationOnScreen(parentLocation)
+                    val offsetX = (viewX - parentLocation[0]).toFloat()
+                    val offsetY = (viewY - parentLocation[1]).toFloat()
+
+                    recordingCanvas.save()
+                    recordingCanvas.translate(margin.toFloat() - offsetX, margin.toFloat() - offsetY)
+
+                    isCapturingBackdrop = true
+                    // Temporarily hide the PIN container layout so no PIN buttons are drawn into the lens backdrop
+                    setTransitionVisibilitySafe(pinContainer, View.INVISIBLE)
+                    try {
+                        backdropSource.draw(recordingCanvas)
+                        capturedLive = true
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "Live backdrop draw failed, falling back to wallpaper", t)
+                    } finally {
+                        setTransitionVisibilitySafe(pinContainer, View.VISIBLE)
+                        isCapturingBackdrop = false
+                        recordingCanvas.restore()
+                    }
+                }
+
+                if (!capturedLive) {
+                    val wp = getSharedWallpaper(view.context)
+                    val screenW = view.resources.displayMetrics.widthPixels
+                    val screenH = view.resources.displayMetrics.heightPixels
+
+                    recordingCanvas.save()
                     recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
                     if (wp != null) {
                         wp.setBounds(0, 0, screenW, screenH)
@@ -294,9 +349,10 @@ class LiquidGlassKeyDrawable(
                         }
                         recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), p)
                     }
-                } finally {
-                    renderNode.endRecording()
+                    recordingCanvas.restore()
                 }
+
+                renderNode.endRecording()
 
                 canvas.save()
                 canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
