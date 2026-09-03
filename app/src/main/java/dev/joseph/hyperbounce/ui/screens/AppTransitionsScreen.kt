@@ -11,8 +11,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.joseph.hyperbounce.ui.components.AppGridIcon
+import dev.joseph.hyperbounce.ui.components.AppsIcon
 import dev.joseph.hyperbounce.ui.components.DropdownPicker
 import dev.joseph.hyperbounce.ui.components.GlassCard
+import dev.joseph.hyperbounce.ui.components.PowerIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
@@ -103,30 +106,36 @@ fun AppTransitionsScreen(
                     title = "Parallel Multi-App Opening",
                     subtitle = "Click consecutive apps without home gesture; previous card collapses in-flight",
                     colors = colors,
+                    iconTint = colors.accentBlue,
                     backdrop = backdrop,
                     checked = trans.parallelAnimEnabled,
                     onCheckedChange = trans::setParallelAnimEnabled,
-                    enabled = trans.enabled
+                    enabled = trans.enabled,
+                    icon = { AppsIcon(color = Color.White, size = 16.dp) }
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "OriginOS 120ms Alpha Delay",
                     subtitle = "Hold 100% solid opacity for 120ms during close so squircle card shrinks cleanly",
                     colors = colors,
+                    iconTint = colors.accentOrange,
                     backdrop = backdrop,
                     checked = trans.delayedAlphaClose,
                     onCheckedChange = trans::setDelayedAlphaClose,
-                    enabled = trans.enabled
+                    enabled = trans.enabled,
+                    icon = { AppGridIcon(color = Color.White, size = 16.dp) }
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "Unlock High-End FastLaunch",
                     subtitle = "Bypasses MIUI lite/low-tier device throttles and enables hardware FastLaunchWindowElement",
                     colors = colors,
+                    iconTint = colors.accentPurple,
                     backdrop = backdrop,
                     checked = trans.unlockHighEndCapabilities,
                     onCheckedChange = trans::setUnlockHighEndCapabilities,
-                    enabled = trans.enabled
+                    enabled = trans.enabled,
+                    icon = { PowerIcon(color = Color.White, size = 16.dp) }
                 )
             }
         }
