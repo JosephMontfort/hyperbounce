@@ -152,13 +152,35 @@ object KeypadPhysicsHook {
                             }
                         }
 
-                        // 3. Clear delete / cancel buttons
-                        val delId = ctx.resources.getIdentifier("delete_button", "id", "com.android.systemui")
-                        if (delId != 0) pinView.findViewById<View>(delId)?.background = null
-                        val cancelId = ctx.resources.getIdentifier("cancel_button", "id", "com.android.systemui")
-                        if (cancelId != 0) pinView.findViewById<View>(cancelId)?.background = null
-                        val emerId = ctx.resources.getIdentifier("emergency_call_button", "id", "com.android.systemui")
-                        if (emerId != 0) pinView.findViewById<View>(emerId)?.background = null
+                        // 3. Cleanly style Action Buttons (delete, cancel, emergency) without breaking LinearLayout weights
+                        val styleActionButton: (View?) -> Unit = { btn ->
+                            if (btn != null) {
+                                try {
+                                    btn.background = null
+                                    if (btn is TextView) {
+                                        btn.setTextColor(0xEEFFFFFF.toInt())
+                                        btn.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+                                        btn.gravity = Gravity.CENTER
+                                        btn.setShadowLayer(0f, 0f, 0f, 0)
+                                    }
+                                } catch (_: Throwable) {}
+                            }
+                        }
+
+                        val delContainerId = ctx.resources.getIdentifier("delete_container", "id", "com.android.systemui")
+                        if (delContainerId != 0) pinView.findViewById<View>(delContainerId)?.background = null
+
+                        val actionButtonNames = arrayOf(
+                            "delete_button", "zero_delete_button",
+                            "cancel_button", "zero_cancel_button",
+                            "emergency_call_button"
+                        )
+                        for (name in actionButtonNames) {
+                            val id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
+                            if (id != 0) {
+                                styleActionButton(pinView.findViewById(id))
+                            }
+                        }
                     } catch (_: Throwable) {}
                 }
             }
@@ -173,6 +195,24 @@ object KeypadPhysicsHook {
                                 applyPinLayoutAndStyles(pinView)
                             } catch (_: Throwable) {}
                             return result
+                        }
+                    })
+                } else if (m.name == "onDetachedFromWindow") {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            try {
+                                val pinView = chain.thisObject as? View
+                                if (pinView != null) {
+                                    val ctx = pinView.context
+                                    for (name in arrayOf("key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8", "key9", "key0")) {
+                                        val id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
+                                        if (id != 0) {
+                                            (pinView.findViewById<View>(id)?.background as? LiquidGlassKeyDrawable)?.release()
+                                        }
+                                    }
+                                }
+                            } catch (_: Throwable) {}
+                            return chain.proceed()
                         }
                     })
                 }

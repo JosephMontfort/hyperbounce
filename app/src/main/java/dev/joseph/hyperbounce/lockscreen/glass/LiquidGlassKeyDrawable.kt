@@ -42,27 +42,6 @@ class LiquidGlassKeyDrawable(
         @Volatile
         var isCapturingBackdrop: Boolean = false
 
-        private val setTransitionVisibilityMethod by lazy {
-            try {
-                val method = View::class.java.getDeclaredMethod("setTransitionVisibility", Int::class.javaPrimitiveType)
-                method.isAccessible = true
-                method
-            } catch (_: Throwable) {
-                null
-            }
-        }
-
-        fun setTransitionVisibilitySafe(v: View?, visibility: Int) {
-            if (v == null) return
-            try {
-                setTransitionVisibilityMethod?.invoke(v, visibility)
-            } catch (_: Throwable) {
-                try {
-                    v.visibility = visibility
-                } catch (_: Throwable) {}
-            }
-        }
-
         private var cachedWallpaper: Drawable? = null
         private var lastWallpaperFetchTime = 0L
 
@@ -205,6 +184,7 @@ class LiquidGlassKeyDrawable(
         style = Paint.Style.STROKE
         color = 0x66FFFFFF
     }
+    private val fallbackWallpaperPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     var pressProgress: Float = 0f
         private set
@@ -246,6 +226,72 @@ class LiquidGlassKeyDrawable(
                 invalidateSelf()
             }
             start()
+        }
+    }
+
+    /**
+     * Absolute protection against HWUI RenderThread cyclic display-list aborts:
+     * Never draw a view if it is an ancestor of the target button or the target button itself.
+     */
+    private fun isAncestorOrSelf(candidate: View?, target: View): Boolean {
+        if (candidate == null) return false
+        if (candidate === target) return true
+        var p = target.parent
+        while (p != null) {
+            if (p === candidate) return true
+            p = p.parent
+        }
+        return false
+    }
+
+    /**
+     * Safely draws a sibling view into the recording canvas only if it is NOT an ancestor,
+     * is currently visible, and intersects the button's capture bounding box.
+     */
+    private fun drawSiblingLayerSafe(
+        recordingCanvas: Canvas,
+        sibling: View?,
+        targetKeyView: View,
+        viewX: Int,
+        viewY: Int,
+        margin: Int,
+        keyW: Float,
+        keyH: Float
+    ) {
+        if (sibling == null) return
+        if (sibling.visibility != View.VISIBLE) return
+        if (sibling.alpha <= 0.01f) return
+        if (sibling.width <= 0 || sibling.height <= 0) return
+        if (isAncestorOrSelf(sibling, targetKeyView)) return
+
+        try {
+            sibling.getLocationOnScreen(parentLocation)
+            val sibX = parentLocation[0]
+            val sibY = parentLocation[1]
+
+            val sLeft = sibX
+            val sTop = sibY
+            val sRight = sibX + sibling.width
+            val sBottom = sibY + sibling.height
+
+            val capLeft = viewX - margin
+            val capTop = viewY - margin
+            val capRight = viewX + keyW.toInt() + margin
+            val capBottom = viewY + keyH.toInt() + margin
+
+            // Quick AABB rejection: if sibling doesn't overlap the button's lens capture box, skip
+            if (sRight <= capLeft || sLeft >= capRight || sBottom <= capTop || sTop >= capBottom) {
+                return
+            }
+
+            recordingCanvas.save()
+            val dx = margin.toFloat() - (viewX - sibX).toFloat()
+            val dy = margin.toFloat() - (viewY - sibY).toFloat()
+            recordingCanvas.translate(dx, dy)
+            sibling.draw(recordingCanvas)
+            recordingCanvas.restore()
+        } catch (t: Throwable) {
+            Log.w(TAG, "Safe sibling draw skipped for ${sibling.javaClass.simpleName}", t)
         }
     }
 
@@ -305,72 +351,68 @@ class LiquidGlassKeyDrawable(
                 renderNode.setPosition(-margin, -margin, (w + margin).toInt(), (h + margin).toInt())
 
                 val recordingCanvas = renderNode.beginRecording((w + 2 * margin).toInt(), (h + 2 * margin).toInt())
+                isCapturingBackdrop = true
 
-                var capturedLive = false
-
-                // Find top PIN view to hide during background recording so all PIN buttons are omitted from the backdrop
-                var topPinView: View? = null
-                var curr: ViewParent? = view.parent
-                while (curr is View) {
-                    val name = curr.javaClass.name
-                    if (name.contains("KeyguardPINView") || name.contains("KeyguardSecurityContainer")) {
-                        topPinView = curr
-                    }
-                    if (curr.id == android.R.id.content || name.contains("NotificationShadeWindowView")) {
-                        break
-                    }
-                    curr = curr.parent
-                }
-
-                val hideTarget = topPinView ?: (view.parent?.parent as? View) ?: (view.parent as? View)
-                val backdropSource = view.rootView ?: (hideTarget?.parent as? View)
-
-                if (backdropSource != null && backdropSource.width > 0 && backdropSource.height > 0) {
-                    backdropSource.getLocationOnScreen(parentLocation)
-                    val offsetX = (viewX - parentLocation[0]).toFloat()
-                    val offsetY = (viewY - parentLocation[1]).toFloat()
-
-                    recordingCanvas.save()
-                    recordingCanvas.translate(margin.toFloat() - offsetX, margin.toFloat() - offsetY)
-
-                    isCapturingBackdrop = true
-                    setTransitionVisibilitySafe(hideTarget, View.INVISIBLE)
-                    try {
-                        backdropSource.draw(recordingCanvas)
-                        capturedLive = true
-                    } catch (t: Throwable) {
-                        Log.w(TAG, "Live backdrop draw failed, falling back to wallpaper", t)
-                    } finally {
-                        setTransitionVisibilitySafe(hideTarget, View.VISIBLE)
-                        isCapturingBackdrop = false
-                        recordingCanvas.restore()
-                    }
-                }
-
-                if (!capturedLive) {
-                    val wp = getSharedWallpaper(view.context)
+                try {
                     val screenW = view.resources.displayMetrics.widthPixels
                     val screenH = view.resources.displayMetrics.heightPixels
 
+                    // 1. Base Layer: 100% Real-Time Lockscreen Live Wallpaper
+                    val wp = getSharedWallpaper(view.context)
                     recordingCanvas.save()
                     recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
                     if (wp != null) {
                         wp.setBounds(0, 0, screenW, screenH)
                         wp.draw(recordingCanvas)
                     } else {
-                        val p = Paint().apply {
-                            shader = LinearGradient(
-                                0f, 0f, 0f, screenH.toFloat(),
-                                0xFF2C2C2E.toInt(), 0xFF121214.toInt(),
-                                Shader.TileMode.CLAMP
-                            )
-                        }
-                        recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), p)
+                        fallbackWallpaperPaint.shader = LinearGradient(
+                            0f, 0f, 0f, screenH.toFloat(),
+                            0xFF2C2C2E.toInt(), 0xFF121214.toInt(),
+                            Shader.TileMode.CLAMP
+                        )
+                        recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), fallbackWallpaperPaint)
                     }
                     recordingCanvas.restore()
-                }
 
-                renderNode.endRecording()
+                    // 2. Underlying Sibling Layers: Live Clock, Notifications, Sheet Card, & Bouncer Blur
+                    val root = view.rootView
+                    if (root != null) {
+                        // A. Injected LockScreen Liquid Glass Sheet (Feature 1)
+                        val sheetView = root.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
+                        drawSiblingLayerSafe(recordingCanvas, sheetView, view, viewX, viewY, margin, w, h)
+
+                        // B. Lockscreen Clock Panel (KeyguardPanelView)
+                        val panelId = view.resources.getIdentifier("keyguard_panel_view", "id", "com.android.systemui")
+                        if (panelId != 0) {
+                            val panelView = root.findViewById<View>(panelId)
+                            drawSiblingLayerSafe(recordingCanvas, panelView, view, viewX, viewY, margin, w, h)
+                        }
+
+                        // C. Lockscreen Clock Container (KeyguardClockContainer)
+                        val clockId = view.resources.getIdentifier("miui_keyguard_clock_container", "id", "com.android.systemui")
+                        if (clockId != 0) {
+                            val clockView = root.findViewById<View>(clockId)
+                            drawSiblingLayerSafe(recordingCanvas, clockView, view, viewX, viewY, margin, w, h)
+                        }
+
+                        // D. Lockscreen Notifications (NotificationStackScrollLayout)
+                        val notifId = view.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
+                        if (notifId != 0) {
+                            val notifView = root.findViewById<View>(notifId)
+                            drawSiblingLayerSafe(recordingCanvas, notifView, view, viewX, viewY, margin, w, h)
+                        }
+
+                        // E. Live Bouncer Wallpaper Blur (keyguard_bouncer_bg in KeyguardSecurityContainer)
+                        val bouncerBgId = view.resources.getIdentifier("keyguard_bouncer_bg", "id", "com.android.systemui")
+                        if (bouncerBgId != 0) {
+                            val bouncerBgView = root.findViewById<View>(bouncerBgId)
+                            drawSiblingLayerSafe(recordingCanvas, bouncerBgView, view, viewX, viewY, margin, w, h)
+                        }
+                    }
+                } finally {
+                    isCapturingBackdrop = false
+                    renderNode.endRecording()
+                }
 
                 canvas.save()
                 canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
@@ -386,6 +428,13 @@ class LiquidGlassKeyDrawable(
         canvas.drawCircle(cx, cy, radius, fallbackPaint)
         fallbackStrokePaint.strokeWidth = 1.5f * density
         canvas.drawCircle(cx, cy, radius, fallbackStrokePaint)
+    }
+
+    fun release() {
+        pressAnimator?.cancel()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            renderNode?.discardDisplayList()
+        }
     }
 
     override fun setAlpha(alpha: Int) {
