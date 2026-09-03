@@ -254,20 +254,7 @@ class LiquidGlassKeyDrawable(
      * MiuiWallpaperManager lockscreen preview, and Android WallpaperManager.
      */
     private fun getLiveBackdropDrawable(context: Context, root: View?): Drawable? {
-        // 1. Direct HyperOS live bouncer wallpaper blur from MiuiKeyguardWallPaperManager
-        try {
-            val ifaceClass = Class.forName("com.miui.systemui.interfacesmanager.InterfacesImplManager", false, context.classLoader)
-            val mgrClass = Class.forName("com.android.keyguard.wallpaper.MiuiKeyguardWallPaperManager", false, context.classLoader)
-            val getImplMethod = ifaceClass.getMethod("getImpl", Class::class.java)
-            val mgr = getImplMethod.invoke(null, mgrClass)
-            if (mgr != null) {
-                val field = mgrClass.getField("mKeyguardWallpaperBlurPreview")
-                val d = field.get(mgr) as? Drawable
-                if (d != null) return d
-            }
-        } catch (_: Throwable) {}
-
-        // 2. Direct keyguard_bouncer_bg ImageView in root view tree
+        // 1. Direct keyguard_bouncer_bg ImageView in root view tree if active
         if (root != null) {
             try {
                 val bouncerBgId = context.resources.getIdentifier("keyguard_bouncer_bg", "id", "com.android.systemui")
@@ -279,21 +266,8 @@ class LiquidGlassKeyDrawable(
             } catch (_: Throwable) {}
         }
 
-        // 3. MiuiWallpaperManager fit screen lockscreen wallpaper preview
-        try {
-            val ifaceClass = Class.forName("com.miui.systemui.interfacesmanager.InterfacesImplManager", false, context.classLoader)
-            val miuiWpClass = Class.forName("com.miui.miwallpaper.MiuiWallpaperManager", false, context.classLoader)
-            val getImplMethod = ifaceClass.getMethod("getImpl", Class::class.java)
-            val miuiWp = getImplMethod.invoke(null, miuiWpClass)
-            if (miuiWp != null) {
-                val method = miuiWpClass.getMethod("getFitScreenWallpaperPreview", Int::class.javaPrimitiveType, Context::class.java)
-                val bmp = method.invoke(miuiWp, 2, context) as? Bitmap
-                if (bmp != null) return BitmapDrawable(context.resources, bmp)
-            }
-        } catch (_: Throwable) {}
-
-        // 4. Android WallpaperManager (static lock/system wallpaper)
-        return getSharedWallpaper(context)
+        // 2. Real-time HyperOS lockscreen wallpaper with all active lockscreen effects applied
+        return LockScreenWallpaperHelper.getLiveLockWallpaper(context)
     }
 
     /**

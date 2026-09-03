@@ -57,38 +57,52 @@ class GlassLensRenderer {
                     return half4(0.0);
                 }
 
-                float2 n = float2(
-                    sd3SidedSheet(p + float2(1.0, 0.0), viewSize, cornerRadius) - sd3SidedSheet(p - float2(1.0, 0.0), viewSize, cornerRadius),
-                    sd3SidedSheet(p + float2(0.0, 1.0), viewSize, cornerRadius) - sd3SidedSheet(p - float2(0.0, 1.0), viewSize, cornerRadius)
-                );
-                float nLen = length(n);
-                if (nLen > 0.0001) {
-                    n = n / nLen;
-                } else {
+                // Independent per-edge bevel slopes with elliptical continuous corner blending (zero crease, zero overlap)
+                float wL = max(edgeBevels.x, 0.5);
+                float wR = max(edgeBevels.y, 0.5);
+                float wB = max(edgeBevels.z, 0.5);
+
+                float slope = 0.0;
+                float2 n = float2(0.0, 1.0);
+
+                bool inLeft = (p.x < wL) && (edgeBevels.x > 0.5);
+                bool inRight = (p.x > (viewSize.x - wR)) && (edgeBevels.y > 0.5);
+                bool inBottom = (p.y > (viewSize.y - wB)) && (edgeBevels.z > 0.5);
+
+                if (inLeft && inBottom) {
+                    // Bottom-Left Corner: Elliptical Continuous Blend (zero crease, zero overlap)
+                    float u = 1.0 - p.x / wL;
+                    float v = 1.0 - (viewSize.y - p.y) / wB;
+                    float dist = sqrt(u * u + v * v);
+                    slope = pow(clamp(dist, 0.0, 1.0), 2.0);
+                    float2 cornerN = float2(-u / wL, v / wB);
+                    float lenN = length(cornerN);
+                    n = lenN > 0.0001 ? cornerN / lenN : float2(-0.7071, 0.7071);
+                } else if (inRight && inBottom) {
+                    // Bottom-Right Corner: Elliptical Continuous Blend (zero crease, zero overlap)
+                    float u = 1.0 - (viewSize.x - p.x) / wR;
+                    float v = 1.0 - (viewSize.y - p.y) / wB;
+                    float dist = sqrt(u * u + v * v);
+                    slope = pow(clamp(dist, 0.0, 1.0), 2.0);
+                    float2 cornerN = float2(u / wR, v / wB);
+                    float lenN = length(cornerN);
+                    n = lenN > 0.0001 ? cornerN / lenN : float2(0.7071, 0.7071);
+                } else if (inLeft) {
+                    // Straight Left Edge
+                    float u = 1.0 - p.x / wL;
+                    slope = pow(clamp(u, 0.0, 1.0), 2.0);
+                    n = float2(-1.0, 0.0);
+                } else if (inRight) {
+                    // Straight Right Edge
+                    float u = 1.0 - (viewSize.x - p.x) / wR;
+                    slope = pow(clamp(u, 0.0, 1.0), 2.0);
+                    n = float2(1.0, 0.0);
+                } else if (inBottom) {
+                    // Straight Bottom Edge
+                    float v = 1.0 - (viewSize.y - p.y) / wB;
+                    slope = pow(clamp(v, 0.0, 1.0), 2.0);
                     n = float2(0.0, 1.0);
                 }
-
-                // Independent per-edge bevel slopes
-                float slopeLeft = edgeBevels.x > 0.5 ? pow(clamp(1.0 - p.x / edgeBevels.x, 0.0, 1.0), 2.0) : 0.0;
-                float slopeRight = edgeBevels.y > 0.5 ? pow(clamp(1.0 - (viewSize.x - p.x) / edgeBevels.y, 0.0, 1.0), 2.0) : 0.0;
-                float slopeBottom = edgeBevels.z > 0.5 ? pow(clamp(1.0 - (viewSize.y - p.y) / edgeBevels.z, 0.0, 1.0), 2.0) : 0.0;
-
-                float slopeCorner = 0.0;
-                if (p.x < cornerRadius && p.y > (viewSize.y - cornerRadius)) {
-                    float cd = length(p - float2(cornerRadius, viewSize.y - cornerRadius)) - cornerRadius;
-                    float cornerBevel = max(edgeBevels.x, edgeBevels.z);
-                    if (cornerBevel > 0.5) {
-                        slopeCorner = pow(clamp(-cd / cornerBevel, 0.0, 1.0), 2.0);
-                    }
-                } else if (p.x > (viewSize.x - cornerRadius) && p.y > (viewSize.y - cornerRadius)) {
-                    float cd = length(p - float2(viewSize.x - cornerRadius, viewSize.y - cornerRadius)) - cornerRadius;
-                    float cornerBevel = max(edgeBevels.y, edgeBevels.z);
-                    if (cornerBevel > 0.5) {
-                        slopeCorner = pow(clamp(-cd / cornerBevel, 0.0, 1.0), 2.0);
-                    }
-                }
-
-                float slope = max(max(max(slopeLeft, slopeRight), slopeBottom), slopeCorner);
 
                 // Specular highlight
                 float facing = dot(n, -lightDir);

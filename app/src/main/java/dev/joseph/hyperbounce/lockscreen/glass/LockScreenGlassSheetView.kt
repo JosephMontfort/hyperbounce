@@ -28,29 +28,12 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
             GlassLensRenderer()
         } else null
 
-    private var wallpaperDrawable: Drawable? = null
-    private var lastWallpaperFetchTime = 0L
-
     private val fallbackBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0x80FFFFFF.toInt()
         style = Paint.Style.STROKE
     }
     private val boundsRect = RectF()
     private val location = IntArray(2)
-
-    private fun getWallpaper(): Drawable? {
-        val now = SystemClock.uptimeMillis()
-        if (wallpaperDrawable == null || now - lastWallpaperFetchTime > 4000L) {
-            lastWallpaperFetchTime = now
-            try {
-                val wm = WallpaperManager.getInstance(context)
-                wallpaperDrawable = wm.drawable ?: wm.peekDrawable()
-            } catch (t: Throwable) {
-                Log.w("HyperBounce_LockSheet", "Failed to retrieve lockscreen wallpaper", t)
-            }
-        }
-        return wallpaperDrawable
-    }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val parent = parent as? View
@@ -79,7 +62,7 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
         val cornerRadius = cfg.cornerRadius * density
         val margin = ((maxBevel + refractAmount * 0.4f) + 16f * density).toInt().coerceAtLeast(32)
 
-        val wp = getWallpaper()
+        val wp = LockScreenWallpaperHelper.getLiveLockWallpaper(context)
         val screenW = resources.displayMetrics.widthPixels
         val screenH = resources.displayMetrics.heightPixels
 
@@ -137,6 +120,5 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             renderer?.release()
         }
-        wallpaperDrawable = null
     }
 }
