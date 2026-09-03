@@ -3,6 +3,7 @@ package dev.joseph.hyperbounce.lockscreen.glass
 import android.animation.ValueAnimator
 import android.app.WallpaperManager
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
@@ -13,6 +14,7 @@ import android.graphics.RenderEffect
 import android.graphics.RenderNode
 import android.graphics.RuntimeShader
 import android.graphics.Shader
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.SystemClock
@@ -21,6 +23,7 @@ import android.view.View
 import android.view.ViewParent
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
+import android.widget.ImageView
 import dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder
 import kotlin.math.max
 import kotlin.math.min
@@ -245,6 +248,54 @@ class LiquidGlassKeyDrawable(
     }
 
     /**
+     * Obtains the 100% real-time underlying lockscreen wallpaper/blur drawable.
+     * Tries HyperOS MiuiKeyguardWallPaperManager blur preview, keyguard_bouncer_bg,
+     * MiuiWallpaperManager lockscreen preview, and Android WallpaperManager.
+     */
+    private fun getLiveBackdropDrawable(context: Context, root: View?): Drawable? {
+        // 1. Direct HyperOS live bouncer wallpaper blur from MiuiKeyguardWallPaperManager
+        try {
+            val ifaceClass = Class.forName("com.miui.systemui.interfacesmanager.InterfacesImplManager", false, context.classLoader)
+            val mgrClass = Class.forName("com.android.keyguard.wallpaper.MiuiKeyguardWallPaperManager", false, context.classLoader)
+            val getImplMethod = ifaceClass.getMethod("getImpl", Class::class.java)
+            val mgr = getImplMethod.invoke(null, mgrClass)
+            if (mgr != null) {
+                val field = mgrClass.getField("mKeyguardWallpaperBlurPreview")
+                val d = field.get(mgr) as? Drawable
+                if (d != null) return d
+            }
+        } catch (_: Throwable) {}
+
+        // 2. Direct keyguard_bouncer_bg ImageView in root view tree
+        if (root != null) {
+            try {
+                val bouncerBgId = context.resources.getIdentifier("keyguard_bouncer_bg", "id", "com.android.systemui")
+                if (bouncerBgId != 0) {
+                    val iv = root.findViewById<View>(bouncerBgId) as? ImageView
+                    val d = iv?.drawable
+                    if (d != null) return d
+                }
+            } catch (_: Throwable) {}
+        }
+
+        // 3. MiuiWallpaperManager fit screen lockscreen wallpaper preview
+        try {
+            val ifaceClass = Class.forName("com.miui.systemui.interfacesmanager.InterfacesImplManager", false, context.classLoader)
+            val miuiWpClass = Class.forName("com.miui.miwallpaper.MiuiWallpaperManager", false, context.classLoader)
+            val getImplMethod = ifaceClass.getMethod("getImpl", Class::class.java)
+            val miuiWp = getImplMethod.invoke(null, miuiWpClass)
+            if (miuiWp != null) {
+                val method = miuiWpClass.getMethod("getFitScreenWallpaperPreview", Int::class.javaPrimitiveType, Context::class.java)
+                val bmp = method.invoke(miuiWp, 2, context) as? Bitmap
+                if (bmp != null) return BitmapDrawable(context.resources, bmp)
+            }
+        } catch (_: Throwable) {}
+
+        // 4. Android WallpaperManager (static lock/system wallpaper)
+        return getSharedWallpaper(context)
+    }
+
+    /**
      * Safely draws a sibling view into the recording canvas only if it is NOT an ancestor,
      * is currently visible, and intersects the button's capture bounding box.
      */
@@ -260,9 +311,15 @@ class LiquidGlassKeyDrawable(
     ) {
         if (sibling == null) return
         if (sibling.visibility != View.VISIBLE) return
-        if (sibling.alpha <= 0.01f) return
         if (sibling.width <= 0 || sibling.height <= 0) return
         if (isAncestorOrSelf(sibling, targetKeyView)) return
+
+        val alpha = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            max(sibling.alpha, sibling.transitionAlpha)
+        } else {
+            sibling.alpha
+        }
+        if (alpha <= 0.01f) return
 
         try {
             sibling.getLocationOnScreen(parentLocation)
@@ -337,7 +394,7 @@ class LiquidGlassKeyDrawable(
                 sh.setFloatUniform("satFactor", cfg.buttonSaturation / 100f)
                 sh.setFloatUniform("press", pressProgress)
                 sh.setFloatUniform("touchPos", touchLocalX - cx, touchLocalY - cy)
-                sh.setFloatUniform("touchAmp", if (pressProgress > 0.01f) pressProgress else 0f)
+                sh.setFloatUniform("touchAmp", if (pressProgress > 0.01f) pressProgress * cfg.pressLiquidAmp else 0f)
 
                 val lensEffect = RenderEffect.createRuntimeShaderEffect(sh, "content")
                 val effect = if (cfg.buttonBlur > 0.01f) {
@@ -357,13 +414,13 @@ class LiquidGlassKeyDrawable(
                     val screenW = view.resources.displayMetrics.widthPixels
                     val screenH = view.resources.displayMetrics.heightPixels
 
-                    // 1. Base Layer: 100% Real-Time Lockscreen Live Wallpaper
-                    val wp = getSharedWallpaper(view.context)
+                    // 1. Base Layer: 100% Real-Time Lockscreen Live Wallpaper / Bouncer Blur
+                    val bgDrawable = getLiveBackdropDrawable(view.context, view.rootView)
                     recordingCanvas.save()
                     recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
-                    if (wp != null) {
-                        wp.setBounds(0, 0, screenW, screenH)
-                        wp.draw(recordingCanvas)
+                    if (bgDrawable != null) {
+                        bgDrawable.setBounds(0, 0, screenW, screenH)
+                        bgDrawable.draw(recordingCanvas)
                     } else {
                         fallbackWallpaperPaint.shader = LinearGradient(
                             0f, 0f, 0f, screenH.toFloat(),
@@ -374,7 +431,7 @@ class LiquidGlassKeyDrawable(
                     }
                     recordingCanvas.restore()
 
-                    // 2. Underlying Sibling Layers: Live Clock, Notifications, Sheet Card, & Bouncer Blur
+                    // 2. Underlying Sibling Layers: Live Clock, Notifications, Sheet Card
                     val root = view.rootView
                     if (root != null) {
                         // A. Injected LockScreen Liquid Glass Sheet (Feature 1)
@@ -400,13 +457,6 @@ class LiquidGlassKeyDrawable(
                         if (notifId != 0) {
                             val notifView = root.findViewById<View>(notifId)
                             drawSiblingLayerSafe(recordingCanvas, notifView, view, viewX, viewY, margin, w, h)
-                        }
-
-                        // E. Live Bouncer Wallpaper Blur (keyguard_bouncer_bg in KeyguardSecurityContainer)
-                        val bouncerBgId = view.resources.getIdentifier("keyguard_bouncer_bg", "id", "com.android.systemui")
-                        if (bouncerBgId != 0) {
-                            val bouncerBgView = root.findViewById<View>(bouncerBgId)
-                            drawSiblingLayerSafe(recordingCanvas, bouncerBgView, view, viewX, viewY, margin, w, h)
                         }
                     }
                 } finally {

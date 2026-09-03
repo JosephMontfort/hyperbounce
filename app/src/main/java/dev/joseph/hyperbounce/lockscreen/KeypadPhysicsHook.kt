@@ -1,12 +1,18 @@
 package dev.joseph.hyperbounce.lockscreen
 
 import android.graphics.Typeface
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.util.Pair
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import android.widget.TextView
 import dev.joseph.hyperbounce.lockscreen.glass.LiquidGlassKeyDrawable
 import io.github.libxposed.api.XposedInterface
@@ -16,7 +22,8 @@ import java.lang.reflect.Method
 
 /**
  * Feature 2: 100% Real-Time Liquid Glass 2.0 Lockscreen PIN Pad Engine.
- * Replaces legacy jelly physics with true Liquid Glass 2.0 circular lens buttons.
+ * Features Apple-grade Liquid Glass circular lens optics, custom cascade entry animations,
+ * and dynamic layout spacing hacks responsive to companion app sliders.
  */
 object KeypadPhysicsHook {
 
@@ -42,9 +49,27 @@ object KeypadPhysicsHook {
                             if (view != null && event != null && cfg.enabled) {
                                 val liquidDrawable = view.background as? LiquidGlassKeyDrawable
                                 when (event.actionMasked) {
-                                    MotionEvent.ACTION_DOWN -> liquidDrawable?.onTouchDown(event.x, event.y)
-                                    MotionEvent.ACTION_MOVE -> liquidDrawable?.onTouchMove(event.x, event.y)
-                                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> liquidDrawable?.onTouchUp()
+                                    MotionEvent.ACTION_DOWN -> {
+                                        liquidDrawable?.onTouchDown(event.x, event.y)
+                                        view.animate()
+                                            .scaleX(cfg.pressLiquidScale)
+                                            .scaleY(cfg.pressLiquidScale)
+                                            .setDuration(120L)
+                                            .setInterpolator(DecelerateInterpolator(1.5f))
+                                            .start()
+                                    }
+                                    MotionEvent.ACTION_MOVE -> {
+                                        liquidDrawable?.onTouchMove(event.x, event.y)
+                                    }
+                                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                                        liquidDrawable?.onTouchUp()
+                                        view.animate()
+                                            .scaleX(1.0f)
+                                            .scaleY(1.0f)
+                                            .setDuration(240L)
+                                            .setInterpolator(OvershootInterpolator(1.4f))
+                                            .start()
+                                    }
                                 }
                             }
                             return chain.proceed()
@@ -76,6 +101,15 @@ object KeypadPhysicsHook {
                         keyView.clipToOutline = false
                         (keyView.parent as? ViewGroup)?.clipChildren = false
                         (keyView.parent?.parent as? ViewGroup)?.clipChildren = false
+
+                        // Apply custom button diameter to layout params (Layout Spacing Hack)
+                        val customDiameterPx = (cfg.circleDiameter * density).toInt()
+                        val lp = keyView.layoutParams
+                        if (lp != null && (lp.width != customDiameterPx || lp.height != customDiameterPx)) {
+                            lp.width = customDiameterPx
+                            lp.height = customDiameterPx
+                            keyView.layoutParams = lp
+                        }
 
                         // Set Liquid Glass 2.0 Circular Button Lens Background
                         if (keyView.background !is LiquidGlassKeyDrawable) {
@@ -120,7 +154,7 @@ object KeypadPhysicsHook {
                         val density = ctx.resources.displayMetrics.density
                         val cfg = LockScreenConfigHolder.keypad
 
-                        // 1. Vertical Row Offsets
+                        // 1. Vertical Row Offsets (Layout Spacing Hack)
                         val row1Id = ctx.resources.getIdentifier("row1", "id", "com.android.systemui")
                         val row2Id = ctx.resources.getIdentifier("row2", "id", "com.android.systemui")
                         val row3Id = ctx.resources.getIdentifier("row3", "id", "com.android.systemui")
@@ -186,7 +220,7 @@ object KeypadPhysicsHook {
             }
 
             for (m: Method in pinViewClass.declaredMethods) {
-                if (m.name == "onFinishInflate" || m.name == "updatePositionForFod" || m.name == "updateLayoutParams" || m.name == "onAttachedToWindow" || m.name == "startAppearAnimation") {
+                if (m.name == "onFinishInflate" || m.name == "updatePositionForFod" || m.name == "updateLayoutParams" || m.name == "onAttachedToWindow") {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
@@ -195,6 +229,134 @@ object KeypadPhysicsHook {
                                 applyPinLayoutAndStyles(pinView)
                             } catch (_: Throwable) {}
                             return result
+                        }
+                    })
+                } else if (m.name == "startAppearAnimation") {
+                    // Custom Cascade Glide & Staggered Sequential Entrance Animation Engine
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val pinViewObj = chain.thisObject
+                            val pinView = pinViewObj as? View ?: return chain.proceed()
+                            val cfg = LockScreenConfigHolder.keypad
+                            if (!cfg.enabled) return chain.proceed()
+
+                            val ctx = pinView.context
+                            val density = ctx.resources.displayMetrics.density
+
+                            try {
+                                val pairs = Array(4) { Array(3) { Pair(0, 0) } }
+                                val keysAnimField = try { pinViewObj.javaClass.getField("keysAnimStartState") } catch (_: Throwable) { null }
+                                keysAnimField?.isAccessible = true
+                                keysAnimField?.set(pinViewObj, pairs)
+
+                                val appearAnimField = try { pinViewObj.javaClass.getField("mAppearAnimating") } catch (_: Throwable) { null }
+                                appearAnimField?.isAccessible = true
+                                appearAnimField?.setBoolean(pinViewObj, true)
+
+                                val initAppearField = try { pinViewObj.javaClass.getField("initAppearAnimed") } catch (_: Throwable) { null }
+                                initAppearField?.isAccessible = true
+                                initAppearField?.setBoolean(pinViewObj, true)
+
+                                val canceledField = try { pinViewObj.javaClass.getField("appearAnimCanceled") } catch (_: Throwable) { null }
+                                canceledField?.isAccessible = true
+                                canceledField?.setBoolean(pinViewObj, false)
+                            } catch (_: Throwable) {}
+
+                            val runCustomAppear = Runnable {
+                                try {
+                                    pinView.alpha = 1.0f
+                                    applyPinLayoutAndStyles(pinView)
+
+                                    // 1. PIN dots fade in smoothly
+                                    val row0Id = ctx.resources.getIdentifier("row0", "id", "com.android.systemui")
+                                    if (row0Id != 0) {
+                                        val row0 = pinView.findViewById<View>(row0Id)
+                                        if (row0 != null) {
+                                            row0.alpha = 0.0f
+                                            row0.translationY = (cfg.row0Offset - 15f) * density
+                                            row0.animate()
+                                                .alpha(1.0f)
+                                                .translationY(cfg.row0Offset * density)
+                                                .setDuration(340)
+                                                .setInterpolator(DecelerateInterpolator())
+                                                .start()
+                                        }
+                                    }
+
+                                    // 2. Custom Cascade Animation Engine for Keys
+                                    val keyNames = arrayOf(
+                                        arrayOf("key1", "key2", "key3"),
+                                        arrayOf("key4", "key5", "key6"),
+                                        arrayOf("key7", "key8", "key9"),
+                                        arrayOf("emergency_call_button", "key0", "delete_button")
+                                    )
+
+                                    val startTY = cfg.entryTranslationY * density
+                                    val startScale = cfg.entryInitialScale
+                                    val duration = cfg.entryDuration.toLong().coerceAtLeast(100L)
+                                    val overshoot = cfg.entryOvershoot.coerceAtLeast(0.5f)
+
+                                    for (row in 0..3) {
+                                        for (col in 0..2) {
+                                            val keyName = keyNames[row][col]
+                                            val resId = ctx.resources.getIdentifier(keyName, "id", "com.android.systemui")
+                                            val keyView = if (resId != 0) pinView.findViewById<View>(resId) else null
+
+                                            if (keyView != null) {
+                                                val delay = cfg.getKeyDelay(keyName, row, col)
+
+                                                keyView.translationY = startTY
+                                                keyView.scaleX = startScale
+                                                keyView.scaleY = startScale
+                                                keyView.alpha = 0f
+
+                                                keyView.animate()
+                                                    .translationY(0f)
+                                                    .scaleX(1f)
+                                                    .scaleY(1f)
+                                                    .alpha(1f)
+                                                    .setStartDelay(delay)
+                                                    .setDuration(duration)
+                                                    .setInterpolator(OvershootInterpolator(overshoot))
+                                                    .start()
+                                            }
+                                        }
+                                    }
+                                } catch (t: Throwable) {
+                                    Log.e(TAG, "Custom cascade appear animation error", t)
+                                }
+                            }
+
+                            if (Looper.myLooper() == Looper.getMainLooper()) {
+                                runCustomAppear.run()
+                            } else {
+                                Handler(Looper.getMainLooper()).post(runCustomAppear)
+                            }
+
+                            return null
+                        }
+                    })
+                } else if (m.name == "startBackAnimation") {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val pinView = chain.thisObject as? View
+                            val rawArgs = chain.args
+                            val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                            val callback = if (args.isNotEmpty() && args[0] is Runnable) args[0] as Runnable else null
+
+                            try {
+                                pinView?.animate()
+                                    ?.alpha(0.0f)
+                                    ?.setDuration(220)
+                                    ?.setInterpolator(AccelerateInterpolator(1.5f))
+                                    ?.withEndAction {
+                                        callback?.run()
+                                    }
+                                    ?.start()
+                            } catch (_: Throwable) {
+                                callback?.run()
+                            }
+                            return null
                         }
                     })
                 } else if (m.name == "onDetachedFromWindow") {
