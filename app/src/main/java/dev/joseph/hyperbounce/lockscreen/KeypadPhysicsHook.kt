@@ -56,6 +56,7 @@ object KeypadPhysicsHook {
                                             .scaleY(cfg.pressLiquidScale)
                                             .setDuration(120L)
                                             .setInterpolator(DecelerateInterpolator(1.5f))
+                                            .setUpdateListener { view.invalidate() }
                                             .start()
                                     }
                                     MotionEvent.ACTION_MOVE -> {
@@ -68,6 +69,7 @@ object KeypadPhysicsHook {
                                             .scaleY(1.0f)
                                             .setDuration(240L)
                                             .setInterpolator(OvershootInterpolator(1.4f))
+                                            .setUpdateListener { view.invalidate() }
                                             .start()
                                     }
                                 }
@@ -318,6 +320,9 @@ object KeypadPhysicsHook {
                                                     .setStartDelay(delay)
                                                     .setDuration(duration)
                                                     .setInterpolator(OvershootInterpolator(overshoot))
+                                                    .setUpdateListener {
+                                                        keyView.invalidate()
+                                                    }
                                                     .start()
                                             }
                                         }

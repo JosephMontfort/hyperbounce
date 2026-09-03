@@ -352,6 +352,44 @@ class LiquidGlassKeyDrawable(
         }
     }
 
+    /**
+     * Recursively traverses from the root view down towards targetKeyView,
+     * safely drawing any visible sibling subtrees directly underneath targetKeyView.
+     * Ancestor containers are traversed to avoid HWUI re-entrancy on actively recording RenderNodes.
+     * Sibling subtrees are drawn safely via drawSiblingLayerSafe() with AABB intersection check.
+     */
+    private fun drawUnderlyingLayers(
+        recordingCanvas: Canvas,
+        current: View?,
+        targetKeyView: View,
+        viewX: Int,
+        viewY: Int,
+        margin: Int,
+        keyW: Float,
+        keyH: Float
+    ) {
+        if (current == null || current.visibility != View.VISIBLE) return
+        if (current === targetKeyView) return
+
+        if (!isAncestorOrSelf(current, targetKeyView)) {
+            // Entire subtree is a sibling branch (e.g. NotificationPanelView, Clock, Notifications, Bouncer background)
+            drawSiblingLayerSafe(recordingCanvas, current, targetKeyView, viewX, viewY, margin, keyW, keyH)
+            return
+        }
+
+        // 'current' is an ancestor of targetKeyView (RootView, KeyguardSecurityContainer, MiuiKeyguardPINView, Row)
+        // Recurse into children
+        if (current is ViewGroup) {
+            val count = current.childCount
+            for (i in 0 until count) {
+                val child = current.getChildAt(i)
+                if (child != null && child.visibility == View.VISIBLE) {
+                    drawUnderlyingLayers(recordingCanvas, child, targetKeyView, viewX, viewY, margin, keyW, keyH)
+                }
+            }
+        }
+    }
+
     override fun draw(canvas: Canvas) {
         if (isCapturingBackdrop) return
 
@@ -397,12 +435,12 @@ class LiquidGlassKeyDrawable(
                 sh.setFloatUniform("touchAmp", if (pressProgress > 0.01f) pressProgress * cfg.pressLiquidAmp else 0f)
 
                 val lensEffect = RenderEffect.createRuntimeShaderEffect(sh, "content")
-                val effect = if (cfg.buttonBlur > 0.01f) {
-                    RenderEffect.createChainEffect(
-                        lensEffect,
-                        RenderEffect.createBlurEffect(cfg.buttonBlur * density, cfg.buttonBlur * density, Shader.TileMode.CLAMP)
-                    )
-                } else lensEffect
+                val blurDp = if (cfg.buttonBlur > 0.01f) cfg.buttonBlur else 24f
+                val blurPx = blurDp * density
+                val effect = RenderEffect.createChainEffect(
+                    lensEffect,
+                    RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP)
+                )
 
                 renderNode.setRenderEffect(effect)
                 renderNode.setPosition(-margin, -margin, (w + margin).toInt(), (h + margin).toInt())
@@ -431,33 +469,10 @@ class LiquidGlassKeyDrawable(
                     }
                     recordingCanvas.restore()
 
-                    // 2. Underlying Sibling Layers: Live Clock, Notifications, Sheet Card
+                    // 2. Underlying Visible Layers: Live Clock, Notifications, Sheet Card, Bouncer BG, etc.
                     val root = view.rootView
                     if (root != null) {
-                        // A. Injected LockScreen Liquid Glass Sheet (Feature 1)
-                        val sheetView = root.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
-                        drawSiblingLayerSafe(recordingCanvas, sheetView, view, viewX, viewY, margin, w, h)
-
-                        // B. Lockscreen Clock Panel (KeyguardPanelView)
-                        val panelId = view.resources.getIdentifier("keyguard_panel_view", "id", "com.android.systemui")
-                        if (panelId != 0) {
-                            val panelView = root.findViewById<View>(panelId)
-                            drawSiblingLayerSafe(recordingCanvas, panelView, view, viewX, viewY, margin, w, h)
-                        }
-
-                        // C. Lockscreen Clock Container (KeyguardClockContainer)
-                        val clockId = view.resources.getIdentifier("miui_keyguard_clock_container", "id", "com.android.systemui")
-                        if (clockId != 0) {
-                            val clockView = root.findViewById<View>(clockId)
-                            drawSiblingLayerSafe(recordingCanvas, clockView, view, viewX, viewY, margin, w, h)
-                        }
-
-                        // D. Lockscreen Notifications (NotificationStackScrollLayout)
-                        val notifId = view.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
-                        if (notifId != 0) {
-                            val notifView = root.findViewById<View>(notifId)
-                            drawSiblingLayerSafe(recordingCanvas, notifView, view, viewX, viewY, margin, w, h)
-                        }
+                        drawUnderlyingLayers(recordingCanvas, root, view, viewX, viewY, margin, w, h)
                     }
                 } finally {
                     isCapturingBackdrop = false
