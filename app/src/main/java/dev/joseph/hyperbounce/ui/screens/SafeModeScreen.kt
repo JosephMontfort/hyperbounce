@@ -1,6 +1,7 @@
 package dev.joseph.hyperbounce.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,14 +13,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Text
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,6 +34,7 @@ import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
 import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
+import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 
 @Composable
 fun SafeModeScreen(
@@ -61,44 +62,50 @@ fun SafeModeScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             Modifier
-                                .size(12.dp)
+                                .size(10.dp)
                                 .clip(CircleShape)
                                 .background(if (isAnyActive) colors.accentRed else colors.accentGreen)
                         )
                         Spacer(Modifier.width(10.dp))
-                        Text(
+                        BasicText(
                             text = if (isAnyActive) "SAFE MODE ENGAGED" else "ALL SUBSYSTEMS PROTECTED",
-                            color = if (isAnyActive) colors.accentRed else colors.accentGreen,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                            style = HyperBounceType.headline.copy(
+                                color = if (isAnyActive) colors.accentRed else colors.accentGreen,
+                                fontSize = 13.sp,
+                                letterSpacing = 1.sp
+                            )
                         )
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text(
+                    BasicText(
                         text = if (isAnyActive) {
                             "One or more subsystems are currently bypassed due to crash watchdog triggers or manual bypass. Hooks will NOT execute for: " +
                                     (if (safe.globalSafeMode || activeAliases.contains("all")) "ALL APPS (Global)" else activeAliases.joinToString(", ").ifEmpty { "Selected apps" })
                         } else {
                             "Automatic crash watchdog is active. If any system app crashes twice within 60s of launch, Safe Mode engages automatically to prevent bootloops."
                         },
-                        color = colors.textSecondary,
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp
+                        style = HyperBounceType.subhead.copy(
+                            color = colors.secondaryLabel,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp
+                        )
                     )
 
                     if (isAnyActive) {
                         Spacer(Modifier.height(14.dp))
-                        Button(
-                            onClick = { safe.clearAll() },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = colors.accentRed.copy(alpha = 0.85f),
-                                contentColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(colors.accentRed.copy(alpha = 0.85f))
+                                .clickable { safe.clearAll() }
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text("Reset Crash Flags & Disable Safe Mode", fontWeight = FontWeight.SemiBold)
+                            BasicText(
+                                text = "Reset Crash Flags & Disable Safe Mode",
+                                style = HyperBounceType.headline.copy(color = Color.White, fontSize = 14.sp)
+                            )
                         }
                     }
                 }
@@ -189,11 +196,13 @@ fun SafeModeScreen(
             SectionHeader("Emergency Shell Rescue", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(
+                    BasicText(
                         text = "If SystemUI or Launcher ever crashes repeatedly, you can clear safe mode or manually engage it via Termux or ADB shell:",
-                        color = colors.textSecondary,
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp
+                        style = HyperBounceType.subhead.copy(
+                            color = colors.secondaryLabel,
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp
+                        )
                     )
                     Spacer(Modifier.height(10.dp))
                     Box(
@@ -204,32 +213,40 @@ fun SafeModeScreen(
                             .padding(12.dp)
                     ) {
                         Column {
-                            Text(
+                            BasicText(
                                 text = "# Clear all safe modes (Restore normal operation):",
-                                color = Color(0xFF8E8E93),
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace
+                                style = TextStyle(
+                                    color = Color(0xFF8E8E93),
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
                             )
-                            Text(
+                            BasicText(
                                 text = "su -c setprop persist.hyperbounce.safemode \"\"",
-                                color = Color(0xFF30D158),
-                                fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Medium
+                                style = TextStyle(
+                                    color = Color(0xFF30D158),
+                                    fontSize = 12.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Medium
+                                )
                             )
                             Spacer(Modifier.height(8.dp))
-                            Text(
+                            BasicText(
                                 text = "# Emergency disable SystemUI hooks:",
-                                color = Color(0xFF8E8E93),
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace
+                                style = TextStyle(
+                                    color = Color(0xFF8E8E93),
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
                             )
-                            Text(
+                            BasicText(
                                 text = "su -c setprop persist.hyperbounce.safemode \"systemui\"",
-                                color = Color(0xFFFF9F0A),
-                                fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Medium
+                                style = TextStyle(
+                                    color = Color(0xFFFF9F0A),
+                                    fontSize = 12.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Medium
+                                )
                             )
                         }
                     }
