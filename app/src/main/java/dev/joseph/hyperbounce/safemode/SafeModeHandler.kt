@@ -2,9 +2,7 @@ package dev.joseph.hyperbounce.safemode
 
 import android.content.SharedPreferences
 import android.os.SystemClock
-import android.os.SystemProperties
 import android.util.Log
-import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -79,11 +77,10 @@ object SafeModeHandler {
     private fun applySafeModeProp(aliases: Set<String>) {
         val propValue = aliases.filter { it.isNotEmpty() }.joinToString(",")
         try {
-            SystemProperties.set(CrashScope.PROP_SAFE_MODE, propValue)
+            SystemPropertiesHelper.set(CrashScope.PROP_SAFE_MODE, propValue)
             Log.i(TAG, "Updated safe mode property ${CrashScope.PROP_SAFE_MODE} = '$propValue'")
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to set SystemProperty ${CrashScope.PROP_SAFE_MODE} to '$propValue'", t)
-            // Fallback: try root shell command if app has root access
             try {
                 Runtime.getRuntime().exec(arrayOf("su", "-c", "setprop ${CrashScope.PROP_SAFE_MODE} '$propValue'"))
             } catch (_: Throwable) {}

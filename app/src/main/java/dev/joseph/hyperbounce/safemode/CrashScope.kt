@@ -1,7 +1,47 @@
 package dev.joseph.hyperbounce.safemode
 
-import android.os.SystemProperties
 import android.util.Log
+
+/**
+ * Helper to safely access hidden android.os.SystemProperties via reflection without SDK hidden API compile errors.
+ */
+object SystemPropertiesHelper {
+    private val getMethod by lazy {
+        try {
+            val clazz = Class.forName("android.os.SystemProperties")
+            clazz.getDeclaredMethod("get", String::class.java, String::class.java)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private val setMethod by lazy {
+        try {
+            val clazz = Class.forName("android.os.SystemProperties")
+            clazz.getDeclaredMethod("set", String::class.java, String::class.java)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    fun get(key: String, def: String = ""): String {
+        return try {
+            (getMethod?.invoke(null, key, def) as? String) ?: def
+        } catch (_: Throwable) {
+            def
+        }
+    }
+
+    fun set(key: String, value: String) {
+        try {
+            setMethod?.invoke(null, key, value)
+        } catch (_: Throwable) {
+            try {
+                Runtime.getRuntime().exec(arrayOf("su", "-c", "setprop $key \"$value\""))
+            } catch (_: Throwable) {}
+        }
+    }
+}
 
 /**
  * Maps packages to crash aliases and manages the system property `persist.hyperbounce.safemode`.
@@ -49,7 +89,7 @@ object CrashScope {
      */
     fun getCrashingAliases(): Set<String> {
         val raw = try {
-            SystemProperties.get(PROP_SAFE_MODE, "")
+            SystemPropertiesHelper.get(PROP_SAFE_MODE, "")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to read system property $PROP_SAFE_MODE", t)
             ""
