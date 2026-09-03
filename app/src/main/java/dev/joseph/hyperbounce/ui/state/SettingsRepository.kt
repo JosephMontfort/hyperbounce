@@ -95,6 +95,7 @@ class SettingsRepository(context: Context) {
     val appTransition = AppTransitionHolder()
     val controlCenter = ControlCenterHolder()
     val morphPhysics = MorphPhysicsHolder()
+    val safeMode = SafeModeHolder()
 
     @JvmName("setModuleEnabledPref")
     fun setModuleEnabled(value: Boolean) {
@@ -926,6 +927,89 @@ class SettingsRepository(context: Context) {
         }
     }
 
+
+    inner class SafeModeHolder {
+        private val defaults = SafeModeSettings()
+
+        var globalSafeMode by prefsBooleanState("prefs_key_global_safe_mode", defaults.globalSafeMode); private set
+        var systemUiSafeMode by prefsBooleanState("prefs_key_systemui_safe_mode_enable", defaults.systemUiSafeMode); private set
+        var launcherSafeMode by prefsBooleanState("prefs_key_home_safe_mode_enable", defaults.launcherSafeMode); private set
+        var instagramSafeMode by prefsBooleanState("prefs_key_instagram_safe_mode_enable", defaults.instagramSafeMode); private set
+        var whatsappSafeMode by prefsBooleanState("prefs_key_whatsapp_safe_mode_enable", defaults.whatsappSafeMode); private set
+        var youtubeSafeMode by prefsBooleanState("prefs_key_youtube_safe_mode_enable", defaults.youtubeSafeMode); private set
+
+        fun getCrashingAliases(): Set<String> {
+            return dev.joseph.hyperbounce.safemode.CrashScope.getCrashingAliases()
+        }
+
+        fun isAliasActive(alias: String): Boolean {
+            return dev.joseph.hyperbounce.safemode.CrashScope.isAliasInSafeModeProp(alias)
+        }
+
+        fun setGlobalSafeMode(v: Boolean) {
+            globalSafeMode = v
+            if (v) {
+                dev.joseph.hyperbounce.safemode.SafeModeHandler.updateCrashProp("all")
+            } else {
+                dev.joseph.hyperbounce.safemode.SafeModeHandler.removeCrashProp("all")
+            }
+        }
+
+        fun setSystemUiSafeMode(v: Boolean) {
+            systemUiSafeMode = v
+            if (v) {
+                dev.joseph.hyperbounce.safemode.SafeModeHandler.updateCrashProp("systemui")
+            } else {
+                dev.joseph.hyperbounce.safemode.SafeModeHandler.removeCrashProp("systemui")
+            }
+        }
+
+        fun setLauncherSafeMode(v: Boolean) {
+            launcherSafeMode = v
+            if (v) {
+                dev.joseph.hyperbounce.safemode.SafeModeHandler.updateCrashProp("home")
+            } else {
+                dev.joseph.hyperbounce.safemode.SafeModeHandler.removeCrashProp("home")
+            }
+        }
+
+        fun setInstagramSafeMode(v: Boolean) {
+            instagramSafeMode = v
+            if (v) {
+                dev.joseph.hyperbounce.safemode.SafeModeHandler.updateCrashProp("instagram")
+            } else {
+                dev.joseph.hyperbounce.safemode.SafeModeHandler.removeCrashProp("instagram")
+            }
+        }
+
+        fun setWhatsappSafeMode(v: Boolean) {
+            whatsappSafeMode = v
+            if (v) {
+                dev.joseph.hyperbounce.safemode.SafeModeHandler.updateCrashProp("whatsapp")
+            } else {
+                dev.joseph.hyperbounce.safemode.SafeModeHandler.removeCrashProp("whatsapp")
+            }
+        }
+
+        fun setYoutubeSafeMode(v: Boolean) {
+            youtubeSafeMode = v
+            if (v) {
+                dev.joseph.hyperbounce.safemode.SafeModeHandler.updateCrashProp("youtube")
+            } else {
+                dev.joseph.hyperbounce.safemode.SafeModeHandler.removeCrashProp("youtube")
+            }
+        }
+
+        fun clearAll() {
+            setGlobalSafeMode(false)
+            setSystemUiSafeMode(false)
+            setLauncherSafeMode(false)
+            setInstagramSafeMode(false)
+            setWhatsappSafeMode(false)
+            setYoutubeSafeMode(false)
+            dev.joseph.hyperbounce.safemode.SafeModeHandler.clearAllSafeModes()
+        }
+    }
 
     // --- small property-delegate helpers over SharedPreferences --------------------------
 

@@ -1127,6 +1127,11 @@ public class LiquidTogglesHook extends XposedModule {
         if (classLoader == null) classLoader = param.getDefaultClassLoader();
         final ClassLoader packageClassLoader = classLoader;
 
+        if (dev.joseph.hyperbounce.safemode.SafeModeHandler.INSTANCE.isSafeMode(packageName, null)) {
+            log(4, "HyperBounce", "[SAFE MODE ACTIVE] Skipping toggles/sliders for " + packageName);
+            return;
+        }
+
         HyperBouncePrefs hyperBouncePrefs = null;
         try {
             hyperBouncePrefs = new HyperBouncePrefs(this);

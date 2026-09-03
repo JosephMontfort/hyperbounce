@@ -37,7 +37,6 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
     }
     private val boundsRect = RectF()
     private val location = IntArray(2)
-    private val parentLocation = IntArray(2)
 
     private fun getWallpaper(): Drawable? {
         val now = SystemClock.uptimeMillis()
@@ -61,7 +60,6 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
-        if (LiquidGlassKeyDrawable.isCapturingGlobalBackdrop) return
         super.onDraw(canvas)
         if (visibility != VISIBLE) return
 
@@ -89,8 +87,6 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
         val viewX = location[0]
         val viewY = location[1]
 
-        val backdrop = rootView ?: (parent as? View)
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderer != null) {
             val params = GlassLensRenderer.LensParams(
                 cornerRadius = cornerRadius,
@@ -108,45 +104,19 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
             )
 
             val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
-                var capturedLive = false
-                if (backdrop != null && backdrop.width > 0 && backdrop.height > 0 && backdrop !== this) {
-                    backdrop.getLocationOnScreen(parentLocation)
-                    val offsetX = (viewX - parentLocation[0]).toFloat()
-                    val offsetY = (viewY - parentLocation[1]).toFloat()
-
-                    recordingCanvas.save()
-                    recordingCanvas.translate(margin.toFloat() - offsetX, margin.toFloat() - offsetY)
-                    LiquidGlassKeyDrawable.isCapturingGlobalBackdrop = true
-                    LiquidGlassKeyDrawable.setTransitionVisibilitySafe(this, View.INVISIBLE)
-                    try {
-                        backdrop.draw(recordingCanvas)
-                        capturedLive = true
-                    } catch (t: Throwable) {
-                        Log.w("HyperBounce_LockSheet", "Live backdrop capture error", t)
-                    } finally {
-                        LiquidGlassKeyDrawable.setTransitionVisibilitySafe(this, View.VISIBLE)
-                        LiquidGlassKeyDrawable.isCapturingGlobalBackdrop = false
-                        recordingCanvas.restore()
+                recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
+                if (wp != null) {
+                    wp.setBounds(0, 0, screenW, screenH)
+                    wp.draw(recordingCanvas)
+                } else {
+                    val p = Paint().apply {
+                        shader = LinearGradient(
+                            0f, 0f, 0f, screenH.toFloat(),
+                            0xFF1C1C1E.toInt(), 0xFF0A0A0C.toInt(),
+                            Shader.TileMode.CLAMP
+                        )
                     }
-                }
-
-                if (!capturedLive) {
-                    recordingCanvas.save()
-                    recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
-                    if (wp != null) {
-                        wp.setBounds(0, 0, screenW, screenH)
-                        wp.draw(recordingCanvas)
-                    } else {
-                        val p = Paint().apply {
-                            shader = LinearGradient(
-                                0f, 0f, 0f, screenH.toFloat(),
-                                0xFF1C1C1E.toInt(), 0xFF0A0A0C.toInt(),
-                                Shader.TileMode.CLAMP
-                            )
-                        }
-                        recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), p)
-                    }
-                    recordingCanvas.restore()
+                    recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), p)
                 }
             }
             if (success) return

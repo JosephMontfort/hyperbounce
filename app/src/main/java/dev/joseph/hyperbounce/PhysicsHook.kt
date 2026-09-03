@@ -4,6 +4,7 @@ import android.util.Log
 import dev.joseph.hyperbounce.nav.InstagramHook
 import dev.joseph.hyperbounce.nav.WhatsAppHook
 import dev.joseph.hyperbounce.nav.YouTubeHook
+import dev.joseph.hyperbounce.safemode.SafeModeHandler
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 
@@ -12,13 +13,22 @@ class PhysicsHook : XposedModule() {
     override fun onPackageReady(param: XposedModuleInterface.PackageReadyParam) {
         super.onPackageReady(param)
 
-        // Each branch is its own try-catch, not one around the whole `when`: an exception
-        // anywhere in here (including HyperBouncePrefs' remote-preferences read, which
-        // Phase 2 added to every one of these hooks' construction/onPackageReady) must
-        // never propagate out of this function uncaught — this runs inside the *hooked*
-        // app's own process (Instagram/WhatsApp/YouTube), so an uncaught exception here
-        // risks crashing that app, not just this module.
         try {
+            val prefs = try {
+                getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
+            } catch (t: Throwable) {
+                null
+            }
+
+            // 1. Safe Mode Check (Hyperceiler Architecture)
+            if (SafeModeHandler.isSafeMode(param.packageName, prefs)) {
+                Log.w("HyperBounce", "[SAFE MODE ACTIVE] Skipping all hooks for ${param.packageName}")
+                return
+            }
+
+            // 2. Install Crash Watchdog (Auto-triggers Safe Mode if 2+ crashes occur in 60s)
+            SafeModeHandler.installCrashWatchdog(param.packageName)
+
             when {
                 param.packageName.contains("instagram") ->
                     InstagramHook(this, param).onPackageReady()
@@ -30,16 +40,17 @@ class PhysicsHook : XposedModule() {
                     YouTubeHook(this, param).onPackageReady()
 
                 param.packageName == "com.android.systemui" -> {
-                    try {
-                        val prefs = getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
-                        dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
-                        dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
-                        prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                    if (prefs != null) {
+                        try {
                             dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
                             dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
+                            prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                                dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
+                                dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
+                            }
+                        } catch (t: Throwable) {
+                            Log.e("HyperBounce", "Failed to bind remote preferences in SystemUI", t)
                         }
-                    } catch (t: Throwable) {
-                        Log.e("HyperBounce", "Failed to bind remote preferences in SystemUI", t)
                     }
                     dev.joseph.hyperbounce.lockscreen.LockScreenSheetHook.init(this, param.classLoader)
                     dev.joseph.hyperbounce.lockscreen.KeypadPhysicsHook.init(this, param.classLoader)
@@ -47,27 +58,29 @@ class PhysicsHook : XposedModule() {
                 }
 
                 param.packageName == "miui.systemui.plugin" -> {
-                    try {
-                        val prefs = getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
-                        dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
-                        prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                    if (prefs != null) {
+                        try {
                             dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
+                            prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                                dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
+                            }
+                        } catch (t: Throwable) {
+                            Log.e("HyperBounce", "Failed to bind remote preferences in Control Center Plugin", t)
                         }
-                    } catch (t: Throwable) {
-                        Log.e("HyperBounce", "Failed to bind remote preferences in Control Center Plugin", t)
                     }
                     dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initPluginHooks(this, param.classLoader)
                 }
 
                 param.packageName == "com.miui.home" -> {
-                    try {
-                        val prefs = getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
-                        dev.joseph.hyperbounce.launcher.LauncherConfigHolder.update(prefs)
-                        prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                    if (prefs != null) {
+                        try {
                             dev.joseph.hyperbounce.launcher.LauncherConfigHolder.update(prefs)
+                            prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                                dev.joseph.hyperbounce.launcher.LauncherConfigHolder.update(prefs)
+                            }
+                        } catch (t: Throwable) {
+                            Log.e("HyperBounce", "Failed to bind remote preferences in MIUI Home", t)
                         }
-                    } catch (t: Throwable) {
-                        Log.e("HyperBounce", "Failed to bind remote preferences in MIUI Home", t)
                     }
                     dev.joseph.hyperbounce.launcher.ScreenUnlockHook.init(this, param.classLoader)
                     dev.joseph.hyperbounce.launcher.AppTransitionHook.init(this, param.classLoader)

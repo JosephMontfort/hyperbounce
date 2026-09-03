@@ -23,12 +23,13 @@ import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import androidx.annotation.RequiresApi
 import dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder
-import java.lang.reflect.Method
 import kotlin.math.min
 
 /**
- * 100% Real-Time Liquid Glass 2.0 Circular Lens for Lock Screen PIN Pad Keys.
- * Includes global re-entrancy protection to eliminate recursive draw / RenderNode recording collisions.
+ * Authentic Liquid Glass 2.0 Circular Lens for Lock Screen PIN Pad Keys.
+ * Samples live lockscreen wallpaper with real-time motion coordinate tracking:
+ * sdCircle SDF -> Numerical Normal Field -> Real-time Inward Refraction
+ * -> Physical Chromatic Dispersion -> Adaptive Luminous Tint -> Vibrancy Curve -> Specular Reflection.
  */
 class LiquidGlassKeyDrawable(
     private val view: View,
@@ -37,32 +38,6 @@ class LiquidGlassKeyDrawable(
 
     companion object {
         private const val TAG = "HyperBounce_KeyLens"
-
-        @Volatile
-        var isCapturingGlobalBackdrop = false
-
-        private var setTransitionVisibilityMethod: Method? = null
-        private var methodLookedUp = false
-
-        fun setTransitionVisibilitySafe(targetView: View, visibility: Int) {
-            if (!methodLookedUp) {
-                methodLookedUp = true
-                try {
-                    setTransitionVisibilityMethod = View::class.java.getMethod(
-                        "setTransitionVisibility",
-                        Int::class.javaPrimitiveType
-                    ).apply { isAccessible = true }
-                } catch (_: Throwable) {}
-            }
-            val m = setTransitionVisibilityMethod
-            if (m != null) {
-                try {
-                    m.invoke(targetView, visibility)
-                    return
-                } catch (_: Throwable) {}
-            }
-            targetView.alpha = if (visibility == View.VISIBLE) 1f else 0f
-        }
 
         private var cachedWallpaper: Drawable? = null
         private var lastWallpaperFetchTime = 0L
@@ -149,7 +124,7 @@ class LiquidGlassKeyDrawable(
 
                 float3 col = float3(sR.r, sG.g, sB.b);
 
-                // Vibrancy curve
+                // Liquid Glass 2.0 Vibrancy Saturation Curve
                 float lum = dot(col, float3(0.2126, 0.7152, 0.0722));
                 float satNow = max(col.r, max(col.g, col.b)) - min(col.r, min(col.g, col.b));
                 float room = 1.0 - smoothstep(0.20, 0.85, satNow);
@@ -157,13 +132,13 @@ class LiquidGlassKeyDrawable(
                 float amount = 1.0 + (satFactor - 1.0) * mix(0.30, 1.0, room * hl);
                 col = clamp(mix(float3(lum), col, amount), float3(0.0), float3(1.0));
 
-                // Adaptive Luminous Glass Tint
+                // Adaptive Luminous Glass Tint (Radiant crystal glow on dark backgrounds)
                 float lumT = dot(col, float3(0.2126, 0.7152, 0.0722));
                 float e = smoothstep(0.30, 0.75, lumT);
                 float tintAlpha = mix(0.18, 0.38, press);
                 col = mix(col, float3(1.0 - e), tintAlpha * (0.60 + 0.40 * slope));
 
-                // Specular reflection
+                // Directional Specular Reflection
                 float facing = dot(n, -lightDir);
                 float facingPos = max(facing, 0.0);
                 float facingNeg = max(-facing, 0.0);
@@ -174,7 +149,7 @@ class LiquidGlassKeyDrawable(
                 float spec = (rim * lobe + hair * (0.28 + 0.45 * facingPos)) * specStrength * (1.0 - 0.30 * press);
                 col += float3(spec);
 
-                // Inner Shadow
+                // Backside Inner Shadow for physical lens depth
                 float shadowW = clamp(bevel, 4.0, 24.0);
                 float shadowBand = pow(clamp(1.0 + d / shadowW, 0.0, 1.0), 1.5);
                 float ish = shadowBand * facingNeg * innerShadow;
@@ -193,7 +168,6 @@ class LiquidGlassKeyDrawable(
 
     private var shader: RuntimeShader? = null
     private val location = IntArray(2)
-    private val parentLocation = IntArray(2)
 
     private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
@@ -248,9 +222,6 @@ class LiquidGlassKeyDrawable(
     }
 
     override fun draw(canvas: Canvas) {
-        // Stop recursion if backdrop capture is currently recording the view tree
-        if (isCapturingGlobalBackdrop) return
-
         val bounds = bounds
         val w = bounds.width().toFloat()
         val h = bounds.height().toFloat()
@@ -267,8 +238,6 @@ class LiquidGlassKeyDrawable(
         view.getLocationOnScreen(location)
         val viewX = location[0]
         val viewY = location[1]
-
-        val backdrop = view.rootView ?: (view.parent?.parent?.parent as? View) ?: (view.parent as? View)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderNode != null && canvas.isHardwareAccelerated) {
             val sh = shader ?: try {
@@ -305,53 +274,25 @@ class LiquidGlassKeyDrawable(
                 renderNode.setRenderEffect(effect)
                 renderNode.setPosition(-margin, -margin, (w + margin).toInt(), (h + margin).toInt())
 
+                val wp = getSharedWallpaper(view.context)
+                val screenW = view.resources.displayMetrics.widthPixels
+                val screenH = view.resources.displayMetrics.heightPixels
+
                 val recordingCanvas = renderNode.beginRecording((w + 2 * margin).toInt(), (h + 2 * margin).toInt())
-                var capturedLiveBackdrop = false
-
                 try {
-                    if (backdrop != null && backdrop.width > 0 && backdrop.height > 0) {
-                        backdrop.getLocationOnScreen(parentLocation)
-                        val offsetX = (viewX - parentLocation[0]).toFloat()
-                        val offsetY = (viewY - parentLocation[1]).toFloat()
-
-                        recordingCanvas.save()
-                        recordingCanvas.translate(margin.toFloat() - offsetX, margin.toFloat() - offsetY)
-
-                        isCapturingGlobalBackdrop = true
-                        setTransitionVisibilitySafe(view, View.INVISIBLE)
-                        try {
-                            backdrop.draw(recordingCanvas)
-                            capturedLiveBackdrop = true
-                        } catch (t: Throwable) {
-                            Log.w(TAG, "Live backdrop recording failed, fallback to wallpaper", t)
-                        } finally {
-                            setTransitionVisibilitySafe(view, View.VISIBLE)
-                            isCapturingGlobalBackdrop = false
-                            recordingCanvas.restore()
+                    recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
+                    if (wp != null) {
+                        wp.setBounds(0, 0, screenW, screenH)
+                        wp.draw(recordingCanvas)
+                    } else {
+                        val p = Paint().apply {
+                            shader = LinearGradient(
+                                0f, 0f, 0f, screenH.toFloat(),
+                                0xFF2C2C2E.toInt(), 0xFF121214.toInt(),
+                                Shader.TileMode.CLAMP
+                            )
                         }
-                    }
-
-                    if (!capturedLiveBackdrop) {
-                        val wp = getSharedWallpaper(view.context)
-                        val screenW = view.resources.displayMetrics.widthPixels
-                        val screenH = view.resources.displayMetrics.heightPixels
-
-                        recordingCanvas.save()
-                        recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
-                        if (wp != null) {
-                            wp.setBounds(0, 0, screenW, screenH)
-                            wp.draw(recordingCanvas)
-                        } else {
-                            val p = Paint().apply {
-                                shader = LinearGradient(
-                                    0f, 0f, 0f, screenH.toFloat(),
-                                    0xFF2C2C2E.toInt(), 0xFF121214.toInt(),
-                                    Shader.TileMode.CLAMP
-                                )
-                            }
-                            recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), p)
-                        }
-                        recordingCanvas.restore()
+                        recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), p)
                     }
                 } finally {
                     renderNode.endRecording()

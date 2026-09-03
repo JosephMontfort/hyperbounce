@@ -261,3 +261,15 @@ data class MorphPhysicsSettings(
     val motionBlurSurgeDp: Float = 30.0f
 )
 
+/** Safe Mode & Crash Recovery Settings */
+data class SafeModeSettings(
+    val globalSafeMode: Boolean = false,
+    val systemUiSafeMode: Boolean = false,
+    val launcherSafeMode: Boolean = false,
+    val instagramSafeMode: Boolean = false,
+    val whatsappSafeMode: Boolean = false,
+    val youtubeSafeMode: Boolean = false,
+    val crashingAliases: Set<String> = emptySet()
+)
+
+

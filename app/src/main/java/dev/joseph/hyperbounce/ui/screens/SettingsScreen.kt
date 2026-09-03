@@ -139,6 +139,21 @@ fun SettingsScreen(
             )
         }
 
+        SectionHeader("System & Safety", colors)
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+            val activeCount = repository.safeMode.getCrashingAliases().size
+            val isSafeEngaged = repository.safeMode.globalSafeMode || activeCount > 0 ||
+                    repository.safeMode.systemUiSafeMode || repository.safeMode.launcherSafeMode
+            SettingsNavRow(
+                title = "Safe Mode & Crash Recovery",
+                subtitle = if (isSafeEngaged) "Safe Mode ACTIVE (Bypass enabled)" else "Auto crash watchdog & emergency recovery",
+                colors = colors,
+                iconTint = if (isSafeEngaged) colors.accentRed else colors.accentGreen,
+                onClick = { onNavigate(Destination.SafeMode) },
+                icon = { PowerIcon(color = Color.White, size = 14.dp) }
+            )
+        }
+
         SectionHeader("About", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsNavRow(
