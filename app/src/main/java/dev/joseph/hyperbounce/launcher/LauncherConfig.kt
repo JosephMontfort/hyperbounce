@@ -38,16 +38,16 @@ data class ScreenUnlockConfig(
 
 data class OriginOSTransitionConfig(
     val enabled: Boolean = true,
-    val curveProfile: Int = 0, // 0 = Swift (轻快), 1 = Gentle (柔和), 2 = Comfort (舒适), 3 = Custom Tuner
-    val parallelAnimEnabled: Boolean = true, // Parallel multi-app launches without home gesture
-    val unlockHighEndCapabilities: Boolean = true, // Force unlock flagship FastLaunch & bypass lite device throttling
+    val curveProfile: Int = 0, // 0 = Gentle (柔和 - OriginOS 6 Signature), 1 = Comfort (舒适), 2 = Swift (轻快), 3 = Custom Tuner
+    val parallelAnimEnabled: Boolean = true, // OriginOS multiple.close interrupt dynamics
+    val unlockHighEndCapabilities: Boolean = true, // Force unlock flagship capabilities & bypass lite device throttling
     val delayedAlphaClose: Boolean = true, // OriginOS 120ms alpha hold for solid card collapse
 
     // Custom Tuner Parameters (Active when curveProfile == 3, or customized)
     val customOpenDamping: Float = 1.00f,
-    val customOpenResponse: Float = 0.296f, // k = 450.0f
-    val customCloseDamping: Float = 1.00f,
-    val customCloseResponse: Float = 0.468f, // k = 180.0f
+    val customOpenResponse: Float = 0.444f, // k = 200.0f (Gentle Signature)
+    val customCloseDamping: Float = 0.88f,  // k = 150.0f (Underdamped Organic Cushion)
+    val customCloseResponse: Float = 0.513f, // k = 150.0f
     val customRecentsDamping: Float = 0.95f,
     val customRecentsResponse: Float = 0.419f, // k = 224.0f
     val customParallelDamping: Float = 0.95f,
@@ -125,9 +125,9 @@ object LauncherConfigHolder {
             unlockHighEndCapabilities = prefs.getBoolean("originos_unlock_highend", true),
             delayedAlphaClose = prefs.getBoolean("originos_delayed_alpha", true),
             customOpenDamping = prefs.getFloat("originos_open_damping", 1.00f),
-            customOpenResponse = prefs.getFloat("originos_open_response", 0.296f),
-            customCloseDamping = prefs.getFloat("originos_close_damping", 1.00f),
-            customCloseResponse = prefs.getFloat("originos_close_response", 0.468f),
+            customOpenResponse = prefs.getFloat("originos_open_response", 0.444f),
+            customCloseDamping = prefs.getFloat("originos_close_damping", 0.88f),
+            customCloseResponse = prefs.getFloat("originos_close_response", 0.513f),
             customRecentsDamping = prefs.getFloat("originos_recents_damping", 0.95f),
             customRecentsResponse = prefs.getFloat("originos_recents_response", 0.419f),
             customParallelDamping = prefs.getFloat("originos_parallel_damping", 0.95f),

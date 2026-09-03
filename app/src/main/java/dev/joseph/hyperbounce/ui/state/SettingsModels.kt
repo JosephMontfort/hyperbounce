@@ -201,16 +201,16 @@ data class ScreenUnlockSettings(
 /** Feature 4: OriginOS 6 App Transition & Physics Settings */
 data class OriginOSTransitionSettings(
     val enabled: Boolean = true,
-    val curveProfile: Int = 0, // 0 = Swift (轻快), 1 = Gentle (柔和), 2 = Comfort (舒适), 3 = Custom Tuner
+    val curveProfile: Int = 0, // 0 = Gentle (柔和 - OriginOS 6 Signature), 1 = Comfort (舒适), 2 = Swift (轻快), 3 = Custom Tuner
     val parallelAnimEnabled: Boolean = true,
     val unlockHighEndCapabilities: Boolean = true,
     val delayedAlphaClose: Boolean = true,
 
     // Custom Tuner Parameters
     val customOpenDamping: Float = 1.00f,
-    val customOpenResponse: Float = 0.296f, // k = 450.0f
-    val customCloseDamping: Float = 1.00f,
-    val customCloseResponse: Float = 0.468f, // k = 180.0f
+    val customOpenResponse: Float = 0.444f, // k = 200.0f
+    val customCloseDamping: Float = 0.88f,  // k = 150.0f (underdamped cushion)
+    val customCloseResponse: Float = 0.513f, // k = 150.0f
     val customRecentsDamping: Float = 0.95f,
     val customRecentsResponse: Float = 0.419f, // k = 224.0f
     val customParallelDamping: Float = 0.95f,

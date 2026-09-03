@@ -38,9 +38,9 @@ fun AppTransitionsScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
 
     val profileOptions = listOf(
-        "Swift / 轻快 (Flagship)",
-        "Gentle / 柔和 (Style 3)",
+        "Gentle / 柔和 (Signature)",
         "Comfort / 舒适 (Style 4)",
+        "Swift / 轻快 (Flagship Fast)",
         "Custom Tuner"
     )
 
@@ -90,9 +90,9 @@ fun AppTransitionsScreen(
             }
             SectionFooter(
                 when (trans.curveProfile) {
-                    0 -> "Swift (轻快): OriginOS default flagship curve. k=450 on open, k=250 on close, instant response."
-                    1 -> "Gentle (柔和): OriginOS Style 3. k=200 on open, k=180 on close, luxurious decelerating glide."
-                    2 -> "Comfort (舒适): OriginOS Style 4. k=300 on open, balanced damping and critical settling."
+                    0 -> "Gentle (柔和 - OriginOS 6 Signature): Luxurious float & organic cushion. k=200 on open (T₀=0.444s), k=150 on close (T₀=0.513s, ζ=0.88 underdamped)."
+                    1 -> "Comfort (舒适): OriginOS Style 4. k=300 on open (T₀=0.363s), k=200 on close (T₀=0.444s, ζ=0.92 balanced)."
+                    2 -> "Swift (轻快): OriginOS Flagship Fast. k=450 on open (T₀=0.296s), k=250 on close (T₀=0.397s)."
                     else -> "Custom: Fine-tune every harmonic channel independently using the sliders below."
                 },
                 colors
@@ -103,8 +103,8 @@ fun AppTransitionsScreen(
             SectionHeader("FLAGSHIP PARALLEL & INTERRUPT FEATURES", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
-                    title = "Parallel Multi-App Opening",
-                    subtitle = "Click consecutive apps without home gesture; previous card collapses in-flight",
+                    title = "OriginOS Interrupt Dynamics (multiple.close)",
+                    subtitle = "Applies OriginOS multiple.close harmonic curves during parallel swipes and app switching",
                     colors = colors,
                     iconTint = colors.accentBlue,
                     backdrop = backdrop,
@@ -115,8 +115,8 @@ fun AppTransitionsScreen(
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
-                    title = "OriginOS 120ms Alpha Delay",
-                    subtitle = "Hold 100% solid opacity for 120ms during close so squircle card shrinks cleanly",
+                    title = "Desktop Layer Dynamic Scaling",
+                    subtitle = "OriginOS HomeLayer staging: desktop and icon grid shrink to 0.90x on open and float back on close",
                     colors = colors,
                     iconTint = colors.accentOrange,
                     backdrop = backdrop,
@@ -127,8 +127,8 @@ fun AppTransitionsScreen(
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
-                    title = "Unlock High-End FastLaunch",
-                    subtitle = "Bypasses MIUI lite/low-tier device throttles and enables hardware FastLaunchWindowElement",
+                    title = "Unlock High-End Capabilities",
+                    subtitle = "Bypasses MIUI lite/low-tier device throttles and unlocks full 120Hz refresh curves and wallpaper zoom",
                     colors = colors,
                     iconTint = colors.accentPurple,
                     backdrop = backdrop,
@@ -158,13 +158,13 @@ fun AppTransitionsScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Open Response Time (T₀)",
-                    subtitle = "0.296s (k=450 Swift), 0.363s (k=300 Comfort), 0.444s (k=200 Gentle)",
+                    subtitle = "0.444s (k=200 Gentle Signature), 0.363s (k=300 Comfort), 0.296s (k=450 Swift)",
                     colors = colors,
                     backdrop = backdrop,
                     value = trans.customOpenResponse,
                     onValueChange = trans::setCustomOpenResponse,
                     valueRange = 0.15f..0.80f,
-                    defaultValue = 0.296f,
+                    defaultValue = 0.444f,
                     valueLabel = { String.format(Locale.US, "%.3fs", it) },
                     enabled = trans.enabled
                 )
@@ -176,26 +176,26 @@ fun AppTransitionsScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
                     title = "Close Damping Ratio (ζ)",
-                    subtitle = "Damping for closing flight path back to icon position",
+                    subtitle = "0.88 = Signature OriginOS underdamped cushion into squircle, 1.00 = Critically damped",
                     colors = colors,
                     backdrop = backdrop,
                     value = trans.customCloseDamping,
                     onValueChange = trans::setCustomCloseDamping,
                     valueRange = 0.50f..1.40f,
-                    defaultValue = 1.00f,
+                    defaultValue = 0.88f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = trans.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Close Response Time (T₀)",
-                    subtitle = "0.397s (k=250 Swift), 0.468s (k=180 Gentle Style 3)",
+                    subtitle = "0.513s (k=150 Gentle Signature), 0.444s (k=200 Comfort), 0.397s (k=250 Swift)",
                     colors = colors,
                     backdrop = backdrop,
                     value = trans.customCloseResponse,
                     onValueChange = trans::setCustomCloseResponse,
                     valueRange = 0.20f..0.90f,
-                    defaultValue = 0.468f,
+                    defaultValue = 0.513f,
                     valueLabel = { String.format(Locale.US, "%.3fs", it) },
                     enabled = trans.enabled
                 )
