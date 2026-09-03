@@ -390,8 +390,9 @@ object AppTransitionHook {
 
         // Fallback: Android system Vibrator with standard linear motor EFFECT_CLICK
         try {
-            val app = android.app.ActivityThread.currentApplication()
-            val vibrator = app?.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? Vibrator
+            val activityThreadClass = Class.forName("android.app.ActivityThread")
+            val currentApp = activityThreadClass.getMethod("currentApplication").invoke(null) as? android.content.Context
+            val vibrator = currentApp?.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? Vibrator
             if (vibrator != null && vibrator.hasVibrator()) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
