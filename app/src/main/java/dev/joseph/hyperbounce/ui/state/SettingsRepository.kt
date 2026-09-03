@@ -946,6 +946,7 @@ class SettingsRepository(context: Context) {
             return dev.joseph.hyperbounce.safemode.CrashScope.isAliasInSafeModeProp(alias)
         }
 
+        @JvmName("setGlobalSafeModePref")
         fun setGlobalSafeMode(v: Boolean) {
             globalSafeMode = v
             if (v) {
@@ -955,6 +956,7 @@ class SettingsRepository(context: Context) {
             }
         }
 
+        @JvmName("setSystemUiSafeModePref")
         fun setSystemUiSafeMode(v: Boolean) {
             systemUiSafeMode = v
             if (v) {
@@ -964,6 +966,7 @@ class SettingsRepository(context: Context) {
             }
         }
 
+        @JvmName("setLauncherSafeModePref")
         fun setLauncherSafeMode(v: Boolean) {
             launcherSafeMode = v
             if (v) {
@@ -973,6 +976,7 @@ class SettingsRepository(context: Context) {
             }
         }
 
+        @JvmName("setInstagramSafeModePref")
         fun setInstagramSafeMode(v: Boolean) {
             instagramSafeMode = v
             if (v) {
@@ -982,6 +986,7 @@ class SettingsRepository(context: Context) {
             }
         }
 
+        @JvmName("setWhatsappSafeModePref")
         fun setWhatsappSafeMode(v: Boolean) {
             whatsappSafeMode = v
             if (v) {
@@ -991,6 +996,7 @@ class SettingsRepository(context: Context) {
             }
         }
 
+        @JvmName("setYoutubeSafeModePref")
         fun setYoutubeSafeMode(v: Boolean) {
             youtubeSafeMode = v
             if (v) {
