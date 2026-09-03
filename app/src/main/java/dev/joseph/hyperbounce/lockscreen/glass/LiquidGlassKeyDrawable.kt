@@ -353,44 +353,6 @@ class LiquidGlassKeyDrawable(
         }
     }
 
-    /**
-     * Recursively traverses from the root view down towards targetKeyView,
-     * safely drawing any visible sibling subtrees directly underneath targetKeyView.
-     * Ancestor containers are traversed to avoid HWUI re-entrancy on actively recording RenderNodes.
-     * Sibling subtrees are drawn safely via drawSiblingLayerSafe() with AABB intersection check.
-     */
-    private fun drawUnderlyingLayers(
-        recordingCanvas: Canvas,
-        current: View?,
-        targetKeyView: View,
-        viewX: Int,
-        viewY: Int,
-        margin: Int,
-        keyW: Float,
-        keyH: Float
-    ) {
-        if (current == null || current.visibility != View.VISIBLE) return
-        if (current === targetKeyView) return
-
-        if (!isAncestorOrSelf(current, targetKeyView)) {
-            // Entire subtree is a sibling branch (e.g. NotificationPanelView, Clock, Notifications, Bouncer background)
-            drawSiblingLayerSafe(recordingCanvas, current, targetKeyView, viewX, viewY, margin, keyW, keyH)
-            return
-        }
-
-        // 'current' is an ancestor of targetKeyView (RootView, KeyguardSecurityContainer, MiuiKeyguardPINView, Row)
-        // Recurse into children
-        if (current is ViewGroup) {
-            val count = current.childCount
-            for (i in 0 until count) {
-                val child = current.getChildAt(i)
-                if (child != null && child.visibility == View.VISIBLE) {
-                    drawUnderlyingLayers(recordingCanvas, child, targetKeyView, viewX, viewY, margin, keyW, keyH)
-                }
-            }
-        }
-    }
-
     override fun draw(canvas: Canvas) {
         if (isCapturingBackdrop) return
 
@@ -453,7 +415,7 @@ class LiquidGlassKeyDrawable(
                     val screenW = view.resources.displayMetrics.widthPixels
                     val screenH = view.resources.displayMetrics.heightPixels
 
-                    // 1. Base Layer: 100% Real-Time Lockscreen Live Wallpaper / Bouncer Blur
+                    // 1. Base Layer: 100% Real-Time Lockscreen Live Wallpaper & Bouncer Blur
                     val bgDrawable = getLiveBackdropDrawable(view.context, view.rootView)
                     recordingCanvas.save()
                     recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
@@ -470,10 +432,11 @@ class LiquidGlassKeyDrawable(
                     }
                     recordingCanvas.restore()
 
-                    // 2. Underlying Visible Layers: Live Clock, Notifications, Sheet Card, Bouncer BG, etc.
+                    // 2. Underlying Sibling Layer: Injected LockScreen Liquid Glass Sheet (Feature 1)
                     val root = view.rootView
                     if (root != null) {
-                        drawUnderlyingLayers(recordingCanvas, root, view, viewX, viewY, margin, w, h)
+                        val sheetView = root.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
+                        drawSiblingLayerSafe(recordingCanvas, sheetView, view, viewX, viewY, margin, w, h)
                     }
                 } finally {
                     isCapturingBackdrop = false

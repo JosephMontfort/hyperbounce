@@ -26,7 +26,13 @@ class PhysicsHook : XposedModule() {
                 return
             }
 
-            // 2. Install Crash Watchdog (Auto-triggers Safe Mode if 2+ crashes occur in 60s)
+            // 2. Rapid PID restart check (Engages Safe Mode if PID changes 3 times within 60s)
+            if (SafeModeHandler.checkAndTrackPidRestart(param.packageName)) {
+                Log.e("HyperBounce", "[SAFE MODE TRIGGERED] Rapid restart detected for ${param.packageName}! Skipping hooks.")
+                return
+            }
+
+            // 3. Install Crash Watchdog (Auto-triggers Safe Mode on uncaught exceptions)
             SafeModeHandler.installCrashWatchdog(param.packageName)
 
             when {
