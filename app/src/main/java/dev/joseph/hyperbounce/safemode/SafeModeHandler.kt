@@ -1,9 +1,7 @@
 package dev.joseph.hyperbounce.safemode
 
 import android.content.SharedPreferences
-import android.os.SystemClock
 import android.util.Log
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Hyperceiler-compatible Safe Mode Handler for HyperBounce.
@@ -11,11 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 object SafeModeHandler {
     private const val TAG = "HyperBounce_SafeMode"
-    private const val CRASH_WINDOW_MS = 60_000L // 60 seconds from startup
-    private const val CRASH_THRESHOLD = 2      // 2 crashes in 60s triggers Safe Mode
 
-    private val processStartTime = SystemClock.uptimeMillis()
-    private val crashCount = AtomicInteger(0)
     private var watchdogInstalled = false
 
     /**
@@ -89,7 +83,7 @@ object SafeModeHandler {
 
     /**
      * Installs an UncaughtExceptionHandler in the hooked process.
-     * If repeated crashes occur within 60s of process startup, Safe Mode is automatically engaged.
+     * Automatically engages Safe Mode immediately upon crash detection to prevent bootloops.
      */
     fun installCrashWatchdog(packageName: String) {
         if (watchdogInstalled) return
@@ -98,20 +92,9 @@ object SafeModeHandler {
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                val uptime = SystemClock.uptimeMillis() - processStartTime
                 val alias = CrashScope.getAlias(packageName) ?: packageName
-
-                Log.e(TAG, "[CRASH DETECTED] Process $packageName ($alias) crashed after ${uptime}ms", throwable)
-
-                if (uptime in 1..CRASH_WINDOW_MS) {
-                    val count = crashCount.incrementAndGet()
-                    Log.w(TAG, "Process $packageName crash count within window: $count/$CRASH_THRESHOLD")
-
-                    if (count >= CRASH_THRESHOLD) {
-                        Log.e(TAG, "[AUTO SAFE MODE TRIGGERED] $packageName exceeded crash threshold! Enabling Safe Mode.")
-                        updateCrashProp(alias)
-                    }
-                }
+                Log.e(TAG, "[CRASH DETECTED] Process $packageName ($alias) crashed! Engaging Safe Mode immediately.", throwable)
+                updateCrashProp(alias)
             } catch (t: Throwable) {
                 Log.e(TAG, "Error in crash watchdog", t)
             } finally {

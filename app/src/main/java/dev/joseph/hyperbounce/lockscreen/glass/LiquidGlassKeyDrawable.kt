@@ -18,17 +18,18 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
-import android.view.ViewGroup
+import android.view.ViewParent
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder
+import kotlin.math.max
 import kotlin.math.min
 
 /**
  * Authentic Liquid Glass 2.0 Circular Lens for Lock Screen PIN Pad Keys.
- * Captures 100% real-time backdrop directly beneath each button (live lockscreen blur, animations, and wallpaper):
+ * 100% Real-Time Backdrop Refraction with Zero-Crash Sibling Key Suppression:
  * sdCircle SDF -> Numerical Normal Field -> Real-time Inward Refraction
- * -> Physical Chromatic Dispersion -> Adaptive Luminous Tint -> Vibrancy Curve -> Specular Reflection.
+ * -> Physical Chromatic Dispersion -> Apple-grade Adaptive Luminous Tint -> Vibrancy Curve -> Specular Reflection.
  */
 class LiquidGlassKeyDrawable(
     private val view: View,
@@ -149,38 +150,41 @@ class LiquidGlassKeyDrawable(
 
                 // Liquid Glass 2.0 Vibrancy Saturation Curve
                 float lum = dot(col, float3(0.2126, 0.7152, 0.0722));
-                float satNow = max(col.r, max(col.g, col.b)) - min(col.r, min(col.g, col.b));
-                float room = 1.0 - smoothstep(0.20, 0.85, satNow);
-                float hl = 1.0 - smoothstep(0.75, 0.98, lum);
-                float amount = 1.0 + (satFactor - 1.0) * mix(0.30, 1.0, room * hl);
-                col = clamp(mix(float3(lum), col, amount), float3(0.0), float3(1.0));
+                if (satFactor <= 1.0) {
+                    col = mix(float3(lum), col, satFactor);
+                } else {
+                    float satNow = max(col.r, max(col.g, col.b)) - min(col.r, min(col.g, col.b));
+                    float room = 1.0 - smoothstep(0.20, 0.85, satNow);
+                    float hl = 1.0 - smoothstep(0.75, 0.98, lum);
+                    float amount = 1.0 + (satFactor - 1.0) * mix(0.30, 1.0, room * hl);
+                    col = clamp(mix(float3(lum), col, amount), float3(0.0), float3(1.0));
+                }
 
-                // Adaptive Luminous Glass Tint (Radiant crystal glow on dark backgrounds)
+                // Apple-grade Adaptive Luminous Glass Tint
                 float lumT = dot(col, float3(0.2126, 0.7152, 0.0722));
-                float e = smoothstep(0.30, 0.75, lumT);
-                float tintAlpha = mix(0.18, 0.38, press);
-                col = mix(col, float3(1.0 - e), tintAlpha * (0.60 + 0.40 * slope));
+                float e = smoothstep(0.35, 0.75, lumT);
+                col = mix(col, float3(1.0 - e), 0.16 + 0.12 * e + 0.20 * press);
 
                 // Directional Specular Reflection
                 float facing = dot(n, -lightDir);
                 float facingPos = max(facing, 0.0);
                 float facingNeg = max(-facing, 0.0);
-                float bandW = clamp(bevel * 0.35, 2.0, 10.0);
+                float bandW = clamp(bevel * 0.30, 2.0, 9.0);
                 float rim = clamp(1.0 - (dist - 0.5) / bandW, 0.0, 1.0) * cov;
-                float lobe = 0.60 * pow(facingPos, 5.0) + 0.20 * pow(facingNeg, 5.0) + 0.05;
+                float lobe = 0.55 * pow(facingPos, 5.0) + 0.18 * pow(facingNeg, 5.0) + 0.05;
                 float hair = clamp(1.0 - abs(d + 1.0) / 1.5, 0.0, 1.0);
-                float spec = (rim * lobe + hair * (0.28 + 0.45 * facingPos)) * specStrength * (1.0 - 0.30 * press);
+                float spec = (rim * lobe + hair * (0.22 + 0.35 * facingPos)) * specStrength * (1.0 - 0.35 * press);
                 col += float3(spec);
 
                 // Backside Inner Shadow for physical lens depth
-                float shadowW = clamp(bevel, 4.0, 24.0);
+                float shadowW = clamp(bevel, 4.0, 28.0);
                 float shadowBand = pow(clamp(1.0 + d / shadowW, 0.0, 1.0), 1.5);
                 float ish = shadowBand * facingNeg * innerShadow;
                 col = col * (1.0 - 0.45 * ish);
 
                 col = clamp(col, float3(0.0), float3(1.0));
 
-                return half4(col * cov, cov);
+                return half4(half3(col * cov), half(cov));
             }
         """
     }
@@ -216,7 +220,7 @@ class LiquidGlassKeyDrawable(
         touchLocalY = y
         pressAnimator?.cancel()
         pressAnimator = ValueAnimator.ofFloat(pressProgress, 1.0f).apply {
-            duration = 140L
+            duration = 120L
             interpolator = DecelerateInterpolator(1.5f)
             addUpdateListener {
                 pressProgress = it.animatedValue as Float
@@ -235,7 +239,7 @@ class LiquidGlassKeyDrawable(
     fun onTouchUp() {
         pressAnimator?.cancel()
         pressAnimator = ValueAnimator.ofFloat(pressProgress, 0.0f).apply {
-            duration = 280L
+            duration = 240L
             interpolator = OvershootInterpolator(1.4f)
             addUpdateListener {
                 pressProgress = it.animatedValue as Float
@@ -255,7 +259,7 @@ class LiquidGlassKeyDrawable(
 
         val cfg = LockScreenConfigHolder.keypad
         val customDiameterPx = cfg.circleDiameter * density
-        val radius = (customDiameterPx / 2f).coerceAtMost(min(w, h) / 2f)
+        val radius = (customDiameterPx / 2f).coerceAtMost(min(w, h) / 2f).coerceAtLeast(16f)
         val cx = w / 2f
         val cy = h / 2f
 
@@ -278,7 +282,7 @@ class LiquidGlassKeyDrawable(
                 sh.setFloatUniform("viewSize", w, h)
                 sh.setFloatUniform("circleCenter", cx, cy)
                 sh.setFloatUniform("radius", radius)
-                sh.setFloatUniform("bevel", cfg.buttonBevel * density)
+                sh.setFloatUniform("bevel", max(cfg.buttonBevel * density, 1f))
                 sh.setFloatUniform("refractPx", cfg.buttonRefraction * density)
                 sh.setFloatUniform("dispersion", cfg.buttonDispersion)
                 sh.setFloatUniform("lightDir", 0f, 1f)
@@ -303,8 +307,23 @@ class LiquidGlassKeyDrawable(
                 val recordingCanvas = renderNode.beginRecording((w + 2 * margin).toInt(), (h + 2 * margin).toInt())
 
                 var capturedLive = false
-                val pinContainer = (view.parent as? ViewGroup)
-                val backdropSource = (pinContainer?.parent as? View) ?: pinContainer?.rootView
+
+                // Find top PIN view to hide during background recording so all PIN buttons are omitted from the backdrop
+                var topPinView: View? = null
+                var curr: ViewParent? = view.parent
+                while (curr is View) {
+                    val name = curr.javaClass.name
+                    if (name.contains("KeyguardPINView") || name.contains("KeyguardSecurityContainer")) {
+                        topPinView = curr
+                    }
+                    if (curr.id == android.R.id.content || name.contains("NotificationShadeWindowView")) {
+                        break
+                    }
+                    curr = curr.parent
+                }
+
+                val hideTarget = topPinView ?: (view.parent?.parent as? View) ?: (view.parent as? View)
+                val backdropSource = view.rootView ?: (hideTarget?.parent as? View)
 
                 if (backdropSource != null && backdropSource.width > 0 && backdropSource.height > 0) {
                     backdropSource.getLocationOnScreen(parentLocation)
@@ -315,15 +334,14 @@ class LiquidGlassKeyDrawable(
                     recordingCanvas.translate(margin.toFloat() - offsetX, margin.toFloat() - offsetY)
 
                     isCapturingBackdrop = true
-                    // Temporarily hide the PIN container layout so no PIN buttons are drawn into the lens backdrop
-                    setTransitionVisibilitySafe(pinContainer, View.INVISIBLE)
+                    setTransitionVisibilitySafe(hideTarget, View.INVISIBLE)
                     try {
                         backdropSource.draw(recordingCanvas)
                         capturedLive = true
                     } catch (t: Throwable) {
                         Log.w(TAG, "Live backdrop draw failed, falling back to wallpaper", t)
                     } finally {
-                        setTransitionVisibilitySafe(pinContainer, View.VISIBLE)
+                        setTransitionVisibilitySafe(hideTarget, View.VISIBLE)
                         isCapturingBackdrop = false
                         recordingCanvas.restore()
                     }

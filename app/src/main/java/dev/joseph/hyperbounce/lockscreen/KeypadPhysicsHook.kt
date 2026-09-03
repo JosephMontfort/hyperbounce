@@ -1,70 +1,26 @@
 package dev.joseph.hyperbounce.lockscreen
 
-import android.content.Context
 import android.graphics.Typeface
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
-import android.util.Pair
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.DecelerateInterpolator
-import android.view.animation.OvershootInterpolator
 import android.widget.TextView
 import dev.joseph.hyperbounce.lockscreen.glass.LiquidGlassKeyDrawable
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Field
 import java.lang.reflect.Method
-import java.util.WeakHashMap
 
 /**
  * Feature 2: 100% Real-Time Liquid Glass 2.0 Lockscreen PIN Pad Engine.
  * Replaces legacy jelly physics with true Liquid Glass 2.0 circular lens buttons.
- *
- * NOTE: Legacy spring / jelly squish physics engine is preserved below in a dormant state
- * for future reference and A/B comparison.
  */
 object KeypadPhysicsHook {
 
     private const val TAG = "HyperBounce_Keypad"
-
-    // =========================================================================
-    // DORMANT LEGACY JELLY / SPRING PHYSICS ENGINE (Preserved for reference)
-    // =========================================================================
-    /*
-    class Spring(var current: Float = 1f, var target: Float = 1f, var velocity: Float = 0f) {
-        fun update(stiffness: Float, damping: Float): Boolean {
-            val displacement = current - target
-            val acceleration = (-stiffness * displacement) + (-damping * velocity)
-            velocity += acceleration * 0.016f
-            current += velocity * 0.016f
-            return abs(velocity) > 0.001f || abs(displacement) > 0.001f
-        }
-        fun snap(value: Float) {
-            current = value
-            target = value
-            velocity = 0f
-        }
-    }
-
-    class KeyState {
-        val scale = Spring(1f, 1f)
-        val highlight = Spring(0f, 0f)
-        val dragX = Spring(0f, 0f)
-        val dragY = Spring(0f, 0f)
-        var touchDownX = 0f
-        var touchDownY = 0f
-        var isPressed = false
-        var isRunning = false
-    }
-
-    private val keyStateMap = WeakHashMap<View, KeyState>()
-    */
-    // =========================================================================
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
         // 1. Hook MiuiNumPadKey touch events for Liquid Glass 2.0 Press Optics & Liquid Bulge
@@ -86,29 +42,9 @@ object KeypadPhysicsHook {
                             if (view != null && event != null && cfg.enabled) {
                                 val liquidDrawable = view.background as? LiquidGlassKeyDrawable
                                 when (event.actionMasked) {
-                                    MotionEvent.ACTION_DOWN -> {
-                                        liquidDrawable?.onTouchDown(event.x, event.y)
-                                        // Dynamic smooth liquid scale on press
-                                        view.animate()
-                                            .scaleX(cfg.pressLiquidScale)
-                                            .scaleY(cfg.pressLiquidScale)
-                                            .setDuration(140)
-                                            .setInterpolator(DecelerateInterpolator(1.5f))
-                                            .start()
-                                    }
-                                    MotionEvent.ACTION_MOVE -> {
-                                        liquidDrawable?.onTouchMove(event.x, event.y)
-                                    }
-                                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                                        liquidDrawable?.onTouchUp()
-                                        // Spring back smoothly
-                                        view.animate()
-                                            .scaleX(1.0f)
-                                            .scaleY(1.0f)
-                                            .setDuration(280)
-                                            .setInterpolator(OvershootInterpolator(1.4f))
-                                            .start()
-                                    }
+                                    MotionEvent.ACTION_DOWN -> liquidDrawable?.onTouchDown(event.x, event.y)
+                                    MotionEvent.ACTION_MOVE -> liquidDrawable?.onTouchMove(event.x, event.y)
+                                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> liquidDrawable?.onTouchUp()
                                 }
                             }
                             return chain.proceed()
@@ -141,20 +77,11 @@ object KeypadPhysicsHook {
                         (keyView.parent as? ViewGroup)?.clipChildren = false
                         (keyView.parent?.parent as? ViewGroup)?.clipChildren = false
 
-                        // Apply custom button diameter to layout params
-                        val customDiameterPx = (cfg.circleDiameter * density).toInt()
-                        val lp = keyView.layoutParams
-                        if (lp != null && (lp.width != customDiameterPx || lp.height != customDiameterPx)) {
-                            lp.width = customDiameterPx
-                            lp.height = customDiameterPx
-                            keyView.layoutParams = lp
-                        }
-
                         // Set Liquid Glass 2.0 Circular Button Lens Background
                         if (keyView.background !is LiquidGlassKeyDrawable) {
                             keyView.background = LiquidGlassKeyDrawable(keyView, density)
                         }
-                        keyView.elevation = 6 * density
+                        keyView.elevation = 4 * density
 
                         // Letters text (Klondike)
                         try {
@@ -237,7 +164,7 @@ object KeypadPhysicsHook {
             }
 
             for (m: Method in pinViewClass.declaredMethods) {
-                if (m.name == "onFinishInflate" || m.name == "updatePositionForFod" || m.name == "updateLayoutParams" || m.name == "onAttachedToWindow") {
+                if (m.name == "onFinishInflate" || m.name == "updatePositionForFod" || m.name == "updateLayoutParams" || m.name == "onAttachedToWindow" || m.name == "startAppearAnimation") {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
@@ -246,64 +173,6 @@ object KeypadPhysicsHook {
                                 applyPinLayoutAndStyles(pinView)
                             } catch (_: Throwable) {}
                             return result
-                        }
-                    })
-                }
-
-                // Hook startAppearAnimation for Y-Axis Glide & Staggered Sequential Entrance
-                if (m.name == "startAppearAnimation") {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
-                            val pinViewObj = chain.thisObject
-                            val pinView = pinViewObj as? View ?: return chain.proceed()
-                            val cfg = LockScreenConfigHolder.keypad
-                            if (!cfg.enabled) return chain.proceed()
-
-                            val ctx = pinView.context
-                            val density = ctx.resources.displayMetrics.density
-
-                            try {
-                                val pairs = Array(4) { Array(3) { Pair(0, 0) } }
-                                val keyNames = arrayOf(
-                                    arrayOf("key1", "key2", "key3"),
-                                    arrayOf("key4", "key5", "key6"),
-                                    arrayOf("key7", "key8", "key9"),
-                                    arrayOf("emergency_call_button", "key0", "delete_button")
-                                )
-
-                                for (row in 0..3) {
-                                    for (col in 0..2) {
-                                        val keyName = keyNames[row][col]
-                                        val resId = ctx.resources.getIdentifier(keyName, "id", "com.android.systemui")
-                                        val keyView = if (resId != 0) pinView.findViewById<View>(resId) else null
-
-                                        if (keyView != null) {
-                                            val delay = cfg.getKeyDelay(keyName, row, col)
-                                            val startTY = cfg.entryTranslationY * density
-                                            val startScale = cfg.entryInitialScale
-                                            val duration = cfg.entryDuration.toLong().coerceAtLeast(100L)
-                                            val overshoot = cfg.entryOvershoot.coerceAtLeast(0.5f)
-
-                                            keyView.translationY = startTY
-                                            keyView.scaleX = startScale
-                                            keyView.scaleY = startScale
-                                            keyView.alpha = 0f
-
-                                            keyView.animate()
-                                                .translationY(0f)
-                                                .scaleX(1f)
-                                                .scaleY(1f)
-                                                .alpha(1f)
-                                                .setStartDelay(delay)
-                                                .setDuration(duration)
-                                                .setInterpolator(OvershootInterpolator(overshoot))
-                                                .start()
-                                        }
-                                    }
-                                }
-                            } catch (_: Throwable) {}
-
-                            return null
                         }
                     })
                 }
