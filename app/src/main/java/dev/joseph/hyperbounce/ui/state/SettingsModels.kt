@@ -198,23 +198,31 @@ data class ScreenUnlockSettings(
     val kineticDockZDepth: Float = 800.0f
 )
 
-/** Feature 4: Launcher App Open / Close Spring Physics Settings */
-data class AppTransitionSettings(
+/** Feature 4: OriginOS 6 App Transition & Physics Settings */
+data class OriginOSTransitionSettings(
     val enabled: Boolean = true,
-    val posDamping: Float = 0.80f,
-    val posResponse: Float = 0.40f,
-    val scaleDamping: Float = 0.80f,
-    val scaleResponse: Float = 0.40f,
-    val cornerDamping: Float = 1.00f,
-    val cornerResponse: Float = 0.35f,
-    val alphaDamping: Float = 1.00f,
-    val alphaResponse: Float = 0.30f,
-    val appYArc: Float = 0.0f,
-    val appBottomZWarp: Float = 0.0f,
-    val appXSway: Float = 0.0f,
-    val appInterruptSmooth: Float = 1.0f,
-    val appIconPitchDeg: Float = 0.0f,
-    val appIconCameraDist: Float = 8000.0f
+    val curveProfile: Int = 0, // 0 = Swift (轻快), 1 = Gentle (柔和), 2 = Comfort (舒适), 3 = Custom Tuner
+    val parallelAnimEnabled: Boolean = true,
+    val unlockHighEndCapabilities: Boolean = true,
+    val delayedAlphaClose: Boolean = true,
+
+    // Custom Tuner Parameters
+    val customOpenDamping: Float = 1.00f,
+    val customOpenResponse: Float = 0.296f, // k = 450.0f
+    val customCloseDamping: Float = 1.00f,
+    val customCloseResponse: Float = 0.468f, // k = 180.0f
+    val customRecentsDamping: Float = 0.95f,
+    val customRecentsResponse: Float = 0.419f, // k = 224.0f
+    val customParallelDamping: Float = 0.95f,
+    val customParallelResponse: Float = 0.419f, // k = 224.0f
+    val customCornerDamping: Float = 1.15f,
+    val customCornerResponse: Float = 0.256f, // k = 600.0f
+    val customAlphaDamping: Float = 0.60f,
+    val customAlphaResponse: Float = 0.268f, // k = 550.0f
+
+    // Spatial & Environmental
+    val wallpaperScaleZoom: Float = 1.15f,
+    val dragLayerEndScale: Float = 0.90f
 )
 
 /** Features 5, 6, 7, 8, 9: Control Center Modular Customization, Jelly Physics & Dynamics */

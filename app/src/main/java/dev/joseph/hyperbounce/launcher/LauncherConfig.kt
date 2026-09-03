@@ -36,26 +36,30 @@ data class ScreenUnlockConfig(
     fun getDyn(key: String, defVal: Float): Float = dyn[key] ?: defVal
 }
 
-data class AppTransitionConfig(
+data class OriginOSTransitionConfig(
     val enabled: Boolean = true,
+    val curveProfile: Int = 0, // 0 = Swift (轻快), 1 = Gentle (柔和), 2 = Comfort (舒适), 3 = Custom Tuner
+    val parallelAnimEnabled: Boolean = true, // Parallel multi-app launches without home gesture
+    val unlockHighEndCapabilities: Boolean = true, // Force unlock flagship FastLaunch & bypass lite device throttling
+    val delayedAlphaClose: Boolean = true, // OriginOS 120ms alpha hold for solid card collapse
 
-    // Spring Channel Remapping
-    val posDamping: Float = 0.80f,
-    val posResponse: Float = 0.40f,
-    val scaleDamping: Float = 0.80f,
-    val scaleResponse: Float = 0.40f,
-    val cornerDamping: Float = 1.00f,
-    val cornerResponse: Float = 0.35f,
-    val alphaDamping: Float = 1.00f,
-    val alphaResponse: Float = 0.30f,
+    // Custom Tuner Parameters (Active when curveProfile == 3, or customized)
+    val customOpenDamping: Float = 1.00f,
+    val customOpenResponse: Float = 0.296f, // k = 450.0f
+    val customCloseDamping: Float = 1.00f,
+    val customCloseResponse: Float = 0.468f, // k = 180.0f
+    val customRecentsDamping: Float = 0.95f,
+    val customRecentsResponse: Float = 0.419f, // k = 224.0f
+    val customParallelDamping: Float = 0.95f,
+    val customParallelResponse: Float = 0.419f, // k = 224.0f
+    val customCornerDamping: Float = 1.15f,
+    val customCornerResponse: Float = 0.256f, // k = 600.0f
+    val customAlphaDamping: Float = 0.60f,
+    val customAlphaResponse: Float = 0.268f, // k = 550.0f
 
-    // Spatial Trajectory & 3D Depth
-    val appYArc: Float = 0.0f,
-    val appBottomZWarp: Float = 0.0f,
-    val appXSway: Float = 0.0f,
-    val appInterruptSmooth: Float = 1.0f,
-    val appIconPitchDeg: Float = 0.0f,
-    val appIconCameraDist: Float = 8000.0f
+    // Spatial & Environmental Parameters
+    val wallpaperScaleZoom: Float = 1.15f, // OriginOS wallpaper zoom (1.0 -> 1.15)
+    val dragLayerEndScale: Float = 0.90f   // OriginOS desktop scale (1.0 -> 0.90)
 )
 
 object LauncherConfigHolder {
@@ -64,8 +68,12 @@ object LauncherConfigHolder {
         private set
 
     @Volatile
-    var transitionConfig: AppTransitionConfig = AppTransitionConfig()
+    var originOSConfig: OriginOSTransitionConfig = OriginOSTransitionConfig()
         private set
+
+    // Backward compatibility accessor
+    val transitionConfig: OriginOSTransitionConfig
+        get() = originOSConfig
 
     fun update(prefs: SharedPreferences) {
         val rows = prefs.getInt("unlock_grid_rows", 7).coerceIn(1, 32)
@@ -110,22 +118,26 @@ object LauncherConfigHolder {
             dyn = dynMap
         )
 
-        transitionConfig = AppTransitionConfig(
-            enabled = prefs.getBoolean("app_anim_enabled", true),
-            posDamping = prefs.getFloat("app_pos_damping", 0.80f),
-            posResponse = prefs.getFloat("app_pos_response", 0.40f),
-            scaleDamping = prefs.getFloat("app_scale_damping", 0.80f),
-            scaleResponse = prefs.getFloat("app_scale_response", 0.40f),
-            cornerDamping = prefs.getFloat("app_corner_damping", 1.00f),
-            cornerResponse = prefs.getFloat("app_corner_response", 0.35f),
-            alphaDamping = prefs.getFloat("app_alpha_damping", 1.00f),
-            alphaResponse = prefs.getFloat("app_alpha_response", 0.30f),
-            appYArc = prefs.getFloat("app_y_arc", 0.0f),
-            appBottomZWarp = prefs.getFloat("app_bottom_z_warp", 0.0f),
-            appXSway = prefs.getFloat("app_x_sway", 0.0f),
-            appInterruptSmooth = prefs.getFloat("app_interrupt_smooth", 1.0f),
-            appIconPitchDeg = prefs.getFloat("app_icon_pitch_deg", 0.0f),
-            appIconCameraDist = prefs.getFloat("app_icon_camera_dist", 8000.0f)
+        originOSConfig = OriginOSTransitionConfig(
+            enabled = prefs.getBoolean("originos_anim_enabled", true),
+            curveProfile = prefs.getInt("originos_curve_profile", 0),
+            parallelAnimEnabled = prefs.getBoolean("originos_parallel_enabled", true),
+            unlockHighEndCapabilities = prefs.getBoolean("originos_unlock_highend", true),
+            delayedAlphaClose = prefs.getBoolean("originos_delayed_alpha", true),
+            customOpenDamping = prefs.getFloat("originos_open_damping", 1.00f),
+            customOpenResponse = prefs.getFloat("originos_open_response", 0.296f),
+            customCloseDamping = prefs.getFloat("originos_close_damping", 1.00f),
+            customCloseResponse = prefs.getFloat("originos_close_response", 0.468f),
+            customRecentsDamping = prefs.getFloat("originos_recents_damping", 0.95f),
+            customRecentsResponse = prefs.getFloat("originos_recents_response", 0.419f),
+            customParallelDamping = prefs.getFloat("originos_parallel_damping", 0.95f),
+            customParallelResponse = prefs.getFloat("originos_parallel_response", 0.419f),
+            customCornerDamping = prefs.getFloat("originos_corner_damping", 1.15f),
+            customCornerResponse = prefs.getFloat("originos_corner_response", 0.256f),
+            customAlphaDamping = prefs.getFloat("originos_alpha_damping", 0.60f),
+            customAlphaResponse = prefs.getFloat("originos_alpha_response", 0.268f),
+            wallpaperScaleZoom = prefs.getFloat("originos_wallpaper_zoom", 1.15f),
+            dragLayerEndScale = prefs.getFloat("originos_draglayer_scale", 0.90f)
         )
     }
 }

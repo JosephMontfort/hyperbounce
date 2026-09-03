@@ -96,8 +96,8 @@ fun TuningScreen(
             )
             RowDivider(colors.separator)
             SettingsNavRow(
-                title = "App Transitions",
-                subtitle = if (repository.appTransition.enabled) "Open / Close Spring Channels" else "Off",
+                title = "OriginOS Transitions",
+                subtitle = if (repository.appTransition.enabled) "OriginOS 6 Physics & Parallel Launch" else "Off",
                 colors = colors,
                 iconTint = colors.accentGreen,
                 onClick = { onNavigate(Destination.AppTransitions) },

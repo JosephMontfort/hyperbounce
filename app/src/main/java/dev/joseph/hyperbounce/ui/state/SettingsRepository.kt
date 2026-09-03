@@ -709,65 +709,83 @@ class SettingsRepository(context: Context) {
         }
     }
 
-    // --- app open/close spring transitions (Feature 4) -----------------------------------
+    // --- OriginOS 6 App Transitions & Physics (Feature 4) -----------------------------------
 
     inner class AppTransitionHolder {
-        private val defaults = AppTransitionSettings()
+        private val defaults = OriginOSTransitionSettings()
 
-        var enabled by prefsBooleanState("app_anim_enabled", defaults.enabled); private set
-        var posDamping by prefsFloatState("app_pos_damping", defaults.posDamping); private set
-        var posResponse by prefsFloatState("app_pos_response", defaults.posResponse); private set
-        var scaleDamping by prefsFloatState("app_scale_damping", defaults.scaleDamping); private set
-        var scaleResponse by prefsFloatState("app_scale_response", defaults.scaleResponse); private set
-        var cornerDamping by prefsFloatState("app_corner_damping", defaults.cornerDamping); private set
-        var cornerResponse by prefsFloatState("app_corner_response", defaults.cornerResponse); private set
-        var alphaDamping by prefsFloatState("app_alpha_damping", defaults.alphaDamping); private set
-        var alphaResponse by prefsFloatState("app_alpha_response", defaults.alphaResponse); private set
-        var appYArc by prefsFloatState("app_y_arc", defaults.appYArc); private set
-        var appBottomZWarp by prefsFloatState("app_bottom_z_warp", defaults.appBottomZWarp); private set
-        var appXSway by prefsFloatState("app_x_sway", defaults.appXSway); private set
-        var appInterruptSmooth by prefsFloatState("app_interrupt_smooth", defaults.appInterruptSmooth); private set
-        var appIconPitchDeg by prefsFloatState("app_icon_pitch_deg", defaults.appIconPitchDeg); private set
-        var appIconCameraDist by prefsFloatState("app_icon_camera_dist", defaults.appIconCameraDist); private set
+        var enabled by prefsBooleanState("originos_anim_enabled", defaults.enabled); private set
+        var curveProfile by prefsIntState("originos_curve_profile", defaults.curveProfile); private set
+        var parallelAnimEnabled by prefsBooleanState("originos_parallel_enabled", defaults.parallelAnimEnabled); private set
+        var unlockHighEndCapabilities by prefsBooleanState("originos_unlock_highend", defaults.unlockHighEndCapabilities); private set
+        var delayedAlphaClose by prefsBooleanState("originos_delayed_alpha", defaults.delayedAlphaClose); private set
 
-        fun snapshot(): AppTransitionSettings = AppTransitionSettings(
-            enabled, posDamping, posResponse, scaleDamping, scaleResponse,
-            cornerDamping, cornerResponse, alphaDamping, alphaResponse,
-            appYArc, appBottomZWarp, appXSway, appInterruptSmooth, appIconPitchDeg, appIconCameraDist
+        var customOpenDamping by prefsFloatState("originos_open_damping", defaults.customOpenDamping); private set
+        var customOpenResponse by prefsFloatState("originos_open_response", defaults.customOpenResponse); private set
+        var customCloseDamping by prefsFloatState("originos_close_damping", defaults.customCloseDamping); private set
+        var customCloseResponse by prefsFloatState("originos_close_response", defaults.customCloseResponse); private set
+        var customRecentsDamping by prefsFloatState("originos_recents_damping", defaults.customRecentsDamping); private set
+        var customRecentsResponse by prefsFloatState("originos_recents_response", defaults.customRecentsResponse); private set
+        var customParallelDamping by prefsFloatState("originos_parallel_damping", defaults.customParallelDamping); private set
+        var customParallelResponse by prefsFloatState("originos_parallel_response", defaults.customParallelResponse); private set
+        var customCornerDamping by prefsFloatState("originos_corner_damping", defaults.customCornerDamping); private set
+        var customCornerResponse by prefsFloatState("originos_corner_response", defaults.customCornerResponse); private set
+        var customAlphaDamping by prefsFloatState("originos_alpha_damping", defaults.customAlphaDamping); private set
+        var customAlphaResponse by prefsFloatState("originos_alpha_response", defaults.customAlphaResponse); private set
+
+        var wallpaperScaleZoom by prefsFloatState("originos_wallpaper_zoom", defaults.wallpaperScaleZoom); private set
+        var dragLayerEndScale by prefsFloatState("originos_draglayer_scale", defaults.dragLayerEndScale); private set
+
+        fun snapshot(): OriginOSTransitionSettings = OriginOSTransitionSettings(
+            enabled, curveProfile, parallelAnimEnabled, unlockHighEndCapabilities, delayedAlphaClose,
+            customOpenDamping, customOpenResponse, customCloseDamping, customCloseResponse,
+            customRecentsDamping, customRecentsResponse, customParallelDamping, customParallelResponse,
+            customCornerDamping, customCornerResponse, customAlphaDamping, customAlphaResponse,
+            wallpaperScaleZoom, dragLayerEndScale
         )
 
-        @JvmName("setAppAnimEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
-        @JvmName("setAppPosDampingPref") fun setPosDamping(v: Float) { posDamping = v }
-        @JvmName("setAppPosResponsePref") fun setPosResponse(v: Float) { posResponse = v }
-        @JvmName("setScaleDampingPref") fun setScaleDamping(v: Float) { scaleDamping = v }
-        @JvmName("setScaleResponsePref") fun setScaleResponse(v: Float) { scaleResponse = v }
-        @JvmName("setCornerDampingPref") fun setCornerDamping(v: Float) { cornerDamping = v }
-        @JvmName("setCornerResponsePref") fun setCornerResponse(v: Float) { cornerResponse = v }
-        @JvmName("setAlphaDampingPref") fun setAlphaDamping(v: Float) { alphaDamping = v }
-        @JvmName("setAlphaResponsePref") fun setAlphaResponse(v: Float) { alphaResponse = v }
-        @JvmName("setAppYArcPref") fun setAppYArc(v: Float) { appYArc = v }
-        @JvmName("setAppBottomZWarpPref") fun setAppBottomZWarp(v: Float) { appBottomZWarp = v }
-        @JvmName("setAppXSwayPref") fun setAppXSway(v: Float) { appXSway = v }
-        @JvmName("setAppInterruptSmoothPref") fun setAppInterruptSmooth(v: Float) { appInterruptSmooth = v }
-        @JvmName("setAppIconPitchDegPref") fun setAppIconPitchDeg(v: Float) { appIconPitchDeg = v }
-        @JvmName("setAppIconCameraDistPref") fun setAppIconCameraDist(v: Float) { appIconCameraDist = v }
+        @JvmName("setOriginOSEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
+        @JvmName("setOriginOSCurveProfilePref") fun setCurveProfile(v: Int) { curveProfile = v }
+        @JvmName("setOriginOSParallelEnabledPref") fun setParallelAnimEnabled(v: Boolean) { parallelAnimEnabled = v }
+        @JvmName("setOriginOSUnlockHighEndPref") fun setUnlockHighEndCapabilities(v: Boolean) { unlockHighEndCapabilities = v }
+        @JvmName("setOriginOSDelayedAlphaPref") fun setDelayedAlphaClose(v: Boolean) { delayedAlphaClose = v }
+
+        @JvmName("setOriginOSOpenDampingPref") fun setCustomOpenDamping(v: Float) { customOpenDamping = v }
+        @JvmName("setOriginOSOpenResponsePref") fun setCustomOpenResponse(v: Float) { customOpenResponse = v }
+        @JvmName("setOriginOSCloseDampingPref") fun setCustomCloseDamping(v: Float) { customCloseDamping = v }
+        @JvmName("setOriginOSCloseResponsePref") fun setCustomCloseResponse(v: Float) { customCloseResponse = v }
+        @JvmName("setOriginOSRecentsDampingPref") fun setCustomRecentsDamping(v: Float) { customRecentsDamping = v }
+        @JvmName("setOriginOSRecentsResponsePref") fun setCustomRecentsResponse(v: Float) { customRecentsResponse = v }
+        @JvmName("setOriginOSParallelDampingPref") fun setCustomParallelDamping(v: Float) { customParallelDamping = v }
+        @JvmName("setOriginOSParallelResponsePref") fun setCustomParallelResponse(v: Float) { customParallelResponse = v }
+        @JvmName("setOriginOSCornerDampingPref") fun setCustomCornerDamping(v: Float) { customCornerDamping = v }
+        @JvmName("setOriginOSCornerResponsePref") fun setCustomCornerResponse(v: Float) { customCornerResponse = v }
+        @JvmName("setOriginOSAlphaDampingPref") fun setCustomAlphaDamping(v: Float) { customAlphaDamping = v }
+        @JvmName("setOriginOSAlphaResponsePref") fun setCustomAlphaResponse(v: Float) { customAlphaResponse = v }
+
+        @JvmName("setOriginOSWallpaperZoomPref") fun setWallpaperScaleZoom(v: Float) { wallpaperScaleZoom = v }
+        @JvmName("setOriginOSDragLayerScalePref") fun setDragLayerEndScale(v: Float) { dragLayerEndScale = v }
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
-            posDamping = defaults.posDamping
-            posResponse = defaults.posResponse
-            scaleDamping = defaults.scaleDamping
-            scaleResponse = defaults.scaleResponse
-            cornerDamping = defaults.cornerDamping
-            cornerResponse = defaults.cornerResponse
-            alphaDamping = defaults.alphaDamping
-            alphaResponse = defaults.alphaResponse
-            appYArc = defaults.appYArc
-            appBottomZWarp = defaults.appBottomZWarp
-            appXSway = defaults.appXSway
-            appInterruptSmooth = defaults.appInterruptSmooth
-            appIconPitchDeg = defaults.appIconPitchDeg
-            appIconCameraDist = defaults.appIconCameraDist
+            curveProfile = defaults.curveProfile
+            parallelAnimEnabled = defaults.parallelAnimEnabled
+            unlockHighEndCapabilities = defaults.unlockHighEndCapabilities
+            delayedAlphaClose = defaults.delayedAlphaClose
+            customOpenDamping = defaults.customOpenDamping
+            customOpenResponse = defaults.customOpenResponse
+            customCloseDamping = defaults.customCloseDamping
+            customCloseResponse = defaults.customCloseResponse
+            customRecentsDamping = defaults.customRecentsDamping
+            customRecentsResponse = defaults.customRecentsResponse
+            customParallelDamping = defaults.customParallelDamping
+            customParallelResponse = defaults.customParallelResponse
+            customCornerDamping = defaults.customCornerDamping
+            customCornerResponse = defaults.customCornerResponse
+            customAlphaDamping = defaults.customAlphaDamping
+            customAlphaResponse = defaults.customAlphaResponse
+            wallpaperScaleZoom = defaults.wallpaperScaleZoom
+            dragLayerEndScale = defaults.dragLayerEndScale
         }
     }
 
