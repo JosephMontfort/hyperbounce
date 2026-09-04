@@ -833,11 +833,11 @@ object AppTransitionHook {
                         // 1. OPEN DYNAMICS (Distinct Vertical Uplift for Bottom Apps, Downward Dip for Top Apps):
                         val isBottomApp = normY >= 0.5f
                         val openDamping = if (isBottomApp) 0.86f else 0.88f
-                        val openResponseCenterY = (if (isBottomApp) 0.40f else 0.44f) * speedRatio
-                        val openResponseCenterX = (0.32f * speedRatio).coerceAtLeast(0.18f)
-                        val openResponseHeight = (0.34f * speedRatio).coerceAtLeast(0.18f)
-                        val openResponseWidth = (0.35f * speedRatio).coerceAtLeast(0.18f)
-                        val openResponseRatio = (0.35f * speedRatio).coerceAtLeast(0.18f)
+                        val openResponseCenterY = (if (isBottomApp) 0.44f else 0.46f) * speedRatio
+                        val openResponseCenterX = (0.34f * speedRatio).coerceAtLeast(0.18f)
+                        val openResponseHeight = (0.36f * speedRatio).coerceAtLeast(0.18f)
+                        val openResponseWidth = (0.36f * speedRatio).coerceAtLeast(0.18f)
+                        val openResponseRatio = (0.36f * speedRatio).coerceAtLeast(0.18f)
                         val openCornerDamping = 1.05f
                         val openCornerResponse = (0.28f * speedRatio).coerceAtLeast(0.16f)
                         val openAlphaDamping = 0.98f
@@ -853,9 +853,9 @@ object AppTransitionHook {
                         val closeDampingSize = if (isRecentFlick) 0.94f else 0.96f
 
                         val closeResponseCenterY = if (isBottomApp) {
-                            (((0.48f - (vertOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.24f)
+                            (((0.50f - (vertOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.24f)
                         } else {
-                            (((0.36f - (vertOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
+                            (((0.38f - (vertOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
                         }
                         val closeResponseCenterX = (((0.36f - (horizOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
                         val closeResponseSize = (((0.38f + (vertOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.20f)
@@ -1028,26 +1028,27 @@ object AppTransitionHook {
                         if (isOpen) {
                             if (normY >= 0.50f) {
                                 // Bottom-half apps (dock/lower rows): open with a DISTINCT UPLIFT surge right on tap!
-                                val openUpward = -24000f - ((normY - 0.50f) * 12000f)
+                                val openUpward = -32000f - ((normY - 0.50f) * 16000f)
                                 setCenterYVelMethod?.invoke(sfAnimParam, openUpward)
 
                                 val openVx = -(dx / deviceWidth) * 2600f
                                 setCenterXVelMethod?.invoke(sfAnimParam, openVx)
 
-                                setWidthVelMethod?.invoke(sfAnimParam, 1800f)
-                                setHeightVelMethod?.invoke(sfAnimParam, 2600f)
-                                setRatioVelMethod?.invoke(sfAnimParam, 2.4f)
+                                // Vertical squeeze to imitate window uplifting:
+                                setWidthVelMethod?.invoke(sfAnimParam, 2400f)
+                                setHeightVelMethod?.invoke(sfAnimParam, -4200f)
+                                setRatioVelMethod?.invoke(sfAnimParam, -4.5f)
                             } else {
                                 // Top-half apps: plunges down distinctly first before expanding!
-                                val openDownward = +18000f + ((0.50f - normY) * 10000f)
+                                val openDownward = +26000f + ((0.50f - normY) * 14000f)
                                 setCenterYVelMethod?.invoke(sfAnimParam, openDownward)
 
                                 val openVx = -(dx / deviceWidth) * 2000f
                                 setCenterXVelMethod?.invoke(sfAnimParam, openVx)
 
-                                setWidthVelMethod?.invoke(sfAnimParam, -1600f)
-                                setHeightVelMethod?.invoke(sfAnimParam, -1600f)
-                                setRatioVelMethod?.invoke(sfAnimParam, -1.8f)
+                                setWidthVelMethod?.invoke(sfAnimParam, 1800f)
+                                setHeightVelMethod?.invoke(sfAnimParam, -3600f)
+                                setRatioVelMethod?.invoke(sfAnimParam, -3.8f)
                             }
                         } else if (isClose) {
                             val flickSpeed = if (isRecentFlick && vy < -0.10f) abs(vy).coerceIn(0.10f, 12.0f) else 0f
@@ -1059,18 +1060,25 @@ object AppTransitionHook {
                             val thumbMultiplier = (1.35f - (thumbNormY * 0.35f)).coerceIn(0.95f, 1.35f)
 
                             if (normY >= 0.50f) {
-                                // Bottom-half apps: soar high up into a massive 450-600px parabolic apex before landing into icon!
-                                val baseUpward = 24000f + ((normY - 0.50f) * 12000f)
-                                val flickAdd = flickSpeed * 4500f
+                                // Bottom-half apps: soar high up into a massive parabolic apex before landing into icon!
+                                val baseUpward = 32000f + ((normY - 0.50f) * 16000f)
+                                val flickAdd = flickSpeed * 5000f
                                 val totalUpward = -(baseUpward + flickAdd) * thumbMultiplier
-                                val vyLaunch = totalUpward.coerceIn(-45000f, -22000f)
+                                val vyLaunch = totalUpward.coerceIn(-48000f, -24000f)
                                 setCenterYVelMethod?.invoke(sfAnimParam, vyLaunch)
-                                setRatioVelMethod?.invoke(sfAnimParam, -2.4f)
+
+                                // Symmetrical vertical squeeze on close at the exact same point in space:
+                                setWidthVelMethod?.invoke(sfAnimParam, 2400f)
+                                setHeightVelMethod?.invoke(sfAnimParam, -4200f)
+                                setRatioVelMethod?.invoke(sfAnimParam, -4.5f)
                             } else {
                                 // Top-half apps: fly directly up into top icon without overshoot
-                                val topUpward = -(8000f + flickSpeed * 2500f).coerceIn(-22000f, -7000f)
+                                val topUpward = -(12000f + flickSpeed * 3000f).coerceIn(-26000f, -9000f)
                                 setCenterYVelMethod?.invoke(sfAnimParam, topUpward)
-                                setRatioVelMethod?.invoke(sfAnimParam, 1.8f)
+
+                                setWidthVelMethod?.invoke(sfAnimParam, 1800f)
+                                setHeightVelMethod?.invoke(sfAnimParam, -3600f)
+                                setRatioVelMethod?.invoke(sfAnimParam, -3.8f)
                             }
 
                             // Reverse horizontal trajectory: drift towards the target icon's side
@@ -1285,7 +1293,34 @@ object AppTransitionHook {
      *    - Seamless 1:1 continuous icon morph with zero ghosting or double icons.
      */
     private fun hookFolder1to1IconTrajectories(module: XposedInterface, classLoader: ClassLoader) {
-        // 1. Hook FolderAnimController.initIconLoc: modular 1:1 preview-to-grid mapping
+        // 1. Hook FolderAnimController.getIconIndex: safe linear lookup preventing Collectors.toMap Duplicate key crash
+        try {
+            val folderAnimControllerClass = Class.forName("com.miui.home.folder.FolderAnimController", false, classLoader)
+            val getIconIndexMethod = folderAnimControllerClass.getDeclaredMethod("getIconIndex", Integer::class.java).apply {
+                isAccessible = true
+            }
+
+            module.hook(getIconIndexMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val controller = chain.thisObject ?: return chain.proceed()
+                    val num = (chain.args[0] as? Integer)?.toInt() ?: return chain.proceed()
+                    val locMapField = controller.javaClass.getDeclaredField("mFolderIconLocMap").apply { isAccessible = true }
+                    val locMap = locMapField.get(controller) as? Map<*, *> ?: return chain.proceed()
+                    for ((k, v) in locMap) {
+                        if ((v as? Number)?.toInt() == num) {
+                            val keyInt = (k as? Number)?.toInt() ?: continue
+                            return Integer.valueOf(keyInt)
+                        }
+                    }
+                    return null
+                }
+            })
+            Log.i(TAG, "Hooked FolderAnimController.getIconIndex for safe linear key lookup")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to hook FolderAnimController.getIconIndex", t)
+        }
+
+        // 2. Hook FolderAnimController.initIconLoc: modular 1:1 preview-to-grid mapping with guaranteed unique values
         try {
             val folderAnimControllerClass = Class.forName("com.miui.home.folder.FolderAnimController", false, classLoader)
             val folderIconClass = Class.forName("com.miui.home.folder.FolderIcon", false, classLoader)
@@ -1318,16 +1353,16 @@ object AppTransitionHook {
                         val previewCount = previewArray?.size ?: 0
                         val gridChildCount = folderGridView?.childCount ?: 0
 
-                        if (previewCount > 0) {
+                        if (previewCount > 0 && gridChildCount > 0) {
                             val matchedGridIndices = mutableSetOf<Int>()
 
+                            // Pass 1: Match preview views to open grid views by IShortcutInfo / buddy tag
                             for (p in 0 until previewCount) {
                                 val pv = previewArray?.get(p) as? View
                                 val pvBuddy = runCatching {
                                     pv?.javaClass?.getMethod("getMBuddyInfo")?.invoke(pv)
                                 }.getOrNull() ?: pv?.tag
 
-                                var foundIndex = -1
                                 if (pvBuddy != null && folderGridView != null) {
                                     for (g in 0 until gridChildCount) {
                                         if (matchedGridIndices.contains(g)) continue
@@ -1337,44 +1372,71 @@ object AppTransitionHook {
                                             (m.invoke(folderGridView, g) as? View)?.tag
                                         }.getOrNull()
                                         if (gvTag != null && (gvTag == pvBuddy || gvTag.toString() == pvBuddy.toString())) {
-                                            foundIndex = g
+                                            locMap[p] = g
+                                            matchedGridIndices.add(g)
                                             break
                                         }
                                     }
                                 }
+                            }
 
-                                if (foundIndex >= 0) {
-                                    locMap[p] = foundIndex
-                                    matchedGridIndices.add(foundIndex)
-                                } else {
-                                    // Fallback: detect 2x2 4-icon perfect grid vs standard 3-large
-                                    val is2x2 = runCatching {
-                                        val getFolderIconType = folderIcon.javaClass.getMethod("getFolderIconType")
-                                        (getFolderIconType.invoke(folderIcon) as? Number)?.toInt() == 2
-                                    }.getOrDefault(false)
+                            // Pass 2: Fill remaining unmatched preview slots with strictly UNIQUE grid indices
+                            val is2x2 = runCatching {
+                                val getFolderIconType = folderIcon.javaClass.getMethod("getFolderIconType")
+                                (getFolderIconType.invoke(folderIcon) as? Number)?.toInt() == 2
+                            }.getOrDefault(false)
 
-                                    val mapped = if (is2x2) {
-                                        if (gridChildCount == 4) {
-                                            // Perfect grid: 4 icons in 2x2 folder are full size (1:1 grid)
-                                            p.coerceAtMost(gridChildCount - 1)
-                                        } else {
-                                            // Standard 3-large + small icons in 3-column grid
-                                            when (p) {
-                                                0 -> 0
-                                                1 -> 1
-                                                2 -> 3 // row 1, col 0
-                                                else -> (p - 1).coerceAtMost(gridChildCount - 1)
-                                            }
+                            val cols = runCatching {
+                                val m = folderGridView?.javaClass?.getMethod("getColumnCount")
+                                (m?.invoke(folderGridView) as? Number)?.toInt()
+                            }.getOrNull() ?: 3
+
+                            for (p in 0 until previewCount) {
+                                if (locMap.containsKey(p)) continue
+
+                                // Calculate ideal candidate grid index for this slot
+                                val candidate = if (is2x2) {
+                                    if (gridChildCount == 4) {
+                                        // Perfect Grid (2x2 layout: 4 icons full size)
+                                        when (p) {
+                                            0 -> 0
+                                            1 -> 1
+                                            2 -> cols
+                                            3 -> cols + 1
+                                            else -> null
                                         }
                                     } else {
-                                        // Universal 1:1 mapping for 1x1, 1x3, 3x1, XXL, 3x6, etc.
-                                        p.coerceAtMost(gridChildCount - 1)
+                                        // Standard 2x2 layout (3 large + small icons)
+                                        when (p) {
+                                            0 -> 0
+                                            1 -> 1
+                                            2 -> cols
+                                            3 -> 2 // row 0, col 2
+                                            else -> null
+                                        }
                                     }
-                                    locMap[p] = mapped
-                                    matchedGridIndices.add(mapped)
+                                } else {
+                                    // Regular 1x1, 1x3, 3x1, XXL, 3x6, etc.: sequential candidate
+                                    p
                                 }
+
+                                val assignedG = if (candidate != null && candidate in 0 until gridChildCount && !matchedGridIndices.contains(candidate)) {
+                                    candidate
+                                } else {
+                                    // Find next free grid child index that is strictly unmapped
+                                    (0 until gridChildCount).firstOrNull { !matchedGridIndices.contains(it) }
+                                }
+
+                                if (assignedG != null) {
+                                    locMap[p] = assignedG
+                                    matchedGridIndices.add(assignedG)
+                                }
+                                // If no unused grid index is available (e.g. preview slots exceed items in folder),
+                                // we DO NOT map slot p! This guarantees 100% uniqueness in locMap.
                             }
-                            return (previewCount - 1).coerceAtLeast(0)
+
+                            val maxKey = locMap.keys.maxOrNull() ?: (previewCount - 1)
+                            return maxKey.coerceAtLeast(0)
                         }
                     } catch (t: Throwable) {
                         Log.e(TAG, "Error in modular 1:1 initIconLoc", t)
