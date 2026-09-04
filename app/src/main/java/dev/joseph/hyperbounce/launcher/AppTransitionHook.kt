@@ -69,9 +69,23 @@ object AppTransitionHook {
     @Volatile
     private var sLastVelocityTime: Long = 0L
 
-    // Recents Stack Scroll Tracking
+    // Back gesture single-pop debouncing
     @Volatile
-    private var sLastScrolledTaskIndex: Int = -999
+    private var sBackGestureArmed: Boolean = false
+    @Volatile
+    private var sLastBackHapticTime: Long = 0L
+
+    // Recents Stack Scroll Crossing Tracking
+    @Volatile
+    private var sIsRecentsScrolling: Boolean = false
+    @Volatile
+    private var sLastStackRecentsTickTime: Long = 0L
+    private val sTaskCenterXMap = java.util.concurrent.ConcurrentHashMap<Int, Float>()
+
+    private var sIsScrollingField: Field? = null
+    private var sRectField: Field? = null
+    private var sVisibleField: Field? = null
+    private var sIsStackMethod: Method? = null
 
     private var sKeyField: Field? = null
     private var sImpField: Field? = null
@@ -413,65 +427,118 @@ object AppTransitionHook {
 
     /**
      * Hook 4: Horizontal card-crossing clock tick haptics for Stack-style Recents.
-     * As each app crosses the middle reference line during horizontal swipes, triggers a crisp light clock tick.
+     * As each app crosses the screen center reference line during horizontal swipes,
+     * triggers a crisp light mechanical clock tick (MIUI_GEAR_LIGHT / EFFECT_TICK).
+     * Functional ONLY in stack style recents.
      */
     private fun hookRecentsStackScrollHaptics(module: XposedInterface, classLoader: ClassLoader) {
         try {
             val tsvClass = Class.forName("com.miui.home.recents.views.TaskStackView", false, classLoader)
 
-            // Reset tracking index on onScrollStart
-            val onScrollStartMethod = tsvClass.getDeclaredMethod("onScrollStart")
-            module.hook(onScrollStartMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val result = chain.proceed()
-                    try {
-                        val scrollerField = chain.thisObject.javaClass.getDeclaredField("mStackScroller").apply { isAccessible = true }
-                        val scroller = scrollerField.get(chain.thisObject)
-                        val stackScroll = (scroller?.javaClass?.getMethod("getStackScroll")?.invoke(scroller) as? Number)?.toFloat() ?: 0f
-                        sLastScrolledTaskIndex = kotlin.math.round(stackScroll).toInt()
-                    } catch (_: Throwable) {
-                        sLastScrolledTaskIndex = -999
+            // 1. Track scrolling start
+            tsvClass.declaredMethods.firstOrNull { it.name == "onScrollStart" && it.parameterTypes.isEmpty() }?.let { method ->
+                module.hook(method).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        sIsRecentsScrolling = true
+                        sTaskCenterXMap.clear()
+                        return chain.proceed()
                     }
-                    return result
-                }
-            })
+                })
+            }
 
-            // Hook onStackScrollChanged(float f, AnimationProps animationProps)
-            val animPropsClass = Class.forName("com.miui.home.recents.views.AnimationProps", false, classLoader)
-            val onScrollChangedMethod = tsvClass.getDeclaredMethod(
-                "onStackScrollChanged",
-                Float::class.javaPrimitiveType,
-                animPropsClass
-            )
+            // 2. Track scrolling end
+            tsvClass.declaredMethods.firstOrNull { it.name == "onScrollEnd" && it.parameterTypes.isEmpty() }?.let { method ->
+                module.hook(method).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        sIsRecentsScrolling = false
+                        sTaskCenterXMap.clear()
+                        return chain.proceed()
+                    }
+                })
+            }
 
-            module.hook(onScrollChangedMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val result = chain.proceed()
-                    val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.refinedHaptics) {
+            // 3. Hook TaskViewTransform.applyToTaskView to detect middle line crossing
+            val transformClass = Class.forName("com.miui.home.recents.views.TaskViewTransform", false, classLoader)
+            val applyMethod = transformClass.declaredMethods.firstOrNull {
+                it.name == "applyToTaskView" && it.parameterTypes.size == 4
+            }
+
+            if (applyMethod != null) {
+                module.hook(applyMethod).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        val result = chain.proceed()
+                        val cfg = LauncherConfigHolder.iosAnimConfig
+                        if (!cfg.enabled || !cfg.refinedHaptics || !cfg.stackRecentsHaptics) {
+                            return result
+                        }
+
+                        // Functional ONLY in stack style recents
+                        val isStack = try {
+                            val styleMethod = sIsStackMethod ?: Class.forName("com.miui.home.recents.TaskStackViewLayoutStyle", false, classLoader)
+                                .getMethod("isStackLayout").also { sIsStackMethod = it }
+                            styleMethod.invoke(null) as? Boolean ?: false
+                        } catch (_: Throwable) { false }
+                        if (!isStack) return result
+
+                        val taskView = chain.args[0] as? View ?: return result
+                        val parent = taskView.parent as? View
+
+                        val isScrolling = sIsRecentsScrolling || try {
+                            val f = sIsScrollingField ?: parent?.javaClass?.getDeclaredField("mIsScrolling")?.apply { isAccessible = true }?.also { sIsScrollingField = it }
+                            f?.getBoolean(parent) ?: false
+                        } catch (_: Throwable) { false }
+
+                        try {
+                            val rect = (sRectField ?: chain.thisObject.javaClass.getField("rect").also { sRectField = it })
+                                .get(chain.thisObject) as? RectF ?: return result
+                            if (rect.width() <= 0f || rect.height() <= 0f) return result
+
+                            val visible = (sVisibleField ?: chain.thisObject.javaClass.getField("visible").also { sVisibleField = it })
+                                .getBoolean(chain.thisObject)
+                            if (!visible) return result
+
+                            val taskId = try {
+                                val taskMethod = taskView.javaClass.getMethod("getTask")
+                                val task = taskMethod.invoke(taskView)
+                                val keyField = task?.javaClass?.getField("key")
+                                val key = keyField?.get(task)
+                                val idField = key?.javaClass?.getField("id")
+                                idField?.getInt(key) ?: System.identityHashCode(taskView)
+                            } catch (_: Throwable) {
+                                System.identityHashCode(taskView)
+                            }
+
+                            val currCenterX = rect.centerX()
+                            val midX = (parent?.width?.toFloat()?.takeIf { it > 0f }
+                                ?: taskView.resources.displayMetrics.widthPixels.toFloat()) / 2f
+
+                            if (!isScrolling) {
+                                sTaskCenterXMap[taskId] = currCenterX
+                                return result
+                            }
+
+                            val prevCenterX = sTaskCenterXMap[taskId]
+                            sTaskCenterXMap[taskId] = currCenterX
+
+                            if (prevCenterX != null) {
+                                val crossedL2R = (prevCenterX < midX && currCenterX >= midX)
+                                val crossedR2L = (prevCenterX > midX && currCenterX <= midX)
+                                if (crossedL2R || crossedR2L) {
+                                    val now = SystemClock.uptimeMillis()
+                                    if (now - sLastStackRecentsTickTime > 40L) {
+                                        sLastStackRecentsTickTime = now
+                                        triggerLightClockTickHaptic(taskView)
+                                    }
+                                }
+                            }
+                        } catch (_: Throwable) {}
+
                         return result
                     }
+                })
+            }
 
-                    try {
-                        val scrollP = (chain.args[0] as? Number)?.toFloat() ?: return result
-                        val nearestIndex = kotlin.math.round(scrollP).toInt()
-
-                        // Trigger light clock tick when crossing each app's center threshold
-                        if (nearestIndex != sLastScrolledTaskIndex && kotlin.math.abs(scrollP - nearestIndex) < 0.18f) {
-                            sLastScrolledTaskIndex = nearestIndex
-                            val isScrollingField = chain.thisObject.javaClass.getDeclaredField("mIsScrolling").apply { isAccessible = true }
-                            val isScrolling = isScrollingField.get(chain.thisObject) as? Boolean ?: true
-                            if (isScrolling) {
-                                triggerLightClockTickHaptic(chain.thisObject as? View)
-                            }
-                        }
-                    } catch (_: Throwable) {}
-
-                    return result
-                }
-            })
-
-            Log.i(TAG, "Hooked TaskStackView.onStackScrollChanged for horizontal card crossing clock tick haptics")
+            Log.i(TAG, "Hooked TaskViewTransform.applyToTaskView and TaskStackView for Stack Recents center-crossing haptics")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook TaskStackView for scroll haptics", t)
         }
@@ -484,7 +551,7 @@ object AppTransitionHook {
         try {
             if (view != null) {
                 // miuix.view.HapticFeedbackConstants.MIUI_GEAR_LIGHT = 268435477 (Crisp clock/gear tick)
-                val hapticCompatClass = Class.forName("miuix.view.HapticCompat")
+                val hapticCompatClass = Class.forName("miuix.view.HapticCompat", false, view.context.classLoader)
                 val performMethod = hapticCompatClass.getMethod(
                     "performHapticFeedbackAsync",
                     View::class.java,
@@ -492,6 +559,13 @@ object AppTransitionHook {
                 )
                 performMethod.invoke(null, view, 268435477)
                 return
+            }
+        } catch (_: Throwable) {}
+
+        try {
+            if (view != null) {
+                if (view.performHapticFeedback(268435477)) return
+                if (view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)) return
             }
         } catch (_: Throwable) {}
 
@@ -513,7 +587,7 @@ object AppTransitionHook {
 
     /**
      * Hook 5: Refined, satisfying linear motor haptics:
-     * - Back Gesture: Crisp elastic tactile pop (MIUI_BUTTON_SMALL / MIUI_MESH_LIGHT)
+     * - Back Gesture: Crisp elastic tactile pop (with single-pop debouncing, never double-ticks)
      * - App-to-Recents Gesture: Clean mechanical latch tick (MIUI_SWITCH / MIUI_KEYBOARD) instead of heavy thud
      */
     private fun hookRefinedHaptics(module: XposedInterface, classLoader: ClassLoader) {
@@ -527,7 +601,7 @@ object AppTransitionHook {
             try {
                 val clazz = Class.forName(className, false, classLoader)
 
-                // 1. Hook performGestureReadyBack() -> Crisp elastic pop
+                // 1. Hook performGestureReadyBack() -> Crisp elastic pop (primary trigger)
                 val readyBackMethod = clazz.getDeclaredMethod("performGestureReadyBack")
                 module.hook(readyBackMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -535,12 +609,17 @@ object AppTransitionHook {
                         if (!cfg.enabled || !cfg.refinedHaptics) {
                             return chain.proceed()
                         }
-                        triggerBackPopHaptic(chain.thisObject)
+                        val now = SystemClock.uptimeMillis()
+                        if (now - sLastBackHapticTime >= 450L) {
+                            sLastBackHapticTime = now
+                            sBackGestureArmed = true
+                            triggerBackPopHaptic(chain.thisObject)
+                        }
                         return null // Suppress heavy thud
                     }
                 })
 
-                // 2. Hook performGestureBackHandUp() -> Crisp elastic pop on release
+                // 2. Hook performGestureBackHandUp() -> Crisp elastic pop on release (only if readyBack didn't already fire!)
                 val handUpMethod = clazz.getDeclaredMethod("performGestureBackHandUp")
                 module.hook(handUpMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -548,7 +627,13 @@ object AppTransitionHook {
                         if (!cfg.enabled || !cfg.refinedHaptics) {
                             return chain.proceed()
                         }
-                        triggerBackPopHaptic(chain.thisObject)
+                        val now = SystemClock.uptimeMillis()
+                        val alreadyFired = sBackGestureArmed || (now - sLastBackHapticTime < 450L)
+                        sBackGestureArmed = false
+                        if (!alreadyFired) {
+                            sLastBackHapticTime = now
+                            triggerBackPopHaptic(chain.thisObject)
+                        }
                         return null // Suppress heavy thud
                     }
                 })
@@ -809,7 +894,13 @@ object AppTransitionHook {
 
                     try {
                         val speedRatio = (getAnimationSpeedRatio(classLoader) / cfg.animSpeed.coerceIn(0.50f, 2.0f))
-                        val dampingScale = (cfg.springDamping / 0.98f).coerceIn(0.70f, 1.40f)
+                        val openDampingScale = (cfg.openSpringDamping / 0.98f).coerceIn(0.70f, 1.40f)
+                        val closeDampingScale = (cfg.closeSpringDamping / 0.84f).coerceIn(0.70f, 1.40f)
+                        val dampingScale = when {
+                            animType.startsWith("OPEN") -> openDampingScale
+                            animType.startsWith("CLOSE_TO_HOME") -> closeDampingScale
+                            else -> openDampingScale
+                        }
 
                         // Start/Target rects for screen coordinate normalization
                         val iconRect = if (animType.startsWith("OPEN")) {
@@ -1169,7 +1260,7 @@ object AppTransitionHook {
             module.hook(getAppStateMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.depthZoom) {
+                    if (!cfg.enabled) {
                         return chain.proceed()
                     }
                     return homeLayerParamConst.newInstance(0.92f, 0.92f, 0.0f, 0.0f)
@@ -1180,7 +1271,7 @@ object AppTransitionHook {
             module.hook(getHomeStateMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.depthZoom) {
+                    if (!cfg.enabled) {
                         return chain.proceed()
                     }
                     return homeLayerParamConst.newInstance(1.0f, 1.0f, 0.0f, 0.0f)
@@ -1195,7 +1286,7 @@ object AppTransitionHook {
                 module.hook(bindMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (cfg.enabled && cfg.depthZoom) {
+                        if (cfg.enabled) {
                             try { enableField.set(chain.thisObject, true) } catch (_: Throwable) {}
                         }
                         return chain.proceed()
@@ -1228,7 +1319,7 @@ object AppTransitionHook {
             module.hook(getAppStateMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.depthZoom) {
+                    if (!cfg.enabled) {
                         return chain.proceed()
                     }
                     return wpParamConst.newInstance(1.08f, 1.08f, 0.0f, 0.0f)
@@ -1239,7 +1330,7 @@ object AppTransitionHook {
             module.hook(getHomeStateMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.depthZoom) {
+                    if (!cfg.enabled) {
                         return chain.proceed()
                     }
                     return wpParamConst.newInstance(1.0f, 1.0f, 0.0f, 0.0f)

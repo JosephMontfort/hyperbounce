@@ -205,13 +205,14 @@ data class IOSTransitionSettings(
     val openUpliftSurge: Boolean = true,
     val keystoneSqueeze: Boolean = true,
     val animSpeed: Float = 1.0f,
-    val springDamping: Float = 0.98f,
+    val openSpringDamping: Float = 0.98f,
+    val closeSpringDamping: Float = 0.84f,
     val folderTracking: Boolean = true,
     val recentsCentering: Boolean = true,
     val zeroFrictionDrag: Boolean = true,
     val landscapeGameOpt: Boolean = true,
-    val depthZoom: Boolean = true,
-    val refinedHaptics: Boolean = true
+    val refinedHaptics: Boolean = true,
+    val stackRecentsHaptics: Boolean = true
 )
 
 

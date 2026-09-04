@@ -719,13 +719,14 @@ class SettingsRepository(context: Context) {
         var openUpliftSurge by prefsBooleanState("ios_anim_open_uplift_surge", defaults.openUpliftSurge); private set
         var keystoneSqueeze by prefsBooleanState("ios_anim_keystone_squeeze", defaults.keystoneSqueeze); private set
         var animSpeed by prefsFloatState("ios_anim_speed", defaults.animSpeed); private set
-        var springDamping by prefsFloatState("ios_anim_spring_damping", defaults.springDamping); private set
+        var openSpringDamping by prefsFloatState("ios_anim_open_spring_damping", defaults.openSpringDamping); private set
+        var closeSpringDamping by prefsFloatState("ios_anim_close_spring_damping", defaults.closeSpringDamping); private set
         var folderTracking by prefsBooleanState("ios_anim_folder_tracking", defaults.folderTracking); private set
         var recentsCentering by prefsBooleanState("ios_anim_recents_centering", defaults.recentsCentering); private set
         var zeroFrictionDrag by prefsBooleanState("ios_anim_zero_friction_drag", defaults.zeroFrictionDrag); private set
         var landscapeGameOpt by prefsBooleanState("ios_anim_landscape_game_opt", defaults.landscapeGameOpt); private set
-        var depthZoom by prefsBooleanState("ios_anim_depth_zoom", defaults.depthZoom); private set
         var refinedHaptics by prefsBooleanState("ios_anim_refined_haptics", defaults.refinedHaptics); private set
+        var stackRecentsHaptics by prefsBooleanState("ios_anim_stack_recents_haptics", defaults.stackRecentsHaptics); private set
 
         fun snapshot(): IOSTransitionSettings = IOSTransitionSettings(
             enabled = enabled,
@@ -733,13 +734,14 @@ class SettingsRepository(context: Context) {
             openUpliftSurge = openUpliftSurge,
             keystoneSqueeze = keystoneSqueeze,
             animSpeed = animSpeed,
-            springDamping = springDamping,
+            openSpringDamping = openSpringDamping,
+            closeSpringDamping = closeSpringDamping,
             folderTracking = folderTracking,
             recentsCentering = recentsCentering,
             zeroFrictionDrag = zeroFrictionDrag,
             landscapeGameOpt = landscapeGameOpt,
-            depthZoom = depthZoom,
-            refinedHaptics = refinedHaptics
+            refinedHaptics = refinedHaptics,
+            stackRecentsHaptics = stackRecentsHaptics
         )
 
         @JvmName("setIOSTransitionsEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
@@ -747,13 +749,14 @@ class SettingsRepository(context: Context) {
         @JvmName("setOpenUpliftSurgePref") fun setOpenUpliftSurge(v: Boolean) { openUpliftSurge = v }
         @JvmName("setKeystoneSqueezePref") fun setKeystoneSqueeze(v: Boolean) { keystoneSqueeze = v }
         @JvmName("setAnimSpeedPref") fun setAnimSpeed(v: Float) { animSpeed = v }
-        @JvmName("setSpringDampingPref") fun setSpringDamping(v: Float) { springDamping = v }
+        @JvmName("setOpenSpringDampingPref") fun setOpenSpringDamping(v: Float) { openSpringDamping = v }
+        @JvmName("setCloseSpringDampingPref") fun setCloseSpringDamping(v: Float) { closeSpringDamping = v }
         @JvmName("setFolderTrackingPref") fun setFolderTracking(v: Boolean) { folderTracking = v }
         @JvmName("setRecentsCenteringPref") fun setRecentsCentering(v: Boolean) { recentsCentering = v }
         @JvmName("setZeroFrictionDragPref") fun setZeroFrictionDrag(v: Boolean) { zeroFrictionDrag = v }
         @JvmName("setLandscapeGameOptPref") fun setLandscapeGameOpt(v: Boolean) { landscapeGameOpt = v }
-        @JvmName("setDepthZoomPref") fun setDepthZoom(v: Boolean) { depthZoom = v }
         @JvmName("setRefinedHapticsPref") fun setRefinedHaptics(v: Boolean) { refinedHaptics = v }
+        @JvmName("setStackRecentsHapticsPref") fun setStackRecentsHaptics(v: Boolean) { stackRecentsHaptics = v }
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
@@ -761,13 +764,14 @@ class SettingsRepository(context: Context) {
             openUpliftSurge = defaults.openUpliftSurge
             keystoneSqueeze = defaults.keystoneSqueeze
             animSpeed = defaults.animSpeed
-            springDamping = defaults.springDamping
+            openSpringDamping = defaults.openSpringDamping
+            closeSpringDamping = defaults.closeSpringDamping
             folderTracking = defaults.folderTracking
             recentsCentering = defaults.recentsCentering
             zeroFrictionDrag = defaults.zeroFrictionDrag
             landscapeGameOpt = defaults.landscapeGameOpt
-            depthZoom = defaults.depthZoom
             refinedHaptics = defaults.refinedHaptics
+            stackRecentsHaptics = defaults.stackRecentsHaptics
         }
     }
 

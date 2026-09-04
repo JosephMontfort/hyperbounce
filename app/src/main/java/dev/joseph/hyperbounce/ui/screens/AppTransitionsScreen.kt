@@ -12,7 +12,6 @@ import dev.joseph.hyperbounce.ui.components.GearIcon
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.PowerIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
-import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
@@ -57,10 +56,6 @@ fun AppTransitionsScreen(
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
             }
-            SectionFooter(
-                "• Enables velocity-dependent parabolic trajectory arcs, 1:1 folder tracking, zero drag friction, and organic spring dynamics.",
-                colors
-            )
         }
 
         // 2. FLIGHT ARC & TRAJECTORY DYNAMICS
@@ -104,10 +99,6 @@ fun AppTransitionsScreen(
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
             }
-            SectionFooter(
-                "• Flight Arc Lift: Higher values cause lower-half apps to soar higher into an apex before diving into their icon.\n• Open Uplift: Bottom apps surge upward before expanding outward to full display.\n• Keystone Squeeze: Naturally tapers window boundaries during vertical climb.",
-                colors
-            )
         }
 
         // 3. SPRING DYNAMICS & SPEED
@@ -128,22 +119,31 @@ fun AppTransitionsScreen(
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
-                    title = "Spring Damping Ratio",
-                    subtitle = "Settling elasticity (Lower = subtle bounce, Higher = critically damped)",
+                    title = "Opening Spring Damping",
+                    subtitle = "Settling elasticity for opening apps (Higher = smoother, critically damped)",
                     colors = colors,
                     backdrop = backdrop,
-                    value = trans.springDamping,
-                    onValueChange = trans::setSpringDamping,
-                    valueRange = 0.80f..1.15f,
+                    value = trans.openSpringDamping,
+                    onValueChange = trans::setOpenSpringDamping,
+                    valueRange = 0.80f..1.25f,
                     defaultValue = 0.98f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = trans.enabled
                 )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Closing Spring Damping",
+                    subtitle = "Settling elasticity for closing apps (Lower = responsive bounce, Higher = controlled)",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = trans.closeSpringDamping,
+                    onValueChange = trans::setCloseSpringDamping,
+                    valueRange = 0.70f..1.10f,
+                    defaultValue = 0.84f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = trans.enabled
+                )
             }
-            SectionFooter(
-                "• Animation Speed: Dynamically scales open, close, and recents spring response duration.\n• Damping Ratio: Controls whether windows settle with an organic elastic rebound or crisp critical damping.",
-                colors
-            )
         }
 
         // 4. FOLDER & RECENTS GESTURES
@@ -198,28 +198,12 @@ fun AppTransitionsScreen(
                     icon = { GearIcon(color = Color.White, size = 15.dp) }
                 )
             }
-            SectionFooter(
-                "• Folder Trajectories: Uses modular 1:1 affine scaling and OriginOS expansion curves.\n• Zero Friction Drag: Full 1:1 finger tracking with zero artificial drag resistance.\n• Game Mode Recents: Eliminates gesture hesitation when playing games.",
-                colors
-            )
         }
 
-        // 5. DEPTH ZOOM & HAPTICS
+        // 5. TACTILE HAPTICS
         item {
-            SectionHeader("DEPTH ZOOM & HAPTICS", colors)
+            SectionHeader("TACTILE HAPTICS", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsToggleRow(
-                    title = "Environmental Depth Zoom",
-                    subtitle = "Home screen icons and wallpaper breathe dynamically during transitions",
-                    colors = colors,
-                    iconTint = colors.accentPurple,
-                    backdrop = backdrop,
-                    checked = trans.depthZoom,
-                    onCheckedChange = trans::setDepthZoom,
-                    enabled = trans.enabled,
-                    icon = { AppGridIcon(color = Color.White, size = 15.dp) }
-                )
-                RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "Refined Tactile Haptics",
                     subtitle = "Crisp elastic pop on back gestures and tactile latch tick on Recents",
@@ -231,11 +215,19 @@ fun AppTransitionsScreen(
                     enabled = trans.enabled,
                     icon = { PowerIcon(color = Color.White, size = 15.dp) }
                 )
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "Stack Recents Crossing Tick",
+                    subtitle = "Light mechanical clock tick as each app card crosses the screen center line in Stack recents",
+                    colors = colors,
+                    iconTint = colors.accentBlue,
+                    backdrop = backdrop,
+                    checked = trans.stackRecentsHaptics,
+                    onCheckedChange = trans::setStackRecentsHaptics,
+                    enabled = trans.enabled && trans.refinedHaptics,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                )
             }
-            SectionFooter(
-                "• Dynamic Island: Dynamic Island animations for calls and media players remain 100% stock and isolated from transition overrides.",
-                colors
-            )
         }
     }
 }
