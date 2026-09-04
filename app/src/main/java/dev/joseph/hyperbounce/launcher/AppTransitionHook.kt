@@ -78,6 +78,7 @@ object AppTransitionHook {
 
         hookGestureVelocityTracking(module, classLoader)
         hookDragResistanceAndScaling(module, classLoader)
+        hookSmallWindowThreshold(module, classLoader)
         hookRecentsCurrentTaskCentering(module, classLoader)
         hookRecentsStackScrollHaptics(module, classLoader)
         hookRefinedHaptics(module, classLoader)
@@ -166,18 +167,17 @@ object AppTransitionHook {
                     // p >= 0.60 -> 0.22x - 0.24x
                     val scale = when {
                         p <= 0.02f -> 1.0f
-                        p <= 0.18f -> 1.0f - (p - 0.02f) * (0.24f / 0.16f) // 1.0 -> 0.76
-                        p <= 0.35f -> 0.76f - (p - 0.18f) * (0.28f / 0.17f) // 0.76 -> 0.48
-                        p <= 0.50f -> 0.48f - (p - 0.35f) * (0.23f / 0.15f) // 0.48 -> 0.25
-                        p <= 0.75f -> 0.25f - (p - 0.50f) * (0.03f / 0.25f) // 0.25 -> 0.22
-                        else -> (0.22f / (1.0f + (p - 0.75f) * 1.20f)).coerceAtLeast(0.18f)
+                        p <= 0.25f -> 1.0f - (p - 0.02f) * (0.22f / 0.23f) // 1.00 -> 0.78
+                        p <= 0.50f -> 0.78f - (p - 0.25f) * (0.30f / 0.25f) // 0.78 -> 0.48
+                        p <= 0.75f -> 0.48f - (p - 0.50f) * (0.24f / 0.25f) // 0.48 -> 0.24
+                        else -> (0.24f / (1.0f + (p - 0.75f) * 1.20f)).coerceAtLeast(0.18f)
                     }
                     return baseWidth * scale
                 }
             })
 
             // 2. Hook calculateTaskY(int i, float f, float f2, float f3)
-            // Provides instant upward lift at start (zero dip), then smoothly docks within the viewport
+            // 1:1 finger tracking: bottom edge follows finger directly (no 2x overshoot bug!)
             val calcYMethod = algoClass.getDeclaredMethod(
                 "calculateTaskY",
                 Int::class.javaPrimitiveType,
@@ -201,24 +201,15 @@ object AppTransitionHook {
                     if (i == 1 && screenH > 0f) {
                         val p = progress
 
-                        // Initial swipe response (p <= 0.12): strictly moves UPWARDS from frame 0
-                        // Zero downward shift when triggering Recents!
+                        // 1:1 Finger Tracking: bottom edge is directly positioned at finger height
+                        val bottomY = screenH * (1.0f - p)
+                        val desiredTop = bottomY - taskH
+
+                        // Never shift down at start (0.0f at p=0), and stay cleanly inside screen
                         val finalY = when {
-                            p <= 0.12f -> {
-                                screenH * (-p * 0.42f)
-                            }
-                            p <= 0.45f -> {
-                                // Smoothly transition into upper viewport as card rapidly scales down
-                                val t = (p - 0.12f) / 0.33f
-                                val smoothT = t * t * (3f - 2f * t)
-                                val initialLift = screenH * (-0.12f * 0.42f) // ~ -0.05 * screenH
-                                val targetTop = screenH * 0.045f // below status bar
-                                (initialLift * (1f - smoothT)) + (targetTop * smoothT)
-                            }
-                            else -> {
-                                // Fully docked inside upper viewport: entire app sits completely inside the screen!
-                                screenH * 0.045f
-                            }
+                            p <= 0.02f -> 0.0f
+                            desiredTop < -0.040f * screenH -> -0.040f * screenH
+                            else -> desiredTop
                         }
                         return finalY
                     }
@@ -288,7 +279,42 @@ object AppTransitionHook {
     }
 
     /**
-     * Hook 3: Centers the current running task in Recents Overview instead of pushing it to the right.
+     * Hook 3: Reduces the vertical swipe distance required to activate the Floating Window Engulfer.
+     * Hooks SmallWindowCrop.getActiveCoef and getHoldCoef so the engulfer activates ~250px earlier.
+     */
+    private fun hookSmallWindowThreshold(module: XposedInterface, classLoader: ClassLoader) {
+        try {
+            val swcClass = Class.forName("com.miui.home.recents.views.SmallWindowCrop", false, classLoader)
+
+            val getHoldMethod = swcClass.getDeclaredMethod("getHoldCoef").apply { isAccessible = true }
+            module.hook(getHoldMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    if (!LauncherConfigHolder.iosAnimConfig.enabled) {
+                        return chain.proceed()
+                    }
+                    return 0.92f // Appears earlier when moving towards top-right
+                }
+            })
+
+            val getActiveMethod = swcClass.getDeclaredMethod("getActiveCoef").apply { isAccessible = true }
+            module.hook(getActiveMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    if (!LauncherConfigHolder.iosAnimConfig.enabled) {
+                        return chain.proceed()
+                    }
+                    // Engulfs earlier (reduced vertical distance threshold from stock 0.363 to 0.48)
+                    return 0.48f
+                }
+            })
+
+            Log.i(TAG, "Hooked SmallWindowCrop thresholds to reduce vertical swipe activation distance")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to hook SmallWindowCrop thresholds", t)
+        }
+    }
+
+    /**
+     * Hook 4: Centers the current running task in Recents Overview instead of pushing it to the right.
      * Overrides getDefaultCenterTaskViewIndex, getTargetTaskViewIndex, and getCenterTaskViewIndex.
      */
     private fun hookRecentsCurrentTaskCentering(module: XposedInterface, classLoader: ClassLoader) {
@@ -721,35 +747,34 @@ object AppTransitionHook {
                         val alphaResponse: Float
 
                         // --- Scenario 1: Closing to Home (Row-Dependent Parabolic Dynamics) ---
-                        // Even lighter, weightless flight feeling
+                        // --- Enhancement 4: Floating Apogee & Soft Air Cushioning for Close ---
                         if (normY > 0.58f) {
                             val depthRatio = ((normY - 0.58f) / 0.42f).coerceIn(0f, 1f)
-                            val baseDamping = 0.86f - (depthRatio * 0.04f)
-                            val baseResponse = 0.50f + (depthRatio * 0.10f)
+                            val baseDamping = 0.85f - (depthRatio * 0.04f)
+                            val baseResponse = 0.52f + (depthRatio * 0.10f)
 
-                            closeDampingY = if (isFastFlick) (baseDamping - 0.03f).coerceAtLeast(0.80f) else baseDamping
-                            closeResponseY = if (isFastFlick) (baseResponse + 0.06f).coerceAtMost(0.66f) else baseResponse
+                            closeDampingY = if (isFastFlick) (baseDamping - 0.03f).coerceAtLeast(0.79f) else baseDamping
+                            closeResponseY = if (isFastFlick) (baseResponse + 0.06f).coerceAtMost(0.68f) else baseResponse
                         } else if (normY < 0.38f) {
-                            closeDampingY = if (isFastFlick) 0.92f else 0.96f
-                            closeResponseY = if (isFastFlick) 0.46f else 0.42f
+                            closeDampingY = if (isFastFlick) 0.90f else 0.94f
+                            closeResponseY = if (isFastFlick) 0.48f else 0.44f
                         } else {
                             val midRatio = (normY - 0.38f) / 0.20f
-                            val baseD = 0.96f - (midRatio * 0.10f)
-                            val baseR = 0.42f + (midRatio * 0.08f)
+                            val baseD = 0.94f - (midRatio * 0.09f)
+                            val baseR = 0.44f + (midRatio * 0.08f)
                             closeDampingY = if (isFastFlick) (baseD - 0.03f) else baseD
                             closeResponseY = if (isFastFlick) (baseR + 0.04f) else baseR
                         }
 
-                        // Horizontal tracking: Fluid, natural iOS curve
-                        closeDampingX = 1.00f
+                        // Horizontal tracking: gentle, fluid curve
+                        closeDampingX = 0.98f
                         closeResponseX = 0.44f
 
-                        // Window geometry (width & height): stays light and broad during ascent,
-                        // then collapses gracefully into icon squircle
+                        // Window geometry: remains expansive during the float, then condenses softly into icon
                         closeDampingSize = 0.90f
                         closeResponseSize = 0.46f
 
-                        // Corner squircle morphing
+                        // Corner squircle morphing: seamless superellipse easing
                         cornerDamping = 1.05f
                         cornerResponse = 0.30f
 
@@ -757,9 +782,9 @@ object AppTransitionHook {
                         alphaDamping = 0.88f
                         alphaResponse = 0.38f
 
-                        // --- Scenario 2: Expansive App Open ---
+                        // --- Enhancement 5: Expansive Radial Bloom on Open ---
                         openDamping = 1.00f
-                        openResponse = 0.410f
+                        openResponse = 0.395f
 
                         // --- Scenario 3: Recents ---
                         recentsDamping = 0.94f
@@ -778,8 +803,8 @@ object AppTransitionHook {
                                     when (key) {
                                         "centerX", "centerY" -> { newDamping = openDamping; newResponse = openResponse }
                                         "Width", "Height", "Ratio" -> { newDamping = openDamping; newResponse = openResponse }
-                                        "Radius", "RadiusRatio" -> { newDamping = 1.10f; newResponse = 0.320f }
-                                        "alpha" -> { newDamping = 0.95f; newResponse = 0.280f }
+                                        "Radius", "RadiusRatio" -> { newDamping = 1.08f; newResponse = 0.310f }
+                                        "alpha" -> { newDamping = 0.96f; newResponse = 0.260f }
                                     }
                                 }
                                 animType.startsWith("CLOSE_TO_HOME") || animType.startsWith("CLOSE_TO_ELEMENT") -> {
@@ -834,15 +859,15 @@ object AppTransitionHook {
                     return result
                 }
             })
-            Log.i(TAG, "Hooked SpringParamsProvider.generateSpringBundlesByAnimType with weightless minimizing dynamics")
+            Log.i(TAG, "Hooked SpringParamsProvider for floating apogee and expansive radial bloom")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook SpringParamsProvider", t)
         }
     }
 
     /**
-     * Hook 8: Injects live upward gesture momentum directly into SurfaceFlinger hardware animation parameters.
-     * Directly couples flick velocity and thumb release position into the flight launch curve.
+     * Hook 9: Enhancement 1 - Parabolic Ballistic Flight Arc (Spatial Curvature).
+     * Injects centrifugal horizontal drift and upward ballistic momentum into SurfaceFlinger parameters.
      */
     private fun hookSfAnimImplementor(module: XposedInterface, classLoader: ClassLoader) {
         try {
@@ -879,8 +904,16 @@ object AppTransitionHook {
                                 (dcClass.getMethod("getDeviceHeight").invoke(null) as? Number)?.toFloat() ?: 2400f
                             }.getOrDefault(2400f).coerceAtLeast(1000f)
 
+                            val deviceWidth = runCatching {
+                                val dcClass = Class.forName("com.miui.home.common.device.DeviceConfigs", false, classLoader)
+                                (dcClass.getMethod("getDeviceWidth").invoke(null) as? Number)?.toFloat() ?: 1080f
+                            }.getOrDefault(1080f).coerceAtLeast(720f)
+
                             val targetCenterY = targetRect?.centerY() ?: (deviceHeight * 0.75f)
                             val normY = (targetCenterY / deviceHeight).coerceIn(0f, 1f)
+
+                            val targetCenterX = targetRect?.centerX() ?: (deviceWidth * 0.50f)
+                            val dx = targetCenterX - (deviceWidth * 0.50f)
 
                             // Thumb position when flicked
                             val thumbNormY = if (sLastThumbY > 0f) {
@@ -891,34 +924,36 @@ object AppTransitionHook {
 
                             val thumbMultiplier = 1.30f - (thumbNormY * 0.35f)
 
-                            // Boosted speed calculation for effortless weightless flight
                             val speedFactor = if (isRecentFlick && vy < -0.15f) {
                                 (kotlin.math.abs(vy) * 1200f).coerceIn(1600f, 16000f)
                             } else {
                                 1600f
                             }
 
-                            // Calculate upward velocity for parabolic minimizing flight across all rows
+                            // 1. Upward ballistic launch impulse
                             val upwardVelocity = -speedFactor * thumbMultiplier * (0.65f + (normY * 0.80f))
-
                             val setCenterYVelMethod = sfAnimParam.javaClass.getMethod("setCenterYVelocity", Float::class.javaPrimitiveType)
                             setCenterYVelMethod.invoke(sfAnimParam, upwardVelocity)
 
-                            // Preserve horizontal flick curve if user swiped diagonally
-                            if (isRecentFlick && kotlin.math.abs(sLastVelocityX) > 0.15f) {
-                                val vxPxSec = (sLastVelocityX * 900f).coerceIn(-6000f, 6000f)
-                                val setCenterXVelMethod = sfAnimParam.javaClass.getMethod("setCenterXVelocity", Float::class.javaPrimitiveType)
-                                setCenterXVelMethod.invoke(sfAnimParam, vxPxSec)
+                            // 2. Centrifugal horizontal drift for natural parabolic ballistic flight arc
+                            val driftVx = (dx / deviceWidth) * 2200f
+                            val gestureVx = if (isRecentFlick && kotlin.math.abs(sLastVelocityX) > 0.15f) {
+                                (sLastVelocityX * 900f).coerceIn(-6000f, 6000f)
+                            } else {
+                                0f
                             }
+                            val totalVx = (gestureVx + driftVx).coerceIn(-6500f, 6500f)
+                            val setCenterXVelMethod = sfAnimParam.javaClass.getMethod("setCenterXVelocity", Float::class.javaPrimitiveType)
+                            setCenterXVelMethod.invoke(sfAnimParam, totalVx)
                         }
                     } catch (t: Throwable) {
-                        Log.e(TAG, "Error injecting upward velocity into SfAnimParam", t)
+                        Log.e(TAG, "Error injecting ballistic trajectory into SfAnimParam", t)
                     }
 
                     return sfAnimParam
                 }
             })
-            Log.i(TAG, "Hooked SfWindowAnimImplementor.buildSfAnimParam for weightless minimizing launch curves")
+            Log.i(TAG, "Hooked SfWindowAnimImplementor for parabolic ballistic flight arcs")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook SfWindowAnimImplementor.buildSfAnimParam", t)
         }
