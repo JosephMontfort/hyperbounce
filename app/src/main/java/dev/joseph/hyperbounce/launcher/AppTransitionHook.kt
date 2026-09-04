@@ -1,5 +1,7 @@
 package dev.joseph.hyperbounce.launcher
 
+import android.graphics.Camera
+import android.graphics.Matrix
 import android.graphics.RectF
 import android.os.Build
 import android.os.SystemClock
@@ -11,6 +13,9 @@ import io.github.libxposed.api.XposedInterface
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * iOS-Style App Open & Close Animation Engine for HyperOS Launcher (com.miui.home)
@@ -78,6 +83,8 @@ object AppTransitionHook {
 
         hookGestureVelocityTracking(module, classLoader)
         hookDragResistanceAndScaling(module, classLoader)
+        hookLandscapeRecentsOptimization(module, classLoader)
+        hookFloatingIcon3DTilt(module, classLoader)
         hookSmallWindowThreshold(module, classLoader)
         hookRecentsCurrentTaskCentering(module, classLoader)
         hookRecentsStackScrollHaptics(module, classLoader)
@@ -198,20 +205,28 @@ object AppTransitionHook {
                     val taskH = (chain.args[2] as? Number)?.toFloat() ?: 0f
                     val progress = (chain.args[3] as? Number)?.toFloat()?.coerceAtLeast(0f) ?: 0f
 
-                    if (i == 1 && screenH > 0f) {
+                    if (screenH > 0f) {
                         val p = progress
 
-                        // 1:1 Finger Tracking: bottom edge is directly positioned at finger height
-                        val bottomY = screenH * (1.0f - p)
-                        val desiredTop = bottomY - taskH
+                        if (i == 1 || i == 3) {
+                            // 1:1 Finger Tracking: bottom edge is directly positioned at finger height
+                            // i == 1: Portrait gesture swipe up
+                            // i == 3: Landscape gesture swipe up (right-side nav bar)
+                            val bottomY = screenH * (1.0f - p)
+                            val desiredTop = bottomY - taskH
 
-                        // Never shift down at start (0.0f at p=0), and stay cleanly inside screen
-                        val finalY = when {
-                            p <= 0.02f -> 0.0f
-                            desiredTop < -0.040f * screenH -> -0.040f * screenH
-                            else -> desiredTop
+                            // Never shift down at start (0.0f at p=0), and stay cleanly inside screen
+                            val finalY = when {
+                                p <= 0.02f -> 0.0f
+                                desiredTop < -0.040f * screenH -> -0.040f * screenH
+                                else -> desiredTop
+                            }
+                            return finalY
+                        } else if (i == 2) {
+                            // Landscape gesture swipe up (left-side nav bar)
+                            val desiredTop = (screenH * p).coerceAtMost(screenH * 1.040f)
+                            return desiredTop
                         }
-                        return finalY
                     }
 
                     return chain.proceed()
@@ -560,21 +575,21 @@ object AppTransitionHook {
     }
 
     /**
-     * Triggers a crisp, refined tactile pop for Back Gesture (MIUI_BUTTON_SMALL = 268435476).
+     * Triggers a crisp standard linear motor keyboard tick for Back Gesture (MIUI_KEYBOARD = 268435479).
      */
     private fun triggerBackPopHaptic(instance: Any) {
         try {
             val helperField = instance.javaClass.getDeclaredField("mHapticHelper").apply { isAccessible = true }
             val helper = helperField.get(instance)
             if (helper != null) {
-                // miuix.view.HapticFeedbackConstants.MIUI_BUTTON_SMALL = 268435476
-                // miuix.view.HapticFeedbackConstants.MIUI_MESH_LIGHT = 268435463
+                // miuix.view.HapticFeedbackConstants.MIUI_KEYBOARD = 268435479 (Standard keyboard tick)
+                // miuix.view.HapticFeedbackConstants.MIUI_GEAR_LIGHT = 268435477
                 val performMethod = helper.javaClass.getMethod(
                     "performHapticFeedback",
                     Int::class.javaPrimitiveType,
                     Int::class.javaPrimitiveType
                 )
-                val success = performMethod.invoke(helper, 268435476, 268435463) as? Boolean ?: false
+                val success = performMethod.invoke(helper, 268435479, 268435477) as? Boolean ?: false
                 if (success) return
             }
         } catch (_: Throwable) {}
@@ -673,8 +688,30 @@ object AppTransitionHook {
     }
 
     /**
-     * Hook 7: Row-Dependent Parabolic Trajectory Physics in SpringParamsProvider.
-     * Computes spring damping & response dynamically based on target icon row position and flick velocity.
+     * Obtains the dynamic animation speed scale factor from HyperOS system settings.
+     * Uses Utilities.getGestureAnimMagicSpeed() and persist.miui.home_ms.
+     */
+    private fun getAnimationSpeedRatio(classLoader: ClassLoader): Float {
+        return try {
+            val utilClass = Class.forName("com.miui.home.recents.util.Utilities", false, classLoader)
+            val magicSpeed = (utilClass.getDeclaredMethod("getGestureAnimMagicSpeed").invoke(null) as? Number)?.toFloat() ?: 1.0f
+            val sysPropClass = Class.forName("android.os.SystemProperties")
+            val persistMsStr = sysPropClass.getDeclaredMethod("get", String::class.java, String::class.java).invoke(null, "persist.miui.home_ms", "1") as? String ?: "1"
+            val persistMs = persistMsStr.toFloatOrNull() ?: 1.0f
+            (magicSpeed * persistMs).coerceIn(0.1f, 5.0f)
+        } catch (_: Throwable) {
+            1.0f
+        }
+    }
+
+    /**
+     * Hook 7: iOS 26 Asymmetric Edge Compression & Z-Axis Depth Trajectory Physics.
+     * Computes position-dependent spring damping & response respecting system animation speed parameters:
+     * - Respects getGestureAnimMagicSpeed() * persist.miui.home_ms across all transitions.
+     * - Reverts Enhancement 4 underdamped floating apogee to fluid, critically damped springs (zeta = 0.98 - 1.00).
+     * - Lower half apps (normY > 0.5): bottom edge anchors/compresses near icon while top edge accelerates upward (Z-lift).
+     * - Upper half apps (normY < 0.5): top edge anchors/compresses while bottom edge accelerates downward.
+     * - Left/Right margins (normX): edge nearest screen boundary stays compressed while opposite edge flares outward.
      */
     private fun hookSpringParamsProvider(module: XposedInterface, classLoader: ClassLoader) {
         try {
@@ -714,81 +751,80 @@ object AppTransitionHook {
                     }
 
                     val animType = (chain.args[0] as? Enum<*>)?.name ?: ""
-                    val targetRect = chain.args[2] as? RectF
 
                     try {
+                        val speedRatio = getAnimationSpeedRatio(classLoader)
+
+                        // Start/Target rects for screen coordinate normalization
+                        val iconRect = if (animType.startsWith("OPEN")) {
+                            (chain.args[1] as? RectF) ?: (chain.args[2] as? RectF)
+                        } else {
+                            (chain.args[2] as? RectF) ?: (chain.args[1] as? RectF)
+                        }
+
                         val deviceHeight = runCatching {
                             val dcClass = Class.forName("com.miui.home.common.device.DeviceConfigs", false, classLoader)
                             (dcClass.getMethod("getDeviceHeight").invoke(null) as? Number)?.toFloat() ?: 2400f
                         }.getOrDefault(2400f).coerceAtLeast(1000f)
 
-                        val targetCenterY = targetRect?.centerY() ?: (deviceHeight * 0.75f)
-                        val normY = (targetCenterY / deviceHeight).coerceIn(0f, 1f)
+                        val deviceWidth = runCatching {
+                            val dcClass = Class.forName("com.miui.home.common.device.DeviceConfigs", false, classLoader)
+                            (dcClass.getMethod("getDeviceWidth").invoke(null) as? Number)?.toFloat() ?: 1080f
+                        }.getOrDefault(1080f).coerceAtLeast(720f)
+
+                        val iconCenterY = iconRect?.centerY() ?: (deviceHeight * 0.75f)
+                        val iconCenterX = iconRect?.centerX() ?: (deviceWidth * 0.50f)
+                        val normY = (iconCenterY / deviceHeight).coerceIn(0f, 1f)
+                        val normX = (iconCenterX / deviceWidth).coerceIn(0f, 1f)
+
+                        val vertOffset = (abs(normY - 0.5f) * 2.0f).coerceIn(0f, 1f)
+                        val horizOffset = (abs(normX - 0.5f) * 2.0f).coerceIn(0f, 1f)
 
                         // Check live flick velocity
                         val now = SystemClock.uptimeMillis()
                         val isRecentFlick = (now - sLastVelocityTime) < 800L
                         val vy = sLastVelocityY // px/ms (< 0 on upward flick)
                         val isFastFlick = isRecentFlick && vy < -0.8f
+                        val flickBoost = if (isFastFlick) -0.03f * speedRatio else 0.0f
 
-                        val openDamping: Float
-                        val openResponse: Float
-                        val closeDampingY: Float
-                        val closeResponseY: Float
-                        val closeDampingX: Float
-                        val closeResponseX: Float
-                        val closeDampingSize: Float
-                        val closeResponseSize: Float
-                        val recentsDamping: Float
-                        val recentsResponse: Float
-                        val cornerDamping: Float
-                        val cornerResponse: Float
-                        val alphaDamping: Float
-                        val alphaResponse: Float
+                        // 1. OPEN DYNAMICS (iOS 26 Asymmetric Edge Compression & Z-Axis Lift):
+                        // centerY leads Height: bottom edge anchors near dock while top shoots up!
+                        val openResponseCenterY = ((0.33f - (vertOffset * 0.04f)) * speedRatio).coerceAtLeast(0.18f)
+                        val openResponseHeight = ((0.39f + (vertOffset * 0.04f)) * speedRatio).coerceAtLeast(0.20f)
+                        val openResponseCenterX = ((0.34f - (horizOffset * 0.03f)) * speedRatio).coerceAtLeast(0.18f)
+                        val openResponseWidth = ((0.39f + (horizOffset * 0.03f)) * speedRatio).coerceAtLeast(0.20f)
+                        val openDamping = 1.00f
+                        val openCornerDamping = 1.06f
+                        val openCornerResponse = (0.28f * speedRatio).coerceAtLeast(0.16f)
+                        val openAlphaDamping = 0.98f
+                        val openAlphaResponse = (0.24f * speedRatio).coerceAtLeast(0.14f)
 
-                        // --- Scenario 1: Closing to Home (Row-Dependent Parabolic Dynamics) ---
-                        // --- Enhancement 4: Floating Apogee & Soft Air Cushioning for Close ---
-                        if (normY > 0.58f) {
-                            val depthRatio = ((normY - 0.58f) / 0.42f).coerceIn(0f, 1f)
-                            val baseDamping = 0.85f - (depthRatio * 0.04f)
-                            val baseResponse = 0.52f + (depthRatio * 0.10f)
+                        // 2. CLOSE DYNAMICS (Critically Damped, Zero Floating Apogee Stall):
+                        val closeResponseCenterY = (((0.36f + (vertOffset * 0.04f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
+                        val closeResponseHeight = (((0.38f + (vertOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
+                        val closeResponseCenterX = (((0.36f + (horizOffset * 0.04f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
+                        val closeResponseWidth = (((0.38f + (horizOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
+                        val closeDampingY = 0.99f
+                        val closeDampingX = 0.99f
+                        val closeDampingSize = 0.98f
+                        val closeCornerDamping = 1.05f
+                        val closeCornerResponse = (0.28f * speedRatio).coerceAtLeast(0.16f)
+                        val closeAlphaDamping = 0.96f
+                        val closeAlphaResponse = (0.32f * speedRatio).coerceAtLeast(0.16f)
 
-                            closeDampingY = if (isFastFlick) (baseDamping - 0.03f).coerceAtLeast(0.79f) else baseDamping
-                            closeResponseY = if (isFastFlick) (baseResponse + 0.06f).coerceAtMost(0.68f) else baseResponse
-                        } else if (normY < 0.38f) {
-                            closeDampingY = if (isFastFlick) 0.90f else 0.94f
-                            closeResponseY = if (isFastFlick) 0.48f else 0.44f
-                        } else {
-                            val midRatio = (normY - 0.38f) / 0.20f
-                            val baseD = 0.94f - (midRatio * 0.09f)
-                            val baseR = 0.44f + (midRatio * 0.08f)
-                            closeDampingY = if (isFastFlick) (baseD - 0.03f) else baseD
-                            closeResponseY = if (isFastFlick) (baseR + 0.04f) else baseR
-                        }
+                        // 3. RECENTS & APP-TO-APP DYNAMICS:
+                        val recentsDamping = 0.98f
+                        val recentsResponse = (0.36f * speedRatio).coerceAtLeast(0.18f)
+                        val recentsCornerDamping = 1.05f
+                        val recentsCornerResponse = (0.28f * speedRatio).coerceAtLeast(0.16f)
+                        val recentsAlphaDamping = 0.95f
+                        val recentsAlphaResponse = (0.30f * speedRatio).coerceAtLeast(0.16f)
 
-                        // Horizontal tracking: gentle, fluid curve
-                        closeDampingX = 0.98f
-                        closeResponseX = 0.44f
+                        val recentsOpenDamping = 1.00f
+                        val recentsOpenResponse = (0.36f * speedRatio).coerceAtLeast(0.18f)
 
-                        // Window geometry: remains expansive during the float, then condenses softly into icon
-                        closeDampingSize = 0.90f
-                        closeResponseSize = 0.46f
-
-                        // Corner squircle morphing: seamless superellipse easing
-                        cornerDamping = 1.05f
-                        cornerResponse = 0.30f
-
-                        // Alpha fade: stays solid until landing
-                        alphaDamping = 0.88f
-                        alphaResponse = 0.38f
-
-                        // --- Enhancement 5: Expansive Radial Bloom on Open ---
-                        openDamping = 1.00f
-                        openResponse = 0.395f
-
-                        // --- Scenario 3: Recents ---
-                        recentsDamping = 0.94f
-                        recentsResponse = 0.400f
+                        val appToAppDamping = 0.98f
+                        val appToAppResponse = (0.38f * speedRatio).coerceAtLeast(0.18f)
 
                         // Apply parameters per SpringParam key
                         for (i in result.indices) {
@@ -801,43 +837,46 @@ object AppTransitionHook {
                             when {
                                 animType.startsWith("OPEN_FROM_HOME") || animType.startsWith("OPEN_FROM_ELEMENT") -> {
                                     when (key) {
-                                        "centerX", "centerY" -> { newDamping = openDamping; newResponse = openResponse }
-                                        "Width", "Height", "Ratio" -> { newDamping = openDamping; newResponse = openResponse }
-                                        "Radius", "RadiusRatio" -> { newDamping = 1.08f; newResponse = 0.310f }
-                                        "alpha" -> { newDamping = 0.96f; newResponse = 0.260f }
+                                        "centerY" -> { newDamping = openDamping; newResponse = openResponseCenterY }
+                                        "centerX" -> { newDamping = openDamping; newResponse = openResponseCenterX }
+                                        "Height" -> { newDamping = openDamping; newResponse = openResponseHeight }
+                                        "Width", "Ratio" -> { newDamping = openDamping; newResponse = openResponseWidth }
+                                        "Radius", "RadiusRatio" -> { newDamping = openCornerDamping; newResponse = openCornerResponse }
+                                        "alpha" -> { newDamping = openAlphaDamping; newResponse = openAlphaResponse }
                                     }
                                 }
                                 animType.startsWith("CLOSE_TO_HOME") || animType.startsWith("CLOSE_TO_ELEMENT") -> {
                                     when (key) {
-                                        "centerY" -> { newDamping = closeDampingY; newResponse = closeResponseY }
-                                        "centerX" -> { newDamping = closeDampingX; newResponse = closeResponseX }
-                                        "Width", "Height", "Ratio" -> { newDamping = closeDampingSize; newResponse = closeResponseSize }
-                                        "Radius", "RadiusRatio" -> { newDamping = cornerDamping; newResponse = cornerResponse }
-                                        "alpha" -> { newDamping = alphaDamping; newResponse = alphaResponse }
+                                        "centerY" -> { newDamping = closeDampingY; newResponse = closeResponseCenterY }
+                                        "centerX" -> { newDamping = closeDampingX; newResponse = closeResponseCenterX }
+                                        "Height" -> { newDamping = closeDampingSize; newResponse = closeResponseHeight }
+                                        "Width", "Ratio" -> { newDamping = closeDampingSize; newResponse = closeResponseWidth }
+                                        "Radius", "RadiusRatio" -> { newDamping = closeCornerDamping; newResponse = closeCornerResponse }
+                                        "alpha" -> { newDamping = closeAlphaDamping; newResponse = closeAlphaResponse }
                                     }
                                 }
                                 animType.startsWith("CLOSE_TO_RECENTS") -> {
                                     when (key) {
                                         "centerX", "centerY" -> { newDamping = recentsDamping; newResponse = recentsResponse }
                                         "Width", "Height", "Ratio" -> { newDamping = recentsDamping; newResponse = recentsResponse }
-                                        "Radius", "RadiusRatio" -> { newDamping = cornerDamping; newResponse = cornerResponse }
-                                        "alpha" -> { newDamping = 0.90f; newResponse = 0.350f }
+                                        "Radius", "RadiusRatio" -> { newDamping = recentsCornerDamping; newResponse = recentsCornerResponse }
+                                        "alpha" -> { newDamping = recentsAlphaDamping; newResponse = recentsAlphaResponse }
                                     }
                                 }
                                 animType.startsWith("OPEN_FROM_RECENTS") -> {
                                     when (key) {
-                                        "centerX", "centerY" -> { newDamping = 1.00f; newResponse = 0.380f }
-                                        "Width", "Height", "Ratio" -> { newDamping = 1.00f; newResponse = 0.380f }
-                                        "Radius", "RadiusRatio" -> { newDamping = cornerDamping; newResponse = cornerResponse }
-                                        "alpha" -> { newDamping = 0.95f; newResponse = 0.300f }
+                                        "centerX", "centerY" -> { newDamping = recentsOpenDamping; newResponse = recentsOpenResponse }
+                                        "Width", "Height", "Ratio" -> { newDamping = recentsOpenDamping; newResponse = recentsOpenResponse }
+                                        "Radius", "RadiusRatio" -> { newDamping = recentsCornerDamping; newResponse = recentsCornerResponse }
+                                        "alpha" -> { newDamping = recentsAlphaDamping; newResponse = recentsAlphaResponse }
                                     }
                                 }
                                 animType.startsWith("APP_TO_APP") || animType.startsWith("START_FIRST_TASK") -> {
                                     when (key) {
-                                        "centerX", "centerY" -> { newDamping = 0.96f; newResponse = 0.400f }
-                                        "Width", "Height", "Ratio" -> { newDamping = 0.96f; newResponse = 0.400f }
-                                        "Radius", "RadiusRatio" -> { newDamping = cornerDamping; newResponse = cornerResponse }
-                                        "alpha" -> { newDamping = 0.90f; newResponse = 0.320f }
+                                        "centerX", "centerY" -> { newDamping = appToAppDamping; newResponse = appToAppResponse }
+                                        "Width", "Height", "Ratio" -> { newDamping = appToAppDamping; newResponse = appToAppResponse }
+                                        "Radius", "RadiusRatio" -> { newDamping = recentsCornerDamping; newResponse = recentsCornerResponse }
+                                        "alpha" -> { newDamping = 0.90f; newResponse = (0.32f * speedRatio).coerceAtLeast(0.16f) }
                                     }
                                 }
                             }
@@ -859,7 +898,7 @@ object AppTransitionHook {
                     return result
                 }
             })
-            Log.i(TAG, "Hooked SpringParamsProvider for floating apogee and expansive radial bloom")
+            Log.i(TAG, "Hooked SpringParamsProvider for iOS 26 edge compression, Z-lift & speed scaling")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook SpringParamsProvider", t)
         }
@@ -1079,6 +1118,154 @@ object AppTransitionHook {
             Log.i(TAG, "Hooked DeviceLevelUtils to bypass low-tier throttling")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook DeviceLevelUtils", t)
+        }
+    }
+
+    /**
+     * Hook 12: Eliminates landscape recents lag and touch drops in games & immersive apps.
+     * Overrides NavStubView.isMistakeTouch to return false, enabling instant gesture start
+     * and immediate pre-warming of SurfaceControl leashes in startRecentsAnimationPre.
+     */
+    private fun hookLandscapeRecentsOptimization(module: XposedInterface, classLoader: ClassLoader) {
+        try {
+            val navStubClass = Class.forName("com.miui.home.recents.NavStubView", false, classLoader)
+            val isMistakeTouchMethod = navStubClass.declaredMethods.find {
+                it.name == "isMistakeTouch" && it.parameterCount == 0
+            }
+            if (isMistakeTouchMethod != null) {
+                isMistakeTouchMethod.isAccessible = true
+                module.hook(isMistakeTouchMethod).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        val cfg = LauncherConfigHolder.iosAnimConfig
+                        if (cfg.enabled) {
+                            return false
+                        }
+                        return chain.proceed()
+                    }
+                })
+                Log.i(TAG, "Hooked NavStubView.isMistakeTouch to eliminate landscape recents lag in games")
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to hook NavStubView.isMistakeTouch", t)
+        }
+    }
+
+    /**
+     * Hook 13: iOS 26 3D Spatial Perspective Icon Tilt on Close.
+     * When an app window closes back into its launcher icon:
+     * - As the icon appears, projects a 3D spatial perspective rotation (pitch & roll)
+     *   via android.graphics.Camera matching screen coordinates (0.50 - normY, normX - 0.50).
+     * - Tilts smoothly peaking at progress p = 0.78, then seamlessly settles flat (0 deg)
+     *   at p = 1.0 as the icon lands in its desktop position.
+     */
+    private fun hookFloatingIcon3DTilt(module: XposedInterface, classLoader: ClassLoader) {
+        try {
+            val layerClass = Class.forName("com.miui.home.recents.views.FloatingIconLayer2", false, classLoader)
+            val method = layerClass.declaredMethods.find { it.name == "setMatrixAndClip" } ?: return
+            method.isAccessible = true
+
+            val isOpeningField = layerClass.getDeclaredField("mIsOpening").apply { isAccessible = true }
+            val matrixField = layerClass.getDeclaredField("mMatrix").apply { isAccessible = true }
+            val txField = layerClass.getDeclaredField("mTransaction").apply { isAccessible = true }
+            val modRectField = layerClass.getDeclaredField("mModifiedRectF").apply { isAccessible = true }
+            val validIconMethod = layerClass.getMethod("getValidIconRectF")
+
+            val txClass = txField.type
+            val setMatrixMethod = txClass.declaredMethods.find {
+                it.name == "setMatrix" && it.parameterTypes.size == 2 && it.parameterTypes[1] == Matrix::class.java
+            }?.apply { isAccessible = true }
+
+            val dcClass = Class.forName("com.miui.home.common.device.DeviceConfigs", false, classLoader)
+            val getDeviceWidthMethod = dcClass.getMethod("getDeviceWidth")
+            val getDeviceHeightMethod = dcClass.getMethod("getDeviceHeight")
+
+            module.hook(method).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val result = chain.proceed()
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (!cfg.enabled) {
+                        return result
+                    }
+
+                    try {
+                        val isOpening = isOpeningField.getBoolean(chain.thisObject)
+                        if (isOpening) {
+                            return result
+                        }
+
+                        val rectF = chain.args[2] as? RectF ?: return result
+                        if (rectF.isEmpty) return result
+
+                        val validIconRect = validIconMethod.invoke(chain.thisObject) as? RectF ?: return result
+                        if (validIconRect.isEmpty) return result
+
+                        val screenW = ((getDeviceWidthMethod.invoke(null) as? Number)?.toFloat() ?: 1080f).coerceAtLeast(720f)
+                        val screenH = ((getDeviceHeightMethod.invoke(null) as? Number)?.toFloat() ?: 2400f).coerceAtLeast(1000f)
+
+                        val targetW = validIconRect.width()
+                        val curW = rectF.width()
+
+                        // Closing progress p: 0.0 (full screen) -> 1.0 (icon reached)
+                        val p = ((screenW - curW) / (screenW - targetW).coerceAtLeast(10f)).coerceIn(0f, 1f)
+
+                        // Envelope peaking at p = 0.78, settling flat (0.0) at p = 1.0
+                        val envelope = when {
+                            p < 0.35f -> 0.0f
+                            p <= 0.78f -> {
+                                val t = (p - 0.35f) / 0.43f
+                                sin(t * Math.PI / 2.0).toFloat().coerceIn(0f, 1f)
+                            }
+                            else -> {
+                                val t = (p - 0.78f) / 0.22f
+                                ((1.0f + cos(t * Math.PI).toFloat()) / 2.0f).coerceIn(0f, 1f)
+                            }
+                        }
+
+                        if (envelope > 0.005f) {
+                            val normX = (validIconRect.centerX() / screenW).coerceIn(0f, 1f)
+                            val normY = (validIconRect.centerY() / screenH).coerceIn(0f, 1f)
+
+                            // 3D perspective pitch and yaw
+                            val rotX = (0.50f - normY) * 22.0f * envelope
+                            val rotY = (normX - 0.50f) * 18.0f * envelope
+
+                            val camera = Camera()
+                            camera.save()
+                            camera.rotateX(rotX)
+                            camera.rotateY(rotY)
+                            val tiltMatrix = Matrix()
+                            camera.getMatrix(tiltMatrix)
+                            camera.restore()
+
+                            val modRect = modRectField.get(chain.thisObject) as? RectF ?: rectF
+                            val cx = modRect.centerX()
+                            val cy = modRect.centerY()
+
+                            tiltMatrix.preTranslate(-cx, -cy)
+                            tiltMatrix.postTranslate(cx, cy)
+
+                            val matrix = matrixField.get(chain.thisObject) as? Matrix ?: return result
+                            matrix.postConcat(tiltMatrix)
+
+                            val tx = txField.get(chain.thisObject) ?: return result
+                            val sc1 = chain.args[0]
+                            val sc2 = chain.args[1]
+
+                            setMatrixMethod?.invoke(tx, sc1, matrix)
+                            if (sc2 != null) {
+                                setMatrixMethod?.invoke(tx, sc2, matrix)
+                            }
+                        }
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "Failed in 3D icon tilt projection", t)
+                    }
+
+                    return result
+                }
+            })
+            Log.i(TAG, "Hooked FloatingIconLayer2.setMatrixAndClip for iOS 26 3D spatial perspective tilt")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to hook FloatingIconLayer2.setMatrixAndClip", t)
         }
     }
 }
