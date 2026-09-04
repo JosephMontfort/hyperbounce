@@ -84,7 +84,7 @@ object AppTransitionHook {
         hookGestureVelocityTracking(module, classLoader)
         hookDragResistanceAndScaling(module, classLoader)
         hookLandscapeRecentsOptimization(module, classLoader)
-        hookFolderFrameAnimation(module, classLoader)
+        hookFolder1to1IconTrajectories(module, classLoader)
         hookSmallWindowThreshold(module, classLoader)
         hookRecentsCurrentTaskCentering(module, classLoader)
         hookRecentsStackScrollHaptics(module, classLoader)
@@ -832,8 +832,8 @@ object AppTransitionHook {
 
                         // 1. OPEN DYNAMICS (Distinct Vertical Uplift for Bottom Apps, Downward Dip for Top Apps):
                         val isBottomApp = normY >= 0.5f
-                        val openDamping = if (isBottomApp) 0.88f else 0.90f
-                        val openResponseCenterY = (if (isBottomApp) 0.38f else 0.42f) * speedRatio
+                        val openDamping = if (isBottomApp) 0.86f else 0.88f
+                        val openResponseCenterY = (if (isBottomApp) 0.40f else 0.44f) * speedRatio
                         val openResponseCenterX = (0.32f * speedRatio).coerceAtLeast(0.18f)
                         val openResponseHeight = (0.34f * speedRatio).coerceAtLeast(0.18f)
                         val openResponseWidth = (0.35f * speedRatio).coerceAtLeast(0.18f)
@@ -845,7 +845,7 @@ object AppTransitionHook {
 
                         // 2. CLOSE DYNAMICS (High Soaring Parabolic Apex for Bottom Apps, Direct Ascent for Top Apps):
                         val closeDampingY = if (isBottomApp) {
-                            if (isRecentFlick) 0.80f else 0.82f // Deep underdamping for 350-500px parabolic apex float
+                            if (isRecentFlick) 0.78f else 0.80f // Deep physical underdamping for elevated parabolic flight
                         } else {
                             0.96f // Direct ascent straight into top icon without overshoot
                         }
@@ -853,7 +853,7 @@ object AppTransitionHook {
                         val closeDampingSize = if (isRecentFlick) 0.94f else 0.96f
 
                         val closeResponseCenterY = if (isBottomApp) {
-                            (((0.46f - (vertOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.22f)
+                            (((0.48f - (vertOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.24f)
                         } else {
                             (((0.36f - (vertOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
                         }
@@ -1028,26 +1028,26 @@ object AppTransitionHook {
                         if (isOpen) {
                             if (normY >= 0.50f) {
                                 // Bottom-half apps (dock/lower rows): open with a DISTINCT UPLIFT surge right on tap!
-                                val openUpward = -15000f - ((normY - 0.50f) * 6000f)
+                                val openUpward = -24000f - ((normY - 0.50f) * 12000f)
                                 setCenterYVelMethod?.invoke(sfAnimParam, openUpward)
 
-                                val openVx = -(dx / deviceWidth) * 2200f
+                                val openVx = -(dx / deviceWidth) * 2600f
                                 setCenterXVelMethod?.invoke(sfAnimParam, openVx)
 
-                                setWidthVelMethod?.invoke(sfAnimParam, 1200f)
-                                setHeightVelMethod?.invoke(sfAnimParam, 1800f)
-                                setRatioVelMethod?.invoke(sfAnimParam, 1.5f)
+                                setWidthVelMethod?.invoke(sfAnimParam, 1800f)
+                                setHeightVelMethod?.invoke(sfAnimParam, 2600f)
+                                setRatioVelMethod?.invoke(sfAnimParam, 2.4f)
                             } else {
-                                // Top-half apps: plunges down slightly first before expanding!
-                                val openDownward = +9500f + ((0.50f - normY) * 6000f)
+                                // Top-half apps: plunges down distinctly first before expanding!
+                                val openDownward = +18000f + ((0.50f - normY) * 10000f)
                                 setCenterYVelMethod?.invoke(sfAnimParam, openDownward)
 
-                                val openVx = -(dx / deviceWidth) * 1600f
+                                val openVx = -(dx / deviceWidth) * 2000f
                                 setCenterXVelMethod?.invoke(sfAnimParam, openVx)
 
-                                setWidthVelMethod?.invoke(sfAnimParam, -1000f)
-                                setHeightVelMethod?.invoke(sfAnimParam, -1000f)
-                                setRatioVelMethod?.invoke(sfAnimParam, -1.2f)
+                                setWidthVelMethod?.invoke(sfAnimParam, -1600f)
+                                setHeightVelMethod?.invoke(sfAnimParam, -1600f)
+                                setRatioVelMethod?.invoke(sfAnimParam, -1.8f)
                             }
                         } else if (isClose) {
                             val flickSpeed = if (isRecentFlick && vy < -0.10f) abs(vy).coerceIn(0.10f, 12.0f) else 0f
@@ -1056,21 +1056,21 @@ object AppTransitionHook {
                             } else {
                                 0.75f
                             }
-                            val thumbMultiplier = (1.30f - (thumbNormY * 0.35f)).coerceIn(0.90f, 1.30f)
+                            val thumbMultiplier = (1.35f - (thumbNormY * 0.35f)).coerceIn(0.95f, 1.35f)
 
                             if (normY >= 0.50f) {
-                                // Bottom-half apps: soar high up into a 350-500px parabolic apex before falling into icon!
-                                val baseUpward = 16000f + ((normY - 0.50f) * 8000f)
-                                val flickAdd = flickSpeed * 3500f
+                                // Bottom-half apps: soar high up into a massive 450-600px parabolic apex before landing into icon!
+                                val baseUpward = 24000f + ((normY - 0.50f) * 12000f)
+                                val flickAdd = flickSpeed * 4500f
                                 val totalUpward = -(baseUpward + flickAdd) * thumbMultiplier
-                                val vyLaunch = totalUpward.coerceIn(-35000f, -15000f)
+                                val vyLaunch = totalUpward.coerceIn(-45000f, -22000f)
                                 setCenterYVelMethod?.invoke(sfAnimParam, vyLaunch)
-                                setRatioVelMethod?.invoke(sfAnimParam, -1.5f)
+                                setRatioVelMethod?.invoke(sfAnimParam, -2.4f)
                             } else {
                                 // Top-half apps: fly directly up into top icon without overshoot
-                                val topUpward = -(4500f + flickSpeed * 2000f).coerceIn(-16000f, -4000f)
+                                val topUpward = -(8000f + flickSpeed * 2500f).coerceIn(-22000f, -7000f)
                                 setCenterYVelMethod?.invoke(sfAnimParam, topUpward)
-                                setRatioVelMethod?.invoke(sfAnimParam, 1.2f)
+                                setRatioVelMethod?.invoke(sfAnimParam, 1.8f)
                             }
 
                             // Reverse horizontal trajectory: drift towards the target icon's side
@@ -1270,97 +1270,273 @@ object AppTransitionHook {
     }
 
     /**
-     * Hook 14: Folder Frame Enclosure & Synchronized Scale Animation.
-     * Encloses folder header (title) and grid (apps) inside an animated outline frame
-     * that expands smoothly along with the apps on open to resting position,
-     * and collapses cleanly back into the folder icon on dismissal/close.
+     * Hook 14: Universal Modular 1:1 Folder Icon Trajectory Tracking & OriginOS Expansion Physics.
+     *
+     * 1. Eliminates outline borders (no border enclosing expanded folders).
+     * 2. Modular 1:1 affine trajectory mapping for ALL folder types & grid sizes:
+     *    - Regular (1x1)
+     *    - Enlarged (2x2) standard (3 large + 4 small) AND "Perfect Grid" (4 full-size large icons)
+     *    - 1x3, 3x1, XXL (2x4, 3x3, etc.), 3x6, and any custom grid layout.
+     *    - Matches each preview icon dynamically to its open grid cell via IShortcutInfo / buddy tag
+     *      and actual on-screen measured coordinates.
+     * 3. OriginOS Physical Dynamics:
+     *    - Opening: PathInterpolator(0.33f, 0.0f, 0.67f, 1.0f) / Folme Spring (zeta=0.88, T0=0.32s), zero delay.
+     *    - Closing: PathInterpolator(0.25f, 0.1f, 0.25f, 1.0f) / Folme Spring (zeta=0.90, T0=0.28s), zero delay.
+     *    - Seamless 1:1 continuous icon morph with zero ghosting or double icons.
      */
-    private fun hookFolderFrameAnimation(module: XposedInterface, classLoader: ClassLoader) {
-        // 1. Hook FolderView.onOpen to ensure background frame is enabled and configured
+    private fun hookFolder1to1IconTrajectories(module: XposedInterface, classLoader: ClassLoader) {
+        // 1. Hook FolderAnimController.initIconLoc: modular 1:1 preview-to-grid mapping
         try {
-            val folderViewClass = Class.forName("com.miui.home.folder.FolderView", false, classLoader)
-            val onOpenMethod = folderViewClass.getDeclaredMethod("onOpen").apply { isAccessible = true }
-            module.hook(onOpenMethod).intercept(object : XposedInterface.Hooker {
+            val folderAnimControllerClass = Class.forName("com.miui.home.folder.FolderAnimController", false, classLoader)
+            val folderIconClass = Class.forName("com.miui.home.folder.FolderIcon", false, classLoader)
+            val initIconLocMethod = folderAnimControllerClass.getDeclaredMethod(
+                "initIconLoc",
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                folderIconClass
+            ).apply { isAccessible = true }
+
+            module.hook(initIconLocMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val result = chain.proceed()
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) return result
+                    if (!cfg.enabled) return chain.proceed()
 
                     try {
-                        val folderView = chain.thisObject as? View ?: return result
-                        val bgField = folderView.javaClass.getDeclaredField("mBackgroundView").apply { isAccessible = true }
-                        val backgroundView = bgField.get(folderView) as? ViewGroup ?: return result
+                        val controller = chain.thisObject ?: return chain.proceed()
+                        val folderIcon = chain.args[3] ?: return chain.proceed()
 
-                        val enableBgField = folderView.javaClass.getDeclaredField("mEnableShowFolderContentBg").apply { isAccessible = true }
-                        enableBgField.set(folderView, true)
+                        val locMapField = controller.javaClass.getDeclaredField("mFolderIconLocMap").apply { isAccessible = true }
+                        val locMap = locMapField.get(controller) as? MutableMap<Int, Int> ?: return chain.proceed()
+                        locMap.clear()
 
-                        val contentBgField = folderView.javaClass.getDeclaredField("mContentBackground").apply { isAccessible = true }
-                        val contentBg = contentBgField.get(folderView) as? Drawable
+                        val gridViewField = controller.javaClass.getDeclaredField("mAnimaFolderGridView").apply { isAccessible = true }
+                        val folderGridView = gridViewField.get(controller) as? ViewGroup
 
-                        // Prepare default outline frame drawable if not present
-                        if (backgroundView.background == null) {
-                            val isLight = runCatching {
-                                val wallpaperUtilClass = Class.forName("com.miui.home.isolate.wallpaper.WallpaperUtil", false, classLoader)
-                                val modeMethod = wallpaperUtilClass.getDeclaredMethod("getCurrentWallpaperColorMode")
-                                (modeMethod.invoke(null) as? Int) == 2
-                            }.getOrDefault(false)
+                        val getPreviewArrayMethod = folderIcon.javaClass.getMethod("getPreviewArray")
+                        val previewArray = getPreviewArrayMethod.invoke(folderIcon) as? Array<*>
+                        val previewCount = previewArray?.size ?: 0
+                        val gridChildCount = folderGridView?.childCount ?: 0
 
-                            val density = folderView.resources.displayMetrics.density
-                            val strokeColor = if (isLight) 0x33000000 else 0x44FFFFFF
-                            val fillColor = if (isLight) 0x10000000 else 0x15FFFFFF
-                            val gd = GradientDrawable().apply {
-                                shape = GradientDrawable.RECTANGLE
-                                cornerRadius = 28f * density
-                                setStroke((1.5f * density).toInt(), strokeColor)
-                                setColor(fillColor)
+                        if (previewCount > 0) {
+                            val matchedGridIndices = mutableSetOf<Int>()
+
+                            for (p in 0 until previewCount) {
+                                val pv = previewArray?.get(p) as? View
+                                val pvBuddy = runCatching {
+                                    pv?.javaClass?.getMethod("getMBuddyInfo")?.invoke(pv)
+                                }.getOrNull() ?: pv?.tag
+
+                                var foundIndex = -1
+                                if (pvBuddy != null && folderGridView != null) {
+                                    for (g in 0 until gridChildCount) {
+                                        if (matchedGridIndices.contains(g)) continue
+                                        val gv = folderGridView.getChildAt(g)
+                                        val gvTag = gv?.tag ?: runCatching {
+                                            val m = folderGridView.javaClass.getMethod("getChildView", Int::class.javaPrimitiveType)
+                                            (m.invoke(folderGridView, g) as? View)?.tag
+                                        }.getOrNull()
+                                        if (gvTag != null && (gvTag == pvBuddy || gvTag.toString() == pvBuddy.toString())) {
+                                            foundIndex = g
+                                            break
+                                        }
+                                    }
+                                }
+
+                                if (foundIndex >= 0) {
+                                    locMap[p] = foundIndex
+                                    matchedGridIndices.add(foundIndex)
+                                } else {
+                                    // Fallback: detect 2x2 4-icon perfect grid vs standard 3-large
+                                    val is2x2 = runCatching {
+                                        val getFolderIconType = folderIcon.javaClass.getMethod("getFolderIconType")
+                                        (getFolderIconType.invoke(folderIcon) as? Number)?.toInt() == 2
+                                    }.getOrDefault(false)
+
+                                    val mapped = if (is2x2) {
+                                        if (gridChildCount == 4) {
+                                            // Perfect grid: 4 icons in 2x2 folder are full size (1:1 grid)
+                                            p.coerceAtMost(gridChildCount - 1)
+                                        } else {
+                                            // Standard 3-large + small icons in 3-column grid
+                                            when (p) {
+                                                0 -> 0
+                                                1 -> 1
+                                                2 -> 3 // row 1, col 0
+                                                else -> (p - 1).coerceAtMost(gridChildCount - 1)
+                                            }
+                                        }
+                                    } else {
+                                        // Universal 1:1 mapping for 1x1, 1x3, 3x1, XXL, 3x6, etc.
+                                        p.coerceAtMost(gridChildCount - 1)
+                                    }
+                                    locMap[p] = mapped
+                                    matchedGridIndices.add(mapped)
+                                }
                             }
-                            backgroundView.background = gd
-                            contentBgField.set(folderView, gd)
+                            return (previewCount - 1).coerceAtLeast(0)
                         }
-                        contentBg?.alpha = 255
                     } catch (t: Throwable) {
-                        Log.e(TAG, "Error in FolderView.onOpen frame init", t)
+                        Log.e(TAG, "Error in modular 1:1 initIconLoc", t)
                     }
-
-                    return result
+                    return chain.proceed()
                 }
             })
-            Log.i(TAG, "Hooked FolderView.onOpen for folder content frame enablement")
+            Log.i(TAG, "Hooked FolderAnimController.initIconLoc for universal 1:1 multi-grid tracking")
         } catch (t: Throwable) {
-            Log.w(TAG, "Failed to hook FolderView.onOpen", t)
+            Log.w(TAG, "Failed to hook FolderAnimController.initIconLoc", t)
         }
 
-        // 2. Hook FolderView.onClose to preserve outline alpha while closing animation plays
+        // 2. Hook FolderAnimController.updateGridItemAnimationPosition: exact 1:1 starting transform
         try {
-            val folderViewClass = Class.forName("com.miui.home.folder.FolderView", false, classLoader)
-            val onCloseMethod = folderViewClass.getDeclaredMethod("onClose", Boolean::class.javaPrimitiveType, Runnable::class.java).apply {
-                isAccessible = true
-            }
-            module.hook(onCloseMethod).intercept(object : XposedInterface.Hooker {
+            val folderAnimControllerClass = Class.forName("com.miui.home.folder.FolderAnimController", false, classLoader)
+            val updatePosMethod = folderAnimControllerClass.getDeclaredMethod(
+                "updateGridItemAnimationPosition",
+                View::class.java,
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType
+            ).apply { isAccessible = true }
+
+            module.hook(updatePosMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val result = chain.proceed()
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) return result
+                    if (!cfg.enabled) return chain.proceed()
 
                     try {
-                        val folderView = chain.thisObject as? View ?: return result
-                        val contentBgField = folderView.javaClass.getDeclaredField("mContentBackground").apply { isAccessible = true }
-                        val contentBg = contentBgField.get(folderView) as? Drawable
-                        // Keep alpha visible during closing flight so the outline doesn't disappear abruptly
-                        contentBg?.alpha = 255
-                    } catch (t: Throwable) {
-                        Log.e(TAG, "Error in FolderView.onClose frame preservation", t)
-                    }
+                        val controller = chain.thisObject ?: return chain.proceed()
+                        val view = chain.args[0] as? View ?: return chain.proceed()
+                        val previewIndex = (chain.args[1] as? Number)?.toInt() ?: 0
 
-                    return result
+                        val animViewField = controller.javaClass.getDeclaredField("mFolderIconAnimView").apply { isAccessible = true }
+                        val folderAnimIcon = animViewField.get(controller) ?: return chain.proceed()
+                        val getPreviewArrayMethod = folderAnimIcon.javaClass.getMethod("getPreviewArray")
+                        val previewArray = getPreviewArrayMethod.invoke(folderAnimIcon) as? Array<*> ?: return chain.proceed()
+
+                        if (previewIndex in previewArray.indices) {
+                            val pv = previewArray[previewIndex] as? View ?: return chain.proceed()
+                            val pvLoc = IntArray(2)
+                            pv.getLocationOnScreen(pvLoc)
+
+                            val gridEndLocField = controller.javaClass.getDeclaredField("mGridEndLoc").apply { isAccessible = true }
+                            val gridEndLoc = gridEndLocField.get(controller) as IntArray
+
+                            val pvW = pv.width.toFloat().takeIf { it > 0f } ?: pv.measuredWidth.toFloat()
+                            val pvH = pv.height.toFloat().takeIf { it > 0f } ?: pv.measuredHeight.toFloat()
+                            val gridW = view.width.toFloat().takeIf { it > 0f } ?: view.measuredWidth.toFloat().takeIf { it > 0f } ?: pvW
+                            val gridH = view.height.toFloat().takeIf { it > 0f } ?: view.measuredHeight.toFloat().takeIf { it > 0f } ?: pvH
+
+                            val editScaleField = runCatching {
+                                controller.javaClass.getDeclaredField("mNormalEditScale").apply { isAccessible = true }
+                            }.getOrNull()
+                            val editScale = (editScaleField?.get(controller) as? Number)?.toFloat() ?: 1.0f
+
+                            val folmeScaleField = runCatching {
+                                controller.javaClass.getDeclaredField("mFolmeScale").apply { isAccessible = true }
+                            }.getOrNull()
+                            val folmeScale = (folmeScaleField?.get(controller) as? Number)?.toFloat() ?: 1.0f
+
+                            val transX = (pvLoc[0] - gridEndLoc[0]).toFloat() / (editScale * folmeScale)
+                            val transY = (pvLoc[1] - gridEndLoc[1]).toFloat() / (editScale * folmeScale)
+                            val scaleX = if (gridW > 0f && pvW > 0f) (pvW / gridW).coerceIn(0.12f, 1.20f) else 1.0f
+                            val scaleY = if (gridH > 0f && pvH > 0f) (pvH / gridH).coerceIn(0.12f, 1.20f) else 1.0f
+
+                            // Set initial 1:1 affine pre-animation state
+                            val preAnimMethod = controller.javaClass.getDeclaredMethod(
+                                "preAnimState",
+                                View::class.java,
+                                Float::class.javaPrimitiveType,
+                                Float::class.javaPrimitiveType,
+                                Float::class.javaPrimitiveType,
+                                Float::class.javaPrimitiveType
+                            ).apply { isAccessible = true }
+                            preAnimMethod.invoke(controller, view, scaleX, scaleY, transX, transY)
+
+                            // Hide the preview icon cleanly so only the 1:1 grid icon is rendered, eliminating double icons
+                            pv.alpha = 0f
+                            return null
+                        }
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "Error in 1:1 updateGridItemAnimationPosition", t)
+                    }
+                    return chain.proceed()
                 }
             })
-            Log.i(TAG, "Hooked FolderView.onClose for smooth outline frame fade-out")
+            Log.i(TAG, "Hooked FolderAnimController.updateGridItemAnimationPosition for 1:1 preview-to-grid flight")
         } catch (t: Throwable) {
-            Log.w(TAG, "Failed to hook FolderView.onClose", t)
+            Log.w(TAG, "Failed to hook FolderAnimController.updateGridItemAnimationPosition", t)
         }
 
-        // 3. Hook FolderAnimController.startFolderAnim to animate the outline frame in sync with apps
+        // 3. Hook FolderAnimController.setVisibleScale: exact 1:1 collapse scaling into preview
+        try {
+            val folderAnimControllerClass = Class.forName("com.miui.home.folder.FolderAnimController", false, classLoader)
+            val animStateClass = Class.forName("miuix.animation.controller.AnimState", false, classLoader)
+            val viewPropertyClass = Class.forName("miuix.animation.property.ViewProperty", false, classLoader)
+            val scaleXProp = viewPropertyClass.getField("SCALE_X").get(null)
+            val scaleYProp = viewPropertyClass.getField("SCALE_Y").get(null)
+            val addMethod = animStateClass.getMethod("add", Object::class.java, Double::class.javaPrimitiveType)
+
+            val setVisibleScaleMethod = folderAnimControllerClass.getDeclaredMethod(
+                "setVisibleScale",
+                animStateClass,
+                Int::class.javaPrimitiveType
+            ).apply { isAccessible = true }
+
+            module.hook(setVisibleScaleMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (!cfg.enabled) return chain.proceed()
+
+                    try {
+                        val controller = chain.thisObject ?: return chain.proceed()
+                        val animState = chain.args[0] ?: return chain.proceed()
+                        val gridIndex = (chain.args[1] as? Number)?.toInt() ?: 0
+
+                        val animViewField = controller.javaClass.getDeclaredField("mFolderIconAnimView").apply { isAccessible = true }
+                        val folderAnimIcon = animViewField.get(controller) ?: return chain.proceed()
+                        val getPreviewArrayMethod = folderAnimIcon.javaClass.getMethod("getPreviewArray")
+                        val previewArray = getPreviewArrayMethod.invoke(folderAnimIcon) as? Array<*> ?: return chain.proceed()
+
+                        val locMapField = controller.javaClass.getDeclaredField("mFolderIconLocMap").apply { isAccessible = true }
+                        val locMap = locMapField.get(controller) as? Map<Int, Int> ?: return chain.proceed()
+
+                        var pvIndex = -1
+                        for ((k, v) in locMap) {
+                            if (v == gridIndex) {
+                                pvIndex = k
+                                break
+                            }
+                        }
+
+                        if (pvIndex in previewArray.indices) {
+                            val pv = previewArray[pvIndex] as? View
+                            val pvW = pv?.width?.toFloat()?.takeIf { it > 0f } ?: pv?.measuredWidth?.toFloat() ?: 0f
+                            val pvH = pv?.height?.toFloat()?.takeIf { it > 0f } ?: pv?.measuredHeight?.toFloat() ?: 0f
+
+                            val gridViewField = controller.javaClass.getDeclaredField("mAnimaFolderGridView").apply { isAccessible = true }
+                            val folderGridView = gridViewField.get(controller) as? ViewGroup
+                            val child = folderGridView?.getChildAt(gridIndex)
+                            val gridW = child?.width?.toFloat()?.takeIf { it > 0f } ?: child?.measuredWidth?.toFloat() ?: pvW
+                            val gridH = child?.height?.toFloat()?.takeIf { it > 0f } ?: child?.measuredHeight?.toFloat() ?: pvH
+
+                            val scaleX = if (gridW > 0f && pvW > 0f) (pvW / gridW).coerceIn(0.12f, 1.20f) else 0.35f
+                            val scaleY = if (gridH > 0f && pvH > 0f) (pvH / gridH).coerceIn(0.12f, 1.20f) else 0.35f
+
+                            addMethod.invoke(animState, scaleXProp, scaleX.toDouble())
+                            addMethod.invoke(animState, scaleYProp, scaleY.toDouble())
+                            return null
+                        }
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "Error in 1:1 setVisibleScale", t)
+                    }
+                    return chain.proceed()
+                }
+            })
+            Log.i(TAG, "Hooked FolderAnimController.setVisibleScale for 1:1 collapse scaling")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to hook FolderAnimController.setVisibleScale", t)
+        }
+
+        // 4. Hook FolderAnimController.startFolderAnim: OriginOS physical curves & synchronous timing
         try {
             val folderAnimControllerClass = Class.forName("com.miui.home.folder.FolderAnimController", false, classLoader)
             val iFolderIconClass = Class.forName("com.miui.home.folder.api.IFolderIcon", false, classLoader)
@@ -1374,228 +1550,94 @@ object AppTransitionHook {
 
             module.hook(startFolderAnimMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val result = chain.proceed()
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) return result
+                    if (!cfg.enabled) return chain.proceed()
+
+                    val isOpen = chain.args[0] as? Boolean ?: true
+                    val iFolderIcon = chain.args[1]
+                    val controller = chain.thisObject
+
+                    val result = chain.proceed()
 
                     try {
-                        val controller = chain.thisObject ?: return result
-                        val isOpen = chain.args[0] as? Boolean ?: true
-                        val iFolderIcon = chain.args[1]
+                        if (controller != null) {
+                            // OriginOS Physical Springs:
+                            // Open: Damping 0.88f, Response 0.32s (matches OriginOS V0 = PathInterpolator(0.33, 0.0, 0.67, 1.0))
+                            // Close: Damping 0.90f, Response 0.28s
+                            val damping = if (isOpen) 0.88f else 0.90f
+                            val response = if (isOpen) 0.32f else 0.28f
 
-                        val clingField = controller.javaClass.getDeclaredField("mFolderCling").apply { isAccessible = true }
-                        val folderCling = clingField.get(controller) ?: return result
+                            fun applyOriginOSSpring(animListField: String) {
+                                runCatching {
+                                    val field = controller.javaClass.getDeclaredField(animListField).apply { isAccessible = true }
+                                    val list = field.get(controller) as? List<*> ?: return
+                                    for (anim in list) {
+                                        if (anim == null) continue
+                                        val getAnimConfigMethod = anim.javaClass.getMethod("getAnimConfig")
+                                        val animConfig = getAnimConfigMethod.invoke(anim) ?: continue
+                                        val setEaseMethod = animConfig.javaClass.getMethod("setEase", Int::class.javaPrimitiveType, FloatArray::class.java)
+                                        setEaseMethod.invoke(animConfig, -2, floatArrayOf(damping, response))
+                                        val setDelayMethod = animConfig.javaClass.getMethod("setDelay", Long::class.javaPrimitiveType)
+                                        setDelayMethod.invoke(animConfig, 0L)
+                                    }
+                                }
+                            }
 
-                        val folderMethod = folderCling.javaClass.getMethod("getFolder")
-                        val folderView = folderMethod.invoke(folderCling) as? View ?: return result
+                            applyOriginOSSpring("mGridIconSpringAnimList")
+                            applyOriginOSSpring("mFolderIconSpringAnimList")
+                            applyOriginOSSpring("mBgSpringAnimList")
+                            applyOriginOSSpring("mTitleSpringAnimList")
 
-                        val bgField = folderView.javaClass.getDeclaredField("mBackgroundView").apply { isAccessible = true }
-                        val backgroundView = bgField.get(folderView) as? ViewGroup ?: return result
+                            // When closing: restore preview view alphas on desktop icon after flight finishes
+                            if (!isOpen && iFolderIcon != null) {
+                                val desktopIcon = (iFolderIcon as? View) ?: runCatching {
+                                    val m = iFolderIcon.javaClass.getMethod("getIconImageView")
+                                    m.invoke(iFolderIcon) as? View
+                                }.getOrNull()
 
-                        val contentBgField = folderView.javaClass.getDeclaredField("mContentBackground").apply { isAccessible = true }
-                        val contentBg = contentBgField.get(folderView) as? Drawable
-
-                        animateFolderFrameEnclosure(
-                            isOpen = isOpen,
-                            folderView = folderView,
-                            backgroundView = backgroundView,
-                            contentBackground = contentBg,
-                            iFolderIcon = iFolderIcon,
-                            classLoader = classLoader
-                        )
+                                desktopIcon?.postDelayed({
+                                    runCatching {
+                                        val getPreviewArrayMethod = iFolderIcon.javaClass.getMethod("getPreviewArray")
+                                        val pvs = getPreviewArrayMethod.invoke(iFolderIcon) as? Array<*>
+                                        pvs?.forEach { (it as? View)?.alpha = 1.0f }
+                                    }
+                                }, 320L)
+                            }
+                        }
                     } catch (t: Throwable) {
-                        Log.e(TAG, "Error animating folder frame enclosure", t)
+                        Log.e(TAG, "Error applying OriginOS curves to folder animation", t)
                     }
 
                     return result
                 }
             })
-            Log.i(TAG, "Hooked FolderAnimController.startFolderAnim for synchronized outline frame flight")
+            Log.i(TAG, "Hooked FolderAnimController.startFolderAnim with OriginOS spring dynamics")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook FolderAnimController.startFolderAnim", t)
         }
-    }
 
-    private fun animateFolderFrameEnclosure(
-        isOpen: Boolean,
-        folderView: View,
-        backgroundView: ViewGroup,
-        contentBackground: Drawable?,
-        iFolderIcon: Any?,
-        classLoader: ClassLoader
-    ) {
-        // Measure and size backgroundView to wrap Header (Title) + Content (Grid)
-        val headerView = runCatching {
-            val f = folderView.javaClass.getDeclaredField("mHeader").apply { isAccessible = true }
-            f.get(folderView) as? View
-        }.getOrNull()
-
-        val contentView = runCatching {
-            val f = folderView.javaClass.getDeclaredField("mContent").apply { isAccessible = true }
-            f.get(folderView) as? View
-        }.getOrNull()
-
-        val gridViewHeight = runCatching {
-            val m = folderView.javaClass.getDeclaredMethod("getGridViewHeight").apply { isAccessible = true }
-            (m.invoke(folderView) as? Number)?.toInt() ?: 0
-        }.getOrNull() ?: 0
-
-        val density = folderView.resources.displayMetrics.density
-        val diffWidth = runCatching {
-            val resId = folderView.resources.getIdentifier("background_view_diff_width", "dimen", folderView.context.packageName)
-            if (resId != 0) folderView.resources.getDimensionPixelSize(resId) else (14 * density).toInt()
-        }.getOrDefault((14 * density).toInt())
-
-        backgroundView.setPadding(folderView.paddingLeft, 0, folderView.paddingRight, 0)
-        val lp = backgroundView.layoutParams
-        val contentW = contentView?.measuredWidth ?: 0
-        if (contentW > 0) {
-            lp.width = contentW + (diffWidth * 2)
-        }
-        val headerH = headerView?.measuredHeight ?: 0
-        if (headerH > 0 && gridViewHeight > 0) {
-            lp.height = headerH + gridViewHeight
-        }
-        backgroundView.layoutParams = lp
-        backgroundView.visibility = View.VISIBLE
-        contentBackground?.alpha = 255
-
-        // Get desktop folder icon position
-        val iconView = (iFolderIcon as? View) ?: runCatching {
-            val getIconMethod = iFolderIcon?.javaClass?.getMethod("getIconImageView")
-            getIconMethod?.invoke(iFolderIcon) as? View
-        }.getOrNull()
-
-        val iconLoc = IntArray(2)
-        val bgLoc = IntArray(2)
-        iconView?.getLocationOnScreen(iconLoc) ?: runCatching {
-            iconLoc[0] = folderView.width / 2
-            iconLoc[1] = folderView.height / 2
-        }
-        backgroundView.getLocationOnScreen(bgLoc)
-        if (bgLoc[0] == 0 && bgLoc[1] == 0) {
-            val folderLoc = IntArray(2)
-            folderView.getLocationOnScreen(folderLoc)
-            bgLoc[0] = folderLoc[0] + backgroundView.left
-            bgLoc[1] = folderLoc[1] + backgroundView.top
-        }
-
-        val bgW = backgroundView.width.takeIf { it > 0 } ?: lp.width.coerceAtLeast(1)
-        val bgH = backgroundView.height.takeIf { it > 0 } ?: lp.height.coerceAtLeast(1)
-        val iconW = iconView?.width?.takeIf { it > 0 } ?: (bgW / 3)
-        val iconH = iconView?.height?.takeIf { it > 0 } ?: (bgH / 3)
-
-        val startScaleX = (iconW.toFloat() / bgW.toFloat()).coerceIn(0.12f, 0.85f)
-        val startScaleY = (iconH.toFloat() / bgH.toFloat()).coerceIn(0.12f, 0.85f)
-
-        val iconCenterX = iconLoc[0] + iconW / 2f
-        val iconCenterY = iconLoc[1] + iconH / 2f
-        val bgCenterX = bgLoc[0] + bgW / 2f
-        val bgCenterY = bgLoc[1] + bgH / 2f
-
-        val startTransX = iconCenterX - bgCenterX
-        val startTransY = iconCenterY - bgCenterY
-
-        val isFolmeSuccess = runCatching {
-            val folmeClass = Class.forName("miuix.animation.Folme", false, classLoader)
-            val useAtMethod = folmeClass.getDeclaredMethod("useAt", View::class.java)
-            val iFolme = useAtMethod.invoke(null, backgroundView)
-            val iStateStyle = iFolme.javaClass.getMethod("state").invoke(iFolme)
-
-            val animStateClass = Class.forName("miuix.animation.controller.AnimState", false, classLoader)
-            val viewPropertyClass = Class.forName("miuix.animation.property.ViewProperty", false, classLoader)
-            val scaleXProp = viewPropertyClass.getField("SCALE_X").get(null)
-            val scaleYProp = viewPropertyClass.getField("SCALE_Y").get(null)
-            val transXProp = viewPropertyClass.getField("TRANSLATION_X").get(null)
-            val transYProp = viewPropertyClass.getField("TRANSLATION_Y").get(null)
-            val alphaProp = viewPropertyClass.getField("ALPHA").get(null)
-            val addMethod = animStateClass.getMethod("add", Object::class.java, Double::class.javaPrimitiveType)
-
-            val animConfigClass = Class.forName("miuix.animation.base.AnimConfig", false, classLoader)
-            val animConfig = animConfigClass.newInstance()
-            val setEaseMethod = animConfigClass.getMethod("setEase", Int::class.javaPrimitiveType, FloatArray::class.java)
-
-            if (isOpen) {
-                // 1. Initial collapsed state at desktop icon
-                val initState = animStateClass.getConstructor(String::class.java).newInstance("folder_frame_init")
-                addMethod.invoke(initState, scaleXProp, startScaleX.toDouble())
-                addMethod.invoke(initState, scaleYProp, startScaleY.toDouble())
-                addMethod.invoke(initState, transXProp, startTransX.toDouble())
-                addMethod.invoke(initState, transYProp, startTransY.toDouble())
-                addMethod.invoke(initState, alphaProp, 0.0)
-
-                iStateStyle.javaClass.getMethod("setTo", Object::class.java).invoke(iStateStyle, initState)
-
-                // 2. Resting expanded state enclosing title and grid
-                val targetState = animStateClass.getConstructor(String::class.java).newInstance("folder_frame_open")
-                addMethod.invoke(targetState, scaleXProp, 1.0)
-                addMethod.invoke(targetState, scaleYProp, 1.0)
-                addMethod.invoke(targetState, transXProp, 0.0)
-                addMethod.invoke(targetState, transYProp, 0.0)
-                addMethod.invoke(targetState, alphaProp, 1.0)
-
-                setEaseMethod.invoke(animConfig, -2, floatArrayOf(0.88f, 0.35f))
-                val toMethod = iStateStyle.javaClass.getMethod("to", Object::class.java, java.lang.reflect.Array.newInstance(animConfigClass, 0).javaClass)
-                toMethod.invoke(iStateStyle, targetState, java.lang.reflect.Array.newInstance(animConfigClass, 1).apply {
-                    java.lang.reflect.Array.set(this, 0, animConfig)
-                })
-            } else {
-                // Collapse back to desktop icon on close
-                val closeState = animStateClass.getConstructor(String::class.java).newInstance("folder_frame_close")
-                addMethod.invoke(closeState, scaleXProp, startScaleX.toDouble())
-                addMethod.invoke(closeState, scaleYProp, startScaleY.toDouble())
-                addMethod.invoke(closeState, transXProp, startTransX.toDouble())
-                addMethod.invoke(closeState, transYProp, startTransY.toDouble())
-                addMethod.invoke(closeState, alphaProp, 0.0)
-
-                setEaseMethod.invoke(animConfig, -2, floatArrayOf(0.92f, 0.28f))
-                val toMethod = iStateStyle.javaClass.getMethod("to", Object::class.java, java.lang.reflect.Array.newInstance(animConfigClass, 0).javaClass)
-                toMethod.invoke(iStateStyle, closeState, java.lang.reflect.Array.newInstance(animConfigClass, 1).apply {
-                    java.lang.reflect.Array.set(this, 0, animConfig)
-                })
-
-                backgroundView.postDelayed({
-                    if (backgroundView.alpha < 0.15f) {
-                        backgroundView.visibility = View.INVISIBLE
-                        contentBackground?.alpha = 0
-                    }
-                }, 300L)
-            }
-            true
-        }.getOrDefault(false)
-
-        if (!isFolmeSuccess) {
-            // ViewPropertyAnimator fallback
-            if (isOpen) {
-                backgroundView.scaleX = startScaleX
-                backgroundView.scaleY = startScaleY
-                backgroundView.translationX = startTransX
-                backgroundView.translationY = startTransY
-                backgroundView.alpha = 0f
-                backgroundView.animate()
-                    .scaleX(1f)
-                    .scaleY(1f)
-                    .translationX(0f)
-                    .translationY(0f)
-                    .alpha(1f)
-                    .setDuration(320L)
-                    .setInterpolator(PathInterpolator(0.16f, 1f, 0.3f, 1f))
-                    .start()
-            } else {
-                backgroundView.animate()
-                    .scaleX(startScaleX)
-                    .scaleY(startScaleY)
-                    .translationX(startTransX)
-                    .translationY(startTransY)
-                    .alpha(0f)
-                    .setDuration(260L)
-                    .setInterpolator(PathInterpolator(0.25f, 0.1f, 0.25f, 1f))
-                    .withEndAction {
-                        backgroundView.visibility = View.INVISIBLE
-                        contentBackground?.alpha = 0
-                    }
-                    .start()
-            }
+        // 5. Hook FolderAnimControllerPre for synchronous OriginOS timing
+        try {
+            val preClass = Class.forName("com.miui.home.folder.FolderAnimControllerPre", false, classLoader)
+            val getDelayMethod = preClass.getDeclaredMethod("getGridItemDelay", Long::class.javaPrimitiveType)
+            module.hook(getDelayMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any = 0L
+            })
+            val getGridRespMethod = preClass.getDeclaredMethod("getGridViewResponse", Int::class.javaPrimitiveType)
+            module.hook(getGridRespMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any = 0.32f
+            })
+            val getPrevRespMethod = preClass.getDeclaredMethod("getPreViewOpenResponse", Int::class.javaPrimitiveType)
+            module.hook(getPrevRespMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any = 0.32f
+            })
+            val getClosePrevRespMethod = preClass.getDeclaredMethod("getClosePreviewResponse")
+            module.hook(getClosePrevRespMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any = 0.28f
+            })
+            Log.i(TAG, "Hooked FolderAnimControllerPre for synchronous OriginOS response times")
+        } catch (t: Throwable) {
+            Log.w(TAG, "FolderAnimControllerPre hook bypassed or not present", t)
         }
     }
 }
