@@ -1,7 +1,5 @@
 package dev.joseph.hyperbounce.launcher
 
-import android.graphics.Camera
-import android.graphics.Matrix
 import android.graphics.RectF
 import android.os.Build
 import android.os.SystemClock
@@ -14,8 +12,6 @@ import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
  * iOS-Style App Open & Close Animation Engine for HyperOS Launcher (com.miui.home)
@@ -84,7 +80,7 @@ object AppTransitionHook {
         hookGestureVelocityTracking(module, classLoader)
         hookDragResistanceAndScaling(module, classLoader)
         hookLandscapeRecentsOptimization(module, classLoader)
-        hookFloatingIcon3DTilt(module, classLoader)
+        hookParallelAppTransitions(module, classLoader)
         hookSmallWindowThreshold(module, classLoader)
         hookRecentsCurrentTaskCentering(module, classLoader)
         hookRecentsStackScrollHaptics(module, classLoader)
@@ -687,31 +683,82 @@ object AppTransitionHook {
         }
     }
 
+    // Reflection & Device Metric Caching for Zero Frame Jitter
+    private var sCachedMagicSpeedMethod: Method? = null
+    private var sMagicSpeedMethodChecked = false
+    private var sCachedSysPropGetMethod: Method? = null
+    private var sSysPropGetMethodChecked = false
+    private var sCachedSpeedRatio = 1.0f
+    private var sLastSpeedRatioCheck = 0L
+
+    private var sCachedDeviceWidth = 0f
+    private var sCachedDeviceHeight = 0f
+    private var sLastDeviceConfigCheck = 0L
+
     /**
-     * Obtains the dynamic animation speed scale factor from HyperOS system settings.
+     * Obtains the cached device dimensions (width, height) without per-frame reflection overhead.
+     */
+    private fun getCachedDeviceDimensions(classLoader: ClassLoader): Pair<Float, Float> {
+        val now = SystemClock.uptimeMillis()
+        if (sCachedDeviceWidth > 0f && sCachedDeviceHeight > 0f && (now - sLastDeviceConfigCheck) < 10000L) {
+            return Pair(sCachedDeviceWidth, sCachedDeviceHeight)
+        }
+        return try {
+            val dcClass = Class.forName("com.miui.home.common.device.DeviceConfigs", false, classLoader)
+            val h = (dcClass.getMethod("getDeviceHeight").invoke(null) as? Number)?.toFloat() ?: 2400f
+            val w = (dcClass.getMethod("getDeviceWidth").invoke(null) as? Number)?.toFloat() ?: 1080f
+            sCachedDeviceWidth = w.coerceAtLeast(720f)
+            sCachedDeviceHeight = h.coerceAtLeast(1000f)
+            sLastDeviceConfigCheck = now
+            Pair(sCachedDeviceWidth, sCachedDeviceHeight)
+        } catch (_: Throwable) {
+            Pair(1080f, 2400f)
+        }
+    }
+
+    /**
+     * Obtains the dynamic animation speed scale factor from HyperOS system settings with reflection caching.
      * Uses Utilities.getGestureAnimMagicSpeed() and persist.miui.home_ms.
      */
     private fun getAnimationSpeedRatio(classLoader: ClassLoader): Float {
+        val now = SystemClock.uptimeMillis()
+        if (sLastSpeedRatioCheck > 0L && (now - sLastSpeedRatioCheck) < 2000L) {
+            return sCachedSpeedRatio
+        }
         return try {
-            val utilClass = Class.forName("com.miui.home.recents.util.Utilities", false, classLoader)
-            val magicSpeed = (utilClass.getDeclaredMethod("getGestureAnimMagicSpeed").invoke(null) as? Number)?.toFloat() ?: 1.0f
-            val sysPropClass = Class.forName("android.os.SystemProperties")
-            val persistMsStr = sysPropClass.getDeclaredMethod("get", String::class.java, String::class.java).invoke(null, "persist.miui.home_ms", "1") as? String ?: "1"
+            if (!sMagicSpeedMethodChecked) {
+                sMagicSpeedMethodChecked = true
+                val utilClass = Class.forName("com.miui.home.recents.util.Utilities", false, classLoader)
+                sCachedMagicSpeedMethod = utilClass.getDeclaredMethod("getGestureAnimMagicSpeed").apply { isAccessible = true }
+            }
+            val magicSpeed = (sCachedMagicSpeedMethod?.invoke(null) as? Number)?.toFloat() ?: 1.0f
+
+            if (!sSysPropGetMethodChecked) {
+                sSysPropGetMethodChecked = true
+                val sysPropClass = Class.forName("android.os.SystemProperties")
+                sCachedSysPropGetMethod = sysPropClass.getDeclaredMethod("get", String::class.java, String::class.java).apply { isAccessible = true }
+            }
+            val persistMsStr = sCachedSysPropGetMethod?.invoke(null, "persist.miui.home_ms", "1") as? String ?: "1"
             val persistMs = persistMsStr.toFloatOrNull() ?: 1.0f
-            (magicSpeed * persistMs).coerceIn(0.1f, 5.0f)
+
+            val ratio = (magicSpeed * persistMs).coerceIn(0.1f, 5.0f)
+            sCachedSpeedRatio = ratio
+            sLastSpeedRatioCheck = now
+            ratio
         } catch (_: Throwable) {
             1.0f
         }
     }
 
     /**
-     * Hook 7: iOS 26 Asymmetric Edge Compression & Z-Axis Depth Trajectory Physics.
-     * Computes position-dependent spring damping & response respecting system animation speed parameters:
-     * - Respects getGestureAnimMagicSpeed() * persist.miui.home_ms across all transitions.
-     * - Reverts Enhancement 4 underdamped floating apogee to fluid, critically damped springs (zeta = 0.98 - 1.00).
-     * - Lower half apps (normY > 0.5): bottom edge anchors/compresses near icon while top edge accelerates upward (Z-lift).
-     * - Upper half apps (normY < 0.5): top edge anchors/compresses while bottom edge accelerates downward.
-     * - Left/Right margins (normX): edge nearest screen boundary stays compressed while opposite edge flares outward.
+     * Hook 7: iOS 26 Asymmetric Edge Compression, Z-Axis Depth Trajectory & Zero-Jitter Geometry.
+     * - Width, Height, and Ratio share the EXACT SAME response and damping: eliminates the
+     *   mathematical aspect-ratio solver conflict in SurfaceFlinger native C++, locking 120 FPS.
+     * - Prominent Accordion Squeeze: CenterY response leads Height/Width response by over 2x.
+     *   On open from dock/lower half, the window center shoots up before the height expands,
+     *   pinning the bottom edge to the icon and rocketing the top edge skyward with immense 3D depth.
+     * - Zero-Resistance Minimizing: Critically tuned damping (zeta = 0.84 - 0.88) and natural
+     *   flick momentum allow minimizing windows to glide effortlessly into their icon targets.
      */
     private fun hookSpringParamsProvider(module: XposedInterface, classLoader: ClassLoader) {
         try {
@@ -762,15 +809,7 @@ object AppTransitionHook {
                             (chain.args[2] as? RectF) ?: (chain.args[1] as? RectF)
                         }
 
-                        val deviceHeight = runCatching {
-                            val dcClass = Class.forName("com.miui.home.common.device.DeviceConfigs", false, classLoader)
-                            (dcClass.getMethod("getDeviceHeight").invoke(null) as? Number)?.toFloat() ?: 2400f
-                        }.getOrDefault(2400f).coerceAtLeast(1000f)
-
-                        val deviceWidth = runCatching {
-                            val dcClass = Class.forName("com.miui.home.common.device.DeviceConfigs", false, classLoader)
-                            (dcClass.getMethod("getDeviceWidth").invoke(null) as? Number)?.toFloat() ?: 1080f
-                        }.getOrDefault(1080f).coerceAtLeast(720f)
+                        val (deviceWidth, deviceHeight) = getCachedDeviceDimensions(classLoader)
 
                         val iconCenterY = iconRect?.centerY() ?: (deviceHeight * 0.75f)
                         val iconCenterX = iconRect?.centerX() ?: (deviceWidth * 0.50f)
@@ -787,30 +826,35 @@ object AppTransitionHook {
                         val isFastFlick = isRecentFlick && vy < -0.8f
                         val flickBoost = if (isFastFlick) -0.03f * speedRatio else 0.0f
 
-                        // 1. OPEN DYNAMICS (iOS 26 Asymmetric Edge Compression & Z-Axis Lift):
-                        // centerY leads Height: bottom edge anchors near dock while top shoots up!
-                        val openResponseCenterY = ((0.33f - (vertOffset * 0.04f)) * speedRatio).coerceAtLeast(0.18f)
-                        val openResponseHeight = ((0.39f + (vertOffset * 0.04f)) * speedRatio).coerceAtLeast(0.20f)
-                        val openResponseCenterX = ((0.34f - (horizOffset * 0.03f)) * speedRatio).coerceAtLeast(0.18f)
-                        val openResponseWidth = ((0.39f + (horizOffset * 0.03f)) * speedRatio).coerceAtLeast(0.20f)
-                        val openDamping = 1.00f
-                        val openCornerDamping = 1.06f
+                        // 1. OPEN DYNAMICS (iOS 26 Accordion Squeeze & Z-Axis Depth Trajectory):
+                        // CenterY response leads Size response by > 2x. Bottom edge anchors while top edge launches!
+                        val openResponseCenterY = ((0.20f - (vertOffset * 0.04f)) * speedRatio).coerceAtLeast(0.14f)
+                        val openResponseCenterX = ((0.24f - (horizOffset * 0.04f)) * speedRatio).coerceAtLeast(0.15f)
+                        // Synchronized geometry: Width, Height, and Ratio MUST share openResponseSize for 120fps zero jitter
+                        val openResponseSize = ((0.40f + (vertOffset * 0.04f)) * speedRatio).coerceAtLeast(0.22f)
+                        val openDamping = 1.00f // Critically damped: locked 120fps fluidity, zero jitter
+                        val openCornerDamping = 1.05f
                         val openCornerResponse = (0.28f * speedRatio).coerceAtLeast(0.16f)
                         val openAlphaDamping = 0.98f
-                        val openAlphaResponse = (0.24f * speedRatio).coerceAtLeast(0.14f)
+                        val openAlphaResponse = (0.22f * speedRatio).coerceAtLeast(0.14f)
 
-                        // 2. CLOSE DYNAMICS (Critically Damped, Zero Floating Apogee Stall):
-                        val closeResponseCenterY = (((0.36f + (vertOffset * 0.04f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
-                        val closeResponseHeight = (((0.38f + (vertOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
-                        val closeResponseCenterX = (((0.36f + (horizOffset * 0.04f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
-                        val closeResponseWidth = (((0.38f + (horizOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
-                        val closeDampingY = 0.99f
-                        val closeDampingX = 0.99f
-                        val closeDampingSize = 0.98f
+                        // 2. CLOSE DYNAMICS (Weightless, Zero Resistance Minimizing):
+                        val closeDampingY = if (normY >= 0.5f) {
+                            if (isRecentFlick) 0.84f else 0.88f
+                        } else {
+                            if (isRecentFlick) 0.92f else 0.95f
+                        }
+                        val closeDampingX = if (isRecentFlick) 0.94f else 0.95f
+                        val closeDampingSize = if (isRecentFlick) 0.94f else 0.95f
+
+                        val closeResponseCenterY = (((0.33f - (vertOffset * 0.04f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
+                        val closeResponseCenterX = (((0.36f - (horizOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
+                        // Synchronized geometry: Width, Height, and Ratio MUST share closeResponseSize
+                        val closeResponseSize = (((0.43f + (vertOffset * 0.04f)) * speedRatio) + flickBoost).coerceAtLeast(0.20f)
                         val closeCornerDamping = 1.05f
                         val closeCornerResponse = (0.28f * speedRatio).coerceAtLeast(0.16f)
                         val closeAlphaDamping = 0.96f
-                        val closeAlphaResponse = (0.32f * speedRatio).coerceAtLeast(0.16f)
+                        val closeAlphaResponse = (0.28f * speedRatio).coerceAtLeast(0.16f)
 
                         // 3. RECENTS & APP-TO-APP DYNAMICS:
                         val recentsDamping = 0.98f
@@ -839,20 +883,18 @@ object AppTransitionHook {
                                     when (key) {
                                         "centerY" -> { newDamping = openDamping; newResponse = openResponseCenterY }
                                         "centerX" -> { newDamping = openDamping; newResponse = openResponseCenterX }
-                                        "Height" -> { newDamping = openDamping; newResponse = openResponseHeight }
-                                        "Width", "Ratio" -> { newDamping = openDamping; newResponse = openResponseWidth }
+                                        "Height", "Width", "Ratio" -> { newDamping = openDamping; newResponse = openResponseSize }
                                         "Radius", "RadiusRatio" -> { newDamping = openCornerDamping; newResponse = openCornerResponse }
-                                        "alpha" -> { newDamping = openAlphaDamping; newResponse = openAlphaResponse }
+                                        "alpha", "SurfaceExtAlpha", "appLeashBlurRadius" -> { newDamping = openAlphaDamping; newResponse = openAlphaResponse }
                                     }
                                 }
                                 animType.startsWith("CLOSE_TO_HOME") || animType.startsWith("CLOSE_TO_ELEMENT") -> {
                                     when (key) {
                                         "centerY" -> { newDamping = closeDampingY; newResponse = closeResponseCenterY }
                                         "centerX" -> { newDamping = closeDampingX; newResponse = closeResponseCenterX }
-                                        "Height" -> { newDamping = closeDampingSize; newResponse = closeResponseHeight }
-                                        "Width", "Ratio" -> { newDamping = closeDampingSize; newResponse = closeResponseWidth }
+                                        "Height", "Width", "Ratio" -> { newDamping = closeDampingSize; newResponse = closeResponseSize }
                                         "Radius", "RadiusRatio" -> { newDamping = closeCornerDamping; newResponse = closeCornerResponse }
-                                        "alpha" -> { newDamping = closeAlphaDamping; newResponse = closeAlphaResponse }
+                                        "alpha", "SurfaceExtAlpha", "appLeashBlurRadius" -> { newDamping = closeAlphaDamping; newResponse = closeAlphaResponse }
                                     }
                                 }
                                 animType.startsWith("CLOSE_TO_RECENTS") -> {
@@ -860,7 +902,7 @@ object AppTransitionHook {
                                         "centerX", "centerY" -> { newDamping = recentsDamping; newResponse = recentsResponse }
                                         "Width", "Height", "Ratio" -> { newDamping = recentsDamping; newResponse = recentsResponse }
                                         "Radius", "RadiusRatio" -> { newDamping = recentsCornerDamping; newResponse = recentsCornerResponse }
-                                        "alpha" -> { newDamping = recentsAlphaDamping; newResponse = recentsAlphaResponse }
+                                        "alpha", "SurfaceExtAlpha", "appLeashBlurRadius" -> { newDamping = recentsAlphaDamping; newResponse = recentsAlphaResponse }
                                     }
                                 }
                                 animType.startsWith("OPEN_FROM_RECENTS") -> {
@@ -868,7 +910,7 @@ object AppTransitionHook {
                                         "centerX", "centerY" -> { newDamping = recentsOpenDamping; newResponse = recentsOpenResponse }
                                         "Width", "Height", "Ratio" -> { newDamping = recentsOpenDamping; newResponse = recentsOpenResponse }
                                         "Radius", "RadiusRatio" -> { newDamping = recentsCornerDamping; newResponse = recentsCornerResponse }
-                                        "alpha" -> { newDamping = recentsAlphaDamping; newResponse = recentsAlphaResponse }
+                                        "alpha", "SurfaceExtAlpha", "appLeashBlurRadius" -> { newDamping = recentsAlphaDamping; newResponse = recentsAlphaResponse }
                                     }
                                 }
                                 animType.startsWith("APP_TO_APP") || animType.startsWith("START_FIRST_TASK") -> {
@@ -876,7 +918,7 @@ object AppTransitionHook {
                                         "centerX", "centerY" -> { newDamping = appToAppDamping; newResponse = appToAppResponse }
                                         "Width", "Height", "Ratio" -> { newDamping = appToAppDamping; newResponse = appToAppResponse }
                                         "Radius", "RadiusRatio" -> { newDamping = recentsCornerDamping; newResponse = recentsCornerResponse }
-                                        "alpha" -> { newDamping = 0.90f; newResponse = (0.32f * speedRatio).coerceAtLeast(0.16f) }
+                                        "alpha", "SurfaceExtAlpha", "appLeashBlurRadius" -> { newDamping = 0.90f; newResponse = (0.32f * speedRatio).coerceAtLeast(0.16f) }
                                     }
                                 }
                             }
@@ -898,15 +940,16 @@ object AppTransitionHook {
                     return result
                 }
             })
-            Log.i(TAG, "Hooked SpringParamsProvider for iOS 26 edge compression, Z-lift & speed scaling")
+            Log.i(TAG, "Hooked SpringParamsProvider for iOS 26 accordion squeeze, Z-lift & zero-jitter 120fps sync")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook SpringParamsProvider", t)
         }
     }
 
     /**
-     * Hook 9: Enhancement 1 - Parabolic Ballistic Flight Arc (Spatial Curvature).
-     * Injects centrifugal horizontal drift and upward ballistic momentum into SurfaceFlinger parameters.
+     * Hook 8: Parabolic Ballistic Flight Arc Momentum.
+     * Injects natural flick launch momentum and horizontal drift into SurfaceFlinger parameters.
+     * Never forces artificial impulses on gentle releases, ensuring zero minimizing resistance.
      */
     private fun hookSfAnimImplementor(module: XposedInterface, classLoader: ClassLoader) {
         try {
@@ -935,55 +978,45 @@ object AppTransitionHook {
                             val isRecentFlick = (now - sLastVelocityTime) < 800L
                             val vy = sLastVelocityY // in px/ms (negative when swiping up)
 
-                            val windowAnimParams = rectFParams.javaClass.getMethod("getWindowAnimParams").invoke(rectFParams)
-                            val targetRect = windowAnimParams?.javaClass?.getMethod("getTargetRect")?.invoke(windowAnimParams) as? RectF
+                            // ONLY inject ballistic launch momentum when user actually flicked upward!
+                            // When NOT flicking, preserve natural gesture release velocity (ZERO drag resistance)
+                            if (isRecentFlick && vy < -0.10f) {
+                                val windowAnimParams = rectFParams.javaClass.getMethod("getWindowAnimParams").invoke(rectFParams)
+                                val targetRect = windowAnimParams?.javaClass?.getMethod("getTargetRect")?.invoke(windowAnimParams) as? RectF
 
-                            val deviceHeight = runCatching {
-                                val dcClass = Class.forName("com.miui.home.common.device.DeviceConfigs", false, classLoader)
-                                (dcClass.getMethod("getDeviceHeight").invoke(null) as? Number)?.toFloat() ?: 2400f
-                            }.getOrDefault(2400f).coerceAtLeast(1000f)
+                                val (deviceWidth, deviceHeight) = getCachedDeviceDimensions(classLoader)
 
-                            val deviceWidth = runCatching {
-                                val dcClass = Class.forName("com.miui.home.common.device.DeviceConfigs", false, classLoader)
-                                (dcClass.getMethod("getDeviceWidth").invoke(null) as? Number)?.toFloat() ?: 1080f
-                            }.getOrDefault(1080f).coerceAtLeast(720f)
+                                val targetCenterY = targetRect?.centerY() ?: (deviceHeight * 0.75f)
+                                val normY = (targetCenterY / deviceHeight).coerceIn(0f, 1f)
+                                val targetCenterX = targetRect?.centerX() ?: (deviceWidth * 0.50f)
+                                val dx = targetCenterX - (deviceWidth * 0.50f)
 
-                            val targetCenterY = targetRect?.centerY() ?: (deviceHeight * 0.75f)
-                            val normY = (targetCenterY / deviceHeight).coerceIn(0f, 1f)
+                                val thumbNormY = if (sLastThumbY > 0f) {
+                                    (sLastThumbY / deviceHeight).coerceIn(0.20f, 1.0f)
+                                } else {
+                                    0.75f
+                                }
+                                val thumbMultiplier = 1.30f - (thumbNormY * 0.35f)
 
-                            val targetCenterX = targetRect?.centerX() ?: (deviceWidth * 0.50f)
-                            val dx = targetCenterX - (deviceWidth * 0.50f)
+                                val flickSpeed = abs(vy).coerceIn(0.10f, 12.0f)
+                                // Upward ballistic launch momentum: scales with flick velocity, thumb position & bottom placement
+                                val upwardVelocity = -flickSpeed * 2200f * thumbMultiplier * (0.70f + normY * 0.60f)
+                                val setCenterYVelMethod = sfAnimParam.javaClass.getMethod("setCenterYVelocity", Float::class.javaPrimitiveType)
+                                setCenterYVelMethod.invoke(sfAnimParam, upwardVelocity.coerceIn(-18000f, -600f))
 
-                            // Thumb position when flicked
-                            val thumbNormY = if (sLastThumbY > 0f) {
-                                (sLastThumbY / deviceHeight).coerceIn(0.20f, 1.0f)
-                            } else {
-                                0.75f
+                                // Centrifugal horizontal drift for natural flight arc if icon is off-center or gesture has horizontal velocity
+                                if (abs(sLastVelocityX) > 0.10f || abs(dx) > 50f) {
+                                    val driftVx = (dx / deviceWidth) * 1600f
+                                    val gestureVx = if (abs(sLastVelocityX) > 0.10f) {
+                                        (sLastVelocityX * 900f).coerceIn(-5000f, 5000f)
+                                    } else {
+                                        0f
+                                    }
+                                    val totalVx = (gestureVx + driftVx).coerceIn(-6000f, 6000f)
+                                    val setCenterXVelMethod = sfAnimParam.javaClass.getMethod("setCenterXVelocity", Float::class.javaPrimitiveType)
+                                    setCenterXVelMethod.invoke(sfAnimParam, totalVx)
+                                }
                             }
-
-                            val thumbMultiplier = 1.30f - (thumbNormY * 0.35f)
-
-                            val speedFactor = if (isRecentFlick && vy < -0.15f) {
-                                (kotlin.math.abs(vy) * 1200f).coerceIn(1600f, 16000f)
-                            } else {
-                                1600f
-                            }
-
-                            // 1. Upward ballistic launch impulse
-                            val upwardVelocity = -speedFactor * thumbMultiplier * (0.65f + (normY * 0.80f))
-                            val setCenterYVelMethod = sfAnimParam.javaClass.getMethod("setCenterYVelocity", Float::class.javaPrimitiveType)
-                            setCenterYVelMethod.invoke(sfAnimParam, upwardVelocity)
-
-                            // 2. Centrifugal horizontal drift for natural parabolic ballistic flight arc
-                            val driftVx = (dx / deviceWidth) * 2200f
-                            val gestureVx = if (isRecentFlick && kotlin.math.abs(sLastVelocityX) > 0.15f) {
-                                (sLastVelocityX * 900f).coerceIn(-6000f, 6000f)
-                            } else {
-                                0f
-                            }
-                            val totalVx = (gestureVx + driftVx).coerceIn(-6500f, 6500f)
-                            val setCenterXVelMethod = sfAnimParam.javaClass.getMethod("setCenterXVelocity", Float::class.javaPrimitiveType)
-                            setCenterXVelMethod.invoke(sfAnimParam, totalVx)
                         }
                     } catch (t: Throwable) {
                         Log.e(TAG, "Error injecting ballistic trajectory into SfAnimParam", t)
@@ -1151,121 +1184,94 @@ object AppTransitionHook {
     }
 
     /**
-     * Hook 13: iOS 26 3D Spatial Perspective Icon Tilt on Close.
-     * When an app window closes back into its launcher icon:
-     * - As the icon appears, projects a 3D spatial perspective rotation (pitch & roll)
-     *   via android.graphics.Camera matching screen coordinates (0.50 - normY, normX - 0.50).
-     * - Tilts smoothly peaking at progress p = 0.78, then seamlessly settles flat (0 deg)
-     *   at p = 1.0 as the icon lands in its desktop position.
+     * Hook 13: Parallel App Transitions & Zero-Delay Launch Interruptibility.
+     * Enables concurrent multi-layer SurfaceFlinger animations and unlocks fast-launch:
+     * - Unlocks SfAnimCapability.getUseMultiLayersForSfAnim() to allow concurrent animations.
+     * - Enables FastLaunchUtils.isSupportFastLaunch so tapping icons during transitions is never blocked.
+     * - Enables FastLaunchWindowElement.useFastLaunch() for zero-lag parallel app execution.
      */
-    private fun hookFloatingIcon3DTilt(module: XposedInterface, classLoader: ClassLoader) {
+    private fun hookParallelAppTransitions(module: XposedInterface, classLoader: ClassLoader) {
+        // 1. Enable SurfaceFlinger Multi-Layers for concurrent window animations
         try {
-            val layerClass = Class.forName("com.miui.home.recents.views.FloatingIconLayer2", false, classLoader)
-            val method = layerClass.declaredMethods.find { it.name == "setMatrixAndClip" } ?: return
-            method.isAccessible = true
-
-            val isOpeningField = layerClass.getDeclaredField("mIsOpening").apply { isAccessible = true }
-            val matrixField = layerClass.getDeclaredField("mMatrix").apply { isAccessible = true }
-            val txField = layerClass.getDeclaredField("mTransaction").apply { isAccessible = true }
-            val modRectField = layerClass.getDeclaredField("mModifiedRectF").apply { isAccessible = true }
-            val validIconMethod = layerClass.getMethod("getValidIconRectF")
-
-            val txClass = txField.type
-            val setMatrixMethod = txClass.declaredMethods.find {
-                it.name == "setMatrix" && it.parameterTypes.size == 2 && it.parameterTypes[1] == Matrix::class.java
-            }?.apply { isAccessible = true }
-
-            val dcClass = Class.forName("com.miui.home.common.device.DeviceConfigs", false, classLoader)
-            val getDeviceWidthMethod = dcClass.getMethod("getDeviceWidth")
-            val getDeviceHeightMethod = dcClass.getMethod("getDeviceHeight")
-
-            module.hook(method).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val result = chain.proceed()
-                    val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
-                        return result
+            val capabilityClassNames = listOf(
+                "com.miui.home.recents.anim.windowanim.sfanim.SfAnimCapability",
+                "com.miui.home.recents.anim.windowanim.sfanim.SfAnimCapability\$Companion"
+            )
+            for (className in capabilityClassNames) {
+                runCatching {
+                    val clazz = Class.forName(className, false, classLoader)
+                    clazz.declaredMethods.filter { method ->
+                        val name = method.name.lowercase()
+                        (name.contains("multilayers") || name.contains("multiwindow") || name.contains("parallel")) &&
+                                (method.returnType == Boolean::class.javaPrimitiveType || method.returnType == java.lang.Boolean::class.java)
+                    }.forEach { method ->
+                        method.isAccessible = true
+                        module.hook(method).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any {
+                                if (LauncherConfigHolder.iosAnimConfig.enabled) {
+                                    return true
+                                }
+                                return chain.proceed()
+                            }
+                        })
+                        Log.i(TAG, "Hooked $className.${method.name} for multi-layer concurrent animations")
                     }
-
-                    try {
-                        val isOpening = isOpeningField.getBoolean(chain.thisObject)
-                        if (isOpening) {
-                            return result
-                        }
-
-                        val rectF = chain.args[2] as? RectF ?: return result
-                        if (rectF.isEmpty) return result
-
-                        val validIconRect = validIconMethod.invoke(chain.thisObject) as? RectF ?: return result
-                        if (validIconRect.isEmpty) return result
-
-                        val screenW = ((getDeviceWidthMethod.invoke(null) as? Number)?.toFloat() ?: 1080f).coerceAtLeast(720f)
-                        val screenH = ((getDeviceHeightMethod.invoke(null) as? Number)?.toFloat() ?: 2400f).coerceAtLeast(1000f)
-
-                        val targetW = validIconRect.width()
-                        val curW = rectF.width()
-
-                        // Closing progress p: 0.0 (full screen) -> 1.0 (icon reached)
-                        val p = ((screenW - curW) / (screenW - targetW).coerceAtLeast(10f)).coerceIn(0f, 1f)
-
-                        // Envelope peaking at p = 0.78, settling flat (0.0) at p = 1.0
-                        val envelope = when {
-                            p < 0.35f -> 0.0f
-                            p <= 0.78f -> {
-                                val t = (p - 0.35f) / 0.43f
-                                sin(t * Math.PI / 2.0).toFloat().coerceIn(0f, 1f)
-                            }
-                            else -> {
-                                val t = (p - 0.78f) / 0.22f
-                                ((1.0f + cos(t * Math.PI).toFloat()) / 2.0f).coerceIn(0f, 1f)
-                            }
-                        }
-
-                        if (envelope > 0.005f) {
-                            val normX = (validIconRect.centerX() / screenW).coerceIn(0f, 1f)
-                            val normY = (validIconRect.centerY() / screenH).coerceIn(0f, 1f)
-
-                            // 3D perspective pitch and yaw
-                            val rotX = (0.50f - normY) * 22.0f * envelope
-                            val rotY = (normX - 0.50f) * 18.0f * envelope
-
-                            val camera = Camera()
-                            camera.save()
-                            camera.rotateX(rotX)
-                            camera.rotateY(rotY)
-                            val tiltMatrix = Matrix()
-                            camera.getMatrix(tiltMatrix)
-                            camera.restore()
-
-                            val modRect = modRectField.get(chain.thisObject) as? RectF ?: rectF
-                            val cx = modRect.centerX()
-                            val cy = modRect.centerY()
-
-                            tiltMatrix.preTranslate(-cx, -cy)
-                            tiltMatrix.postTranslate(cx, cy)
-
-                            val matrix = matrixField.get(chain.thisObject) as? Matrix ?: return result
-                            matrix.postConcat(tiltMatrix)
-
-                            val tx = txField.get(chain.thisObject) ?: return result
-                            val sc1 = chain.args[0]
-                            val sc2 = chain.args[1]
-
-                            setMatrixMethod?.invoke(tx, sc1, matrix)
-                            if (sc2 != null) {
-                                setMatrixMethod?.invoke(tx, sc2, matrix)
-                            }
-                        }
-                    } catch (t: Throwable) {
-                        Log.w(TAG, "Failed in 3D icon tilt projection", t)
-                    }
-
-                    return result
                 }
-            })
-            Log.i(TAG, "Hooked FloatingIconLayer2.setMatrixAndClip for iOS 26 3D spatial perspective tilt")
+            }
         } catch (t: Throwable) {
-            Log.w(TAG, "Failed to hook FloatingIconLayer2.setMatrixAndClip", t)
+            Log.w(TAG, "Failed to hook SfAnimCapability for multi-layers", t)
+        }
+
+        // 2. Enable Fast Launch so tapping an app while another is animating starts immediately
+        try {
+            val fastLaunchClassNames = listOf(
+                "com.miui.home.launcher.anim.FastLaunchUtils",
+                "com.miui.home.launcher.anim.FastLaunchUtils\$Companion"
+            )
+            for (className in fastLaunchClassNames) {
+                runCatching {
+                    val clazz = Class.forName(className, false, classLoader)
+                    clazz.declaredMethods.filter { method ->
+                        method.name.contains("FastLaunch", ignoreCase = true) &&
+                                (method.returnType == Boolean::class.javaPrimitiveType || method.returnType == java.lang.Boolean::class.java)
+                    }.forEach { method ->
+                        method.isAccessible = true
+                        module.hook(method).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any {
+                                if (LauncherConfigHolder.iosAnimConfig.enabled) {
+                                    return true
+                                }
+                                return chain.proceed()
+                            }
+                        })
+                        Log.i(TAG, "Hooked $className.${method.name} for instant interruptible app launch")
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to hook FastLaunchUtils", t)
+        }
+
+        // 3. FastLaunchWindowElement optimization
+        try {
+            val elemClass = Class.forName("com.miui.home.launcher.anim.FastLaunchWindowElement", false, classLoader)
+            elemClass.declaredMethods.filter { method ->
+                method.name.contains("FastLaunch", ignoreCase = true) &&
+                        (method.returnType == Boolean::class.javaPrimitiveType || method.returnType == java.lang.Boolean::class.java)
+            }.forEach { method ->
+                method.isAccessible = true
+                module.hook(method).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any {
+                        if (LauncherConfigHolder.iosAnimConfig.enabled) {
+                            return true
+                        }
+                        return chain.proceed()
+                    }
+                })
+                Log.i(TAG, "Hooked FastLaunchWindowElement.${method.name} for fast window element launch")
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "FastLaunchWindowElement not found or hook skipped", t)
         }
     }
 }
