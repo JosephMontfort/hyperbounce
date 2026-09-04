@@ -1,12 +1,16 @@
 package dev.joseph.hyperbounce.launcher
 
 import android.graphics.RectF
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
+import android.view.animation.PathInterpolator
 import io.github.libxposed.api.XposedInterface
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
@@ -80,7 +84,7 @@ object AppTransitionHook {
         hookGestureVelocityTracking(module, classLoader)
         hookDragResistanceAndScaling(module, classLoader)
         hookLandscapeRecentsOptimization(module, classLoader)
-        hookParallelAppTransitions(module, classLoader)
+        hookFolderFrameAnimation(module, classLoader)
         hookSmallWindowThreshold(module, classLoader)
         hookRecentsCurrentTaskCentering(module, classLoader)
         hookRecentsStackScrollHaptics(module, classLoader)
@@ -826,30 +830,33 @@ object AppTransitionHook {
                         val isFastFlick = isRecentFlick && vy < -0.8f
                         val flickBoost = if (isFastFlick) -0.03f * speedRatio else 0.0f
 
-                        // 1. OPEN DYNAMICS (iOS 26 Full-Height Natural Expansion & Harmonious Centering):
-                        // Height & CenterY expand harmoniously (~0.34s) so the window opens at full natural height
-                        // without vertical squashing. Horizontal keystone is handled by StretchType.
-                        val openResponseCenterY = (0.34f * speedRatio).coerceAtLeast(0.18f)
+                        // 1. OPEN DYNAMICS (Distinct Vertical Uplift for Bottom Apps, Downward Dip for Top Apps):
+                        val isBottomApp = normY >= 0.5f
+                        val openDamping = if (isBottomApp) 0.88f else 0.90f
+                        val openResponseCenterY = (if (isBottomApp) 0.38f else 0.42f) * speedRatio
                         val openResponseCenterX = (0.32f * speedRatio).coerceAtLeast(0.18f)
                         val openResponseHeight = (0.34f * speedRatio).coerceAtLeast(0.18f)
                         val openResponseWidth = (0.35f * speedRatio).coerceAtLeast(0.18f)
                         val openResponseRatio = (0.35f * speedRatio).coerceAtLeast(0.18f)
-                        val openDamping = 1.00f // Critically damped: locked 120fps fluidity, zero jitter
                         val openCornerDamping = 1.05f
                         val openCornerResponse = (0.28f * speedRatio).coerceAtLeast(0.16f)
                         val openAlphaDamping = 0.98f
                         val openAlphaResponse = (0.22f * speedRatio).coerceAtLeast(0.14f)
 
-                        // 2. CLOSE DYNAMICS (Ballistic Parabolic Arc, Apogee Float & Zero Resistance Minimizing):
-                        val closeDampingY = if (normY >= 0.5f) {
-                            if (isRecentFlick) 0.84f else 0.86f // Soft underdamping for upward flight apogee float
+                        // 2. CLOSE DYNAMICS (High Soaring Parabolic Apex for Bottom Apps, Direct Ascent for Top Apps):
+                        val closeDampingY = if (isBottomApp) {
+                            if (isRecentFlick) 0.80f else 0.82f // Deep underdamping for 350-500px parabolic apex float
                         } else {
-                            if (isRecentFlick) 0.92f else 0.95f
+                            0.96f // Direct ascent straight into top icon without overshoot
                         }
                         val closeDampingX = if (isRecentFlick) 0.94f else 0.96f
                         val closeDampingSize = if (isRecentFlick) 0.94f else 0.96f
 
-                        val closeResponseCenterY = (((0.42f - (vertOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.20f)
+                        val closeResponseCenterY = if (isBottomApp) {
+                            (((0.46f - (vertOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.22f)
+                        } else {
+                            (((0.36f - (vertOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
+                        }
                         val closeResponseCenterX = (((0.36f - (horizOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.18f)
                         val closeResponseSize = (((0.38f + (vertOffset * 0.03f)) * speedRatio) + flickBoost).coerceAtLeast(0.20f)
                         val closeCornerDamping = 1.05f
@@ -984,18 +991,65 @@ object AppTransitionHook {
                         val targetRect = runCatching {
                             windowAnimParams?.javaClass?.getMethod("getTargetRect")?.invoke(windowAnimParams) as? RectF
                         }.getOrNull()
+                        val startRect = runCatching {
+                            windowAnimParams?.javaClass?.getMethod("getStartRect")?.invoke(windowAnimParams) as? RectF
+                        }.getOrNull()
 
-                        val targetCenterY = targetRect?.centerY() ?: (deviceHeight * 0.75f)
-                        val normY = (targetCenterY / deviceHeight).coerceIn(0f, 1f)
-                        val targetCenterX = targetRect?.centerX() ?: (deviceWidth * 0.50f)
-                        val dx = targetCenterX - (deviceWidth * 0.50f)
+                        val isOpen = animType.startsWith("OPEN_FROM_HOME") || animType.startsWith("OPEN_FROM_ELEMENT")
+                        val isClose = animType.startsWith("CLOSE_TO_HOME") || animType.startsWith("CLOSE_TO_ELEMENT")
+
+                        val iconRect = if (isOpen) (startRect ?: targetRect) else (targetRect ?: startRect)
+                        val iconCenterY = iconRect?.centerY() ?: (deviceHeight * 0.75f)
+                        val normY = (iconCenterY / deviceHeight).coerceIn(0f, 1f)
+                        val iconCenterX = iconRect?.centerX() ?: (deviceWidth * 0.50f)
+                        val dx = iconCenterX - (deviceWidth * 0.50f)
 
                         val now = SystemClock.uptimeMillis()
                         val isRecentFlick = (now - sLastVelocityTime) < 800L
                         val vy = sLastVelocityY // in px/ms (negative when swiping up)
                         val vx = sLastVelocityX
 
-                        if (animType.startsWith("CLOSE_TO_HOME") || animType.startsWith("CLOSE_TO_ELEMENT")) {
+                        val setCenterYVelMethod = runCatching {
+                            sfAnimParam.javaClass.getMethod("setCenterYVelocity", Float::class.javaPrimitiveType)
+                        }.getOrNull()
+                        val setCenterXVelMethod = runCatching {
+                            sfAnimParam.javaClass.getMethod("setCenterXVelocity", Float::class.javaPrimitiveType)
+                        }.getOrNull()
+                        val setWidthVelMethod = runCatching {
+                            sfAnimParam.javaClass.getMethod("setWidthVelocity", Float::class.javaPrimitiveType)
+                        }.getOrNull()
+                        val setHeightVelMethod = runCatching {
+                            sfAnimParam.javaClass.getMethod("setHeightVelocity", Float::class.javaPrimitiveType)
+                        }.getOrNull()
+                        val setRatioVelMethod = runCatching {
+                            sfAnimParam.javaClass.getMethod("setRatioVelocity", Float::class.javaPrimitiveType)
+                        }.getOrNull()
+
+                        if (isOpen) {
+                            if (normY >= 0.50f) {
+                                // Bottom-half apps (dock/lower rows): open with a DISTINCT UPLIFT surge right on tap!
+                                val openUpward = -15000f - ((normY - 0.50f) * 6000f)
+                                setCenterYVelMethod?.invoke(sfAnimParam, openUpward)
+
+                                val openVx = -(dx / deviceWidth) * 2200f
+                                setCenterXVelMethod?.invoke(sfAnimParam, openVx)
+
+                                setWidthVelMethod?.invoke(sfAnimParam, 1200f)
+                                setHeightVelMethod?.invoke(sfAnimParam, 1800f)
+                                setRatioVelMethod?.invoke(sfAnimParam, 1.5f)
+                            } else {
+                                // Top-half apps: plunges down slightly first before expanding!
+                                val openDownward = +9500f + ((0.50f - normY) * 6000f)
+                                setCenterYVelMethod?.invoke(sfAnimParam, openDownward)
+
+                                val openVx = -(dx / deviceWidth) * 1600f
+                                setCenterXVelMethod?.invoke(sfAnimParam, openVx)
+
+                                setWidthVelMethod?.invoke(sfAnimParam, -1000f)
+                                setHeightVelMethod?.invoke(sfAnimParam, -1000f)
+                                setRatioVelMethod?.invoke(sfAnimParam, -1.2f)
+                            }
+                        } else if (isClose) {
                             val flickSpeed = if (isRecentFlick && vy < -0.10f) abs(vy).coerceIn(0.10f, 12.0f) else 0f
                             val thumbNormY = if (sLastThumbY > 0f) {
                                 (sLastThumbY / deviceHeight).coerceIn(0.20f, 1.0f)
@@ -1004,40 +1058,34 @@ object AppTransitionHook {
                             }
                             val thumbMultiplier = (1.30f - (thumbNormY * 0.35f)).coerceIn(0.90f, 1.30f)
 
-                            val setCenterYVelMethod = runCatching {
-                                sfAnimParam.javaClass.getMethod("setCenterYVelocity", Float::class.javaPrimitiveType)
-                            }.getOrNull()
-
                             if (normY >= 0.50f) {
-                                // Bottom-half apps (dock/lower rows): ALWAYS soar UP first into an apex before cascading down!
-                                val baseUpward = 10500f + (normY - 0.50f) * 5000f
-                                val flickAdd = flickSpeed * 2500f
+                                // Bottom-half apps: soar high up into a 350-500px parabolic apex before falling into icon!
+                                val baseUpward = 16000f + ((normY - 0.50f) * 8000f)
+                                val flickAdd = flickSpeed * 3500f
                                 val totalUpward = -(baseUpward + flickAdd) * thumbMultiplier
-                                val vyLaunch = totalUpward.coerceIn(-24000f, -9500f)
+                                val vyLaunch = totalUpward.coerceIn(-35000f, -15000f)
                                 setCenterYVelMethod?.invoke(sfAnimParam, vyLaunch)
+                                setRatioVelMethod?.invoke(sfAnimParam, -1.5f)
                             } else {
-                                // Top-half apps: fly directly up into the top icon, matching reverse opening trajectory
-                                val topUpward = -(3500f + flickSpeed * 1800f).coerceIn(-14000f, -3000f)
+                                // Top-half apps: fly directly up into top icon without overshoot
+                                val topUpward = -(4500f + flickSpeed * 2000f).coerceIn(-16000f, -4000f)
                                 setCenterYVelMethod?.invoke(sfAnimParam, topUpward)
+                                setRatioVelMethod?.invoke(sfAnimParam, 1.2f)
                             }
 
                             // Reverse horizontal trajectory: drift towards the target icon's side
-                            val driftVx = (dx / deviceWidth) * 2200f
+                            val driftVx = (dx / deviceWidth) * 2800f
                             val gestureVx = if (isRecentFlick && abs(vx) > 0.10f) {
                                 (vx * 900f).coerceIn(-5000f, 5000f)
                             } else {
                                 0f
                             }
-                            val totalVx = (gestureVx + driftVx).coerceIn(-6000f, 6000f)
-                            val setCenterXVelMethod = runCatching {
-                                sfAnimParam.javaClass.getMethod("setCenterXVelocity", Float::class.javaPrimitiveType)
-                            }.getOrNull()
+                            val totalVx = (gestureVx + driftVx).coerceIn(-7000f, 7000f)
                             setCenterXVelMethod?.invoke(sfAnimParam, totalVx)
                         }
 
                         // Apply Horizontal Edge Squeeze via StretchType on BOTH open and close transitions
-                        if (animType.startsWith("CLOSE_TO_HOME") || animType.startsWith("CLOSE_TO_ELEMENT") ||
-                            animType.startsWith("OPEN_FROM_HOME") || animType.startsWith("OPEN_FROM_ELEMENT")) {
+                        if (isOpen || isClose) {
                             runCatching {
                                 val iconsField = sfAnimParam.javaClass.getDeclaredField("icons").apply { isAccessible = true }
                                 val iconsArray = iconsField.get(sfAnimParam) as? Array<*>
@@ -1222,73 +1270,332 @@ object AppTransitionHook {
     }
 
     /**
-     * Hook 13: Parallel App Transitions & Zero-Delay Launch Interruptibility.
-     * Enables concurrent window transitions and unlocks fast-launch:
-     * - Enables FastLaunchUtils.isSupportFastLaunch so tapping icons during transitions is never blocked.
-     * - Enables FastLaunchWindowElement & WindowElement fast-launch flags for zero-lag parallel app execution.
+     * Hook 14: Folder Frame Enclosure & Synchronized Scale Animation.
+     * Encloses folder header (title) and grid (apps) inside an animated outline frame
+     * that expands smoothly along with the apps on open to resting position,
+     * and collapses cleanly back into the folder icon on dismissal/close.
      */
-    private fun hookParallelAppTransitions(module: XposedInterface, classLoader: ClassLoader) {
-        // 1. Enable Fast Launch so tapping an app while another is animating starts immediately
+    private fun hookFolderFrameAnimation(module: XposedInterface, classLoader: ClassLoader) {
+        // 1. Hook FolderView.onOpen to ensure background frame is enabled and configured
         try {
-            val fastLaunchClassNames = listOf(
-                "com.miui.home.recents.anim.FastLaunchUtils",
-                "com.miui.home.recents.anim.FastLaunchUtils\$Companion"
-            )
-            for (className in fastLaunchClassNames) {
-                runCatching {
-                    val clazz = Class.forName(className, false, classLoader)
-                    clazz.declaredMethods.filter { method ->
-                        method.name.contains("FastLaunch", ignoreCase = true) &&
-                                (method.returnType == Boolean::class.javaPrimitiveType || method.returnType == java.lang.Boolean::class.java)
-                    }.forEach { method ->
-                        method.isAccessible = true
-                        module.hook(method).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any {
-                                if (LauncherConfigHolder.iosAnimConfig.enabled) {
-                                    return true
-                                }
-                                return chain.proceed()
+            val folderViewClass = Class.forName("com.miui.home.folder.FolderView", false, classLoader)
+            val onOpenMethod = folderViewClass.getDeclaredMethod("onOpen").apply { isAccessible = true }
+            module.hook(onOpenMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val result = chain.proceed()
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (!cfg.enabled) return result
+
+                    try {
+                        val folderView = chain.thisObject as? View ?: return result
+                        val bgField = folderView.javaClass.getDeclaredField("mBackgroundView").apply { isAccessible = true }
+                        val backgroundView = bgField.get(folderView) as? ViewGroup ?: return result
+
+                        val enableBgField = folderView.javaClass.getDeclaredField("mEnableShowFolderContentBg").apply { isAccessible = true }
+                        enableBgField.set(folderView, true)
+
+                        val contentBgField = folderView.javaClass.getDeclaredField("mContentBackground").apply { isAccessible = true }
+                        val contentBg = contentBgField.get(folderView) as? Drawable
+
+                        // Prepare default outline frame drawable if not present
+                        if (backgroundView.background == null) {
+                            val isLight = runCatching {
+                                val wallpaperUtilClass = Class.forName("com.miui.home.isolate.wallpaper.WallpaperUtil", false, classLoader)
+                                val modeMethod = wallpaperUtilClass.getDeclaredMethod("getCurrentWallpaperColorMode")
+                                (modeMethod.invoke(null) as? Int) == 2
+                            }.getOrDefault(false)
+
+                            val density = folderView.resources.displayMetrics.density
+                            val strokeColor = if (isLight) 0x33000000 else 0x44FFFFFF
+                            val fillColor = if (isLight) 0x10000000 else 0x15FFFFFF
+                            val gd = GradientDrawable().apply {
+                                shape = GradientDrawable.RECTANGLE
+                                cornerRadius = 28f * density
+                                setStroke((1.5f * density).toInt(), strokeColor)
+                                setColor(fillColor)
                             }
-                        })
-                        Log.i(TAG, "Hooked $className.${method.name} for instant interruptible app launch")
+                            backgroundView.background = gd
+                            contentBgField.set(folderView, gd)
+                        }
+                        contentBg?.alpha = 255
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "Error in FolderView.onOpen frame init", t)
                     }
+
+                    return result
                 }
-            }
+            })
+            Log.i(TAG, "Hooked FolderView.onOpen for folder content frame enablement")
         } catch (t: Throwable) {
-            Log.w(TAG, "Failed to hook FastLaunchUtils", t)
+            Log.w(TAG, "Failed to hook FolderView.onOpen", t)
         }
 
-        // 2. FastLaunchWindowElement & WindowElement optimization
+        // 2. Hook FolderView.onClose to preserve outline alpha while closing animation plays
         try {
-            val elementClassNames = listOf(
-                "com.miui.home.recents.anim.FastLaunchWindowElement",
-                "com.miui.home.recents.anim.WindowElement"
-            )
-            for (className in elementClassNames) {
-                runCatching {
-                    val clazz = Class.forName(className, false, classLoader)
-                    clazz.declaredMethods.filter { method ->
-                        (method.name.contains("FastLaunch", ignoreCase = true) ||
-                                method.name == "getAllowFastLaunch" ||
-                                method.name == "useFastLaunch" ||
-                                method.name == "isAbleToStartAnim") &&
-                                (method.returnType == Boolean::class.javaPrimitiveType || method.returnType == java.lang.Boolean::class.java)
-                    }.forEach { method ->
-                        method.isAccessible = true
-                        module.hook(method).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any {
-                                if (LauncherConfigHolder.iosAnimConfig.enabled) {
-                                    return true
-                                }
-                                return chain.proceed()
-                            }
-                        })
-                        Log.i(TAG, "Hooked $className.${method.name} for fast window element launch")
-                    }
-                }
+            val folderViewClass = Class.forName("com.miui.home.folder.FolderView", false, classLoader)
+            val onCloseMethod = folderViewClass.getDeclaredMethod("onClose", Boolean::class.javaPrimitiveType, Runnable::class.java).apply {
+                isAccessible = true
             }
+            module.hook(onCloseMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val result = chain.proceed()
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (!cfg.enabled) return result
+
+                    try {
+                        val folderView = chain.thisObject as? View ?: return result
+                        val contentBgField = folderView.javaClass.getDeclaredField("mContentBackground").apply { isAccessible = true }
+                        val contentBg = contentBgField.get(folderView) as? Drawable
+                        // Keep alpha visible during closing flight so the outline doesn't disappear abruptly
+                        contentBg?.alpha = 255
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "Error in FolderView.onClose frame preservation", t)
+                    }
+
+                    return result
+                }
+            })
+            Log.i(TAG, "Hooked FolderView.onClose for smooth outline frame fade-out")
         } catch (t: Throwable) {
-            Log.w(TAG, "FastLaunchWindowElement not found or hook skipped", t)
+            Log.w(TAG, "Failed to hook FolderView.onClose", t)
+        }
+
+        // 3. Hook FolderAnimController.startFolderAnim to animate the outline frame in sync with apps
+        try {
+            val folderAnimControllerClass = Class.forName("com.miui.home.folder.FolderAnimController", false, classLoader)
+            val iFolderIconClass = Class.forName("com.miui.home.folder.api.IFolderIcon", false, classLoader)
+            val startFolderAnimMethod = folderAnimControllerClass.getDeclaredMethod(
+                "startFolderAnim",
+                Boolean::class.javaPrimitiveType,
+                iFolderIconClass,
+                IntArray::class.java,
+                Boolean::class.javaPrimitiveType
+            ).apply { isAccessible = true }
+
+            module.hook(startFolderAnimMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val result = chain.proceed()
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (!cfg.enabled) return result
+
+                    try {
+                        val controller = chain.thisObject ?: return result
+                        val isOpen = chain.args[0] as? Boolean ?: true
+                        val iFolderIcon = chain.args[1]
+
+                        val clingField = controller.javaClass.getDeclaredField("mFolderCling").apply { isAccessible = true }
+                        val folderCling = clingField.get(controller) ?: return result
+
+                        val folderMethod = folderCling.javaClass.getMethod("getFolder")
+                        val folderView = folderMethod.invoke(folderCling) as? View ?: return result
+
+                        val bgField = folderView.javaClass.getDeclaredField("mBackgroundView").apply { isAccessible = true }
+                        val backgroundView = bgField.get(folderView) as? ViewGroup ?: return result
+
+                        val contentBgField = folderView.javaClass.getDeclaredField("mContentBackground").apply { isAccessible = true }
+                        val contentBg = contentBgField.get(folderView) as? Drawable
+
+                        animateFolderFrameEnclosure(
+                            isOpen = isOpen,
+                            folderView = folderView,
+                            backgroundView = backgroundView,
+                            contentBackground = contentBg,
+                            iFolderIcon = iFolderIcon,
+                            classLoader = classLoader
+                        )
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "Error animating folder frame enclosure", t)
+                    }
+
+                    return result
+                }
+            })
+            Log.i(TAG, "Hooked FolderAnimController.startFolderAnim for synchronized outline frame flight")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to hook FolderAnimController.startFolderAnim", t)
+        }
+    }
+
+    private fun animateFolderFrameEnclosure(
+        isOpen: Boolean,
+        folderView: View,
+        backgroundView: ViewGroup,
+        contentBackground: Drawable?,
+        iFolderIcon: Any?,
+        classLoader: ClassLoader
+    ) {
+        // Measure and size backgroundView to wrap Header (Title) + Content (Grid)
+        val headerView = runCatching {
+            val f = folderView.javaClass.getDeclaredField("mHeader").apply { isAccessible = true }
+            f.get(folderView) as? View
+        }.getOrNull()
+
+        val contentView = runCatching {
+            val f = folderView.javaClass.getDeclaredField("mContent").apply { isAccessible = true }
+            f.get(folderView) as? View
+        }.getOrNull()
+
+        val gridViewHeight = runCatching {
+            val m = folderView.javaClass.getDeclaredMethod("getGridViewHeight").apply { isAccessible = true }
+            (m.invoke(folderView) as? Number)?.toInt() ?: 0
+        }.getOrNull() ?: 0
+
+        val density = folderView.resources.displayMetrics.density
+        val diffWidth = runCatching {
+            val resId = folderView.resources.getIdentifier("background_view_diff_width", "dimen", folderView.context.packageName)
+            if (resId != 0) folderView.resources.getDimensionPixelSize(resId) else (14 * density).toInt()
+        }.getOrDefault((14 * density).toInt())
+
+        backgroundView.setPadding(folderView.paddingLeft, 0, folderView.paddingRight, 0)
+        val lp = backgroundView.layoutParams
+        val contentW = contentView?.measuredWidth ?: 0
+        if (contentW > 0) {
+            lp.width = contentW + (diffWidth * 2)
+        }
+        val headerH = headerView?.measuredHeight ?: 0
+        if (headerH > 0 && gridViewHeight > 0) {
+            lp.height = headerH + gridViewHeight
+        }
+        backgroundView.layoutParams = lp
+        backgroundView.visibility = View.VISIBLE
+        contentBackground?.alpha = 255
+
+        // Get desktop folder icon position
+        val iconView = (iFolderIcon as? View) ?: runCatching {
+            val getIconMethod = iFolderIcon?.javaClass?.getMethod("getIconImageView")
+            getIconMethod?.invoke(iFolderIcon) as? View
+        }.getOrNull()
+
+        val iconLoc = IntArray(2)
+        val bgLoc = IntArray(2)
+        iconView?.getLocationOnScreen(iconLoc) ?: runCatching {
+            iconLoc[0] = folderView.width / 2
+            iconLoc[1] = folderView.height / 2
+        }
+        backgroundView.getLocationOnScreen(bgLoc)
+        if (bgLoc[0] == 0 && bgLoc[1] == 0) {
+            val folderLoc = IntArray(2)
+            folderView.getLocationOnScreen(folderLoc)
+            bgLoc[0] = folderLoc[0] + backgroundView.left
+            bgLoc[1] = folderLoc[1] + backgroundView.top
+        }
+
+        val bgW = backgroundView.width.takeIf { it > 0 } ?: lp.width.coerceAtLeast(1)
+        val bgH = backgroundView.height.takeIf { it > 0 } ?: lp.height.coerceAtLeast(1)
+        val iconW = iconView?.width?.takeIf { it > 0 } ?: (bgW / 3)
+        val iconH = iconView?.height?.takeIf { it > 0 } ?: (bgH / 3)
+
+        val startScaleX = (iconW.toFloat() / bgW.toFloat()).coerceIn(0.12f, 0.85f)
+        val startScaleY = (iconH.toFloat() / bgH.toFloat()).coerceIn(0.12f, 0.85f)
+
+        val iconCenterX = iconLoc[0] + iconW / 2f
+        val iconCenterY = iconLoc[1] + iconH / 2f
+        val bgCenterX = bgLoc[0] + bgW / 2f
+        val bgCenterY = bgLoc[1] + bgH / 2f
+
+        val startTransX = iconCenterX - bgCenterX
+        val startTransY = iconCenterY - bgCenterY
+
+        val isFolmeSuccess = runCatching {
+            val folmeClass = Class.forName("miuix.animation.Folme", false, classLoader)
+            val useAtMethod = folmeClass.getDeclaredMethod("useAt", View::class.java)
+            val iFolme = useAtMethod.invoke(null, backgroundView)
+            val iStateStyle = iFolme.javaClass.getMethod("state").invoke(iFolme)
+
+            val animStateClass = Class.forName("miuix.animation.controller.AnimState", false, classLoader)
+            val viewPropertyClass = Class.forName("miuix.animation.property.ViewProperty", false, classLoader)
+            val scaleXProp = viewPropertyClass.getField("SCALE_X").get(null)
+            val scaleYProp = viewPropertyClass.getField("SCALE_Y").get(null)
+            val transXProp = viewPropertyClass.getField("TRANSLATION_X").get(null)
+            val transYProp = viewPropertyClass.getField("TRANSLATION_Y").get(null)
+            val alphaProp = viewPropertyClass.getField("ALPHA").get(null)
+            val addMethod = animStateClass.getMethod("add", Object::class.java, Double::class.javaPrimitiveType)
+
+            val animConfigClass = Class.forName("miuix.animation.base.AnimConfig", false, classLoader)
+            val animConfig = animConfigClass.newInstance()
+            val setEaseMethod = animConfigClass.getMethod("setEase", Int::class.javaPrimitiveType, FloatArray::class.java)
+
+            if (isOpen) {
+                // 1. Initial collapsed state at desktop icon
+                val initState = animStateClass.getConstructor(String::class.java).newInstance("folder_frame_init")
+                addMethod.invoke(initState, scaleXProp, startScaleX.toDouble())
+                addMethod.invoke(initState, scaleYProp, startScaleY.toDouble())
+                addMethod.invoke(initState, transXProp, startTransX.toDouble())
+                addMethod.invoke(initState, transYProp, startTransY.toDouble())
+                addMethod.invoke(initState, alphaProp, 0.0)
+
+                iStateStyle.javaClass.getMethod("setTo", Object::class.java).invoke(iStateStyle, initState)
+
+                // 2. Resting expanded state enclosing title and grid
+                val targetState = animStateClass.getConstructor(String::class.java).newInstance("folder_frame_open")
+                addMethod.invoke(targetState, scaleXProp, 1.0)
+                addMethod.invoke(targetState, scaleYProp, 1.0)
+                addMethod.invoke(targetState, transXProp, 0.0)
+                addMethod.invoke(targetState, transYProp, 0.0)
+                addMethod.invoke(targetState, alphaProp, 1.0)
+
+                setEaseMethod.invoke(animConfig, -2, floatArrayOf(0.88f, 0.35f))
+                val toMethod = iStateStyle.javaClass.getMethod("to", Object::class.java, java.lang.reflect.Array.newInstance(animConfigClass, 0).javaClass)
+                toMethod.invoke(iStateStyle, targetState, java.lang.reflect.Array.newInstance(animConfigClass, 1).apply {
+                    java.lang.reflect.Array.set(this, 0, animConfig)
+                })
+            } else {
+                // Collapse back to desktop icon on close
+                val closeState = animStateClass.getConstructor(String::class.java).newInstance("folder_frame_close")
+                addMethod.invoke(closeState, scaleXProp, startScaleX.toDouble())
+                addMethod.invoke(closeState, scaleYProp, startScaleY.toDouble())
+                addMethod.invoke(closeState, transXProp, startTransX.toDouble())
+                addMethod.invoke(closeState, transYProp, startTransY.toDouble())
+                addMethod.invoke(closeState, alphaProp, 0.0)
+
+                setEaseMethod.invoke(animConfig, -2, floatArrayOf(0.92f, 0.28f))
+                val toMethod = iStateStyle.javaClass.getMethod("to", Object::class.java, java.lang.reflect.Array.newInstance(animConfigClass, 0).javaClass)
+                toMethod.invoke(iStateStyle, closeState, java.lang.reflect.Array.newInstance(animConfigClass, 1).apply {
+                    java.lang.reflect.Array.set(this, 0, animConfig)
+                })
+
+                backgroundView.postDelayed({
+                    if (backgroundView.alpha < 0.15f) {
+                        backgroundView.visibility = View.INVISIBLE
+                        contentBackground?.alpha = 0
+                    }
+                }, 300L)
+            }
+            true
+        }.getOrDefault(false)
+
+        if (!isFolmeSuccess) {
+            // ViewPropertyAnimator fallback
+            if (isOpen) {
+                backgroundView.scaleX = startScaleX
+                backgroundView.scaleY = startScaleY
+                backgroundView.translationX = startTransX
+                backgroundView.translationY = startTransY
+                backgroundView.alpha = 0f
+                backgroundView.animate()
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .translationX(0f)
+                    .translationY(0f)
+                    .alpha(1f)
+                    .setDuration(320L)
+                    .setInterpolator(PathInterpolator(0.16f, 1f, 0.3f, 1f))
+                    .start()
+            } else {
+                backgroundView.animate()
+                    .scaleX(startScaleX)
+                    .scaleY(startScaleY)
+                    .translationX(startTransX)
+                    .translationY(startTransY)
+                    .alpha(0f)
+                    .setDuration(260L)
+                    .setInterpolator(PathInterpolator(0.25f, 0.1f, 0.25f, 1f))
+                    .withEndAction {
+                        backgroundView.visibility = View.INVISIBLE
+                        contentBackground?.alpha = 0
+                    }
+                    .start()
+            }
         }
     }
 }
