@@ -159,7 +159,7 @@ object AppTransitionHook {
             module.hook(calcWidthMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
+                    if (!cfg.enabled || !cfg.zeroFrictionDrag) {
                         return chain.proceed()
                     }
 
@@ -196,7 +196,7 @@ object AppTransitionHook {
             module.hook(calcYMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
+                    if (!cfg.enabled || !cfg.zeroFrictionDrag) {
                         return chain.proceed()
                     }
 
@@ -247,7 +247,7 @@ object AppTransitionHook {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val result = (chain.proceed() as? Number)?.toFloat() ?: return chain.proceed()
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
+                    if (!cfg.enabled || !cfg.zeroFrictionDrag) {
                         return result
                     }
                     val screenW = (chain.args[2] as? Number)?.toFloat() ?: return result
@@ -282,7 +282,7 @@ object AppTransitionHook {
                 module.hook(frictionMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (!cfg.enabled) {
+                        if (!cfg.enabled || !cfg.zeroFrictionDrag) {
                             return chain.proceed()
                         }
                         val f = (chain.args[0] as? Number)?.toFloat() ?: 0f
@@ -347,7 +347,7 @@ object AppTransitionHook {
                 module.hook(defaultCenterMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (!cfg.enabled) {
+                        if (!cfg.enabled || !cfg.recentsCentering) {
                             return chain.proceed()
                         }
                         return 0 // Current task stays in the center!
@@ -364,7 +364,7 @@ object AppTransitionHook {
                 module.hook(targetIndexMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (!cfg.enabled) {
+                        if (!cfg.enabled || !cfg.recentsCentering) {
                             return chain.proceed()
                         }
 
@@ -390,7 +390,7 @@ object AppTransitionHook {
             module.hook(centerMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
+                    if (!cfg.enabled || !cfg.recentsCentering) {
                         return chain.proceed()
                     }
 
@@ -448,7 +448,7 @@ object AppTransitionHook {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val result = chain.proceed()
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
+                    if (!cfg.enabled || !cfg.refinedHaptics) {
                         return result
                     }
 
@@ -532,7 +532,7 @@ object AppTransitionHook {
                 module.hook(readyBackMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (!cfg.enabled) {
+                        if (!cfg.enabled || !cfg.refinedHaptics) {
                             return chain.proceed()
                         }
                         triggerBackPopHaptic(chain.thisObject)
@@ -545,7 +545,7 @@ object AppTransitionHook {
                 module.hook(handUpMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (!cfg.enabled) {
+                        if (!cfg.enabled || !cfg.refinedHaptics) {
                             return chain.proceed()
                         }
                         triggerBackPopHaptic(chain.thisObject)
@@ -558,7 +558,7 @@ object AppTransitionHook {
                 module.hook(enterRecentMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (!cfg.enabled) {
+                        if (!cfg.enabled || !cfg.refinedHaptics) {
                             return chain.proceed()
                         }
                         val view = chain.args[0] as? View
@@ -650,7 +650,7 @@ object AppTransitionHook {
             module.hook(convertOffsetMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
+                    if (!cfg.enabled || !cfg.zeroFrictionDrag) {
                         return chain.proceed()
                     }
                     val f = (chain.args[0] as? Number)?.toFloat() ?: 0f
@@ -674,7 +674,7 @@ object AppTransitionHook {
             module.hook(frictionMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
+                    if (!cfg.enabled || !cfg.zeroFrictionDrag) {
                         return chain.proceed()
                     }
                     val f = (chain.args[0] as? Number)?.toFloat() ?: 0f
@@ -802,9 +802,14 @@ object AppTransitionHook {
                     }
 
                     val animType = (chain.args[0] as? Enum<*>)?.name ?: ""
+                    if (animType.contains("ELEMENT") || animType.contains("DYNAMIC_ISLAND", ignoreCase = true)) {
+                        // Dynamic Island / Status Bar Element: 100% resistant to custom transition overrides!
+                        return result
+                    }
 
                     try {
-                        val speedRatio = getAnimationSpeedRatio(classLoader)
+                        val speedRatio = (getAnimationSpeedRatio(classLoader) / cfg.animSpeed.coerceIn(0.50f, 2.0f))
+                        val dampingScale = (cfg.springDamping / 0.98f).coerceIn(0.70f, 1.40f)
 
                         // Start/Target rects for screen coordinate normalization
                         val iconRect = if (animType.startsWith("OPEN")) {
@@ -887,30 +892,6 @@ object AppTransitionHook {
                             var newResponse: Float? = null
 
                             when {
-                                animType.startsWith("OPEN_FROM_ELEMENT") -> {
-                                    // Symmetrical forward emergence along the Z-axis from the Dynamic Island pill
-                                    val islandResponse = (0.32f * speedRatio).coerceAtLeast(0.18f)
-                                    val islandSizeResponse = (0.30f * speedRatio).coerceAtLeast(0.16f)
-                                    when (key) {
-                                        "centerY" -> { newDamping = 0.96f; newResponse = islandResponse }
-                                        "centerX" -> { newDamping = 0.96f; newResponse = islandResponse }
-                                        "Height", "Width", "Ratio" -> { newDamping = 0.94f; newResponse = islandSizeResponse }
-                                        "Radius", "RadiusRatio" -> { newDamping = 1.02f; newResponse = (0.28f * speedRatio).coerceAtLeast(0.16f) }
-                                        "alpha", "SurfaceExtAlpha", "appLeashBlurRadius" -> { newDamping = 0.95f; newResponse = (0.24f * speedRatio).coerceAtLeast(0.14f) }
-                                    }
-                                }
-                                animType.startsWith("CLOSE_TO_ELEMENT") -> {
-                                    // Symmetrical receding Z-depth flight deep into the phone's back panel / island pill
-                                    val islandResponse = (0.32f * speedRatio).coerceAtLeast(0.18f)
-                                    val islandSizeResponse = (0.30f * speedRatio).coerceAtLeast(0.16f)
-                                    when (key) {
-                                        "centerY" -> { newDamping = 0.96f; newResponse = islandResponse }
-                                        "centerX" -> { newDamping = 0.96f; newResponse = islandResponse }
-                                        "Height", "Width", "Ratio" -> { newDamping = 0.94f; newResponse = islandSizeResponse }
-                                        "Radius", "RadiusRatio" -> { newDamping = 1.02f; newResponse = (0.28f * speedRatio).coerceAtLeast(0.16f) }
-                                        "alpha", "SurfaceExtAlpha", "appLeashBlurRadius" -> { newDamping = 0.95f; newResponse = (0.24f * speedRatio).coerceAtLeast(0.14f) }
-                                    }
-                                }
                                 animType.startsWith("OPEN_FROM_HOME") -> {
                                     when (key) {
                                         "centerY" -> { newDamping = openDamping; newResponse = openResponseCenterY }
@@ -958,12 +939,13 @@ object AppTransitionHook {
                             }
 
                             if (newDamping != null && newResponse != null) {
+                                val finalDamping = (newDamping * dampingScale).coerceIn(0.60f, 1.35f)
                                 if (sDField != null && sRField != null) {
-                                    sDField?.set(sp, newDamping)
+                                    sDField?.set(sp, finalDamping)
                                     sRField?.set(sp, newResponse)
                                 } else {
                                     val imp = (sImpField?.get(sp) as? Number)?.toFloat() ?: 0.0f
-                                    result[i] = springParamConst.newInstance(key, newDamping, newResponse, imp)
+                                    result[i] = springParamConst.newInstance(key, finalDamping, newResponse, imp)
                                 }
                             }
                         }
@@ -1008,6 +990,19 @@ object AppTransitionHook {
                         val animTypeObj = rectFParams.javaClass.getMethod("getAnimType").invoke(rectFParams)
                         val animType = (animTypeObj as? Enum<*>)?.name ?: ""
 
+                        // Check if animation is related to Dynamic Island / status bar element
+                        val isElementAnim = animType.contains("ELEMENT") || animType.contains("DYNAMIC_ISLAND", ignoreCase = true)
+                        val hasElementTarget = runCatching {
+                            val targetSet = rectFParams.javaClass.getMethod("getTargetApps").invoke(rectFParams)
+                            targetSet?.javaClass?.getMethod("getElementTarget")?.invoke(targetSet) != null
+                        }.getOrDefault(false)
+
+                        if (isElementAnim || hasElementTarget) {
+                            // Dynamic Island stock animation resistance: 100% stock SurfaceFlinger params!
+                            // Do not modify any velocities, damping, or stretch types!
+                            return sfAnimParam
+                        }
+
                         val (deviceWidth, deviceHeight) = getCachedDeviceDimensions(classLoader)
                         val windowAnimParams = runCatching {
                             rectFParams.javaClass.getMethod("getWindowAnimParams").invoke(rectFParams)
@@ -1019,12 +1014,10 @@ object AppTransitionHook {
                             windowAnimParams?.javaClass?.getMethod("getStartRect")?.invoke(windowAnimParams) as? RectF
                         }.getOrNull()
 
-                        val isIslandOpen = animType == "OPEN_FROM_ELEMENT"
-                        val isIslandClose = animType == "CLOSE_TO_ELEMENT"
                         val isHomeOpen = animType.startsWith("OPEN_FROM_HOME")
                         val isHomeClose = animType.startsWith("CLOSE_TO_HOME")
-                        val isOpen = isHomeOpen || isIslandOpen
-                        val isClose = isHomeClose || isIslandClose
+                        val isOpen = isHomeOpen
+                        val isClose = isHomeClose
 
                         val iconRect = if (isOpen) (startRect ?: targetRect) else (targetRect ?: startRect)
                         val iconCenterY = iconRect?.centerY() ?: (deviceHeight * 0.75f)
@@ -1053,34 +1046,21 @@ object AppTransitionHook {
                             sfAnimParam.javaClass.getMethod("setRatioVelocity", Float::class.javaPrimitiveType)
                         }.getOrNull()
 
-                        if (isIslandClose) {
-                            // Dynamic Island Z-depth close: symmetrical inward contraction deep into the display panel
-                            // Negative width, height, and ratio velocities create the physical depth feeling of receding into the phone
-                            setCenterYVelMethod?.invoke(sfAnimParam, -14000f)
-                            setCenterXVelMethod?.invoke(sfAnimParam, 0f)
-                            setWidthVelMethod?.invoke(sfAnimParam, -3600f)
-                            setHeightVelMethod?.invoke(sfAnimParam, -4800f)
-                            setRatioVelMethod?.invoke(sfAnimParam, -3.2f)
-                        } else if (isIslandOpen) {
-                            // Dynamic Island Z-depth open: symmetrical forward emergence from deep within the display panel
-                            setCenterYVelMethod?.invoke(sfAnimParam, +14000f)
-                            setCenterXVelMethod?.invoke(sfAnimParam, 0f)
-                            setWidthVelMethod?.invoke(sfAnimParam, -1200f)
-                            setHeightVelMethod?.invoke(sfAnimParam, -1200f)
-                            setRatioVelMethod?.invoke(sfAnimParam, -1.5f)
-                        } else if (isHomeOpen) {
+                        if (isHomeOpen) {
                             if (normY >= 0.50f) {
-                                // Bottom-half apps (dock/lower rows): open with a DISTINCT UPLIFT surge right on tap!
-                                val openUpward = -32000f - ((normY - 0.50f) * 16000f)
-                                setCenterYVelMethod?.invoke(sfAnimParam, openUpward)
+                                if (cfg.openUpliftSurge) {
+                                    // Bottom-half apps (dock/lower rows): open with a DISTINCT UPLIFT surge right on tap!
+                                    val openUpward = -32000f - ((normY - 0.50f) * 16000f)
+                                    setCenterYVelMethod?.invoke(sfAnimParam, openUpward)
 
-                                val openVx = -(dx / deviceWidth) * 2600f
-                                setCenterXVelMethod?.invoke(sfAnimParam, openVx)
+                                    val openVx = -(dx / deviceWidth) * 2600f
+                                    setCenterXVelMethod?.invoke(sfAnimParam, openVx)
 
-                                // Vertical squeeze to imitate window uplifting:
-                                setWidthVelMethod?.invoke(sfAnimParam, 2400f)
-                                setHeightVelMethod?.invoke(sfAnimParam, -4200f)
-                                setRatioVelMethod?.invoke(sfAnimParam, -4.5f)
+                                    // Vertical squeeze to imitate window uplifting:
+                                    setWidthVelMethod?.invoke(sfAnimParam, 2400f)
+                                    setHeightVelMethod?.invoke(sfAnimParam, -4200f)
+                                    setRatioVelMethod?.invoke(sfAnimParam, -4.5f)
+                                }
                             } else {
                                 // Top-half apps: plunges down distinctly first before expanding!
                                 val openDownward = +26000f + ((0.50f - normY) * 14000f)
@@ -1094,6 +1074,7 @@ object AppTransitionHook {
                                 setRatioVelMethod?.invoke(sfAnimParam, -3.8f)
                             }
                         } else if (isHomeClose) {
+                            val arcMultiplier = cfg.arcApexLift.coerceIn(0.40f, 2.50f)
                             val flickSpeed = if (isRecentFlick && vy < -0.10f) abs(vy).coerceIn(0.10f, 12.0f) else 0f
                             val thumbNormY = if (sLastThumbY > 0f) {
                                 (sLastThumbY / deviceHeight).coerceIn(0.20f, 1.0f)
@@ -1104,10 +1085,10 @@ object AppTransitionHook {
 
                             if (normY >= 0.50f) {
                                 // Bottom-half apps: soar high up into a massive parabolic apex before landing into icon!
-                                val baseUpward = 32000f + ((normY - 0.50f) * 16000f)
-                                val flickAdd = flickSpeed * 5000f
+                                val baseUpward = (32000f + ((normY - 0.50f) * 16000f)) * arcMultiplier
+                                val flickAdd = flickSpeed * 5000f * arcMultiplier
                                 val totalUpward = -(baseUpward + flickAdd) * thumbMultiplier
-                                val vyLaunch = totalUpward.coerceIn(-48000f, -24000f)
+                                val vyLaunch = totalUpward.coerceIn(-64000f * arcMultiplier, -16000f)
                                 setCenterYVelMethod?.invoke(sfAnimParam, vyLaunch)
 
                                 // Symmetrical vertical squeeze on close at the exact same point in space:
@@ -1116,7 +1097,7 @@ object AppTransitionHook {
                                 setRatioVelMethod?.invoke(sfAnimParam, -4.5f)
                             } else {
                                 // Top-half apps: fly directly up into top icon without overshoot
-                                val topUpward = -(12000f + flickSpeed * 3000f).coerceIn(-26000f, -9000f)
+                                val topUpward = (-(12000f + flickSpeed * 3000f) * arcMultiplier).coerceIn(-36000f, -6000f)
                                 setCenterYVelMethod?.invoke(sfAnimParam, topUpward)
 
                                 setWidthVelMethod?.invoke(sfAnimParam, 1800f)
@@ -1136,7 +1117,7 @@ object AppTransitionHook {
                         }
 
                         // Apply Horizontal Edge Squeeze via StretchType on BOTH open and close transitions
-                        if (isOpen || isClose) {
+                        if (cfg.keystoneSqueeze && (isOpen || isClose)) {
                             runCatching {
                                 val iconsField = sfAnimParam.javaClass.getDeclaredField("icons").apply { isAccessible = true }
                                 val iconsArray = iconsField.get(sfAnimParam) as? Array<*>
@@ -1144,7 +1125,7 @@ object AppTransitionHook {
                                     val stretchTypeClass = Class.forName("com.miui.home.recents.anim.windowanim.sfanim.StretchType", false, classLoader)
                                     val hMatchVTop = java.lang.Enum.valueOf(stretchTypeClass as Class<out Enum<*>>, "HMatchVTop")
                                     val vMatchHCenter = java.lang.Enum.valueOf(stretchTypeClass, "VMatchHCenter")
-                                    val chosenStretch = if (isIslandOpen || isIslandClose) vMatchHCenter else (if (normY >= 0.50f) hMatchVTop else vMatchHCenter)
+                                    val chosenStretch = if (normY >= 0.50f) hMatchVTop else vMatchHCenter
 
                                     for (layerParam in iconsArray) {
                                         if (layerParam != null) {
@@ -1188,7 +1169,7 @@ object AppTransitionHook {
             module.hook(getAppStateMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
+                    if (!cfg.enabled || !cfg.depthZoom) {
                         return chain.proceed()
                     }
                     return homeLayerParamConst.newInstance(0.92f, 0.92f, 0.0f, 0.0f)
@@ -1199,7 +1180,7 @@ object AppTransitionHook {
             module.hook(getHomeStateMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
+                    if (!cfg.enabled || !cfg.depthZoom) {
                         return chain.proceed()
                     }
                     return homeLayerParamConst.newInstance(1.0f, 1.0f, 0.0f, 0.0f)
@@ -1213,7 +1194,8 @@ object AppTransitionHook {
                 val bindMethod = elemClass.getDeclaredMethod("bindHomeLeash")
                 module.hook(bindMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
-                        if (LauncherConfigHolder.iosAnimConfig.enabled) {
+                        val cfg = LauncherConfigHolder.iosAnimConfig
+                        if (cfg.enabled && cfg.depthZoom) {
                             try { enableField.set(chain.thisObject, true) } catch (_: Throwable) {}
                         }
                         return chain.proceed()
@@ -1246,7 +1228,7 @@ object AppTransitionHook {
             module.hook(getAppStateMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
+                    if (!cfg.enabled || !cfg.depthZoom) {
                         return chain.proceed()
                     }
                     return wpParamConst.newInstance(1.08f, 1.08f, 0.0f, 0.0f)
@@ -1257,7 +1239,7 @@ object AppTransitionHook {
             module.hook(getHomeStateMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
+                    if (!cfg.enabled || !cfg.depthZoom) {
                         return chain.proceed()
                     }
                     return wpParamConst.newInstance(1.0f, 1.0f, 0.0f, 0.0f)
@@ -1307,7 +1289,7 @@ object AppTransitionHook {
                 module.hook(isMistakeTouchMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (cfg.enabled) {
+                        if (cfg.enabled && cfg.landscapeGameOpt) {
                             return false
                         }
                         return chain.proceed()
@@ -1345,6 +1327,9 @@ object AppTransitionHook {
 
             module.hook(getIconIndexMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (!cfg.enabled || !cfg.folderTracking) return chain.proceed()
+
                     val controller = chain.thisObject ?: return chain.proceed()
                     val num = (chain.args[0] as? Integer)?.toInt() ?: return chain.proceed()
                     val locMapField = controller.javaClass.getDeclaredField("mFolderIconLocMap").apply { isAccessible = true }
@@ -1378,7 +1363,7 @@ object AppTransitionHook {
             module.hook(initIconLocMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) return chain.proceed()
+                    if (!cfg.enabled || !cfg.folderTracking) return chain.proceed()
 
                     try {
                         val controller = chain.thisObject ?: return chain.proceed()
@@ -1515,7 +1500,7 @@ object AppTransitionHook {
             module.hook(updatePosMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) return chain.proceed()
+                    if (!cfg.enabled || !cfg.folderTracking) return chain.proceed()
 
                     try {
                         val controller = chain.thisObject ?: return chain.proceed()
@@ -1614,7 +1599,7 @@ object AppTransitionHook {
             module.hook(setVisibleScaleMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) return chain.proceed()
+                    if (!cfg.enabled || !cfg.folderTracking) return chain.proceed()
 
                     try {
                         val controller = chain.thisObject ?: return chain.proceed()
@@ -1713,7 +1698,7 @@ object AppTransitionHook {
             module.hook(startFolderAnimMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) return chain.proceed()
+                    if (!cfg.enabled || !cfg.folderTracking) return chain.proceed()
 
                     val isOpen = chain.args[0] as? Boolean ?: true
                     val iFolderIcon = chain.args[1]
@@ -1783,19 +1768,35 @@ object AppTransitionHook {
             val preClass = Class.forName("com.miui.home.folder.FolderAnimControllerPre", false, classLoader)
             val getDelayMethod = preClass.getDeclaredMethod("getGridItemDelay", Long::class.javaPrimitiveType)
             module.hook(getDelayMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any = 0L
+                override fun intercept(chain: XposedInterface.Chain): Any {
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (cfg.enabled && cfg.folderTracking) return 0L
+                    return chain.proceed()
+                }
             })
             val getGridRespMethod = preClass.getDeclaredMethod("getGridViewResponse", Int::class.javaPrimitiveType)
             module.hook(getGridRespMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any = 0.32f
+                override fun intercept(chain: XposedInterface.Chain): Any {
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (cfg.enabled && cfg.folderTracking) return 0.32f
+                    return chain.proceed()
+                }
             })
             val getPrevRespMethod = preClass.getDeclaredMethod("getPreViewOpenResponse", Int::class.javaPrimitiveType)
             module.hook(getPrevRespMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any = 0.32f
+                override fun intercept(chain: XposedInterface.Chain): Any {
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (cfg.enabled && cfg.folderTracking) return 0.32f
+                    return chain.proceed()
+                }
             })
             val getClosePrevRespMethod = preClass.getDeclaredMethod("getClosePreviewResponse")
             module.hook(getClosePrevRespMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any = 0.28f
+                override fun intercept(chain: XposedInterface.Chain): Any {
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (cfg.enabled && cfg.folderTracking) return 0.28f
+                    return chain.proceed()
+                }
             })
             Log.i(TAG, "Hooked FolderAnimControllerPre for synchronous OriginOS response times")
         } catch (t: Throwable) {

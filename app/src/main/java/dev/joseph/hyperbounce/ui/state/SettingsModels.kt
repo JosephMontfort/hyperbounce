@@ -200,7 +200,18 @@ data class ScreenUnlockSettings(
 
 /** Feature 4: iOS App Transition & Physics Settings */
 data class IOSTransitionSettings(
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    val arcApexLift: Float = 1.0f,
+    val openUpliftSurge: Boolean = true,
+    val keystoneSqueeze: Boolean = true,
+    val animSpeed: Float = 1.0f,
+    val springDamping: Float = 0.98f,
+    val folderTracking: Boolean = true,
+    val recentsCentering: Boolean = true,
+    val zeroFrictionDrag: Boolean = true,
+    val landscapeGameOpt: Boolean = true,
+    val depthZoom: Boolean = true,
+    val refinedHaptics: Boolean = true
 )
 
 

@@ -715,15 +715,59 @@ class SettingsRepository(context: Context) {
         private val defaults = IOSTransitionSettings()
 
         var enabled by prefsBooleanState("ios_anim_enabled", defaults.enabled); private set
+        var arcApexLift by prefsFloatState("ios_anim_arc_apex_lift", defaults.arcApexLift); private set
+        var openUpliftSurge by prefsBooleanState("ios_anim_open_uplift_surge", defaults.openUpliftSurge); private set
+        var keystoneSqueeze by prefsBooleanState("ios_anim_keystone_squeeze", defaults.keystoneSqueeze); private set
+        var animSpeed by prefsFloatState("ios_anim_speed", defaults.animSpeed); private set
+        var springDamping by prefsFloatState("ios_anim_spring_damping", defaults.springDamping); private set
+        var folderTracking by prefsBooleanState("ios_anim_folder_tracking", defaults.folderTracking); private set
+        var recentsCentering by prefsBooleanState("ios_anim_recents_centering", defaults.recentsCentering); private set
+        var zeroFrictionDrag by prefsBooleanState("ios_anim_zero_friction_drag", defaults.zeroFrictionDrag); private set
+        var landscapeGameOpt by prefsBooleanState("ios_anim_landscape_game_opt", defaults.landscapeGameOpt); private set
+        var depthZoom by prefsBooleanState("ios_anim_depth_zoom", defaults.depthZoom); private set
+        var refinedHaptics by prefsBooleanState("ios_anim_refined_haptics", defaults.refinedHaptics); private set
 
         fun snapshot(): IOSTransitionSettings = IOSTransitionSettings(
-            enabled
+            enabled = enabled,
+            arcApexLift = arcApexLift,
+            openUpliftSurge = openUpliftSurge,
+            keystoneSqueeze = keystoneSqueeze,
+            animSpeed = animSpeed,
+            springDamping = springDamping,
+            folderTracking = folderTracking,
+            recentsCentering = recentsCentering,
+            zeroFrictionDrag = zeroFrictionDrag,
+            landscapeGameOpt = landscapeGameOpt,
+            depthZoom = depthZoom,
+            refinedHaptics = refinedHaptics
         )
 
         @JvmName("setIOSTransitionsEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
+        @JvmName("setArcApexLiftPref") fun setArcApexLift(v: Float) { arcApexLift = v }
+        @JvmName("setOpenUpliftSurgePref") fun setOpenUpliftSurge(v: Boolean) { openUpliftSurge = v }
+        @JvmName("setKeystoneSqueezePref") fun setKeystoneSqueeze(v: Boolean) { keystoneSqueeze = v }
+        @JvmName("setAnimSpeedPref") fun setAnimSpeed(v: Float) { animSpeed = v }
+        @JvmName("setSpringDampingPref") fun setSpringDamping(v: Float) { springDamping = v }
+        @JvmName("setFolderTrackingPref") fun setFolderTracking(v: Boolean) { folderTracking = v }
+        @JvmName("setRecentsCenteringPref") fun setRecentsCentering(v: Boolean) { recentsCentering = v }
+        @JvmName("setZeroFrictionDragPref") fun setZeroFrictionDrag(v: Boolean) { zeroFrictionDrag = v }
+        @JvmName("setLandscapeGameOptPref") fun setLandscapeGameOpt(v: Boolean) { landscapeGameOpt = v }
+        @JvmName("setDepthZoomPref") fun setDepthZoom(v: Boolean) { depthZoom = v }
+        @JvmName("setRefinedHapticsPref") fun setRefinedHaptics(v: Boolean) { refinedHaptics = v }
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
+            arcApexLift = defaults.arcApexLift
+            openUpliftSurge = defaults.openUpliftSurge
+            keystoneSqueeze = defaults.keystoneSqueeze
+            animSpeed = defaults.animSpeed
+            springDamping = defaults.springDamping
+            folderTracking = defaults.folderTracking
+            recentsCentering = defaults.recentsCentering
+            zeroFrictionDrag = defaults.zeroFrictionDrag
+            landscapeGameOpt = defaults.landscapeGameOpt
+            depthZoom = defaults.depthZoom
+            refinedHaptics = defaults.refinedHaptics
         }
     }
 

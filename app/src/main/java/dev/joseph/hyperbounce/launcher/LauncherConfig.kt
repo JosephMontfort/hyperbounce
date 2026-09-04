@@ -37,7 +37,18 @@ data class ScreenUnlockConfig(
 }
 
 data class IOSTransitionConfig(
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    val arcApexLift: Float = 1.0f,
+    val openUpliftSurge: Boolean = true,
+    val keystoneSqueeze: Boolean = true,
+    val animSpeed: Float = 1.0f,
+    val springDamping: Float = 0.98f,
+    val folderTracking: Boolean = true,
+    val recentsCentering: Boolean = true,
+    val zeroFrictionDrag: Boolean = true,
+    val landscapeGameOpt: Boolean = true,
+    val depthZoom: Boolean = true,
+    val refinedHaptics: Boolean = true
 )
 
 object LauncherConfigHolder {
@@ -97,7 +108,18 @@ object LauncherConfigHolder {
         )
 
         iosAnimConfig = IOSTransitionConfig(
-            enabled = prefs.getBoolean("ios_anim_enabled", true)
+            enabled = prefs.getBoolean("ios_anim_enabled", true),
+            arcApexLift = prefs.getFloat("ios_anim_arc_apex_lift", 1.0f),
+            openUpliftSurge = prefs.getBoolean("ios_anim_open_uplift_surge", true),
+            keystoneSqueeze = prefs.getBoolean("ios_anim_keystone_squeeze", true),
+            animSpeed = prefs.getFloat("ios_anim_speed", 1.0f),
+            springDamping = prefs.getFloat("ios_anim_spring_damping", 0.98f),
+            folderTracking = prefs.getBoolean("ios_anim_folder_tracking", true),
+            recentsCentering = prefs.getBoolean("ios_anim_recents_centering", true),
+            zeroFrictionDrag = prefs.getBoolean("ios_anim_zero_friction_drag", true),
+            landscapeGameOpt = prefs.getBoolean("ios_anim_landscape_game_opt", true),
+            depthZoom = prefs.getBoolean("ios_anim_depth_zoom", true),
+            refinedHaptics = prefs.getBoolean("ios_anim_refined_haptics", true)
         )
     }
 }
