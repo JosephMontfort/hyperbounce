@@ -6,6 +6,7 @@ import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
+import android.view.View
 import io.github.libxposed.api.XposedInterface
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
@@ -16,37 +17,38 @@ import java.lang.reflect.Method
  *
  * Implements pure iOS physical dynamics and weightless trajectory equations:
  *
- * 1. Zero Drag Resistance & Continuous Elevation (No Downward Dip):
+ * 1. Zero Drag Resistance & Continuous Elevation (Zero Downward Dip):
  *    - Replaces HyperOS's heavy friction curves with fluid, direct-tracking physics.
- *    - Center-anchored displacement equation: as soon as the user touches and pushes up,
- *      the app moves strictly UPWARDS from frame 0. Zero downward shift when triggering Recents!
- *    - The app scales down continuously and travels higher up freely along with the finger
- *      without hitting any artificial clamp ceilings.
+ *    - Upward elevation from frame 0: strictly moves UPWARDS as soon as touched,
+ *      eliminating any downward shift when swiping up for Recents.
+ *    - Weightless upward tracking for normal minimize / flick.
  *
- * 2. Recents Current Task Centering:
+ * 2. Complete Floating Window / Top Corner Engulfing & Scaling:
+ *    - Continuous non-linear scaling: shrinks progressively down to 0.22x - 0.25x as it reaches the top.
+ *    - Smooth boundary docking: when dragged high into the top or top-right corner,
+ *      the card top settles cleanly inside the upper screen boundary (below status bar) and
+ *      the right edge is clamped inside the display bezel.
+ *    - The entire app remains 100% visible on screen, perfectly wrapped and engulfed inside
+ *      the floating window circle/squircle, exactly like stock!
+ *
+ * 3. Recents Current Task Centering:
  *    - Overrides TaskStackViewsAlgorithmHorizontal, TaskStackViewsAlgorithmStack, and TaskViewsElement.
  *    - Eliminates the intentional HyperOS offset that shifted the current app to the right.
  *    - Keeps the active running app perfectly centered on screen when opening Recents, matching iOS
  *      behavior, while preserving Quick Switch app cycling.
  *
- * 3. Velocity-Dependent Flight & Thumb-Coupled Minimizing:
+ * 4. Velocity-Dependent Flight & Thumb-Coupled Minimizing:
  *    - Captures live gesture flick velocity and thumb release position.
- *    - Couples thumb release height and flick speed directly into the launch trajectory.
- *    - High-speed flick launches the window effortlessly into a soaring parabolic arc before
+ *    - Boosted launch impulses: app launches effortlessly into a soaring parabolic arc before
  *      landing smoothly into its icon squircle.
  *
- * 4. SurfaceFlinger Hardware Momentum Injection:
- *    - Injects velocity directly into SfAnimParam.centerY on hardware-accelerated transitions.
+ * 5. Refined Haptic Experience:
+ *    - Back Gesture: Distinct, crisp, modern elastic pop (MIUI_BUTTON_SMALL / MIUI_MESH_LIGHT)
+ *      instead of dull keyboard tick or heavy thud.
+ *    - App-to-Recents Gesture: Clean, tactile latch tick (MIUI_SWITCH / MIUI_KEYBOARD) instead of
+ *      the stock heavy MIUI_HOLD thud.
  *
- * 5. Standard X-Axis Linear Motor Keyboard Tick for Back Gestures:
- *    - Replaces the heavy thud in BackGesture with the crisp, standard keyboard tick
- *      (MIUI_KEYBOARD / EFFECT_CLICK) from the linear motor.
- *
- * 6. Multi-Scenario Resistance Reduction:
- *    - Fluid back gesture indicator tracking in BackGestureUtils.
- *    - Feather-light swipe dismissal in VerticalSwipe.
- *
- * 7. Feather-Light Expansive App Opening:
+ * 6. Feather-Light Expansive App Opening:
  *    - Organic, critically damped (zeta=1.00, T0=0.410s) expansive flight from squircle to full screen.
  */
 object AppTransitionHook {
@@ -73,7 +75,7 @@ object AppTransitionHook {
         hookGestureVelocityTracking(module, classLoader)
         hookDragResistanceAndScaling(module, classLoader)
         hookRecentsCurrentTaskCentering(module, classLoader)
-        hookBackGestureHaptics(module, classLoader)
+        hookRefinedHaptics(module, classLoader)
         hookExtraInteractionsFriction(module, classLoader)
         hookSpringParamsProvider(module, classLoader)
         hookSfAnimImplementor(module, classLoader)
@@ -126,8 +128,8 @@ object AppTransitionHook {
     }
 
     /**
-     * Hook 2: Eliminates drag resistance, removes the downward dip on Recents trigger,
-     * and enables the app to travel higher up easily with progressive scaling.
+     * Hook 2: Eliminates drag resistance, ensures zero downward dip when swiping for Recents,
+     * and guarantees 100% on-screen engulfing when dragged to the floating window corner.
      */
     private fun hookDragResistanceAndScaling(module: XposedInterface, classLoader: ClassLoader) {
         try {
@@ -150,11 +152,17 @@ object AppTransitionHook {
                     }
 
                     val baseWidth = (chain.args[0] as? Number)?.toFloat() ?: return chain.proceed()
-                    val progress = (chain.args[1] as? Number)?.toFloat()?.coerceAtLeast(0f) ?: 0f
+                    val p = (chain.args[1] as? Number)?.toFloat()?.coerceAtLeast(0f) ?: 0f
 
-                    // Smooth, continuous scaling down as the app climbs higher:
-                    // Progressively shrinks down to 0.30x without abrupt cliffs
-                    val scale = (1.0f - (progress * 0.48f)).coerceIn(0.28f, 1.0f)
+                    // Continuous non-linear scale down:
+                    // Progressively shrinks down to 0.22x - 0.25x so it fits perfectly inside
+                    // the top-right floating window circle/squircle
+                    val scale = when {
+                        p <= 0.02f -> 1.0f
+                        p <= 0.45f -> 1.0f - (p - 0.02f) * (0.35f / 0.43f) // 1.0 -> 0.65
+                        p <= 0.90f -> 0.65f - (p - 0.45f) * (0.38f / 0.45f) // 0.65 -> 0.27
+                        else -> (0.27f / (1.0f + (p - 0.90f) * 1.50f)).coerceAtLeast(0.22f) // down to 0.22
+                    }
                     return baseWidth * scale
                 }
             })
@@ -184,29 +192,65 @@ object AppTransitionHook {
                     val taskH = (chain.args[2] as? Number)?.toFloat() ?: 0f
                     val progress = (chain.args[3] as? Number)?.toFloat()?.coerceAtLeast(0f) ?: 0f
 
-                    // If upward gesture from bottom (i == 1):
                     if (i == 1 && screenH > 0f) {
-                        // Center-anchored elevation:
-                        // At progress = 0: yCenter = 0.50 * screenH, taskH = screenH => yTop = 0.0f
-                        // As progress > 0: yTop strictly decreases (moves UPWARDS).
-                        // The app moves UP from the very first frame of the gesture:
-                        // ZERO downward shift when triggering Recents!
-                        // And as the user pulls higher, it travels freely upward with ZERO clamp resistance!
-                        val yCenter = screenH * (0.50f - (progress * 0.65f))
-                        val yTop = yCenter - (taskH * 0.50f)
-                        return yTop
+                        val p = progress
+
+                        // For normal minimize flick & swipe-up start (p <= 0.60):
+                        // Strictly moves UPWARDS from frame 0 (rawTop <= 0).
+                        // Completely eliminates the initial downward dip when triggering Recents!
+                        val rawTop = screenH * (-p * 0.52f)
+
+                        // When dragged high up into the floating window zone (p > 0.60):
+                        // Smoothly transition the card top so it docks inside the upper viewport
+                        // (right below status bar ~0.045 * screenH) instead of shooting off-screen!
+                        val finalY = if (p <= 0.60f) {
+                            rawTop
+                        } else {
+                            val t = ((p - 0.60f) / 0.40f).coerceIn(0f, 1f)
+                            val smoothT = t * t * (3f - 2f * t)
+                            val anchoredTop = screenH * 0.045f
+                            (rawTop * (1f - smoothT)) + (anchoredTop * smoothT)
+                        }
+                        return finalY
                     }
 
                     return chain.proceed()
                 }
             })
 
-            Log.i(TAG, "Hooked TaskStackLayoutAlgorithm for fluid upward elevation & progressive scaling")
+            // 3. Hook calculateTaskX(float f, float f2, float f3, float f4)
+            // Ensures horizontal bounds stay completely inside the screen when pulled to corners
+            val calcXMethod = algoClass.getDeclaredMethod(
+                "calculateTaskX",
+                Float::class.javaPrimitiveType,
+                Float::class.javaPrimitiveType,
+                Float::class.javaPrimitiveType,
+                Float::class.javaPrimitiveType
+            )
+
+            module.hook(calcXMethod).intercept(object : XposedInterface.Hooker {
+                override fun intercept(chain: XposedInterface.Chain): Any? {
+                    val result = (chain.proceed() as? Number)?.toFloat() ?: return chain.proceed()
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    if (!cfg.enabled) {
+                        return result
+                    }
+                    val screenW = (chain.args[2] as? Number)?.toFloat() ?: return result
+                    val taskW = (chain.args[3] as? Number)?.toFloat() ?: return result
+
+                    // Keep the card cleanly inside display boundaries [12dp, screenW - taskW - 12dp]
+                    val margin = screenW * 0.025f
+                    val maxX = (screenW - taskW - margin).coerceAtLeast(margin)
+                    return result.coerceIn(margin, maxX)
+                }
+            })
+
+            Log.i(TAG, "Hooked TaskStackLayoutAlgorithm for fluid elevation, 100% on-screen engulfing & scaling")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook TaskStackLayoutAlgorithm drag calculations", t)
         }
 
-        // 3. Hook afterFrictionValue on algorithm subclasses to eliminate artificial rubber-band wall
+        // 4. Hook afterFrictionValue on algorithm subclasses to eliminate artificial rubber-band wall
         val algoSubclasses = listOf(
             "com.miui.home.recents.views.TaskStackViewsAlgorithmVertical",
             "com.miui.home.recents.views.TaskStackViewsAlgorithmHorizontal",
@@ -227,7 +271,7 @@ object AppTransitionHook {
                             return chain.proceed()
                         }
                         val f = (chain.args[0] as? Number)?.toFloat() ?: 0f
-                        return f * 0.94f
+                        return f * 1.0f // 100% linear, zero friction resistance
                     }
                 })
             } catch (_: Throwable) {}
@@ -323,9 +367,11 @@ object AppTransitionHook {
     }
 
     /**
-     * Hook 4: Replaces the heavy back gesture thud with the standard X-axis linear motor keyboard tick.
+     * Hook 4: Refined, satisfying linear motor haptics:
+     * - Back Gesture: Crisp elastic tactile pop (MIUI_BUTTON_SMALL / MIUI_MESH_LIGHT)
+     * - App-to-Recents Gesture: Clean mechanical latch tick (MIUI_SWITCH / MIUI_KEYBOARD) instead of heavy thud
      */
-    private fun hookBackGestureHaptics(module: XposedInterface, classLoader: ClassLoader) {
+    private fun hookRefinedHaptics(module: XposedInterface, classLoader: ClassLoader) {
         val hapticClasses = listOf(
             "com.miui.home.common.hapticfeedback.HapticFeedbackCompatLinear",
             "com.miui.home.common.hapticfeedback.HapticFeedbackCompatV2",
@@ -336,7 +382,7 @@ object AppTransitionHook {
             try {
                 val clazz = Class.forName(className, false, classLoader)
 
-                // 1. Hook performGestureReadyBack()
+                // 1. Hook performGestureReadyBack() -> Crisp elastic pop
                 val readyBackMethod = clazz.getDeclaredMethod("performGestureReadyBack")
                 module.hook(readyBackMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -344,12 +390,12 @@ object AppTransitionHook {
                         if (!cfg.enabled) {
                             return chain.proceed()
                         }
-                        triggerKeyboardTickHaptic(chain.thisObject)
-                        return null // Do NOT proceed with the heavy thud
+                        triggerBackPopHaptic(chain.thisObject)
+                        return null // Suppress heavy thud
                     }
                 })
 
-                // 2. Hook performGestureBackHandUp()
+                // 2. Hook performGestureBackHandUp() -> Crisp elastic pop on release
                 val handUpMethod = clazz.getDeclaredMethod("performGestureBackHandUp")
                 module.hook(handUpMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -357,38 +403,53 @@ object AppTransitionHook {
                         if (!cfg.enabled) {
                             return chain.proceed()
                         }
-                        triggerKeyboardTickHaptic(chain.thisObject)
-                        return null // Do NOT proceed with the heavy thud
+                        triggerBackPopHaptic(chain.thisObject)
+                        return null // Suppress heavy thud
                     }
                 })
 
-                Log.i(TAG, "Hooked $className to replace back gesture thud with standard linear keyboard tick")
+                // 3. Hook performEnterRecent(View view) -> Satisfying latch tick instead of heavy thud
+                val enterRecentMethod = clazz.getDeclaredMethod("performEnterRecent", View::class.java)
+                module.hook(enterRecentMethod).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        val cfg = LauncherConfigHolder.iosAnimConfig
+                        if (!cfg.enabled) {
+                            return chain.proceed()
+                        }
+                        val view = chain.args[0] as? View
+                        triggerRecentsTickHaptic(chain.thisObject, view)
+                        return null // Suppress stock heavy MIUI_HOLD thud!
+                    }
+                })
+
+                Log.i(TAG, "Hooked $className for refined gesture haptics")
             } catch (t: Throwable) {
-                Log.w(TAG, "Failed to hook back gesture haptics on $className", t)
+                Log.w(TAG, "Failed to hook haptics on $className", t)
             }
         }
     }
 
     /**
-     * Triggers the crisp, standard X-axis linear motor keyboard tick (not light tick).
+     * Triggers a crisp, refined tactile pop for Back Gesture (MIUI_BUTTON_SMALL = 268435476).
      */
-    private fun triggerKeyboardTickHaptic(instance: Any) {
+    private fun triggerBackPopHaptic(instance: Any) {
         try {
-            // First attempt: MIUI HapticHelper with MIUI_KEYBOARD constant (268435479)
             val helperField = instance.javaClass.getDeclaredField("mHapticHelper").apply { isAccessible = true }
             val helper = helperField.get(instance)
             if (helper != null) {
+                // miuix.view.HapticFeedbackConstants.MIUI_BUTTON_SMALL = 268435476
+                // miuix.view.HapticFeedbackConstants.MIUI_MESH_LIGHT = 268435463
                 val performMethod = helper.javaClass.getMethod(
                     "performHapticFeedback",
                     Int::class.javaPrimitiveType,
                     Int::class.javaPrimitiveType
                 )
-                val success = performMethod.invoke(helper, 268435479, 268435457) as? Boolean ?: false
+                val success = performMethod.invoke(helper, 268435476, 268435463) as? Boolean ?: false
                 if (success) return
             }
         } catch (_: Throwable) {}
 
-        // Fallback: Android system Vibrator with standard linear motor EFFECT_CLICK
+        // Fallback: Android system linear motor tick
         try {
             val activityThreadClass = Class.forName("android.app.ActivityThread")
             val currentApp = activityThreadClass.getMethod("currentApplication").invoke(null) as? android.content.Context
@@ -398,9 +459,35 @@ object AppTransitionHook {
                     vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
                 } else {
                     @Suppress("DEPRECATION")
-                    vibrator.vibrate(15L)
+                    vibrator.vibrate(10L)
                 }
             }
+        } catch (_: Throwable) {}
+    }
+
+    /**
+     * Triggers a distinct, satisfying mechanical latch tick for Recents (MIUI_SWITCH = 268435460 / MIUI_KEYBOARD = 268435479).
+     */
+    private fun triggerRecentsTickHaptic(instance: Any, view: View?) {
+        try {
+            val helperField = instance.javaClass.getDeclaredField("mHapticHelper").apply { isAccessible = true }
+            val helper = helperField.get(instance)
+            if (helper != null) {
+                // miuix.view.HapticFeedbackConstants.MIUI_SWITCH = 268435460
+                // miuix.view.HapticFeedbackConstants.MIUI_KEYBOARD = 268435479
+                val performMethod = helper.javaClass.getMethod(
+                    "performHapticFeedback",
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType
+                )
+                val success = performMethod.invoke(helper, 268435460, 268435479) as? Boolean ?: false
+                if (success) return
+            }
+        } catch (_: Throwable) {}
+
+        // Fallback on view or system vibrator
+        try {
+            view?.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
         } catch (_: Throwable) {}
     }
 
@@ -446,7 +533,7 @@ object AppTransitionHook {
                         return chain.proceed()
                     }
                     val f = (chain.args[0] as? Number)?.toFloat() ?: 0f
-                    return f * 0.94f
+                    return f * 1.0f // 100% responsive card dismiss in recents
                 }
             })
             Log.i(TAG, "Hooked VerticalSwipe.afterFrictionValue for feather-light recents dismissal")
@@ -512,7 +599,7 @@ object AppTransitionHook {
                         val now = SystemClock.uptimeMillis()
                         val isRecentFlick = (now - sLastVelocityTime) < 800L
                         val vy = sLastVelocityY // px/ms (< 0 on upward flick)
-                        val isFastFlick = isRecentFlick && vy < -1.0f
+                        val isFastFlick = isRecentFlick && vy < -0.8f
 
                         val openDamping: Float
                         val openResponse: Float
@@ -530,34 +617,33 @@ object AppTransitionHook {
                         val alphaResponse: Float
 
                         // --- Scenario 1: Closing to Home (Row-Dependent Parabolic Dynamics) ---
+                        // Even lighter, weightless flight feeling
                         if (normY > 0.58f) {
                             val depthRatio = ((normY - 0.58f) / 0.42f).coerceIn(0f, 1f)
-                            // Underdamped cushion for weightless floating apogee:
-                            val baseDamping = 0.88f - (depthRatio * 0.04f)
-                            val baseResponse = 0.54f + (depthRatio * 0.10f)
+                            val baseDamping = 0.86f - (depthRatio * 0.04f)
+                            val baseResponse = 0.50f + (depthRatio * 0.10f)
 
-                            // On fast flick: enhance floating flight
-                            closeDampingY = if (isFastFlick) (baseDamping - 0.03f).coerceAtLeast(0.81f) else baseDamping
-                            closeResponseY = if (isFastFlick) (baseResponse + 0.06f).coerceAtMost(0.68f) else baseResponse
+                            closeDampingY = if (isFastFlick) (baseDamping - 0.03f).coerceAtLeast(0.80f) else baseDamping
+                            closeResponseY = if (isFastFlick) (baseResponse + 0.06f).coerceAtMost(0.66f) else baseResponse
                         } else if (normY < 0.38f) {
-                            closeDampingY = if (isFastFlick) 0.94f else 0.98f
-                            closeResponseY = if (isFastFlick) 0.48f else 0.44f
+                            closeDampingY = if (isFastFlick) 0.92f else 0.96f
+                            closeResponseY = if (isFastFlick) 0.46f else 0.42f
                         } else {
                             val midRatio = (normY - 0.38f) / 0.20f
-                            val baseD = 0.98f - (midRatio * 0.10f)
-                            val baseR = 0.44f + (midRatio * 0.10f)
+                            val baseD = 0.96f - (midRatio * 0.10f)
+                            val baseR = 0.42f + (midRatio * 0.08f)
                             closeDampingY = if (isFastFlick) (baseD - 0.03f) else baseD
                             closeResponseY = if (isFastFlick) (baseR + 0.04f) else baseR
                         }
 
                         // Horizontal tracking: Fluid, natural iOS curve
                         closeDampingX = 1.00f
-                        closeResponseX = 0.46f
+                        closeResponseX = 0.44f
 
                         // Window geometry (width & height): stays light and broad during ascent,
                         // then collapses gracefully into icon squircle
-                        closeDampingSize = 0.92f
-                        closeResponseSize = 0.50f
+                        closeDampingSize = 0.90f
+                        closeResponseSize = 0.46f
 
                         // Corner squircle morphing
                         cornerDamping = 1.05f
@@ -573,7 +659,7 @@ object AppTransitionHook {
 
                         // --- Scenario 3: Recents ---
                         recentsDamping = 0.94f
-                        recentsResponse = 0.420f
+                        recentsResponse = 0.400f
 
                         // Apply parameters per SpringParam key
                         for (i in result.indices) {
@@ -644,7 +730,7 @@ object AppTransitionHook {
                     return result
                 }
             })
-            Log.i(TAG, "Hooked SpringParamsProvider.generateSpringBundlesByAnimType with velocity-coupled dynamics")
+            Log.i(TAG, "Hooked SpringParamsProvider.generateSpringBundlesByAnimType with weightless minimizing dynamics")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook SpringParamsProvider", t)
         }
@@ -699,25 +785,24 @@ object AppTransitionHook {
                                 0.75f
                             }
 
-                            // Thumb release multiplier: higher thumb position provides sustained flight momentum
-                            val thumbMultiplier = 1.25f - (thumbNormY * 0.35f)
+                            val thumbMultiplier = 1.30f - (thumbNormY * 0.35f)
 
-                            // Base speed calculation directly coupled to flick velocity
+                            // Boosted speed calculation for effortless weightless flight
                             val speedFactor = if (isRecentFlick && vy < -0.15f) {
-                                (kotlin.math.abs(vy) * 1000f).coerceIn(1200f, 14000f)
+                                (kotlin.math.abs(vy) * 1200f).coerceIn(1600f, 16000f)
                             } else {
-                                1400f
+                                1600f
                             }
 
-                            // Calculate upward velocity for parabolic minimizing flight
-                            val upwardVelocity = -speedFactor * thumbMultiplier * (0.60f + (normY * 0.75f))
+                            // Calculate upward velocity for parabolic minimizing flight across all rows
+                            val upwardVelocity = -speedFactor * thumbMultiplier * (0.65f + (normY * 0.80f))
 
                             val setCenterYVelMethod = sfAnimParam.javaClass.getMethod("setCenterYVelocity", Float::class.javaPrimitiveType)
                             setCenterYVelMethod.invoke(sfAnimParam, upwardVelocity)
 
                             // Preserve horizontal flick curve if user swiped diagonally
                             if (isRecentFlick && kotlin.math.abs(sLastVelocityX) > 0.15f) {
-                                val vxPxSec = (sLastVelocityX * 850f).coerceIn(-6000f, 6000f)
+                                val vxPxSec = (sLastVelocityX * 900f).coerceIn(-6000f, 6000f)
                                 val setCenterXVelMethod = sfAnimParam.javaClass.getMethod("setCenterXVelocity", Float::class.javaPrimitiveType)
                                 setCenterXVelMethod.invoke(sfAnimParam, vxPxSec)
                             }
@@ -729,7 +814,7 @@ object AppTransitionHook {
                     return sfAnimParam
                 }
             })
-            Log.i(TAG, "Hooked SfWindowAnimImplementor.buildSfAnimParam for velocity & thumb coupled trajectories")
+            Log.i(TAG, "Hooked SfWindowAnimImplementor.buildSfAnimParam for weightless minimizing launch curves")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook SfWindowAnimImplementor.buildSfAnimParam", t)
         }
