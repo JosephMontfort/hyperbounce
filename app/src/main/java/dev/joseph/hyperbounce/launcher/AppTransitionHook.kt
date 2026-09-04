@@ -887,7 +887,31 @@ object AppTransitionHook {
                             var newResponse: Float? = null
 
                             when {
-                                animType.startsWith("OPEN_FROM_HOME") || animType.startsWith("OPEN_FROM_ELEMENT") -> {
+                                animType.startsWith("OPEN_FROM_ELEMENT") -> {
+                                    // Symmetrical forward emergence along the Z-axis from the Dynamic Island pill
+                                    val islandResponse = (0.32f * speedRatio).coerceAtLeast(0.18f)
+                                    val islandSizeResponse = (0.30f * speedRatio).coerceAtLeast(0.16f)
+                                    when (key) {
+                                        "centerY" -> { newDamping = 0.96f; newResponse = islandResponse }
+                                        "centerX" -> { newDamping = 0.96f; newResponse = islandResponse }
+                                        "Height", "Width", "Ratio" -> { newDamping = 0.94f; newResponse = islandSizeResponse }
+                                        "Radius", "RadiusRatio" -> { newDamping = 1.02f; newResponse = (0.28f * speedRatio).coerceAtLeast(0.16f) }
+                                        "alpha", "SurfaceExtAlpha", "appLeashBlurRadius" -> { newDamping = 0.95f; newResponse = (0.24f * speedRatio).coerceAtLeast(0.14f) }
+                                    }
+                                }
+                                animType.startsWith("CLOSE_TO_ELEMENT") -> {
+                                    // Symmetrical receding Z-depth flight deep into the phone's back panel / island pill
+                                    val islandResponse = (0.32f * speedRatio).coerceAtLeast(0.18f)
+                                    val islandSizeResponse = (0.30f * speedRatio).coerceAtLeast(0.16f)
+                                    when (key) {
+                                        "centerY" -> { newDamping = 0.96f; newResponse = islandResponse }
+                                        "centerX" -> { newDamping = 0.96f; newResponse = islandResponse }
+                                        "Height", "Width", "Ratio" -> { newDamping = 0.94f; newResponse = islandSizeResponse }
+                                        "Radius", "RadiusRatio" -> { newDamping = 1.02f; newResponse = (0.28f * speedRatio).coerceAtLeast(0.16f) }
+                                        "alpha", "SurfaceExtAlpha", "appLeashBlurRadius" -> { newDamping = 0.95f; newResponse = (0.24f * speedRatio).coerceAtLeast(0.14f) }
+                                    }
+                                }
+                                animType.startsWith("OPEN_FROM_HOME") -> {
                                     when (key) {
                                         "centerY" -> { newDamping = openDamping; newResponse = openResponseCenterY }
                                         "centerX" -> { newDamping = openDamping; newResponse = openResponseCenterX }
@@ -898,7 +922,7 @@ object AppTransitionHook {
                                         "alpha", "SurfaceExtAlpha", "appLeashBlurRadius" -> { newDamping = openAlphaDamping; newResponse = openAlphaResponse }
                                     }
                                 }
-                                animType.startsWith("CLOSE_TO_HOME") || animType.startsWith("CLOSE_TO_ELEMENT") -> {
+                                animType.startsWith("CLOSE_TO_HOME") -> {
                                     when (key) {
                                         "centerY" -> { newDamping = closeDampingY; newResponse = closeResponseCenterY }
                                         "centerX" -> { newDamping = closeDampingX; newResponse = closeResponseCenterX }
@@ -995,8 +1019,12 @@ object AppTransitionHook {
                             windowAnimParams?.javaClass?.getMethod("getStartRect")?.invoke(windowAnimParams) as? RectF
                         }.getOrNull()
 
-                        val isOpen = animType.startsWith("OPEN_FROM_HOME") || animType.startsWith("OPEN_FROM_ELEMENT")
-                        val isClose = animType.startsWith("CLOSE_TO_HOME") || animType.startsWith("CLOSE_TO_ELEMENT")
+                        val isIslandOpen = animType == "OPEN_FROM_ELEMENT"
+                        val isIslandClose = animType == "CLOSE_TO_ELEMENT"
+                        val isHomeOpen = animType.startsWith("OPEN_FROM_HOME")
+                        val isHomeClose = animType.startsWith("CLOSE_TO_HOME")
+                        val isOpen = isHomeOpen || isIslandOpen
+                        val isClose = isHomeClose || isIslandClose
 
                         val iconRect = if (isOpen) (startRect ?: targetRect) else (targetRect ?: startRect)
                         val iconCenterY = iconRect?.centerY() ?: (deviceHeight * 0.75f)
@@ -1025,7 +1053,22 @@ object AppTransitionHook {
                             sfAnimParam.javaClass.getMethod("setRatioVelocity", Float::class.javaPrimitiveType)
                         }.getOrNull()
 
-                        if (isOpen) {
+                        if (isIslandClose) {
+                            // Dynamic Island Z-depth close: symmetrical inward contraction deep into the display panel
+                            // Negative width, height, and ratio velocities create the physical depth feeling of receding into the phone
+                            setCenterYVelMethod?.invoke(sfAnimParam, -14000f)
+                            setCenterXVelMethod?.invoke(sfAnimParam, 0f)
+                            setWidthVelMethod?.invoke(sfAnimParam, -3600f)
+                            setHeightVelMethod?.invoke(sfAnimParam, -4800f)
+                            setRatioVelMethod?.invoke(sfAnimParam, -3.2f)
+                        } else if (isIslandOpen) {
+                            // Dynamic Island Z-depth open: symmetrical forward emergence from deep within the display panel
+                            setCenterYVelMethod?.invoke(sfAnimParam, +14000f)
+                            setCenterXVelMethod?.invoke(sfAnimParam, 0f)
+                            setWidthVelMethod?.invoke(sfAnimParam, -1200f)
+                            setHeightVelMethod?.invoke(sfAnimParam, -1200f)
+                            setRatioVelMethod?.invoke(sfAnimParam, -1.5f)
+                        } else if (isHomeOpen) {
                             if (normY >= 0.50f) {
                                 // Bottom-half apps (dock/lower rows): open with a DISTINCT UPLIFT surge right on tap!
                                 val openUpward = -32000f - ((normY - 0.50f) * 16000f)
@@ -1050,7 +1093,7 @@ object AppTransitionHook {
                                 setHeightVelMethod?.invoke(sfAnimParam, -3600f)
                                 setRatioVelMethod?.invoke(sfAnimParam, -3.8f)
                             }
-                        } else if (isClose) {
+                        } else if (isHomeClose) {
                             val flickSpeed = if (isRecentFlick && vy < -0.10f) abs(vy).coerceIn(0.10f, 12.0f) else 0f
                             val thumbNormY = if (sLastThumbY > 0f) {
                                 (sLastThumbY / deviceHeight).coerceIn(0.20f, 1.0f)
@@ -1101,7 +1144,7 @@ object AppTransitionHook {
                                     val stretchTypeClass = Class.forName("com.miui.home.recents.anim.windowanim.sfanim.StretchType", false, classLoader)
                                     val hMatchVTop = java.lang.Enum.valueOf(stretchTypeClass as Class<out Enum<*>>, "HMatchVTop")
                                     val vMatchHCenter = java.lang.Enum.valueOf(stretchTypeClass, "VMatchHCenter")
-                                    val chosenStretch = if (normY >= 0.50f) hMatchVTop else vMatchHCenter
+                                    val chosenStretch = if (isIslandOpen || isIslandClose) vMatchHCenter else (if (normY >= 0.50f) hMatchVTop else vMatchHCenter)
 
                                     for (layerParam in iconsArray) {
                                         if (layerParam != null) {
@@ -1381,7 +1424,17 @@ object AppTransitionHook {
                             }
 
                             // Pass 2: Fill remaining unmatched preview slots with strictly UNIQUE grid indices
-                            val is2x2 = runCatching {
+                            val isXXL = folderIcon.javaClass.simpleName.contains("2x2_9") || runCatching {
+                                val m = folderIcon.javaClass.getMethod("getLargeIconNum")
+                                (m.invoke(folderIcon) as? Number)?.toInt() == 8
+                            }.getOrDefault(false) || runCatching {
+                                val getFolderInfo = folderIcon.javaClass.getMethod("getFolderInfo")
+                                val fi = getFolderInfo.invoke(folderIcon)
+                                val itField = fi?.javaClass?.getField("itemType")
+                                itField?.getInt(fi) == 22
+                            }.getOrDefault(false)
+
+                            val is2x2 = !isXXL && runCatching {
                                 val getFolderIconType = folderIcon.javaClass.getMethod("getFolderIconType")
                                 (getFolderIconType.invoke(folderIcon) as? Number)?.toInt() == 2
                             }.getOrDefault(false)
@@ -1469,23 +1522,37 @@ object AppTransitionHook {
                         val view = chain.args[0] as? View ?: return chain.proceed()
                         val previewIndex = (chain.args[1] as? Number)?.toInt() ?: 0
 
+                        val desktopViewsField = runCatching {
+                            controller.javaClass.getDeclaredField("mDesktopImageViews").apply { isAccessible = true }
+                        }.getOrNull()
+                        val desktopViews = desktopViewsField?.get(controller) as? Array<*>
+
                         val animViewField = controller.javaClass.getDeclaredField("mFolderIconAnimView").apply { isAccessible = true }
                         val folderAnimIcon = animViewField.get(controller) ?: return chain.proceed()
                         val getPreviewArrayMethod = folderAnimIcon.javaClass.getMethod("getPreviewArray")
                         val previewArray = getPreviewArrayMethod.invoke(folderAnimIcon) as? Array<*> ?: return chain.proceed()
 
-                        if (previewIndex in previewArray.indices) {
-                            val pv = previewArray[previewIndex] as? View ?: return chain.proceed()
+                        val pv = (desktopViews?.getOrNull(previewIndex) as? View) ?: (previewArray.getOrNull(previewIndex) as? View)
+                        if (pv != null) {
                             val pvLoc = IntArray(2)
                             pv.getLocationOnScreen(pvLoc)
 
                             val gridEndLocField = controller.javaClass.getDeclaredField("mGridEndLoc").apply { isAccessible = true }
                             val gridEndLoc = gridEndLocField.get(controller) as IntArray
 
-                            val pvW = pv.width.toFloat().takeIf { it > 0f } ?: pv.measuredWidth.toFloat()
-                            val pvH = pv.height.toFloat().takeIf { it > 0f } ?: pv.measuredHeight.toFloat()
-                            val gridW = view.width.toFloat().takeIf { it > 0f } ?: view.measuredWidth.toFloat().takeIf { it > 0f } ?: pvW
-                            val gridH = view.height.toFloat().takeIf { it > 0f } ?: view.measuredHeight.toFloat().takeIf { it > 0f } ?: pvH
+                            var pvW = pv.width.toFloat().takeIf { it > 0f } ?: pv.measuredWidth.toFloat()
+                            var pvH = pv.height.toFloat().takeIf { it > 0f } ?: pv.measuredHeight.toFloat()
+                            if (pvW <= 0f) pvW = 100f
+                            if (pvH <= 0f) pvH = 100f
+
+                            val desktopIcon = (view as? Any)
+                            val iconW = (runCatching {
+                                (desktopIcon?.javaClass?.getMethod("getIconWidth")?.invoke(desktopIcon) as? Number)?.toFloat()
+                            }.getOrNull())?.takeIf { it > 0f } ?: view.width.toFloat().takeIf { it > 0f } ?: pvW
+
+                            val iconH = (runCatching {
+                                (desktopIcon?.javaClass?.getMethod("getIconHeight")?.invoke(desktopIcon) as? Number)?.toFloat()
+                            }.getOrNull())?.takeIf { it > 0f } ?: view.height.toFloat().takeIf { it > 0f } ?: pvH
 
                             val editScaleField = runCatching {
                                 controller.javaClass.getDeclaredField("mNormalEditScale").apply { isAccessible = true }
@@ -1499,8 +1566,8 @@ object AppTransitionHook {
 
                             val transX = (pvLoc[0] - gridEndLoc[0]).toFloat() / (editScale * folmeScale)
                             val transY = (pvLoc[1] - gridEndLoc[1]).toFloat() / (editScale * folmeScale)
-                            val scaleX = if (gridW > 0f && pvW > 0f) (pvW / gridW).coerceIn(0.12f, 1.20f) else 1.0f
-                            val scaleY = if (gridH > 0f && pvH > 0f) (pvH / gridH).coerceIn(0.12f, 1.20f) else 1.0f
+                            val scaleX = if (iconW > 0f && pvW > 0f) (pvW / iconW).coerceIn(0.12f, 1.20f) else 1.0f
+                            val scaleY = if (iconH > 0f && pvH > 0f) (pvH / iconH).coerceIn(0.12f, 1.20f) else 1.0f
 
                             // Set initial 1:1 affine pre-animation state
                             val preAnimMethod = controller.javaClass.getDeclaredMethod(
@@ -1514,6 +1581,7 @@ object AppTransitionHook {
                             preAnimMethod.invoke(controller, view, scaleX, scaleY, transX, transY)
 
                             // Hide the preview icon cleanly so only the 1:1 grid icon is rendered, eliminating double icons
+                            (previewArray.getOrNull(previewIndex) as? View)?.alpha = 0f
                             pv.alpha = 0f
                             return null
                         }
@@ -1553,10 +1621,18 @@ object AppTransitionHook {
                         val animState = chain.args[0] ?: return chain.proceed()
                         val gridIndex = (chain.args[1] as? Number)?.toInt() ?: 0
 
-                        val animViewField = controller.javaClass.getDeclaredField("mFolderIconAnimView").apply { isAccessible = true }
-                        val folderAnimIcon = animViewField.get(controller) ?: return chain.proceed()
-                        val getPreviewArrayMethod = folderAnimIcon.javaClass.getMethod("getPreviewArray")
-                        val previewArray = getPreviewArrayMethod.invoke(folderAnimIcon) as? Array<*> ?: return chain.proceed()
+                        val desktopViewsField = runCatching {
+                            controller.javaClass.getDeclaredField("mDesktopImageViews").apply { isAccessible = true }
+                        }.getOrNull()
+                        val desktopViews = desktopViewsField?.get(controller) as? Array<*>
+
+                        val animViewField = runCatching {
+                            controller.javaClass.getDeclaredField("mFolderIconAnimView").apply { isAccessible = true }
+                        }.getOrNull()
+                        val folderAnimIcon = animViewField?.get(controller)
+                        val previewArray = (runCatching {
+                            folderAnimIcon?.javaClass?.getMethod("getPreviewArray")?.invoke(folderAnimIcon) as? Array<*>
+                        }.getOrNull()) ?: desktopViews ?: return chain.proceed()
 
                         val locMapField = controller.javaClass.getDeclaredField("mFolderIconLocMap").apply { isAccessible = true }
                         val locMap = locMapField.get(controller) as? Map<Int, Int> ?: return chain.proceed()
@@ -1569,19 +1645,43 @@ object AppTransitionHook {
                             }
                         }
 
-                        if (pvIndex in previewArray.indices) {
-                            val pv = previewArray[pvIndex] as? View
-                            val pvW = pv?.width?.toFloat()?.takeIf { it > 0f } ?: pv?.measuredWidth?.toFloat() ?: 0f
-                            val pvH = pv?.height?.toFloat()?.takeIf { it > 0f } ?: pv?.measuredHeight?.toFloat() ?: 0f
+                        val pvCount = desktopViews?.size ?: previewArray.size
+                        if (pvIndex in 0 until pvCount) {
+                            // Primary view is from mDesktopImageViews on desktop for exact 1:1 resting size match!
+                            val pv = (desktopViews?.getOrNull(pvIndex) as? View) ?: (previewArray.getOrNull(pvIndex) as? View)
+                            var pvW = pv?.width?.toFloat()?.takeIf { it > 0f } ?: pv?.measuredWidth?.toFloat() ?: 0f
+                            var pvH = pv?.height?.toFloat()?.takeIf { it > 0f } ?: pv?.measuredHeight?.toFloat() ?: 0f
+
+                            if (pvW <= 0f || pvH <= 0f) {
+                                val parentContainer = pv?.parent as? ViewGroup
+                                pvW = parentContainer?.width?.toFloat()?.takeIf { it > 0f } ?: 100f
+                                pvH = pvW
+                            }
 
                             val gridViewField = controller.javaClass.getDeclaredField("mAnimaFolderGridView").apply { isAccessible = true }
                             val folderGridView = gridViewField.get(controller) as? ViewGroup
                             val child = folderGridView?.getChildAt(gridIndex)
-                            val gridW = child?.width?.toFloat()?.takeIf { it > 0f } ?: child?.measuredWidth?.toFloat() ?: pvW
-                            val gridH = child?.height?.toFloat()?.takeIf { it > 0f } ?: child?.measuredHeight?.toFloat() ?: pvH
 
-                            val scaleX = if (gridW > 0f && pvW > 0f) (pvW / gridW).coerceIn(0.12f, 1.20f) else 0.35f
-                            val scaleY = if (gridH > 0f && pvH > 0f) (pvH / gridH).coerceIn(0.12f, 1.20f) else 0.35f
+                            // Retrieve true icon dimensions inside DesktopIcon (excluding padding and text label)
+                            val desktopIcon = (child as? Any) ?: runCatching {
+                                folderGridView?.javaClass?.getMethod("getChildView", Int::class.javaPrimitiveType)?.invoke(folderGridView, gridIndex)
+                            }.getOrNull()
+                            val iconW = (runCatching {
+                                (desktopIcon?.javaClass?.getMethod("getIconWidth")?.invoke(desktopIcon) as? Number)?.toFloat()
+                            }.getOrNull())?.takeIf { it > 0f } ?: child?.width?.toFloat()?.takeIf { it > 0f } ?: pvW
+
+                            val iconH = (runCatching {
+                                (desktopIcon?.javaClass?.getMethod("getIconHeight")?.invoke(desktopIcon) as? Number)?.toFloat()
+                            }.getOrNull())?.takeIf { it > 0f } ?: child?.height?.toFloat()?.takeIf { it > 0f } ?: pvH
+
+                            val quickEditScaleField = runCatching {
+                                controller.javaClass.getDeclaredField("mQuickEditScale").apply { isAccessible = true }
+                            }.getOrNull()
+                            val quickEditScale = (quickEditScaleField?.get(controller) as? Number)?.toFloat() ?: 1.0f
+
+                            // Affine scale: preview dimension divided by desktop icon dimensions * quickEditScale
+                            val scaleX = if (iconW > 0f && pvW > 0f) ((pvW / iconW) * quickEditScale).coerceIn(0.12f, 1.20f) else 0.35f
+                            val scaleY = if (iconH > 0f && pvH > 0f) ((pvH / iconH) * quickEditScale).coerceIn(0.12f, 1.20f) else 0.35f
 
                             addMethod.invoke(animState, scaleXProp, scaleX.toDouble())
                             addMethod.invoke(animState, scaleYProp, scaleY.toDouble())
