@@ -1223,56 +1223,12 @@ object AppTransitionHook {
 
     /**
      * Hook 13: Parallel App Transitions & Zero-Delay Launch Interruptibility.
-     * Enables concurrent multi-layer SurfaceFlinger animations and unlocks fast-launch:
-     * - Unlocks SfAnimCapability.getUseMultiLayersForSfAnim() to allow concurrent animations.
+     * Enables concurrent window transitions and unlocks fast-launch:
      * - Enables FastLaunchUtils.isSupportFastLaunch so tapping icons during transitions is never blocked.
-     * - Enables FastLaunchWindowElement.useFastLaunch() for zero-lag parallel app execution.
+     * - Enables FastLaunchWindowElement & WindowElement fast-launch flags for zero-lag parallel app execution.
      */
     private fun hookParallelAppTransitions(module: XposedInterface, classLoader: ClassLoader) {
-        // 1. Enable SurfaceFlinger Multi-Layers for concurrent window animations in SfAnimCapability
-        try {
-            val capabilityClass = Class.forName("com.miui.home.common.sfanim.SfAnimCapability", false, classLoader)
-            // Force static boolean fields
-            runCatching {
-                capabilityClass.getDeclaredField("useMultiLayersForSfAnim").apply { isAccessible = true }.set(null, true)
-            }
-            runCatching {
-                capabilityClass.getDeclaredField("shouldUseSfAnim").apply { isAccessible = true }.set(null, true)
-            }
-            runCatching {
-                capabilityClass.getDeclaredField("shouldUseSfBigIconAnim").apply { isAccessible = true }.set(null, true)
-            }
-
-            val capabilityClassNames = listOf(
-                "com.miui.home.common.sfanim.SfAnimCapability",
-                "com.miui.home.common.sfanim.SfAnimCapability\$Companion"
-            )
-            for (className in capabilityClassNames) {
-                runCatching {
-                    val clazz = Class.forName(className, false, classLoader)
-                    clazz.declaredMethods.filter { method ->
-                        val name = method.name.lowercase()
-                        (name.contains("multilayers") || name.contains("shoulduse") || name.contains("scenesupport")) &&
-                                (method.returnType == Boolean::class.javaPrimitiveType || method.returnType == java.lang.Boolean::class.java)
-                    }.forEach { method ->
-                        method.isAccessible = true
-                        module.hook(method).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any {
-                                if (LauncherConfigHolder.iosAnimConfig.enabled) {
-                                    return true
-                                }
-                                return chain.proceed()
-                            }
-                        })
-                        Log.i(TAG, "Hooked $className.${method.name} for multi-layer concurrent animations")
-                    }
-                }
-            }
-        } catch (t: Throwable) {
-            Log.w(TAG, "Failed to hook SfAnimCapability for multi-layers", t)
-        }
-
-        // 2. Enable Fast Launch so tapping an app while another is animating starts immediately
+        // 1. Enable Fast Launch so tapping an app while another is animating starts immediately
         try {
             val fastLaunchClassNames = listOf(
                 "com.miui.home.recents.anim.FastLaunchUtils",
@@ -1302,7 +1258,7 @@ object AppTransitionHook {
             Log.w(TAG, "Failed to hook FastLaunchUtils", t)
         }
 
-        // 3. FastLaunchWindowElement & WindowElement optimization
+        // 2. FastLaunchWindowElement & WindowElement optimization
         try {
             val elementClassNames = listOf(
                 "com.miui.home.recents.anim.FastLaunchWindowElement",
