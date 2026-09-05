@@ -338,9 +338,14 @@ object ControlCenterFullUnlock {
         return Pair(rightList, leftList)
     }
 
-    // Cache of all active slots and footer entries
+    // Cache of all active slots
     private val sKnownSlots = ConcurrentHashMap<String, SlotItem>()
-    private val sFooterEntries = CopyOnWriteArrayList<Pair<Any, List<Any>>>()
+
+    // Per-adapter header and footer entries
+    private val sAdapterHeaders = ConcurrentHashMap<Any, Pair<Any, List<Any>>>()
+    private val sAdapterWordless = ConcurrentHashMap<Any, Pair<Any, List<Any>>>()
+    private val sAdapterQsFooters = ConcurrentHashMap<Any, Pair<Any, List<Any>>>()
+    private val sAdapterFooters = ConcurrentHashMap<Any, MutableList<Pair<Any, List<Any>>>>()
 
     /**
      * Resolves the SlotItem ID from a ViewHolder instance.
@@ -398,18 +403,49 @@ object ControlCenterFullUnlock {
             val context = ctxField.get(adapter) as? Context ?: ControlCenterConfigHolder.sLastKnownContext
             if (context != null) loadOrder(context)
 
+            val isLandscape = context?.resources?.configuration?.orientation == Configuration.ORIENTATION_LANDSCAPE
             ControlCenterConfigHolder.sMainPanelAdapter = adapter
 
             // Check if stockMap already consists of our Proxies
             val hasProxies = stockMap.keys.any { Proxy.isProxyClass(it.javaClass) }
 
             if (!hasProxies) {
-                // Fresh stock map from HyperOS: parse active slots & footer entries
-                sKnownSlots.clear()
-                sFooterEntries.clear()
+                // Fresh stock map from HyperOS: parse active slots & footer entries for this adapter
+                val footers = ArrayList<Pair<Any, List<Any>>>()
+                var headerEntry: Pair<Any, List<Any>>? = null
+                var wordlessEntry: Pair<Any, List<Any>>? = null
+                var qsFooterEntry: Pair<Any, List<Any>>? = null
 
                 for ((controller, items) in stockMap) {
-                    val ctrlName = controller.javaClass.simpleName
+                    val realController = if (Proxy.isProxyClass(controller.javaClass)) {
+                        (Proxy.getInvocationHandler(controller) as? ProxyContentHandler)?.target ?: controller
+                    } else controller
+                    val ctrlName = realController.javaClass.simpleName
+
+                    // 1. NEVER include compact QS cards (they create duplicate circular wifi/cell)
+                    if (ctrlName.contains("CompactQS") || ctrlName.contains("CompactQSCard")) {
+                        continue
+                    }
+
+                    // 2. Header space controller -> MUST be placed at TOP
+                    if (ctrlName.contains("HeaderSpaceController")) {
+                        headerEntry = Pair(controller, items)
+                        continue
+                    }
+
+                    // 3. Wordless mode controller ("Show icon labels")
+                    if (ctrlName.contains("WordlessModeController")) {
+                        wordlessEntry = Pair(controller, items)
+                        continue
+                    }
+
+                    // 4. Footer space controller -> placed at BOTTOM
+                    if (ctrlName.contains("FooterSpaceController")) {
+                        footers.add(Pair(controller, items))
+                        continue
+                    }
+
+                    // 5. Active content controllers
                     if (ctrlName.contains("QSCardsController")) {
                         for (i in items.indices) {
                             val item = items[i]
@@ -431,13 +467,27 @@ object ControlCenterFullUnlock {
                         val spans = getItemSpans(item, 3484339, null)
                         sKnownSlots["component:volume"] = SlotItem("component:volume", controller, item, 3484339, spans.first, spans.second)
                     } else if (ctrlName.contains("DeviceCenterEntryController")) {
-                        val item = items.firstOrNull() ?: controller
-                        val spans = getItemSpans(item, 338423, null)
-                        sKnownSlots["component:device_center"] = SlotItem("component:device_center", controller, item, 338423, spans.first, spans.second)
+                        // Check if available in settings
+                        val isAvail = try {
+                            val availM = realController.javaClass.getMethod("available", Boolean::class.javaPrimitiveType)
+                            availM.invoke(realController, isLandscape) as Boolean
+                        } catch (t: Throwable) { false }
+                        if (isAvail) {
+                            val item = items.firstOrNull() ?: controller
+                            val spans = getItemSpans(item, 338423, null)
+                            sKnownSlots["component:device_center"] = SlotItem("component:device_center", controller, item, 338423, spans.first, spans.second)
+                        }
                     } else if (ctrlName.contains("DeviceControlsEntryController")) {
-                        val item = items.firstOrNull() ?: controller
-                        val spans = getItemSpans(item, 2668765, null)
-                        sKnownSlots["component:device_controls"] = SlotItem("component:device_controls", controller, item, 2668765, spans.first, spans.second)
+                        // Check if available in settings
+                        val isAvail = try {
+                            val availM = realController.javaClass.getMethod("available", Boolean::class.javaPrimitiveType)
+                            availM.invoke(realController, isLandscape) as Boolean
+                        } catch (t: Throwable) { false }
+                        if (isAvail) {
+                            val item = items.firstOrNull() ?: controller
+                            val spans = getItemSpans(item, 2668765, null)
+                            sKnownSlots["component:device_controls"] = SlotItem("component:device_controls", controller, item, 2668765, spans.first, spans.second)
+                        }
                     } else if (ctrlName.contains("QSListController")) {
                         val qsFooterItems = ArrayList<Any>()
                         for (item in items) {
@@ -467,12 +517,24 @@ object ControlCenterFullUnlock {
                             }
                         }
                         if (qsFooterItems.isNotEmpty()) {
-                            sFooterEntries.add(Pair(controller, qsFooterItems))
+                            qsFooterEntry = Pair(controller, qsFooterItems)
                         }
                     } else {
-                        sFooterEntries.add(Pair(controller, items))
+                        // EditButtonController, SecurityFooterController, etc.
+                        val isAvail = try {
+                            val availM = realController.javaClass.getMethod("available", Boolean::class.javaPrimitiveType)
+                            availM.invoke(realController, ControlCenterConfigHolder.sIsEditMode) as Boolean
+                        } catch (t: Throwable) { true }
+                        if (isAvail) {
+                            footers.add(Pair(controller, items))
+                        }
                     }
                 }
+
+                if (headerEntry != null) sAdapterHeaders[adapter] = headerEntry
+                if (wordlessEntry != null) sAdapterWordless[adapter] = wordlessEntry
+                if (qsFooterEntry != null) sAdapterQsFooters[adapter] = qsFooterEntry
+                sAdapterFooters[adapter] = footers
             }
 
             buildAndSetContentMap(adapter, classLoader)
@@ -549,36 +611,94 @@ object ControlCenterFullUnlock {
             // Build new ContentMap based on orientation and panel
             val newContentMap = LinkedHashMap<Any, List<Any>>()
 
+            // 1. TOP HEADER SPACER: ALWAYS FIRST (index 0) so tiles start below clock/status bar!
+            val headerEntry = sAdapterHeaders[adapter]
+            if (headerEntry != null) {
+                newContentMap[headerEntry.first] = headerEntry.second
+            }
+
             if (!isLandscape) {
-                // Portrait: All ordered active slots flow into this single adapter
+                // Portrait mode:
+                // 2. WordlessMode ("Show icon labels") - ONLY in Edit Mode!
+                if (ControlCenterConfigHolder.sIsEditMode) {
+                    val wordless = sAdapterWordless[adapter]
+                    if (wordless != null) {
+                        newContentMap[wordless.first] = wordless.second
+                    }
+                }
+
+                // 3. All ordered active slots flow into this single adapter
                 for (i in orderedSlots.indices) {
                     val slot = orderedSlots[i]
                     val proxy = getOrCreateProxy(slot, classLoader, priority = 10 + i * 2, isRight = true)
                     newContentMap[proxy] = listOf(slot.item)
                 }
-                // Append footer/edit items (dividers, available pool, edit button)
-                for ((ctrl, fItems) in sFooterEntries) {
-                    newContentMap[ctrl] = fItems
+
+                // 4. Edit Divider & Inactive Available tiles pool
+                val qsFooter = sAdapterQsFooters[adapter]
+                if (qsFooter != null) {
+                    newContentMap[qsFooter.first] = qsFooter.second
+                }
+
+                // 5. Other footers (edit button, footer space)
+                val footers = sAdapterFooters[adapter]
+                if (footers != null) {
+                    for ((ctrl, fItems) in footers) {
+                        newContentMap[ctrl] = fItems
+                    }
                 }
             } else {
-                // Landscape: Dynamic Row Split Simulation (up to 5 rows on Right Side)
+                // Landscape Mode: Dynamic Row Split Simulation (up to 5 rows on Right Side)
                 val (rightSlots, leftSlots) = calculateLandscapeRowSplit(orderedSlots, maxRightRows = MAX_LANDSCAPE_RIGHT_ROWS)
 
                 if (isRightPanel) {
+                    // Right Panel: gets rightSlots (first N rows, max 5 rows)
                     for (i in rightSlots.indices) {
                         val slot = rightSlots[i]
                         val proxy = getOrCreateProxy(slot, classLoader, priority = 10 + i * 2, isRight = true)
                         newContentMap[proxy] = listOf(slot.item)
                     }
+
+                    // Right panel footer spacer (if present)
+                    val footers = sAdapterFooters[adapter]
+                    if (footers != null) {
+                        for ((ctrl, fItems) in footers) {
+                            if (ctrl.javaClass.simpleName.contains("FooterSpaceController")) {
+                                newContentMap[ctrl] = fItems
+                            }
+                        }
+                    }
                 } else {
-                    // Left Panel: gets leftSlots + edit mode footer / available tiles
+                    // Left Panel:
+                    // Show icon labels ONLY in edit mode!
+                    if (ControlCenterConfigHolder.sIsEditMode) {
+                        val wordless = sAdapterWordless[adapter]
+                        if (wordless != null) {
+                            newContentMap[wordless.first] = wordless.second
+                        }
+                    }
+
+                    // Left Panel gets leftSlots (overflowing active slots)
                     for (i in leftSlots.indices) {
                         val slot = leftSlots[i]
                         val proxy = getOrCreateProxy(slot, classLoader, priority = 10 + i * 2, isRight = false)
                         newContentMap[proxy] = listOf(slot.item)
                     }
-                    for ((ctrl, fItems) in sFooterEntries) {
-                        newContentMap[ctrl] = fItems
+
+                    // In edit mode: QS Divider and available tiles pool
+                    if (ControlCenterConfigHolder.sIsEditMode) {
+                        val qsFooter = sAdapterQsFooters[adapter]
+                        if (qsFooter != null) {
+                            newContentMap[qsFooter.first] = qsFooter.second
+                        }
+                    }
+
+                    // Left Panel other footers (edit button & footer space)
+                    val footers = sAdapterFooters[adapter]
+                    if (footers != null) {
+                        for ((ctrl, fItems) in footers) {
+                            newContentMap[ctrl] = fItems
+                        }
                     }
                 }
             }
@@ -615,6 +735,12 @@ object ControlCenterFullUnlock {
 
             // Rebuild contentMap immediately
             buildAndSetContentMap(adapter, classLoader)
+            if (sDistributor != null) {
+                val otherAdapter = if (adapter === sRightAdapter) sLeftAdapter else if (adapter === sLeftAdapter) sRightAdapter else null
+                if (otherAdapter != null) {
+                    buildAndSetContentMap(otherAdapter, classLoader)
+                }
+            }
 
             // Notify adapter of visual move
             val notifyItemMovedMethod = adapter.javaClass.getMethod("notifyItemMoved", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
@@ -709,9 +835,7 @@ object ControlCenterFullUnlock {
                                 sRightAdapter = rightAdapterMethod.invoke(distributor)
                             } catch (t: Throwable) {}
 
-                            val rawArgs = chain.args
-                            val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                            val inLandscape = if (args != null && args.isNotEmpty()) (args[0] as? Boolean ?: false) else false
+                            val inLandscape = (chain.args.getOrNull(0) as? Boolean) ?: false
 
                             if (inLandscape && ControlCenterConfigHolder.config.modularEditEnabled) {
                                 // In landscape, ensure both left and right panel contents receive all available controllers
@@ -730,11 +854,40 @@ object ControlCenterFullUnlock {
                                     if (rightContent != null && leftContent != null && allChildren != null) {
                                         rightContent.clear()
                                         leftContent.clear()
+
                                         for (child in allChildren) {
-                                            if (child != null) {
-                                                rightContent.add(child)
-                                                leftContent.add(child)
+                                            if (child == null) continue
+                                            val cName = child.javaClass.name
+
+                                            // 1. NEVER include compact QS cards (they create duplicate circular wifi/cell)
+                                            if (cName.contains("CompactQS") || cName.contains("CompactQSCard")) continue
+
+                                            // 2. Check if the controller is available for landscape
+                                            val isAvail = try {
+                                                val availMethod = child.javaClass.getMethod("available", Boolean::class.javaPrimitiveType)
+                                                availMethod.invoke(child, true) as Boolean
+                                            } catch (t: Throwable) { true }
+
+                                            if (!isAvail) continue
+
+                                            // 3. For HeaderSpace and FooterSpace, distribute to respective panel based on getRightOrLeft()
+                                            if (cName.contains("HeaderSpaceController") || cName.contains("FooterSpaceController")) {
+                                                val isRight = try {
+                                                    val getRightMethod = child.javaClass.getMethod("getRightOrLeft")
+                                                    getRightMethod.invoke(child) as Boolean
+                                                } catch (t: Throwable) { true }
+
+                                                if (isRight) {
+                                                    rightContent.add(child)
+                                                } else {
+                                                    leftContent.add(child)
+                                                }
+                                                continue
                                             }
+
+                                            // 4. For content controllers, add to both panels
+                                            rightContent.add(child)
+                                            leftContent.add(child)
                                         }
                                         return@intercept null
                                     }
@@ -759,30 +912,26 @@ object ControlCenterFullUnlock {
                         module.hook(m).intercept { chain ->
                             try {
                                 if (ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                                    if (args != null && args.size >= 2) {
-                                        val vh = args[1]
-                                        if (vh != null) {
-                                            val getItemViewTypeMethod = vh.javaClass.getMethod("getItemViewType")
-                                            val vt = getItemViewTypeMethod.invoke(vh) as Int
-                                            if (vt != 8398 && vt != 3484337 && vt != 8397) {
-                                                // Check if it's an inactive tile in the available pool
-                                                val getItemMethod = try { vh.javaClass.getMethod("getItem\$miui_controlcenter_release") } catch (e: Throwable) { null }
-                                                val item = getItemMethod?.invoke(vh)
-                                                if (item != null) {
-                                                    val addedField = try { item.javaClass.getDeclaredField("added") } catch (e: Throwable) { null }
-                                                    if (addedField != null) {
-                                                        addedField.isAccessible = true
-                                                        val isAdded = addedField.getBoolean(item)
-                                                        if (!isAdded) {
-                                                            return@intercept chain.proceed()
-                                                        }
+                                    val vh = chain.args.getOrNull(1)
+                                    if (vh != null) {
+                                        val getItemViewTypeMethod = vh.javaClass.getMethod("getItemViewType")
+                                        val vt = getItemViewTypeMethod.invoke(vh) as Int
+                                        if (vt != 8398 && vt != 3484337 && vt != 8397 && vt != 432337 && vt != 366837 && vt != 334833 && vt != 3348) {
+                                            // Check if it's an inactive tile in the available pool
+                                            val getItemMethod = try { vh.javaClass.getMethod("getItem\$miui_controlcenter_release") } catch (e: Throwable) { null }
+                                            val item = getItemMethod?.invoke(vh)
+                                            if (item != null) {
+                                                val addedField = try { item.javaClass.getDeclaredField("added") } catch (e: Throwable) { null }
+                                                if (addedField != null) {
+                                                    addedField.isAccessible = true
+                                                    val isAdded = addedField.getBoolean(item)
+                                                    if (!isAdded) {
+                                                        return@intercept chain.proceed()
                                                     }
                                                 }
-                                                // Return DRAG_FLAG: 15 shl 16 (UP | DOWN | LEFT | RIGHT)
-                                                return@intercept (15 shl 16)
                                             }
+                                            // Return DRAG_FLAG: 15 shl 16 (UP | DOWN | LEFT | RIGHT)
+                                            return@intercept (15 shl 16)
                                         }
                                     }
                                 }
@@ -796,28 +945,24 @@ object ControlCenterFullUnlock {
                         module.hook(m).intercept { chain ->
                             try {
                                 if (ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                                    if (args != null && args.size >= 3) {
-                                        val targetVh = args[2]
-                                        if (targetVh != null) {
-                                            val getItemViewTypeMethod = targetVh.javaClass.getMethod("getItemViewType")
-                                            val vt = getItemViewTypeMethod.invoke(targetVh) as Int
-                                            if (vt == 8398 || vt == 3484337 || vt == 8397) {
-                                                return@intercept false
-                                            }
-                                            val getItemMethod = try { targetVh.javaClass.getMethod("getItem\$miui_controlcenter_release") } catch (e: Throwable) { null }
-                                            val targetItem = getItemMethod?.invoke(targetVh)
-                                            if (targetItem != null) {
-                                                val addedField = try { targetItem.javaClass.getDeclaredField("added") } catch (e: Throwable) { null }
-                                                if (addedField != null) {
-                                                    addedField.isAccessible = true
-                                                    val isAdded = addedField.getBoolean(targetItem)
-                                                    if (!isAdded) return@intercept false
-                                                }
-                                            }
-                                            return@intercept true
+                                    val targetVh = chain.args.getOrNull(2)
+                                    if (targetVh != null) {
+                                        val getItemViewTypeMethod = targetVh.javaClass.getMethod("getItemViewType")
+                                        val vt = getItemViewTypeMethod.invoke(targetVh) as Int
+                                        if (vt == 8398 || vt == 3484337 || vt == 8397 || vt == 432337 || vt == 366837 || vt == 334833 || vt == 3348) {
+                                            return@intercept false
                                         }
+                                        val getItemMethod = try { targetVh.javaClass.getMethod("getItem\$miui_controlcenter_release") } catch (e: Throwable) { null }
+                                        val targetItem = getItemMethod?.invoke(targetVh)
+                                        if (targetItem != null) {
+                                            val addedField = try { targetItem.javaClass.getDeclaredField("added") } catch (e: Throwable) { null }
+                                            if (addedField != null) {
+                                                addedField.isAccessible = true
+                                                val isAdded = addedField.getBoolean(targetItem)
+                                                if (!isAdded) return@intercept false
+                                            }
+                                        }
+                                        return@intercept true
                                     }
                                 }
                             } catch (t: Throwable) {}
@@ -830,30 +975,26 @@ object ControlCenterFullUnlock {
                         module.hook(m).intercept { chain ->
                             try {
                                 if (ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                                    if (args != null && args.size >= 3) {
-                                        val helperCallback = chain.thisObject
-                                        val this0Field = helperClass.getDeclaredField("this$0")
-                                        this0Field.isAccessible = true
-                                        val adapter = this0Field.get(helperCallback)
+                                    val helperCallback = chain.thisObject
+                                    val this0Field = helperClass.getDeclaredField("this$0")
+                                    this0Field.isAccessible = true
+                                    val adapter = this0Field.get(helperCallback)
 
-                                        val sourceVh = args[1]
-                                        val targetVh = args[2]
+                                    val sourceVh = chain.args.getOrNull(1)
+                                    val targetVh = chain.args.getOrNull(2)
 
-                                        if (adapter != null && sourceVh != null && targetVh != null) {
-                                            val getPosMethod = try {
-                                                sourceVh.javaClass.getMethod("getBindingAdapterPosition")
-                                            } catch (e: Throwable) {
-                                                sourceVh.javaClass.getMethod("getAdapterPosition")
-                                            }
-                                            val fromPos = getPosMethod.invoke(sourceVh) as Int
-                                            val toPos = getPosMethod.invoke(targetVh) as Int
+                                    if (adapter != null && sourceVh != null && targetVh != null) {
+                                        val getPosMethod = try {
+                                            sourceVh.javaClass.getMethod("getBindingAdapterPosition")
+                                        } catch (e: Throwable) {
+                                            sourceVh.javaClass.getMethod("getAdapterPosition")
+                                        }
+                                        val fromPos = getPosMethod.invoke(sourceVh) as Int
+                                        val toPos = getPosMethod.invoke(targetVh) as Int
 
-                                            if (fromPos >= 0 && toPos >= 0 && fromPos != toPos) {
-                                                val success = onItemMove(adapter, fromPos, toPos, sourceVh, targetVh, classLoader)
-                                                if (success) return@intercept true
-                                            }
+                                        if (fromPos >= 0 && toPos >= 0 && fromPos != toPos) {
+                                            val success = onItemMove(adapter, fromPos, toPos, sourceVh, targetVh, classLoader)
+                                            if (success) return@intercept true
                                         }
                                     }
                                 }
