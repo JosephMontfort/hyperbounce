@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -998,6 +999,18 @@ object ControlCenterGrouping {
             val customizeHeader = root.findViewById<ViewGroup>(headerId) ?: return
             val completeButton = root.findViewById<View>(completeBtnId) ?: return
             val customizeTitle = root.findViewById<View>(titleId)
+
+            if (completeButton.getTag(0x7f099996) == null) {
+                completeButton.setTag(0x7f099996, true)
+                completeButton.setOnTouchListener { v, event ->
+                    if (event.action == MotionEvent.ACTION_UP) {
+                        v.post {
+                            ControlCenterConfigHolder.onExitEditMode(root, v.context)
+                        }
+                    }
+                    false
+                }
+            }
 
             val groupTag = 0x7f099997
             val disassembleTag = 0x7f099994

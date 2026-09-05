@@ -220,13 +220,46 @@ object ControlCenterHook {
 
     fun hideAllCustomBadges(v: View?) {
         if (v == null) return
-        val resizeHandle = v.findViewById<View>(0x7f099999)
-        if (resizeHandle != null) {
-            resizeHandle.visibility = View.GONE
+        val resizeTag = 0x7f099999
+        val selectTag = 0x7f099998
+        val rotateTag = 0x7f099992
+
+        fun clearBadge(badge: View?) {
+            if (badge != null) {
+                badge.visibility = View.GONE
+                badge.setOnTouchListener(null)
+                badge.setOnClickListener(null)
+                badge.isClickable = false
+            }
         }
-        val selectBadge = v.findViewById<View>(0x7f099998)
-        if (selectBadge != null) {
-            selectBadge.visibility = View.GONE
+
+        clearBadge(v.findViewById(resizeTag))
+        clearBadge(v.findViewById(selectTag))
+        clearBadge(v.findViewById(rotateTag))
+
+        if (v is ViewGroup) {
+            for (i in 0 until v.childCount) {
+                val ch = v.getChildAt(i) ?: continue
+                if (ch.id == resizeTag || ch.id == selectTag || ch.id == rotateTag) {
+                    clearBadge(ch)
+                }
+            }
+        }
+
+        val container = v.findViewById<ViewGroup>(0x7f099995)
+        if (container != null) {
+            container.isClickable = false
+            for (i in 0 until 4) {
+                val childTile = ControlCenterGrouping.getChildTileAt(container, i)
+                if (childTile != null) {
+                    clearBadge(childTile.findViewById(resizeTag))
+                    clearBadge(childTile.findViewById(selectTag))
+                    clearBadge(childTile.findViewById(rotateTag))
+                    childTile.isClickable = true
+                    childTile.isLongClickable = true
+                    childTile.isFocusable = true
+                }
+            }
         }
     }
 
@@ -362,7 +395,7 @@ object ControlCenterHook {
             try {
                 val modeControllerClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelModeController", false, classLoader)
                 for (m in modeControllerClass.declaredMethods) {
-                    if (m.name == "set_mode") {
+                    if (m.name == "set_mode" || m.name == "setMode" || m.name == "update_mode" || m.name == "updateMode") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             try {
@@ -370,7 +403,17 @@ object ControlCenterHook {
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                                 if (args != null && args.isNotEmpty() && args[0] != null) {
                                     val modeName = args[0].toString()
-                                    ControlCenterConfigHolder.sIsEditMode = "EDIT" == modeName
+                                    val isEdit = "EDIT" == modeName
+                                    if (ControlCenterConfigHolder.sIsEditMode && !isEdit) {
+                                        val modeCtrl = chain.thisObject
+                                        val ctx = try {
+                                            val getCtxMethod = modeCtrl.javaClass.getMethod("getContext")
+                                            getCtxMethod.invoke(modeCtrl) as? Context
+                                        } catch (t: Throwable) { null }
+                                        ControlCenterConfigHolder.onExitEditMode(context = ctx)
+                                    } else {
+                                        ControlCenterConfigHolder.sIsEditMode = isEdit
+                                    }
                                     if (!ControlCenterConfigHolder.sIsEditMode) {
                                         try {
                                             val modeCtrl = chain.thisObject
@@ -400,16 +443,24 @@ object ControlCenterHook {
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                                 if (args != null && args.size >= 2) {
                                     val stateObj = args[1]
-                                    if (stateObj != null && "STARTED" == stateObj.toString()) {
-                                        if (ControlCenterConfigHolder.sPendingOrientationRebind) {
-                                            ControlCenterConfigHolder.sPendingOrientationRebind = false
-                                            ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
-                                            val windowView = chain.thisObject as? View
-                                            if (windowView != null) {
-                                                ControlCenterConfigHolder.refreshAdapter(windowView, windowView.context)
+                                    if (stateObj != null) {
+                                        val stateStr = stateObj.toString()
+                                        if ("STARTED" == stateStr) {
+                                            if (ControlCenterConfigHolder.sPendingOrientationRebind) {
+                                                ControlCenterConfigHolder.sPendingOrientationRebind = false
+                                                ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
+                                                val windowView = chain.thisObject as? View
+                                                if (windowView != null) {
+                                                    ControlCenterConfigHolder.refreshAdapter(windowView, windowView.context)
+                                                }
+                                            } else {
+                                                ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
                                             }
-                                        } else {
-                                            ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
+                                        } else if ("STOPPED" == stateStr || "DESTROYED" == stateStr) {
+                                            if (ControlCenterConfigHolder.sIsEditMode) {
+                                                val windowView = chain.thisObject as? View
+                                                ControlCenterConfigHolder.onExitEditMode(windowView, windowView?.context)
+                                            }
                                         }
                                     }
                                 }
@@ -1817,10 +1868,19 @@ object ControlCenterHook {
                                         if (itemView.getTag(0x7f099991) == null) {
                                             itemView.setTag(0x7f099991, true)
                                             itemView.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ ->
+                                                val curHandle = itemView.findViewById<ImageView>(resizeTag)
+                                                if (!ControlCenterConfigHolder.sIsEditMode) {
+                                                    if (curHandle != null) {
+                                                        curHandle.visibility = View.GONE
+                                                        curHandle.setOnTouchListener(null)
+                                                        curHandle.setOnClickListener(null)
+                                                        curHandle.isClickable = false
+                                                    }
+                                                    return@addOnLayoutChangeListener
+                                                }
                                                 val w = r - l
                                                 val h = b - t
                                                 if (w > 0 && h > 0) {
-                                                    val curHandle = itemView.findViewById<ImageView>(resizeTag)
                                                     if (curHandle != null && curHandle.visibility == View.VISIBLE) {
                                                         val bw = curHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
                                                         val bh = curHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
@@ -1845,6 +1905,15 @@ object ControlCenterHook {
                                             iconFrame.setTag(0x7f099991, true)
                                             iconFrame.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
                                                 val curHandle = itemView.findViewById<ImageView>(resizeTag)
+                                                if (!ControlCenterConfigHolder.sIsEditMode) {
+                                                    if (curHandle != null) {
+                                                        curHandle.visibility = View.GONE
+                                                        curHandle.setOnTouchListener(null)
+                                                        curHandle.setOnClickListener(null)
+                                                        curHandle.isClickable = false
+                                                    }
+                                                    return@addOnLayoutChangeListener
+                                                }
                                                 if (curHandle != null && curHandle.visibility == View.VISIBLE) {
                                                     val bw = curHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
                                                     val bh = curHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
@@ -1877,6 +1946,9 @@ object ControlCenterHook {
                                                 }
                                             } else {
                                                 resizeHandle.visibility = View.GONE
+                                                resizeHandle.setOnTouchListener(null)
+                                                resizeHandle.setOnClickListener(null)
+                                                resizeHandle.isClickable = false
                                             }
                                         }
 
@@ -1953,7 +2025,11 @@ object ControlCenterHook {
                                         val rawArgs = chain.args
                                         val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                                         val isEdit = args != null && args.isNotEmpty() && args[0] != null && "EDIT" == args[0].toString()
-                                        ControlCenterConfigHolder.sIsEditMode = isEdit
+                                        if (ControlCenterConfigHolder.sIsEditMode && !isEdit) {
+                                            ControlCenterConfigHolder.onExitEditMode(itemView, itemView.context)
+                                        } else {
+                                            ControlCenterConfigHolder.sIsEditMode = isEdit
+                                        }
 
                                         val spec = ControlCenterConfigHolder.getOrResolveTileSpec(itemView)
                                         val density = itemView.context.resources.displayMetrics.density
@@ -2106,7 +2182,7 @@ object ControlCenterHook {
                             }
                         }
                     }
-                    if (m.name == "onTouchEvent" || m.name == "onInterceptTouchEvent") {
+                    if (m.name == "onInterceptTouchEvent") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val itemView = chain.thisObject as? View
@@ -2115,6 +2191,21 @@ object ControlCenterHook {
                                     chain.proceed()
                                 } else {
                                     false
+                                }
+                            } else {
+                                chain.proceed()
+                            }
+                        }
+                    }
+                    if (m.name == "onTouchEvent") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val itemView = chain.thisObject as? View
+                            if (itemView != null && itemView.findViewById<View>(0x7f099995) != null) {
+                                if (ControlCenterConfigHolder.sIsDisassembleMode) {
+                                    chain.proceed()
+                                } else {
+                                    true
                                 }
                             } else {
                                 chain.proceed()
@@ -2490,6 +2581,13 @@ class TileResizeDragTouchListener(
     }
 
     override fun onTouch(v: View, event: MotionEvent): Boolean {
+        if (!ControlCenterConfigHolder.sIsEditMode) {
+            v.visibility = View.GONE
+            v.setOnTouchListener(null)
+            v.setOnClickListener(null)
+            v.isClickable = false
+            return false
+        }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 requestDisallowAll(v, true)

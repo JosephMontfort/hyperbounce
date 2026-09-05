@@ -615,18 +615,25 @@ object ControlCenterConfigHolder {
                     var selectBadge = itemView.findViewById<ImageView>(selectTag)
 
                     if (!sIsEditMode) {
-                        if (resizeHandle != null) {
-                            resizeHandle.visibility = View.GONE
-                        }
-                        if (selectBadge != null) {
-                            selectBadge.visibility = View.GONE
-                            selectBadge.setOnClickListener(null)
-                            selectBadge.isClickable = false
-                        }
+                        ControlCenterHook.hideAllCustomBadges(itemView)
                         itemView.isClickable = true
                         itemView.isLongClickable = true
+                        itemView.isFocusable = true
                         if (isCircular) {
                             ControlCenterHook.setCircularTileLabelVisibility(itemView, true)
+                        }
+                        val container = itemView.findViewById<ViewGroup>(0x7f099995)
+                        if (container != null) {
+                            container.isClickable = false
+                            for (cIdx in 0 until 4) {
+                                val child = ControlCenterGrouping.getChildTileAt(container, cIdx)
+                                if (child != null) {
+                                    ControlCenterHook.hideAllCustomBadges(child)
+                                    child.isClickable = true
+                                    child.isLongClickable = true
+                                    child.isFocusable = true
+                                }
+                            }
                         }
                         continue
                     }
@@ -638,6 +645,9 @@ object ControlCenterConfigHolder {
                     if (sIsGroupSelectMode) {
                         if (resizeHandle != null) {
                             resizeHandle.visibility = View.GONE
+                            resizeHandle.setOnTouchListener(null)
+                            resizeHandle.setOnClickListener(null)
+                            resizeHandle.isClickable = false
                         }
                         if (spec != null && !"wifi".equals(spec, ignoreCase = true) && !"cell".equals(spec, ignoreCase = true)) {
                             if (selectBadge == null && itemView is ViewGroup) {
@@ -654,6 +664,7 @@ object ControlCenterConfigHolder {
                                 }
                                 itemView.addView(selectBadge)
                             }
+
                             if (selectBadge != null) {
                                 val scd = (selectBadge.drawable as? SelectCircleDrawable) ?: SelectCircleDrawable()
                                 scd.setChecked(sSelectedTileSpecs.contains(spec))
@@ -686,6 +697,9 @@ object ControlCenterConfigHolder {
                     } else if (sIsDisassembleMode) {
                         if (resizeHandle != null) {
                             resizeHandle.visibility = View.GONE
+                            resizeHandle.setOnTouchListener(null)
+                            resizeHandle.setOnClickListener(null)
+                            resizeHandle.isClickable = false
                         }
                         val group = isGroupAnchor(spec)
                         if (group != null) {
@@ -754,6 +768,87 @@ object ControlCenterConfigHolder {
                 }
             } catch (t: Throwable) {
                 Log.e(TAG, "updateAllVisibleTileBadges error", t)
+            }
+        }
+    }
+
+    @Volatile private var sLastExitEditTime: Long = 0L
+
+    fun cleanupAllVisibleViews(rv: ViewGroup?) {
+        if (rv == null) return
+        try {
+            val childCount = rv.childCount
+            for (i in 0 until childCount) {
+                val itemView = rv.getChildAt(i) ?: continue
+                ControlCenterHook.hideAllCustomBadges(itemView)
+                itemView.isClickable = true
+                itemView.isLongClickable = true
+                itemView.isFocusable = true
+
+                val spec = getOrResolveTileSpec(itemView)
+                val isExpanded = spec != null && sExpandedTileSpecs.contains(spec)
+                val isVertical = spec != null && sVerticalTileSpecs.contains(spec)
+                val isCircular = !isExpanded && !isVertical && !itemView.javaClass.name.contains("Card")
+                if (isCircular) {
+                    ControlCenterHook.setCircularTileLabelVisibility(itemView, true)
+                }
+
+                val container = itemView.findViewById<ViewGroup>(0x7f099995)
+                if (container != null) {
+                    container.isClickable = false
+                    for (cIdx in 0 until 4) {
+                        val child = ControlCenterGrouping.getChildTileAt(container, cIdx)
+                        if (child != null) {
+                            ControlCenterHook.hideAllCustomBadges(child)
+                            child.isClickable = true
+                            child.isLongClickable = true
+                            child.isFocusable = true
+                        }
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "cleanupAllVisibleViews error", t)
+        }
+    }
+
+    fun onExitEditMode(rootView: View? = null, context: Context? = null) {
+        val now = System.currentTimeMillis()
+        sIsEditMode = false
+        sIsGroupSelectMode = false
+        sIsDisassembleMode = false
+        sSelectedTileSpecs.clear()
+        sSelectedDisassembleGroups.clear()
+
+        val ctx = context ?: rootView?.context ?: sRecyclerView?.get()?.context ?: sLastKnownContext
+        if (ctx != null) {
+            savePriorities(ctx)
+        }
+
+        var rv = (sRecyclerView?.get() as? ViewGroup)
+        if (rv == null && rootView != null) {
+            var cur: View? = rootView
+            while (cur != null) {
+                if (cur is ViewGroup && cur.javaClass.name.contains("RecyclerView")) {
+                    rv = cur
+                    sRecyclerView = WeakReference(cur)
+                    break
+                }
+                cur = cur.parent as? View
+            }
+        }
+
+        cleanupAllVisibleViews(rv)
+
+        if (now - sLastExitEditTime > 300L) {
+            sLastExitEditTime = now
+            if (rv != null) {
+                rv.post {
+                    cleanupAllVisibleViews(rv)
+                    refreshAdapter(rv, ctx, isStructuralChange = true)
+                }
+            } else {
+                refreshAdapter(rootView, ctx, isStructuralChange = true)
             }
         }
     }
