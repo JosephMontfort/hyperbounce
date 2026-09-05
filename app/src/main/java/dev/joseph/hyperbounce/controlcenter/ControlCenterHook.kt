@@ -1838,15 +1838,15 @@ object ControlCenterHook {
                                             }
                                         }
 
-                                        if (curIconFrame != null && curIconFrame.getTag(0x7f099991) == null) {
-                                            curIconFrame.setTag(0x7f099991, true)
-                                            curIconFrame.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                                        if (iconFrame != null && iconFrame.getTag(0x7f099991) == null) {
+                                            iconFrame.setTag(0x7f099991, true)
+                                            iconFrame.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
                                                 val curHandle = itemView.findViewById<ImageView>(resizeTag)
                                                 if (curHandle != null && curHandle.visibility == View.VISIBLE) {
                                                     val bw = curHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
                                                     val bh = curHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
-                                                    val iRight = curIconFrame.right
-                                                    val iBottom = curIconFrame.bottom
+                                                    val iRight = iconFrame.right
+                                                    val iBottom = iconFrame.bottom
                                                     if (iRight > 0 && iBottom > 0) {
                                                         curHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
                                                         curHandle.bringToFront()
@@ -1860,10 +1860,9 @@ object ControlCenterHook {
                                                 resizeHandle.visibility = View.VISIBLE
                                                 val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
                                                 val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
-                                                val curIconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
-                                                if (isCircular && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
-                                                    val iRight = curIconFrame.right
-                                                    val iBottom = curIconFrame.bottom
+                                                if (isCircular && iconFrame != null && iconFrame.width > 0 && iconFrame.height > 0) {
+                                                    val iRight = iconFrame.right
+                                                    val iBottom = iconFrame.bottom
                                                     resizeHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
                                                 } else if (itemView.width > 0 && itemView.height > 0) {
                                                     resizeHandle.layout(itemView.width - bw, itemView.height - bh, itemView.width, itemView.height)
