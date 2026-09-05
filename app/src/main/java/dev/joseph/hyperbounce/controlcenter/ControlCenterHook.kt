@@ -1732,6 +1732,17 @@ object ControlCenterHook {
                                         val indicatorBadge = itemView.findViewById<ImageView>(selectTag)
 
                                         if (ControlCenterConfigHolder.sIsDisassembleMode) {
+                                            val toggleDisassembleSelect = View.OnClickListener {
+                                                if (ControlCenterConfigHolder.sSelectedDisassembleGroups.contains(group.id)) {
+                                                    ControlCenterConfigHolder.sSelectedDisassembleGroups.remove(group.id)
+                                                } else {
+                                                    ControlCenterConfigHolder.sSelectedDisassembleGroups.add(group.id)
+                                                }
+                                                val curScd = indicatorBadge?.drawable as? SelectCircleDrawable
+                                                curScd?.setChecked(ControlCenterConfigHolder.sSelectedDisassembleGroups.contains(group.id))
+                                                indicatorBadge?.invalidate()
+                                            }
+
                                             if (indicatorBadge != null) {
                                                 val scd = (indicatorBadge.drawable as? SelectCircleDrawable) ?: SelectCircleDrawable()
                                                 scd.setChecked(ControlCenterConfigHolder.sSelectedDisassembleGroups.contains(group.id))
@@ -1739,17 +1750,6 @@ object ControlCenterHook {
                                                 indicatorBadge.visibility = View.VISIBLE
                                                 indicatorBadge.bringToFront()
                                                 indicatorBadge.isClickable = true
-
-                                                val toggleDisassembleSelect = View.OnClickListener {
-                                                    if (ControlCenterConfigHolder.sSelectedDisassembleGroups.contains(group.id)) {
-                                                        ControlCenterConfigHolder.sSelectedDisassembleGroups.remove(group.id)
-                                                    } else {
-                                                        ControlCenterConfigHolder.sSelectedDisassembleGroups.add(group.id)
-                                                    }
-                                                    val curScd = indicatorBadge.drawable as? SelectCircleDrawable
-                                                    curScd?.setChecked(ControlCenterConfigHolder.sSelectedDisassembleGroups.contains(group.id))
-                                                    indicatorBadge.invalidate()
-                                                }
                                                 indicatorBadge.setOnClickListener(toggleDisassembleSelect)
                                             }
                                             itemView.setOnClickListener(toggleDisassembleSelect)

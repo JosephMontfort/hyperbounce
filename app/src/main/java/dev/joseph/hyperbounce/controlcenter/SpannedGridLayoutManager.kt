@@ -123,7 +123,7 @@ class SpannedGridLayoutManager : GridLayoutManager {
             } catch (t: Throwable) {}
         }
         if (adapter == null) {
-            val rv = ControlCenterConfigHolder.sRecyclerView?.get()
+            val rv = ControlCenterConfigHolder.sRecyclerView?.get() as? RecyclerView
             if (rv != null) {
                 adapter = rv.adapter
                 mAttachedRv = rv
