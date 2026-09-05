@@ -1,13 +1,16 @@
 package dev.joseph.hyperbounce.launcher
 
+import android.content.Context
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.SystemClock
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.PathInterpolator
@@ -79,12 +82,15 @@ object AppTransitionHook {
     @Volatile
     private var sIsRecentsScrolling: Boolean = false
     @Volatile
+    private var sIsRecentsTouchActive: Boolean = false
+    @Volatile
+    private var sLastScrollP: Float? = null
+    @Volatile
+    private var sLastCrossedInteger: Int? = null
+    @Volatile
     private var sLastStackRecentsTickTime: Long = 0L
-    private val sTaskCenterXMap = java.util.concurrent.ConcurrentHashMap<Int, Float>()
 
     private var sIsScrollingField: Field? = null
-    private var sRectField: Field? = null
-    private var sVisibleField: Field? = null
     private var sIsStackMethod: Method? = null
 
     private var sKeyField: Field? = null
@@ -440,7 +446,8 @@ object AppTransitionHook {
                 module.hook(method).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         sIsRecentsScrolling = true
-                        sTaskCenterXMap.clear()
+                        sLastCrossedInteger = null
+                        sLastScrollP = null
                         return chain.proceed()
                     }
                 })
@@ -451,20 +458,49 @@ object AppTransitionHook {
                 module.hook(method).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         sIsRecentsScrolling = false
-                        sTaskCenterXMap.clear()
+                        sLastCrossedInteger = null
+                        sLastScrollP = null
                         return chain.proceed()
                     }
                 })
             }
 
-            // 3. Hook TaskViewTransform.applyToTaskView to detect middle line crossing
-            val transformClass = Class.forName("com.miui.home.recents.views.TaskViewTransform", false, classLoader)
-            val applyMethod = transformClass.declaredMethods.firstOrNull {
-                it.name == "applyToTaskView" && it.parameterTypes.size == 4
+            // 3. Track touch gestures on TaskStackViewTouchHandler
+            try {
+                val touchHandlerClass = Class.forName("com.miui.home.recents.views.TaskStackViewTouchHandler", false, classLoader)
+                touchHandlerClass.declaredMethods.firstOrNull {
+                    it.name == "onTouchEvent" && it.parameterTypes.size == 1 &&
+                        it.parameterTypes[0] == MotionEvent::class.java
+                }?.let { method ->
+                    module.hook(method).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val ev = chain.args[0] as? MotionEvent
+                            if (ev != null) {
+                                when (ev.actionMasked) {
+                                    MotionEvent.ACTION_DOWN -> {
+                                        sIsRecentsTouchActive = true
+                                        sLastCrossedInteger = null
+                                        sLastScrollP = null
+                                    }
+                                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                                        sIsRecentsTouchActive = false
+                                    }
+                                }
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                }
+            } catch (t: Throwable) {
+                Log.d(TAG, "TaskStackViewTouchHandler onTouchEvent hook fallback", t)
             }
 
-            if (applyMethod != null) {
-                module.hook(applyMethod).intercept(object : XposedInterface.Hooker {
+            // 4. Hook onStackScrollChanged(float f, AnimationProps animationProps) on TaskStackView
+            tsvClass.declaredMethods.firstOrNull {
+                it.name == "onStackScrollChanged" && it.parameterTypes.size == 2 &&
+                    (it.parameterTypes[0] == java.lang.Float.TYPE || it.parameterTypes[0] == java.lang.Float::class.java)
+            }?.let { method ->
+                module.hook(method).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val result = chain.proceed()
                         val cfg = LauncherConfigHolder.iosAnimConfig
@@ -472,73 +508,72 @@ object AppTransitionHook {
                             return result
                         }
 
-                        // Functional ONLY in stack style recents
+                        val tsv = chain.thisObject as? View ?: return result
+
+                        // Functional ONLY in stack style recents (TaskStackViewLayoutStyleStack has styleValue == 2)
                         val isStack = try {
-                            val styleMethod = sIsStackMethod ?: Class.forName("com.miui.home.recents.TaskStackViewLayoutStyle", false, classLoader)
-                                .getMethod("isStackLayout").also { sIsStackMethod = it }
-                            styleMethod.invoke(null) as? Boolean ?: false
-                        } catch (_: Throwable) { false }
+                            val layoutStyleMethod = tsv.javaClass.getMethod("getTaskStackViewLayoutStyle")
+                            val layoutStyle = layoutStyleMethod.invoke(tsv)
+                            val styleVal = layoutStyle?.javaClass?.getMethod("getStyleValue")?.invoke(layoutStyle) as? Int
+                            if (styleVal == 2) {
+                                true
+                            } else {
+                                val isStackMethod = sIsStackMethod ?: Class.forName(
+                                    "com.miui.home.recents.TaskStackViewLayoutStyle",
+                                    false,
+                                    tsv.context.classLoader
+                                ).getMethod("isStackLayout").also { sIsStackMethod = it }
+                                isStackMethod.invoke(null) as? Boolean ?: false
+                            }
+                        } catch (_: Throwable) {
+                            try {
+                                val isStackMethod = sIsStackMethod ?: Class.forName(
+                                    "com.miui.home.recents.TaskStackViewLayoutStyle",
+                                    false,
+                                    tsv.context.classLoader
+                                ).getMethod("isStackLayout").also { sIsStackMethod = it }
+                                isStackMethod.invoke(null) as? Boolean ?: false
+                            } catch (_: Throwable) { false }
+                        }
                         if (!isStack) return result
 
-                        val taskView = chain.args[0] as? View ?: return result
-                        val parent = taskView.parent as? View
+                        val f = (chain.args[0] as? Number)?.toFloat() ?: return result
 
-                        val isScrolling = sIsRecentsScrolling || try {
-                            val f = sIsScrollingField ?: parent?.javaClass?.getDeclaredField("mIsScrolling")?.apply { isAccessible = true }?.also { sIsScrollingField = it }
-                            f?.getBoolean(parent) ?: false
+                        val isScrolling = sIsRecentsScrolling || sIsRecentsTouchActive || try {
+                            val field = sIsScrollingField ?: tsv.javaClass.getDeclaredField("mIsScrolling").apply { isAccessible = true }.also { sIsScrollingField = it }
+                            field.getBoolean(tsv)
                         } catch (_: Throwable) { false }
 
-                        try {
-                            val rect = (sRectField ?: chain.thisObject.javaClass.getField("rect").also { sRectField = it })
-                                .get(chain.thisObject) as? RectF ?: return result
-                            if (rect.width() <= 0f || rect.height() <= 0f) return result
+                        if (!isScrolling) {
+                            sLastScrollP = f
+                            return result
+                        }
 
-                            val visible = (sVisibleField ?: chain.thisObject.javaClass.getField("visible").also { sVisibleField = it })
-                                .getBoolean(chain.thisObject)
-                            if (!visible) return result
+                        val prev = sLastScrollP
+                        sLastScrollP = f
 
-                            val taskId = try {
-                                val taskMethod = taskView.javaClass.getMethod("getTask")
-                                val task = taskMethod.invoke(taskView)
-                                val keyField = task?.javaClass?.getField("key")
-                                val key = keyField?.get(task)
-                                val idField = key?.javaClass?.getField("id")
-                                idField?.getInt(key) ?: System.identityHashCode(taskView)
-                            } catch (_: Throwable) {
-                                System.identityHashCode(taskView)
-                            }
-
-                            val currCenterX = rect.centerX()
-                            val midX = (parent?.width?.toFloat()?.takeIf { it > 0f }
-                                ?: taskView.resources.displayMetrics.widthPixels.toFloat()) / 2f
-
-                            if (!isScrolling) {
-                                sTaskCenterXMap[taskId] = currCenterX
-                                return result
-                            }
-
-                            val prevCenterX = sTaskCenterXMap[taskId]
-                            sTaskCenterXMap[taskId] = currCenterX
-
-                            if (prevCenterX != null) {
-                                val crossedL2R = (prevCenterX < midX && currCenterX >= midX)
-                                val crossedR2L = (prevCenterX > midX && currCenterX <= midX)
-                                if (crossedL2R || crossedR2L) {
-                                    val now = SystemClock.uptimeMillis()
-                                    if (now - sLastStackRecentsTickTime > 40L) {
-                                        sLastStackRecentsTickTime = now
-                                        triggerLightClockTickHaptic(taskView)
-                                    }
+                        if (prev != null && prev != f) {
+                            val minVal = minOf(prev, f)
+                            val maxVal = maxOf(prev, f)
+                            val lowInt = kotlin.math.ceil(minVal).toInt()
+                            val highInt = kotlin.math.floor(maxVal).toInt()
+                            if (lowInt <= highInt) {
+                                val targetInt = if (f < prev) lowInt else highInt
+                                val now = SystemClock.uptimeMillis()
+                                if (sLastCrossedInteger != targetInt && now - sLastStackRecentsTickTime > 35L) {
+                                    sLastCrossedInteger = targetInt
+                                    sLastStackRecentsTickTime = now
+                                    triggerLightClockTickHaptic(tsv)
                                 }
                             }
-                        } catch (_: Throwable) {}
+                        }
 
                         return result
                     }
                 })
             }
 
-            Log.i(TAG, "Hooked TaskViewTransform.applyToTaskView and TaskStackView for Stack Recents center-crossing haptics")
+            Log.i(TAG, "Hooked TaskStackView.onStackScrollChanged for Stack Recents center-crossing haptics")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook TaskStackView for scroll haptics", t)
         }
@@ -548,9 +583,28 @@ object AppTransitionHook {
      * Triggers a crisp, light clock tick (MIUI_GEAR_LIGHT / EFFECT_TICK) as an app crosses the center.
      */
     private fun triggerLightClockTickHaptic(view: View?) {
+        // 1. Official MIUI Launcher fast scroll tick (calls native ext haptic 5 on linear motor)
+        try {
+            val hfCompatClass = Class.forName(
+                "com.miui.home.common.hapticfeedback.HapticFeedbackCompat",
+                false,
+                view?.context?.classLoader ?: ClassLoader.getSystemClassLoader()
+            )
+            val getInstanceMethod = hfCompatClass.getMethod("getInstance")
+            val instance = getInstanceMethod.invoke(null)
+            if (instance != null && view != null) {
+                val fastScrollMethod = hfCompatClass.methods.firstOrNull {
+                    it.name == "performFastScrollSection" && it.parameterTypes.size == 1
+                }
+                fastScrollMethod?.invoke(instance, view)
+            }
+        } catch (t: Throwable) {
+            Log.d(TAG, "HapticFeedbackCompat.performFastScrollSection error", t)
+        }
+
+        // 2. Miuix HapticCompat (MIUI_GEAR_LIGHT = 268435477 / MIUI_MESH_LIGHT = 268435463)
         try {
             if (view != null) {
-                // miuix.view.HapticFeedbackConstants.MIUI_GEAR_LIGHT = 268435477 (Crisp clock/gear tick)
                 val hapticCompatClass = Class.forName("miuix.view.HapticCompat", false, view.context.classLoader)
                 val performMethod = hapticCompatClass.getMethod(
                     "performHapticFeedbackAsync",
@@ -558,31 +612,48 @@ object AppTransitionHook {
                     Int::class.javaPrimitiveType
                 )
                 performMethod.invoke(null, view, 268435477)
-                return
             }
         } catch (_: Throwable) {}
 
+        // 3. Android View performHapticFeedback CLOCK_TICK
         try {
             if (view != null) {
-                if (view.performHapticFeedback(268435477)) return
-                if (view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)) return
+                view.performHapticFeedback(
+                    android.view.HapticFeedbackConstants.CLOCK_TICK,
+                    android.view.HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING or
+                        android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
+                )
             }
         } catch (_: Throwable) {}
 
-        // Fallback: Android system linear motor light tick
+        // 4. Guaranteed Android Linear Motor EFFECT_TICK / USAGE_TOUCH
         try {
-            val activityThreadClass = Class.forName("android.app.ActivityThread")
-            val currentApp = activityThreadClass.getMethod("currentApplication").invoke(null) as? android.content.Context
-            val vibrator = currentApp?.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? Vibrator
+            val ctx = view?.context ?: try {
+                Class.forName("android.app.ActivityThread")
+                    .getMethod("currentApplication")
+                    .invoke(null) as? Context
+            } catch (_: Throwable) { null }
+
+            val vibrator = ctx?.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
             if (vibrator != null && vibrator.hasVibrator()) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK))
+                    val effect = VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val attrs = VibrationAttributes.Builder()
+                            .setUsage(VibrationAttributes.USAGE_TOUCH)
+                            .build()
+                        vibrator.vibrate(effect, attrs)
+                    } else {
+                        vibrator.vibrate(effect)
+                    }
                 } else {
                     @Suppress("DEPRECATION")
                     vibrator.vibrate(8L)
                 }
             }
-        } catch (_: Throwable) {}
+        } catch (t: Throwable) {
+            Log.d(TAG, "System vibrator tick error", t)
+        }
     }
 
     /**

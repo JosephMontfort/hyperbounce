@@ -58,50 +58,7 @@ fun AppTransitionsScreen(
             }
         }
 
-        // 2. FLIGHT ARC & TRAJECTORY DYNAMICS
-        item {
-            SectionHeader("FLIGHT ARC & TRAJECTORY", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsSliderRow(
-                    title = "Flight Arc Apex Lift",
-                    subtitle = "Parabolic trajectory height when closing lower-half apps",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = trans.arcApexLift,
-                    onValueChange = trans::setArcApexLift,
-                    valueRange = 0.40f..2.00f,
-                    defaultValue = 1.00f,
-                    valueLabel = { String.format(Locale.US, "%.2fx", it) },
-                    enabled = trans.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "Expansive Open Uplift",
-                    subtitle = "Distinct upward launch surge when tapping bottom & dock apps",
-                    colors = colors,
-                    iconTint = colors.accentBlue,
-                    backdrop = backdrop,
-                    checked = trans.openUpliftSurge,
-                    onCheckedChange = trans::setOpenUpliftSurge,
-                    enabled = trans.enabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
-                )
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "Keystone Edge Squeeze",
-                    subtitle = "Trapezoidal width taper (HMatchVTop) during vertical flight",
-                    colors = colors,
-                    iconTint = colors.accentPurple,
-                    backdrop = backdrop,
-                    checked = trans.keystoneSqueeze,
-                    onCheckedChange = trans::setKeystoneSqueeze,
-                    enabled = trans.enabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
-                )
-            }
-        }
-
-        // 3. SPRING DYNAMICS & SPEED
+        // 2. SPRING DYNAMICS & SPEED
         item {
             SectionHeader("SPRING DYNAMICS & SPEED", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -146,7 +103,7 @@ fun AppTransitionsScreen(
             }
         }
 
-        // 4. FOLDER & RECENTS GESTURES
+        // 3. FOLDER & RECENTS GESTURES
         item {
             SectionHeader("FOLDER & RECENTS GESTURES", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -200,7 +157,7 @@ fun AppTransitionsScreen(
             }
         }
 
-        // 5. TACTILE HAPTICS
+        // 4. TACTILE HAPTICS
         item {
             SectionHeader("TACTILE HAPTICS", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
