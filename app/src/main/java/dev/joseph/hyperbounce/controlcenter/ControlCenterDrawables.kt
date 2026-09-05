@@ -129,19 +129,24 @@ class TileResizeGhostDrawable(private val density: Float = 2.75f) : Drawable() {
     private var cornerRadius = 24f * density
     private var isSnapping = false
 
-    fun setOriginBounds(left: Float, top: Float, width: Float, height: Float) {
+    fun setOriginBounds(left: Float, top: Float, width: Float, height: Float, initialRadius: Float? = null) {
         rect.set(left, top, left + width, top + height)
-        cornerRadius = Math.min(width, height) / 2.0f
+        cornerRadius = initialRadius ?: (Math.min(width, height) / 2.0f)
+        setBounds(left.toInt(), top.toInt(), (left + width).toInt(), (top + height).toInt())
+    }
+
+    fun updateMorph(left: Float, top: Float, width: Float, height: Float, radius: Float, snapping: Boolean) {
+        rect.set(left, top, left + width, top + height)
+        isSnapping = snapping
+        cornerRadius = radius
         setBounds(left.toInt(), top.toInt(), (left + width).toInt(), (top + height).toInt())
     }
 
     fun updateMorph(left: Float, top: Float, width: Float, height: Float, snapping: Boolean) {
-        rect.set(left, top, left + width, top + height)
-        isSnapping = snapping
         val maxDim = Math.max(width, height)
         val minDim = Math.min(width, height)
-        cornerRadius = if (maxDim / minDim > 1.3f) 20f * density else minDim / 2f
-        setBounds(left.toInt(), top.toInt(), (left + width).toInt(), (top + height).toInt())
+        val r = if (maxDim / minDim > 1.3f) 24f * density else minDim / 2f
+        updateMorph(left, top, width, height, r, snapping)
     }
 
     override fun draw(canvas: Canvas) {

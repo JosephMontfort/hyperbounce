@@ -424,6 +424,129 @@ object ControlCenterGrouping {
         return null
     }
 
+    fun createLargeCardViewHolder(parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader): Any? {
+        try {
+            val ctx = parent.context
+            val density = ctx.resources.displayMetrics.density
+            var sysUIContext = ctx
+            if (qsListCtrl != null) {
+                try {
+                    val sysUIContextField = qsListCtrl.javaClass.getDeclaredField("sysUIContext")
+                    sysUIContextField.isAccessible = true
+                    val sc = sysUIContextField.get(qsListCtrl) as? Context
+                    if (sc != null) sysUIContext = sc
+                } catch (t: Throwable) {}
+            }
+
+            val cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader)
+            val inflateMethod = cardBindingClass.getMethod("inflate", LayoutInflater::class.java, ViewGroup::class.java, Boolean::class.javaPrimitiveType)
+            val binding = inflateMethod.invoke(null, LayoutInflater.from(ctx), parent, false)
+
+            val getRootMethod = cardBindingClass.getMethod("getRoot")
+            val root = getRootMethod.invoke(binding) as ViewGroup
+
+            try {
+                val cardIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemIconView", false, classLoader)
+                var iconCtor: Constructor<*>? = null
+                for (c in cardIconViewClass.declaredConstructors) {
+                    if (c.parameterTypes.size == 5) {
+                        iconCtor = c
+                        break
+                    }
+                }
+                if (iconCtor == null && cardIconViewClass.declaredConstructors.isNotEmpty()) {
+                    iconCtor = cardIconViewClass.declaredConstructors[0]
+                }
+                if (iconCtor != null) {
+                    iconCtor.isAccessible = true
+                    val iconView = if (iconCtor.parameterTypes.size == 5) {
+                        iconCtor.newInstance(root.context, sysUIContext, null, 4, null)
+                    } else {
+                        iconCtor.newInstance(root.context, sysUIContext)
+                    }
+
+                    val initMethod = root.javaClass.getMethod("init", cardIconViewClass)
+                    initMethod.invoke(root, iconView)
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "createLargeCardViewHolder init error", t)
+            }
+
+            val resHeightId = ctx.resources.getIdentifier("control_center_universal_1_row_with_margin_size", "dimen", ctx.packageName)
+            val unitH = if (resHeightId != 0) ctx.resources.getDimensionPixelSize(resHeightId) else (76 * density).toInt()
+            val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
+            val gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId) else (10 * density).toInt()
+            val tallH = unitH * 2 + gap
+
+            val rlp = root.layoutParams
+            if (rlp != null) {
+                rlp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                rlp.height = tallH
+                root.layoutParams = rlp
+            } else {
+                root.layoutParams = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, tallH)
+            }
+
+            try {
+                val scaleContentResId = ctx.resources.getIdentifier("scale_content", "id", ctx.packageName)
+                val scaleContent = if (scaleContentResId != 0) root.findViewById<LinearLayout>(scaleContentResId) else null
+                if (scaleContent != null) {
+                    scaleContent.orientation = LinearLayout.VERTICAL
+                    scaleContent.gravity = Gravity.CENTER_HORIZONTAL
+
+                    if (scaleContent.childCount > 0) {
+                        val iconChild = scaleContent.getChildAt(0)
+                        val iconLp = iconChild.layoutParams as? LinearLayout.LayoutParams
+                        if (iconLp != null) {
+                            iconLp.gravity = Gravity.CENTER_HORIZONTAL
+                            iconLp.topMargin = (22 * density).toInt()
+                            iconLp.bottomMargin = (6 * density).toInt()
+                            iconChild.layoutParams = iconLp
+                        }
+                    }
+
+                    val labelContResId = ctx.resources.getIdentifier("label_container", "id", ctx.packageName)
+                    val labelCont = if (labelContResId != 0) root.findViewById<LinearLayout>(labelContResId) else null
+                    if (labelCont != null) {
+                        val lblLp = labelCont.layoutParams as? LinearLayout.LayoutParams
+                        if (lblLp != null) {
+                            lblLp.gravity = Gravity.CENTER_HORIZONTAL
+                            lblLp.marginStart = (8 * density).toInt()
+                            lblLp.marginEnd = (8 * density).toInt()
+                            labelCont.layoutParams = lblLp
+                        }
+
+                        val titleResId = ctx.resources.getIdentifier("title", "id", ctx.packageName)
+                        val titleView = if (titleResId != 0) labelCont.findViewById<TextView>(titleResId) else null
+                        titleView?.gravity = Gravity.CENTER
+
+                        val statusResId = ctx.resources.getIdentifier("status", "id", ctx.packageName)
+                        val statusView = if (statusResId != 0) labelCont.findViewById<TextView>(statusResId) else null
+                        statusView?.gravity = Gravity.CENTER
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "createLargeCardViewHolder layout adjustment error", t)
+            }
+
+            val cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader)
+            for (c in cardHolderClass.declaredConstructors) {
+                if (c.parameterTypes.size == 1 && c.parameterTypes[0].isAssignableFrom(root.javaClass)) {
+                    c.isAccessible = true
+                    return c.newInstance(root)
+                }
+            }
+            if (cardHolderClass.declaredConstructors.isNotEmpty()) {
+                val c = cardHolderClass.declaredConstructors[0]
+                c.isAccessible = true
+                return c.newInstance(root)
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "createLargeCardViewHolder error", t)
+        }
+        return null
+    }
+
     fun createGrouped2TileViewHolder(parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader, isVertical: Boolean): Any? {
         try {
             val ctx = parent.context
@@ -1203,6 +1326,7 @@ object ControlCenterGrouping {
                             for (spec in ControlCenterConfigHolder.sSelectedTileSpecs) {
                                 ControlCenterConfigHolder.sExpandedTileSpecs.remove(spec)
                                 ControlCenterConfigHolder.sVerticalTileSpecs.remove(spec)
+                                ControlCenterConfigHolder.sLargeTileSpecs.remove(spec)
                             }
                             ControlCenterConfigHolder.sTileGroups.add(TileGroup(groupId, ArrayList(ControlCenterConfigHolder.sSelectedTileSpecs), false))
                             ControlCenterConfigHolder.sIsGroupSelectMode = false
