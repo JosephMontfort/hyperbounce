@@ -1221,14 +1221,16 @@ object ControlCenterGrouping {
                         finalDisassembleBtn.setImageDrawable(UngroupHeaderDrawable(true))
                         finalGroupBtn?.setImageDrawable(GroupGridDrawable(false))
                     } else {
-                        if (ControlCenterConfigHolder.sSelectedDisassembleGroups.isNotEmpty()) {
-                            val it = ControlCenterConfigHolder.sTileGroups.iterator()
-                            while (it.hasNext()) {
-                                val g = it.next()
-                                if (ControlCenterConfigHolder.sSelectedDisassembleGroups.contains(g.id)) {
-                                    ControlCenterConfigHolder.sTileGroups.remove(g)
-                                }
-                            }
+                        val toRemove = if (ControlCenterConfigHolder.sSelectedDisassembleGroups.isNotEmpty()) {
+                            HashSet(ControlCenterConfigHolder.sSelectedDisassembleGroups)
+                        } else if (ControlCenterConfigHolder.sTileGroups.size == 1) {
+                            hashSetOf(ControlCenterConfigHolder.sTileGroups[0].id)
+                        } else {
+                            hashSetOf<String>()
+                        }
+
+                        if (toRemove.isNotEmpty()) {
+                            ControlCenterConfigHolder.sTileGroups.removeAll { g -> toRemove.contains(g.id) }
                             ControlCenterConfigHolder.sSelectedDisassembleGroups.clear()
                             ControlCenterConfigHolder.sIsDisassembleMode = false
                             finalDisassembleBtn.setImageDrawable(UngroupHeaderDrawable(false))

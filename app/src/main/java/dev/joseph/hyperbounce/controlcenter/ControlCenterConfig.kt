@@ -9,7 +9,6 @@ import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
-import androidx.recyclerview.widget.RecyclerView
 import dev.joseph.hyperbounce.prefs.PREFS_GROUP
 import org.json.JSONObject
 import java.lang.ref.WeakReference
@@ -96,7 +95,9 @@ object ControlCenterConfigHolder {
 
     @Volatile var sQSListController: Any? = null
     @Volatile var sMainPanelAdapter: Any? = null
-    @Volatile var sRecyclerView: WeakReference<RecyclerView>? = null
+    // Typed as View to avoid class loading dependencies on androidx.recyclerview in SystemUI
+    @Volatile var sRecyclerView: WeakReference<View>? = null
+    @Volatile var sHasLoadedPriorities: Boolean = false
     @Volatile var sFrameCallback: Any? = null
     @Volatile var sLastKnownContext: Context? = null
     @Volatile var sExplicitReset: Boolean = false
@@ -141,6 +142,7 @@ object ControlCenterConfigHolder {
     fun loadSavedPriorities(ctx: Context?) {
         if (ctx == null) return
         sLastKnownContext = ctx
+        sHasLoadedPriorities = true
         try {
             // 1. Android Settings.Secure
             var jsonStr = try {
@@ -205,27 +207,27 @@ object ControlCenterConfigHolder {
                         }
                     }
 
-                    val grpV2 = json.optString("tile_groups_v2", "")
-                    if (!TextUtils.isEmpty(grpV2)) {
+                    if (json.has("tile_groups_v2")) {
+                        val grpV2 = json.optString("tile_groups_v2", "")
                         val newGroups = ArrayList<TileGroup>()
-                        for (gEntry in grpV2.split(";")) {
-                            val parts = gEntry.split(":")
-                            if (parts.size >= 3) {
-                                val gId = parts[0]
-                                val isVert = "V".equals(parts[1], ignoreCase = true)
-                                val gSpecs = mutableListOf<String>()
-                                for (sp in parts[2].split(",")) {
-                                    if (sp.trim().isNotEmpty()) gSpecs.add(sp.trim())
-                                }
-                                if (gSpecs.size == 4 || gSpecs.size == 2) {
-                                    newGroups.add(TileGroup(gId, gSpecs, isVert))
+                        if (!TextUtils.isEmpty(grpV2)) {
+                            for (gEntry in grpV2.split(";")) {
+                                val parts = gEntry.split(":")
+                                if (parts.size >= 3) {
+                                    val gId = parts[0]
+                                    val isVert = "V".equals(parts[1], ignoreCase = true)
+                                    val gSpecs = mutableListOf<String>()
+                                    for (sp in parts[2].split(",")) {
+                                        if (sp.trim().isNotEmpty()) gSpecs.add(sp.trim())
+                                    }
+                                    if (gSpecs.size == 4 || gSpecs.size == 2) {
+                                        newGroups.add(TileGroup(gId, gSpecs, isVert))
+                                    }
                                 }
                             }
                         }
-                        if (newGroups.isNotEmpty()) {
-                            sTileGroups.clear()
-                            sTileGroups.addAll(newGroups)
-                        }
+                        sTileGroups.clear()
+                        sTileGroups.addAll(newGroups)
                     }
                     return
                 } catch (t: Throwable) {}
@@ -267,27 +269,27 @@ object ControlCenterConfigHolder {
                     }
                 }
 
-                val groupsStrV2 = prefs.getString("tile_groups_v2", "")
-                if (!TextUtils.isEmpty(groupsStrV2)) {
+                if (prefs.contains("tile_groups_v2")) {
+                    val groupsStrV2 = prefs.getString("tile_groups_v2", "") ?: ""
                     val newGroups = ArrayList<TileGroup>()
-                    for (gEntry in groupsStrV2!!.split(";")) {
-                        val parts = gEntry.split(":")
-                        if (parts.size >= 3) {
-                            val gId = parts[0]
-                            val isVert = "V".equals(parts[1], ignoreCase = true)
-                            val gSpecs = mutableListOf<String>()
-                            for (sp in parts[2].split(",")) {
-                                if (sp.trim().isNotEmpty()) gSpecs.add(sp.trim())
-                            }
-                            if (gSpecs.size == 4 || gSpecs.size == 2) {
-                                newGroups.add(TileGroup(gId, gSpecs, isVert))
+                    if (groupsStrV2.isNotEmpty()) {
+                        for (gEntry in groupsStrV2.split(";")) {
+                            val parts = gEntry.split(":")
+                            if (parts.size >= 3) {
+                                val gId = parts[0]
+                                val isVert = "V".equals(parts[1], ignoreCase = true)
+                                val gSpecs = mutableListOf<String>()
+                                for (sp in parts[2].split(",")) {
+                                    if (sp.trim().isNotEmpty()) gSpecs.add(sp.trim())
+                                }
+                                if (gSpecs.size == 4 || gSpecs.size == 2) {
+                                    newGroups.add(TileGroup(gId, gSpecs, isVert))
+                                }
                             }
                         }
                     }
-                    if (newGroups.isNotEmpty()) {
-                        sTileGroups.clear()
-                        sTileGroups.addAll(newGroups)
-                    }
+                    sTileGroups.clear()
+                    sTileGroups.addAll(newGroups)
                 }
             }
         } catch (t: Throwable) {
@@ -298,18 +300,8 @@ object ControlCenterConfigHolder {
     @Synchronized
     fun savePriorities(ctx: Context?) {
         val targetCtx = ctx ?: sLastKnownContext ?: return
+        sHasLoadedPriorities = true
         try {
-            if (!sExplicitReset && sTileGroups.isEmpty() && sExpandedTileSpecs.size <= 2) {
-                try {
-                    val existing = android.provider.Settings.Secure.getString(
-                        targetCtx.contentResolver, "sysui_hyperbounce_cc_layout"
-                    )
-                    if (!TextUtils.isEmpty(existing) && existing.contains("tile_groups_v2") && !existing.contains("\"tile_groups_v2\":\"\"")) {
-                        return
-                    }
-                } catch (t: Throwable) {}
-            }
-
             val json = JSONObject()
             val prioObj = JSONObject()
             for ((k, v) in sComponentPriorities) {
@@ -454,7 +446,7 @@ object ControlCenterConfigHolder {
 
     fun isGroupAnchor(spec: String?): TileGroup? {
         if (spec == null) return null
-        if (sTileGroups.isEmpty() && sLastKnownContext != null) loadSavedPriorities(sLastKnownContext)
+        if (!sHasLoadedPriorities && sLastKnownContext != null) loadSavedPriorities(sLastKnownContext)
         for (g in sTileGroups) {
             if ((g.specs.size == 4 || g.specs.size == 2) && spec == g.specs[0]) {
                 return g
@@ -465,7 +457,7 @@ object ControlCenterConfigHolder {
 
     fun isGroupChild(spec: String?): Boolean {
         if (spec == null) return false
-        if (sTileGroups.isEmpty() && sLastKnownContext != null) loadSavedPriorities(sLastKnownContext)
+        if (!sHasLoadedPriorities && sLastKnownContext != null) loadSavedPriorities(sLastKnownContext)
         for (g in sTileGroups) {
             if (g.specs.size == 4 || g.specs.size == 2) {
                 for (i in 1 until g.specs.size) {
@@ -478,7 +470,7 @@ object ControlCenterConfigHolder {
 
     fun findGroupForSpec(spec: String?): TileGroup? {
         if (spec == null) return null
-        if (sTileGroups.isEmpty() && sLastKnownContext != null) loadSavedPriorities(sLastKnownContext)
+        if (!sHasLoadedPriorities && sLastKnownContext != null) loadSavedPriorities(sLastKnownContext)
         for (g in sTileGroups) {
             if (g.specs.contains(spec)) return g
         }
@@ -600,7 +592,7 @@ object ControlCenterConfigHolder {
     }
 
     fun updateAllVisibleTileBadges() {
-        val rv = sRecyclerView?.get() ?: return
+        val rv = (sRecyclerView?.get() as? ViewGroup) ?: return
         rv.post {
             try {
                 val childCount = rv.childCount
@@ -769,7 +761,7 @@ object ControlCenterConfigHolder {
     fun refreshAdapter(root: View?, ctx: Context?, isStructuralChange: Boolean = false) {
         try {
             val targetCtx = ctx ?: root?.context ?: sLastKnownContext ?: return
-            loadSavedPriorities(targetCtx)
+            if (!sHasLoadedPriorities) loadSavedPriorities(targetCtx)
             val rvsToProcess = mutableListOf<View>()
             val directRv = sRecyclerView?.get()
             if (directRv != null) {
@@ -825,22 +817,37 @@ object ControlCenterConfigHolder {
     }
 
     fun refreshRecyclerView(tileView: View?) {
-        var parent: View? = tileView
-        while (parent != null && !parent.javaClass.name.contains("RecyclerView")) {
-            parent = if (parent.parent is View) parent.parent as View else break
-        }
-        val rv = (parent as? RecyclerView) ?: sRecyclerView?.get()
-        if (rv != null) {
-            rv.post {
-                try {
-                    val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
-                    val adp = getAdapterMethod.invoke(rv)
-                    if (adp != null) {
-                        val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
-                        notifyDataSetChangedMethod.invoke(adp)
-                    }
-                } catch (t: Throwable) {}
+        try {
+            var parent: View? = tileView
+            while (parent != null && !parent.javaClass.name.contains("RecyclerView")) {
+                parent = if (parent.parent is View) parent.parent as View else break
             }
+            // Safely reference View without triggering NoClassDefFoundError for androidx.recyclerview
+            val rv = parent ?: sRecyclerView?.get()
+            if (rv != null) {
+                if (sRecyclerView?.get() != rv) {
+                    sRecyclerView = WeakReference(rv)
+                }
+                rv.post {
+                    try {
+                        val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
+                        val adp = getAdapterMethod.invoke(rv)
+                        if (adp != null) {
+                            try {
+                                val distMethod = adp.javaClass.getDeclaredMethod("distributeContent", Boolean::class.javaPrimitiveType)
+                                distMethod.isAccessible = true
+                                distMethod.invoke(adp, true)
+                            } catch (t: Throwable) {}
+                            val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
+                            notifyDataSetChangedMethod.invoke(adp)
+                        }
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "refreshRecyclerView notify error", t)
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "refreshRecyclerView error", t)
         }
     }
 

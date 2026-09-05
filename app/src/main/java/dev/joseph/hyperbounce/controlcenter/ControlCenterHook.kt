@@ -16,7 +16,6 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
-import androidx.recyclerview.widget.RecyclerView
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
@@ -213,7 +212,7 @@ object ControlCenterHook {
             if (cur is View && (cur.id == 0x7f099995 || cur.getTag(0x7f099995) != null || cur.getTag(0x7f099993) != null)) {
                 return true
             }
-            if (cur is RecyclerView) return false
+            if (cur is View && cur.javaClass.name.contains("RecyclerView")) return false
             cur = cur.parent
         }
         return false
@@ -1753,12 +1752,16 @@ object ControlCenterHook {
                                                 }
                                                 indicatorBadge.setOnClickListener(toggleDisassembleSelect)
                                             }
+                                            itemView.setOnClickListener(toggleDisassembleSelect)
+                                            itemView.isClickable = true
                                         } else {
                                             if (indicatorBadge != null) {
                                                 indicatorBadge.visibility = View.GONE
                                                 indicatorBadge.setOnClickListener(null)
                                                 indicatorBadge.isClickable = false
                                             }
+                                            itemView.setOnClickListener(null)
+                                            itemView.isClickable = false
                                         }
                                     } else {
                                         // Standard Single Tile / Card Customization Badge
@@ -2218,18 +2221,13 @@ object ControlCenterHook {
                                 val adapter = chain.thisObject
                                 val rawArgs = chain.args
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                                if (args != null && args.isNotEmpty() && args[0] is RecyclerView) {
-                                    val rv = args[0] as RecyclerView
-                                    val customLm = SpannedGridLayoutManager(rv.context, 4)
-                                    val lmField = adapterClass.getDeclaredField("layoutManager")
-                                    lmField.isAccessible = true
-                                    lmField.set(adapter, customLm)
-                                    rv.layoutManager = customLm
+                                if (args != null && args.isNotEmpty() && args[0] is View) {
+                                    val rv = args[0] as View
                                     ControlCenterConfigHolder.sRecyclerView = java.lang.ref.WeakReference(rv)
                                     ControlCenterConfigHolder.sMainPanelAdapter = adapter
                                 }
                             } catch (t: Throwable) {
-                                Log.e(TAG, "Failed to attach SpannedGridLayoutManager", t)
+                                Log.e(TAG, "Failed in onAttachedToRecyclerView intercept", t)
                             }
                             result
                         }
