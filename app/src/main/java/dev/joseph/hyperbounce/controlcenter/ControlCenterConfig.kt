@@ -631,7 +631,6 @@ object ControlCenterConfigHolder {
                             selectBadge.setOnClickListener(null)
                             selectBadge.isClickable = false
                         }
-                        itemView.setOnClickListener(null)
                         itemView.isClickable = true
                         itemView.isLongClickable = true
                         if (isCircular) {
@@ -682,8 +681,6 @@ object ControlCenterConfigHolder {
                                     selectBadge.invalidate()
                                 }
                                 selectBadge.setOnClickListener(toggleSelect)
-                                itemView.setOnClickListener(toggleSelect)
-                                itemView.isClickable = true
 
                                 if (isCircular && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
                                     val bw2 = selectBadge.measuredWidth.takeIf { it > 0 } ?: (26 * density).toInt()
@@ -719,8 +716,6 @@ object ControlCenterConfigHolder {
                                     selectBadge.invalidate()
                                 }
                                 selectBadge.setOnClickListener(toggleDisassembleSelect)
-                                itemView.setOnClickListener(toggleDisassembleSelect)
-                                itemView.isClickable = true
                             }
                         } else if (selectBadge != null) {
                             selectBadge.visibility = View.GONE
@@ -734,7 +729,6 @@ object ControlCenterConfigHolder {
                             selectBadge.setOnClickListener(null)
                             selectBadge.isClickable = false
                         }
-                        itemView.setOnClickListener(null)
                         if (spec != null && !"wifi".equals(spec, ignoreCase = true) && !"cell".equals(spec, ignoreCase = true)) {
                             val badgeSize = (38 * density).toInt()
                             if (resizeHandle == null && itemView is ViewGroup) {
@@ -795,24 +789,10 @@ object ControlCenterConfigHolder {
                 }
             }
             for (rv in rvsToProcess) {
-                if (rv is RecyclerView) {
-                    sRecyclerView = WeakReference(rv)
-                    if (rv.layoutManager !is SpannedGridLayoutManager) {
-                        val customLm = SpannedGridLayoutManager(rv.context, 4)
-                        rv.layoutManager = customLm
-                    }
-                }
                 val getAdapterMethod = try { rv.javaClass.getMethod("getAdapter") } catch (t: Throwable) { null }
                 val adp = getAdapterMethod?.invoke(rv)
                 if (adp != null) {
                     sMainPanelAdapter = adp
-                    if (rv is RecyclerView && rv.layoutManager is SpannedGridLayoutManager) {
-                        try {
-                            val lmField = adp.javaClass.getDeclaredField("layoutManager")
-                            lmField.isAccessible = true
-                            lmField.set(adp, rv.layoutManager)
-                        } catch (t: Throwable) {}
-                    }
                     try {
                         val distMethod = adp.javaClass.getDeclaredMethod("distributeContent", Boolean::class.javaPrimitiveType)
                         distMethod.isAccessible = true
@@ -851,13 +831,8 @@ object ControlCenterConfigHolder {
         }
         val rv = (parent as? RecyclerView) ?: sRecyclerView?.get()
         if (rv != null) {
-            sRecyclerView = WeakReference(rv)
             rv.post {
                 try {
-                    if (rv.layoutManager !is SpannedGridLayoutManager) {
-                        val customLm = SpannedGridLayoutManager(rv.context, 4)
-                        rv.layoutManager = customLm
-                    }
                     val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
                     val adp = getAdapterMethod.invoke(rv)
                     if (adp != null) {
