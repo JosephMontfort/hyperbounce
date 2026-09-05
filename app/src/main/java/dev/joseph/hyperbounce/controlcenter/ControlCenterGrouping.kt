@@ -349,11 +349,8 @@ object ControlCenterGrouping {
                 Log.e(TAG, "createVerticalSingleCardViewHolder init error", t)
             }
 
-            val resHeightId = ctx.resources.getIdentifier("control_center_universal_1_row_with_margin_size", "dimen", ctx.packageName)
-            val unitH = if (resHeightId != 0) ctx.resources.getDimensionPixelSize(resHeightId) else (76 * density).toInt()
-            val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
-            val gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId) else (10 * density).toInt()
-            val tallH = unitH * 2 + gap
+            val res2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
+            val tallH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId) else (157 * density).toInt()
 
             val rlp = root.layoutParams
             if (rlp != null) {
@@ -472,11 +469,8 @@ object ControlCenterGrouping {
                 Log.e(TAG, "createLargeCardViewHolder init error", t)
             }
 
-            val resHeightId = ctx.resources.getIdentifier("control_center_universal_1_row_with_margin_size", "dimen", ctx.packageName)
-            val unitH = if (resHeightId != 0) ctx.resources.getDimensionPixelSize(resHeightId) else (76 * density).toInt()
-            val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
-            val gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId) else (10 * density).toInt()
-            val tallH = unitH * 2 + gap
+            val res2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
+            val tallH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId) else (157 * density).toInt()
 
             val rlp = root.layoutParams
             if (rlp != null) {
@@ -592,11 +586,10 @@ object ControlCenterGrouping {
 
             root.removeAllViews()
 
-            val resHeightId = ctx.resources.getIdentifier("control_center_universal_1_row_with_margin_size", "dimen", ctx.packageName)
-            val unitH = if (resHeightId != 0) ctx.resources.getDimensionPixelSize(resHeightId) else (76 * density).toInt()
-            val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
-            val gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId) else (10 * density).toInt()
-            val tallH = unitH * 2 + gap
+            val cardHId = ctx.resources.getIdentifier("qs_card_item_height", "dimen", ctx.packageName)
+            val unitH = if (cardHId != 0) ctx.resources.getDimensionPixelSize(cardHId) else (71.5f * density).toInt()
+            val res2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
+            val tallH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId) else (157 * density).toInt()
 
             val cardH = if (isVertical) tallH else unitH
             val rlp = root.layoutParams
@@ -901,7 +894,8 @@ object ControlCenterGrouping {
             // Remove default card children
             root.removeAllViews()
 
-            val cardH = (162 * density).toInt()
+            val res2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
+            val cardH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId) else (157 * density).toInt()
             val rlp = root.layoutParams
             if (rlp != null) {
                 rlp.width = ViewGroup.LayoutParams.MATCH_PARENT

@@ -86,6 +86,7 @@ object ControlCenterConfigHolder {
     @Volatile var sIsEditMode: Boolean = false
     @Volatile var sIsGroupSelectMode: Boolean = false
     @Volatile var sIsDisassembleMode: Boolean = false
+    @Volatile var sIsDraggingResizeHandle: Boolean = false
     val sSelectedTileSpecs = LinkedHashSet<String>()
     val sSelectedDisassembleGroups = HashSet<String>()
 
@@ -603,19 +604,15 @@ object ControlCenterConfigHolder {
                             return s
                         }
                     }
-                    if (f.name == "record" || f.name == "mRecord") {
+                    if (f.name == "record" || f.name == "mRecord" || f.name == "item" || f.name == "mItem") {
                         f.isAccessible = true
                         val rec = f.get(itemView)
                         if (rec != null) {
-                            try {
-                                val sf = rec.javaClass.getDeclaredField("spec")
-                                sf.isAccessible = true
-                                val s = sf.get(rec) as? String
-                                if (!s.isNullOrEmpty()) {
-                                    itemView.setTag(0x7f099990, s)
-                                    return s
-                                }
-                            } catch (t: Throwable) {}
+                            val s = getRecordSpec(rec)
+                            if (!s.isNullOrEmpty()) {
+                                itemView.setTag(0x7f099990, s)
+                                return s
+                            }
                         }
                     }
                 }
@@ -632,19 +629,15 @@ object ControlCenterConfigHolder {
                     var vhCls: Class<*>? = vh.javaClass
                     while (vhCls != null && vhCls != Any::class.java) {
                         for (f in vhCls.declaredFields) {
-                            if (f.name == "record" || f.name == "mRecord") {
+                            if (f.name == "record" || f.name == "mRecord" || f.name == "item" || f.name == "mItem") {
                                 f.isAccessible = true
                                 val rec = f.get(vh)
                                 if (rec != null) {
-                                    try {
-                                        val sf = rec.javaClass.getDeclaredField("spec")
-                                        sf.isAccessible = true
-                                        val s = sf.get(rec) as? String
-                                        if (!s.isNullOrEmpty()) {
-                                            itemView.setTag(0x7f099990, s)
-                                            return s
-                                        }
-                                    } catch (t: Throwable) {}
+                                    val s = getRecordSpec(rec)
+                                    if (!s.isNullOrEmpty()) {
+                                        itemView.setTag(0x7f099990, s)
+                                        return s
+                                    }
                                 }
                             }
                         }

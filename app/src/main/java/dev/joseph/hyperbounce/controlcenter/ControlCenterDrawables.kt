@@ -133,6 +133,7 @@ class TileResizeGhostDrawable(private val density: Float = 2.75f) : Drawable() {
         rect.set(left, top, left + width, top + height)
         cornerRadius = initialRadius ?: (Math.min(width, height) / 2.0f)
         setBounds(left.toInt(), top.toInt(), (left + width).toInt(), (top + height).toInt())
+        invalidateSelf()
     }
 
     fun updateMorph(left: Float, top: Float, width: Float, height: Float, radius: Float, snapping: Boolean) {
@@ -140,6 +141,7 @@ class TileResizeGhostDrawable(private val density: Float = 2.75f) : Drawable() {
         isSnapping = snapping
         cornerRadius = radius
         setBounds(left.toInt(), top.toInt(), (left + width).toInt(), (top + height).toInt())
+        invalidateSelf()
     }
 
     fun updateMorph(left: Float, top: Float, width: Float, height: Float, snapping: Boolean) {

@@ -1643,7 +1643,8 @@ object ControlCenterHook {
                                                     try {
                                                         group.isVertical = !group.isVertical
                                                         ControlCenterConfigHolder.savePriorities(ctx)
-                                                        ControlCenterConfigHolder.refreshAdapter(itemView.rootView, ctx)
+                                                        ControlCenterConfigHolder.refreshRecyclerView(itemView)
+                                                        ControlCenterConfigHolder.updateAllVisibleTileBadges()
                                                     } catch (t: Throwable) {
                                                         Log.e(TAG, "Rotate group click error", t)
                                                     }
@@ -1903,6 +1904,10 @@ object ControlCenterHook {
                                             itemView.addView(selectBadge)
                                         }
 
+                                        if (spec != null) {
+                                            itemView.setTag(0x7f099990, spec)
+                                        }
+
                                         if (itemView.getTag(0x7f099991) == null) {
                                             itemView.setTag(0x7f099991, true)
                                             itemView.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ ->
@@ -1919,22 +1924,28 @@ object ControlCenterHook {
                                                 val w = r - l
                                                 val h = b - t
                                                 if (w > 0 && h > 0) {
-                                                    if (curHandle != null && curHandle.visibility == View.VISIBLE) {
-                                                        val bw = curHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
-                                                        val bh = curHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
-                                                        val curIconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
-                                                        val curIsExp = ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)
-                                                        val curIsVert = ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)
-                                                        val curIsLarge = ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)
-                                                        val curIsCirc = !curIsExp && !curIsVert && !curIsLarge && !itemView.javaClass.name.contains("Card")
-                                                        if (curIsCirc && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
-                                                            val iRight = curIconFrame.right
-                                                            val iBottom = curIconFrame.bottom
-                                                            curHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
-                                                        } else {
-                                                            curHandle.layout(w - bw, h - bh, w, h)
+                                                    if (curHandle != null) {
+                                                        if (!ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode &&
+                                                            !"wifi".equals(spec, ignoreCase = true) && !"cell".equals(spec, ignoreCase = true)) {
+                                                            curHandle.visibility = View.VISIBLE
                                                         }
-                                                        curHandle.bringToFront()
+                                                        if (curHandle.visibility == View.VISIBLE) {
+                                                            val bw = curHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
+                                                            val bh = curHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
+                                                            val curIconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
+                                                            val curIsExp = ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)
+                                                            val curIsVert = ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)
+                                                            val curIsLarge = ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)
+                                                            val curIsCirc = !curIsExp && !curIsVert && !curIsLarge && !itemView.javaClass.name.contains("Card")
+                                                            if (curIsCirc && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
+                                                                val iRight = curIconFrame.right
+                                                                val iBottom = curIconFrame.bottom
+                                                                curHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
+                                                            } else {
+                                                                curHandle.layout(w - bw, h - bh, w, h)
+                                                            }
+                                                            curHandle.bringToFront()
+                                                        }
                                                     }
                                                 }
                                             }
@@ -1992,11 +2003,10 @@ object ControlCenterHook {
                                         }
 
                                         if (spec != null) {
-                                            val resHeightId = ctx.resources.getIdentifier("control_center_universal_1_row_with_margin_size", "dimen", ctx.packageName)
-                                            val unitH = if (resHeightId != 0) ctx.resources.getDimensionPixelSize(resHeightId) else (76 * density).toInt()
-                                            val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
-                                            val gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId) else (10 * density).toInt()
-                                            val tallH = unitH * 2 + gap
+                                            val cardHId = ctx.resources.getIdentifier("qs_card_item_height", "dimen", ctx.packageName)
+                                            val cardH = if (cardHId != 0) ctx.resources.getDimensionPixelSize(cardHId) else (71.5f * density).toInt()
+                                            val res2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
+                                            val tallH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId) else (157 * density).toInt()
                                             val curLp = itemView.layoutParams
                                             if (ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) || ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)) {
                                                 if (curLp != null && curLp.height != tallH) {
@@ -2004,8 +2014,8 @@ object ControlCenterHook {
                                                     itemView.layoutParams = curLp
                                                 }
                                             } else if (ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)) {
-                                                if (curLp != null && curLp.height != unitH) {
-                                                    curLp.height = unitH
+                                                if (curLp != null && curLp.height != cardH) {
+                                                    curLp.height = cardH
                                                     itemView.layoutParams = curLp
                                                 }
                                             }
@@ -2569,6 +2579,146 @@ object ControlCenterHook {
                 }
             } catch (t: Throwable) {}
 
+            // 20. Prevent RecyclerView from stealing touch gestures during curved resize handle dragging
+            try {
+                val rvClasses = arrayOf(
+                    "miui.systemui.controlcenter.widget.MainPanelRecyclerView",
+                    "miui.systemui.controlcenter.widget.ClickableRecyclerView"
+                )
+                for (clsName in rvClasses) {
+                    try {
+                        val rvCls = Class.forName(clsName, false, classLoader)
+                        for (m in rvCls.declaredMethods) {
+                            if (m.name == "onInterceptTouchEvent") {
+                                m.isAccessible = true
+                                module.hook(m).intercept { chain ->
+                                    if (ControlCenterConfigHolder.sIsDraggingResizeHandle) {
+                                        return@intercept false
+                                    }
+                                    chain.proceed()
+                                }
+                            }
+                        }
+                    } catch (t: Throwable) {}
+                }
+            } catch (t: Throwable) {}
+
+            // 21. Secondary detail window (e.g. Bluetooth) card adaptation so collapse animation matches card
+            try {
+                val delegateClass = Class.forName("miui.systemui.controlcenter.panel.secondary.detail.DetailPanelTilesDelegate", false, classLoader)
+                for (m in delegateClass.declaredMethods) {
+                    if (m.name == "prepareShow") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            try {
+                                val delegate = chain.thisObject
+                                val getPanelParamsM = delegate.javaClass.getDeclaredMethod("getPanelParams")
+                                getPanelParamsM.isAccessible = true
+                                val panelParams = getPanelParamsM.invoke(delegate)
+                                if (panelParams != null) {
+                                    val getAdapterM = panelParams.javaClass.getMethod("getAdapter")
+                                    val adapter = getAdapterM.invoke(panelParams)
+                                    if (adapter != null) {
+                                        val secParamsClass = Class.forName("miui.systemui.controlcenter.panel.secondary.SecondaryParamsKt", false, classLoader)
+                                        val fromM = secParamsClass.getMethod("from", Class.forName("miui.systemui.controlcenter.panel.secondary.DetailAdapter", false, classLoader))
+                                        val strFrom = fromM.invoke(null, adapter) as? String
+                                        if (strFrom != null) {
+                                            val isVert = ControlCenterConfigHolder.sVerticalTileSpecs.contains(strFrom)
+                                            val isExp = ControlCenterConfigHolder.sExpandedTileSpecs.contains(strFrom)
+                                            val isLarge = ControlCenterConfigHolder.sLargeTileSpecs.contains(strFrom)
+                                            val getViewsM = delegate.javaClass.getDeclaredMethod("getViews")
+                                            getViewsM.isAccessible = true
+                                            @Suppress("UNCHECKED_CAST")
+                                            val viewsMap = getViewsM.invoke(delegate) as? HashMap<String, ViewGroup>
+                                            if (viewsMap != null) {
+                                                val currentView = viewsMap[strFrom]
+                                                val isCard = currentView != null && currentView.javaClass.name.contains("QSCardItemView")
+                                                if (isVert || isExp || isLarge) {
+                                                    if (!isCard) {
+                                                        val getCtxM = delegate.javaClass.getMethod("getContext")
+                                                        val ctx = getCtxM.invoke(delegate) as Context
+                                                        val sysUIContextF = delegate.javaClass.getDeclaredField("sysUIContext")
+                                                        sysUIContextF.isAccessible = true
+                                                        val sysUIContext = (sysUIContextF.get(delegate) as? Context) ?: ctx
+
+                                                        val cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader)
+                                                        val inflateMethod = cardBindingClass.getMethod("inflate", LayoutInflater::class.java)
+                                                        val binding = inflateMethod.invoke(null, LayoutInflater.from(ctx))
+                                                        val getRootM = cardBindingClass.getMethod("getRoot")
+                                                        val rootCard = getRootM.invoke(binding) as ViewGroup
+
+                                                        val cardIconClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemIconView", false, classLoader)
+                                                        var iconCtor: java.lang.reflect.Constructor<*>? = null
+                                                        for (c in cardIconClass.declaredConstructors) {
+                                                            if (c.parameterTypes.size == 5) {
+                                                                iconCtor = c
+                                                                break
+                                                            }
+                                                        }
+                                                        if (iconCtor == null && cardIconClass.declaredConstructors.isNotEmpty()) {
+                                                            iconCtor = cardIconClass.declaredConstructors[0]
+                                                        }
+                                                        iconCtor?.isAccessible = true
+                                                        val iconView = if (iconCtor?.parameterTypes?.size == 5) {
+                                                            iconCtor.newInstance(rootCard.context, sysUIContext, null, 4, null)
+                                                        } else {
+                                                            iconCtor?.newInstance(rootCard.context, sysUIContext)
+                                                        }
+                                                        if (iconView != null) {
+                                                            val initM = rootCard.javaClass.getMethod("init", cardIconClass)
+                                                            initM.invoke(rootCard, iconView)
+                                                        }
+
+                                                        if (isVert) {
+                                                            val density = ctx.resources.displayMetrics.density
+                                                            val scaleResId = ctx.resources.getIdentifier("scale_content", "id", ctx.packageName)
+                                                            val scaleContent = if (scaleResId != 0) rootCard.findViewById<android.widget.LinearLayout>(scaleResId) else null
+                                                            if (scaleContent != null) {
+                                                                scaleContent.orientation = android.widget.LinearLayout.VERTICAL
+                                                                scaleContent.gravity = Gravity.CENTER_HORIZONTAL
+                                                                if (scaleContent.childCount > 0) {
+                                                                    val iconChild = scaleContent.getChildAt(0)
+                                                                    val iconLp = iconChild.layoutParams as? android.widget.LinearLayout.LayoutParams
+                                                                    if (iconLp != null) {
+                                                                        iconLp.gravity = Gravity.CENTER_HORIZONTAL
+                                                                        iconLp.topMargin = (16 * density).toInt()
+                                                                        iconLp.bottomMargin = (4 * density).toInt()
+                                                                        iconChild.layoutParams = iconLp
+                                                                    }
+                                                                }
+                                                                val lblResId = ctx.resources.getIdentifier("label_container", "id", ctx.packageName)
+                                                                val labelCont = if (lblResId != 0) rootCard.findViewById<android.widget.LinearLayout>(lblResId) else null
+                                                                if (labelCont != null) {
+                                                                    val lblLp = labelCont.layoutParams as? android.widget.LinearLayout.LayoutParams
+                                                                    if (lblLp != null) {
+                                                                        lblLp.gravity = Gravity.CENTER_HORIZONTAL
+                                                                        lblLp.marginStart = (4 * density).toInt()
+                                                                        lblLp.marginEnd = (4 * density).toInt()
+                                                                        labelCont.layoutParams = lblLp
+                                                                    }
+                                                                    val tId = ctx.resources.getIdentifier("title", "id", ctx.packageName)
+                                                                    labelCont.findViewById<TextView>(tId)?.gravity = Gravity.CENTER
+                                                                    val sId = ctx.resources.getIdentifier("status", "id", ctx.packageName)
+                                                                    labelCont.findViewById<TextView>(sId)?.gravity = Gravity.CENTER
+                                                                }
+                                                            }
+                                                        }
+                                                        viewsMap[strFrom] = rootCard
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "prepareShow secondary detail card adaptation error", t)
+                            }
+                            chain.proceed()
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
             hookedPluginLoaders.add(classLoader)
             Log.i(TAG, "Control Center Plugin hooks successfully attached!")
         } catch (t: Throwable) {
@@ -2649,6 +2799,7 @@ class TileResizeDragTouchListener(
         }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                ControlCenterConfigHolder.sIsDraggingResizeHandle = true
                 requestDisallowAll(v, true)
 
                 downRawX = event.rawX
@@ -2679,11 +2830,12 @@ class TileResizeDragTouchListener(
                     originWidth = visualView.width.toFloat().coerceAtLeast(56f * density)
                     originHeight = visualView.height.toFloat().coerceAtLeast(56f * density)
 
-                    val resHeightId = ctx.resources.getIdentifier("control_center_universal_1_row_with_margin_size", "dimen", ctx.packageName)
-                    val unitH = if (resHeightId != 0) ctx.resources.getDimensionPixelSize(resHeightId).toFloat() else (76f * density)
+                    val cardHId = ctx.resources.getIdentifier("qs_card_item_height", "dimen", ctx.packageName)
+                    val cardH = if (cardHId != 0) ctx.resources.getDimensionPixelSize(cardHId).toFloat() else (71.5f * density)
+                    val res2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
+                    val tallH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId).toFloat() else (157f * density)
                     val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
                     val gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId).toFloat() else (10f * density)
-                    val tallH = unitH * 2f + gap
 
                     val cardRadius = 26f * density
 
@@ -2711,14 +2863,14 @@ class TileResizeDragTouchListener(
                         STATE_VERTICAL -> {
                             unitWidth1x1 = originWidth
                             cardHeight1x2 = originHeight
-                            unitHeight1x1 = unitH.coerceAtLeast(56f * density)
+                            unitHeight1x1 = colW.coerceAtLeast(56f * density)
                             cardWidth2x1 = twoColW.coerceAtLeast(originWidth * 2f + gap)
                         }
                         STATE_LARGE -> {
                             cardWidth2x1 = originWidth
                             cardHeight1x2 = originHeight
                             unitWidth1x1 = colW.coerceAtLeast(56f * density)
-                            unitHeight1x1 = unitH.coerceAtLeast(56f * density)
+                            unitHeight1x1 = colW.coerceAtLeast(56f * density)
                         }
                     }
 
@@ -2732,6 +2884,7 @@ class TileResizeDragTouchListener(
             }
 
             MotionEvent.ACTION_MOVE -> {
+                ControlCenterConfigHolder.sIsDraggingResizeHandle = true
                 requestDisallowAll(v, true)
 
                 val dx = event.rawX - downRawX
@@ -2919,6 +3072,7 @@ class TileResizeDragTouchListener(
             }
 
             MotionEvent.ACTION_UP -> {
+                ControlCenterConfigHolder.sIsDraggingResizeHandle = false
                 requestDisallowAll(v, false)
                 tileView.alpha = 1.0f
 
@@ -2941,16 +3095,21 @@ class TileResizeDragTouchListener(
                     v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     ControlCenterConfigHolder.toggleTileSize(ctx, spec, tileView)
                 }
+                isDragging = false
+                candidateTargetState = -1
                 return true
             }
 
             MotionEvent.ACTION_CANCEL -> {
+                ControlCenterConfigHolder.sIsDraggingResizeHandle = false
                 requestDisallowAll(v, false)
                 tileView.alpha = 1.0f
                 ghostDrawable?.let { gd ->
                     targetContainer?.overlay?.remove(gd)
                     targetContainer?.invalidate()
                 }
+                isDragging = false
+                candidateTargetState = -1
                 return true
             }
         }
