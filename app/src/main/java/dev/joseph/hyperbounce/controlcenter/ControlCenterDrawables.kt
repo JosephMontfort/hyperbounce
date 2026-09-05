@@ -47,53 +47,125 @@ class RotateIconDrawable : Drawable() {
 }
 
 /**
- * Custom Anti-Aliased Resize Handle Vector Badge Drawable.
+ * Custom Anti-Aliased Curved Resize Handle Drawable.
+ * Renders a sleek curved arc pill hugging the bottom-right corner of tiles and cards,
+ * exactly matching the iOS/HyperOS interactive drag handle design.
  */
-class ResizeHandleDrawable : Drawable() {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+open class CurvedResizeHandleDrawable(private val density: Float = 2.75f) : Drawable() {
+    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         style = Paint.Style.STROKE
-        strokeWidth = 3.5f
+        strokeWidth = 3.6f * density
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
-    private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#B3000000")
-        style = Paint.Style.FILL
+    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#80000000") // 50% dark translucent shadow for contrast
+        style = Paint.Style.STROKE
+        strokeWidth = 4.8f * density
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
     }
+
+    private val arcPath = Path()
+    private val arcRect = RectF()
 
     override fun draw(canvas: Canvas) {
         val w = bounds.width().toFloat()
         val h = bounds.height().toFloat()
-        if (w <= 0 || h <= 0) return
+        if (w <= 0f || h <= 0f) return
 
-        canvas.drawCircle(w / 2.0f, h / 2.0f, Math.min(w, h) / 2.0f, bgPaint)
+        // In a bounding box (e.g. 38dp x 38dp):
+        // Curve along bottom-right quadrant
+        val inset = 4.0f * density
+        val radius = (w - inset) * 0.70f
+        val cx = w - inset - radius
+        val cy = h - inset - radius
 
-        val cx = w * 0.50f
-        val cy = h * 0.50f
-        val off = w * 0.22f
+        arcRect.set(cx - radius, cy - radius, cx + radius, cy + radius)
+        arcPath.reset()
+        arcPath.arcTo(arcRect, 12f, 66f, false)
 
-        canvas.drawLine(cx - off, cy + off, cx + off, cy - off, paint)
-
-        // Top-right arrow head
-        val p1 = Path().apply {
-            moveTo(cx + off - (w * 0.14f), cy - off)
-            lineTo(cx + off, cy - off)
-            lineTo(cx + off, cy - off + (h * 0.14f))
-        }
-        canvas.drawPath(p1, paint)
-
-        // Bottom-left arrow head
-        val p2 = Path().apply {
-            moveTo(cx - off + (w * 0.14f), cy + off)
-            lineTo(cx - off, cy + off)
-            lineTo(cx - off, cy + off - (h * 0.14f))
-        }
-        canvas.drawPath(p2, paint)
+        // Drop shadow for crisp visibility on light wallpapers
+        canvas.drawPath(arcPath, shadowPaint)
+        // Main white curved pill arc
+        canvas.drawPath(arcPath, strokePaint)
     }
 
-    override fun setAlpha(alpha: Int) { paint.alpha = alpha }
-    override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
+    override fun setAlpha(alpha: Int) {
+        strokePaint.alpha = alpha
+        shadowPaint.alpha = (alpha * 0.5f).toInt()
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        strokePaint.colorFilter = colorFilter
+    }
+
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
+class ResizeHandleDrawable(density: Float = 2.75f) : CurvedResizeHandleDrawable(density)
+
+/**
+ * Live Morphing Ghost Overlay Drawable for tile resizing.
+ */
+class TileResizeGhostDrawable(private val density: Float = 2.75f) : Drawable() {
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.parseColor("#4DFFFFFF") // 30% translucent white
+    }
+    private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 2.5f * density
+        color = Color.parseColor("#B3FFFFFF") // 70% white border
+    }
+    private val snapPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 3.0f * density
+        color = Color.parseColor("#FF0A84FF") // iOS Blue snap highlight
+    }
+
+    private val rect = RectF()
+    private var cornerRadius = 24f * density
+    private var isSnapping = false
+
+    fun setOriginBounds(left: Float, top: Float, width: Float, height: Float) {
+        rect.set(left, top, left + width, top + height)
+        cornerRadius = Math.min(width, height) / 2.0f
+        setBounds(left.toInt(), top.toInt(), (left + width).toInt(), (top + height).toInt())
+    }
+
+    fun updateMorph(left: Float, top: Float, width: Float, height: Float, snapping: Boolean) {
+        rect.set(left, top, left + width, top + height)
+        isSnapping = snapping
+        val maxDim = Math.max(width, height)
+        val minDim = Math.min(width, height)
+        cornerRadius = if (maxDim / minDim > 1.3f) 20f * density else minDim / 2f
+        setBounds(left.toInt(), top.toInt(), (left + width).toInt(), (top + height).toInt())
+    }
+
+    override fun draw(canvas: Canvas) {
+        if (rect.isEmpty) return
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, fillPaint)
+        if (isSnapping) {
+            canvas.drawRoundRect(rect, cornerRadius, cornerRadius, snapPaint)
+        } else {
+            canvas.drawRoundRect(rect, cornerRadius, cornerRadius, borderPaint)
+        }
+    }
+
+    override fun setAlpha(alpha: Int) {
+        fillPaint.alpha = (alpha * 0.3f).toInt()
+        borderPaint.alpha = alpha
+        snapPaint.alpha = alpha
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        fillPaint.colorFilter = colorFilter
+        borderPaint.colorFilter = colorFilter
+        snapPaint.colorFilter = colorFilter
+    }
+
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
 

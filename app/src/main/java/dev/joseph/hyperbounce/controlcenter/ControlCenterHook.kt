@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -912,6 +913,10 @@ object ControlCenterHook {
                                             val holder = ControlCenterGrouping.createCardViewHolder(parent, qsListCtrl, classLoader)
                                             if (holder != null) return@intercept holder
                                         }
+                                        if (viewType == 2277) {
+                                            val holder = ControlCenterGrouping.createVerticalSingleCardViewHolder(parent, qsListCtrl, classLoader)
+                                            if (holder != null) return@intercept holder
+                                        }
                                     }
                                 } catch (t: Throwable) {
                                     Log.e(TAG, "QSListController.createViewHolder inflation error", t)
@@ -934,7 +939,7 @@ object ControlCenterHook {
                             val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                             if (args != null && args.size >= 2) {
                                 val vt = args[1] as Int
-                                if (vt == 2274 || vt == 2275 || vt == 2276 || vt == 2273) {
+                                if (vt == 2274 || vt == 2275 || vt == 2276 || vt == 2273 || vt == 2277) {
                                     val parent = args[0] as ViewGroup
                                     try {
                                         val adapterObj = chain.thisObject
@@ -958,6 +963,9 @@ object ControlCenterHook {
                                             if (holder != null) return@intercept holder
                                         } else if (vt == 2273) {
                                             val holder = ControlCenterGrouping.createCardViewHolder(parent, qsListCtrl, classLoader)
+                                            if (holder != null) return@intercept holder
+                                        } else if (vt == 2277) {
+                                            val holder = ControlCenterGrouping.createVerticalSingleCardViewHolder(parent, qsListCtrl, classLoader)
                                             if (holder != null) return@intercept holder
                                         }
                                     } catch (t: Throwable) {
@@ -1099,6 +1107,9 @@ object ControlCenterHook {
                                         if (g.specs.size == 4) return@intercept 2274
                                         if (g.specs.size == 2) return@intercept if (g.isVertical) 2276 else 2275
                                     }
+                                    if (ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)) {
+                                        return@intercept 2277
+                                    }
                                     if (ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)) {
                                         return@intercept 2273
                                     }
@@ -1121,6 +1132,9 @@ object ControlCenterHook {
                                     if (g != null) {
                                         if (g.specs.size == 4) return@intercept 2
                                         if (g.specs.size == 2) return@intercept if (g.isVertical) 1 else 2
+                                    }
+                                    if (ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)) {
+                                        return@intercept 1
                                     }
                                     if (ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)) {
                                         return@intercept 2
@@ -1540,18 +1554,30 @@ object ControlCenterHook {
                                         var selectBadge = itemView.findViewById<ImageView>(selectTag)
 
                                         if (itemView is ViewGroup && resizeHandle == null && !"wifi".equals(spec, ignoreCase = true) && !"cell".equals(spec, ignoreCase = true)) {
+                                            val badgeSize = (38 * density).toInt()
                                             resizeHandle = ImageView(ctx).apply {
                                                 id = resizeTag
-                                                val badgeSize = (24 * density).toInt()
                                                 val lp = FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
                                                     gravity = Gravity.BOTTOM or Gravity.END
-                                                    val margin = (4 * density).toInt()
-                                                    setMargins(0, 0, margin, margin)
                                                 }
                                                 layoutParams = lp
-                                                setImageDrawable(ResizeHandleDrawable())
+                                                setImageDrawable(CurvedResizeHandleDrawable(density))
                                             }
                                             itemView.addView(resizeHandle)
+
+                                            itemView.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ ->
+                                                val w = r - l
+                                                val h = b - t
+                                                if (w > 0 && h > 0) {
+                                                    val curHandle = itemView.findViewById<ImageView>(resizeTag)
+                                                    if (curHandle != null && curHandle.visibility == View.VISIBLE) {
+                                                        val bw = curHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
+                                                        val bh = curHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
+                                                        curHandle.layout(w - bw, h - bh, w, h)
+                                                        curHandle.bringToFront()
+                                                    }
+                                                }
+                                            }
                                         }
 
                                         if (itemView is ViewGroup && selectBadge == null && !"wifi".equals(spec, ignoreCase = true) && !"cell".equals(spec, ignoreCase = true)) {
@@ -1574,13 +1600,27 @@ object ControlCenterHook {
                                                 resizeHandle.visibility = View.VISIBLE
                                                 resizeHandle.bringToFront()
                                                 resizeHandle.isClickable = true
-                                                resizeHandle.setOnClickListener {
-                                                    ControlCenterConfigHolder.toggleTileSize(ctx, spec, itemView)
+                                                if (spec != null) {
+                                                    resizeHandle.setOnTouchListener(TileResizeDragTouchListener(ctx, spec, itemView, density))
                                                 }
                                             } else {
                                                 resizeHandle.visibility = View.GONE
+                                                resizeHandle.setOnTouchListener(null)
                                                 resizeHandle.setOnClickListener(null)
                                                 resizeHandle.isClickable = false
+                                            }
+                                        }
+
+                                        if (spec != null && ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)) {
+                                            val resHeightId = ctx.resources.getIdentifier("control_center_universal_1_row_with_margin_size", "dimen", ctx.packageName)
+                                            val unitH = if (resHeightId != 0) ctx.resources.getDimensionPixelSize(resHeightId) else (76 * density).toInt()
+                                            val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
+                                            val gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId) else (10 * density).toInt()
+                                            val tallH = unitH * 2 + gap
+                                            val curLp = itemView.layoutParams
+                                            if (curLp != null && curLp.height != tallH) {
+                                                curLp.height = tallH
+                                                itemView.layoutParams = curLp
                                             }
                                         }
 
@@ -2026,5 +2066,236 @@ object ControlCenterHook {
         } catch (t: Throwable) {
             Log.e(TAG, "initPluginHooks fatal error", t)
         }
+    }
+}
+
+/**
+ * Interactive Drag Touch Listener for Tile Resizing.
+ * Handles live dragging and morphing between:
+ * - 1x1 circular tile (Normal)
+ * - 2x1 horizontal card (Expanded)
+ * - 1x2 vertical card (Vertical)
+ */
+class TileResizeDragTouchListener(
+    private val ctx: Context,
+    private val spec: String,
+    private val tileView: View,
+    private val density: Float
+) : View.OnTouchListener {
+
+    companion object {
+        private const val STATE_NORMAL = 0
+        private const val STATE_EXPANDED = 1
+        private const val STATE_VERTICAL = 2
+    }
+
+    private var downRawX = 0f
+    private var downRawY = 0f
+    private var isDragging = false
+    private var initialState = STATE_NORMAL
+    private var candidateTargetState = -1
+
+    private var targetContainer: ViewGroup? = null
+    private var ghostDrawable: TileResizeGhostDrawable? = null
+
+    private var originLeft = 0f
+    private var originTop = 0f
+    private var originWidth = 0f
+    private var originHeight = 0f
+    private var unitWidth1x1 = 0f
+    private var cardWidth2x1 = 0f
+    private var cardHeight1x2 = 0f
+
+    private fun findRecyclerView(view: View?): ViewGroup? {
+        var cur = view?.parent
+        while (cur != null) {
+            if (cur is ViewGroup && cur.javaClass.name.contains("RecyclerView")) {
+                return cur
+            }
+            cur = cur.parent
+        }
+        return null
+    }
+
+    override fun onTouch(v: View, event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                v.parent?.requestDisallowInterceptTouchEvent(true)
+
+                downRawX = event.rawX
+                downRawY = event.rawY
+                isDragging = false
+                candidateTargetState = -1
+
+                initialState = when {
+                    ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) -> STATE_EXPANDED
+                    ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) -> STATE_VERTICAL
+                    else -> STATE_NORMAL
+                }
+
+                val rv = findRecyclerView(tileView) ?: (tileView.rootView as? ViewGroup)
+                targetContainer = rv
+                if (rv != null) {
+                    val locTile = IntArray(2)
+                    val locRv = IntArray(2)
+                    tileView.getLocationInWindow(locTile)
+                    rv.getLocationInWindow(locRv)
+                    originLeft = (locTile[0] - locRv[0]).toFloat()
+                    originTop = (locTile[1] - locRv[1]).toFloat()
+                    originWidth = tileView.width.toFloat()
+                    originHeight = tileView.height.toFloat()
+
+                    val unitH = originHeight.coerceAtLeast(60f * density)
+                    val gap = 10f * density
+                    unitWidth1x1 = if (initialState == STATE_EXPANDED) {
+                        ((originWidth - gap) / 2f).coerceAtLeast(60f * density)
+                    } else {
+                        originWidth.coerceAtLeast(60f * density)
+                    }
+                    cardWidth2x1 = unitWidth1x1 * 2f + gap
+                    cardHeight1x2 = unitH * 2f + gap
+
+                    ghostDrawable = TileResizeGhostDrawable(density).apply {
+                        setOriginBounds(originLeft, originTop, originWidth, originHeight)
+                    }
+                }
+                v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                return true
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                val dx = event.rawX - downRawX
+                val dy = event.rawY - downRawY
+                val dist = Math.hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                val slop = 8f * density
+
+                if (dist > slop) {
+                    if (!isDragging) {
+                        isDragging = true
+                        ghostDrawable?.let { targetContainer?.overlay?.add(it) }
+                        tileView.alpha = 0.60f
+                    }
+                }
+
+                if (!isDragging) return true
+
+                var previewW = originWidth
+                var previewH = originHeight
+                var targetState = initialState
+
+                when (initialState) {
+                    STATE_NORMAL -> {
+                        val horizThreshold = (cardWidth2x1 - unitWidth1x1) * 0.35f
+                        val vertThreshold = (cardHeight1x2 - originHeight) * 0.35f
+
+                        if (Math.abs(dx) > Math.abs(dy)) {
+                            if (dx > 0) {
+                                val p = (dx / (cardWidth2x1 - unitWidth1x1)).coerceIn(0f, 1f)
+                                previewW = unitWidth1x1 + p * (cardWidth2x1 - unitWidth1x1)
+                                if (dx >= horizThreshold) {
+                                    targetState = STATE_EXPANDED
+                                }
+                            }
+                        } else {
+                            if (dy > 0) {
+                                val p = (dy / (cardHeight1x2 - originHeight)).coerceIn(0f, 1f)
+                                previewH = originHeight + p * (cardHeight1x2 - originHeight)
+                                if (dy >= vertThreshold) {
+                                    targetState = STATE_VERTICAL
+                                }
+                            }
+                        }
+                    }
+                    STATE_EXPANDED -> {
+                        val shrinkThreshold = (cardWidth2x1 - unitWidth1x1) * 0.35f
+                        val vertThreshold = (cardHeight1x2 - originHeight) * 0.35f
+
+                        if (dx < 0 && Math.abs(dx) > Math.abs(dy)) {
+                            val p = (-dx / (cardWidth2x1 - unitWidth1x1)).coerceIn(0f, 1f)
+                            previewW = cardWidth2x1 - p * (cardWidth2x1 - unitWidth1x1)
+                            if (-dx >= shrinkThreshold) {
+                                targetState = STATE_NORMAL
+                            }
+                        } else if (dy > 0 && dy > Math.abs(dx)) {
+                            val p = (dy / (cardHeight1x2 - originHeight)).coerceIn(0f, 1f)
+                            previewH = originHeight + p * (cardHeight1x2 - originHeight)
+                            if (dy >= vertThreshold) {
+                                targetState = STATE_VERTICAL
+                            }
+                        }
+                    }
+                    STATE_VERTICAL -> {
+                        val shrinkThreshold = (cardHeight1x2 - originHeight / 2f) * 0.35f
+                        val horizThreshold = (cardWidth2x1 - unitWidth1x1) * 0.35f
+
+                        if (dy < 0 && Math.abs(dy) > Math.abs(dx)) {
+                            val p = (-dy / (cardHeight1x2 - originHeight / 2f)).coerceIn(0f, 1f)
+                            previewH = cardHeight1x2 - p * (cardHeight1x2 - originHeight / 2f)
+                            if (-dy >= shrinkThreshold) {
+                                targetState = STATE_NORMAL
+                            }
+                        } else if (dx > 0 && dx > Math.abs(dy)) {
+                            val p = (dx / (cardWidth2x1 - unitWidth1x1)).coerceIn(0f, 1f)
+                            previewW = unitWidth1x1 + p * (cardWidth2x1 - unitWidth1x1)
+                            if (dx >= horizThreshold) {
+                                targetState = STATE_EXPANDED
+                            }
+                        }
+                    }
+                }
+
+                if (targetState != candidateTargetState) {
+                    candidateTargetState = targetState
+                    v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                }
+
+                ghostDrawable?.let { gd ->
+                    val isSnapping = candidateTargetState != initialState && candidateTargetState != -1
+                    gd.updateMorph(originLeft, originTop, previewW, previewH, isSnapping)
+                    targetContainer?.invalidate()
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_UP -> {
+                v.parent?.requestDisallowInterceptTouchEvent(false)
+                tileView.alpha = 1.0f
+
+                ghostDrawable?.let { gd ->
+                    targetContainer?.overlay?.remove(gd)
+                    targetContainer?.invalidate()
+                }
+
+                if (isDragging) {
+                    if (candidateTargetState != -1 && candidateTargetState != initialState) {
+                        v.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                        when (candidateTargetState) {
+                            STATE_EXPANDED -> ControlCenterConfigHolder.setTileToExpanded(ctx, spec, tileView)
+                            STATE_VERTICAL -> ControlCenterConfigHolder.setTileToVertical(ctx, spec, tileView)
+                            STATE_NORMAL -> ControlCenterConfigHolder.setTileToNormal(ctx, spec, tileView)
+                        }
+                    }
+                } else {
+                    v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    when (initialState) {
+                        STATE_NORMAL -> ControlCenterConfigHolder.setTileToExpanded(ctx, spec, tileView)
+                        STATE_EXPANDED -> ControlCenterConfigHolder.setTileToVertical(ctx, spec, tileView)
+                        STATE_VERTICAL -> ControlCenterConfigHolder.setTileToNormal(ctx, spec, tileView)
+                    }
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
+                v.parent?.requestDisallowInterceptTouchEvent(false)
+                tileView.alpha = 1.0f
+                ghostDrawable?.let { gd ->
+                    targetContainer?.overlay?.remove(gd)
+                    targetContainer?.invalidate()
+                }
+                return true
+            }
+        }
+        return false
     }
 }

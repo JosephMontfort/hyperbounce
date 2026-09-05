@@ -66,6 +66,7 @@ object ControlCenterConfigHolder {
         add("wifi")
         add("cell")
     }
+    val sVerticalTileSpecs = LinkedHashSet<String>()
     val sComponentPriorities = ConcurrentHashMap<String, Int>().apply {
         put("CompactQS", 0)
         put("CompactQSCard", 1)
@@ -188,6 +189,18 @@ object ControlCenterConfigHolder {
                         }
                     }
 
+                    val verticalStr = json.optString("vertical_tile_specs", "")
+                    if (!TextUtils.isEmpty(verticalStr)) {
+                        val newVert = LinkedHashSet<String>()
+                        for (spec in verticalStr.split(",")) {
+                            if (spec.trim().isNotEmpty()) newVert.add(spec.trim())
+                        }
+                        if (newVert.isNotEmpty()) {
+                            sVerticalTileSpecs.clear()
+                            sVerticalTileSpecs.addAll(newVert)
+                        }
+                    }
+
                     val grpV2 = json.optString("tile_groups_v2", "")
                     if (!TextUtils.isEmpty(grpV2)) {
                         val newGroups = ArrayList<TileGroup>()
@@ -235,6 +248,18 @@ object ControlCenterConfigHolder {
                     if (newExp.isNotEmpty()) {
                         sExpandedTileSpecs.clear()
                         sExpandedTileSpecs.addAll(newExp)
+                    }
+                }
+
+                val verticalStr = prefs.getString("vertical_tile_specs", "")
+                if (!TextUtils.isEmpty(verticalStr)) {
+                    val newVert = LinkedHashSet<String>()
+                    for (spec in verticalStr!!.split(",")) {
+                        if (spec.trim().isNotEmpty()) newVert.add(spec.trim())
+                    }
+                    if (newVert.isNotEmpty()) {
+                        sVerticalTileSpecs.clear()
+                        sVerticalTileSpecs.addAll(newVert)
                     }
                 }
 
@@ -296,6 +321,13 @@ object ControlCenterConfigHolder {
             }
             json.put("expanded_tile_specs", sb.toString())
 
+            val vertSb = StringBuilder()
+            for (spec in sVerticalTileSpecs) {
+                if (vertSb.isNotEmpty()) vertSb.append(",")
+                vertSb.append(spec)
+            }
+            json.put("vertical_tile_specs", vertSb.toString())
+
             val groupsSb = StringBuilder()
             for (g in sTileGroups) {
                 if (g.specs.size == 4 || g.specs.size == 2) {
@@ -334,6 +366,7 @@ object ControlCenterConfigHolder {
                 }
                 editor.putBoolean("wifi_card_first", sIsWifiFirst)
                 editor.putString("expanded_tile_specs", sb.toString())
+                editor.putString("vertical_tile_specs", vertSb.toString())
                 editor.putString("tile_groups_v2", groupsSb.toString())
                 editor.apply()
             }
@@ -365,6 +398,7 @@ object ControlCenterConfigHolder {
             sExpandedTileSpecs.clear()
             sExpandedTileSpecs.add("wifi")
             sExpandedTileSpecs.add("cell")
+            sVerticalTileSpecs.clear()
             sIsWifiFirst = true
             sComponentPriorities.clear()
             sComponentPriorities["CompactQS"] = 0
@@ -557,15 +591,7 @@ object ControlCenterConfigHolder {
         }
     }
 
-    fun toggleTileSize(ctx: Context, spec: String?, tileView: View?) {
-        if (spec == null || "wifi" == spec || "cell" == spec) return
-        if (sExpandedTileSpecs.contains(spec)) {
-            sExpandedTileSpecs.remove(spec)
-        } else {
-            sExpandedTileSpecs.add(spec)
-        }
-        savePriorities(ctx)
-
+    fun refreshRecyclerView(tileView: View?) {
         var parent: View? = tileView
         while (parent != null && !parent.javaClass.name.contains("RecyclerView")) {
             parent = if (parent.parent is View) parent.parent as View else break
@@ -583,6 +609,49 @@ object ControlCenterConfigHolder {
                 } catch (t: Throwable) {}
             }
         }
+    }
+
+    fun setTileToExpanded(ctx: Context, spec: String?, tileView: View?) {
+        if (spec == null || "wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) return
+        sExpandedTileSpecs.add(spec)
+        sVerticalTileSpecs.remove(spec)
+        savePriorities(ctx)
+        refreshRecyclerView(tileView)
+    }
+
+    fun setTileToVertical(ctx: Context, spec: String?, tileView: View?) {
+        if (spec == null || "wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) return
+        sVerticalTileSpecs.add(spec)
+        sExpandedTileSpecs.remove(spec)
+        savePriorities(ctx)
+        refreshRecyclerView(tileView)
+    }
+
+    fun setTileToNormal(ctx: Context, spec: String?, tileView: View?) {
+        if (spec == null || "wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) return
+        sExpandedTileSpecs.remove(spec)
+        sVerticalTileSpecs.remove(spec)
+        savePriorities(ctx)
+        refreshRecyclerView(tileView)
+    }
+
+    fun toggleTileSize(ctx: Context, spec: String?, tileView: View?) {
+        if (spec == null || "wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) return
+        when {
+            sExpandedTileSpecs.contains(spec) -> {
+                sExpandedTileSpecs.remove(spec)
+                sVerticalTileSpecs.add(spec)
+            }
+            sVerticalTileSpecs.contains(spec) -> {
+                sVerticalTileSpecs.remove(spec)
+            }
+            else -> {
+                sExpandedTileSpecs.add(spec)
+                sVerticalTileSpecs.remove(spec)
+            }
+        }
+        savePriorities(ctx)
+        refreshRecyclerView(tileView)
     }
 
     fun triggerTileToggle(tile: Any?, record: Any?, childView: View?, classLoader: ClassLoader) {

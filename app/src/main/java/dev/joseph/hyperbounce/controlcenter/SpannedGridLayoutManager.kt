@@ -112,6 +112,10 @@ class SpannedGridLayoutManager : GridLayoutManager {
             if (viewType == 2273) {
                 return intArrayOf(2, 1)
             }
+            // 2277: Single Tile Vertical Card -> 1x2
+            if (viewType == 2277) {
+                return intArrayOf(1, 2)
+            }
             // 338423: Mi Smart Hub -> 2x1
             if (viewType == 338423) {
                 return intArrayOf(2, 1)
