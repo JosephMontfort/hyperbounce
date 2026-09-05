@@ -659,11 +659,11 @@ object ControlCenterConfigHolder {
                     val itemView = rv.getChildAt(i) ?: continue
                     if (ControlCenterHook.isChildOfContainer(itemView)) continue
 
-                    val spec = getOrResolveTileSpec(itemView)
-                    val isExpanded = spec != null && sExpandedTileSpecs.contains(spec)
-                    val isVertical = spec != null && sVerticalTileSpecs.contains(spec)
-                    val isLarge = spec != null && sLargeTileSpecs.contains(spec)
-                    val isCircular = !isExpanded && !isVertical && !isLarge && !itemView.javaClass.name.contains("Card")
+                    val spec = getOrResolveTileSpec(itemView) ?: continue
+                    val isExpanded = sExpandedTileSpecs.contains(spec)
+                    val isVertical = sVerticalTileSpecs.contains(spec)
+                    val isLarge = sLargeTileSpecs.contains(spec)
+                    val isCircular = !isExpanded && !isVertical && !isLarge && !itemView.javaClass.name.contains("Card") && (itemView.javaClass.name.contains("Tile") || itemView.javaClass.name.contains("QSTileItemView"))
                     val density = itemView.resources.displayMetrics.density
 
                     val iconFrameId = itemView.resources.getIdentifier("icon_frame", "id", itemView.context.packageName)
@@ -845,11 +845,11 @@ object ControlCenterConfigHolder {
                 itemView.isLongClickable = true
                 itemView.isFocusable = true
 
-                val spec = getOrResolveTileSpec(itemView)
-                val isExpanded = spec != null && sExpandedTileSpecs.contains(spec)
-                val isVertical = spec != null && sVerticalTileSpecs.contains(spec)
-                val isLarge = spec != null && sLargeTileSpecs.contains(spec)
-                val isCircular = !isExpanded && !isVertical && !isLarge && !itemView.javaClass.name.contains("Card")
+                val spec = getOrResolveTileSpec(itemView) ?: continue
+                val isExpanded = sExpandedTileSpecs.contains(spec)
+                val isVertical = sVerticalTileSpecs.contains(spec)
+                val isLarge = sLargeTileSpecs.contains(spec)
+                val isCircular = !isExpanded && !isVertical && !isLarge && !itemView.javaClass.name.contains("Card") && (itemView.javaClass.name.contains("Tile") || itemView.javaClass.name.contains("QSTileItemView"))
                 if (isCircular) {
                     ControlCenterHook.setCircularTileLabelVisibility(itemView, true)
                 }

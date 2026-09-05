@@ -1335,7 +1335,9 @@ object ControlCenterGrouping {
                         }
                     }
                     ControlCenterConfigHolder.updateAllVisibleTileBadges()
-                    ControlCenterConfigHolder.refreshAdapter(root, ctx, structural)
+                    if (structural) {
+                        ControlCenterConfigHolder.refreshAdapter(root, ctx, true)
+                    }
                 } catch (t: Throwable) {
                     Log.e(TAG, "groupButton error", t)
                 }
@@ -1373,7 +1375,9 @@ object ControlCenterGrouping {
                         }
                     }
                     ControlCenterConfigHolder.updateAllVisibleTileBadges()
-                    ControlCenterConfigHolder.refreshAdapter(root, ctx, structural)
+                    if (structural) {
+                        ControlCenterConfigHolder.refreshAdapter(root, ctx, true)
+                    }
                 } catch (t: Throwable) {
                     Log.e(TAG, "disassembleButton error", t)
                 }

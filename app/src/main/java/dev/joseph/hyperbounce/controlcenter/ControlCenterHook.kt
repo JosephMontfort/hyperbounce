@@ -265,6 +265,10 @@ object ControlCenterHook {
 
     fun setCircularTileLabelVisibility(itemView: View, visible: Boolean) {
         try {
+            val cName = itemView.javaClass.name
+            if (!cName.contains("Tile") || cName.contains("Card")) {
+                return
+            }
             var shouldShow = visible
             if (visible) {
                 try {
@@ -968,6 +972,16 @@ object ControlCenterHook {
                                                 lp.topMargin = 0
                                                 itemView.layoutParams = lp
                                             }
+                                            fun restoreWordlessViews(v: View) {
+                                                v.visibility = View.VISIBLE
+                                                v.alpha = 1.0f
+                                                if (v is ViewGroup) {
+                                                    for (ci in 0 until v.childCount) {
+                                                        restoreWordlessViews(v.getChildAt(ci))
+                                                    }
+                                                }
+                                            }
+                                            restoreWordlessViews(itemView)
                                         }
                                     }
                                 } catch (t: Throwable) {}
@@ -1857,7 +1871,7 @@ object ControlCenterHook {
                                         val isExpanded = ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)
                                         val isVertical = ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)
                                         val isLarge = ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)
-                                        val isCircular = !isExpanded && !isVertical && !isLarge && !itemView.javaClass.name.contains("Card")
+                                        val isCircular = !isExpanded && !isVertical && !isLarge && !itemView.javaClass.name.contains("Card") && (itemView.javaClass.name.contains("Tile") || itemView.javaClass.name.contains("QSTileItemView"))
                                         val iconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
                                         val iconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
 
@@ -2132,7 +2146,7 @@ object ControlCenterHook {
                                                     val curIsExp = ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)
                                                     val curIsVert = ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)
                                                     val curIsLarge = ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)
-                                                    val curIsCirc = !curIsExp && !curIsVert && !curIsLarge && !itemView.javaClass.name.contains("Card")
+                                                    val curIsCirc = !curIsExp && !curIsVert && !curIsLarge && !itemView.javaClass.name.contains("Card") && (itemView.javaClass.name.contains("Tile") || itemView.javaClass.name.contains("QSTileItemView"))
 
                                                     fun applyHandleLayout() {
                                                         if (curIsCirc && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
