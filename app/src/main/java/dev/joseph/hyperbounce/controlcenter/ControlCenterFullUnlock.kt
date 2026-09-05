@@ -489,7 +489,9 @@ object ControlCenterFullUnlock {
                             sKnownSlots["component:device_controls"] = SlotItem("component:device_controls", controller, item, 2668765, spans.first, spans.second)
                         }
                     } else if (ctrlName.contains("QSListController")) {
-                        val qsFooterItems = ArrayList<Any>()
+                        val rawFooterItems = ArrayList<Any>()
+                        val seenAvailableSpecs = HashSet<String>()
+
                         for (item in items) {
                             val spec = ControlCenterConfigHolder.getRecordSpec(item)
                             var isAdded = true
@@ -513,17 +515,93 @@ object ControlCenterFullUnlock {
                                 val spans = getItemSpans(item, vt, spec)
                                 sKnownSlots[id] = SlotItem(id, controller, item, vt, spans.first, spans.second)
                             } else {
-                                qsFooterItems.add(item)
+                                // Potential footer item: either divider/header or unadded available tile
+                                if (isDividerOrHeader) {
+                                    rawFooterItems.add(item)
+                                } else if (spec != null) {
+                                    // Check if tile is ALREADY an active tile in our unified slots!
+                                    val isAlreadyActive = sKnownSlots.containsKey("tile:$spec") ||
+                                            sKnownSlots.containsKey("group:$spec") ||
+                                            sUnifiedSlotOrder.contains("tile:$spec") ||
+                                            sUnifiedSlotOrder.contains("group:$spec") ||
+                                            ControlCenterConfigHolder.isGroupAnchor(spec) != null
+
+                                    // Deduplicate available tiles so the same spec never appears multiple times
+                                    if (!isAlreadyActive && !seenAvailableSpecs.contains(spec)) {
+                                        seenAvailableSpecs.add(spec)
+                                        rawFooterItems.add(item)
+                                    }
+                                }
                             }
                         }
-                        if (qsFooterItems.isNotEmpty()) {
-                            qsFooterEntry = Pair(controller, qsFooterItems)
+
+                        // Clean up consecutive or empty dividers from rawFooterItems
+                        val cleanedFooterItems = ArrayList<Any>()
+                        for (idx in rawFooterItems.indices) {
+                            val item = rawFooterItems[idx]
+                            var vt = 2272
+                            try {
+                                val getTypeM = item.javaClass.getMethod("getType")
+                                vt = getTypeM.invoke(item) as Int
+                            } catch (t: Throwable) {}
+
+                            val isDividerText = (vt == 8398) // "System toggles" or "App toggles"
+                            val isDividerLine = (vt == 3484337)
+
+                            if (isDividerText) {
+                                // Check if there is at least one tile following this header before the next divider
+                                var hasTilesBelow = false
+                                for (nextIdx in (idx + 1) until rawFooterItems.size) {
+                                    val nextItem = rawFooterItems[nextIdx]
+                                    var nextVt = 2272
+                                    try {
+                                        val getNextTypeM = nextItem.javaClass.getMethod("getType")
+                                        nextVt = getNextTypeM.invoke(nextItem) as Int
+                                    } catch (t: Throwable) {}
+                                    if (nextVt == 8398 || nextVt == 3484337) {
+                                        break
+                                    }
+                                    hasTilesBelow = true
+                                    break
+                                }
+                                if (hasTilesBelow) {
+                                    cleanedFooterItems.add(item)
+                                }
+                            } else if (isDividerLine) {
+                                val lastItem = cleanedFooterItems.lastOrNull()
+                                var lastVt = 0
+                                if (lastItem != null) {
+                                    try {
+                                        lastVt = lastItem.javaClass.getMethod("getType").invoke(lastItem) as Int
+                                    } catch (t: Throwable) {}
+                                }
+                                if (lastVt != 3484337 && idx < rawFooterItems.size - 1) {
+                                    cleanedFooterItems.add(item)
+                                }
+                            } else {
+                                cleanedFooterItems.add(item)
+                            }
+                        }
+
+                        while (cleanedFooterItems.isNotEmpty()) {
+                            val last = cleanedFooterItems.last()
+                            var lastVt = 0
+                            try { lastVt = last.javaClass.getMethod("getType").invoke(last) as Int } catch (t: Throwable) {}
+                            if (lastVt == 3484337 || lastVt == 8398) {
+                                cleanedFooterItems.removeAt(cleanedFooterItems.size - 1)
+                            } else {
+                                break
+                            }
+                        }
+
+                        if (cleanedFooterItems.isNotEmpty()) {
+                            qsFooterEntry = Pair(controller, cleanedFooterItems)
                         }
                     } else {
                         // EditButtonController, SecurityFooterController, etc.
                         val isAvail = try {
                             val availM = realController.javaClass.getMethod("available", Boolean::class.javaPrimitiveType)
-                            availM.invoke(realController, ControlCenterConfigHolder.sIsEditMode) as Boolean
+                            availM.invoke(realController, isLandscape) as Boolean
                         } catch (t: Throwable) { true }
                         if (isAvail) {
                             footers.add(Pair(controller, items))
@@ -531,9 +609,13 @@ object ControlCenterFullUnlock {
                     }
                 }
 
-                if (headerEntry != null) sAdapterHeaders[adapter] = headerEntry
-                if (wordlessEntry != null) sAdapterWordless[adapter] = wordlessEntry
-                if (qsFooterEntry != null) sAdapterQsFooters[adapter] = qsFooterEntry
+                if (headerEntry != null) sAdapterHeaders[adapter] = headerEntry else sAdapterHeaders.remove(adapter)
+                if (wordlessEntry != null) sAdapterWordless[adapter] = wordlessEntry else sAdapterWordless.remove(adapter)
+                if (qsFooterEntry != null && ControlCenterConfigHolder.sIsEditMode) {
+                    sAdapterQsFooters[adapter] = qsFooterEntry
+                } else {
+                    sAdapterQsFooters.remove(adapter)
+                }
                 sAdapterFooters[adapter] = footers
             }
 
@@ -634,10 +716,12 @@ object ControlCenterFullUnlock {
                     newContentMap[proxy] = listOf(slot.item)
                 }
 
-                // 4. Edit Divider & Inactive Available tiles pool
-                val qsFooter = sAdapterQsFooters[adapter]
-                if (qsFooter != null) {
-                    newContentMap[qsFooter.first] = qsFooter.second
+                // 4. Edit Divider & Inactive Available tiles pool - ONLY in Edit Mode!
+                if (ControlCenterConfigHolder.sIsEditMode) {
+                    val qsFooter = sAdapterQsFooters[adapter]
+                    if (qsFooter != null) {
+                        newContentMap[qsFooter.first] = qsFooter.second
+                    }
                 }
 
                 // 5. Other footers (edit button, footer space)
@@ -787,6 +871,44 @@ object ControlCenterFullUnlock {
         } catch (t: Throwable) {
             Log.e(TAG, "onItemMove error", t)
             return false
+        }
+    }
+
+    fun onExitEditMode() {
+        sAdapterQsFooters.clear()
+        sAdapterWordless.clear()
+        val adapter = ControlCenterConfigHolder.sMainPanelAdapter
+        if (adapter != null) {
+            val cl = adapter.javaClass.classLoader
+            if (cl != null) {
+                try {
+                    buildAndSetContentMap(adapter, cl)
+                    val notifyDataSetChangedM = adapter.javaClass.getMethod("notifyDataSetChanged")
+                    notifyDataSetChangedM.invoke(adapter)
+                } catch (t: Throwable) {}
+            }
+        }
+        if (sDistributor != null) {
+            val left = sLeftAdapter
+            val right = sRightAdapter
+            if (left != null) {
+                val cl = left.javaClass.classLoader
+                if (cl != null) {
+                    try {
+                        buildAndSetContentMap(left, cl)
+                        left.javaClass.getMethod("notifyDataSetChanged").invoke(left)
+                    } catch (t: Throwable) {}
+                }
+            }
+            if (right != null) {
+                val cl = right.javaClass.classLoader
+                if (cl != null) {
+                    try {
+                        buildAndSetContentMap(right, cl)
+                        right.javaClass.getMethod("notifyDataSetChanged").invoke(right)
+                    } catch (t: Throwable) {}
+                }
+            }
         }
     }
 

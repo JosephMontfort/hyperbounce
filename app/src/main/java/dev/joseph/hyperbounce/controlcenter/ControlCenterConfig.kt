@@ -913,6 +913,9 @@ object ControlCenterConfigHolder {
         sIsDisassembleMode = false
         sSelectedTileSpecs.clear()
         sSelectedDisassembleGroups.clear()
+        try {
+            ControlCenterFullUnlock.onExitEditMode()
+        } catch (t: Throwable) {}
 
         val ctx = context ?: rootView?.context ?: sRecyclerView?.get()?.context ?: sLastKnownContext
         if (ctx != null) {
