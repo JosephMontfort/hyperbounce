@@ -15,6 +15,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Constructor
@@ -44,8 +45,12 @@ object ControlCenterHook {
                             if (plugin != null) {
                                 val pluginLoader = plugin.javaClass.classLoader
                                 if (pluginLoader != null) {
-                                    Handler(Looper.getMainLooper()).post {
+                                    if (Looper.myLooper() == Looper.getMainLooper()) {
                                         initPluginHooks(module, pluginLoader)
+                                    } else {
+                                        Handler(Looper.getMainLooper()).post {
+                                            initPluginHooks(module, pluginLoader)
+                                        }
                                     }
                                 }
                             }
@@ -53,8 +58,38 @@ object ControlCenterHook {
                         }
                     }
                 }
-            } catch (t: Throwable) {}
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to hook PluginFactory.createPlugin", t)
+            }
 
+            try {
+                val pluginManagerClass = Class.forName("com.android.systemui.plugins.PluginManager", false, classLoader)
+                for (m in pluginManagerClass.declaredMethods) {
+                    if (m.name == "onPluginConnected") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            try {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                if (args != null && args.isNotEmpty() && args[0] != null) {
+                                    val pluginLoader = args[0]!!.javaClass.classLoader
+                                    if (pluginLoader != null) {
+                                        if (Looper.myLooper() == Looper.getMainLooper()) {
+                                            initPluginHooks(module, pluginLoader)
+                                        } else {
+                                            Handler(Looper.getMainLooper()).post {
+                                                initPluginHooks(module, pluginLoader)
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "Error in onPluginConnected hook", t)
+                            }
+                            chain.proceed()
+                        }
+                    }
+                }
             try {
                 val cccClass = Class.forName("com.miui.systemui.controlcenter.container.ControlCenterContentController", false, classLoader)
                 for (m in cccClass.declaredMethods) {
@@ -68,8 +103,12 @@ object ControlCenterHook {
                                 if (args != null && args.isNotEmpty() && args[0] != null) {
                                     val pluginLoader = args[0]!!.javaClass.classLoader
                                     if (pluginLoader != null) {
-                                        Handler(Looper.getMainLooper()).post {
+                                        if (Looper.myLooper() == Looper.getMainLooper()) {
                                             initPluginHooks(module, pluginLoader)
+                                        } else {
+                                            Handler(Looper.getMainLooper()).post {
+                                                initPluginHooks(module, pluginLoader)
+                                            }
                                         }
                                     }
                                 }
@@ -127,11 +166,145 @@ object ControlCenterHook {
                 }
             } catch (t: Throwable) {}
 
+            try {
+                val sysuiAppClass = Class.forName("com.android.systemui.SystemUIApplication", false, classLoader)
+                for (m in sysuiAppClass.declaredMethods) {
+                    if (m.name == "onCreate") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            try {
+                                val app = chain.thisObject as? Context
+                                if (app != null) {
+                                    ControlCenterConfigHolder.sLastKnownContext = app.applicationContext
+                                    ControlCenterConfigHolder.loadSavedPriorities(app.applicationContext)
+                                    val filter = IntentFilter("dev.joseph.hyperbounce.RESET_CC_LAYOUT")
+                                    app.registerReceiver(object : BroadcastReceiver() {
+                                        override fun onReceive(context: Context?, intent: Intent?) {
+                                            Log.i(TAG, "Broadcast received: dev.joseph.hyperbounce.RESET_CC_LAYOUT")
+                                            ControlCenterConfigHolder.resetLayoutToStock(context)
+                                        }
+                                    }, filter, Context.RECEIVER_EXPORTED)
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "SystemUIApplication.onCreate hook error", t)
+                            }
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to hook SystemUIApplication.onCreate", t)
+            }
+
             sysuiHooked = true
-            Log.i(TAG, "SystemUI hooks successfully initialized!")
         } catch (t: Throwable) {
             Log.e(TAG, "initSystemUIHooks fatal error", t)
         }
+    }
+
+    fun attachToRecyclerView(rv: RecyclerView?) {
+        if (rv == null) return
+        try {
+            if (rv.layoutManager !is SpannedGridLayoutManager) {
+                val customLm = SpannedGridLayoutManager(rv.context, 4)
+                rv.layoutManager = customLm
+                val adapter = rv.adapter
+                if (adapter != null) {
+                    ControlCenterConfigHolder.sMainPanelAdapter = adapter
+                    var adpCls: Class<*>? = adapter.javaClass
+                    while (adpCls != null && adpCls != Any::class.java) {
+                        for (f in adpCls.declaredFields) {
+                            if (f.name == "layoutManager" || RecyclerView.LayoutManager::class.java.isAssignableFrom(f.type)) {
+                                try {
+                                    f.isAccessible = true
+                                    f.set(adapter, customLm)
+                                } catch (t: Throwable) {}
+                            }
+                        }
+                        adpCls = adpCls.superclass
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to attach SpannedGridLayoutManager to RV", t)
+        }
+    }
+
+    fun attachSpannedLayoutManager(ctrl: Any?) {
+        if (ctrl == null) return
+        try {
+            var cls: Class<*>? = ctrl.javaClass
+            while (cls != null && cls != Any::class.java) {
+                for (f in cls.declaredFields) {
+                    try {
+                        f.isAccessible = true
+                        val obj = f.get(ctrl)
+                        if (obj is RecyclerView) {
+                            attachToRecyclerView(obj)
+                        }
+                    } catch (t: Throwable) {}
+                }
+                cls = cls.superclass
+            }
+        } catch (t: Throwable) {}
+    }
+
+    fun isChildOfContainer(view: View?): Boolean {
+        var cur = view?.parent
+        while (cur != null) {
+            if (cur is View && (cur.getTag(0x7f099995) != null || cur.getTag(0x7f099993) != null)) {
+                return true
+            }
+            if (cur is RecyclerView) return false
+            cur = cur.parent
+        }
+        return false
+    }
+
+    fun hideAllCustomBadgesRecursively(v: View) {
+        if (v.id == 0x7f099999 || v.id == 0x7f099998) {
+            v.visibility = View.GONE
+            v.setOnTouchListener(null)
+            v.setOnClickListener(null)
+            v.isClickable = false
+            (v.parent as? ViewGroup)?.removeView(v)
+            return
+        }
+        if (v is ViewGroup) {
+            for (i in v.childCount - 1 downTo 0) {
+                hideAllCustomBadgesRecursively(v.getChildAt(i))
+            }
+        }
+    }
+
+    fun setCircularTileLabelVisibility(itemView: View, visible: Boolean) {
+        try {
+            val iconFrameId = itemView.resources.getIdentifier("icon_frame", "id", itemView.context.packageName)
+            fun process(v: View) {
+                if (iconFrameId != 0 && v.id == iconFrameId) return
+                if (v is TextView) {
+                    v.visibility = if (visible) View.VISIBLE else View.GONE
+                    v.alpha = if (visible) 1.0f else 0.0f
+                } else if (v is ViewGroup) {
+                    for (i in 0 until v.childCount) {
+                        process(v.getChildAt(i))
+                    }
+                }
+            }
+            process(itemView)
+        } catch (t: Throwable) {}
+    }
+
+    fun findRecyclerView(view: View?): ViewGroup? {
+        var cur = view?.parent
+        while (cur != null) {
+            if (cur is ViewGroup && cur.javaClass.name.contains("RecyclerView")) {
+                return cur
+            }
+            cur = cur.parent
+        }
+        return null
     }
 
     @Synchronized
@@ -140,6 +313,42 @@ object ControlCenterHook {
 
         try {
             Log.i(TAG, "Initializing Control Center Plugin hooks on ClassLoader: $classLoader")
+
+            // 0. Hook MainPanelController to attach SpannedGridLayoutManager
+            try {
+                val mainPanelCtrlClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController", false, classLoader)
+                for (m in mainPanelCtrlClass.declaredMethods) {
+                    if (m.name == "onCreate" || m.name == "onStart" || m.name == "onResume" || m.name == "setupViews") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            try {
+                                val ctrl = chain.thisObject
+                                attachSpannedLayoutManager(ctrl)
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "MainPanelController.${m.name} attach error", t)
+                            }
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            // 0b. Hook QSTileItemView.getShowLabel to return false in EDIT mode
+            try {
+                val qstileItemViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemView", false, classLoader)
+                for (m in qstileItemViewClass.declaredMethods) {
+                    if (m.name == "getShowLabel" || m.name == "isShowLabel") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            if (ControlCenterConfigHolder.sIsEditMode) {
+                                return@intercept false
+                            }
+                            chain.proceed()
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
 
             // 1. Hook Low-End Animation Switch
             try {
@@ -938,9 +1147,12 @@ object ControlCenterHook {
                             val rawArgs = chain.args
                             val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                             if (args != null && args.size >= 2) {
+                                val parent = args[0] as ViewGroup
+                                if (parent is RecyclerView) {
+                                    attachToRecyclerView(parent)
+                                }
                                 val vt = args[1] as Int
                                 if (vt == 2274 || vt == 2275 || vt == 2276 || vt == 2273 || vt == 2277) {
-                                    val parent = args[0] as ViewGroup
                                     try {
                                         val adapterObj = chain.thisObject
                                         ControlCenterConfigHolder.sMainPanelAdapter = adapterObj
@@ -1327,9 +1539,43 @@ object ControlCenterHook {
                                     val ctx = itemView.context
                                     val density = ctx.resources.displayMetrics.density
 
+                                    val rv = findRecyclerView(itemView) as? RecyclerView
+                                    if (rv != null) {
+                                        attachToRecyclerView(rv)
+                                    }
+
+                                    val isSubTile = ControlCenterConfigHolder.isGroupChild(spec) || isChildOfContainer(itemView)
+                                    if (isSubTile) {
+                                        hideAllCustomBadgesRecursively(itemView)
+                                        if (isEdit) {
+                                            itemView.isClickable = false
+                                            itemView.isLongClickable = false
+                                            itemView.isFocusable = false
+                                        } else {
+                                            itemView.isClickable = true
+                                            itemView.isLongClickable = true
+                                            itemView.isFocusable = true
+                                        }
+                                        return@intercept result
+                                    }
+
                                     // Grouped Card Binding (4-Tile & 2-Tile)
                                     val group = ControlCenterConfigHolder.isGroupAnchor(spec)
                                     if (group != null) {
+                                        if (!isEdit) {
+                                            val container = itemView.findViewById<ViewGroup>(0x7f099995)
+                                            if (container != null) {
+                                                for (i in 0 until 4) {
+                                                    val childTile = ControlCenterGrouping.getChildTileAt(container, i)
+                                                    if (childTile != null) {
+                                                        hideAllCustomBadgesRecursively(childTile)
+                                                        childTile.isClickable = true
+                                                        childTile.isLongClickable = true
+                                                        childTile.isFocusable = true
+                                                    }
+                                                }
+                                            }
+                                        }
                                         val rotateBtn = itemView.findViewById<View>(0x7f099992)
                                         if (rotateBtn != null) {
                                             if (isEdit) {
@@ -1548,13 +1794,39 @@ object ControlCenterHook {
                                         }
                                     } else {
                                         // Standard Single Tile / Card Customization Badge
+                                        val isExpanded = ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)
+                                        val isVertical = ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)
+                                        val isCircular = !isExpanded && !isVertical && !itemView.javaClass.name.contains("Card")
+                                        val iconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
+                                        val iconFrame = if (iconFrameId != 0) itemView.findViewById<ViewGroup>(iconFrameId) else null
+
+                                        if (isCircular && isEdit) {
+                                            setCircularTileLabelVisibility(itemView, false)
+                                        }
+
+                                        val handleParent: ViewGroup = if (isCircular && iconFrame != null) iconFrame else (itemView as? ViewGroup ?: return@intercept result)
+                                        handleParent.clipChildren = false
+                                        handleParent.clipToPadding = false
+                                        if (itemView is ViewGroup) {
+                                            itemView.clipChildren = false
+                                            itemView.clipToPadding = false
+                                        }
+
                                         val resizeTag = 0x7f099999
-                                        var resizeHandle = itemView.findViewById<ImageView>(resizeTag)
+                                        val badgeSize = (44 * density).toInt()
+
+                                        if (isCircular && iconFrame != null) {
+                                            val wrongHandle = itemView.findViewById<ImageView>(resizeTag)
+                                            if (wrongHandle != null && wrongHandle.parent != iconFrame) {
+                                                (wrongHandle.parent as? ViewGroup)?.removeView(wrongHandle)
+                                            }
+                                        }
+
+                                        var resizeHandle = handleParent.findViewById<ImageView>(resizeTag)
                                         val selectTag = 0x7f099998
                                         var selectBadge = itemView.findViewById<ImageView>(selectTag)
 
-                                        if (itemView is ViewGroup && resizeHandle == null && !"wifi".equals(spec, ignoreCase = true) && !"cell".equals(spec, ignoreCase = true)) {
-                                            val badgeSize = (38 * density).toInt()
+                                        if (resizeHandle == null && !"wifi".equals(spec, ignoreCase = true) && !"cell".equals(spec, ignoreCase = true)) {
                                             resizeHandle = ImageView(ctx).apply {
                                                 id = resizeTag
                                                 val lp = FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
@@ -1563,28 +1835,14 @@ object ControlCenterHook {
                                                 layoutParams = lp
                                                 setImageDrawable(CurvedResizeHandleDrawable(density))
                                             }
-                                            itemView.addView(resizeHandle)
-
-                                            itemView.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ ->
-                                                val w = r - l
-                                                val h = b - t
-                                                if (w > 0 && h > 0) {
-                                                    val curHandle = itemView.findViewById<ImageView>(resizeTag)
-                                                    if (curHandle != null && curHandle.visibility == View.VISIBLE) {
-                                                        val bw = curHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
-                                                        val bh = curHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
-                                                        curHandle.layout(w - bw, h - bh, w, h)
-                                                        curHandle.bringToFront()
-                                                    }
-                                                }
-                                            }
+                                            handleParent.addView(resizeHandle)
                                         }
 
                                         if (itemView is ViewGroup && selectBadge == null && !"wifi".equals(spec, ignoreCase = true) && !"cell".equals(spec, ignoreCase = true)) {
                                             selectBadge = ImageView(ctx).apply {
                                                 id = selectTag
-                                                val badgeSize = (26 * density).toInt()
-                                                val lp = FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
+                                                val badgeSize2 = (26 * density).toInt()
+                                                val lp = FrameLayout.LayoutParams(badgeSize2, badgeSize2).apply {
                                                     gravity = Gravity.TOP or Gravity.START
                                                     val margin = (4 * density).toInt()
                                                     setMargins(margin, margin, 0, 0)
@@ -1686,29 +1944,51 @@ object ControlCenterHook {
                                         val rawArgs = chain.args
                                         val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                                         val isEdit = args != null && args.isNotEmpty() && args[0] != null && "EDIT" == args[0].toString()
-                                        val resizeHandle = itemView.findViewById<ImageView>(0x7f099999)
-                                        if (resizeHandle != null) {
-                                            resizeHandle.visibility = if (isEdit) View.VISIBLE else View.GONE
-                                            if (isEdit) resizeHandle.bringToFront()
-                                        }
 
-                                        val selectBadge = itemView.findViewById<ImageView>(0x7f099998)
-                                        if (selectBadge != null) {
-                                            if (!isEdit || !ControlCenterConfigHolder.sIsGroupSelectMode) {
-                                                selectBadge.visibility = View.GONE
-                                            } else {
-                                                selectBadge.visibility = View.VISIBLE
-                                                selectBadge.bringToFront()
+                                        if (isEdit) {
+                                            if (itemView.javaClass.name.contains("QSTileItemView")) {
+                                                setCircularTileLabelVisibility(itemView, false)
                                             }
-                                        }
+                                            val resizeHandle = itemView.findViewById<ImageView>(0x7f099999)
+                                            if (resizeHandle != null && !isChildOfContainer(itemView)) {
+                                                resizeHandle.visibility = View.VISIBLE
+                                                resizeHandle.bringToFront()
+                                            }
 
-                                        val rotateBtn = itemView.findViewById<View>(0x7f099992)
-                                        if (rotateBtn != null) {
-                                            rotateBtn.visibility = if (isEdit) View.VISIBLE else View.GONE
-                                            if (isEdit) rotateBtn.bringToFront()
-                                        }
+                                            val selectBadge = itemView.findViewById<ImageView>(0x7f099998)
+                                            if (selectBadge != null) {
+                                                if (!ControlCenterConfigHolder.sIsGroupSelectMode) {
+                                                    selectBadge.visibility = View.GONE
+                                                } else {
+                                                    selectBadge.visibility = View.VISIBLE
+                                                    selectBadge.bringToFront()
+                                                }
+                                            }
 
-                                        if (!isEdit) {
+                                            val rotateBtn = itemView.findViewById<View>(0x7f099992)
+                                            if (rotateBtn != null) {
+                                                rotateBtn.visibility = View.VISIBLE
+                                                rotateBtn.bringToFront()
+                                            }
+                                        } else {
+                                            hideAllCustomBadgesRecursively(itemView)
+                                            itemView.isClickable = true
+                                            itemView.isLongClickable = true
+                                            itemView.isFocusable = true
+
+                                            val container = itemView.findViewById<ViewGroup>(0x7f099995)
+                                            if (container != null) {
+                                                for (i in 0 until 4) {
+                                                    val childTile = ControlCenterGrouping.getChildTileAt(container, i)
+                                                    if (childTile != null) {
+                                                        hideAllCustomBadgesRecursively(childTile)
+                                                        childTile.isClickable = true
+                                                        childTile.isLongClickable = true
+                                                        childTile.isFocusable = true
+                                                    }
+                                                }
+                                            }
+
                                             ControlCenterConfigHolder.sIsGroupSelectMode = false
                                             ControlCenterConfigHolder.sIsDisassembleMode = false
                                             ControlCenterConfigHolder.sSelectedTileSpecs.clear()
@@ -1856,11 +2136,7 @@ object ControlCenterHook {
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                                 if (args != null && args.isNotEmpty() && args[0] is RecyclerView) {
                                     val rv = args[0] as RecyclerView
-                                    val customLm = SpannedGridLayoutManager(rv.context, 4)
-                                    val lmField = adapterClass.getDeclaredField("layoutManager")
-                                    lmField.isAccessible = true
-                                    lmField.set(adapter, customLm)
-                                    rv.layoutManager = customLm
+                                    attachToRecyclerView(rv)
                                 }
                             } catch (t: Throwable) {
                                 Log.e(TAG, "Failed to attach SpannedGridLayoutManager", t)
@@ -2106,6 +2382,14 @@ class TileResizeDragTouchListener(
     private var cardWidth2x1 = 0f
     private var cardHeight1x2 = 0f
 
+    private fun requestDisallowAll(view: View?, disallow: Boolean) {
+        var p = view?.parent
+        while (p != null) {
+            p.requestDisallowInterceptTouchEvent(disallow)
+            p = p.parent
+        }
+    }
+
     private fun findRecyclerView(view: View?): ViewGroup? {
         var cur = view?.parent
         while (cur != null) {
@@ -2120,7 +2404,7 @@ class TileResizeDragTouchListener(
     override fun onTouch(v: View, event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                v.parent?.requestDisallowInterceptTouchEvent(true)
+                requestDisallowAll(v, true)
 
                 downRawX = event.rawX
                 downRawY = event.rawY
@@ -2136,24 +2420,33 @@ class TileResizeDragTouchListener(
                 val rv = findRecyclerView(tileView) ?: (tileView.rootView as? ViewGroup)
                 targetContainer = rv
                 if (rv != null) {
+                    val iconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
+                    val iconFrame = if (iconFrameId != 0) tileView.findViewById<View>(iconFrameId) else null
+                    val visualView = if (initialState == STATE_NORMAL && iconFrame != null) iconFrame else tileView
+
                     val locTile = IntArray(2)
                     val locRv = IntArray(2)
-                    tileView.getLocationInWindow(locTile)
+                    visualView.getLocationInWindow(locTile)
                     rv.getLocationInWindow(locRv)
                     originLeft = (locTile[0] - locRv[0]).toFloat()
                     originTop = (locTile[1] - locRv[1]).toFloat()
-                    originWidth = tileView.width.toFloat()
-                    originHeight = tileView.height.toFloat()
+                    originWidth = visualView.width.toFloat().coerceAtLeast(56f * density)
+                    originHeight = visualView.height.toFloat().coerceAtLeast(56f * density)
 
-                    val unitH = originHeight.coerceAtLeast(60f * density)
                     val gap = 10f * density
-                    unitWidth1x1 = if (initialState == STATE_EXPANDED) {
-                        ((originWidth - gap) / 2f).coerceAtLeast(60f * density)
-                    } else {
-                        originWidth.coerceAtLeast(60f * density)
+                    if (initialState == STATE_NORMAL) {
+                        unitWidth1x1 = originWidth
+                        cardWidth2x1 = originWidth * 2f + gap
+                        cardHeight1x2 = originHeight * 2f + gap
+                    } else if (initialState == STATE_EXPANDED) {
+                        cardWidth2x1 = originWidth
+                        unitWidth1x1 = ((originWidth - gap) / 2f).coerceAtLeast(56f * density)
+                        cardHeight1x2 = originHeight * 2f + gap
+                    } else { // STATE_VERTICAL
+                        cardHeight1x2 = originHeight
+                        unitWidth1x1 = originWidth
+                        cardWidth2x1 = originWidth * 2f + gap
                     }
-                    cardWidth2x1 = unitWidth1x1 * 2f + gap
-                    cardHeight1x2 = unitH * 2f + gap
 
                     ghostDrawable = TileResizeGhostDrawable(density).apply {
                         setOriginBounds(originLeft, originTop, originWidth, originHeight)
@@ -2164,10 +2457,12 @@ class TileResizeDragTouchListener(
             }
 
             MotionEvent.ACTION_MOVE -> {
+                requestDisallowAll(v, true)
+
                 val dx = event.rawX - downRawX
                 val dy = event.rawY - downRawY
                 val dist = Math.hypot(dx.toDouble(), dy.toDouble()).toFloat()
-                val slop = 8f * density
+                val slop = 5f * density
 
                 if (dist > slop) {
                     if (!isDragging) {
@@ -2183,12 +2478,14 @@ class TileResizeDragTouchListener(
                 var previewH = originHeight
                 var targetState = initialState
 
+                val snapThreshold = 0.22f
+
                 when (initialState) {
                     STATE_NORMAL -> {
-                        val horizThreshold = (cardWidth2x1 - unitWidth1x1) * 0.35f
-                        val vertThreshold = (cardHeight1x2 - originHeight) * 0.35f
+                        val horizThreshold = (cardWidth2x1 - unitWidth1x1) * snapThreshold
+                        val vertThreshold = (cardHeight1x2 - originHeight) * snapThreshold
 
-                        if (Math.abs(dx) > Math.abs(dy)) {
+                        if (Math.abs(dx) >= Math.abs(dy)) {
                             if (dx > 0) {
                                 val p = (dx / (cardWidth2x1 - unitWidth1x1)).coerceIn(0f, 1f)
                                 previewW = unitWidth1x1 + p * (cardWidth2x1 - unitWidth1x1)
@@ -2207,10 +2504,10 @@ class TileResizeDragTouchListener(
                         }
                     }
                     STATE_EXPANDED -> {
-                        val shrinkThreshold = (cardWidth2x1 - unitWidth1x1) * 0.35f
-                        val vertThreshold = (cardHeight1x2 - originHeight) * 0.35f
+                        val shrinkThreshold = (cardWidth2x1 - unitWidth1x1) * snapThreshold
+                        val vertThreshold = (cardHeight1x2 - originHeight) * snapThreshold
 
-                        if (dx < 0 && Math.abs(dx) > Math.abs(dy)) {
+                        if (dx < 0 && Math.abs(dx) >= Math.abs(dy)) {
                             val p = (-dx / (cardWidth2x1 - unitWidth1x1)).coerceIn(0f, 1f)
                             previewW = cardWidth2x1 - p * (cardWidth2x1 - unitWidth1x1)
                             if (-dx >= shrinkThreshold) {
@@ -2225,10 +2522,10 @@ class TileResizeDragTouchListener(
                         }
                     }
                     STATE_VERTICAL -> {
-                        val shrinkThreshold = (cardHeight1x2 - originHeight / 2f) * 0.35f
-                        val horizThreshold = (cardWidth2x1 - unitWidth1x1) * 0.35f
+                        val shrinkThreshold = (cardHeight1x2 - originHeight / 2f) * snapThreshold
+                        val horizThreshold = (cardWidth2x1 - unitWidth1x1) * snapThreshold
 
-                        if (dy < 0 && Math.abs(dy) > Math.abs(dx)) {
+                        if (dy < 0 && Math.abs(dy) >= Math.abs(dx)) {
                             val p = (-dy / (cardHeight1x2 - originHeight / 2f)).coerceIn(0f, 1f)
                             previewH = cardHeight1x2 - p * (cardHeight1x2 - originHeight / 2f)
                             if (-dy >= shrinkThreshold) {
@@ -2258,7 +2555,7 @@ class TileResizeDragTouchListener(
             }
 
             MotionEvent.ACTION_UP -> {
-                v.parent?.requestDisallowInterceptTouchEvent(false)
+                requestDisallowAll(v, false)
                 tileView.alpha = 1.0f
 
                 ghostDrawable?.let { gd ->
@@ -2287,7 +2584,7 @@ class TileResizeDragTouchListener(
             }
 
             MotionEvent.ACTION_CANCEL -> {
-                v.parent?.requestDisallowInterceptTouchEvent(false)
+                requestDisallowAll(v, false)
                 tileView.alpha = 1.0f
                 ghostDrawable?.let { gd ->
                     targetContainer?.overlay?.remove(gd)
@@ -2296,6 +2593,6 @@ class TileResizeDragTouchListener(
                 return true
             }
         }
-        return false
+        return true
     }
 }

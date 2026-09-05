@@ -8,6 +8,7 @@ import android.text.TextUtils
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import androidx.recyclerview.widget.RecyclerView
 import dev.joseph.hyperbounce.prefs.PREFS_GROUP
 import org.json.JSONObject
 import java.lang.reflect.Field
@@ -472,6 +473,19 @@ object ControlCenterConfigHolder {
         return false
     }
 
+    fun findGroupForSpec(spec: String?): TileGroup? {
+        if (spec == null) return null
+        if (sTileGroups.isEmpty() && sLastKnownContext != null) loadSavedPriorities(sLastKnownContext)
+        for (g in sTileGroups) {
+            if (g.specs.contains(spec)) return g
+        }
+        return null
+    }
+
+    fun isGroupMember(spec: String?): Boolean {
+        return findGroupForSpec(spec) != null
+    }
+
     fun getTileGroupBySpec(spec: String?): TileGroup? {
         if (spec == null) return null
         for (g in sTileGroups) {
@@ -555,9 +569,21 @@ object ControlCenterConfigHolder {
                 if (rvId != 0) {
                     val rv = decor.findViewById<View>(rvId)
                     if (rv != null) {
+                        if (rv is RecyclerView && rv.layoutManager !is SpannedGridLayoutManager) {
+                            val customLm = SpannedGridLayoutManager(rv.context, 4)
+                            rv.layoutManager = customLm
+                        }
                         val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
                         val adp = getAdapterMethod.invoke(rv)
                         if (adp != null) {
+                            sMainPanelAdapter = adp
+                            if (rv is RecyclerView && rv.layoutManager is SpannedGridLayoutManager) {
+                                try {
+                                    val lmField = adp.javaClass.getDeclaredField("layoutManager")
+                                    lmField.isAccessible = true
+                                    lmField.set(adp, rv.layoutManager)
+                                } catch (t: Throwable) {}
+                            }
                             try {
                                 val distMethod = adp.javaClass.getDeclaredMethod("distributeContent", Boolean::class.javaPrimitiveType)
                                 distMethod.isAccessible = true

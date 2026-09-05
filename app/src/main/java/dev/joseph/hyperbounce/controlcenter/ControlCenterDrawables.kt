@@ -55,14 +55,14 @@ open class CurvedResizeHandleDrawable(private val density: Float = 2.75f) : Draw
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         style = Paint.Style.STROKE
-        strokeWidth = 3.6f * density
+        strokeWidth = 4.8f * density
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#80000000") // 50% dark translucent shadow for contrast
+        color = Color.parseColor("#99000000") // 60% dark translucent shadow for contrast
         style = Paint.Style.STROKE
-        strokeWidth = 4.8f * density
+        strokeWidth = 6.4f * density
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
