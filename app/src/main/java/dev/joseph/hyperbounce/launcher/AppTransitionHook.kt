@@ -90,6 +90,15 @@ object AppTransitionHook {
     @Volatile
     private var sLastStackRecentsTickTime: Long = 0L
 
+    @Volatile
+    private var sHapticHelper: Any? = null
+    @Volatile
+    private var sPerformExtMethod: Method? = null
+    @Volatile
+    private var sHfInstance: Any? = null
+    @Volatile
+    private var sPerformFastScrollMethod: Method? = null
+
     private var sIsScrollingField: Field? = null
     private var sIsStackMethod: Method? = null
 
@@ -580,79 +589,55 @@ object AppTransitionHook {
     }
 
     /**
-     * Triggers a crisp, light clock tick (MIUI_GEAR_LIGHT / EFFECT_TICK) as an app crosses the center.
+     * Triggers a single, clean effect ID 5 (MIUI native ext haptic fast scroll tick) on the linear motor.
+     * Uses exclusively this single pipeline to avoid guitar string / spring resonance effects.
      */
     private fun triggerLightClockTickHaptic(view: View?) {
-        // 1. Official MIUI Launcher fast scroll tick (calls native ext haptic 5 on linear motor)
         try {
-            val hfCompatClass = Class.forName(
-                "com.miui.home.common.hapticfeedback.HapticFeedbackCompat",
-                false,
-                view?.context?.classLoader ?: ClassLoader.getSystemClassLoader()
-            )
-            val getInstanceMethod = hfCompatClass.getMethod("getInstance")
-            val instance = getInstanceMethod.invoke(null)
-            if (instance != null && view != null) {
-                val fastScrollMethod = hfCompatClass.methods.firstOrNull {
-                    it.name == "performFastScrollSection" && it.parameterTypes.size == 1
-                }
-                fastScrollMethod?.invoke(instance, view)
-            }
-        } catch (t: Throwable) {
-            Log.d(TAG, "HapticFeedbackCompat.performFastScrollSection error", t)
-        }
+            val cl = view?.context?.classLoader ?: ClassLoader.getSystemClassLoader()
+            var helper = sHapticHelper
+            var method = sPerformExtMethod
 
-        // 2. Miuix HapticCompat (MIUI_GEAR_LIGHT = 268435477 / MIUI_MESH_LIGHT = 268435463)
-        try {
-            if (view != null) {
-                val hapticCompatClass = Class.forName("miuix.view.HapticCompat", false, view.context.classLoader)
-                val performMethod = hapticCompatClass.getMethod(
-                    "performHapticFeedbackAsync",
-                    View::class.java,
-                    Int::class.javaPrimitiveType
-                )
-                performMethod.invoke(null, view, 268435477)
-            }
-        } catch (_: Throwable) {}
+            if (helper == null) {
+                val hfCompatClass = Class.forName("com.miui.home.common.hapticfeedback.HapticFeedbackCompat", false, cl)
+                val instance = hfCompatClass.getMethod("getInstance").invoke(null)
+                if (instance != null) {
+                    sHfInstance = instance
+                    val helperField = try {
+                        instance.javaClass.getDeclaredField("mHapticHelper").apply { isAccessible = true }
+                    } catch (_: Throwable) { null }
+                    helper = helperField?.get(instance)
+                    sHapticHelper = helper
 
-        // 3. Android View performHapticFeedback CLOCK_TICK
-        try {
-            if (view != null) {
-                view.performHapticFeedback(
-                    android.view.HapticFeedbackConstants.CLOCK_TICK,
-                    android.view.HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING or
-                        android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
-                )
-            }
-        } catch (_: Throwable) {}
-
-        // 4. Guaranteed Android Linear Motor EFFECT_TICK / USAGE_TOUCH
-        try {
-            val ctx = view?.context ?: try {
-                Class.forName("android.app.ActivityThread")
-                    .getMethod("currentApplication")
-                    .invoke(null) as? Context
-            } catch (_: Throwable) { null }
-
-            val vibrator = ctx?.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            if (vibrator != null && vibrator.hasVibrator()) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val effect = VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        val attrs = VibrationAttributes.Builder()
-                            .setUsage(VibrationAttributes.USAGE_TOUCH)
-                            .build()
-                        vibrator.vibrate(effect, attrs)
-                    } else {
-                        vibrator.vibrate(effect)
+                    if (helper != null) {
+                        method = helper.javaClass.methods.firstOrNull {
+                            it.name.contains("performExtHapticFeedback") && it.parameterTypes.size == 1 &&
+                                (it.parameterTypes[0] == Integer.TYPE || it.parameterTypes[0] == java.lang.Integer::class.java)
+                        }
+                        sPerformExtMethod = method
                     }
-                } else {
-                    @Suppress("DEPRECATION")
-                    vibrator.vibrate(8L)
+
+                    if (sPerformFastScrollMethod == null) {
+                        sPerformFastScrollMethod = hfCompatClass.methods.firstOrNull {
+                            it.name == "performFastScrollSection" && it.parameterTypes.size == 1
+                        }
+                    }
                 }
             }
+
+            if (helper != null && method != null) {
+                method.invoke(helper, 5)
+                return
+            }
+
+            val inst = sHfInstance
+            val fastScroll = sPerformFastScrollMethod
+            if (inst != null && fastScroll != null && view != null) {
+                fastScroll.invoke(inst, view)
+                return
+            }
         } catch (t: Throwable) {
-            Log.d(TAG, "System vibrator tick error", t)
+            Log.w(TAG, "Failed to trigger effect ID 5 haptic", t)
         }
     }
 
