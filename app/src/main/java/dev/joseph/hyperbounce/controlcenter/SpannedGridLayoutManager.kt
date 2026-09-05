@@ -54,8 +54,10 @@ class SpannedGridLayoutManager : GridLayoutManager {
         mAttachedRv = null
     }
 
+    private var mCustomLookupInitialized = false
+
     private fun initCustomSpanLookup() {
-        spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+        super.setSpanSizeLookup(object : GridLayoutManager.SpanSizeLookup() {
             override fun getSpanSize(position: Int): Int {
                 val spans = getItemSpans(position)
                 return Math.max(1, Math.min(4, spans[0]))
@@ -74,9 +76,16 @@ class SpannedGridLayoutManager : GridLayoutManager {
                 }
                 return Math.max(0, Math.min(3, position % 4))
             }
+        })
+        super.getSpanSizeLookup().isSpanIndexCacheEnabled = false
+        super.getSpanSizeLookup().isSpanGroupIndexCacheEnabled = false
+        mCustomLookupInitialized = true
+    }
+
+    override fun setSpanSizeLookup(spanSizeLookup: GridLayoutManager.SpanSizeLookup?) {
+        if (!mCustomLookupInitialized) {
+            super.setSpanSizeLookup(spanSizeLookup)
         }
-        spanSizeLookup.isSpanIndexCacheEnabled = false
-        spanSizeLookup.isSpanGroupIndexCacheEnabled = false
     }
 
     private fun dpToPx(dp: Float): Int {
@@ -112,6 +121,13 @@ class SpannedGridLayoutManager : GridLayoutManager {
                     mAttachedRv = rv
                 }
             } catch (t: Throwable) {}
+        }
+        if (adapter == null) {
+            val rv = ControlCenterConfigHolder.sRecyclerView?.get()
+            if (rv != null) {
+                adapter = rv.adapter
+                mAttachedRv = rv
+            }
         }
         if (adapter == null) {
             adapter = ControlCenterConfigHolder.sMainPanelAdapter as? RecyclerView.Adapter<*>

@@ -8,9 +8,11 @@ import android.text.TextUtils
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import androidx.recyclerview.widget.RecyclerView
 import dev.joseph.hyperbounce.prefs.PREFS_GROUP
 import org.json.JSONObject
+import java.lang.ref.WeakReference
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.util.concurrent.ConcurrentHashMap
@@ -94,6 +96,7 @@ object ControlCenterConfigHolder {
 
     @Volatile var sQSListController: Any? = null
     @Volatile var sMainPanelAdapter: Any? = null
+    @Volatile var sRecyclerView: WeakReference<RecyclerView>? = null
     @Volatile var sFrameCallback: Any? = null
     @Volatile var sLastKnownContext: Context? = null
     @Volatile var sExplicitReset: Boolean = false
@@ -558,56 +561,280 @@ object ControlCenterConfigHolder {
         }
     }
 
+    fun getOrResolveTileSpec(itemView: View): String? {
+        val cached = itemView.getTag(0x7f099990) as? String
+        if (cached != null) return cached
+
+        try {
+            var cls: Class<*>? = itemView.javaClass
+            while (cls != null && cls != Any::class.java) {
+                for (f in cls.declaredFields) {
+                    if (f.name == "spec" || f.name == "mSpec") {
+                        f.isAccessible = true
+                        val s = f.get(itemView) as? String
+                        if (!s.isNullOrEmpty()) {
+                            itemView.setTag(0x7f099990, s)
+                            return s
+                        }
+                    }
+                    if (f.name == "record" || f.name == "mRecord") {
+                        f.isAccessible = true
+                        val rec = f.get(itemView)
+                        if (rec != null) {
+                            try {
+                                val sf = rec.javaClass.getDeclaredField("spec")
+                                sf.isAccessible = true
+                                val s = sf.get(rec) as? String
+                                if (!s.isNullOrEmpty()) {
+                                    itemView.setTag(0x7f099990, s)
+                                    return s
+                                }
+                            } catch (t: Throwable) {}
+                        }
+                    }
+                }
+                cls = cls.superclass
+            }
+        } catch (t: Throwable) {}
+        return null
+    }
+
+    fun updateAllVisibleTileBadges() {
+        val rv = sRecyclerView?.get() ?: return
+        rv.post {
+            try {
+                val childCount = rv.childCount
+                for (i in 0 until childCount) {
+                    val itemView = rv.getChildAt(i) ?: continue
+                    if (ControlCenterHook.isChildOfContainer(itemView)) continue
+
+                    val spec = getOrResolveTileSpec(itemView)
+                    val isExpanded = spec != null && sExpandedTileSpecs.contains(spec)
+                    val isVertical = spec != null && sVerticalTileSpecs.contains(spec)
+                    val isCircular = !isExpanded && !isVertical && !itemView.javaClass.name.contains("Card")
+                    val density = itemView.resources.displayMetrics.density
+
+                    val iconFrameId = itemView.resources.getIdentifier("icon_frame", "id", itemView.context.packageName)
+                    val curIconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
+
+                    val resizeTag = 0x7f099999
+                    val selectTag = 0x7f099998
+                    var resizeHandle = itemView.findViewById<ImageView>(resizeTag)
+                    var selectBadge = itemView.findViewById<ImageView>(selectTag)
+
+                    if (!sIsEditMode) {
+                        if (resizeHandle != null) {
+                            resizeHandle.visibility = View.GONE
+                        }
+                        if (selectBadge != null) {
+                            selectBadge.visibility = View.GONE
+                            selectBadge.setOnClickListener(null)
+                            selectBadge.isClickable = false
+                        }
+                        itemView.setOnClickListener(null)
+                        itemView.isClickable = true
+                        itemView.isLongClickable = true
+                        if (isCircular) {
+                            ControlCenterHook.setCircularTileLabelVisibility(itemView, true)
+                        }
+                        continue
+                    }
+
+                    if (isCircular) {
+                        ControlCenterHook.setCircularTileLabelVisibility(itemView, false)
+                    }
+
+                    if (sIsGroupSelectMode) {
+                        if (resizeHandle != null) {
+                            resizeHandle.visibility = View.GONE
+                        }
+                        if (spec != null && !"wifi".equals(spec, ignoreCase = true) && !"cell".equals(spec, ignoreCase = true)) {
+                            if (selectBadge == null && itemView is ViewGroup) {
+                                selectBadge = ImageView(itemView.context).apply {
+                                    id = selectTag
+                                    val badgeSize2 = (26 * density).toInt()
+                                    val lp = android.widget.FrameLayout.LayoutParams(badgeSize2, badgeSize2).apply {
+                                        gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                                        val margin = (4 * density).toInt()
+                                        setMargins(margin, margin, 0, 0)
+                                    }
+                                    layoutParams = lp
+                                    setImageDrawable(SelectCircleDrawable())
+                                }
+                                itemView.addView(selectBadge)
+                            }
+                            if (selectBadge != null) {
+                                val scd = (selectBadge.drawable as? SelectCircleDrawable) ?: SelectCircleDrawable()
+                                scd.setChecked(sSelectedTileSpecs.contains(spec))
+                                selectBadge.setImageDrawable(scd)
+                                selectBadge.visibility = View.VISIBLE
+                                selectBadge.bringToFront()
+                                selectBadge.isClickable = true
+
+                                val toggleSelect = View.OnClickListener {
+                                    if (sSelectedTileSpecs.contains(spec)) {
+                                        sSelectedTileSpecs.remove(spec)
+                                    } else {
+                                        sSelectedTileSpecs.add(spec)
+                                    }
+                                    val curScd = selectBadge.drawable as? SelectCircleDrawable
+                                    curScd?.setChecked(sSelectedTileSpecs.contains(spec))
+                                    selectBadge.invalidate()
+                                }
+                                selectBadge.setOnClickListener(toggleSelect)
+                                itemView.setOnClickListener(toggleSelect)
+                                itemView.isClickable = true
+
+                                if (isCircular && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
+                                    val bw2 = selectBadge.measuredWidth.takeIf { it > 0 } ?: (26 * density).toInt()
+                                    val bh2 = selectBadge.measuredHeight.takeIf { it > 0 } ?: (26 * density).toInt()
+                                    val iLeft = curIconFrame.left
+                                    val iTop = curIconFrame.top
+                                    selectBadge.layout(iLeft, iTop, iLeft + bw2, iTop + bh2)
+                                }
+                            }
+                        }
+                    } else if (sIsDisassembleMode) {
+                        if (resizeHandle != null) {
+                            resizeHandle.visibility = View.GONE
+                        }
+                        val group = isGroupAnchor(spec)
+                        if (group != null) {
+                            if (selectBadge != null) {
+                                val scd = (selectBadge.drawable as? SelectCircleDrawable) ?: SelectCircleDrawable()
+                                scd.setChecked(sSelectedDisassembleGroups.contains(group.id))
+                                selectBadge.setImageDrawable(scd)
+                                selectBadge.visibility = View.VISIBLE
+                                selectBadge.bringToFront()
+                                selectBadge.isClickable = true
+
+                                val toggleDisassembleSelect = View.OnClickListener {
+                                    if (sSelectedDisassembleGroups.contains(group.id)) {
+                                        sSelectedDisassembleGroups.remove(group.id)
+                                    } else {
+                                        sSelectedDisassembleGroups.add(group.id)
+                                    }
+                                    val curScd = selectBadge.drawable as? SelectCircleDrawable
+                                    curScd?.setChecked(sSelectedDisassembleGroups.contains(group.id))
+                                    selectBadge.invalidate()
+                                }
+                                selectBadge.setOnClickListener(toggleDisassembleSelect)
+                                itemView.setOnClickListener(toggleDisassembleSelect)
+                                itemView.isClickable = true
+                            }
+                        } else if (selectBadge != null) {
+                            selectBadge.visibility = View.GONE
+                            selectBadge.setOnClickListener(null)
+                            selectBadge.isClickable = false
+                        }
+                    } else {
+                        // Normal Edit Mode
+                        if (selectBadge != null) {
+                            selectBadge.visibility = View.GONE
+                            selectBadge.setOnClickListener(null)
+                            selectBadge.isClickable = false
+                        }
+                        itemView.setOnClickListener(null)
+                        if (spec != null && !"wifi".equals(spec, ignoreCase = true) && !"cell".equals(spec, ignoreCase = true)) {
+                            val badgeSize = (38 * density).toInt()
+                            if (resizeHandle == null && itemView is ViewGroup) {
+                                resizeHandle = ImageView(itemView.context).apply {
+                                    id = resizeTag
+                                    val lp = android.widget.FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
+                                        gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
+                                    }
+                                    layoutParams = lp
+                                    setImageDrawable(CurvedResizeHandleDrawable(density))
+                                }
+                                itemView.addView(resizeHandle)
+                            }
+                            if (resizeHandle != null) {
+                                resizeHandle.visibility = View.VISIBLE
+                                val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
+                                val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
+                                if (isCircular && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
+                                    val iRight = curIconFrame.right
+                                    val iBottom = curIconFrame.bottom
+                                    resizeHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
+                                } else if (itemView.width > 0 && itemView.height > 0) {
+                                    resizeHandle.layout(itemView.width - bw, itemView.height - bh, itemView.width, itemView.height)
+                                }
+                                resizeHandle.bringToFront()
+                                resizeHandle.isClickable = true
+                                resizeHandle.setOnTouchListener(TileResizeDragTouchListener(itemView.context, spec, itemView, density))
+                            }
+                        }
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "updateAllVisibleTileBadges error", t)
+            }
+        }
+    }
+
     fun refreshAdapter(root: View?, ctx: Context?, isStructuralChange: Boolean = false) {
         try {
             val targetCtx = ctx ?: root?.context ?: sLastKnownContext ?: return
             loadSavedPriorities(targetCtx)
-            val decor = root?.rootView ?: return
-            val panelIds = arrayOf("main_panel", "right_main_panel", "left_main_panel", "right_panel", "left_panel")
-            for (pIdStr in panelIds) {
-                val rvId = targetCtx.resources.getIdentifier(pIdStr, "id", targetCtx.packageName)
-                if (rvId != 0) {
-                    val rv = decor.findViewById<View>(rvId)
-                    if (rv != null) {
-                        if (rv is RecyclerView && rv.layoutManager !is SpannedGridLayoutManager) {
-                            val customLm = SpannedGridLayoutManager(rv.context, 4)
-                            rv.layoutManager = customLm
+            val rvsToProcess = mutableListOf<View>()
+            val directRv = sRecyclerView?.get()
+            if (directRv != null) {
+                rvsToProcess.add(directRv)
+            }
+            val decor = root?.rootView
+            if (decor != null) {
+                val panelIds = arrayOf("main_panel", "right_main_panel", "left_main_panel", "right_panel", "left_panel")
+                for (pIdStr in panelIds) {
+                    val rvId = targetCtx.resources.getIdentifier(pIdStr, "id", targetCtx.packageName)
+                    if (rvId != 0) {
+                        val rv = decor.findViewById<View>(rvId)
+                        if (rv != null && !rvsToProcess.contains(rv)) {
+                            rvsToProcess.add(rv)
                         }
-                        val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
-                        val adp = getAdapterMethod.invoke(rv)
-                        if (adp != null) {
-                            sMainPanelAdapter = adp
-                            if (rv is RecyclerView && rv.layoutManager is SpannedGridLayoutManager) {
-                                try {
-                                    val lmField = adp.javaClass.getDeclaredField("layoutManager")
-                                    lmField.isAccessible = true
-                                    lmField.set(adp, rv.layoutManager)
-                                } catch (t: Throwable) {}
-                            }
-                            try {
-                                val distMethod = adp.javaClass.getDeclaredMethod("distributeContent", Boolean::class.javaPrimitiveType)
-                                distMethod.isAccessible = true
-                                distMethod.invoke(adp, true)
-                            } catch (t: Throwable) {}
+                    }
+                }
+            }
+            for (rv in rvsToProcess) {
+                if (rv is RecyclerView) {
+                    sRecyclerView = WeakReference(rv)
+                    if (rv.layoutManager !is SpannedGridLayoutManager) {
+                        val customLm = SpannedGridLayoutManager(rv.context, 4)
+                        rv.layoutManager = customLm
+                    }
+                }
+                val getAdapterMethod = try { rv.javaClass.getMethod("getAdapter") } catch (t: Throwable) { null }
+                val adp = getAdapterMethod?.invoke(rv)
+                if (adp != null) {
+                    sMainPanelAdapter = adp
+                    if (rv is RecyclerView && rv.layoutManager is SpannedGridLayoutManager) {
+                        try {
+                            val lmField = adp.javaClass.getDeclaredField("layoutManager")
+                            lmField.isAccessible = true
+                            lmField.set(adp, rv.layoutManager)
+                        } catch (t: Throwable) {}
+                    }
+                    try {
+                        val distMethod = adp.javaClass.getDeclaredMethod("distributeContent", Boolean::class.javaPrimitiveType)
+                        distMethod.isAccessible = true
+                        distMethod.invoke(adp, true)
+                    } catch (t: Throwable) {}
 
-                            if (isStructuralChange) {
-                                try {
-                                    val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
-                                    notifyDataSetChangedMethod.invoke(adp)
-                                } catch (t: Throwable) {}
-                            } else {
-                                try {
-                                    val getItemCountMethod = adp.javaClass.getMethod("getItemCount")
-                                    val count = getItemCountMethod.invoke(adp) as Int
-                                    val notifyItemRangeChangedMethod = adp.javaClass.getMethod("notifyItemRangeChanged", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-                                    notifyItemRangeChangedMethod.invoke(adp, 0, count)
-                                } catch (t: Throwable) {
-                                    try {
-                                        val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
-                                        notifyDataSetChangedMethod.invoke(adp)
-                                    } catch (t2: Throwable) {}
-                                }
-                            }
+                    if (isStructuralChange) {
+                        try {
+                            val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
+                            notifyDataSetChangedMethod.invoke(adp)
+                        } catch (t: Throwable) {}
+                    } else {
+                        try {
+                            val getItemCountMethod = adp.javaClass.getMethod("getItemCount")
+                            val count = getItemCountMethod.invoke(adp) as Int
+                            val notifyItemRangeChangedMethod = adp.javaClass.getMethod("notifyItemRangeChanged", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                            notifyItemRangeChangedMethod.invoke(adp, 0, count)
+                        } catch (t: Throwable) {
+                            try {
+                                val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
+                                notifyDataSetChangedMethod.invoke(adp)
+                            } catch (t2: Throwable) {}
                         }
                     }
                 }
@@ -622,10 +849,15 @@ object ControlCenterConfigHolder {
         while (parent != null && !parent.javaClass.name.contains("RecyclerView")) {
             parent = if (parent.parent is View) parent.parent as View else break
         }
-        if (parent != null) {
-            val rv = parent
+        val rv = (parent as? RecyclerView) ?: sRecyclerView?.get()
+        if (rv != null) {
+            sRecyclerView = WeakReference(rv)
             rv.post {
                 try {
+                    if (rv.layoutManager !is SpannedGridLayoutManager) {
+                        val customLm = SpannedGridLayoutManager(rv.context, 4)
+                        rv.layoutManager = customLm
+                    }
                     val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
                     val adp = getAdapterMethod.invoke(rv)
                     if (adp != null) {

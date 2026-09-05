@@ -1203,6 +1203,7 @@ object ControlCenterGrouping {
                             finalGroupBtn.setImageDrawable(GroupGridDrawable(false))
                         }
                     }
+                    ControlCenterConfigHolder.updateAllVisibleTileBadges()
                     ControlCenterConfigHolder.refreshAdapter(root, ctx, structural)
                 } catch (t: Throwable) {
                     Log.e(TAG, "groupButton error", t)
@@ -1238,6 +1239,7 @@ object ControlCenterGrouping {
                             finalDisassembleBtn.setImageDrawable(UngroupHeaderDrawable(false))
                         }
                     }
+                    ControlCenterConfigHolder.updateAllVisibleTileBadges()
                     ControlCenterConfigHolder.refreshAdapter(root, ctx, structural)
                 } catch (t: Throwable) {
                     Log.e(TAG, "disassembleButton error", t)

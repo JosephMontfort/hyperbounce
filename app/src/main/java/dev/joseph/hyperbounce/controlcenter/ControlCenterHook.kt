@@ -201,6 +201,53 @@ object ControlCenterHook {
                 Log.e(TAG, "Failed to hook SystemUIApplication.onCreate", t)
             }
 
+            try {
+                val rvClass = Class.forName("androidx.recyclerview.widget.RecyclerView", false, classLoader)
+                for (m in rvClass.declaredMethods) {
+                    if (m.name == "setLayoutManager" && m.parameterTypes.size == 1) {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val rv = chain.thisObject as? RecyclerView
+                            val rawArgs = chain.args
+                            val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                            val incomingLm = if (args != null && args.isNotEmpty()) args[0] else null
+                            if (rv != null && incomingLm != null && incomingLm !is SpannedGridLayoutManager) {
+                                val spanCount = try {
+                                    val sm = incomingLm.javaClass.getMethod("getSpanCount")
+                                    sm.invoke(incomingLm) as? Int ?: -1
+                                } catch (t: Throwable) { -1 }
+                                if (spanCount == 4) {
+                                    Log.i(TAG, "Replacing GridLayoutManager(4) with SpannedGridLayoutManager in SystemUI RV.setLayoutManager")
+                                    val customLm = SpannedGridLayoutManager(rv.context, 4)
+                                    attachToRecyclerView(rv)
+                                    try {
+                                        return@intercept chain.proceed(arrayOf(customLm))
+                                    } catch (t: Throwable) {
+                                        chain.proceed()
+                                        rv.layoutManager = customLm
+                                        return@intercept null
+                                    }
+                                }
+                            }
+                            chain.proceed()
+                        }
+                    }
+                    if (m.name == "setAdapter" && m.parameterTypes.size == 1) {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val rv = chain.thisObject as? RecyclerView
+                            val result = chain.proceed()
+                            try {
+                                if (rv != null) {
+                                    attachToRecyclerView(rv)
+                                }
+                            } catch (t: Throwable) {}
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
             sysuiHooked = true
         } catch (t: Throwable) {
             Log.e(TAG, "initSystemUIHooks fatal error", t)
@@ -210,10 +257,11 @@ object ControlCenterHook {
     fun attachToRecyclerView(rv: RecyclerView?) {
         if (rv == null) return
         try {
+            ControlCenterConfigHolder.sRecyclerView = java.lang.ref.WeakReference(rv)
             if (rv.layoutManager !is SpannedGridLayoutManager) {
                 val customLm = SpannedGridLayoutManager(rv.context, 4)
                 rv.layoutManager = customLm
-                val adapter = rv.adapter
+                val adapter = rv.adapter ?: (ControlCenterConfigHolder.sMainPanelAdapter as? RecyclerView.Adapter<*>)
                 if (adapter != null) {
                     ControlCenterConfigHolder.sMainPanelAdapter = adapter
                     var adpCls: Class<*>? = adapter.javaClass
@@ -235,6 +283,20 @@ object ControlCenterHook {
         }
     }
 
+    fun findRecyclerViewInViewGroup(vg: ViewGroup?): RecyclerView? {
+        if (vg == null) return null
+        if (vg is RecyclerView) return vg
+        for (i in 0 until vg.childCount) {
+            val child = vg.getChildAt(i)
+            if (child is RecyclerView) return child
+            if (child is ViewGroup) {
+                val found = findRecyclerViewInViewGroup(child)
+                if (found != null) return found
+            }
+        }
+        return null
+    }
+
     fun attachSpannedLayoutManager(ctrl: Any?) {
         if (ctrl == null) return
         try {
@@ -246,6 +308,13 @@ object ControlCenterHook {
                         val obj = f.get(ctrl)
                         if (obj is RecyclerView) {
                             attachToRecyclerView(obj)
+                        } else if (obj != null && obj.javaClass.name.contains("RecyclerView")) {
+                            attachToRecyclerView(obj as? RecyclerView)
+                        } else if (obj is ViewGroup) {
+                            val foundRv = findRecyclerViewInViewGroup(obj)
+                            if (foundRv != null) {
+                                attachToRecyclerView(foundRv)
+                            }
                         }
                     } catch (t: Throwable) {}
                 }
@@ -271,15 +340,10 @@ object ControlCenterHook {
         val resizeHandle = v.findViewById<View>(0x7f099999)
         if (resizeHandle != null) {
             resizeHandle.visibility = View.GONE
-            resizeHandle.setOnTouchListener(null)
-            resizeHandle.setOnClickListener(null)
-            resizeHandle.isClickable = false
         }
         val selectBadge = v.findViewById<View>(0x7f099998)
         if (selectBadge != null) {
             selectBadge.visibility = View.GONE
-            selectBadge.setOnClickListener(null)
-            selectBadge.isClickable = false
         }
     }
 
@@ -331,7 +395,47 @@ object ControlCenterHook {
         try {
             Log.i(TAG, "Initializing Control Center Plugin hooks on ClassLoader: $classLoader")
 
-            // 0. Hook RecyclerView.setLayoutManager and setAdapter to attach SpannedGridLayoutManager
+            // 0. Hook MainPanelController to attach SpannedGridLayoutManager
+            try {
+                val mainPanelCtrlClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController", false, classLoader)
+                for (m in mainPanelCtrlClass.declaredMethods) {
+                    if (m.name == "onCreate" || m.name == "onStart" || m.name == "onResume" || m.name == "setupViews" || m.name == "initViews" || m.name == "updateViews") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            try {
+                                val ctrl = chain.thisObject
+                                attachSpannedLayoutManager(ctrl)
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "MainPanelController.${m.name} attach error", t)
+                            }
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            // 0b. Hook QSTileItemView.getShowLabel to return false in EDIT mode
+            try {
+                val qstileItemViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemView", false, classLoader)
+                for (m in qstileItemViewClass.declaredMethods) {
+                    if (m.name == "getShowLabel" || m.name == "isShowLabel") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val v = chain.thisObject as? View
+                            if (ControlCenterConfigHolder.sIsEditMode) {
+                                val isSubTile = isChildOfContainer(v)
+                                if (!isSubTile) {
+                                    return@intercept false
+                                }
+                            }
+                            chain.proceed()
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            // 0c. Hook RecyclerView.setLayoutManager and setAdapter to attach SpannedGridLayoutManager
             try {
                 val rvClass = Class.forName("androidx.recyclerview.widget.RecyclerView", false, classLoader)
                 for (m in rvClass.declaredMethods) {
@@ -341,13 +445,23 @@ object ControlCenterHook {
                             val rv = chain.thisObject as? RecyclerView
                             val rawArgs = chain.args
                             val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                            val incomingLm = if (args != null && args.isNotEmpty()) args[0] as? RecyclerView.LayoutManager else null
+                            val incomingLm = if (args != null && args.isNotEmpty()) args[0] else null
                             if (rv != null && incomingLm != null && incomingLm !is SpannedGridLayoutManager) {
-                                val spanCount = (incomingLm as? androidx.recyclerview.widget.GridLayoutManager)?.spanCount ?: -1
+                                val spanCount = try {
+                                    val sm = incomingLm.javaClass.getMethod("getSpanCount")
+                                    sm.invoke(incomingLm) as? Int ?: -1
+                                } catch (t: Throwable) { -1 }
                                 if (spanCount == 4) {
                                     Log.i(TAG, "Replacing GridLayoutManager(4) with SpannedGridLayoutManager in RecyclerView.setLayoutManager")
                                     val customLm = SpannedGridLayoutManager(rv.context, 4)
-                                    return@intercept chain.proceed(arrayOf(customLm))
+                                    attachToRecyclerView(rv)
+                                    try {
+                                        return@intercept chain.proceed(arrayOf(customLm))
+                                    } catch (t: Throwable) {
+                                        chain.proceed()
+                                        rv.layoutManager = customLm
+                                        return@intercept null
+                                    }
                                 }
                             }
                             chain.proceed()
@@ -359,24 +473,8 @@ object ControlCenterHook {
                             val rv = chain.thisObject as? RecyclerView
                             val result = chain.proceed()
                             try {
-                                if (rv != null && rv.layoutManager is SpannedGridLayoutManager) {
-                                    val customLm = rv.layoutManager as SpannedGridLayoutManager
-                                    val adapter = rv.adapter
-                                    if (adapter != null) {
-                                        ControlCenterConfigHolder.sMainPanelAdapter = adapter
-                                        var adpCls: Class<*>? = adapter.javaClass
-                                        while (adpCls != null && adpCls != Any::class.java) {
-                                            for (f in adpCls.declaredFields) {
-                                                if (f.name == "layoutManager" || RecyclerView.LayoutManager::class.java.isAssignableFrom(f.type)) {
-                                                    try {
-                                                        f.isAccessible = true
-                                                        f.set(adapter, customLm)
-                                                    } catch (t: Throwable) {}
-                                                }
-                                            }
-                                            adpCls = adpCls.superclass
-                                        }
-                                    }
+                                if (rv != null) {
+                                    attachToRecyclerView(rv)
                                 }
                             } catch (t: Throwable) {}
                             result
@@ -1185,6 +1283,9 @@ object ControlCenterHook {
                             val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                             if (args != null && args.size >= 2) {
                                 val parent = args[0] as ViewGroup
+                                if (parent is RecyclerView) {
+                                    attachToRecyclerView(parent)
+                                }
                                 val vt = args[1] as Int
                                 if (vt == 2274 || vt == 2275 || vt == 2276 || vt == 2273 || vt == 2277) {
                                     try {
@@ -1528,6 +1629,27 @@ object ControlCenterHook {
                                             } catch (t2: Throwable) {}
 
                                             if (spec != null && ctx != null) {
+                                                if (ControlCenterConfigHolder.sIsGroupSelectMode) {
+                                                    if (ControlCenterConfigHolder.sSelectedTileSpecs.contains(spec)) {
+                                                        ControlCenterConfigHolder.sSelectedTileSpecs.remove(spec)
+                                                    } else {
+                                                        ControlCenterConfigHolder.sSelectedTileSpecs.add(spec)
+                                                    }
+                                                    ControlCenterConfigHolder.updateAllVisibleTileBadges()
+                                                    return@intercept null
+                                                }
+                                                if (ControlCenterConfigHolder.sIsDisassembleMode) {
+                                                    val g = ControlCenterConfigHolder.isGroupAnchor(spec)
+                                                    if (g != null) {
+                                                        if (ControlCenterConfigHolder.sSelectedDisassembleGroups.contains(g.id)) {
+                                                            ControlCenterConfigHolder.sSelectedDisassembleGroups.remove(g.id)
+                                                        } else {
+                                                            ControlCenterConfigHolder.sSelectedDisassembleGroups.add(g.id)
+                                                        }
+                                                        ControlCenterConfigHolder.updateAllVisibleTileBadges()
+                                                    }
+                                                    return@intercept null
+                                                }
                                                 ControlCenterConfigHolder.toggleTileSize(ctx, spec, tileView)
                                             }
                                             return@intercept null
@@ -1572,6 +1694,14 @@ object ControlCenterHook {
                                     val itemView = tileViewObj
                                     val ctx = itemView.context
                                     val density = ctx.resources.displayMetrics.density
+
+                                    val rv = findRecyclerView(itemView) as? RecyclerView
+                                    if (rv != null) {
+                                        attachToRecyclerView(rv)
+                                    }
+                                    if (spec != null) {
+                                        itemView.setTag(0x7f099990, spec)
+                                    }
 
                                     val isSubTile = ControlCenterConfigHolder.isGroupChild(spec) || isChildOfContainer(itemView)
                                     if (isSubTile) {
@@ -1919,9 +2049,6 @@ object ControlCenterHook {
                                                 }
                                             } else {
                                                 resizeHandle.visibility = View.GONE
-                                                resizeHandle.setOnTouchListener(null)
-                                                resizeHandle.setOnClickListener(null)
-                                                resizeHandle.isClickable = false
                                             }
                                         }
 
@@ -1997,11 +2124,18 @@ object ControlCenterHook {
                                 try {
                                     val itemView = chain.thisObject as? View
                                     if (itemView != null) {
+                                        val rv = findRecyclerView(itemView) as? RecyclerView
+                                        if (rv != null) {
+                                            attachToRecyclerView(rv)
+                                        }
+
                                         val rawArgs = chain.args
                                         val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                                         val isEdit = args != null && args.isNotEmpty() && args[0] != null && "EDIT" == args[0].toString()
                                         ControlCenterConfigHolder.sIsEditMode = isEdit
 
+                                        val spec = ControlCenterConfigHolder.getOrResolveTileSpec(itemView)
+                                        val density = itemView.context.resources.displayMetrics.density
                                         val isCircularTile = itemView.javaClass.name.contains("QSTileItemView") && !isChildOfContainer(itemView)
 
                                         if (isEdit) {
@@ -2010,8 +2144,15 @@ object ControlCenterHook {
                                             }
                                             val resizeHandle = itemView.findViewById<ImageView>(0x7f099999)
                                             if (resizeHandle != null && !isChildOfContainer(itemView)) {
-                                                resizeHandle.visibility = if (!ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode) View.VISIBLE else View.GONE
-                                                if (resizeHandle.visibility == View.VISIBLE) resizeHandle.bringToFront()
+                                                val shouldShow = !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
+                                                resizeHandle.visibility = if (shouldShow) View.VISIBLE else View.GONE
+                                                if (shouldShow) {
+                                                    resizeHandle.bringToFront()
+                                                    resizeHandle.isClickable = true
+                                                    if (spec != null) {
+                                                        resizeHandle.setOnTouchListener(TileResizeDragTouchListener(itemView.context, spec, itemView, density))
+                                                    }
+                                                }
                                             }
 
                                             val selectBadge = itemView.findViewById<ImageView>(0x7f099998)
@@ -2020,6 +2161,22 @@ object ControlCenterHook {
                                                     selectBadge.visibility = View.GONE
                                                 } else {
                                                     val scd = (selectBadge.drawable as? SelectCircleDrawable) ?: SelectCircleDrawable()
+                                                    if (spec != null) {
+                                                        scd.setChecked(ControlCenterConfigHolder.sSelectedTileSpecs.contains(spec))
+                                                        val toggleSelect = View.OnClickListener {
+                                                            if (ControlCenterConfigHolder.sSelectedTileSpecs.contains(spec)) {
+                                                                ControlCenterConfigHolder.sSelectedTileSpecs.remove(spec)
+                                                            } else {
+                                                                ControlCenterConfigHolder.sSelectedTileSpecs.add(spec)
+                                                            }
+                                                            val curScd = selectBadge.drawable as? SelectCircleDrawable
+                                                            curScd?.setChecked(ControlCenterConfigHolder.sSelectedTileSpecs.contains(spec))
+                                                            selectBadge.invalidate()
+                                                        }
+                                                        selectBadge.setOnClickListener(toggleSelect)
+                                                        itemView.setOnClickListener(toggleSelect)
+                                                        selectBadge.isClickable = true
+                                                    }
                                                     selectBadge.setImageDrawable(scd)
                                                     selectBadge.visibility = View.VISIBLE
                                                     selectBadge.bringToFront()
@@ -2039,6 +2196,7 @@ object ControlCenterHook {
                                             itemView.isClickable = true
                                             itemView.isLongClickable = true
                                             itemView.isFocusable = true
+                                            itemView.setOnClickListener(null)
 
                                             val container = itemView.findViewById<ViewGroup>(0x7f099995)
                                             if (container != null) {
