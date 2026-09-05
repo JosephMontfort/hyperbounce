@@ -113,6 +113,9 @@ class SpannedGridLayoutManager : GridLayoutManager {
                 }
             } catch (t: Throwable) {}
         }
+        if (adapter == null) {
+            adapter = ControlCenterConfigHolder.sMainPanelAdapter as? RecyclerView.Adapter<*>
+        }
 
         if (adapter != null && position in 0 until adapter.itemCount) {
             val viewType = try {
@@ -221,7 +224,7 @@ class SpannedGridLayoutManager : GridLayoutManager {
             val wSpans = Math.max(1, Math.min(4, spans[0]))
             val hSpans = Math.max(1, Math.min(2, spans[1]))
 
-            var adapter: RecyclerView.Adapter<*>? = mAttachedRv?.adapter
+            var adapter: RecyclerView.Adapter<*>? = mAttachedRv?.adapter ?: (ControlCenterConfigHolder.sMainPanelAdapter as? RecyclerView.Adapter<*>)
             val vt = if (adapter != null && pos in 0 until adapter.itemCount) {
                 try { adapter.getItemViewType(pos) } catch (t: Throwable) { -1 }
             } else -1
@@ -395,8 +398,15 @@ class SpannedGridLayoutManager : GridLayoutManager {
                 val vh = scrapList[i]
                 if (vh != null && vh.itemView.parent == null) {
                     try {
+                        val scrapField = RecyclerView.ViewHolder::class.java.getDeclaredField("mScrapContainer")
+                        scrapField.isAccessible = true
+                        scrapField.set(vh, null)
                         recycler.recycleView(vh.itemView)
-                    } catch (t: Throwable) {}
+                    } catch (t: Throwable) {
+                        try {
+                            recycler.recycleView(vh.itemView)
+                        } catch (t2: Throwable) {}
+                    }
                 }
             }
         }
