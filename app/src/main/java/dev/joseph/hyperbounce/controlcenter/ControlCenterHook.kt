@@ -90,6 +90,10 @@ object ControlCenterHook {
                         }
                     }
                 }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to hook PluginManager.onPluginConnected", t)
+            }
+
             try {
                 val cccClass = Class.forName("com.miui.systemui.controlcenter.container.ControlCenterContentController", false, classLoader)
                 for (m in cccClass.declaredMethods) {
