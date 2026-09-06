@@ -266,25 +266,51 @@ object ControlCenterHook {
         }
     }
 
-    fun setCircularTileLabelVisibility(itemView: View, visible: Boolean) {
+    fun setCircularTileLabelVisibility(itemView: View, visible: Boolean = true) {
         try {
             val cName = itemView.javaClass.name
             if (!cName.contains("Tile") || cName.contains("Card")) {
                 return
             }
-            var shouldShow = visible
-            if (visible) {
+            val ctx = itemView.context
+            var shouldShow = true
+            var resolved = false
+
+            // 1. Try getShowLabel via reflection (private method on QSTileItemView)
+            try {
+                val m = itemView.javaClass.getDeclaredMethod("getShowLabel")
+                m.isAccessible = true
+                shouldShow = m.invoke(itemView) as Boolean
+                resolved = true
+            } catch (t: Throwable) {
                 try {
-                    val getShowLabelM = itemView.javaClass.getMethod("getShowLabel")
-                    shouldShow = getShowLabelM.invoke(itemView) as Boolean
-                } catch (t: Throwable) {
-                    try {
-                        val isShowLabelM = itemView.javaClass.getMethod("isShowLabel")
-                        shouldShow = isShowLabelM.invoke(itemView) as Boolean
-                    } catch (t2: Throwable) {}
-                }
+                    val m = itemView.javaClass.getMethod("getShowLabel")
+                    shouldShow = m.invoke(itemView) as Boolean
+                    resolved = true
+                } catch (t2: Throwable) {}
             }
-            val iconFrameId = itemView.resources.getIdentifier("icon_frame", "id", itemView.context.packageName)
+
+            // 2. Fallback: query Settings.Secure "wordless_mode" (0 = show labels, 1 = hide labels)
+            if (!resolved) {
+                val isWordless = try {
+                    android.provider.Settings.Secure.getInt(ctx.contentResolver, "wordless_mode", 0) != 0
+                } catch (t: Throwable) { false }
+                shouldShow = if (ControlCenterConfigHolder.sIsEditMode) true else !isWordless
+            }
+
+            // 3. Keep QSTileItemView internal textMode in sync
+            try {
+                val isWordless = android.provider.Settings.Secure.getInt(ctx.contentResolver, "wordless_mode", 0) != 0
+                val textModeEnumClass = itemView.javaClass.classLoader?.loadClass("miui.systemui.controlcenter.panel.main.qs.QSListController\$TextMode")
+                if (textModeEnumClass != null) {
+                    val targetModeName = if (isWordless) "NO_TEXT" else "TEXT"
+                    val targetMode = java.lang.Enum.valueOf(textModeEnumClass as Class<out Enum<*>>, targetModeName)
+                    val onTextModeChangedM = itemView.javaClass.methods.firstOrNull { it.name == "onTextModeChanged" }
+                    onTextModeChangedM?.invoke(itemView, targetMode, false)
+                }
+            } catch (t: Throwable) {}
+
+            val iconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
             fun process(v: View) {
                 if (iconFrameId != 0 && v.id == iconFrameId) return
                 if (v is TextView) {
@@ -878,9 +904,38 @@ object ControlCenterHook {
                                 }
                             }
                         }
+
+                        if (m.name == "getSpanSize" && m.parameterTypes.isEmpty()) {
+                            m.isAccessible = true
+                            module.hook(m).intercept { chain ->
+                                when (simpleName) {
+                                    "BrightnessSliderController" -> if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) 2 else 1
+                                    "VolumeSliderController" -> if (ControlCenterConfigHolder.sVolumeSliderHorizontal) 2 else 1
+                                    "MediaPlayerController" -> if (ControlCenterConfigHolder.sMediaPlayerSize == "1x2" || ControlCenterConfigHolder.sMediaPlayerSize == "1x1") 1 else 2
+                                    else -> chain.proceed()
+                                }
+                            }
+                        }
                     }
                 } catch (t: Throwable) {}
             }
+
+            // Hook WordlessModeController.updateTextMode to immediately update circular card labels on toggle
+            try {
+                val wordlessClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.WordlessModeController", false, classLoader)
+                for (m in wordlessClass.declaredMethods) {
+                    if (m.name == "updateTextMode") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            try {
+                                ControlCenterConfigHolder.updateAllVisibleTileBadges()
+                            } catch (t: Throwable) {}
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
 
             // Hook QSCardsController.getListItems for Wi-Fi / Cell card swapping and sAllQSRecords tracking
             try {
@@ -1691,6 +1746,31 @@ object ControlCenterHook {
 
                                     if (spec != null) {
                                         itemView.setTag(0x7f099990, spec)
+                                    }
+
+                                    if (spec == "wifi" || spec == "cell") {
+                                        try {
+                                            val setAddedM = record.javaClass.getMethod("setAdded", Boolean::class.javaPrimitiveType)
+                                            setAddedM.invoke(record, true)
+                                        } catch (t: Throwable) {
+                                            try {
+                                                val addedF = record.javaClass.getDeclaredField("added")
+                                                addedF.isAccessible = true
+                                                addedF.setBoolean(record, true)
+                                            } catch (t2: Throwable) {}
+                                        }
+                                        if (tileViewObj != null) {
+                                            try {
+                                                val updateAddedM = tileViewObj.javaClass.getMethod("updateAdded", Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+                                                updateAddedM.invoke(tileViewObj, true, false)
+                                            } catch (t: Throwable) {
+                                                try {
+                                                    val setAddedM = tileViewObj.javaClass.getDeclaredMethod("setAdded", Boolean::class.javaPrimitiveType)
+                                                    setAddedM.isAccessible = true
+                                                    setAddedM.invoke(tileViewObj, true)
+                                                } catch (t2: Throwable) {}
+                                            }
+                                        }
                                     }
 
                                     val isSubTile = ControlCenterConfigHolder.isGroupChild(spec) || isChildOfContainer(itemView)
@@ -2817,6 +2897,25 @@ object ControlCenterHook {
                         setDragEnabledM.invoke(dragAnim, !isHorizontal)
                     }
                 } catch (t: Throwable) {}
+
+                try {
+                    val ghField = slider.javaClass.getDeclaredField("gestureHelper")
+                    ghField.isAccessible = true
+                    val gh = ghField.get(slider)
+                    if (gh != null) {
+                        var c: Class<*>? = gh.javaClass
+                        while (c != null && c != Any::class.java) {
+                            try {
+                                val vf = c.getDeclaredField("vertical")
+                                vf.isAccessible = true
+                                vf.set(gh, java.lang.Boolean.valueOf(!isHorizontal))
+                                break
+                            } catch (e: NoSuchFieldException) {
+                                c = c.superclass
+                            }
+                        }
+                    }
+                } catch (t: Throwable) {}
             }
 
             val ctx = itemView.context
@@ -2850,19 +2949,29 @@ object ControlCenterHook {
             } catch (t: Throwable) {}
 
             val curLp = itemView.layoutParams
-            if (isHorizontal) {
-                if (curLp != null && curLp.height != cardH) {
-                    curLp.height = cardH
-                    itemView.layoutParams = curLp
-                }
-                if (slider != null) {
-                    val sLp = slider.layoutParams
-                    if (sLp != null) {
+            if (curLp != null) {
+                curLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                curLp.height = if (isHorizontal) cardH else tallH
+                itemView.layoutParams = curLp
+            }
+
+            if (slider != null) {
+                val sLp = slider.layoutParams
+                if (sLp != null) {
+                    if (isHorizontal) {
+                        slider.rotation = 0f
                         sLp.width = ViewGroup.LayoutParams.MATCH_PARENT
                         sLp.height = ViewGroup.LayoutParams.MATCH_PARENT
-                        slider.layoutParams = sLp
+                    } else {
+                        slider.rotation = 270f
+                        sLp.width = tallH
+                        sLp.height = cardH
                     }
+                    slider.layoutParams = sLp
                 }
+            }
+
+            if (isHorizontal) {
                 try {
                     val iconField = binding.javaClass.getField("icon")
                     val iconView = iconField.get(binding) as? View
@@ -2877,10 +2986,6 @@ object ControlCenterHook {
                     }
                 } catch (t: Throwable) {}
             } else {
-                if (curLp != null && curLp.height != tallH) {
-                    curLp.height = tallH
-                    itemView.layoutParams = curLp
-                }
                 try {
                     val iconField = binding.javaClass.getField("icon")
                     val iconView = iconField.get(binding) as? View
@@ -3000,6 +3105,9 @@ object ControlCenterHook {
             val emptyState = getView("emptyState")
 
             val curLp = itemView.layoutParams
+            if (curLp != null) {
+                curLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+            }
             when (size) {
                 "2x1", "4x1" -> {
                     if (curLp != null && curLp.height != cardH) {
@@ -3060,12 +3168,19 @@ object ControlCenterHook {
             var resizeHandle = itemView.findViewById<ImageView>(resizeTag)
             if (ControlCenterConfigHolder.sIsEditMode) {
                 val shouldShow = !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
+                val badgeSize = (38 * density).toInt()
                 if (resizeHandle == null && itemView is ViewGroup) {
-                    val badgeSize = (38 * density).toInt()
                     resizeHandle = ImageView(ctx).apply {
                         id = resizeTag
-                        val lp = FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
-                            gravity = Gravity.BOTTOM or Gravity.END
+                        val lp = if (itemView is androidx.constraintlayout.widget.ConstraintLayout) {
+                            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(badgeSize, badgeSize).apply {
+                                bottomToBottom = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                                endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                            }
+                        } else {
+                            FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
+                                gravity = Gravity.BOTTOM or Gravity.END
+                            }
                         }
                         layoutParams = lp
                         setImageDrawable(CurvedResizeHandleDrawable(density))
@@ -3074,6 +3189,11 @@ object ControlCenterHook {
                         }
                     }
                     itemView.addView(resizeHandle)
+                } else if (resizeHandle != null && itemView is androidx.constraintlayout.widget.ConstraintLayout && resizeHandle.layoutParams !is androidx.constraintlayout.widget.ConstraintLayout.LayoutParams) {
+                    resizeHandle.layoutParams = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(badgeSize, badgeSize).apply {
+                        bottomToBottom = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                        endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                    }
                 }
                 if (resizeHandle != null) {
                     resizeHandle.visibility = if (shouldShow) View.VISIBLE else View.GONE
@@ -3083,14 +3203,17 @@ object ControlCenterHook {
                         resizeHandle.setOnClickListener {
                             ControlCenterConfigHolder.cycleMediaPlayerSize(ctx, itemView)
                         }
+                        resizeHandle.setOnTouchListener(TileResizeDragTouchListener(ctx, "media", itemView, density))
                     } else {
                         resizeHandle.isClickable = false
                         resizeHandle.setOnClickListener(null)
+                        resizeHandle.setOnTouchListener(null)
                     }
                 }
             } else {
                 resizeHandle?.visibility = View.GONE
                 resizeHandle?.setOnClickListener(null)
+                resizeHandle?.setOnTouchListener(null)
                 resizeHandle?.isClickable = false
             }
         } catch (t: Throwable) {
@@ -3180,6 +3303,13 @@ class TileResizeDragTouchListener(
                 candidateTargetState = -1
 
                 initialState = when {
+                    "media".equals(spec, ignoreCase = true) -> when (ControlCenterConfigHolder.sMediaPlayerSize) {
+                        "2x2" -> STATE_LARGE
+                        "2x1" -> STATE_EXPANDED
+                        "1x2" -> STATE_VERTICAL
+                        "1x1" -> STATE_NORMAL
+                        else -> STATE_LARGE
+                    }
                     ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) -> STATE_LARGE
                     ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) -> STATE_EXPANDED
                     ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) -> STATE_VERTICAL
@@ -3247,7 +3377,8 @@ class TileResizeDragTouchListener(
                         }
                     }
 
-                    val initialRadius = if (initialState == STATE_NORMAL) Math.min(originWidth, originHeight) / 2f else cardRadius
+                    val isMediaSpec = "media".equals(spec, ignoreCase = true)
+                    val initialRadius = if (initialState == STATE_NORMAL && !isMediaSpec) Math.min(originWidth, originHeight) / 2f else cardRadius
                     ghostDrawable = TileResizeGhostDrawable(density).apply {
                         setOriginBounds(originLeft, originTop, originWidth, originHeight, initialRadius)
                     }
@@ -3289,6 +3420,7 @@ class TileResizeDragTouchListener(
 
                 when (initialState) {
                     STATE_NORMAL -> {
+                        val isMediaSpec = "media".equals(spec, ignoreCase = true)
                         val px = (dx / deltaW).coerceIn(0f, 1f)
                         val py = (dy / deltaH).coerceIn(0f, 1f)
                         val isDiagonal = dx > snapDistX * 0.65f && dy > snapDistY * 0.65f
@@ -3297,7 +3429,7 @@ class TileResizeDragTouchListener(
                             previewW = unitWidth1x1 + px * deltaW
                             previewH = unitHeight1x1 + py * deltaH
                             val pMax = Math.max(px, py)
-                            previewRadius = lerp(unitWidth1x1 / 2f, cardRadius, pMax)
+                            previewRadius = if (isMediaSpec) cardRadius else lerp(unitWidth1x1 / 2f, cardRadius, pMax)
                             if (dx >= snapDistX && dy >= snapDistY) {
                                 targetState = STATE_LARGE
                             }
@@ -3305,27 +3437,27 @@ class TileResizeDragTouchListener(
                             if (dx > 0) {
                                 previewW = unitWidth1x1 + px * deltaW
                                 previewH = unitHeight1x1
-                                previewRadius = lerp(unitHeight1x1 / 2f, cardRadius, px)
+                                previewRadius = if (isMediaSpec) cardRadius else lerp(unitHeight1x1 / 2f, cardRadius, px)
                                 if (dx >= snapDistX) {
                                     targetState = STATE_EXPANDED
                                 }
                             } else {
                                 previewW = unitWidth1x1
                                 previewH = unitHeight1x1
-                                previewRadius = unitWidth1x1 / 2f
+                                previewRadius = if (isMediaSpec) cardRadius else unitWidth1x1 / 2f
                             }
                         } else {
                             if (dy > 0) {
                                 previewW = unitWidth1x1
                                 previewH = unitHeight1x1 + py * deltaH
-                                previewRadius = lerp(unitWidth1x1 / 2f, cardRadius, py)
+                                previewRadius = if (isMediaSpec) cardRadius else lerp(unitWidth1x1 / 2f, cardRadius, py)
                                 if (dy >= snapDistY) {
                                     targetState = STATE_VERTICAL
                                 }
                             } else {
                                 previewW = unitWidth1x1
                                 previewH = unitHeight1x1
-                                previewRadius = unitWidth1x1 / 2f
+                                previewRadius = if (isMediaSpec) cardRadius else unitWidth1x1 / 2f
                             }
                         }
                     }

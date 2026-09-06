@@ -65,8 +65,8 @@ object ControlCenterFullUnlock {
         val owner: Any,
         val item: Any,
         val viewType: Int,
-        val spanW: Int,
-        val spanH: Int
+        var spanW: Int,
+        var spanH: Int
     )
 
     /**
@@ -862,6 +862,18 @@ object ControlCenterFullUnlock {
             }
 
             cleanStaleSlots()
+
+            // Dynamically refresh slot spans to reflect any recent size/rotation changes
+            for ((slotId, slot) in sKnownSlots) {
+                val spec = when {
+                    slotId.startsWith("tile:") -> slotId.substring(5)
+                    slotId.startsWith("card:") -> slotId.substring(5)
+                    else -> null
+                }
+                val currentSpans = getItemSpans(slot.item, slot.viewType, spec)
+                slot.spanW = currentSpans.first
+                slot.spanH = currentSpans.second
+            }
 
             // Order active slots according to sUnifiedSlotOrder
             val orderedSlots = ArrayList<SlotItem>()

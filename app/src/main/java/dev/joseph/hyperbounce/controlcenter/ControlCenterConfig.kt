@@ -861,13 +861,25 @@ object ControlCenterConfigHolder {
                         if (resizeHandle == null && itemView is ViewGroup) {
                             resizeHandle = ImageView(itemView.context).apply {
                                 id = resizeTag
-                                val lp = android.widget.FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
-                                    gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
+                                val lp = if (itemView is androidx.constraintlayout.widget.ConstraintLayout) {
+                                    androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(badgeSize, badgeSize).apply {
+                                        bottomToBottom = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                                        endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                                    }
+                                } else {
+                                    android.widget.FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
+                                        gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
+                                    }
                                 }
                                 layoutParams = lp
                                 setImageDrawable(CurvedResizeHandleDrawable(density))
                             }
                             itemView.addView(resizeHandle)
+                        } else if (resizeHandle != null && itemView is androidx.constraintlayout.widget.ConstraintLayout && resizeHandle.layoutParams !is androidx.constraintlayout.widget.ConstraintLayout.LayoutParams) {
+                            resizeHandle.layoutParams = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(badgeSize, badgeSize).apply {
+                                bottomToBottom = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                                endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                            }
                         }
                         if (resizeHandle != null) {
                             val shouldShowMediaResize = !sIsGroupSelectMode && !sIsDisassembleMode
@@ -894,7 +906,32 @@ object ControlCenterConfigHolder {
                     }
 
                     // Handling for standard tiles & cards (Wi-Fi, Cell, normal tiles)
-                    if (rotateBtn != null) rotateBtn.visibility = View.GONE
+                    val group = isGroupAnchor(spec)
+                    if (group != null && group.specs.size == 2) {
+                        if (rotateBtn != null) {
+                            val shouldShowRotate = !sIsGroupSelectMode && !sIsDisassembleMode
+                            rotateBtn.visibility = if (shouldShowRotate) View.VISIBLE else View.GONE
+                            if (shouldShowRotate) {
+                                rotateBtn.bringToFront()
+                                rotateBtn.isClickable = true
+                                rotateBtn.setOnClickListener {
+                                    try {
+                                        group.isVertical = !group.isVertical
+                                        savePriorities(itemView.context)
+                                        refreshRecyclerView(itemView)
+                                        updateAllVisibleTileBadges()
+                                    } catch (t: Throwable) {
+                                        Log.e(TAG, "Rotate 2-tile group error", t)
+                                    }
+                                }
+                            } else {
+                                rotateBtn.isClickable = false
+                                rotateBtn.setOnClickListener(null)
+                            }
+                        }
+                    } else {
+                        if (rotateBtn != null) rotateBtn.visibility = View.GONE
+                    }
 
                     if (sIsGroupSelectMode) {
                         if (resizeHandle != null) {
@@ -1273,6 +1310,12 @@ object ControlCenterConfigHolder {
 
     fun setTileToExpanded(ctx: Context, spec: String?, tileView: View?) {
         if (spec == null) return
+        if ("media".equals(spec, ignoreCase = true)) {
+            sMediaPlayerSize = "2x1"
+            savePriorities(ctx)
+            refreshRecyclerView(tileView)
+            return
+        }
         sExpandedTileSpecs.add(spec)
         sVerticalTileSpecs.remove(spec)
         sLargeTileSpecs.remove(spec)
@@ -1283,6 +1326,12 @@ object ControlCenterConfigHolder {
 
     fun setTileToVertical(ctx: Context, spec: String?, tileView: View?) {
         if (spec == null) return
+        if ("media".equals(spec, ignoreCase = true)) {
+            sMediaPlayerSize = "1x2"
+            savePriorities(ctx)
+            refreshRecyclerView(tileView)
+            return
+        }
         sVerticalTileSpecs.add(spec)
         sExpandedTileSpecs.remove(spec)
         sLargeTileSpecs.remove(spec)
@@ -1293,6 +1342,12 @@ object ControlCenterConfigHolder {
 
     fun setTileToLarge(ctx: Context, spec: String?, tileView: View?) {
         if (spec == null) return
+        if ("media".equals(spec, ignoreCase = true)) {
+            sMediaPlayerSize = "2x2"
+            savePriorities(ctx)
+            refreshRecyclerView(tileView)
+            return
+        }
         sLargeTileSpecs.add(spec)
         sExpandedTileSpecs.remove(spec)
         sVerticalTileSpecs.remove(spec)
@@ -1303,6 +1358,12 @@ object ControlCenterConfigHolder {
 
     fun setTileToNormal(ctx: Context, spec: String?, tileView: View?) {
         if (spec == null) return
+        if ("media".equals(spec, ignoreCase = true)) {
+            sMediaPlayerSize = "1x1"
+            savePriorities(ctx)
+            refreshRecyclerView(tileView)
+            return
+        }
         sExpandedTileSpecs.remove(spec)
         sVerticalTileSpecs.remove(spec)
         sLargeTileSpecs.remove(spec)
