@@ -148,6 +148,9 @@ class SpannedGridLayoutManager : GridLayoutManager {
                     "2x1" -> intArrayOf(2, 1)
                     "1x2" -> intArrayOf(1, 2)
                     "1x1" -> intArrayOf(1, 1)
+                    "4x1" -> intArrayOf(4, 1)
+                    "4x2" -> intArrayOf(4, 2)
+                    "2x4" -> intArrayOf(2, 4)
                     else -> intArrayOf(2, 2)
                 }
             }

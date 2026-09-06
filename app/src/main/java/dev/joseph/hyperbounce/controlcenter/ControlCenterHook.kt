@@ -485,6 +485,7 @@ object ControlCenterHook {
                                             val getCtxMethod = modeCtrl.javaClass.getMethod("getContext")
                                             val ctx = getCtxMethod.invoke(modeCtrl) as? Context
                                             ControlCenterConfigHolder.savePriorities(ctx)
+                                            sMediaPlayerViewHolder?.get()?.let { applyMediaPlayerLayout(it) }
                                         } catch (t: Throwable) {}
                                     }
                                 }
@@ -916,7 +917,11 @@ object ControlCenterHook {
                                 when (simpleName) {
                                     "BrightnessSliderController" -> if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) 2 else 1
                                     "VolumeSliderController" -> if (ControlCenterConfigHolder.sVolumeSliderHorizontal) 2 else 1
-                                    "MediaPlayerController" -> if (ControlCenterConfigHolder.sMediaPlayerSize == "1x2" || ControlCenterConfigHolder.sMediaPlayerSize == "1x1") 1 else 2
+                                    "MediaPlayerController" -> when (ControlCenterConfigHolder.sMediaPlayerSize) {
+                                        "1x2", "1x1" -> 1
+                                        "4x1", "4x2" -> 4
+                                        else -> 2
+                                    }
                                     else -> chain.proceed()
                                 }
                             }
@@ -2622,10 +2627,7 @@ object ControlCenterHook {
                             } catch (t: Throwable) {}
                             val result = chain.proceed()
                             try {
-                                val size = ControlCenterConfigHolder.sMediaPlayerSize
-                                if (size == "2x1" || size == "1x2") {
-                                    applyMediaPlayerLayout(chain.thisObject)
-                                }
+                                applyMediaPlayerLayout(chain.thisObject)
                             } catch (t: Throwable) {}
                             result
                         }
@@ -2634,10 +2636,7 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
                             try {
-                                val size = ControlCenterConfigHolder.sMediaPlayerSize
-                                if (size == "2x1" || size == "1x2") {
-                                    applyMediaPlayerLayout(chain.thisObject)
-                                }
+                                applyMediaPlayerLayout(chain.thisObject)
                             } catch (t: Throwable) {}
                             result
                         }
@@ -2654,18 +2653,7 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
                             try {
-                                val size = ControlCenterConfigHolder.sMediaPlayerSize
-                                if (size == "2x1" || size == "1x2") {
-                                    val anim = chain.thisObject
-                                    val fromViewF = mediaAnimClass.getDeclaredField("fromView")
-                                    fromViewF.isAccessible = true
-                                    val fromView = fromViewF.get(anim)
-                                    if (fromView != null) {
-                                        applyMediaPlayerLayout(fromView)
-                                    } else {
-                                        sMediaPlayerViewHolder?.get()?.let { applyMediaPlayerLayout(it) }
-                                    }
-                                }
+                                sMediaPlayerViewHolder?.get()?.let { applyMediaPlayerLayout(it) }
                             } catch (t: Throwable) {}
                             result
                         }
@@ -2673,17 +2661,9 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val size = ControlCenterConfigHolder.sMediaPlayerSize
-                            if (size == "2x1" || size == "1x2") {
+                            if (size != "2x2") {
                                 try {
-                                    val anim = chain.thisObject
-                                    val fromViewF = mediaAnimClass.getDeclaredField("fromView")
-                                    fromViewF.isAccessible = true
-                                    val fromView = fromViewF.get(anim)
-                                    if (fromView != null) {
-                                        applyMediaPlayerLayout(fromView)
-                                    } else {
-                                        sMediaPlayerViewHolder?.get()?.let { applyMediaPlayerLayout(it) }
-                                    }
+                                    sMediaPlayerViewHolder?.get()?.let { applyMediaPlayerLayout(it) }
                                 } catch (t: Throwable) {}
                                 return@intercept null
                             }
@@ -3269,427 +3249,892 @@ object ControlCenterHook {
             val artistId = ensureId(artist)
             val audioContainerId = ensureId(audioContainer)
 
-            when (size) {
-                "2x1", "4x1" -> {
-                    if (curLp != null && curLp.height != cardH) {
-                        curLp.height = cardH
-                        itemView.layoutParams = curLp
-                    }
-                    title?.visibility = View.GONE
-                    artist?.visibility = View.GONE
-                    emptyState?.visibility = View.GONE
-                    if (emptyState?.layoutParams != null && emptyState.layoutParams.width != 0) {
-                        emptyState.layoutParams.width = 0
-                    }
-                    deviceIcon?.visibility = View.GONE
-                    cover?.visibility = View.VISIBLE
-                    prev?.visibility = View.VISIBLE
-                    play?.visibility = View.VISIBLE
-                    next?.visibility = View.VISIBLE
+            val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
+            val gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId) else (14 * density).toInt()
+            val fourRowsH = 4 * cardH + 3 * gap
 
-                    listOf(cover, play, prev, next, audioContainer).forEach { v ->
-                        v?.alpha = 1f
-                        v?.scaleX = 1f
-                        v?.scaleY = 1f
-                        v?.translationX = 0f
-                        v?.translationY = 0f
+            val meta = sLastMediaPlayerMetaData
+            var hasTrack = false
+            if (meta != null) {
+                try {
+                    val titleProp = meta.javaClass.getMethod("getTitle").invoke(meta) as? CharSequence
+                    if (!titleProp.isNullOrBlank()) {
+                        hasTrack = true
+                    }
+                } catch (t: Throwable) {
+                    hasTrack = true
+                }
+            }
+            if (!hasTrack && title is TextView && !title.text.isNullOrBlank() && title.visibility == View.VISIBLE) {
+                hasTrack = true
+            }
+
+            if (emptyState is TextView) {
+                val noSongResId = ctx.resources.getIdentifier("miplay_detail_header_no_song", "string", ctx.packageName)
+                if (noSongResId != 0) {
+                    emptyState.setText(noSongResId)
+                } else {
+                    emptyState.text = "Not playing"
+                }
+            }
+
+            if (cover is ImageView) {
+                if (cover.drawable == null || !hasTrack) {
+                    val defCoverId = ctx.resources.getIdentifier("miplay_cover_default", "drawable", ctx.packageName)
+                    if (defCoverId != 0) cover.setImageResource(defCoverId)
+                }
+            }
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP && cover != null) {
+                val rad = if (size == "4x2" || size == "2x4") 18f * density else 12f * density
+                cover.outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(v: View, o: Outline) {
+                        o.setRoundRect(0, 0, v.width, v.height, rad)
+                    }
+                }
+                cover.clipToOutline = true
+            }
+
+            listOf(cover, play, prev, next, audioContainer).forEach { v ->
+                v?.alpha = 1f
+                v?.scaleX = 1f
+                v?.scaleY = 1f
+                v?.translationX = 0f
+                v?.translationY = 0f
+            }
+
+            cover?.visibility = View.VISIBLE
+            prev?.visibility = View.VISIBLE
+            play?.visibility = View.VISIBLE
+            next?.visibility = View.VISIBLE
+            audioContainer?.visibility = View.VISIBLE
+
+            if (ControlCenterConfigHolder.isConstraintLayout(itemView)) {
+                try {
+                    val clpClass = itemView.javaClass.classLoader?.loadClass("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+                        ?: Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+                    val pId = clpClass.getField("PARENT_ID").getInt(null)
+                    val unset = clpClass.getField("UNSET").getInt(null)
+
+                    fun setField(obj: Any, field: String, value: Int) {
+                        try { clpClass.getField(field).setInt(obj, value) } catch (t: Throwable) {}
                     }
 
-                    if (cover is ImageView && cover.drawable == null) {
-                        val defCoverId = ctx.resources.getIdentifier("miplay_cover_default", "drawable", ctx.packageName)
-                        if (defCoverId != 0) cover.setImageResource(defCoverId)
+                    fun resetConstraints(lp: Any) {
+                        listOf(
+                            "startToStart", "startToEnd", "endToStart", "endToEnd",
+                            "topToTop", "topToBottom", "bottomToTop", "bottomToBottom",
+                            "horizontalChainStyle", "verticalChainStyle"
+                        ).forEach { fName ->
+                            setField(lp, fName, unset)
+                        }
+                        if (lp is ViewGroup.MarginLayoutParams) {
+                            lp.marginStart = 0
+                            lp.marginEnd = 0
+                            lp.topMargin = 0
+                            lp.bottomMargin = 0
+                        }
                     }
 
-                    if (ControlCenterConfigHolder.isConstraintLayout(itemView)) {
-                        try {
-                            val clpClass = itemView.javaClass.classLoader?.loadClass("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
-                                ?: Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
-                            val pId = clpClass.getField("PARENT_ID").getInt(null)
-                            val unset = clpClass.getField("UNSET").getInt(null)
+                    val cLp = cover?.layoutParams
+                    val acLp = audioContainer?.layoutParams
+                    val prevLp = prev?.layoutParams
+                    val playLp = play?.layoutParams
+                    val nextLp = next?.layoutParams
+                    val tLp = title?.layoutParams
+                    val aLp = artist?.layoutParams
+                    val eLp = emptyState?.layoutParams
+                    val diLp = deviceIcon?.layoutParams
 
-                            fun setField(obj: Any, field: String, value: Int) {
-                                try { clpClass.getField(field).setInt(obj, value) } catch (t: Throwable) {}
+                    when (size) {
+                        "2x1" -> {
+                            if (curLp != null && curLp.height != cardH) {
+                                curLp.height = cardH
+                                itemView.layoutParams = curLp
                             }
+                            title?.visibility = View.GONE
+                            artist?.visibility = View.GONE
+                            emptyState?.visibility = View.GONE
+                            deviceIcon?.visibility = View.GONE
 
-                            val cSize = (48 * density).toInt()
-                            val cLp = cover?.layoutParams
                             if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(cLp)
+                                val cSize = (48 * density).toInt()
                                 cLp.width = cSize
                                 cLp.height = cSize
                                 setField(cLp, "startToStart", pId)
                                 setField(cLp, "topToTop", pId)
                                 setField(cLp, "bottomToBottom", pId)
-                                setField(cLp, "endToEnd", unset)
-                                setField(cLp, "endToStart", unset)
-                                setField(cLp, "topToBottom", unset)
-                                setField(cLp, "bottomToTop", unset)
                                 if (cLp is ViewGroup.MarginLayoutParams) {
                                     cLp.marginStart = (14 * density).toInt()
-                                    cLp.topMargin = 0
-                                    cLp.bottomMargin = 0
-                                    cLp.marginEnd = 0
                                 }
                                 cover.layoutParams = cLp
                             }
 
-                            val acLp = audioContainer?.layoutParams
                             if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(acLp)
                                 acLp.width = 0
                                 acLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
                                 setField(acLp, "startToEnd", coverId)
                                 setField(acLp, "endToEnd", pId)
                                 setField(acLp, "topToTop", pId)
                                 setField(acLp, "bottomToBottom", pId)
-                                setField(acLp, "startToStart", unset)
-                                setField(acLp, "topToBottom", unset)
-                                setField(acLp, "bottomToTop", unset)
                                 if (acLp is ViewGroup.MarginLayoutParams) {
                                     acLp.marginStart = (8 * density).toInt()
                                     acLp.marginEnd = (14 * density).toInt()
-                                    acLp.bottomMargin = 0
-                                    acLp.topMargin = 0
                                 }
                                 audioContainer.layoutParams = acLp
                             }
 
                             val btnSize = (34 * density).toInt()
                             val playSize = (38 * density).toInt()
-                            val prevLp = prev?.layoutParams
                             if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(prevLp)
                                 prevLp.width = btnSize
                                 prevLp.height = btnSize
                                 setField(prevLp, "startToStart", pId)
                                 setField(prevLp, "endToStart", playId)
                                 setField(prevLp, "topToTop", pId)
                                 setField(prevLp, "bottomToBottom", pId)
-                                setField(prevLp, "startToEnd", unset)
-                                setField(prevLp, "endToEnd", unset)
-                                setField(prevLp, "topToBottom", unset)
-                                setField(prevLp, "bottomToTop", unset)
                                 setField(prevLp, "horizontalChainStyle", 0)
-                                setField(prevLp, "verticalChainStyle", unset)
                                 prev.layoutParams = prevLp
                             }
-                            val playLp = play?.layoutParams
                             if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(playLp)
                                 playLp.width = playSize
                                 playLp.height = playSize
                                 setField(playLp, "startToEnd", prevId)
                                 setField(playLp, "endToStart", nextId)
                                 setField(playLp, "topToTop", pId)
                                 setField(playLp, "bottomToBottom", pId)
-                                setField(playLp, "startToStart", unset)
-                                setField(playLp, "endToEnd", unset)
-                                setField(playLp, "topToBottom", unset)
-                                setField(playLp, "bottomToTop", unset)
                                 play.layoutParams = playLp
                             }
-                            val nextLp = next?.layoutParams
                             if (nextLp != null && nextLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(nextLp)
                                 nextLp.width = btnSize
                                 nextLp.height = btnSize
                                 setField(nextLp, "startToEnd", playId)
                                 setField(nextLp, "endToEnd", pId)
                                 setField(nextLp, "topToTop", pId)
                                 setField(nextLp, "bottomToBottom", pId)
-                                setField(nextLp, "startToStart", unset)
-                                setField(nextLp, "endToStart", unset)
-                                setField(nextLp, "topToBottom", unset)
-                                setField(nextLp, "bottomToTop", unset)
                                 next.layoutParams = nextLp
                             }
-                        } catch (t: Throwable) {}
-                    }
-                }
-                "1x2" -> {
-                    if (curLp != null && curLp.height != tallH) {
-                        curLp.height = tallH
-                        itemView.layoutParams = curLp
-                    }
-                    title?.visibility = View.GONE
-                    artist?.visibility = View.GONE
-                    emptyState?.visibility = View.GONE
-                    if (emptyState?.layoutParams != null && emptyState.layoutParams.width != 0) {
-                        emptyState.layoutParams.width = 0
-                    }
-                    deviceIcon?.visibility = View.GONE
-                    cover?.visibility = View.VISIBLE
-                    prev?.visibility = View.VISIBLE
-                    play?.visibility = View.VISIBLE
-                    next?.visibility = View.VISIBLE
+                        }
 
-                    listOf(cover, play, prev, next, audioContainer).forEach { v ->
-                        v?.alpha = 1f
-                        v?.scaleX = 1f
-                        v?.scaleY = 1f
-                        v?.translationX = 0f
-                        v?.translationY = 0f
-                    }
-
-                    if (cover is ImageView && cover.drawable == null) {
-                        val defCoverId = ctx.resources.getIdentifier("miplay_cover_default", "drawable", ctx.packageName)
-                        if (defCoverId != 0) cover.setImageResource(defCoverId)
-                    }
-
-                    if (ControlCenterConfigHolder.isConstraintLayout(itemView)) {
-                        try {
-                            val clpClass = itemView.javaClass.classLoader?.loadClass("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
-                                ?: Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
-                            val pId = clpClass.getField("PARENT_ID").getInt(null)
-                            val unset = clpClass.getField("UNSET").getInt(null)
-
-                            fun setField(obj: Any, field: String, value: Int) {
-                                try { clpClass.getField(field).setInt(obj, value) } catch (t: Throwable) {}
+                        "1x2" -> {
+                            if (curLp != null && curLp.height != tallH) {
+                                curLp.height = tallH
+                                itemView.layoutParams = curLp
                             }
+                            title?.visibility = View.GONE
+                            artist?.visibility = View.GONE
+                            emptyState?.visibility = View.GONE
+                            deviceIcon?.visibility = View.GONE
 
-                            val cSize = (48 * density).toInt()
-                            val cLp = cover?.layoutParams
                             if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(cLp)
+                                val cSize = (48 * density).toInt()
                                 cLp.width = cSize
                                 cLp.height = cSize
                                 setField(cLp, "startToStart", pId)
                                 setField(cLp, "endToEnd", pId)
                                 setField(cLp, "topToTop", pId)
-                                setField(cLp, "bottomToBottom", unset)
-                                setField(cLp, "bottomToTop", unset)
-                                setField(cLp, "startToEnd", unset)
-                                setField(cLp, "endToStart", unset)
                                 if (cLp is ViewGroup.MarginLayoutParams) {
                                     cLp.topMargin = (14 * density).toInt()
-                                    cLp.marginStart = 0
-                                    cLp.marginEnd = 0
-                                    cLp.bottomMargin = 0
                                 }
                                 cover.layoutParams = cLp
                             }
 
-                            val acLp = audioContainer?.layoutParams
                             if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(acLp)
                                 acLp.width = ViewGroup.LayoutParams.MATCH_PARENT
                                 acLp.height = 0
                                 setField(acLp, "startToStart", pId)
                                 setField(acLp, "endToEnd", pId)
                                 setField(acLp, "topToBottom", coverId)
                                 setField(acLp, "bottomToBottom", pId)
-                                setField(acLp, "topToTop", unset)
-                                setField(acLp, "startToEnd", unset)
-                                setField(acLp, "endToStart", unset)
                                 if (acLp is ViewGroup.MarginLayoutParams) {
                                     acLp.topMargin = (8 * density).toInt()
                                     acLp.bottomMargin = (12 * density).toInt()
-                                    acLp.marginEnd = 0
-                                    acLp.marginStart = 0
                                 }
                                 audioContainer.layoutParams = acLp
                             }
 
                             val btnSize = (32 * density).toInt()
                             val playSize = (38 * density).toInt()
-                            val prevLp = prev?.layoutParams
                             if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(prevLp)
                                 prevLp.width = btnSize
                                 prevLp.height = btnSize
                                 setField(prevLp, "startToStart", pId)
                                 setField(prevLp, "endToEnd", pId)
                                 setField(prevLp, "topToTop", pId)
                                 setField(prevLp, "bottomToTop", playId)
-                                setField(prevLp, "startToEnd", unset)
-                                setField(prevLp, "endToStart", unset)
-                                setField(prevLp, "topToBottom", unset)
-                                setField(prevLp, "bottomToBottom", unset)
                                 setField(prevLp, "verticalChainStyle", 0)
-                                setField(prevLp, "horizontalChainStyle", unset)
                                 prev.layoutParams = prevLp
                             }
-                            val playLp = play?.layoutParams
                             if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(playLp)
                                 playLp.width = playSize
                                 playLp.height = playSize
                                 setField(playLp, "startToStart", pId)
                                 setField(playLp, "endToEnd", pId)
                                 setField(playLp, "topToBottom", prevId)
                                 setField(playLp, "bottomToTop", nextId)
-                                setField(playLp, "topToTop", unset)
-                                setField(playLp, "bottomToBottom", unset)
-                                setField(playLp, "startToEnd", unset)
-                                setField(playLp, "endToStart", unset)
                                 play.layoutParams = playLp
                             }
-                            val nextLp = next?.layoutParams
                             if (nextLp != null && nextLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(nextLp)
                                 nextLp.width = btnSize
                                 nextLp.height = btnSize
                                 setField(nextLp, "startToStart", pId)
                                 setField(nextLp, "endToEnd", pId)
                                 setField(nextLp, "topToBottom", playId)
                                 setField(nextLp, "bottomToBottom", pId)
-                                setField(nextLp, "topToTop", unset)
-                                setField(nextLp, "bottomToTop", unset)
-                                setField(nextLp, "startToEnd", unset)
-                                setField(nextLp, "endToStart", unset)
                                 next.layoutParams = nextLp
                             }
-                        } catch (t: Throwable) {}
-                    }
-                }
-                else -> { // "2x2"
-                    if (curLp != null && curLp.height != tallH) {
-                        curLp.height = tallH
-                        itemView.layoutParams = curLp
-                    }
+                        }
 
-                    if (ControlCenterConfigHolder.isConstraintLayout(itemView)) {
-                        try {
-                            val clpClass = itemView.javaClass.classLoader?.loadClass("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
-                                ?: Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
-                            val pId = clpClass.getField("PARENT_ID").getInt(null)
-                            val unset = clpClass.getField("UNSET").getInt(null)
-
-                            fun setField(obj: Any, field: String, value: Int) {
-                                try { clpClass.getField(field).setInt(obj, value) } catch (t: Throwable) {}
+                        "4x1" -> {
+                            if (curLp != null && curLp.height != cardH) {
+                                curLp.height = cardH
+                                itemView.layoutParams = curLp
+                            }
+                            deviceIcon?.visibility = View.GONE
+                            if (hasTrack) {
+                                title?.visibility = View.VISIBLE
+                                artist?.visibility = View.VISIBLE
+                                emptyState?.visibility = View.GONE
+                            } else {
+                                title?.visibility = View.GONE
+                                artist?.visibility = View.GONE
+                                emptyState?.visibility = View.VISIBLE
                             }
 
-                            if (cover != null) {
-                                val cLp = cover.layoutParams
-                                if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
-                                    setField(cLp, "startToStart", pId)
-                                    setField(cLp, "topToTop", pId)
-                                    setField(cLp, "endToEnd", unset)
-                                    setField(cLp, "endToStart", unset)
-                                    setField(cLp, "bottomToBottom", unset)
-                                    setField(cLp, "bottomToTop", unset)
-                                    setField(cLp, "topToBottom", unset)
-                                    cover.layoutParams = cLp
+                            if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(cLp)
+                                val cSize = (48 * density).toInt()
+                                cLp.width = cSize
+                                cLp.height = cSize
+                                setField(cLp, "startToStart", pId)
+                                setField(cLp, "topToTop", pId)
+                                setField(cLp, "bottomToBottom", pId)
+                                if (cLp is ViewGroup.MarginLayoutParams) {
+                                    cLp.marginStart = (14 * density).toInt()
                                 }
+                                cover.layoutParams = cLp
                             }
 
-                            if (audioContainer != null) {
-                                val acLp = audioContainer.layoutParams
-                                if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
-                                    setField(acLp, "startToStart", pId)
-                                    setField(acLp, "endToEnd", pId)
-                                    setField(acLp, "bottomToBottom", pId)
-                                    setField(acLp, "topToTop", unset)
-                                    setField(acLp, "topToBottom", unset)
-                                    setField(acLp, "bottomToTop", unset)
-                                    setField(acLp, "startToEnd", unset)
-                                    setField(acLp, "endToStart", unset)
-                                    acLp.width = ViewGroup.LayoutParams.MATCH_PARENT
-                                    acLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                                    audioContainer.layoutParams = acLp
+                            if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(acLp)
+                                acLp.width = ViewGroup.LayoutParams.WRAP_CONTENT
+                                acLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                setField(acLp, "endToEnd", pId)
+                                setField(acLp, "topToTop", pId)
+                                setField(acLp, "bottomToBottom", pId)
+                                if (acLp is ViewGroup.MarginLayoutParams) {
+                                    acLp.marginEnd = (14 * density).toInt()
                                 }
-
-                                val prevLp = prev?.layoutParams
-                                if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
-                                    setField(prevLp, "startToStart", pId)
-                                    setField(prevLp, "endToStart", playId)
-                                    setField(prevLp, "topToTop", pId)
-                                    setField(prevLp, "bottomToBottom", pId)
-                                    setField(prevLp, "startToEnd", unset)
-                                    setField(prevLp, "endToEnd", unset)
-                                    setField(prevLp, "topToBottom", unset)
-                                    setField(prevLp, "bottomToTop", unset)
-                                    setField(prevLp, "horizontalChainStyle", 1)
-                                    setField(prevLp, "verticalChainStyle", unset)
-                                    prev.layoutParams = prevLp
-                                }
-                                val playLp = play?.layoutParams
-                                if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
-                                    setField(playLp, "startToEnd", prevId)
-                                    setField(playLp, "endToStart", nextId)
-                                    setField(playLp, "topToTop", pId)
-                                    setField(playLp, "bottomToBottom", pId)
-                                    setField(playLp, "startToStart", unset)
-                                    setField(playLp, "endToEnd", unset)
-                                    setField(playLp, "topToBottom", unset)
-                                    setField(playLp, "bottomToTop", unset)
-                                    play.layoutParams = playLp
-                                }
-                                val nextLp = next?.layoutParams
-                                if (nextLp != null && nextLp.javaClass.name.contains("ConstraintLayout")) {
-                                    setField(nextLp, "startToEnd", playId)
-                                    setField(nextLp, "endToEnd", pId)
-                                    setField(nextLp, "topToTop", pId)
-                                    setField(nextLp, "bottomToBottom", pId)
-                                    setField(nextLp, "startToStart", unset)
-                                    setField(nextLp, "endToStart", unset)
-                                    setField(nextLp, "topToBottom", unset)
-                                    setField(nextLp, "bottomToTop", unset)
-                                    next.layoutParams = nextLp
-                                }
+                                audioContainer.layoutParams = acLp
                             }
 
-                            if (title != null) {
-                                val tLp = title.layoutParams
+                            val btnSize = (34 * density).toInt()
+                            val playSize = (38 * density).toInt()
+                            if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(prevLp)
+                                prevLp.width = btnSize
+                                prevLp.height = btnSize
+                                setField(prevLp, "startToStart", pId)
+                                setField(prevLp, "endToStart", playId)
+                                setField(prevLp, "topToTop", pId)
+                                setField(prevLp, "bottomToBottom", pId)
+                                setField(prevLp, "horizontalChainStyle", 2)
+                                if (prevLp is ViewGroup.MarginLayoutParams) {
+                                    prevLp.marginEnd = (4 * density).toInt()
+                                }
+                                prev.layoutParams = prevLp
+                            }
+                            if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(playLp)
+                                playLp.width = playSize
+                                playLp.height = playSize
+                                setField(playLp, "startToEnd", prevId)
+                                setField(playLp, "endToStart", nextId)
+                                setField(playLp, "topToTop", pId)
+                                setField(playLp, "bottomToBottom", pId)
+                                play.layoutParams = playLp
+                            }
+                            if (nextLp != null && nextLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(nextLp)
+                                nextLp.width = btnSize
+                                nextLp.height = btnSize
+                                setField(nextLp, "startToEnd", playId)
+                                setField(nextLp, "endToEnd", pId)
+                                setField(nextLp, "topToTop", pId)
+                                setField(nextLp, "bottomToBottom", pId)
+                                if (nextLp is ViewGroup.MarginLayoutParams) {
+                                    nextLp.marginStart = (4 * density).toInt()
+                                }
+                                next.layoutParams = nextLp
+                            }
+
+                            if (hasTrack) {
                                 if (tLp != null && tLp.javaClass.name.contains("ConstraintLayout")) {
-                                    setField(tLp, "startToStart", pId)
-                                    setField(tLp, "endToEnd", pId)
-                                    setField(tLp, "topToBottom", coverId)
-                                    setField(tLp, "bottomToTopOf", artistId)
-                                    setField(tLp, "topToTop", unset)
-                                    setField(tLp, "bottomToBottom", unset)
+                                    resetConstraints(tLp)
                                     tLp.width = 0
                                     tLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(tLp, "startToEnd", coverId)
+                                    setField(tLp, "endToStart", audioContainerId)
+                                    setField(tLp, "topToTop", pId)
+                                    setField(tLp, "bottomToTop", artistId)
+                                    setField(tLp, "verticalChainStyle", 2)
+                                    if (tLp is ViewGroup.MarginLayoutParams) {
+                                        tLp.marginStart = (12 * density).toInt()
+                                        tLp.marginEnd = (10 * density).toInt()
+                                    }
+                                    if (title is TextView) {
+                                        title.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        title.maxLines = 1
+                                    }
                                     title.layoutParams = tLp
                                 }
-                            }
-
-                            if (artist != null) {
-                                val aLp = artist.layoutParams
                                 if (aLp != null && aLp.javaClass.name.contains("ConstraintLayout")) {
-                                    setField(aLp, "startToStart", pId)
-                                    setField(aLp, "endToEnd", pId)
-                                    setField(aLp, "topToBottom", titleId)
-                                    setField(aLp, "bottomToTopOf", audioContainerId)
-                                    setField(aLp, "topToTop", unset)
-                                    setField(aLp, "bottomToBottom", unset)
+                                    resetConstraints(aLp)
                                     aLp.width = 0
                                     aLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(aLp, "startToEnd", coverId)
+                                    setField(aLp, "endToStart", audioContainerId)
+                                    setField(aLp, "topToBottom", titleId)
+                                    setField(aLp, "bottomToBottom", pId)
+                                    if (aLp is ViewGroup.MarginLayoutParams) {
+                                        aLp.marginStart = (12 * density).toInt()
+                                        aLp.marginEnd = (10 * density).toInt()
+                                    }
+                                    if (artist is TextView) {
+                                        artist.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        artist.maxLines = 1
+                                    }
                                     artist.layoutParams = aLp
                                 }
-                            }
-
-                            if (emptyState != null) {
-                                val eLp = emptyState.layoutParams
+                            } else {
                                 if (eLp != null && eLp.javaClass.name.contains("ConstraintLayout")) {
-                                    setField(eLp, "startToStart", pId)
-                                    setField(eLp, "endToEnd", pId)
+                                    resetConstraints(eLp)
+                                    eLp.width = 0
+                                    eLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(eLp, "startToEnd", coverId)
+                                    setField(eLp, "endToStart", audioContainerId)
                                     setField(eLp, "topToTop", pId)
-                                    setField(eLp, "topToBottom", unset)
-                                    setField(eLp, "bottomToBottom", unset)
-                                    eLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                                    setField(eLp, "bottomToBottom", pId)
+                                    if (eLp is ViewGroup.MarginLayoutParams) {
+                                        eLp.marginStart = (12 * density).toInt()
+                                        eLp.marginEnd = (10 * density).toInt()
+                                    }
+                                    if (emptyState is TextView) {
+                                        emptyState.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        emptyState.maxLines = 1
+                                    }
                                     emptyState.layoutParams = eLp
                                 }
                             }
-                        } catch (t: Throwable) {}
-                    }
-
-                    deviceIcon?.visibility = View.VISIBLE
-                    prev?.visibility = View.VISIBLE
-                    play?.visibility = View.VISIBLE
-                    next?.visibility = View.VISIBLE
-
-                    listOf(cover, play, prev, next, audioContainer).forEach { v ->
-                        v?.alpha = 1f
-                        v?.scaleX = 1f
-                        v?.scaleY = 1f
-                        v?.translationX = 0f
-                        v?.translationY = 0f
-                    }
-
-                    try {
-                        val updateSizeM = holderClass.getDeclaredMethod("updateSize")
-                        updateSizeM.isAccessible = true
-                        updateSizeM.invoke(holder)
-                    } catch (t: Throwable) {}
-
-                    try {
-                        val updateMetaM = holderClass.declaredMethods.firstOrNull { it.name == "updateMetaData" }
-                        if (updateMetaM != null) {
-                            updateMetaM.isAccessible = true
-                            updateMetaM.invoke(holder, sLastMediaPlayerMetaData)
                         }
-                    } catch (t: Throwable) {}
+
+                        "4x2" -> {
+                            if (curLp != null && curLp.height != tallH) {
+                                curLp.height = tallH
+                                itemView.layoutParams = curLp
+                            }
+                            deviceIcon?.visibility = View.VISIBLE
+                            if (hasTrack) {
+                                title?.visibility = View.VISIBLE
+                                artist?.visibility = View.VISIBLE
+                                emptyState?.visibility = View.GONE
+                            } else {
+                                title?.visibility = View.GONE
+                                artist?.visibility = View.GONE
+                                emptyState?.visibility = View.VISIBLE
+                            }
+
+                            val coverSize = (129 * density).toInt()
+                            if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(cLp)
+                                cLp.width = coverSize
+                                cLp.height = coverSize
+                                setField(cLp, "startToStart", pId)
+                                setField(cLp, "topToTop", pId)
+                                setField(cLp, "bottomToBottom", pId)
+                                if (cLp is ViewGroup.MarginLayoutParams) {
+                                    cLp.marginStart = (14 * density).toInt()
+                                    cLp.topMargin = (14 * density).toInt()
+                                    cLp.bottomMargin = (14 * density).toInt()
+                                }
+                                if (cover is ImageView) {
+                                    cover.scaleType = ImageView.ScaleType.CENTER_CROP
+                                }
+                                cover.layoutParams = cLp
+                            }
+
+                            if (diLp != null && diLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(diLp)
+                                diLp.width = (30 * density).toInt()
+                                diLp.height = (30 * density).toInt()
+                                setField(diLp, "topToTop", pId)
+                                setField(diLp, "endToEnd", pId)
+                                if (diLp is ViewGroup.MarginLayoutParams) {
+                                    diLp.topMargin = (14 * density).toInt()
+                                    diLp.marginEnd = (14 * density).toInt()
+                                }
+                                deviceIcon.layoutParams = diLp
+                            }
+
+                            if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(acLp)
+                                acLp.width = 0
+                                acLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                setField(acLp, "startToEnd", coverId)
+                                setField(acLp, "endToEnd", pId)
+                                setField(acLp, "bottomToBottom", pId)
+                                if (acLp is ViewGroup.MarginLayoutParams) {
+                                    acLp.marginStart = (16 * density).toInt()
+                                    acLp.marginEnd = (16 * density).toInt()
+                                    acLp.bottomMargin = (18 * density).toInt()
+                                }
+                                audioContainer.layoutParams = acLp
+                            }
+
+                            val btnSize = (36 * density).toInt()
+                            val playSize = (42 * density).toInt()
+                            if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(prevLp)
+                                prevLp.width = btnSize
+                                prevLp.height = btnSize
+                                setField(prevLp, "startToStart", pId)
+                                setField(prevLp, "endToStart", playId)
+                                setField(prevLp, "topToTop", pId)
+                                setField(prevLp, "bottomToBottom", pId)
+                                setField(prevLp, "horizontalChainStyle", 2)
+                                if (prevLp is ViewGroup.MarginLayoutParams) {
+                                    prevLp.marginEnd = (6 * density).toInt()
+                                }
+                                prev.layoutParams = prevLp
+                            }
+                            if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(playLp)
+                                playLp.width = playSize
+                                playLp.height = playSize
+                                setField(playLp, "startToEnd", prevId)
+                                setField(playLp, "endToStart", nextId)
+                                setField(playLp, "topToTop", pId)
+                                setField(playLp, "bottomToBottom", pId)
+                                play.layoutParams = playLp
+                            }
+                            if (nextLp != null && nextLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(nextLp)
+                                nextLp.width = btnSize
+                                nextLp.height = btnSize
+                                setField(nextLp, "startToEnd", playId)
+                                setField(nextLp, "endToEnd", pId)
+                                setField(nextLp, "topToTop", pId)
+                                setField(nextLp, "bottomToBottom", pId)
+                                if (nextLp is ViewGroup.MarginLayoutParams) {
+                                    nextLp.marginStart = (6 * density).toInt()
+                                }
+                                next.layoutParams = nextLp
+                            }
+
+                            if (hasTrack) {
+                                if (tLp != null && tLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(tLp)
+                                    tLp.width = 0
+                                    tLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(tLp, "startToEnd", coverId)
+                                    setField(tLp, "endToStart", deviceIconId)
+                                    setField(tLp, "topToTop", pId)
+                                    setField(tLp, "bottomToTop", artistId)
+                                    setField(tLp, "verticalChainStyle", 2)
+                                    if (tLp is ViewGroup.MarginLayoutParams) {
+                                        tLp.marginStart = (16 * density).toInt()
+                                        tLp.marginEnd = (8 * density).toInt()
+                                        tLp.topMargin = (20 * density).toInt()
+                                    }
+                                    if (title is TextView) {
+                                        title.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        title.maxLines = 1
+                                    }
+                                    title.layoutParams = tLp
+                                }
+                                if (aLp != null && aLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(aLp)
+                                    aLp.width = 0
+                                    aLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(aLp, "startToEnd", coverId)
+                                    setField(aLp, "endToEnd", pId)
+                                    setField(aLp, "topToBottom", titleId)
+                                    setField(aLp, "bottomToTop", audioContainerId)
+                                    if (aLp is ViewGroup.MarginLayoutParams) {
+                                        aLp.marginStart = (16 * density).toInt()
+                                        aLp.marginEnd = (16 * density).toInt()
+                                        aLp.topMargin = (4 * density).toInt()
+                                    }
+                                    if (artist is TextView) {
+                                        artist.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        artist.maxLines = 1
+                                    }
+                                    artist.layoutParams = aLp
+                                }
+                            } else {
+                                if (eLp != null && eLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(eLp)
+                                    eLp.width = 0
+                                    eLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(eLp, "startToEnd", coverId)
+                                    setField(eLp, "endToStart", deviceIconId)
+                                    setField(eLp, "topToTop", pId)
+                                    setField(eLp, "bottomToTop", audioContainerId)
+                                    if (eLp is ViewGroup.MarginLayoutParams) {
+                                        eLp.marginStart = (16 * density).toInt()
+                                        eLp.marginEnd = (8 * density).toInt()
+                                        eLp.topMargin = (24 * density).toInt()
+                                    }
+                                    if (emptyState is TextView) {
+                                        emptyState.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        emptyState.maxLines = 1
+                                    }
+                                    emptyState.layoutParams = eLp
+                                }
+                            }
+                        }
+
+                        "2x4" -> {
+                            if (curLp != null && curLp.height != fourRowsH) {
+                                curLp.height = fourRowsH
+                                itemView.layoutParams = curLp
+                            }
+                            deviceIcon?.visibility = View.VISIBLE
+                            if (hasTrack) {
+                                title?.visibility = View.VISIBLE
+                                artist?.visibility = View.VISIBLE
+                                emptyState?.visibility = View.GONE
+                            } else {
+                                title?.visibility = View.GONE
+                                artist?.visibility = View.GONE
+                                emptyState?.visibility = View.VISIBLE
+                            }
+
+                            val coverH = (130 * density).toInt()
+                            if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(cLp)
+                                cLp.width = 0
+                                cLp.height = coverH
+                                setField(cLp, "startToStart", pId)
+                                setField(cLp, "endToEnd", pId)
+                                setField(cLp, "topToTop", pId)
+                                if (cLp is ViewGroup.MarginLayoutParams) {
+                                    cLp.marginStart = (14 * density).toInt()
+                                    cLp.marginEnd = (14 * density).toInt()
+                                    cLp.topMargin = (14 * density).toInt()
+                                }
+                                if (cover is ImageView) {
+                                    cover.scaleType = ImageView.ScaleType.CENTER_CROP
+                                }
+                                cover.layoutParams = cLp
+                            }
+
+                            if (diLp != null && diLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(diLp)
+                                diLp.width = (30 * density).toInt()
+                                diLp.height = (30 * density).toInt()
+                                setField(diLp, "topToTop", coverId)
+                                setField(diLp, "endToEnd", coverId)
+                                if (diLp is ViewGroup.MarginLayoutParams) {
+                                    diLp.topMargin = (8 * density).toInt()
+                                    diLp.marginEnd = (8 * density).toInt()
+                                }
+                                deviceIcon.layoutParams = diLp
+                            }
+
+                            if (hasTrack) {
+                                if (tLp != null && tLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(tLp)
+                                    tLp.width = 0
+                                    tLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(tLp, "startToStart", pId)
+                                    setField(tLp, "endToEnd", pId)
+                                    setField(tLp, "topToBottom", coverId)
+                                    setField(tLp, "bottomToTop", artistId)
+                                    setField(tLp, "verticalChainStyle", 2)
+                                    if (tLp is ViewGroup.MarginLayoutParams) {
+                                        tLp.marginStart = (14 * density).toInt()
+                                        tLp.marginEnd = (14 * density).toInt()
+                                        tLp.topMargin = (16 * density).toInt()
+                                    }
+                                    if (title is TextView) {
+                                        title.textAlignment = View.TEXT_ALIGNMENT_CENTER
+                                        title.gravity = Gravity.CENTER
+                                        title.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        title.maxLines = 1
+                                    }
+                                    title.layoutParams = tLp
+                                }
+                                if (aLp != null && aLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(aLp)
+                                    aLp.width = 0
+                                    aLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(aLp, "startToStart", pId)
+                                    setField(aLp, "endToEnd", pId)
+                                    setField(aLp, "topToBottom", titleId)
+                                    setField(aLp, "bottomToTop", audioContainerId)
+                                    if (aLp is ViewGroup.MarginLayoutParams) {
+                                        aLp.marginStart = (14 * density).toInt()
+                                        aLp.marginEnd = (14 * density).toInt()
+                                        aLp.topMargin = (4 * density).toInt()
+                                    }
+                                    if (artist is TextView) {
+                                        artist.textAlignment = View.TEXT_ALIGNMENT_CENTER
+                                        artist.gravity = Gravity.CENTER
+                                        artist.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        artist.maxLines = 1
+                                    }
+                                    artist.layoutParams = aLp
+                                }
+                            } else {
+                                if (eLp != null && eLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(eLp)
+                                    eLp.width = 0
+                                    eLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(eLp, "startToStart", pId)
+                                    setField(eLp, "endToEnd", pId)
+                                    setField(eLp, "topToBottom", coverId)
+                                    setField(eLp, "bottomToTop", audioContainerId)
+                                    if (eLp is ViewGroup.MarginLayoutParams) {
+                                        eLp.marginStart = (14 * density).toInt()
+                                        eLp.marginEnd = (14 * density).toInt()
+                                        eLp.topMargin = (20 * density).toInt()
+                                    }
+                                    if (emptyState is TextView) {
+                                        emptyState.textAlignment = View.TEXT_ALIGNMENT_CENTER
+                                        emptyState.gravity = Gravity.CENTER
+                                        emptyState.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        emptyState.maxLines = 1
+                                    }
+                                    emptyState.layoutParams = eLp
+                                }
+                            }
+
+                            if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(acLp)
+                                acLp.width = ViewGroup.LayoutParams.WRAP_CONTENT
+                                acLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                setField(acLp, "startToStart", pId)
+                                setField(acLp, "endToEnd", pId)
+                                setField(acLp, "bottomToBottom", pId)
+                                if (acLp is ViewGroup.MarginLayoutParams) {
+                                    acLp.bottomMargin = (22 * density).toInt()
+                                }
+                                audioContainer.layoutParams = acLp
+                            }
+
+                            val btnSize = (34 * density).toInt()
+                            val playSize = (40 * density).toInt()
+                            if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(prevLp)
+                                prevLp.width = btnSize
+                                prevLp.height = btnSize
+                                setField(prevLp, "startToStart", pId)
+                                setField(prevLp, "endToStart", playId)
+                                setField(prevLp, "topToTop", pId)
+                                setField(prevLp, "bottomToBottom", pId)
+                                setField(prevLp, "horizontalChainStyle", 2)
+                                if (prevLp is ViewGroup.MarginLayoutParams) {
+                                    prevLp.marginEnd = (6 * density).toInt()
+                                }
+                                prev.layoutParams = prevLp
+                            }
+                            if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(playLp)
+                                playLp.width = playSize
+                                playLp.height = playSize
+                                setField(playLp, "startToEnd", prevId)
+                                setField(playLp, "endToStart", nextId)
+                                setField(playLp, "topToTop", pId)
+                                setField(playLp, "bottomToBottom", pId)
+                                play.layoutParams = playLp
+                            }
+                            if (nextLp != null && nextLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(nextLp)
+                                nextLp.width = btnSize
+                                nextLp.height = btnSize
+                                setField(nextLp, "startToEnd", playId)
+                                setField(nextLp, "endToEnd", pId)
+                                setField(nextLp, "topToTop", pId)
+                                setField(nextLp, "bottomToBottom", pId)
+                                if (nextLp is ViewGroup.MarginLayoutParams) {
+                                    nextLp.marginStart = (6 * density).toInt()
+                                }
+                                next.layoutParams = nextLp
+                            }
+                        }
+
+                        else -> { // "2x2" Stock
+                            if (curLp != null && curLp.height != tallH) {
+                                curLp.height = tallH
+                                itemView.layoutParams = curLp
+                            }
+                            deviceIcon?.visibility = View.VISIBLE
+                            if (hasTrack) {
+                                title?.visibility = View.VISIBLE
+                                artist?.visibility = View.VISIBLE
+                                emptyState?.visibility = View.GONE
+                            } else {
+                                title?.visibility = View.GONE
+                                artist?.visibility = View.GONE
+                                emptyState?.visibility = View.VISIBLE
+                            }
+
+                            if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(cLp)
+                                val cSize = (42 * density).toInt()
+                                cLp.width = cSize
+                                cLp.height = cSize
+                                setField(cLp, "startToStart", pId)
+                                setField(cLp, "topToTop", pId)
+                                if (cLp is ViewGroup.MarginLayoutParams) {
+                                    cLp.marginStart = (15 * density).toInt()
+                                    cLp.topMargin = (15 * density).toInt()
+                                }
+                                cover.layoutParams = cLp
+                            }
+
+                            if (diLp != null && diLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(diLp)
+                                diLp.width = (30 * density).toInt()
+                                diLp.height = (30 * density).toInt()
+                                setField(diLp, "topToTop", pId)
+                                setField(diLp, "endToEnd", pId)
+                                if (diLp is ViewGroup.MarginLayoutParams) {
+                                    diLp.topMargin = (15 * density).toInt()
+                                    diLp.marginEnd = (15 * density).toInt()
+                                }
+                                deviceIcon.layoutParams = diLp
+                            }
+
+                            if (hasTrack) {
+                                if (tLp != null && tLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(tLp)
+                                    tLp.width = 0
+                                    tLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(tLp, "startToStart", pId)
+                                    setField(tLp, "endToEnd", pId)
+                                    setField(tLp, "topToBottom", coverId)
+                                    setField(tLp, "bottomToTop", artistId)
+                                    setField(tLp, "verticalChainStyle", 2)
+                                    if (tLp is ViewGroup.MarginLayoutParams) {
+                                        tLp.marginStart = (15 * density).toInt()
+                                        tLp.marginEnd = (15 * density).toInt()
+                                        tLp.topMargin = (10 * density).toInt()
+                                    }
+                                    if (title is TextView) {
+                                        title.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+                                        title.gravity = Gravity.START
+                                        title.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        title.maxLines = 1
+                                    }
+                                    title.layoutParams = tLp
+                                }
+                                if (aLp != null && aLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(aLp)
+                                    aLp.width = 0
+                                    aLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(aLp, "startToStart", pId)
+                                    setField(aLp, "endToEnd", pId)
+                                    setField(aLp, "topToBottom", titleId)
+                                    setField(aLp, "bottomToTop", audioContainerId)
+                                    if (aLp is ViewGroup.MarginLayoutParams) {
+                                        aLp.marginStart = (15 * density).toInt()
+                                        aLp.marginEnd = (15 * density).toInt()
+                                    }
+                                    if (artist is TextView) {
+                                        artist.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+                                        artist.gravity = Gravity.START
+                                        artist.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        artist.maxLines = 1
+                                    }
+                                    artist.layoutParams = aLp
+                                }
+                            } else {
+                                if (eLp != null && eLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(eLp)
+                                    eLp.width = 0
+                                    eLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(eLp, "startToStart", pId)
+                                    setField(eLp, "endToEnd", pId)
+                                    setField(eLp, "topToBottom", coverId)
+                                    setField(eLp, "bottomToTop", audioContainerId)
+                                    if (eLp is ViewGroup.MarginLayoutParams) {
+                                        eLp.marginStart = (15 * density).toInt()
+                                        eLp.marginEnd = (15 * density).toInt()
+                                        eLp.topMargin = (10 * density).toInt()
+                                    }
+                                    if (emptyState is TextView) {
+                                        emptyState.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+                                        emptyState.gravity = Gravity.START
+                                        emptyState.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        emptyState.maxLines = 1
+                                    }
+                                    emptyState.layoutParams = eLp
+                                }
+                            }
+
+                            if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(acLp)
+                                acLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                                acLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                setField(acLp, "startToStart", pId)
+                                setField(acLp, "endToEnd", pId)
+                                setField(acLp, "bottomToBottom", pId)
+                                if (acLp is ViewGroup.MarginLayoutParams) {
+                                    acLp.bottomMargin = (11 * density).toInt()
+                                    acLp.marginStart = (9.5f * density).toInt()
+                                    acLp.marginEnd = (9.5f * density).toInt()
+                                }
+                                audioContainer.layoutParams = acLp
+                            }
+
+                            val btnSize = (40 * density).toInt()
+                            if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(prevLp)
+                                prevLp.width = btnSize
+                                prevLp.height = btnSize
+                                setField(prevLp, "startToStart", pId)
+                                setField(prevLp, "endToStart", playId)
+                                setField(prevLp, "topToTop", pId)
+                                setField(prevLp, "bottomToBottom", pId)
+                                setField(prevLp, "horizontalChainStyle", 1)
+                                prev.layoutParams = prevLp
+                            }
+                            if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(playLp)
+                                playLp.width = btnSize
+                                playLp.height = btnSize
+                                setField(playLp, "startToEnd", prevId)
+                                setField(playLp, "endToStart", nextId)
+                                setField(playLp, "topToTop", pId)
+                                setField(playLp, "bottomToBottom", pId)
+                                play.layoutParams = playLp
+                            }
+                            if (nextLp != null && nextLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(nextLp)
+                                nextLp.width = btnSize
+                                nextLp.height = btnSize
+                                setField(nextLp, "startToEnd", playId)
+                                setField(nextLp, "endToEnd", pId)
+                                setField(nextLp, "topToTop", pId)
+                                setField(nextLp, "bottomToBottom", pId)
+                                next.layoutParams = nextLp
+                            }
+                        }
+                    }
+                } catch (t: Throwable) {
+                    Log.e(TAG, "applyMediaPlayerLayout constraint setup error", t)
                 }
             }
 
@@ -3698,7 +4143,19 @@ object ControlCenterHook {
                 val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
                     val isLand = ctx.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
                     val curSize = if (isLand) "4x1" else ControlCenterConfigHolder.sMediaPlayerSize
-                    if (curSize == "2x1" || curSize == "1x2" || curSize == "4x1") {
+                    val metaNow = sLastMediaPlayerMetaData
+                    var hasTrackNow = false
+                    if (metaNow != null) {
+                        try {
+                            val titleProp = metaNow.javaClass.getMethod("getTitle").invoke(metaNow) as? CharSequence
+                            if (!titleProp.isNullOrBlank()) hasTrackNow = true
+                        } catch (t: Throwable) { hasTrackNow = true }
+                    }
+                    if (!hasTrackNow && title is TextView && !title.text.isNullOrBlank() && title.visibility == View.VISIBLE) {
+                        hasTrackNow = true
+                    }
+
+                    if (curSize == "2x1" || curSize == "1x2") {
                         if (title?.visibility != View.GONE) title?.visibility = View.GONE
                         if (artist?.visibility != View.GONE) artist?.visibility = View.GONE
                         if (emptyState?.visibility != View.GONE) emptyState?.visibility = View.GONE
@@ -3706,14 +4163,27 @@ object ControlCenterHook {
                             emptyState.layoutParams.width = 0
                         }
                         if (deviceIcon?.visibility != View.GONE) deviceIcon?.visibility = View.GONE
-                        if (cover?.visibility != View.VISIBLE) cover?.visibility = View.VISIBLE
-                        if (prev?.visibility != View.VISIBLE) prev?.visibility = View.VISIBLE
-                        if (play?.visibility != View.VISIBLE) play?.visibility = View.VISIBLE
-                        if (next?.visibility != View.VISIBLE) next?.visibility = View.VISIBLE
-                        if (cover is ImageView && cover.drawable == null) {
-                            val defCoverId = ctx.resources.getIdentifier("miplay_cover_default", "drawable", ctx.packageName)
-                            if (defCoverId != 0) cover.setImageResource(defCoverId)
+                    } else {
+                        if (hasTrackNow) {
+                            if (title?.visibility != View.VISIBLE) title?.visibility = View.VISIBLE
+                            if (artist?.visibility != View.VISIBLE) artist?.visibility = View.VISIBLE
+                            if (emptyState?.visibility != View.GONE) emptyState?.visibility = View.GONE
+                        } else {
+                            if (title?.visibility != View.GONE) title?.visibility = View.GONE
+                            if (artist?.visibility != View.GONE) artist?.visibility = View.GONE
+                            if (emptyState?.visibility != View.VISIBLE) emptyState?.visibility = View.VISIBLE
                         }
+                        if (curSize != "4x1" && deviceIcon?.visibility != View.VISIBLE) {
+                            deviceIcon?.visibility = View.VISIBLE
+                        }
+                    }
+                    if (cover?.visibility != View.VISIBLE) cover?.visibility = View.VISIBLE
+                    if (prev?.visibility != View.VISIBLE) prev?.visibility = View.VISIBLE
+                    if (play?.visibility != View.VISIBLE) play?.visibility = View.VISIBLE
+                    if (next?.visibility != View.VISIBLE) next?.visibility = View.VISIBLE
+                    if (cover is ImageView && cover.drawable == null) {
+                        val defCoverId = ctx.resources.getIdentifier("miplay_cover_default", "drawable", ctx.packageName)
+                        if (defCoverId != 0) cover.setImageResource(defCoverId)
                     }
                 }
                 itemView.addOnLayoutChangeListener(layoutListener)

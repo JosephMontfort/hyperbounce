@@ -1188,6 +1188,11 @@ object ControlCenterConfigHolder {
         sSelectedTileSpecs.clear()
         sSelectedDisassembleGroups.clear()
         try {
+            ControlCenterHook.sMediaPlayerViewHolder?.get()?.let {
+                ControlCenterHook.applyMediaPlayerLayout(it)
+            }
+        } catch (t: Throwable) {}
+        try {
             ControlCenterFullUnlock.onExitEditMode()
         } catch (t: Throwable) {}
 
@@ -1465,9 +1470,18 @@ object ControlCenterConfigHolder {
         sMediaPlayerSize = when (sMediaPlayerSize) {
             "2x2" -> "2x1"
             "2x1" -> "1x2"
+            "1x2" -> "4x1"
+            "4x1" -> "4x2"
+            "4x2" -> "2x4"
+            "2x4" -> "2x2"
             else -> "2x2"
         }
         savePriorities(ctx)
+        try {
+            ControlCenterHook.sMediaPlayerViewHolder?.get()?.let {
+                ControlCenterHook.applyMediaPlayerLayout(it)
+            }
+        } catch (t: Throwable) {}
         refreshRecyclerView(tileView)
     }
 

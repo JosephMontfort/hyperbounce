@@ -382,6 +382,9 @@ object ControlCenterFullUnlock {
             return when (ControlCenterConfigHolder.sMediaPlayerSize) {
                 "2x1" -> Pair(2, 1)
                 "1x2" -> Pair(1, 2)
+                "4x1" -> Pair(4, 1)
+                "4x2" -> Pair(4, 2)
+                "2x4" -> Pair(2, 4)
                 else -> Pair(2, 2)
             }
         }
