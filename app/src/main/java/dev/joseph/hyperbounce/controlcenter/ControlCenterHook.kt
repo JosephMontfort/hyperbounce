@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
+import android.graphics.Canvas
 import android.graphics.Outline
 import android.os.Handler
 import android.os.Looper
@@ -4198,6 +4199,7 @@ class TileResizeDragTouchListener(
         private const val STATE_LARGE = 3
     }
 
+    private val isMediaSpec = "media".equals(spec, ignoreCase = true)
     private var downRawX = 0f
     private var downRawY = 0f
     private var isDragging = false
