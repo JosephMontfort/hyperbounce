@@ -4475,6 +4475,9 @@ class TileResizeDragTouchListener(
         private const val STATE_EXPANDED = 1
         private const val STATE_VERTICAL = 2
         private const val STATE_LARGE = 3
+        private const val STATE_WIDE_1 = 4
+        private const val STATE_WIDE_2 = 5
+        private const val STATE_TALL_4 = 6
     }
 
     private val isMediaSpec = "media".equals(spec, ignoreCase = true)
@@ -4495,6 +4498,12 @@ class TileResizeDragTouchListener(
     private var unitHeight1x1 = 0f
     private var cardWidth2x1 = 0f
     private var cardHeight1x2 = 0f
+    private var oneColW = 0f
+    private var twoColW = 0f
+    private var fourColW = 0f
+    private var row1H = 0f
+    private var row2H = 0f
+    private var row4H = 0f
 
     private fun lerp(start: Float, end: Float, fraction: Float): Float {
         return start + (end - start) * fraction.coerceIn(0f, 1f)
@@ -4542,7 +4551,9 @@ class TileResizeDragTouchListener(
                         "2x2" -> STATE_LARGE
                         "2x1" -> STATE_EXPANDED
                         "1x2" -> STATE_VERTICAL
-                        "1x1" -> STATE_NORMAL
+                        "4x1" -> STATE_WIDE_1
+                        "4x2" -> STATE_WIDE_2
+                        "2x4" -> STATE_TALL_4
                         else -> STATE_LARGE
                     }
                     ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) -> STATE_LARGE
@@ -4583,7 +4594,14 @@ class TileResizeDragTouchListener(
                     } else {
                         originWidth
                     }
-                    val twoColW = colW * 2f + gap
+                    val calcTwoColW = colW * 2f + gap
+
+                    oneColW = colW
+                    twoColW = calcTwoColW
+                    fourColW = if (rvContentW > 100f * density) rvContentW else (colW * 4f + 3f * gap)
+                    row1H = cardH
+                    row2H = tallH
+                    row4H = 4f * cardH + 3f * gap
 
                     when (initialState) {
                         STATE_NORMAL -> {
@@ -4607,6 +4625,12 @@ class TileResizeDragTouchListener(
                         STATE_LARGE -> {
                             cardWidth2x1 = originWidth
                             cardHeight1x2 = originHeight
+                            unitWidth1x1 = colW.coerceAtLeast(56f * density)
+                            unitHeight1x1 = colW.coerceAtLeast(56f * density)
+                        }
+                        STATE_WIDE_1, STATE_WIDE_2, STATE_TALL_4 -> {
+                            cardWidth2x1 = twoColW
+                            cardHeight1x2 = tallH
                             unitWidth1x1 = colW.coerceAtLeast(56f * density)
                             unitHeight1x1 = colW.coerceAtLeast(56f * density)
                         }
@@ -4647,153 +4671,258 @@ class TileResizeDragTouchListener(
                 var previewRadius = cardRadius
                 var targetState = initialState
 
-                val deltaW = (cardWidth2x1 - unitWidth1x1).coerceAtLeast(40f * density)
-                val deltaH = (cardHeight1x2 - unitHeight1x1).coerceAtLeast(40f * density)
-                val snapThreshold = 0.22f
-                val snapDistX = deltaW * snapThreshold
-                val snapDistY = deltaH * snapThreshold
+                if (isMediaSpec) {
+                    val snapDistX = (oneColW + 10f * density) * 0.38f
+                    val snapDistY = (row1H + 10f * density) * 0.38f
 
-                when (initialState) {
-                    STATE_NORMAL -> {
-                        val isMediaSpec = "media".equals(spec, ignoreCase = true)
-                        val px = (dx / deltaW).coerceIn(0f, 1f)
-                        val py = (dy / deltaH).coerceIn(0f, 1f)
-                        val isDiagonal = dx > snapDistX * 0.65f && dy > snapDistY * 0.65f
-
-                        if (isDiagonal) {
-                            previewW = unitWidth1x1 + px * deltaW
-                            previewH = unitHeight1x1 + py * deltaH
-                            val pMax = Math.max(px, py)
-                            previewRadius = if (isMediaSpec) cardRadius else lerp(unitWidth1x1 / 2f, cardRadius, pMax)
-                            if (dx >= snapDistX && dy >= snapDistY) {
-                                targetState = STATE_LARGE
+                    when (initialState) {
+                        STATE_LARGE -> { // 2x2
+                            if (dx > snapDistX) {
+                                targetState = if (dy < -snapDistY) STATE_WIDE_1 else STATE_WIDE_2
+                            } else if (dx < -snapDistX) {
+                                targetState = STATE_VERTICAL
+                            } else if (dy > snapDistY) {
+                                targetState = STATE_TALL_4
+                            } else if (dy < -snapDistY) {
+                                targetState = STATE_EXPANDED
                             }
-                        } else if (dx >= dy) {
-                            if (dx > 0) {
-                                previewW = unitWidth1x1 + px * deltaW
-                                previewH = unitHeight1x1
-                                previewRadius = if (isMediaSpec) cardRadius else lerp(unitHeight1x1 / 2f, cardRadius, px)
-                                if (dx >= snapDistX) {
+                        }
+                        STATE_EXPANDED -> { // 2x1
+                            if (dx > snapDistX) {
+                                targetState = if (dy > snapDistY) STATE_WIDE_2 else STATE_WIDE_1
+                            } else if (dy > snapDistY) {
+                                targetState = if (dy > snapDistY * 2.2f) STATE_TALL_4 else STATE_LARGE
+                            } else if (dx < -snapDistX && dy > snapDistY * 0.5f) {
+                                targetState = STATE_VERTICAL
+                            }
+                        }
+                        STATE_VERTICAL -> { // 1x2
+                            if (dx > snapDistX) {
+                                if (dx > snapDistX * 2.2f) {
+                                    targetState = if (dy < -snapDistY) STATE_WIDE_1 else STATE_WIDE_2
+                                } else {
+                                    targetState = if (dy < -snapDistY) STATE_EXPANDED else STATE_LARGE
+                                }
+                            } else if (dy > snapDistY) {
+                                targetState = STATE_TALL_4
+                            } else if (dy < -snapDistY && dx > snapDistX * 0.5f) {
+                                targetState = STATE_EXPANDED
+                            }
+                        }
+                        STATE_WIDE_1 -> { // 4x1
+                            if (dy > snapDistY) {
+                                targetState = if (dx < -snapDistX * 1.5f) STATE_LARGE else STATE_WIDE_2
+                            } else if (dx < -snapDistX) {
+                                targetState = if (dy > snapDistY * 0.5f) STATE_LARGE else STATE_EXPANDED
+                            }
+                        }
+                        STATE_WIDE_2 -> { // 4x2
+                            if (dy < -snapDistY) {
+                                targetState = if (dx < -snapDistX) STATE_EXPANDED else STATE_WIDE_1
+                            } else if (dx < -snapDistX) {
+                                if (dy > snapDistY) {
+                                    targetState = STATE_TALL_4
+                                } else if (dy < -snapDistY) {
                                     targetState = STATE_EXPANDED
+                                } else if (dx < -snapDistX * 2.5f) {
+                                    targetState = STATE_VERTICAL
+                                } else {
+                                    targetState = STATE_LARGE
+                                }
+                            } else if (dy > snapDistY && dx < -snapDistX * 0.5f) {
+                                targetState = STATE_TALL_4
+                            }
+                        }
+                        STATE_TALL_4 -> { // 2x4
+                            if (dy < -snapDistY) {
+                                if (dy < -snapDistY * 2.2f) {
+                                    targetState = if (dx > snapDistX) STATE_WIDE_1 else STATE_EXPANDED
+                                } else {
+                                    if (dx > snapDistX) {
+                                        targetState = STATE_WIDE_2
+                                    } else if (dx < -snapDistX) {
+                                        targetState = STATE_VERTICAL
+                                    } else {
+                                        targetState = STATE_LARGE
+                                    }
+                                }
+                            } else if (dx > snapDistX && dy < -snapDistY * 0.5f) {
+                                targetState = STATE_WIDE_2
+                            } else if (dx < -snapDistX && dy < -snapDistY * 0.5f) {
+                                targetState = STATE_VERTICAL
+                            }
+                        }
+                        else -> {
+                            targetState = STATE_LARGE
+                        }
+                    }
+
+                    if (targetState != initialState) {
+                        val targetW = when (targetState) {
+                            STATE_VERTICAL -> oneColW
+                            STATE_WIDE_1, STATE_WIDE_2 -> fourColW
+                            else -> twoColW
+                        }
+                        val targetH = when (targetState) {
+                            STATE_EXPANDED, STATE_WIDE_1 -> row1H
+                            STATE_TALL_4 -> row4H
+                            else -> row2H
+                        }
+                        previewW = targetW
+                        previewH = targetH
+                    } else {
+                        previewW = (originWidth + dx).coerceIn(oneColW * 0.7f, fourColW * 1.05f)
+                        previewH = (originHeight + dy).coerceIn(row1H * 0.7f, row4H * 1.05f)
+                    }
+                    previewRadius = cardRadius
+                } else {
+                    val deltaW = (cardWidth2x1 - unitWidth1x1).coerceAtLeast(40f * density)
+                    val deltaH = (cardHeight1x2 - unitHeight1x1).coerceAtLeast(40f * density)
+                    val snapThreshold = 0.22f
+                    val snapDistX = deltaW * snapThreshold
+                    val snapDistY = deltaH * snapThreshold
+
+                    when (initialState) {
+                        STATE_NORMAL -> {
+                            val px = (dx / deltaW).coerceIn(0f, 1f)
+                            val py = (dy / deltaH).coerceIn(0f, 1f)
+                            val isDiagonal = dx > snapDistX * 0.65f && dy > snapDistY * 0.65f
+
+                            if (isDiagonal) {
+                                previewW = unitWidth1x1 + px * deltaW
+                                previewH = unitHeight1x1 + py * deltaH
+                                val pMax = Math.max(px, py)
+                                previewRadius = lerp(unitWidth1x1 / 2f, cardRadius, pMax)
+                                if (dx >= snapDistX && dy >= snapDistY) {
+                                    targetState = STATE_LARGE
+                                }
+                            } else if (dx >= dy) {
+                                if (dx > 0) {
+                                    previewW = unitWidth1x1 + px * deltaW
+                                    previewH = unitHeight1x1
+                                    previewRadius = lerp(unitHeight1x1 / 2f, cardRadius, px)
+                                    if (dx >= snapDistX) {
+                                        targetState = STATE_EXPANDED
+                                    }
+                                } else {
+                                    previewW = unitWidth1x1
+                                    previewH = unitHeight1x1
+                                    previewRadius = unitWidth1x1 / 2f
+                                }
+                            } else {
+                                if (dy > 0) {
+                                    previewW = unitWidth1x1
+                                    previewH = unitHeight1x1 + py * deltaH
+                                    previewRadius = lerp(unitWidth1x1 / 2f, cardRadius, py)
+                                    if (dy >= snapDistY) {
+                                        targetState = STATE_VERTICAL
+                                    }
+                                } else {
+                                    previewW = unitWidth1x1
+                                    previewH = unitHeight1x1
+                                    previewRadius = unitWidth1x1 / 2f
+                                }
+                            }
+                        }
+
+                        STATE_EXPANDED -> {
+                            val shrinkX = (-dx / deltaW).coerceIn(0f, 1f)
+                            val expandY = (dy / deltaH).coerceIn(0f, 1f)
+                            val isDownLeft = -dx > snapDistX * 0.55f && dy > snapDistY * 0.55f
+
+                            if (isDownLeft) {
+                                previewW = cardWidth2x1 - shrinkX * deltaW
+                                previewH = unitHeight1x1 + expandY * deltaH
+                                previewRadius = cardRadius
+                                if (-dx >= snapDistX && dy >= snapDistY) {
+                                    targetState = STATE_VERTICAL
+                                }
+                            } else if (dy > snapDistY * 0.5f && dy > -dx) {
+                                previewW = cardWidth2x1
+                                previewH = unitHeight1x1 + expandY * deltaH
+                                previewRadius = cardRadius
+                                if (dy >= snapDistY) {
+                                    targetState = STATE_LARGE
+                                }
+                            } else if (dx < 0) {
+                                previewW = cardWidth2x1 - shrinkX * deltaW
+                                previewH = unitHeight1x1
+                                previewRadius = lerp(cardRadius, unitHeight1x1 / 2f, shrinkX)
+                                if (-dx >= snapDistX) {
+                                    targetState = STATE_NORMAL
+                                }
+                            } else {
+                                previewW = cardWidth2x1
+                                previewH = unitHeight1x1
+                                previewRadius = cardRadius
+                            }
+                        }
+
+                        STATE_VERTICAL -> {
+                            val shrinkY = (-dy / deltaH).coerceIn(0f, 1f)
+                            val expandX = (dx / deltaW).coerceIn(0f, 1f)
+                            val isUpRight = dx > snapDistX * 0.55f && -dy > snapDistY * 0.55f
+
+                            if (isUpRight) {
+                                previewW = unitWidth1x1 + expandX * deltaW
+                                previewH = cardHeight1x2 - shrinkY * deltaH
+                                previewRadius = cardRadius
+                                if (dx >= snapDistX && -dy >= snapDistY) {
+                                    targetState = STATE_EXPANDED
+                                }
+                            } else if (dx > snapDistX * 0.5f && dx > -dy) {
+                                previewW = unitWidth1x1 + expandX * deltaW
+                                previewH = cardHeight1x2
+                                previewRadius = cardRadius
+                                if (dx >= snapDistX) {
+                                    targetState = STATE_LARGE
+                                }
+                            } else if (dy < 0) {
+                                previewW = unitWidth1x1
+                                previewH = cardHeight1x2 - shrinkY * deltaH
+                                previewRadius = lerp(cardRadius, unitWidth1x1 / 2f, shrinkY)
+                                if (-dy >= snapDistY) {
+                                    targetState = STATE_NORMAL
                                 }
                             } else {
                                 previewW = unitWidth1x1
-                                previewH = unitHeight1x1
-                                previewRadius = if (isMediaSpec) cardRadius else unitWidth1x1 / 2f
+                                previewH = cardHeight1x2
+                                previewRadius = cardRadius
                             }
-                        } else {
-                            if (dy > 0) {
-                                previewW = unitWidth1x1
-                                previewH = unitHeight1x1 + py * deltaH
-                                previewRadius = if (isMediaSpec) cardRadius else lerp(unitWidth1x1 / 2f, cardRadius, py)
-                                if (dy >= snapDistY) {
+                        }
+
+                        STATE_LARGE -> {
+                            val shrinkX = (-dx / deltaW).coerceIn(0f, 1f)
+                            val shrinkY = (-dy / deltaH).coerceIn(0f, 1f)
+                            val isUpLeft = -dx > snapDistX * 0.55f && -dy > snapDistY * 0.55f
+
+                            if (isUpLeft) {
+                                previewW = cardWidth2x1 - shrinkX * deltaW
+                                previewH = cardHeight1x2 - shrinkY * deltaH
+                                val pMax = Math.max(shrinkX, shrinkY)
+                                previewRadius = lerp(cardRadius, unitWidth1x1 / 2f, pMax)
+                                if (-dx >= snapDistX && -dy >= snapDistY) {
+                                    targetState = STATE_NORMAL
+                                }
+                            } else if (-dy >= -dx && -dy > snapDistY * 0.4f) {
+                                previewW = cardWidth2x1
+                                previewH = cardHeight1x2 - shrinkY * deltaH
+                                previewRadius = cardRadius
+                                if (-dy >= snapDistY) {
+                                    targetState = STATE_EXPANDED
+                                }
+                            } else if (-dx > 0) {
+                                previewW = cardWidth2x1 - shrinkX * deltaW
+                                previewH = cardHeight1x2
+                                previewRadius = cardRadius
+                                if (-dx >= snapDistX) {
                                     targetState = STATE_VERTICAL
                                 }
                             } else {
-                                previewW = unitWidth1x1
-                                previewH = unitHeight1x1
-                                previewRadius = if (isMediaSpec) cardRadius else unitWidth1x1 / 2f
+                                previewW = cardWidth2x1
+                                previewH = cardHeight1x2
+                                previewRadius = cardRadius
                             }
-                        }
-                    }
-
-                    STATE_EXPANDED -> {
-                        val shrinkX = (-dx / deltaW).coerceIn(0f, 1f)
-                        val expandY = (dy / deltaH).coerceIn(0f, 1f)
-                        val isDownLeft = -dx > snapDistX * 0.55f && dy > snapDistY * 0.55f
-
-                        if (isDownLeft) {
-                            previewW = cardWidth2x1 - shrinkX * deltaW
-                            previewH = unitHeight1x1 + expandY * deltaH
-                            previewRadius = cardRadius
-                            if (-dx >= snapDistX && dy >= snapDistY) {
-                                targetState = STATE_VERTICAL
-                            }
-                        } else if (dy > snapDistY * 0.5f && dy > -dx) {
-                            previewW = cardWidth2x1
-                            previewH = unitHeight1x1 + expandY * deltaH
-                            previewRadius = cardRadius
-                            if (dy >= snapDistY) {
-                                targetState = STATE_LARGE
-                            }
-                        } else if (dx < 0) {
-                            previewW = cardWidth2x1 - shrinkX * deltaW
-                            previewH = unitHeight1x1
-                            previewRadius = if (isMediaSpec) cardRadius else lerp(cardRadius, unitHeight1x1 / 2f, shrinkX)
-                            if (!isMediaSpec && -dx >= snapDistX) {
-                                targetState = STATE_NORMAL
-                            }
-                        } else {
-                            previewW = cardWidth2x1
-                            previewH = unitHeight1x1
-                            previewRadius = cardRadius
-                        }
-                    }
-
-                    STATE_VERTICAL -> {
-                        val shrinkY = (-dy / deltaH).coerceIn(0f, 1f)
-                        val expandX = (dx / deltaW).coerceIn(0f, 1f)
-                        val isUpRight = dx > snapDistX * 0.55f && -dy > snapDistY * 0.55f
-
-                        if (isUpRight) {
-                            previewW = unitWidth1x1 + expandX * deltaW
-                            previewH = cardHeight1x2 - shrinkY * deltaH
-                            previewRadius = cardRadius
-                            if (dx >= snapDistX && -dy >= snapDistY) {
-                                targetState = STATE_EXPANDED
-                            }
-                        } else if (dx > snapDistX * 0.5f && dx > -dy) {
-                            previewW = unitWidth1x1 + expandX * deltaW
-                            previewH = cardHeight1x2
-                            previewRadius = cardRadius
-                            if (dx >= snapDistX) {
-                                targetState = STATE_LARGE
-                            }
-                        } else if (dy < 0) {
-                            previewW = unitWidth1x1
-                            previewH = cardHeight1x2 - shrinkY * deltaH
-                            previewRadius = if (isMediaSpec) cardRadius else lerp(cardRadius, unitWidth1x1 / 2f, shrinkY)
-                            if (!isMediaSpec && -dy >= snapDistY) {
-                                targetState = STATE_NORMAL
-                            }
-                        } else {
-                            previewW = unitWidth1x1
-                            previewH = cardHeight1x2
-                            previewRadius = cardRadius
-                        }
-                    }
-
-                    STATE_LARGE -> {
-                        val shrinkX = (-dx / deltaW).coerceIn(0f, 1f)
-                        val shrinkY = (-dy / deltaH).coerceIn(0f, 1f)
-                        val isUpLeft = -dx > snapDistX * 0.55f && -dy > snapDistY * 0.55f
-
-                        if (isUpLeft) {
-                            previewW = cardWidth2x1 - shrinkX * deltaW
-                            previewH = cardHeight1x2 - shrinkY * deltaH
-                            val pMax = Math.max(shrinkX, shrinkY)
-                            previewRadius = if (isMediaSpec) cardRadius else lerp(cardRadius, unitWidth1x1 / 2f, pMax)
-                            if (!isMediaSpec && -dx >= snapDistX && -dy >= snapDistY) {
-                                targetState = STATE_NORMAL
-                            }
-                        } else if (-dy >= -dx && -dy > snapDistY * 0.4f) {
-                            previewW = cardWidth2x1
-                            previewH = cardHeight1x2 - shrinkY * deltaH
-                            previewRadius = cardRadius
-                            if (-dy >= snapDistY) {
-                                targetState = STATE_EXPANDED
-                            }
-                        } else if (-dx > 0) {
-                            previewW = cardWidth2x1 - shrinkX * deltaW
-                            previewH = cardHeight1x2
-                            previewRadius = cardRadius
-                            if (-dx >= snapDistX) {
-                                targetState = STATE_VERTICAL
-                            }
-                        } else {
-                            previewW = cardWidth2x1
-                            previewH = cardHeight1x2
-                            previewRadius = cardRadius
                         }
                     }
                 }
@@ -4803,9 +4932,17 @@ class TileResizeDragTouchListener(
                     v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                 }
 
+                val minLeft = targetContainer?.paddingLeft?.toFloat() ?: 0f
+                val maxRight = targetContainer?.let { (it.width - it.paddingRight).toFloat() } ?: (originLeft + previewW)
+                val drawLeft = if (originLeft + previewW > maxRight) {
+                    (maxRight - previewW).coerceAtLeast(minLeft)
+                } else {
+                    originLeft
+                }
+
                 ghostDrawable?.let { gd ->
                     val isSnapping = candidateTargetState != initialState && candidateTargetState != -1
-                    gd.updateMorph(originLeft, originTop, previewW, previewH, previewRadius, isSnapping)
+                    gd.updateMorph(drawLeft, originTop, previewW, previewH, previewRadius, isSnapping)
                     targetContainer?.invalidate()
                 }
                 return true
@@ -4823,15 +4960,25 @@ class TileResizeDragTouchListener(
 
                 if (isDragging) {
                     if (candidateTargetState != -1 && candidateTargetState != initialState) {
-                        if (isMediaSpec && candidateTargetState == STATE_NORMAL) {
-                            candidateTargetState = STATE_LARGE
-                        }
                         v.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                        when (candidateTargetState) {
-                            STATE_EXPANDED -> ControlCenterConfigHolder.setTileToExpanded(ctx, spec, tileView)
-                            STATE_VERTICAL -> ControlCenterConfigHolder.setTileToVertical(ctx, spec, tileView)
-                            STATE_LARGE -> ControlCenterConfigHolder.setTileToLarge(ctx, spec, tileView)
-                            STATE_NORMAL -> ControlCenterConfigHolder.setTileToNormal(ctx, spec, tileView)
+                        if (isMediaSpec) {
+                            val targetMediaSize = when (candidateTargetState) {
+                                STATE_EXPANDED -> "2x1"
+                                STATE_VERTICAL -> "1x2"
+                                STATE_LARGE -> "2x2"
+                                STATE_WIDE_1 -> "4x1"
+                                STATE_WIDE_2 -> "4x2"
+                                STATE_TALL_4 -> "2x4"
+                                else -> "2x2"
+                            }
+                            ControlCenterConfigHolder.setMediaSize(ctx, targetMediaSize, tileView)
+                        } else {
+                            when (candidateTargetState) {
+                                STATE_EXPANDED -> ControlCenterConfigHolder.setTileToExpanded(ctx, spec, tileView)
+                                STATE_VERTICAL -> ControlCenterConfigHolder.setTileToVertical(ctx, spec, tileView)
+                                STATE_LARGE -> ControlCenterConfigHolder.setTileToLarge(ctx, spec, tileView)
+                                STATE_NORMAL -> ControlCenterConfigHolder.setTileToNormal(ctx, spec, tileView)
+                            }
                         }
                     }
                 } else {

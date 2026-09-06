@@ -1337,12 +1337,21 @@ object ControlCenterConfigHolder {
         }
     }
 
+    fun setMediaSize(ctx: Context, size: String, tileView: View?) {
+        sMediaPlayerSize = size
+        savePriorities(ctx)
+        try {
+            ControlCenterHook.sMediaPlayerViewHolder?.get()?.let {
+                ControlCenterHook.applyMediaPlayerLayout(it)
+            }
+        } catch (t: Throwable) {}
+        refreshRecyclerView(tileView)
+    }
+
     fun setTileToExpanded(ctx: Context, spec: String?, tileView: View?) {
         if (spec == null) return
         if ("media".equals(spec, ignoreCase = true)) {
-            sMediaPlayerSize = "2x1"
-            savePriorities(ctx)
-            refreshRecyclerView(tileView)
+            setMediaSize(ctx, "2x1", tileView)
             return
         }
         sExpandedTileSpecs.add(spec)
@@ -1356,9 +1365,7 @@ object ControlCenterConfigHolder {
     fun setTileToVertical(ctx: Context, spec: String?, tileView: View?) {
         if (spec == null) return
         if ("media".equals(spec, ignoreCase = true)) {
-            sMediaPlayerSize = "1x2"
-            savePriorities(ctx)
-            refreshRecyclerView(tileView)
+            setMediaSize(ctx, "1x2", tileView)
             return
         }
         sVerticalTileSpecs.add(spec)
@@ -1372,9 +1379,7 @@ object ControlCenterConfigHolder {
     fun setTileToLarge(ctx: Context, spec: String?, tileView: View?) {
         if (spec == null) return
         if ("media".equals(spec, ignoreCase = true)) {
-            sMediaPlayerSize = "2x2"
-            savePriorities(ctx)
-            refreshRecyclerView(tileView)
+            setMediaSize(ctx, "2x2", tileView)
             return
         }
         sLargeTileSpecs.add(spec)
@@ -1388,9 +1393,7 @@ object ControlCenterConfigHolder {
     fun setTileToNormal(ctx: Context, spec: String?, tileView: View?) {
         if (spec == null) return
         if ("media".equals(spec, ignoreCase = true)) {
-            sMediaPlayerSize = "2x2"
-            savePriorities(ctx)
-            refreshRecyclerView(tileView)
+            setMediaSize(ctx, "2x2", tileView)
             return
         }
         sExpandedTileSpecs.remove(spec)
@@ -1467,7 +1470,7 @@ object ControlCenterConfigHolder {
     }
 
     fun cycleMediaPlayerSize(ctx: Context, tileView: View?) {
-        sMediaPlayerSize = when (sMediaPlayerSize) {
+        val nextSize = when (sMediaPlayerSize) {
             "2x2" -> "2x1"
             "2x1" -> "1x2"
             "1x2" -> "4x1"
@@ -1476,13 +1479,7 @@ object ControlCenterConfigHolder {
             "2x4" -> "2x2"
             else -> "2x2"
         }
-        savePriorities(ctx)
-        try {
-            ControlCenterHook.sMediaPlayerViewHolder?.get()?.let {
-                ControlCenterHook.applyMediaPlayerLayout(it)
-            }
-        } catch (t: Throwable) {}
-        refreshRecyclerView(tileView)
+        setMediaSize(ctx, nextSize, tileView)
     }
 
     fun toggleSliderOrientation(ctx: Context, isBrightness: Boolean, tileView: View?) {
