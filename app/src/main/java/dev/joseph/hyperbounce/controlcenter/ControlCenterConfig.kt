@@ -70,6 +70,10 @@ object ControlCenterConfigHolder {
     }
     val sVerticalTileSpecs = LinkedHashSet<String>()
     val sLargeTileSpecs = LinkedHashSet<String>()
+    val sCircularCardSpecs = LinkedHashSet<String>()
+    @Volatile var sMediaPlayerSize: String = "2x2"
+    @Volatile var sBrightnessSliderHorizontal: Boolean = false
+    @Volatile var sVolumeSliderHorizontal: Boolean = false
     val sComponentPriorities = ConcurrentHashMap<String, Int>().apply {
         put("CompactQS", 0)
         put("CompactQSCard", 1)
@@ -221,6 +225,17 @@ object ControlCenterConfigHolder {
                         }
                     }
 
+                    val circularCardsStr = json.optString("circular_card_specs", "")
+                    sCircularCardSpecs.clear()
+                    if (!TextUtils.isEmpty(circularCardsStr)) {
+                        for (spec in circularCardsStr.split(",")) {
+                            if (spec.trim().isNotEmpty()) sCircularCardSpecs.add(spec.trim())
+                        }
+                    }
+                    sMediaPlayerSize = json.optString("media_player_size", sMediaPlayerSize)
+                    sBrightnessSliderHorizontal = json.optBoolean("brightness_slider_horizontal", sBrightnessSliderHorizontal)
+                    sVolumeSliderHorizontal = json.optBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
+
                     if (json.has("tile_groups_v2")) {
                         val grpV2 = json.optString("tile_groups_v2", "")
                         val newGroups = ArrayList<TileGroup>()
@@ -295,6 +310,17 @@ object ControlCenterConfigHolder {
                     }
                 }
 
+                val circularCardsStr = prefs.getString("circular_card_specs", "")
+                sCircularCardSpecs.clear()
+                if (!TextUtils.isEmpty(circularCardsStr)) {
+                    for (spec in circularCardsStr!!.split(",")) {
+                        if (spec.trim().isNotEmpty()) sCircularCardSpecs.add(spec.trim())
+                    }
+                }
+                sMediaPlayerSize = prefs.getString("media_player_size", sMediaPlayerSize) ?: "2x2"
+                sBrightnessSliderHorizontal = prefs.getBoolean("brightness_slider_horizontal", sBrightnessSliderHorizontal)
+                sVolumeSliderHorizontal = prefs.getBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
+
                 if (prefs.contains("tile_groups_v2")) {
                     val groupsStrV2 = prefs.getString("tile_groups_v2", "") ?: ""
                     val newGroups = ArrayList<TileGroup>()
@@ -357,6 +383,16 @@ object ControlCenterConfigHolder {
             }
             json.put("large_tile_specs", largeSb.toString())
 
+            val circCardSb = StringBuilder()
+            for (spec in sCircularCardSpecs) {
+                if (circCardSb.isNotEmpty()) circCardSb.append(",")
+                circCardSb.append(spec)
+            }
+            json.put("circular_card_specs", circCardSb.toString())
+            json.put("media_player_size", sMediaPlayerSize)
+            json.put("brightness_slider_horizontal", sBrightnessSliderHorizontal)
+            json.put("volume_slider_horizontal", sVolumeSliderHorizontal)
+
             val groupsSb = StringBuilder()
             for (g in sTileGroups) {
                 if (g.specs.size == 4 || g.specs.size == 2) {
@@ -397,6 +433,10 @@ object ControlCenterConfigHolder {
                 editor.putString("expanded_tile_specs", sb.toString())
                 editor.putString("vertical_tile_specs", vertSb.toString())
                 editor.putString("large_tile_specs", largeSb.toString())
+                editor.putString("circular_card_specs", circCardSb.toString())
+                editor.putString("media_player_size", sMediaPlayerSize)
+                editor.putBoolean("brightness_slider_horizontal", sBrightnessSliderHorizontal)
+                editor.putBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
                 editor.putString("tile_groups_v2", groupsSb.toString())
                 editor.apply()
             }
@@ -430,6 +470,10 @@ object ControlCenterConfigHolder {
             sExpandedTileSpecs.add("cell")
             sVerticalTileSpecs.clear()
             sLargeTileSpecs.clear()
+            sCircularCardSpecs.clear()
+            sMediaPlayerSize = "2x2"
+            sBrightnessSliderHorizontal = false
+            sVolumeSliderHorizontal = false
             sIsWifiFirst = true
             sComponentPriorities.clear()
             sComponentPriorities["CompactQS"] = 0
@@ -593,6 +637,36 @@ object ControlCenterConfigHolder {
         val cached = itemView.getTag(0x7f099990) as? String
         if (cached != null) return cached
 
+        // Check for media player
+        if (itemView.javaClass.name.contains("MediaPlayer") ||
+            itemView.findViewById<View?>(itemView.resources.getIdentifier("audio_container", "id", itemView.context.packageName)) != null) {
+            itemView.setTag(0x7f099990, "media")
+            return "media"
+        }
+
+        // Check for sliders
+        if (itemView.javaClass.name.contains("ToggleSlider") ||
+            itemView.findViewById<View?>(itemView.resources.getIdentifier("slider", "id", itemView.context.packageName)) != null) {
+            val p = itemView.parent
+            if (p != null && p.javaClass.name.contains("RecyclerView")) {
+                try {
+                    val getChildVhMethod = p.javaClass.getMethod("getChildViewHolder", View::class.java)
+                    val vh = getChildVhMethod.invoke(p, itemView)
+                    if (vh != null) {
+                        val vhName = vh.javaClass.name
+                        if (vhName.contains("Brightness")) {
+                            itemView.setTag(0x7f099990, "brightness")
+                            return "brightness"
+                        }
+                        if (vhName.contains("Volume")) {
+                            itemView.setTag(0x7f099990, "volume")
+                            return "volume"
+                        }
+                    }
+                } catch (t: Throwable) {}
+            }
+        }
+
         try {
             var cls: Class<*>? = itemView.javaClass
             while (cls != null && cls != Any::class.java) {
@@ -691,10 +765,15 @@ object ControlCenterConfigHolder {
                     if (ControlCenterHook.isChildOfContainer(itemView)) continue
 
                     val spec = getOrResolveTileSpec(itemView) ?: continue
+                    val isCard = ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true))
+                    val isSlider = ("brightness".equals(spec, ignoreCase = true) || "volume".equals(spec, ignoreCase = true))
+                    val isMedia = ("media".equals(spec, ignoreCase = true))
+
                     val isExpanded = sExpandedTileSpecs.contains(spec)
                     val isVertical = sVerticalTileSpecs.contains(spec)
                     val isLarge = sLargeTileSpecs.contains(spec)
-                    val isCircular = !isExpanded && !isVertical && !isLarge && !itemView.javaClass.name.contains("Card") && (itemView.javaClass.name.contains("Tile") || itemView.javaClass.name.contains("QSTileItemView"))
+                    val isCircCard = isCard && sCircularCardSpecs.contains(spec)
+                    val isCircular = isCircCard || (!isCard && !isSlider && !isMedia && !isExpanded && !isVertical && !isLarge && !itemView.javaClass.name.contains("Card") && (itemView.javaClass.name.contains("Tile") || itemView.javaClass.name.contains("QSTileItemView")))
                     val density = itemView.resources.displayMetrics.density
 
                     val iconFrameId = itemView.resources.getIdentifier("icon_frame", "id", itemView.context.packageName)
@@ -702,11 +781,14 @@ object ControlCenterConfigHolder {
 
                     val resizeTag = 0x7f099999
                     val selectTag = 0x7f099998
+                    val rotateTag = 0x7f099992
                     var resizeHandle = itemView.findViewById<ImageView>(resizeTag)
                     var selectBadge = itemView.findViewById<ImageView>(selectTag)
+                    var rotateBtn = itemView.findViewById<ImageView>(rotateTag)
 
                     if (!sIsEditMode) {
                         ControlCenterHook.hideAllCustomBadges(itemView)
+                        hideAllRotateButtons(itemView as? ViewGroup)
                         itemView.isClickable = true
                         itemView.isLongClickable = true
                         itemView.isFocusable = true
@@ -733,6 +815,87 @@ object ControlCenterConfigHolder {
                         ControlCenterHook.setCircularTileLabelVisibility(itemView, false)
                     }
 
+                    // Special Handling for Sliders
+                    if (isSlider) {
+                        if (resizeHandle != null) resizeHandle.visibility = View.GONE
+                        if (selectBadge != null) selectBadge.visibility = View.GONE
+
+                        if (rotateBtn == null && itemView is ViewGroup) {
+                            val rSize = (32 * density).toInt()
+                            rotateBtn = ImageView(itemView.context).apply {
+                                id = rotateTag
+                                val lp = android.widget.FrameLayout.LayoutParams(rSize, rSize).apply {
+                                    gravity = android.view.Gravity.TOP or android.view.Gravity.END
+                                    val m = (6 * density).toInt()
+                                    setMargins(0, m, m, 0)
+                                }
+                                layoutParams = lp
+                                setImageDrawable(RotateIconDrawable())
+                            }
+                            itemView.addView(rotateBtn)
+                        }
+                        if (rotateBtn != null) {
+                            val shouldShowRotate = !sIsGroupSelectMode && !sIsDisassembleMode
+                            rotateBtn.visibility = if (shouldShowRotate) View.VISIBLE else View.GONE
+                            if (shouldShowRotate) {
+                                rotateBtn.bringToFront()
+                                rotateBtn.isClickable = true
+                                val isBright = "brightness".equals(spec, ignoreCase = true)
+                                rotateBtn.setOnClickListener {
+                                    toggleSliderOrientation(itemView.context, isBright, itemView)
+                                }
+                            } else {
+                                rotateBtn.isClickable = false
+                                rotateBtn.setOnClickListener(null)
+                            }
+                        }
+                        continue
+                    }
+
+                    // Special Handling for Media Player
+                    if (isMedia) {
+                        if (rotateBtn != null) rotateBtn.visibility = View.GONE
+                        if (selectBadge != null) selectBadge.visibility = View.GONE
+
+                        val badgeSize = (38 * density).toInt()
+                        if (resizeHandle == null && itemView is ViewGroup) {
+                            resizeHandle = ImageView(itemView.context).apply {
+                                id = resizeTag
+                                val lp = android.widget.FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
+                                    gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
+                                }
+                                layoutParams = lp
+                                setImageDrawable(CurvedResizeHandleDrawable(density))
+                            }
+                            itemView.addView(resizeHandle)
+                        }
+                        if (resizeHandle != null) {
+                            val shouldShowMediaResize = !sIsGroupSelectMode && !sIsDisassembleMode
+                            resizeHandle.visibility = if (shouldShowMediaResize) View.VISIBLE else View.GONE
+                            if (shouldShowMediaResize) {
+                                val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
+                                val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
+                                if (itemView.width > 0 && itemView.height > 0) {
+                                    resizeHandle.layout(itemView.width - bw, itemView.height - bh, itemView.width, itemView.height)
+                                }
+                                resizeHandle.bringToFront()
+                                resizeHandle.isClickable = true
+                                resizeHandle.setOnClickListener {
+                                    cycleMediaPlayerSize(itemView.context, itemView)
+                                }
+                                resizeHandle.setOnTouchListener(TileResizeDragTouchListener(itemView.context, "media", itemView, density))
+                            } else {
+                                resizeHandle.isClickable = false
+                                resizeHandle.setOnClickListener(null)
+                                resizeHandle.setOnTouchListener(null)
+                            }
+                        }
+                        continue
+                    }
+
+                    // Handling for standard tiles & cards (Wi-Fi, Cell, normal tiles)
+                    if (rotateBtn != null) rotateBtn.visibility = View.GONE
+
                     if (sIsGroupSelectMode) {
                         if (resizeHandle != null) {
                             resizeHandle.visibility = View.GONE
@@ -740,7 +903,7 @@ object ControlCenterConfigHolder {
                             resizeHandle.setOnClickListener(null)
                             resizeHandle.isClickable = false
                         }
-                        if (spec != null && !"wifi".equals(spec, ignoreCase = true) && !"cell".equals(spec, ignoreCase = true)) {
+                        if (isCircular) {
                             if (selectBadge == null && itemView is ViewGroup) {
                                 selectBadge = ImageView(itemView.context).apply {
                                     id = selectTag
@@ -776,7 +939,7 @@ object ControlCenterConfigHolder {
                                 }
                                 selectBadge.setOnClickListener(toggleSelect)
 
-                                if (isCircular && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
+                                if (curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
                                     val bw2 = selectBadge.measuredWidth.takeIf { it > 0 } ?: (26 * density).toInt()
                                     val bh2 = selectBadge.measuredHeight.takeIf { it > 0 } ?: (26 * density).toInt()
                                     val iLeft = curIconFrame.left
@@ -784,6 +947,10 @@ object ControlCenterConfigHolder {
                                     selectBadge.layout(iLeft, iTop, iLeft + bw2, iTop + bh2)
                                 }
                             }
+                        } else if (selectBadge != null) {
+                            selectBadge.visibility = View.GONE
+                            selectBadge.setOnClickListener(null)
+                            selectBadge.isClickable = false
                         }
                     } else if (sIsDisassembleMode) {
                         if (resizeHandle != null) {
@@ -826,34 +993,32 @@ object ControlCenterConfigHolder {
                             selectBadge.setOnClickListener(null)
                             selectBadge.isClickable = false
                         }
-                        if (spec != null && !"wifi".equals(spec, ignoreCase = true) && !"cell".equals(spec, ignoreCase = true)) {
-                            val badgeSize = (38 * density).toInt()
-                            if (resizeHandle == null && itemView is ViewGroup) {
-                                resizeHandle = ImageView(itemView.context).apply {
-                                    id = resizeTag
-                                    val lp = android.widget.FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
-                                        gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
-                                    }
-                                    layoutParams = lp
-                                    setImageDrawable(CurvedResizeHandleDrawable(density))
+                        val badgeSize = (38 * density).toInt()
+                        if (resizeHandle == null && itemView is ViewGroup) {
+                            resizeHandle = ImageView(itemView.context).apply {
+                                id = resizeTag
+                                val lp = android.widget.FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
+                                    gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
                                 }
-                                itemView.addView(resizeHandle)
+                                layoutParams = lp
+                                setImageDrawable(CurvedResizeHandleDrawable(density))
                             }
-                            if (resizeHandle != null) {
-                                resizeHandle.visibility = View.VISIBLE
-                                val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
-                                val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
-                                if (isCircular && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
-                                    val iRight = curIconFrame.right
-                                    val iBottom = curIconFrame.bottom
-                                    resizeHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
-                                } else if (itemView.width > 0 && itemView.height > 0) {
-                                    resizeHandle.layout(itemView.width - bw, itemView.height - bh, itemView.width, itemView.height)
-                                }
-                                resizeHandle.bringToFront()
-                                resizeHandle.isClickable = true
-                                resizeHandle.setOnTouchListener(TileResizeDragTouchListener(itemView.context, spec, itemView, density))
+                            itemView.addView(resizeHandle)
+                        }
+                        if (resizeHandle != null) {
+                            resizeHandle.visibility = View.VISIBLE
+                            val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
+                            val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
+                            if (isCircular && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
+                                val iRight = curIconFrame.right
+                                val iBottom = curIconFrame.bottom
+                                resizeHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
+                            } else if (itemView.width > 0 && itemView.height > 0) {
+                                resizeHandle.layout(itemView.width - bw, itemView.height - bh, itemView.width, itemView.height)
                             }
+                            resizeHandle.bringToFront()
+                            resizeHandle.isClickable = true
+                            resizeHandle.setOnTouchListener(TileResizeDragTouchListener(itemView.context, spec, itemView, density))
                         }
                     }
                 }
@@ -873,15 +1038,18 @@ object ControlCenterConfigHolder {
             for (i in 0 until childCount) {
                 val itemView = rv.getChildAt(i) ?: continue
                 ControlCenterHook.hideAllCustomBadges(itemView)
+                hideAllRotateButtons(itemView as? ViewGroup)
                 itemView.isClickable = true
                 itemView.isLongClickable = true
                 itemView.isFocusable = true
 
                 val spec = getOrResolveTileSpec(itemView) ?: continue
+                val isCard = ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true))
                 val isExpanded = sExpandedTileSpecs.contains(spec)
                 val isVertical = sVerticalTileSpecs.contains(spec)
                 val isLarge = sLargeTileSpecs.contains(spec)
-                val isCircular = !isExpanded && !isVertical && !isLarge && !itemView.javaClass.name.contains("Card") && (itemView.javaClass.name.contains("Tile") || itemView.javaClass.name.contains("QSTileItemView"))
+                val isCircCard = isCard && sCircularCardSpecs.contains(spec)
+                val isCircular = isCircCard || (!isCard && !isExpanded && !isVertical && !isLarge && !itemView.javaClass.name.contains("Card") && (itemView.javaClass.name.contains("Tile") || itemView.javaClass.name.contains("QSTileItemView")))
                 if (isCircular) {
                     ControlCenterHook.setCircularTileLabelVisibility(itemView, true)
                 }
@@ -1104,64 +1272,126 @@ object ControlCenterConfigHolder {
     }
 
     fun setTileToExpanded(ctx: Context, spec: String?, tileView: View?) {
-        if (spec == null || "wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) return
+        if (spec == null) return
         sExpandedTileSpecs.add(spec)
         sVerticalTileSpecs.remove(spec)
         sLargeTileSpecs.remove(spec)
+        sCircularCardSpecs.remove(spec)
         savePriorities(ctx)
         refreshRecyclerView(tileView)
     }
 
     fun setTileToVertical(ctx: Context, spec: String?, tileView: View?) {
-        if (spec == null || "wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) return
+        if (spec == null) return
         sVerticalTileSpecs.add(spec)
         sExpandedTileSpecs.remove(spec)
         sLargeTileSpecs.remove(spec)
+        sCircularCardSpecs.remove(spec)
         savePriorities(ctx)
         refreshRecyclerView(tileView)
     }
 
     fun setTileToLarge(ctx: Context, spec: String?, tileView: View?) {
-        if (spec == null || "wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) return
+        if (spec == null) return
         sLargeTileSpecs.add(spec)
         sExpandedTileSpecs.remove(spec)
         sVerticalTileSpecs.remove(spec)
+        sCircularCardSpecs.remove(spec)
         savePriorities(ctx)
         refreshRecyclerView(tileView)
     }
 
     fun setTileToNormal(ctx: Context, spec: String?, tileView: View?) {
-        if (spec == null || "wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) return
+        if (spec == null) return
         sExpandedTileSpecs.remove(spec)
         sVerticalTileSpecs.remove(spec)
         sLargeTileSpecs.remove(spec)
+        if ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) {
+            sCircularCardSpecs.add(spec)
+        } else {
+            sCircularCardSpecs.remove(spec)
+        }
         savePriorities(ctx)
         refreshRecyclerView(tileView)
     }
 
     fun toggleTileSize(ctx: Context, spec: String?, tileView: View?) {
-        if (spec == null || "wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) return
-        when {
-            sExpandedTileSpecs.contains(spec) -> {
-                sExpandedTileSpecs.remove(spec)
-                sLargeTileSpecs.add(spec)
-                sVerticalTileSpecs.remove(spec)
+        if (spec == null) return
+        if ("media".equals(spec, ignoreCase = true)) {
+            cycleMediaPlayerSize(ctx, tileView)
+            return
+        }
+        if ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) {
+            when {
+                sLargeTileSpecs.contains(spec) -> {
+                    sLargeTileSpecs.remove(spec)
+                    sVerticalTileSpecs.add(spec)
+                    sExpandedTileSpecs.remove(spec)
+                    sCircularCardSpecs.remove(spec)
+                }
+                sVerticalTileSpecs.contains(spec) -> {
+                    sVerticalTileSpecs.remove(spec)
+                    sCircularCardSpecs.add(spec)
+                    sExpandedTileSpecs.remove(spec)
+                    sLargeTileSpecs.remove(spec)
+                }
+                sCircularCardSpecs.contains(spec) -> {
+                    sCircularCardSpecs.remove(spec)
+                    sExpandedTileSpecs.add(spec)
+                    sVerticalTileSpecs.remove(spec)
+                    sLargeTileSpecs.remove(spec)
+                }
+                else -> { // Default stock card is 2x1 expanded -> cycle to 2x2 large
+                    sExpandedTileSpecs.remove(spec)
+                    sLargeTileSpecs.add(spec)
+                    sVerticalTileSpecs.remove(spec)
+                    sCircularCardSpecs.remove(spec)
+                }
             }
-            sLargeTileSpecs.contains(spec) -> {
-                sLargeTileSpecs.remove(spec)
-                sVerticalTileSpecs.add(spec)
-                sExpandedTileSpecs.remove(spec)
+        } else {
+            when {
+                sExpandedTileSpecs.contains(spec) -> {
+                    sExpandedTileSpecs.remove(spec)
+                    sLargeTileSpecs.add(spec)
+                    sVerticalTileSpecs.remove(spec)
+                }
+                sLargeTileSpecs.contains(spec) -> {
+                    sLargeTileSpecs.remove(spec)
+                    sVerticalTileSpecs.add(spec)
+                    sExpandedTileSpecs.remove(spec)
+                }
+                sVerticalTileSpecs.contains(spec) -> {
+                    sVerticalTileSpecs.remove(spec)
+                    sLargeTileSpecs.remove(spec)
+                    sExpandedTileSpecs.remove(spec)
+                }
+                else -> {
+                    sExpandedTileSpecs.add(spec)
+                    sLargeTileSpecs.remove(spec)
+                    sVerticalTileSpecs.remove(spec)
+                }
             }
-            sVerticalTileSpecs.contains(spec) -> {
-                sVerticalTileSpecs.remove(spec)
-                sLargeTileSpecs.remove(spec)
-                sExpandedTileSpecs.remove(spec)
-            }
-            else -> {
-                sExpandedTileSpecs.add(spec)
-                sLargeTileSpecs.remove(spec)
-                sVerticalTileSpecs.remove(spec)
-            }
+        }
+        savePriorities(ctx)
+        refreshRecyclerView(tileView)
+    }
+
+    fun cycleMediaPlayerSize(ctx: Context, tileView: View?) {
+        sMediaPlayerSize = when (sMediaPlayerSize) {
+            "2x2" -> "2x1"
+            "2x1" -> "1x2"
+            "1x2" -> "1x1"
+            else -> "2x2"
+        }
+        savePriorities(ctx)
+        refreshRecyclerView(tileView)
+    }
+
+    fun toggleSliderOrientation(ctx: Context, isBrightness: Boolean, tileView: View?) {
+        if (isBrightness) {
+            sBrightnessSliderHorizontal = !sBrightnessSliderHorizontal
+        } else {
+            sVolumeSliderHorizontal = !sVolumeSliderHorizontal
         }
         savePriorities(ctx)
         refreshRecyclerView(tileView)

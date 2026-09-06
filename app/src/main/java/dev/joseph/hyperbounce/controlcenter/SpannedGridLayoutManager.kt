@@ -140,18 +140,24 @@ class SpannedGridLayoutManager : GridLayoutManager {
                 -1
             }
 
-            // 3484336: MediaPlayer -> 2x2 (or 4x1 landscape)
-            if (viewType == 3484336) {
+            // 3484336 / 63342: MediaPlayer -> dynamic size (or 4x1 landscape)
+            if (viewType == 3484336 || viewType == 63342) {
                 val isLandscape = mContext.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-                return if (isLandscape) intArrayOf(4, 1) else intArrayOf(2, 2)
+                if (isLandscape) return intArrayOf(4, 1)
+                return when (ControlCenterConfigHolder.sMediaPlayerSize) {
+                    "2x1" -> intArrayOf(2, 1)
+                    "1x2" -> intArrayOf(1, 2)
+                    "1x1" -> intArrayOf(1, 1)
+                    else -> intArrayOf(2, 2)
+                }
             }
-            // 3484338: Brightness Slider -> 1x2
-            if (viewType == 3484338) {
-                return intArrayOf(1, 2)
+            // 3484338 / 274442: Brightness Slider -> 1x2 vertical or 2x1 horizontal
+            if (viewType == 3484338 || viewType == 274442) {
+                return if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) intArrayOf(2, 1) else intArrayOf(1, 2)
             }
-            // 3484339: Volume Slider -> 1x2
-            if (viewType == 3484339) {
-                return intArrayOf(1, 2)
+            // 3484339 / 865269: Volume Slider -> 1x2 vertical or 2x1 horizontal
+            if (viewType == 3484339 || viewType == 865269) {
+                return if (ControlCenterConfigHolder.sVolumeSliderHorizontal) intArrayOf(2, 1) else intArrayOf(1, 2)
             }
             // 2274: Grouped 4-Tile Card Container -> 2x2
             if (viewType == 2274) {

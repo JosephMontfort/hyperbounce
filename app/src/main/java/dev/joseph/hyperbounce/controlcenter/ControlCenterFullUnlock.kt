@@ -257,6 +257,10 @@ object ControlCenterFullUnlock {
                 sUnifiedSlotOrder.remove("tile:$spec")
                 sProxyCache.remove("tile:$spec")
                 sProxyHandlers.remove("tile:$spec")
+                sKnownSlots.remove("card:$spec")
+                sUnifiedSlotOrder.remove("card:$spec")
+                sProxyCache.remove("card:$spec")
+                sProxyHandlers.remove("card:$spec")
             }
 
             // 3. Deduplicate sUnifiedSlotOrder while preserving order
@@ -286,16 +290,23 @@ object ControlCenterFullUnlock {
             var insertIdx = -1
             for (spec in specs) {
                 val tileId = "tile:$spec"
-                val idx = sUnifiedSlotOrder.indexOf(tileId)
+                val cardId = "card:$spec"
+                val idx1 = sUnifiedSlotOrder.indexOf(tileId)
+                val idx2 = sUnifiedSlotOrder.indexOf(cardId)
+                val idx = if (idx1 >= 0) idx1 else idx2
                 if (idx >= 0 && (insertIdx == -1 || idx < insertIdx)) {
                     insertIdx = idx
                 }
                 sKnownSlots.remove(tileId)
+                sKnownSlots.remove(cardId)
                 sProxyCache.remove(tileId)
+                sProxyCache.remove(cardId)
                 sProxyHandlers.remove(tileId)
+                sProxyHandlers.remove(cardId)
             }
             for (spec in specs) {
                 sUnifiedSlotOrder.remove("tile:$spec")
+                sUnifiedSlotOrder.remove("card:$spec")
             }
             if (insertIdx >= 0 && insertIdx <= sUnifiedSlotOrder.size) {
                 sUnifiedSlotOrder.add(insertIdx, groupSlotId)
@@ -323,7 +334,7 @@ object ControlCenterFullUnlock {
                 val idx = sUnifiedSlotOrder.indexOf(groupSlotId)
                 sUnifiedSlotOrder.remove(groupSlotId)
 
-                val memberTileIds = g.specs.map { "tile:$it" }
+                val memberTileIds = g.specs.map { if (it == "wifi" || it == "cell") "card:$it" else "tile:$it" }
                 if (idx >= 0 && idx <= sUnifiedSlotOrder.size) {
                     sUnifiedSlotOrder.addAll(idx, memberTileIds)
                 } else {
@@ -366,23 +377,30 @@ object ControlCenterFullUnlock {
      * Calculates width and height spans for any item.
      */
     fun getItemSpans(item: Any, viewType: Int, spec: String?): Pair<Int, Int> {
-        // 1. Media Player -> 2x2
+        // 1. Media Player -> dynamic size
         if (viewType == 3484336 || item.javaClass.name.contains("MediaPlayer")) {
-            return Pair(2, 2)
+            return when (ControlCenterConfigHolder.sMediaPlayerSize) {
+                "2x1" -> Pair(2, 1)
+                "1x2" -> Pair(1, 2)
+                "1x1" -> Pair(1, 1)
+                else -> Pair(2, 2)
+            }
         }
-        // 2. Sliders -> 1x2
-        if (viewType == 3484338 || viewType == 3484339 || item.javaClass.name.contains("Slider")) {
+        // 2. Sliders -> 1x2 vertical or 2x1 horizontal
+        if (viewType == 3484338 || item.javaClass.name.contains("Brightness")) {
+            return if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) Pair(2, 1) else Pair(1, 2)
+        }
+        if (viewType == 3484339 || item.javaClass.name.contains("Volume")) {
+            return if (ControlCenterConfigHolder.sVolumeSliderHorizontal) Pair(2, 1) else Pair(1, 2)
+        }
+        if (item.javaClass.name.contains("Slider")) {
             return Pair(1, 2)
         }
         // 3. Smart home -> 2x1
         if (viewType == 338423 || viewType == 2668765) {
             return Pair(2, 1)
         }
-        // 4. Cards (Wi-Fi, Cell) -> 2x1
-        if (spec == "wifi" || spec == "cell") {
-            return Pair(2, 1)
-        }
-        // 5. Grouped containers and resized tiles
+        // 4. Cards (Wi-Fi, Cell) & Circular tiles
         if (spec != null) {
             val g = ControlCenterConfigHolder.isGroupAnchor(spec)
             if (g != null) {
@@ -392,8 +410,12 @@ object ControlCenterFullUnlock {
             if (ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)) return Pair(2, 2)
             if (ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)) return Pair(1, 2)
             if (ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)) return Pair(2, 1)
+            if (ControlCenterConfigHolder.sCircularCardSpecs.contains(spec)) return Pair(1, 1)
+            if (spec == "wifi" || spec == "cell") {
+                return Pair(2, 1)
+            }
         }
-        // 6. Default circular tile -> 1x1
+        // 5. Default circular tile -> 1x1
         return Pair(1, 1)
     }
 
@@ -510,9 +532,9 @@ object ControlCenterFullUnlock {
                 if (g != null) return "group:${g.id}"
                 return "tile:$spec"
             }
-            if (vt == 3484336) return "component:media"
-            if (vt == 3484338) return "component:brightness"
-            if (vt == 3484339) return "component:volume"
+            if (vt == 3484336 || vt == 63342) return "component:media"
+            if (vt == 3484338 || vt == 274442) return "component:brightness"
+            if (vt == 3484339 || vt == 865269) return "component:volume"
             if (vt == 338423) return "component:device_center"
             if (vt == 2668765) return "component:device_controls"
         } catch (t: Throwable) {}
@@ -586,9 +608,31 @@ object ControlCenterFullUnlock {
                         for (i in items.indices) {
                             val item = items[i]
                             val spec = ControlCenterConfigHolder.getRecordSpec(item)
+                            var vt = 2273
+                            try {
+                                val getTypeM = item.javaClass.getMethod("getType")
+                                vt = getTypeM.invoke(item) as Int
+                            } catch (t: Throwable) {}
+
+                            if (spec != null) {
+                                val group = ControlCenterConfigHolder.findGroupForSpec(spec)
+                                if (group != null) {
+                                    if (ControlCenterConfigHolder.isGroupAnchor(spec) != null) {
+                                        val id = "group:${group.id}"
+                                        val spans = getItemSpans(item, vt, spec)
+                                        sKnownSlots[id] = SlotItem(id, controller, item, vt, spans.first, spans.second)
+                                    }
+                                    sKnownSlots.remove("card:$spec")
+                                    sKnownSlots.remove("tile:$spec")
+                                    sUnifiedSlotOrder.remove("card:$spec")
+                                    sUnifiedSlotOrder.remove("tile:$spec")
+                                    continue
+                                }
+                            }
+
                             val id = if (spec == "wifi") "card:wifi" else if (spec == "cell") "card:cell" else "card:$spec"
-                            val spans = getItemSpans(item, 2273, spec)
-                            sKnownSlots[id] = SlotItem(id, controller, item, 2273, spans.first, spans.second)
+                            val spans = getItemSpans(item, vt, spec)
+                            sKnownSlots[id] = SlotItem(id, controller, item, vt, spans.first, spans.second)
                         }
                     } else if (ctrlName.contains("MediaPlayerController")) {
                         val item = items.firstOrNull() ?: controller
