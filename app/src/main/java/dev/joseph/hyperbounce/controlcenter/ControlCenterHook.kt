@@ -1276,6 +1276,10 @@ object ControlCenterHook {
                                             val holder = ControlCenterGrouping.createLargeCardViewHolder(parent, qsListCtrl, classLoader)
                                             if (holder != null) return@intercept holder
                                         }
+                                        if (viewType == 2290) {
+                                            val holder = ControlCenterGrouping.createCompositeSlotViewHolder(parent, classLoader)
+                                            if (holder != null) return@intercept holder
+                                        }
                                     }
                                 } catch (t: Throwable) {
                                     Log.e(TAG, "QSListController.createViewHolder inflation error", t)
@@ -1299,7 +1303,7 @@ object ControlCenterHook {
                             if (args != null && args.size >= 2) {
                                 val parent = args[0] as ViewGroup
                                 val vt = args[1] as Int
-                                if (vt == 2274 || vt == 2275 || vt == 2276 || vt == 2273 || vt == 2277 || vt == 2278) {
+                                if (vt == 2274 || vt == 2275 || vt == 2276 || vt == 2273 || vt == 2277 || vt == 2278 || vt == 2290) {
                                     try {
                                         val adapterObj = chain.thisObject
                                         ControlCenterConfigHolder.sMainPanelAdapter = adapterObj
@@ -1328,6 +1332,9 @@ object ControlCenterHook {
                                             if (holder != null) return@intercept holder
                                         } else if (vt == 2278) {
                                             val holder = ControlCenterGrouping.createLargeCardViewHolder(parent, qsListCtrl, classLoader)
+                                            if (holder != null) return@intercept holder
+                                        } else if (vt == 2290) {
+                                            val holder = ControlCenterGrouping.createCompositeSlotViewHolder(parent, classLoader)
                                             if (holder != null) return@intercept holder
                                         }
                                     } catch (t: Throwable) {
@@ -2580,6 +2587,7 @@ object ControlCenterHook {
                                     val holder = args[0]
                                     if (holder != null) {
                                         bindCustomModuleHolder(holder, classLoader)
+                                        ControlCenterGrouping.checkAndBindCompositeHolder(holder, classLoader)
                                     }
                                 }
                             } catch (t: Throwable) {}
@@ -3354,6 +3362,7 @@ object ControlCenterHook {
 
                             val btnSize = (34 * density).toInt()
                             val playSize = (38 * density).toInt()
+                            val hGap = (3.5f * density).toInt()
                             val prevLp = prev?.layoutParams
                             if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
                                 prevLp.width = btnSize
@@ -3366,8 +3375,12 @@ object ControlCenterHook {
                                 setField(prevLp, "endToEnd", unset)
                                 setField(prevLp, "topToBottom", unset)
                                 setField(prevLp, "bottomToTop", unset)
-                                setField(prevLp, "horizontalChainStyle", 0)
+                                setField(prevLp, "horizontalChainStyle", 2)
                                 setField(prevLp, "verticalChainStyle", unset)
+                                if (prevLp is ViewGroup.MarginLayoutParams) {
+                                    prevLp.marginEnd = hGap
+                                    prevLp.marginStart = 0
+                                }
                                 prev.layoutParams = prevLp
                             }
                             val playLp = play?.layoutParams
@@ -3382,6 +3395,10 @@ object ControlCenterHook {
                                 setField(playLp, "endToEnd", unset)
                                 setField(playLp, "topToBottom", unset)
                                 setField(playLp, "bottomToTop", unset)
+                                if (playLp is ViewGroup.MarginLayoutParams) {
+                                    playLp.marginStart = hGap
+                                    playLp.marginEnd = hGap
+                                }
                                 play.layoutParams = playLp
                             }
                             val nextLp = next?.layoutParams
@@ -3396,6 +3413,10 @@ object ControlCenterHook {
                                 setField(nextLp, "endToStart", unset)
                                 setField(nextLp, "topToBottom", unset)
                                 setField(nextLp, "bottomToTop", unset)
+                                if (nextLp is ViewGroup.MarginLayoutParams) {
+                                    nextLp.marginStart = hGap
+                                    nextLp.marginEnd = 0
+                                }
                                 next.layoutParams = nextLp
                             }
                         } catch (t: Throwable) {}
@@ -3485,6 +3506,7 @@ object ControlCenterHook {
 
                             val btnSize = (32 * density).toInt()
                             val playSize = (38 * density).toInt()
+                            val vGap = (3 * density).toInt()
                             val prevLp = prev?.layoutParams
                             if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
                                 prevLp.width = btnSize
@@ -3497,8 +3519,12 @@ object ControlCenterHook {
                                 setField(prevLp, "endToStart", unset)
                                 setField(prevLp, "topToBottom", unset)
                                 setField(prevLp, "bottomToBottom", unset)
-                                setField(prevLp, "verticalChainStyle", 0)
+                                setField(prevLp, "verticalChainStyle", 2)
                                 setField(prevLp, "horizontalChainStyle", unset)
+                                if (prevLp is ViewGroup.MarginLayoutParams) {
+                                    prevLp.bottomMargin = vGap
+                                    prevLp.topMargin = 0
+                                }
                                 prev.layoutParams = prevLp
                             }
                             val playLp = play?.layoutParams
@@ -3513,6 +3539,10 @@ object ControlCenterHook {
                                 setField(playLp, "bottomToBottom", unset)
                                 setField(playLp, "startToEnd", unset)
                                 setField(playLp, "endToStart", unset)
+                                if (playLp is ViewGroup.MarginLayoutParams) {
+                                    playLp.topMargin = vGap
+                                    playLp.bottomMargin = vGap
+                                }
                                 play.layoutParams = playLp
                             }
                             val nextLp = next?.layoutParams
@@ -3527,6 +3557,10 @@ object ControlCenterHook {
                                 setField(nextLp, "bottomToTop", unset)
                                 setField(nextLp, "startToEnd", unset)
                                 setField(nextLp, "endToStart", unset)
+                                if (nextLp is ViewGroup.MarginLayoutParams) {
+                                    nextLp.topMargin = vGap
+                                    nextLp.bottomMargin = 0
+                                }
                                 next.layoutParams = nextLp
                             }
                         } catch (t: Throwable) {}
@@ -3536,6 +3570,14 @@ object ControlCenterHook {
                     if (curLp != null && curLp.height != tallH) {
                         curLp.height = tallH
                         itemView.layoutParams = curLp
+                    }
+
+                    listOf(cover, play, prev, next, audioContainer).forEach { v ->
+                        v?.alpha = 1f
+                        v?.scaleX = 1f
+                        v?.scaleY = 1f
+                        v?.translationX = 0f
+                        v?.translationY = 0f
                     }
 
                     if (ControlCenterConfigHolder.isConstraintLayout(itemView)) {
@@ -3552,6 +3594,10 @@ object ControlCenterHook {
                             if (cover != null) {
                                 val cLp = cover.layoutParams
                                 if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
+                                    val cSize = (42 * density).toInt()
+                                    val cMargin = (15 * density).toInt()
+                                    cLp.width = cSize
+                                    cLp.height = cSize
                                     setField(cLp, "startToStart", pId)
                                     setField(cLp, "topToTop", pId)
                                     setField(cLp, "endToEnd", unset)
@@ -3559,7 +3605,36 @@ object ControlCenterHook {
                                     setField(cLp, "bottomToBottom", unset)
                                     setField(cLp, "bottomToTop", unset)
                                     setField(cLp, "topToBottom", unset)
+                                    setField(cLp, "startToEnd", unset)
+                                    if (cLp is ViewGroup.MarginLayoutParams) {
+                                        cLp.marginStart = cMargin
+                                        cLp.topMargin = cMargin
+                                        cLp.marginEnd = 0
+                                        cLp.bottomMargin = 0
+                                    }
                                     cover.layoutParams = cLp
+                                }
+                            }
+
+                            if (deviceIcon != null) {
+                                deviceIcon.visibility = View.VISIBLE
+                                val dLp = deviceIcon.layoutParams
+                                if (dLp != null && dLp.javaClass.name.contains("ConstraintLayout")) {
+                                    val dSize = (30 * density).toInt()
+                                    val dMargin = (8 * density).toInt()
+                                    dLp.width = dSize
+                                    dLp.height = dSize
+                                    setField(dLp, "endToEnd", pId)
+                                    setField(dLp, "topToTop", pId)
+                                    setField(dLp, "startToStart", unset)
+                                    setField(dLp, "bottomToBottom", unset)
+                                    if (dLp is ViewGroup.MarginLayoutParams) {
+                                        dLp.marginEnd = dMargin
+                                        dLp.topMargin = dMargin
+                                        dLp.marginStart = 0
+                                        dLp.bottomMargin = 0
+                                    }
+                                    deviceIcon.layoutParams = dLp
                                 }
                             }
 
@@ -3576,11 +3651,20 @@ object ControlCenterHook {
                                     setField(acLp, "endToStart", unset)
                                     acLp.width = ViewGroup.LayoutParams.MATCH_PARENT
                                     acLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    if (acLp is ViewGroup.MarginLayoutParams) {
+                                        acLp.marginStart = (9.5f * density).toInt()
+                                        acLp.marginEnd = (9.5f * density).toInt()
+                                        acLp.bottomMargin = (11 * density).toInt()
+                                        acLp.topMargin = 0
+                                    }
                                     audioContainer.layoutParams = acLp
                                 }
 
+                                val stockBtnSize = (40 * density).toInt()
                                 val prevLp = prev?.layoutParams
                                 if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
+                                    prevLp.width = stockBtnSize
+                                    prevLp.height = stockBtnSize
                                     setField(prevLp, "startToStart", pId)
                                     setField(prevLp, "endToStart", playId)
                                     setField(prevLp, "topToTop", pId)
@@ -3591,10 +3675,16 @@ object ControlCenterHook {
                                     setField(prevLp, "bottomToTop", unset)
                                     setField(prevLp, "horizontalChainStyle", 1)
                                     setField(prevLp, "verticalChainStyle", unset)
+                                    if (prevLp is ViewGroup.MarginLayoutParams) {
+                                        prevLp.marginStart = 0; prevLp.marginEnd = 0
+                                        prevLp.topMargin = 0; prevLp.bottomMargin = 0
+                                    }
                                     prev.layoutParams = prevLp
                                 }
                                 val playLp = play?.layoutParams
                                 if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
+                                    playLp.width = stockBtnSize
+                                    playLp.height = stockBtnSize
                                     setField(playLp, "startToEnd", prevId)
                                     setField(playLp, "endToStart", nextId)
                                     setField(playLp, "topToTop", pId)
@@ -3603,10 +3693,16 @@ object ControlCenterHook {
                                     setField(playLp, "endToEnd", unset)
                                     setField(playLp, "topToBottom", unset)
                                     setField(playLp, "bottomToTop", unset)
+                                    if (playLp is ViewGroup.MarginLayoutParams) {
+                                        playLp.marginStart = 0; playLp.marginEnd = 0
+                                        playLp.topMargin = 0; playLp.bottomMargin = 0
+                                    }
                                     play.layoutParams = playLp
                                 }
                                 val nextLp = next?.layoutParams
                                 if (nextLp != null && nextLp.javaClass.name.contains("ConstraintLayout")) {
+                                    nextLp.width = stockBtnSize
+                                    nextLp.height = stockBtnSize
                                     setField(nextLp, "startToEnd", playId)
                                     setField(nextLp, "endToEnd", pId)
                                     setField(nextLp, "topToTop", pId)
@@ -3615,6 +3711,10 @@ object ControlCenterHook {
                                     setField(nextLp, "endToStart", unset)
                                     setField(nextLp, "topToBottom", unset)
                                     setField(nextLp, "bottomToTop", unset)
+                                    if (nextLp is ViewGroup.MarginLayoutParams) {
+                                        nextLp.marginStart = 0; nextLp.marginEnd = 0
+                                        nextLp.topMargin = 0; nextLp.bottomMargin = 0
+                                    }
                                     next.layoutParams = nextLp
                                 }
                             }
@@ -3625,11 +3725,18 @@ object ControlCenterHook {
                                     setField(tLp, "startToStart", pId)
                                     setField(tLp, "endToEnd", pId)
                                     setField(tLp, "topToBottom", coverId)
-                                    setField(tLp, "bottomToTopOf", artistId)
+                                    setField(tLp, "bottomToTop", artistId)
+                                    setField(tLp, "verticalChainStyle", 2)
                                     setField(tLp, "topToTop", unset)
                                     setField(tLp, "bottomToBottom", unset)
                                     tLp.width = 0
                                     tLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    if (tLp is ViewGroup.MarginLayoutParams) {
+                                        tLp.marginStart = (15 * density).toInt()
+                                        tLp.marginEnd = (10 * density).toInt()
+                                        tLp.topMargin = (10 * density).toInt()
+                                        tLp.bottomMargin = 0
+                                    }
                                     title.layoutParams = tLp
                                 }
                             }
@@ -3640,12 +3747,46 @@ object ControlCenterHook {
                                     setField(aLp, "startToStart", pId)
                                     setField(aLp, "endToEnd", pId)
                                     setField(aLp, "topToBottom", titleId)
-                                    setField(aLp, "bottomToTopOf", audioContainerId)
+                                    setField(aLp, "bottomToTop", audioContainerId)
                                     setField(aLp, "topToTop", unset)
                                     setField(aLp, "bottomToBottom", unset)
                                     aLp.width = 0
                                     aLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    if (aLp is ViewGroup.MarginLayoutParams) {
+                                        aLp.marginStart = (15 * density).toInt()
+                                        aLp.marginEnd = (10 * density).toInt()
+                                        aLp.topMargin = (1 * density).toInt()
+                                        aLp.bottomMargin = 0
+                                    }
                                     artist.layoutParams = aLp
+                                }
+                            }
+
+                            val hasSong = (title is TextView && title.text.isNotEmpty())
+                            if (hasSong) {
+                                title?.visibility = View.VISIBLE
+                                artist?.visibility = View.VISIBLE
+                                emptyState?.visibility = View.GONE
+                                cover?.visibility = View.VISIBLE
+                            } else {
+                                title?.visibility = View.GONE
+                                artist?.visibility = View.GONE
+                                emptyState?.visibility = View.VISIBLE
+                                if (emptyState != null) {
+                                    val esLp = emptyState.layoutParams
+                                    if (esLp != null && esLp.javaClass.name.contains("ConstraintLayout")) {
+                                        setField(esLp, "startToStart", pId)
+                                        setField(esLp, "endToEnd", pId)
+                                        setField(esLp, "topToTop", pId)
+                                        esLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                                        esLp.height = (40 * density).toInt()
+                                        if (esLp is ViewGroup.MarginLayoutParams) {
+                                            esLp.topMargin = (60 * density).toInt()
+                                            esLp.marginStart = (15 * density).toInt()
+                                            esLp.marginEnd = (15 * density).toInt()
+                                        }
+                                        emptyState.layoutParams = esLp
+                                    }
                                 }
                             }
 

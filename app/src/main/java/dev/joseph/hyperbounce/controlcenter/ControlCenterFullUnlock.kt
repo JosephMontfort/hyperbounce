@@ -493,6 +493,178 @@ object ControlCenterFullUnlock {
         return Pair(rightList, leftList)
     }
 
+    /**
+     * Packs smaller items adjacent to a 2x2 card into a single transparent 2D composite slot
+     * so that GridLayoutManager does not vertically stretch 2x1 cards or 1x1 circular tiles.
+     */
+    fun packCompositeSlots(input: List<SlotItem>, classLoader: ClassLoader): List<SlotItem> {
+        val result = ArrayList<SlotItem>()
+        var i = 0
+        var col = 0
+
+        while (i < input.size) {
+            val current = input[i]
+
+            // Case 1: 2x2 item at column 0, followed by smaller items
+            if (col == 0 && current.spanW == 2 && current.spanH == 2) {
+                var row0Rem = 2
+                var row1Rem = 2
+                var k = i + 1
+                val collected = ArrayList<SlotItem>()
+                while (k < input.size) {
+                    val cand = input[k]
+                    if (cand.spanH > 1 || cand.spanW > 2) break
+                    if (row0Rem >= cand.spanW) {
+                        row0Rem -= cand.spanW
+                        collected.add(cand)
+                        k++
+                    } else if (row1Rem >= cand.spanW) {
+                        row1Rem -= cand.spanW
+                        collected.add(cand)
+                        k++
+                    } else {
+                        break
+                    }
+                }
+                if (collected.isNotEmpty()) {
+                    val comp = createCompositeSlotItem(collected, classLoader)
+                    result.add(current)
+                    result.add(comp)
+                    i = k
+                    col = 0
+                    continue
+                }
+            }
+
+            // Case 2: Smaller items at column 0 followed by a 2x2 item
+            if (col == 0 && current.spanH == 1 && current.spanW <= 2) {
+                var row0Rem = 2
+                var row1Rem = 2
+                var k = i
+                val collected = ArrayList<SlotItem>()
+                var found2x2: SlotItem? = null
+                var nextI = -1
+
+                while (k < input.size) {
+                    val cand = input[k]
+                    if (cand.spanW == 2 && cand.spanH == 2) {
+                        if (collected.isNotEmpty()) {
+                            found2x2 = cand
+                            nextI = k + 1
+                        }
+                        break
+                    }
+                    if (cand.spanH > 1 || cand.spanW > 2) break
+                    if (row0Rem >= cand.spanW) {
+                        row0Rem -= cand.spanW
+                        collected.add(cand)
+                        k++
+                    } else if (row1Rem >= cand.spanW) {
+                        row1Rem -= cand.spanW
+                        collected.add(cand)
+                        k++
+                    } else {
+                        break
+                    }
+                }
+
+                if (found2x2 != null && collected.isNotEmpty()) {
+                    val comp = createCompositeSlotItem(collected, classLoader)
+                    result.add(comp)
+                    result.add(found2x2)
+                    i = nextI
+                    col = 0
+                    continue
+                }
+            }
+
+            // Normal item flow
+            result.add(current)
+            col = (col + current.spanW) % 4
+            i++
+        }
+
+        return result
+    }
+
+    fun createCompositeSlotItem(subSlots: List<SlotItem>, classLoader: ClassLoader): SlotItem {
+        val compositeId = "composite:" + subSlots.joinToString("+") { it.id }
+        val listItemInterface = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelListItem", false, classLoader)
+        val contentInterface = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelContent", false, classLoader)
+
+        var currentHolder: Any? = null
+
+        val itemProxy = Proxy.newProxyInstance(classLoader, arrayOf(listItemInterface), object : InvocationHandler {
+            override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? {
+                when (method.name) {
+                    "getHolder" -> return currentHolder
+                    "setHolder" -> {
+                        currentHolder = args?.getOrNull(0)
+                        return null
+                    }
+                    "getSpanSize" -> return 2
+                    "getType" -> return ControlCenterGrouping.VIEW_TYPE_COMPOSITE
+                    "onBindViewHolder" -> {
+                        val h = currentHolder
+                        if (h != null) {
+                            ControlCenterGrouping.bindCompositeSlotViewHolder(h, subSlots, classLoader)
+                        }
+                        return null
+                    }
+                    "onViewAttachedToWindow" -> {
+                        ControlCenterGrouping.attachCompositeSlot(currentHolder)
+                        return null
+                    }
+                    "onViewDetachedFromWindow" -> {
+                        ControlCenterGrouping.detachCompositeSlot(currentHolder)
+                        return null
+                    }
+                    "equals" -> return proxy === args?.getOrNull(0)
+                    "hashCode" -> return System.identityHashCode(proxy)
+                    "toString" -> return "CompositeListItem($compositeId)"
+                }
+                return null
+            }
+        })
+
+        val ownerProxy = Proxy.newProxyInstance(classLoader, arrayOf(contentInterface), object : InvocationHandler {
+            override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? {
+                when (method.name) {
+                    "getListItems" -> return listOf(itemProxy)
+                    "getPriority" -> return 20
+                    "getRightOrLeft" -> return true
+                    "createViewHolder" -> {
+                        val parent = args?.getOrNull(0) as? ViewGroup
+                        if (parent != null) {
+                            return ControlCenterGrouping.createCompositeSlotViewHolder(parent, classLoader)
+                        }
+                        return null
+                    }
+                    "onBindViewHolder" -> {
+                        val h = args?.getOrNull(0)
+                        if (h != null) {
+                            ControlCenterGrouping.bindCompositeSlotViewHolder(h, subSlots, classLoader)
+                        }
+                        return null
+                    }
+                    "equals" -> return proxy === args?.getOrNull(0)
+                    "hashCode" -> return System.identityHashCode(proxy)
+                    "toString" -> return "CompositeContent($compositeId)"
+                }
+                return null
+            }
+        })
+
+        return SlotItem(
+            id = compositeId,
+            owner = ownerProxy,
+            item = itemProxy,
+            viewType = ControlCenterGrouping.VIEW_TYPE_COMPOSITE,
+            spanW = 2,
+            spanH = 2
+        )
+    }
+
     // Cache of all active slots
     private val sKnownSlots = ConcurrentHashMap<String, SlotItem>()
 
@@ -915,6 +1087,9 @@ object ControlCenterFullUnlock {
                 newContentMap[headerEntry.first] = headerEntry.second
             }
 
+            // Dynamic 2D Slot Packaging to prevent stretching next to 2x2 cards
+            val packedSlots = packCompositeSlots(orderedSlots, classLoader)
+
             if (!isLandscape) {
                 // Portrait mode:
                 // 2. WordlessMode ("Show icon labels") - ONLY in Edit Mode!
@@ -926,8 +1101,8 @@ object ControlCenterFullUnlock {
                 }
 
                 // 3. All ordered active slots flow into this single adapter
-                for (i in orderedSlots.indices) {
-                    val slot = orderedSlots[i]
+                for (i in packedSlots.indices) {
+                    val slot = packedSlots[i]
                     val proxy = getOrCreateProxy(slot, classLoader, priority = 10 + i * 2, isRight = true)
                     newContentMap[proxy] = listOf(slot.item)
                 }
@@ -949,7 +1124,7 @@ object ControlCenterFullUnlock {
                 }
             } else {
                 // Landscape Mode: Dynamic Row Split Simulation (up to 5 rows on Right Side)
-                val (rightSlots, leftSlots) = calculateLandscapeRowSplit(orderedSlots, maxRightRows = MAX_LANDSCAPE_RIGHT_ROWS)
+                val (rightSlots, leftSlots) = calculateLandscapeRowSplit(packedSlots, maxRightRows = MAX_LANDSCAPE_RIGHT_ROWS)
 
                 if (isRightPanel) {
                     // Right Panel: gets rightSlots (first N rows, max 5 rows)
