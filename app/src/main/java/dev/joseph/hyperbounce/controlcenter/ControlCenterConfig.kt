@@ -857,12 +857,12 @@ object ControlCenterConfigHolder {
                         }
                     }
                 }
-            } catch (t: Throwable) {
-                Log.e(TAG, "updateAllVisibleTileBadges error", t)
             }
-        }
+        } catch (t: Throwable) {
+            Log.e(TAG, "updateAllVisibleTileBadges error", t)
         }
     }
+}
 
     @Volatile private var sLastExitEditTime: Long = 0L
 
