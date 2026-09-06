@@ -6,8 +6,10 @@ import android.content.SharedPreferences
 import android.net.Uri
 import android.text.TextUtils
 import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.ImageView
 import dev.joseph.hyperbounce.prefs.PREFS_GROUP
 import org.json.JSONObject
@@ -725,6 +727,27 @@ object ControlCenterConfigHolder {
         return null
     }
 
+    fun createMediaBadgeLayoutParams(parent: ViewGroup, badgeSize: Int): ViewGroup.LayoutParams {
+        if (parent.javaClass.name.contains("ConstraintLayout")) {
+            try {
+                val clpClass = parent.javaClass.classLoader?.loadClass("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+                    ?: Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+                val constructor = clpClass.getConstructor(Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                val lp = constructor.newInstance(badgeSize, badgeSize) as ViewGroup.MarginLayoutParams
+                val parentIdField = clpClass.getField("PARENT_ID")
+                val parentId = parentIdField.getInt(null)
+                clpClass.getField("bottomToBottom").setInt(lp, parentId)
+                clpClass.getField("endToEnd").setInt(lp, parentId)
+                return lp
+            } catch (t: Throwable) {
+                Log.e(TAG, "Error creating ConstraintLayout.LayoutParams via reflection", t)
+            }
+        }
+        return FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
+            gravity = Gravity.BOTTOM or Gravity.END
+        }
+    }
+
     fun updateAllVisibleTileBadges() {
         var rv = (sRecyclerView?.get() as? ViewGroup)
         if (rv == null) {
@@ -762,7 +785,8 @@ object ControlCenterConfigHolder {
                     val childCount = pRv.childCount
                     for (i in 0 until childCount) {
                         val itemView = pRv.getChildAt(i) ?: continue
-                    if (ControlCenterHook.isChildOfContainer(itemView)) continue
+                        try {
+                            if (ControlCenterHook.isChildOfContainer(itemView)) continue
 
                     val spec = getOrResolveTileSpec(itemView) ?: continue
                     val isCard = ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true))
@@ -861,25 +885,12 @@ object ControlCenterConfigHolder {
                         if (resizeHandle == null && itemView is ViewGroup) {
                             resizeHandle = ImageView(itemView.context).apply {
                                 id = resizeTag
-                                val lp = if (itemView is androidx.constraintlayout.widget.ConstraintLayout) {
-                                    androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(badgeSize, badgeSize).apply {
-                                        bottomToBottom = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-                                        endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-                                    }
-                                } else {
-                                    android.widget.FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
-                                        gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
-                                    }
-                                }
-                                layoutParams = lp
+                                layoutParams = createMediaBadgeLayoutParams(itemView, badgeSize)
                                 setImageDrawable(CurvedResizeHandleDrawable(density))
                             }
                             itemView.addView(resizeHandle)
-                        } else if (resizeHandle != null && itemView is androidx.constraintlayout.widget.ConstraintLayout && resizeHandle.layoutParams !is androidx.constraintlayout.widget.ConstraintLayout.LayoutParams) {
-                            resizeHandle.layoutParams = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(badgeSize, badgeSize).apply {
-                                bottomToBottom = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-                                endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-                            }
+                        } else if (resizeHandle != null && itemView.javaClass.name.contains("ConstraintLayout") && !resizeHandle.layoutParams.javaClass.name.contains("ConstraintLayout")) {
+                            resizeHandle.layoutParams = createMediaBadgeLayoutParams(itemView as ViewGroup, badgeSize)
                         }
                         if (resizeHandle != null) {
                             val shouldShowMediaResize = !sIsGroupSelectMode && !sIsDisassembleMode
@@ -1057,6 +1068,9 @@ object ControlCenterConfigHolder {
                             resizeHandle.isClickable = true
                             resizeHandle.setOnTouchListener(TileResizeDragTouchListener(itemView.context, spec, itemView, density))
                         }
+                    }
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "Error updating badges for child $i", t)
                     }
                 }
             }

@@ -18,6 +18,8 @@ import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.TextView
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Constructor
@@ -2799,6 +2801,201 @@ object ControlCenterHook {
                 }
             } catch (t: Throwable) {}
 
+            // 21. Secondary Panel Slider Synchronization: Brightness
+            try {
+                val bDelegateClass = Class.forName("miui.systemui.controlcenter.panel.secondary.brightness.BrightnessPanelSliderDelegate", false, classLoader)
+                for (m in bDelegateClass.declaredMethods) {
+                    if (m.name == "prepareShow" || m.name == "updateSize") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val res = chain.proceed()
+                            try {
+                                applyExpandedBrightnessLayout(chain.thisObject)
+                            } catch (t: Throwable) {}
+                            res
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val bAnimClass = Class.forName("miui.systemui.controlcenter.panel.secondary.brightness.BrightnessPanelAnimator", false, classLoader)
+                for (m in bAnimClass.declaredMethods) {
+                    if (m.name == "prepareExpand") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val res = chain.proceed()
+                            try {
+                                if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) {
+                                    val anim = chain.thisObject
+                                    val delegateField = anim.javaClass.getDeclaredField("sliderDelegate")
+                                    delegateField.isAccessible = true
+                                    val delegate = delegateField.get(anim)
+                                    if (delegate != null) {
+                                        applyExpandedBrightnessLayout(delegate)
+                                    }
+                                }
+                            } catch (t: Throwable) {}
+                            res
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            // 22. Secondary Panel Slider Synchronization: Volume
+            try {
+                val vDelegateClass = Class.forName("miui.systemui.controlcenter.panel.secondary.volume.VolumePanelDelegate", false, classLoader)
+                for (m in vDelegateClass.declaredMethods) {
+                    if (m.name == "prepareShow") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val res = chain.proceed()
+                            try {
+                                applyExpandedVolumeLayout(chain.thisObject)
+                            } catch (t: Throwable) {}
+                            res
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val vCtrlClass = Class.forName("com.android.systemui.miui.volume.VolumePanelViewController", false, classLoader)
+                for (m in vCtrlClass.declaredMethods) {
+                    if ((m.name == "updateExpandedH" && m.parameterTypes.size == 3) || m.name == "updateColumnH") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val res = chain.proceed()
+                            try {
+                                if (ControlCenterConfigHolder.sVolumeSliderHorizontal) {
+                                    val ctrl = chain.thisObject
+                                    val colsField = ctrl.javaClass.getDeclaredField("mColumns")
+                                    colsField.isAccessible = true
+                                    val cols = colsField.get(ctrl) as? List<*>
+                                    val f = ctrl.javaClass.getDeclaredField("mVolumeContentColumns")
+                                    f.isAccessible = true
+                                    val contentCols = f.get(ctrl) as? LinearLayout
+                                    if (cols != null && contentCols != null) {
+                                        applyExpandedVolumeLayoutDirect(cols, contentCols)
+                                    }
+                                }
+                            } catch (t: Throwable) {}
+                            res
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val vAnimClass = Class.forName("miui.systemui.controlcenter.panel.secondary.volume.VolumePanelAnimator", false, classLoader)
+                for (m in vAnimClass.declaredMethods) {
+                    if (m.name == "prepareExpand") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val res = chain.proceed()
+                            try {
+                                if (ControlCenterConfigHolder.sVolumeSliderHorizontal) {
+                                    val anim = chain.thisObject
+                                    val ctrlField = anim.javaClass.getDeclaredField("contentController")
+                                    ctrlField.isAccessible = true
+                                    val ctrlProvider = ctrlField.get(anim)
+                                    val getM = ctrlProvider?.javaClass?.getMethod("get")
+                                    val delegate = getM?.invoke(ctrlProvider)
+                                    if (delegate != null) {
+                                        applyExpandedVolumeLayout(delegate)
+                                    }
+                                }
+                            } catch (t: Throwable) {}
+                            res
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val volumeColumnClass = Class.forName("com.android.systemui.miui.volume.VolumeColumn", false, classLoader)
+                for (m in volumeColumnClass.declaredMethods) {
+                    if (m.name == "setSize" && m.parameterTypes.size == 2) {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val res = chain.proceed()
+                            try {
+                                if (ControlCenterConfigHolder.sVolumeSliderHorizontal) {
+                                    applyVolumeColumnHorizontal(chain.thisObject)
+                                }
+                            } catch (t: Throwable) {}
+                            res
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            // 23. Horizontal Progress Clipping for Volume Sliders
+            try {
+                val pvClass = Class.forName("com.android.systemui.miui.volume.MiuiVolumeSeekBarProgressView", false, classLoader)
+                for (m in pvClass.declaredMethods) {
+                    if (m.name == "setRoundRect") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            if (ControlCenterConfigHolder.sVolumeSliderHorizontal) {
+                                val pv = chain.thisObject as? View
+                                if (pv != null) {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                    val progressVal = (args?.getOrNull(0) as? Number)?.toInt() ?: 0
+                                    val parent = pv.parent as? View
+                                    val colParent = parent?.parent as? View
+                                    val slider = colParent?.findViewById<SeekBar>(pv.resources.getIdentifier("volume_column_slider", "id", pv.context.packageName))
+                                    val radius = 16f * pv.resources.displayMetrics.density
+                                    pv.clipToOutline = true
+                                    pv.outlineProvider = object : ViewOutlineProvider() {
+                                        override fun getOutline(view: View, outline: Outline) {
+                                            val maxVal = if (slider != null) slider.max.coerceAtLeast(1) else 100
+                                            val curVal = if (slider != null) slider.progress else progressVal
+                                            val frac = (curVal.toFloat() / maxVal).coerceIn(0f, 1f)
+                                            val w = (view.width * frac).toInt()
+                                            outline.setRoundRect(0, 0, w, view.height, radius)
+                                        }
+                                    }
+                                    pv.invalidateOutline()
+                                    return@intercept null
+                                }
+                            }
+                            chain.proceed()
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            // 24. Touch event remapping for horizontal VerticalSeekBar
+            try {
+                val vSeekBarClass = Class.forName("miui.systemui.widget.VerticalSeekBar", false, classLoader)
+                for (m in vSeekBarClass.declaredMethods) {
+                    if (m.name == "onTouchEvent") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val sb = chain.thisObject as? SeekBar
+                            val isHoriz = sb?.getTag(0x7f099991) == true
+                            if (isHoriz && sb != null) {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                if (args != null && args.isNotEmpty() && args[0] is MotionEvent) {
+                                    val ev = args[0] as MotionEvent
+                                    val contentW = sb.width - sb.paddingLeft - sb.paddingRight
+                                    val contentH = sb.height - sb.paddingTop - sb.paddingBottom
+                                    if (contentW > 0 && contentH > 0) {
+                                        val ratio = ((ev.x - sb.paddingLeft).toFloat() / contentW).coerceIn(0f, 1f)
+                                        val fakeY = sb.height - sb.paddingBottom - (ratio * contentH)
+                                        ev.setLocation(ev.x, fakeY)
+                                    }
+                                }
+                            }
+                            chain.proceed()
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
             hookedPluginLoaders.add(classLoader)
             Log.i(TAG, "Control Center Plugin hooks successfully attached!")
         } catch (t: Throwable) {
@@ -3172,16 +3369,7 @@ object ControlCenterHook {
                 if (resizeHandle == null && itemView is ViewGroup) {
                     resizeHandle = ImageView(ctx).apply {
                         id = resizeTag
-                        val lp = if (itemView is androidx.constraintlayout.widget.ConstraintLayout) {
-                            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(badgeSize, badgeSize).apply {
-                                bottomToBottom = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-                                endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-                            }
-                        } else {
-                            FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
-                                gravity = Gravity.BOTTOM or Gravity.END
-                            }
-                        }
+                        val lp = ControlCenterConfigHolder.createMediaBadgeLayoutParams(itemView, badgeSize)
                         layoutParams = lp
                         setImageDrawable(CurvedResizeHandleDrawable(density))
                         setOnClickListener {
@@ -3189,11 +3377,8 @@ object ControlCenterHook {
                         }
                     }
                     itemView.addView(resizeHandle)
-                } else if (resizeHandle != null && itemView is androidx.constraintlayout.widget.ConstraintLayout && resizeHandle.layoutParams !is androidx.constraintlayout.widget.ConstraintLayout.LayoutParams) {
-                    resizeHandle.layoutParams = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(badgeSize, badgeSize).apply {
-                        bottomToBottom = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-                        endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-                    }
+                } else if (resizeHandle != null && itemView.javaClass.name.contains("ConstraintLayout") && !resizeHandle.layoutParams.javaClass.name.contains("ConstraintLayout")) {
+                    resizeHandle.layoutParams = ControlCenterConfigHolder.createMediaBadgeLayoutParams(itemView as ViewGroup, badgeSize)
                 }
                 if (resizeHandle != null) {
                     resizeHandle.visibility = if (shouldShow) View.VISIBLE else View.GONE
@@ -3218,6 +3403,401 @@ object ControlCenterHook {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "applyMediaPlayerLayout error", t)
+        }
+    }
+
+    fun applyExpandedBrightnessLayout(delegate: Any) {
+        try {
+            val isHorizontal = ControlCenterConfigHolder.sBrightnessSliderHorizontal
+            val delClass = delegate.javaClass
+            var binding: Any? = null
+            try {
+                val bField = delClass.getDeclaredField("binding")
+                bField.isAccessible = true
+                binding = bField.get(delegate)
+            } catch (t: Throwable) {}
+
+            var toggleSliderView: View? = null
+            var slider: SeekBar? = null
+            var icon: View? = null
+            var progress: View? = null
+            var progressBg: View? = null
+
+            if (binding != null) {
+                try {
+                    val tsField = binding.javaClass.getField("toggleSlider")
+                    val tsBinding = tsField.get(binding)
+                    if (tsBinding != null) {
+                        toggleSliderView = tsBinding.javaClass.getField("toggleSlider").get(tsBinding) as? View
+                        slider = tsBinding.javaClass.getField("slider").get(tsBinding) as? SeekBar
+                        icon = tsBinding.javaClass.getField("icon").get(tsBinding) as? View
+                        progress = tsBinding.javaClass.getField("progress").get(tsBinding) as? View
+                        progressBg = tsBinding.javaClass.getField("progressBg").get(tsBinding) as? View
+                    }
+                } catch (t: Throwable) {}
+            }
+
+            if (toggleSliderView == null) return
+
+            val ctx = toggleSliderView.context
+            val density = ctx.resources.displayMetrics.density
+            val cardHId = ctx.resources.getIdentifier("qs_card_item_height", "dimen", ctx.packageName)
+            val cardH = if (cardHId != 0) ctx.resources.getDimensionPixelSize(cardHId) else (71.5f * density).toInt()
+            val progressRadius = 16f * density
+
+            if (isHorizontal) {
+                val lp = toggleSliderView.layoutParams
+                if (lp != null) {
+                    lp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                    lp.height = cardH
+                    if (lp is ViewGroup.MarginLayoutParams) {
+                        lp.marginStart = (16 * density).toInt()
+                        lp.marginEnd = (16 * density).toInt()
+                    }
+                    toggleSliderView.layoutParams = lp
+                }
+
+                if (slider != null) {
+                    slider.rotation = 0f
+                    slider.setTag(0x7f099991, true)
+                    val sLp = slider.layoutParams
+                    if (sLp != null) {
+                        sLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                        sLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+                        slider.layoutParams = sLp
+                    }
+                    try {
+                        val injM = slider.javaClass.getDeclaredMethod("getInjector")
+                        injM.isAccessible = true
+                        val inj = injM.invoke(slider)
+                        if (inj != null) {
+                            val setVertM = inj.javaClass.getMethod("setVertical", Boolean::class.javaPrimitiveType)
+                            setVertM.invoke(inj, false)
+                        }
+                    } catch (t: Throwable) {}
+                    try {
+                        val getDragAnimM = slider.javaClass.getMethod("getDragAnim")
+                        val dragAnim = getDragAnimM.invoke(slider)
+                        if (dragAnim != null) {
+                            val setDragEnabledM = dragAnim.javaClass.getMethod("setDragEnabled", Boolean::class.javaPrimitiveType)
+                            setDragEnabledM.invoke(dragAnim, false)
+                        }
+                    } catch (t: Throwable) {}
+                    try {
+                        val ghField = slider.javaClass.getDeclaredField("gestureHelper")
+                        ghField.isAccessible = true
+                        val gh = ghField.get(slider)
+                        if (gh != null) {
+                            var c: Class<*>? = gh.javaClass
+                            while (c != null && c != Any::class.java) {
+                                try {
+                                    val vf = c.getDeclaredField("vertical")
+                                    vf.isAccessible = true
+                                    vf.set(gh, java.lang.Boolean.FALSE)
+                                    break
+                                } catch (e: NoSuchFieldException) {
+                                    c = c.superclass
+                                }
+                            }
+                        }
+                    } catch (t: Throwable) {}
+                }
+
+                if (progress != null && slider != null) {
+                    val pLp = progress.layoutParams
+                    if (pLp != null) {
+                        pLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                        pLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+                        progress.layoutParams = pLp
+                    }
+                    progress.clipToOutline = true
+                    progress.outlineProvider = object : ViewOutlineProvider() {
+                        override fun getOutline(view: View, outline: Outline) {
+                            val maxVal = slider.max.coerceAtLeast(1)
+                            val curVal = slider.progress.coerceIn(0, maxVal)
+                            val frac = curVal.toFloat() / maxVal
+                            val w = (view.width * frac).toInt()
+                            outline.setRoundRect(0, 0, w, view.height, progressRadius)
+                        }
+                    }
+                    progress.invalidateOutline()
+                }
+
+                if (progressBg != null) {
+                    val bLp = progressBg.layoutParams
+                    if (bLp != null) {
+                        bLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                        bLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+                        progressBg.layoutParams = bLp
+                    }
+                }
+
+                if (icon != null) {
+                    val iLp = icon.layoutParams as? FrameLayout.LayoutParams
+                    if (iLp != null) {
+                        iLp.gravity = Gravity.CENTER_VERTICAL or Gravity.START
+                        iLp.marginStart = (18 * density).toInt()
+                        iLp.bottomMargin = 0
+                        icon.layoutParams = iLp
+                    }
+                }
+            } else {
+                val stockWId = ctx.resources.getIdentifier("brightness_panel_slider_width_large", "dimen", ctx.packageName)
+                val stockHId = ctx.resources.getIdentifier("brightness_panel_slider_height_large", "dimen", ctx.packageName)
+                val stockW = if (stockWId != 0) ctx.resources.getDimensionPixelSize(stockWId) else (76 * density).toInt()
+                val stockH = if (stockHId != 0) ctx.resources.getDimensionPixelSize(stockHId) else (195 * density).toInt()
+
+                val lp = toggleSliderView.layoutParams
+                if (lp != null) {
+                    lp.width = stockW
+                    lp.height = stockH
+                    toggleSliderView.layoutParams = lp
+                }
+
+                if (slider != null) {
+                    slider.rotation = 270f
+                    slider.setTag(0x7f099991, false)
+                    val sLp = slider.layoutParams
+                    if (sLp != null) {
+                        sLp.width = stockH
+                        sLp.height = stockW
+                        slider.layoutParams = sLp
+                    }
+                    try {
+                        val injM = slider.javaClass.getDeclaredMethod("getInjector")
+                        injM.isAccessible = true
+                        val inj = injM.invoke(slider)
+                        if (inj != null) {
+                            val setVertM = inj.javaClass.getMethod("setVertical", Boolean::class.javaPrimitiveType)
+                            setVertM.invoke(inj, true)
+                        }
+                    } catch (t: Throwable) {}
+                    try {
+                        val getDragAnimM = slider.javaClass.getMethod("getDragAnim")
+                        val dragAnim = getDragAnimM.invoke(slider)
+                        if (dragAnim != null) {
+                            val setDragEnabledM = dragAnim.javaClass.getMethod("setDragEnabled", Boolean::class.javaPrimitiveType)
+                            setDragEnabledM.invoke(dragAnim, true)
+                        }
+                    } catch (t: Throwable) {}
+                    try {
+                        val ghField = slider.javaClass.getDeclaredField("gestureHelper")
+                        ghField.isAccessible = true
+                        val gh = ghField.get(slider)
+                        if (gh != null) {
+                            var c: Class<*>? = gh.javaClass
+                            while (c != null && c != Any::class.java) {
+                                try {
+                                    val vf = c.getDeclaredField("vertical")
+                                    vf.isAccessible = true
+                                    vf.set(gh, java.lang.Boolean.TRUE)
+                                    break
+                                } catch (e: NoSuchFieldException) {
+                                    c = c.superclass
+                                }
+                            }
+                        }
+                    } catch (t: Throwable) {}
+                }
+
+                if (icon != null) {
+                    val iLp = icon.layoutParams as? FrameLayout.LayoutParams
+                    if (iLp != null) {
+                        iLp.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+                        iLp.marginStart = 0
+                        iLp.bottomMargin = (18 * density).toInt()
+                        icon.layoutParams = iLp
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "applyExpandedBrightnessLayout error", t)
+        }
+    }
+
+    fun applyExpandedVolumeLayout(delegate: Any) {
+        try {
+            var ctrl: Any? = null
+            for (field in delegate.javaClass.declaredFields) {
+                field.isAccessible = true
+                val obj = field.get(delegate)
+                if (obj != null && obj.javaClass.name.contains("VolumePanelViewController")) {
+                    ctrl = obj
+                    break
+                }
+            }
+            if (ctrl == null) {
+                for (m in delegate.javaClass.declaredMethods) {
+                    if (m.name.contains("Controller", ignoreCase = true) && m.parameterTypes.isEmpty()) {
+                        m.isAccessible = true
+                        val obj = m.invoke(delegate)
+                        if (obj != null && obj.javaClass.name.contains("VolumePanelViewController")) {
+                            ctrl = obj
+                            break
+                        }
+                    }
+                }
+            }
+            if (ctrl != null) {
+                val colsField = ctrl.javaClass.getDeclaredField("mColumns")
+                colsField.isAccessible = true
+                val cols = colsField.get(ctrl) as? List<*>
+                val f = ctrl.javaClass.getDeclaredField("mVolumeContentColumns")
+                f.isAccessible = true
+                val contentCols = f.get(ctrl) as? LinearLayout
+                if (cols != null && contentCols != null) {
+                    applyExpandedVolumeLayoutDirect(cols, contentCols)
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "applyExpandedVolumeLayout error", t)
+        }
+    }
+
+    fun applyExpandedVolumeLayoutDirect(cols: List<*>, contentCols: LinearLayout) {
+        try {
+            val isHorizontal = ControlCenterConfigHolder.sVolumeSliderHorizontal
+            if (isHorizontal) {
+                contentCols.orientation = LinearLayout.VERTICAL
+                val pLp = contentCols.layoutParams
+                if (pLp != null) {
+                    pLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                    contentCols.layoutParams = pLp
+                }
+                for (col in cols) {
+                    if (col != null) {
+                        applyVolumeColumnHorizontal(col)
+                    }
+                }
+            } else {
+                contentCols.orientation = LinearLayout.HORIZONTAL
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "applyExpandedVolumeLayoutDirect error", t)
+        }
+    }
+
+    fun applyVolumeColumnHorizontal(col: Any) {
+        try {
+            val colClass = col.javaClass
+            val viewField = colClass.getField("view")
+            val colView = viewField.get(col) as? View ?: return
+            val ctx = colView.context
+            val density = ctx.resources.displayMetrics.density
+
+            val parent = colView.parent as? LinearLayout
+            if (parent != null && parent.orientation != LinearLayout.VERTICAL) {
+                parent.orientation = LinearLayout.VERTICAL
+                val pLp = parent.layoutParams
+                if (pLp != null) {
+                    pLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                    parent.layoutParams = pLp
+                }
+            }
+
+            val colH = (48 * density).toInt()
+            val vMargin = (3 * density).toInt()
+            val hMargin = (12 * density).toInt()
+
+            val lp = colView.layoutParams as? ViewGroup.MarginLayoutParams ?: LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, colH)
+            lp.width = ViewGroup.LayoutParams.MATCH_PARENT
+            lp.height = colH
+            lp.setMargins(hMargin, vMargin, hMargin, vMargin)
+            colView.layoutParams = lp
+
+            val slider = try {
+                colClass.getField("slider").get(col) as? SeekBar
+            } catch (t: Throwable) {
+                colView.findViewById<SeekBar>(ctx.resources.getIdentifier("volume_column_slider", "id", ctx.packageName))
+            }
+
+            if (slider != null) {
+                slider.rotation = 0f
+                slider.setTag(0x7f099991, true)
+                val sLp = slider.layoutParams
+                if (sLp != null) {
+                    sLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                    sLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+                    if (sLp is ViewGroup.MarginLayoutParams) {
+                        sLp.setMargins(0, 0, 0, 0)
+                    }
+                    slider.layoutParams = sLp
+                }
+                try {
+                    val injField = slider.javaClass.getDeclaredField("mInjector")
+                    injField.isAccessible = true
+                    val inj = injField.get(slider)
+                    if (inj != null) {
+                        val setVM = inj.javaClass.getMethod("setVertical", Boolean::class.javaPrimitiveType)
+                        setVM.invoke(inj, false)
+                    }
+                } catch (t: Throwable) {}
+            }
+
+            val progressBg = try {
+                colClass.getField("progressViewBg").get(col) as? View
+            } catch (t: Throwable) {
+                colView.findViewById<View>(ctx.resources.getIdentifier("volume_column_view", "id", ctx.packageName))
+            }
+            if (progressBg != null) {
+                val bgLp = progressBg.layoutParams
+                if (bgLp != null) {
+                    bgLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                    bgLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+                    if (bgLp is ViewGroup.MarginLayoutParams) {
+                        bgLp.setMargins(0, 0, 0, 0)
+                    }
+                    progressBg.layoutParams = bgLp
+                }
+            }
+
+            val progressView = try {
+                colClass.getField("progressView").get(col) as? View
+            } catch (t: Throwable) {
+                colView.findViewById<View>(ctx.resources.getIdentifier("volume_progress_view", "id", ctx.packageName))
+            }
+            if (progressView != null) {
+                val pvLp = progressView.layoutParams
+                if (pvLp != null) {
+                    pvLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                    pvLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+                    if (pvLp is ViewGroup.MarginLayoutParams) {
+                        pvLp.setMargins(0, 0, 0, 0)
+                    }
+                    progressView.layoutParams = pvLp
+                }
+                if (slider != null) {
+                    val radius = 16f * density
+                    progressView.clipToOutline = true
+                    progressView.outlineProvider = object : ViewOutlineProvider() {
+                        override fun getOutline(view: View, outline: Outline) {
+                            val maxVal = slider.max.coerceAtLeast(1)
+                            val curVal = slider.progress.coerceIn(0, maxVal)
+                            val frac = curVal.toFloat() / maxVal
+                            val w = (view.width * frac).toInt()
+                            outline.setRoundRect(0, 0, w, view.height, radius)
+                        }
+                    }
+                    progressView.invalidateOutline()
+                }
+            }
+
+            val icon = try {
+                colClass.getField("icon").get(col) as? View
+            } catch (t: Throwable) {
+                colView.findViewById<View>(ctx.resources.getIdentifier("volume_column_icon", "id", ctx.packageName))
+            }
+            if (icon != null) {
+                val iLp = icon.layoutParams as? FrameLayout.LayoutParams
+                if (iLp != null) {
+                    iLp.gravity = Gravity.CENTER_VERTICAL or Gravity.START
+                    iLp.marginStart = (14 * density).toInt()
+                    iLp.bottomMargin = 0
+                    icon.layoutParams = iLp
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "applyVolumeColumnHorizontal error", t)
         }
     }
 }
