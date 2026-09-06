@@ -235,6 +235,7 @@ object ControlCenterConfigHolder {
                         }
                     }
                     sMediaPlayerSize = json.optString("media_player_size", sMediaPlayerSize)
+                    if (sMediaPlayerSize == "1x1") sMediaPlayerSize = "2x2"
                     sBrightnessSliderHorizontal = json.optBoolean("brightness_slider_horizontal", sBrightnessSliderHorizontal)
                     sVolumeSliderHorizontal = json.optBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
 
@@ -727,8 +728,17 @@ object ControlCenterConfigHolder {
         return null
     }
 
+    fun isConstraintLayout(view: View?): Boolean {
+        var c: Class<*>? = view?.javaClass
+        while (c != null && c != Any::class.java) {
+            if (c.name.contains("ConstraintLayout")) return true
+            c = c.superclass
+        }
+        return false
+    }
+
     fun createMediaBadgeLayoutParams(parent: ViewGroup, badgeSize: Int): ViewGroup.LayoutParams {
-        if (parent.javaClass.name.contains("ConstraintLayout")) {
+        if (isConstraintLayout(parent)) {
             try {
                 val clpClass = parent.javaClass.classLoader?.loadClass("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
                     ?: Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
@@ -889,7 +899,7 @@ object ControlCenterConfigHolder {
                                 setImageDrawable(CurvedResizeHandleDrawable(density))
                             }
                             itemView.addView(resizeHandle)
-                        } else if (resizeHandle != null && itemView.javaClass.name.contains("ConstraintLayout") && !resizeHandle.layoutParams.javaClass.name.contains("ConstraintLayout")) {
+                        } else if (resizeHandle != null && isConstraintLayout(itemView) && !resizeHandle.layoutParams.javaClass.name.contains("ConstraintLayout")) {
                             resizeHandle.layoutParams = createMediaBadgeLayoutParams(itemView as ViewGroup, badgeSize)
                         }
                         if (resizeHandle != null) {
@@ -1373,7 +1383,7 @@ object ControlCenterConfigHolder {
     fun setTileToNormal(ctx: Context, spec: String?, tileView: View?) {
         if (spec == null) return
         if ("media".equals(spec, ignoreCase = true)) {
-            sMediaPlayerSize = "1x1"
+            sMediaPlayerSize = "2x2"
             savePriorities(ctx)
             refreshRecyclerView(tileView)
             return
@@ -1455,7 +1465,6 @@ object ControlCenterConfigHolder {
         sMediaPlayerSize = when (sMediaPlayerSize) {
             "2x2" -> "2x1"
             "2x1" -> "1x2"
-            "1x2" -> "1x1"
             else -> "2x2"
         }
         savePriorities(ctx)

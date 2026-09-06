@@ -2943,9 +2943,15 @@ object ControlCenterHook {
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                                     val progressVal = (args?.getOrNull(0) as? Number)?.toInt() ?: 0
-                                    val parent = pv.parent as? View
-                                    val colParent = parent?.parent as? View
-                                    val slider = colParent?.findViewById<SeekBar>(pv.resources.getIdentifier("volume_column_slider", "id", pv.context.packageName))
+                                    var p: Any? = pv.parent
+                                    var slider: SeekBar? = null
+                                    while (p != null) {
+                                        if (p is View) {
+                                            slider = p.findViewById<SeekBar>(pv.resources.getIdentifier("volume_column_slider", "id", pv.context.packageName))
+                                            if (slider != null) break
+                                        }
+                                        p = (p as? View)?.parent
+                                    }
                                     val radius = 16f * pv.resources.displayMetrics.density
                                     pv.clipToOutline = true
                                     pv.outlineProvider = object : ViewOutlineProvider() {
@@ -2967,30 +2973,102 @@ object ControlCenterHook {
                 }
             } catch (t: Throwable) {}
 
-            // 24. Touch event remapping for horizontal VerticalSeekBar
-            try {
-                val vSeekBarClass = Class.forName("miui.systemui.widget.VerticalSeekBar", false, classLoader)
-                for (m in vSeekBarClass.declaredMethods) {
-                    if (m.name == "onTouchEvent") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            val sb = chain.thisObject as? SeekBar
-                            val isHoriz = sb?.getTag(0x7f099991) == true
-                            if (isHoriz && sb != null) {
-                                val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                                if (args != null && args.isNotEmpty() && args[0] is MotionEvent) {
-                                    val ev = args[0] as MotionEvent
-                                    val contentW = sb.width - sb.paddingLeft - sb.paddingRight
-                                    val contentH = sb.height - sb.paddingTop - sb.paddingBottom
-                                    if (contentW > 0 && contentH > 0) {
-                                        val ratio = ((ev.x - sb.paddingLeft).toFloat() / contentW).coerceIn(0f, 1f)
-                                        val fakeY = sb.height - sb.paddingBottom - (ratio * contentH)
-                                        ev.setLocation(ev.x, fakeY)
+            // 24. Touch and Draw remapping for horizontal VerticalSeekBar
+            val vSeekBarClassNames = listOf(
+                "miui.systemui.widget.VerticalSeekBar",
+                "com.android.systemui.miui.volume.MiuiVolumeSeekBar",
+                "com.android.systemui.miui.volume.widget.VolumeVerticalSeekBar"
+            )
+            for (className in vSeekBarClassNames) {
+                try {
+                    val vClass = Class.forName(className, false, classLoader)
+                    for (m in vClass.declaredMethods) {
+                        if (m.name == "onTouchEvent") {
+                            m.isAccessible = true
+                            module.hook(m).intercept { chain ->
+                                val sb = chain.thisObject as? SeekBar
+                                val isHoriz = sb?.getTag(0x7f099991) == true
+                                if (isHoriz && sb != null) {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                    val ev = args?.getOrNull(0) as? MotionEvent
+                                    if (ev != null) {
+                                        try {
+                                            val absSeekBarClass = SeekBar::class.java.superclass
+                                            val superOnTouchEvent = absSeekBarClass.getDeclaredMethod("onTouchEvent", MotionEvent::class.java)
+                                            superOnTouchEvent.isAccessible = true
+                                            val res = superOnTouchEvent.invoke(sb, ev) as? Boolean ?: true
+                                            return@intercept res
+                                        } catch (t: Throwable) {}
                                     }
                                 }
+                                chain.proceed()
                             }
-                            chain.proceed()
+                        } else if (m.name == "dispatchTouchEvent") {
+                            m.isAccessible = true
+                            module.hook(m).intercept { chain ->
+                                val sb = chain.thisObject as? SeekBar
+                                val isHoriz = sb?.getTag(0x7f099991) == true
+                                if (isHoriz && sb != null) {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                    val ev = args?.getOrNull(0) as? MotionEvent
+                                    if (ev != null) {
+                                        try {
+                                            val viewClass = View::class.java
+                                            val superDispatch = viewClass.getDeclaredMethod("dispatchTouchEvent", MotionEvent::class.java)
+                                            superDispatch.isAccessible = true
+                                            val res = superDispatch.invoke(sb, ev) as? Boolean ?: true
+                                            return@intercept res
+                                        } catch (t: Throwable) {}
+                                    }
+                                }
+                                chain.proceed()
+                            }
+                        } else if (m.name == "onDraw") {
+                            m.isAccessible = true
+                            module.hook(m).intercept { chain ->
+                                val sb = chain.thisObject as? SeekBar
+                                val isHoriz = sb?.getTag(0x7f099991) == true
+                                if (isHoriz && sb != null) {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                    val canvas = args?.getOrNull(0) as? Canvas
+                                    if (canvas != null) {
+                                        try {
+                                            val pbClass = android.widget.ProgressBar::class.java
+                                            val pbOnDraw = pbClass.getDeclaredMethod("onDraw", Canvas::class.java)
+                                            pbOnDraw.isAccessible = true
+                                            pbOnDraw.invoke(sb, canvas)
+                                            sb.thumb?.draw(canvas)
+                                            return@intercept null
+                                        } catch (t: Throwable) {}
+                                    }
+                                }
+                                chain.proceed()
+                            }
+                        }
+                    }
+                } catch (t: Throwable) {}
+            }
+
+            // 25. Re-layout expanded volume columns vertically during/after animation
+            try {
+                val animClass = Class.forName("com.android.systemui.miui.volume.VolumeExpandCollapsedAnimator", false, classLoader)
+                for (m in animClass.declaredMethods) {
+                    if (m.name == "onAnimComplete" || m.name == "onAnimBegin" || m.name.contains("frameCallback")) {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val res = chain.proceed()
+                            try {
+                                if (ControlCenterConfigHolder.sVolumeSliderHorizontal) {
+                                    val animator = chain.args.getOrNull(0) ?: chain.thisObject
+                                    if (animator != null && animator.javaClass.name.contains("VolumeExpandCollapsedAnimator")) {
+                                        relayoutVolumeColumnsVertically(animator)
+                                    }
+                                }
+                            } catch (t: Throwable) {}
+                            res
                         }
                     }
                 }
@@ -3082,7 +3160,7 @@ object ControlCenterHook {
                     val injector = getInjectorM.invoke(slider)
                     if (injector != null) {
                         val setVertM = injector.javaClass.getMethod("setVertical", Boolean::class.javaPrimitiveType)
-                        setVertM.invoke(injector, !isHorizontal)
+                        setVertM.invoke(injector, false)
                     }
                 } catch (t: Throwable) {}
 
@@ -3278,7 +3356,8 @@ object ControlCenterHook {
             val tallH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId) else (157 * density).toInt()
 
             val isLandscape = ctx.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-            val size = if (isLandscape) "4x1" else ControlCenterConfigHolder.sMediaPlayerSize
+            var size = if (isLandscape) "4x1" else ControlCenterConfigHolder.sMediaPlayerSize
+            if (size == "1x1") size = "2x2"
 
             fun getView(name: String): View? {
                 return try {
@@ -3300,6 +3379,7 @@ object ControlCenterHook {
             val next = getView("next")
             val deviceIcon = getView("deviceIcon")
             val emptyState = getView("emptyState")
+            val audioContainer = getView("audioContainer")
 
             val curLp = itemView.layoutParams
             if (curLp != null) {
@@ -3311,53 +3391,132 @@ object ControlCenterHook {
                         curLp.height = cardH
                         itemView.layoutParams = curLp
                     }
+                    title?.visibility = View.GONE
+                    artist?.visibility = View.GONE
+                    emptyState?.visibility = View.GONE
+                    deviceIcon?.visibility = View.GONE
                     prev?.visibility = View.GONE
                     next?.visibility = View.GONE
-                    deviceIcon?.visibility = View.GONE
                     cover?.visibility = View.VISIBLE
-                    title?.visibility = View.VISIBLE
-                    artist?.visibility = View.VISIBLE
                     play?.visibility = View.VISIBLE
+
+                    if (cover != null && ControlCenterConfigHolder.isConstraintLayout(itemView)) {
+                        try {
+                            val clpClass = itemView.javaClass.classLoader?.loadClass("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+                                ?: Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+                            val cSize = (48 * density).toInt()
+                            val cLp = cover.layoutParams
+                            if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
+                                cLp.width = cSize
+                                cLp.height = cSize
+                                val pId = clpClass.getField("PARENT_ID").getInt(null)
+                                val unset = clpClass.getField("UNSET").getInt(null)
+                                clpClass.getField("startToStart").setInt(cLp, pId)
+                                clpClass.getField("topToTop").setInt(cLp, pId)
+                                clpClass.getField("bottomToBottom").setInt(cLp, pId)
+                                clpClass.getField("endToEnd").setInt(cLp, unset)
+                                if (cLp is ViewGroup.MarginLayoutParams) {
+                                    cLp.marginStart = (12 * density).toInt()
+                                    cLp.topMargin = 0
+                                    cLp.bottomMargin = 0
+                                }
+                                cover.layoutParams = cLp
+                            }
+                        } catch (t: Throwable) {}
+                    }
+
+                    if (audioContainer != null && ControlCenterConfigHolder.isConstraintLayout(itemView)) {
+                        try {
+                            val clpClass = itemView.javaClass.classLoader?.loadClass("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+                                ?: Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+                            val acLp = audioContainer.layoutParams
+                            if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
+                                acLp.width = ViewGroup.LayoutParams.WRAP_CONTENT
+                                acLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                val pId = clpClass.getField("PARENT_ID").getInt(null)
+                                val unset = clpClass.getField("UNSET").getInt(null)
+                                clpClass.getField("endToEnd").setInt(acLp, pId)
+                                clpClass.getField("topToTop").setInt(acLp, pId)
+                                clpClass.getField("bottomToBottom").setInt(acLp, pId)
+                                clpClass.getField("startToStart").setInt(acLp, unset)
+                                if (acLp is ViewGroup.MarginLayoutParams) {
+                                    acLp.marginEnd = (16 * density).toInt()
+                                    acLp.bottomMargin = 0
+                                    acLp.topMargin = 0
+                                }
+                                audioContainer.layoutParams = acLp
+                            }
+                        } catch (t: Throwable) {}
+                    }
                 }
                 "1x2" -> {
                     if (curLp != null && curLp.height != tallH) {
                         curLp.height = tallH
                         itemView.layoutParams = curLp
                     }
-                    prev?.visibility = View.GONE
-                    next?.visibility = View.GONE
-                    deviceIcon?.visibility = View.GONE
-                    artist?.visibility = View.GONE
-                    cover?.visibility = View.VISIBLE
-                    title?.visibility = View.VISIBLE
-                    play?.visibility = View.VISIBLE
-                }
-                "1x1" -> {
-                    if (curLp != null && curLp.height != cardH) {
-                        curLp.height = cardH
-                        itemView.layoutParams = curLp
-                    }
-                    prev?.visibility = View.GONE
-                    next?.visibility = View.GONE
-                    deviceIcon?.visibility = View.GONE
                     title?.visibility = View.GONE
                     artist?.visibility = View.GONE
                     emptyState?.visibility = View.GONE
+                    deviceIcon?.visibility = View.GONE
+                    prev?.visibility = View.GONE
+                    next?.visibility = View.GONE
                     cover?.visibility = View.VISIBLE
                     play?.visibility = View.VISIBLE
+
+                    if (cover != null && ControlCenterConfigHolder.isConstraintLayout(itemView)) {
+                        try {
+                            val clpClass = itemView.javaClass.classLoader?.loadClass("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+                                ?: Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+                            val cSize = (52 * density).toInt()
+                            val cLp = cover.layoutParams
+                            if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
+                                cLp.width = cSize
+                                cLp.height = cSize
+                                val pId = clpClass.getField("PARENT_ID").getInt(null)
+                                val unset = clpClass.getField("UNSET").getInt(null)
+                                clpClass.getField("startToStart").setInt(cLp, pId)
+                                clpClass.getField("endToEnd").setInt(cLp, pId)
+                                clpClass.getField("topToTop").setInt(cLp, pId)
+                                clpClass.getField("bottomToBottom").setInt(cLp, unset)
+                                if (cLp is ViewGroup.MarginLayoutParams) {
+                                    cLp.topMargin = (20 * density).toInt()
+                                    cLp.marginStart = 0
+                                    cLp.marginEnd = 0
+                                }
+                                cover.layoutParams = cLp
+                            }
+                        } catch (t: Throwable) {}
+                    }
+
+                    if (audioContainer != null && ControlCenterConfigHolder.isConstraintLayout(itemView)) {
+                        try {
+                            val clpClass = itemView.javaClass.classLoader?.loadClass("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+                                ?: Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+                            val acLp = audioContainer.layoutParams
+                            if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
+                                acLp.width = ViewGroup.LayoutParams.WRAP_CONTENT
+                                acLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                val pId = clpClass.getField("PARENT_ID").getInt(null)
+                                val unset = clpClass.getField("UNSET").getInt(null)
+                                clpClass.getField("startToStart").setInt(acLp, pId)
+                                clpClass.getField("endToEnd").setInt(acLp, pId)
+                                clpClass.getField("bottomToBottom").setInt(acLp, pId)
+                                clpClass.getField("topToTop").setInt(acLp, unset)
+                                if (acLp is ViewGroup.MarginLayoutParams) {
+                                    acLp.bottomMargin = (20 * density).toInt()
+                                    acLp.marginEnd = 0
+                                    acLp.marginStart = 0
+                                }
+                                audioContainer.layoutParams = acLp
+                            }
+                        } catch (t: Throwable) {}
+                    }
                 }
                 else -> { // "2x2"
                     if (curLp != null && curLp.height != tallH) {
                         curLp.height = tallH
                         itemView.layoutParams = curLp
                     }
-                    prev?.visibility = View.VISIBLE
-                    next?.visibility = View.VISIBLE
-                    deviceIcon?.visibility = View.VISIBLE
-                    cover?.visibility = View.VISIBLE
-                    title?.visibility = View.VISIBLE
-                    artist?.visibility = View.VISIBLE
-                    play?.visibility = View.VISIBLE
                 }
             }
 
@@ -3377,7 +3536,7 @@ object ControlCenterHook {
                         }
                     }
                     itemView.addView(resizeHandle)
-                } else if (resizeHandle != null && itemView.javaClass.name.contains("ConstraintLayout") && !resizeHandle.layoutParams.javaClass.name.contains("ConstraintLayout")) {
+                } else if (resizeHandle != null && ControlCenterConfigHolder.isConstraintLayout(itemView) && !resizeHandle.layoutParams.javaClass.name.contains("ConstraintLayout")) {
                     resizeHandle.layoutParams = ControlCenterConfigHolder.createMediaBadgeLayoutParams(itemView as ViewGroup, badgeSize)
                 }
                 if (resizeHandle != null) {
@@ -3443,16 +3602,24 @@ object ControlCenterHook {
             val density = ctx.resources.displayMetrics.density
             val cardHId = ctx.resources.getIdentifier("qs_card_item_height", "dimen", ctx.packageName)
             val cardH = if (cardHId != 0) ctx.resources.getDimensionPixelSize(cardHId) else (71.5f * density).toInt()
+            val stockHId = ctx.resources.getIdentifier("brightness_panel_slider_height_large", "dimen", ctx.packageName)
+            val stockH = if (stockHId != 0) ctx.resources.getDimensionPixelSize(stockHId) else (195 * density).toInt()
             val progressRadius = 16f * density
 
             if (isHorizontal) {
                 val lp = toggleSliderView.layoutParams
                 if (lp != null) {
-                    lp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                    lp.width = stockH
                     lp.height = cardH
                     if (lp is ViewGroup.MarginLayoutParams) {
-                        lp.marginStart = (16 * density).toInt()
-                        lp.marginEnd = (16 * density).toInt()
+                        lp.topMargin = (72 * density).toInt()
+                        lp.marginStart = 0
+                        lp.marginEnd = 0
+                    }
+                    if (lp is LinearLayout.LayoutParams) {
+                        lp.gravity = Gravity.CENTER_HORIZONTAL
+                    } else if (lp is FrameLayout.LayoutParams) {
+                        lp.gravity = Gravity.CENTER_HORIZONTAL or Gravity.TOP
                     }
                     toggleSliderView.layoutParams = lp
                 }
@@ -3543,14 +3710,15 @@ object ControlCenterHook {
                 }
             } else {
                 val stockWId = ctx.resources.getIdentifier("brightness_panel_slider_width_large", "dimen", ctx.packageName)
-                val stockHId = ctx.resources.getIdentifier("brightness_panel_slider_height_large", "dimen", ctx.packageName)
                 val stockW = if (stockWId != 0) ctx.resources.getDimensionPixelSize(stockWId) else (76 * density).toInt()
-                val stockH = if (stockHId != 0) ctx.resources.getDimensionPixelSize(stockHId) else (195 * density).toInt()
 
                 val lp = toggleSliderView.layoutParams
                 if (lp != null) {
                     lp.width = stockW
                     lp.height = stockH
+                    if (lp is ViewGroup.MarginLayoutParams) {
+                        lp.topMargin = 0
+                    }
                     toggleSliderView.layoutParams = lp
                 }
 
@@ -3569,7 +3737,7 @@ object ControlCenterHook {
                         val inj = injM.invoke(slider)
                         if (inj != null) {
                             val setVertM = inj.javaClass.getMethod("setVertical", Boolean::class.javaPrimitiveType)
-                            setVertM.invoke(inj, true)
+                            setVertM.invoke(inj, false)
                         }
                     } catch (t: Throwable) {}
                     try {
@@ -3657,11 +3825,21 @@ object ControlCenterHook {
     fun applyExpandedVolumeLayoutDirect(cols: List<*>, contentCols: LinearLayout) {
         try {
             val isHorizontal = ControlCenterConfigHolder.sVolumeSliderHorizontal
+            val ctx = contentCols.context
+            val density = ctx.resources.displayMetrics.density
+            val colW = (195 * density).toInt()
+
             if (isHorizontal) {
                 contentCols.orientation = LinearLayout.VERTICAL
                 val pLp = contentCols.layoutParams
                 if (pLp != null) {
-                    pLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                    pLp.width = colW
+                    pLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                    if (pLp is LinearLayout.LayoutParams) {
+                        pLp.gravity = Gravity.CENTER_HORIZONTAL
+                    } else if (pLp is FrameLayout.LayoutParams) {
+                        pLp.gravity = Gravity.CENTER_HORIZONTAL
+                    }
                     contentCols.layoutParams = pLp
                 }
                 for (col in cols) {
@@ -3671,9 +3849,198 @@ object ControlCenterHook {
                 }
             } else {
                 contentCols.orientation = LinearLayout.HORIZONTAL
+                val pLp = contentCols.layoutParams
+                if (pLp != null) {
+                    pLp.width = ViewGroup.LayoutParams.WRAP_CONTENT
+                    pLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                    contentCols.layoutParams = pLp
+                }
+                for (col in cols) {
+                    if (col != null) {
+                        applyVolumeColumnStock(col)
+                    }
+                }
             }
         } catch (t: Throwable) {
             Log.e(TAG, "applyExpandedVolumeLayoutDirect error", t)
+        }
+    }
+
+    fun applyVolumeColumnStock(col: Any) {
+        try {
+            val colClass = col.javaClass
+            val colView = colClass.getField("view").get(col) as? View ?: return
+            val slider = colClass.getField("slider").get(col) as? SeekBar
+            if (slider != null) {
+                slider.rotation = 270f
+                slider.setTag(0x7f099991, false)
+                try {
+                    val injField = slider.javaClass.getDeclaredField("mInjector")
+                    injField.isAccessible = true
+                    val inj = injField.get(slider)
+                    if (inj != null) {
+                        val setVM = inj.javaClass.getMethod("setVertical", Boolean::class.javaPrimitiveType)
+                        setVM.invoke(inj, false)
+                    }
+                } catch (t: Throwable) {}
+            }
+            try {
+                val otlField = colClass.getDeclaredField("onTouchListener\$delegate")
+                otlField.isAccessible = true
+                val otlDelegate = otlField.get(col)
+                val getValueM = otlDelegate?.javaClass?.getMethod("getValue")
+                val otl = getValueM?.invoke(otlDelegate) as? View.OnTouchListener
+                if (otl != null) {
+                    colView.setOnTouchListener(otl)
+                }
+            } catch (t: Throwable) {}
+        } catch (t: Throwable) {}
+    }
+
+    fun relayoutVolumeColumnsVertically(animator: Any) {
+        try {
+            val expandedField = try { animator.javaClass.getDeclaredField("mExpanded") } catch (t: Throwable) { null }
+            expandedField?.isAccessible = true
+            val isExpanded = expandedField?.getBoolean(animator) ?: true
+            if (!isExpanded) return
+
+            val colsList = try {
+                val f = animator.javaClass.getDeclaredField("volumeColumnList")
+                f.isAccessible = true
+                f.get(animator) as? List<*>
+            } catch (t: Throwable) { null } ?: try {
+                val f = animator.javaClass.getDeclaredField("volumeColumns")
+                f.isAccessible = true
+                f.get(animator) as? List<*>
+            } catch (t: Throwable) { null }
+
+            if (colsList.isNullOrEmpty()) return
+
+            val visibleCols = colsList.filterNotNull()
+            val firstView = try { visibleCols.firstOrNull()?.let { it.javaClass.getField("view").get(it) as? View } } catch (t: Throwable) { null }
+            val density = firstView?.resources?.displayMetrics?.density ?: 2.75f
+
+            val colW = (195 * density).toInt()
+            val colH = (48 * density).toInt()
+            val gap = (8 * density).toInt()
+            val iconSize = (24 * density).toInt()
+            val iconLeft = (14 * density).toInt()
+            val iconTop = (colH - iconSize) / 2
+            val radius = 16f * density
+
+            var currentTop = 0
+            for (col in visibleCols) {
+                val colClass = col.javaClass
+                val colView = try { colClass.getField("view").get(col) as? View } catch (t: Throwable) { null } ?: continue
+                val slider = try { colClass.getField("slider").get(col) as? SeekBar } catch (t: Throwable) { null }
+                val progressView = try { colClass.getField("progressView").get(col) as? View } catch (t: Throwable) { null }
+                val progressViewBg = try { colClass.getField("progressViewBg").get(col) as? View } catch (t: Throwable) { null }
+                val icon = try { colClass.getField("icon").get(col) as? View } catch (t: Throwable) { null }
+
+                val top = currentTop
+                val bottom = top + colH
+                currentTop = bottom + gap
+
+                colView.translationZ = 0f
+                colView.scaleX = 1.0f
+                colView.scaleY = 1.0f
+                colView.alpha = 1.0f
+                colView.setLeftTopRightBottom(0, top, colW, bottom)
+
+                if (slider != null) {
+                    slider.rotation = 0f
+                    slider.setTag(0x7f099991, true)
+                    slider.setLeftTopRightBottom(0, 0, colW, colH)
+                    try {
+                        val injField = slider.javaClass.getDeclaredField("mInjector")
+                        injField.isAccessible = true
+                        val inj = injField.get(slider)
+                        if (inj != null) {
+                            val setVM = inj.javaClass.getMethod("setVertical", Boolean::class.javaPrimitiveType)
+                            setVM.invoke(inj, false)
+                        }
+                    } catch (t: Throwable) {}
+
+                    colView.setOnTouchListener { _, ev ->
+                        slider.dispatchTouchEvent(ev)
+                    }
+                }
+
+                if (progressView != null) {
+                    progressView.setLeftTopRightBottom(0, 0, colW, colH)
+                    if (slider != null) {
+                        progressView.clipToOutline = true
+                        progressView.outlineProvider = object : ViewOutlineProvider() {
+                            override fun getOutline(view: View, outline: Outline) {
+                                val maxVal = slider.max.coerceAtLeast(1)
+                                val curVal = slider.progress.coerceIn(0, maxVal)
+                                val frac = curVal.toFloat() / maxVal
+                                val w = (view.width * frac).toInt()
+                                outline.setRoundRect(0, 0, w, view.height, radius)
+                            }
+                        }
+                        progressView.invalidateOutline()
+                    }
+                }
+
+                if (progressViewBg != null) {
+                    progressViewBg.setLeftTopRightBottom(0, 0, colW, colH)
+                }
+
+                if (icon != null) {
+                    icon.setLeftTopRightBottom(iconLeft, iconTop, iconLeft + iconSize, iconTop + iconSize)
+                }
+            }
+
+            val totalColsH = (currentTop - gap).coerceAtLeast(colH)
+            val contentCols = try {
+                val f = animator.javaClass.getDeclaredField("volumeDialogColumns")
+                f.isAccessible = true
+                f.get(animator) as? ViewGroup
+            } catch (t: Throwable) { null }
+
+            if (contentCols != null) {
+                val parent = contentCols.parent as? ViewGroup
+                val parentW = parent?.width ?: colW
+                val colsLeft = ((parentW - colW) / 2).coerceAtLeast(0)
+                val colsTop = contentCols.top
+                contentCols.setLeftTopRightBottom(colsLeft, colsTop, colsLeft + colW, colsTop + totalColsH)
+                if (contentCols is LinearLayout && contentCols.orientation != LinearLayout.VERTICAL) {
+                    contentCols.orientation = LinearLayout.VERTICAL
+                }
+            }
+
+            val ringerModeLayout = try {
+                val f = animator.javaClass.getDeclaredField("mRingerModeLayout")
+                f.isAccessible = true
+                f.get(animator) as? View
+            } catch (t: Throwable) { null }
+
+            if (ringerModeLayout != null && contentCols != null) {
+                val ringerTop = contentCols.bottom + (10 * density).toInt()
+                val ringerH = ringerModeLayout.height
+                val rW = ringerModeLayout.width.coerceAtLeast(colW)
+                val rLeft = contentCols.left
+                ringerModeLayout.setLeftTopRightBottom(rLeft, ringerTop, rLeft + rW, ringerTop + ringerH)
+            }
+
+            val expandBgView = try {
+                val f = animator.javaClass.getDeclaredField("mExpandBgView")
+                f.isAccessible = true
+                f.get(animator) as? View
+            } catch (t: Throwable) { null }
+
+            if (expandBgView != null && contentCols != null) {
+                val padH = (12 * density).toInt()
+                val padV = (12 * density).toInt()
+                val bgLeft = (contentCols.left - padH).coerceAtLeast(0)
+                val bgTop = (contentCols.top - padV).coerceAtLeast(0)
+                val bgRight = contentCols.right + padH
+                val bgBottom = (ringerModeLayout?.bottom ?: (contentCols.bottom + padV)) + padV
+                expandBgView.setLeftTopRightBottom(bgLeft, bgTop, bgRight, bgBottom)
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "relayoutVolumeColumnsVertically error", t)
         }
     }
 
@@ -3690,19 +4057,23 @@ object ControlCenterHook {
                 parent.orientation = LinearLayout.VERTICAL
                 val pLp = parent.layoutParams
                 if (pLp != null) {
-                    pLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                    pLp.width = (195 * density).toInt()
+                    pLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
                     parent.layoutParams = pLp
                 }
             }
 
+            val colW = (195 * density).toInt()
             val colH = (48 * density).toInt()
-            val vMargin = (3 * density).toInt()
-            val hMargin = (12 * density).toInt()
+            val vMargin = (4 * density).toInt()
 
-            val lp = colView.layoutParams as? ViewGroup.MarginLayoutParams ?: LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, colH)
-            lp.width = ViewGroup.LayoutParams.MATCH_PARENT
+            val lp = colView.layoutParams as? ViewGroup.MarginLayoutParams ?: LinearLayout.LayoutParams(colW, colH)
+            lp.width = colW
             lp.height = colH
-            lp.setMargins(hMargin, vMargin, hMargin, vMargin)
+            lp.setMargins(0, vMargin, 0, vMargin)
+            if (lp is LinearLayout.LayoutParams) {
+                lp.gravity = Gravity.CENTER_HORIZONTAL
+            }
             colView.layoutParams = lp
 
             val slider = try {
@@ -3732,6 +4103,10 @@ object ControlCenterHook {
                         setVM.invoke(inj, false)
                     }
                 } catch (t: Throwable) {}
+
+                colView.setOnTouchListener { _, ev ->
+                    slider.dispatchTouchEvent(ev)
+                }
             }
 
             val progressBg = try {
@@ -4064,8 +4439,8 @@ class TileResizeDragTouchListener(
                         } else if (dx < 0) {
                             previewW = cardWidth2x1 - shrinkX * deltaW
                             previewH = unitHeight1x1
-                            previewRadius = lerp(cardRadius, unitHeight1x1 / 2f, shrinkX)
-                            if (-dx >= snapDistX) {
+                            previewRadius = if (isMediaSpec) cardRadius else lerp(cardRadius, unitHeight1x1 / 2f, shrinkX)
+                            if (!isMediaSpec && -dx >= snapDistX) {
                                 targetState = STATE_NORMAL
                             }
                         } else {
@@ -4097,8 +4472,8 @@ class TileResizeDragTouchListener(
                         } else if (dy < 0) {
                             previewW = unitWidth1x1
                             previewH = cardHeight1x2 - shrinkY * deltaH
-                            previewRadius = lerp(cardRadius, unitWidth1x1 / 2f, shrinkY)
-                            if (-dy >= snapDistY) {
+                            previewRadius = if (isMediaSpec) cardRadius else lerp(cardRadius, unitWidth1x1 / 2f, shrinkY)
+                            if (!isMediaSpec && -dy >= snapDistY) {
                                 targetState = STATE_NORMAL
                             }
                         } else {
@@ -4117,8 +4492,8 @@ class TileResizeDragTouchListener(
                             previewW = cardWidth2x1 - shrinkX * deltaW
                             previewH = cardHeight1x2 - shrinkY * deltaH
                             val pMax = Math.max(shrinkX, shrinkY)
-                            previewRadius = lerp(cardRadius, unitWidth1x1 / 2f, pMax)
-                            if (-dx >= snapDistX && -dy >= snapDistY) {
+                            previewRadius = if (isMediaSpec) cardRadius else lerp(cardRadius, unitWidth1x1 / 2f, pMax)
+                            if (!isMediaSpec && -dx >= snapDistX && -dy >= snapDistY) {
                                 targetState = STATE_NORMAL
                             }
                         } else if (-dy >= -dx && -dy > snapDistY * 0.4f) {
@@ -4168,6 +4543,9 @@ class TileResizeDragTouchListener(
 
                 if (isDragging) {
                     if (candidateTargetState != -1 && candidateTargetState != initialState) {
+                        if (isMediaSpec && candidateTargetState == STATE_NORMAL) {
+                            candidateTargetState = STATE_LARGE
+                        }
                         v.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
                         when (candidateTargetState) {
                             STATE_EXPANDED -> ControlCenterConfigHolder.setTileToExpanded(ctx, spec, tileView)
