@@ -2476,6 +2476,7 @@ object ControlCenterHook {
                             }
                             result
                         }
+                    }
                     if (m.name == "onBindViewHolder" && m.parameterTypes.size >= 2 && m.parameterTypes[1] == Int::class.javaPrimitiveType) {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
