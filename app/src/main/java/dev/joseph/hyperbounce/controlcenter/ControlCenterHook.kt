@@ -2843,83 +2843,6 @@ object ControlCenterHook {
                 }
             } catch (t: Throwable) {}
 
-            // 22. Touch and Draw remapping for horizontal VerticalSeekBar in Control Center
-            val vSeekBarClassNames = listOf(
-                "miui.systemui.controlcenter.widget.VerticalSeekBar",
-                "miui.systemui.widget.VerticalSeekBar"
-            )
-            for (className in vSeekBarClassNames) {
-                try {
-                    val vClass = Class.forName(className, false, classLoader)
-                    for (m in vClass.declaredMethods) {
-                        if (m.name == "onTouchEvent") {
-                            m.isAccessible = true
-                            module.hook(m).intercept { chain ->
-                                val sb = chain.thisObject as? SeekBar
-                                val isHoriz = sb?.getTag(0x7f099991) == true
-                                if (isHoriz && sb != null) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                                    val ev = args?.getOrNull(0) as? MotionEvent
-                                    if (ev != null) {
-                                        try {
-                                            val absSeekBarClass = SeekBar::class.java.superclass
-                                            val superOnTouchEvent = absSeekBarClass.getDeclaredMethod("onTouchEvent", MotionEvent::class.java)
-                                            superOnTouchEvent.isAccessible = true
-                                            val res = superOnTouchEvent.invoke(sb, ev) as? Boolean ?: true
-                                            return@intercept res
-                                        } catch (t: Throwable) {}
-                                    }
-                                }
-                                chain.proceed()
-                            }
-                        } else if (m.name == "dispatchTouchEvent") {
-                            m.isAccessible = true
-                            module.hook(m).intercept { chain ->
-                                val sb = chain.thisObject as? SeekBar
-                                val isHoriz = sb?.getTag(0x7f099991) == true
-                                if (isHoriz && sb != null) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                                    val ev = args?.getOrNull(0) as? MotionEvent
-                                    if (ev != null) {
-                                        try {
-                                            val viewClass = View::class.java
-                                            val superDispatch = viewClass.getDeclaredMethod("dispatchTouchEvent", MotionEvent::class.java)
-                                            superDispatch.isAccessible = true
-                                            val res = superDispatch.invoke(sb, ev) as? Boolean ?: true
-                                            return@intercept res
-                                        } catch (t: Throwable) {}
-                                    }
-                                }
-                                chain.proceed()
-                            }
-                        } else if (m.name == "onDraw") {
-                            m.isAccessible = true
-                            module.hook(m).intercept { chain ->
-                                val sb = chain.thisObject as? SeekBar
-                                val isHoriz = sb?.getTag(0x7f099991) == true
-                                if (isHoriz && sb != null) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                                    val canvas = args?.getOrNull(0) as? Canvas
-                                    if (canvas != null) {
-                                        try {
-                                            val pbClass = android.widget.ProgressBar::class.java
-                                            val pbOnDraw = pbClass.getDeclaredMethod("onDraw", Canvas::class.java)
-                                            pbOnDraw.isAccessible = true
-                                            pbOnDraw.invoke(sb, canvas)
-                                            sb.thumb?.draw(canvas)
-                                            return@intercept null
-                                        } catch (t: Throwable) {}
-                                    }
-                                }
-                                chain.proceed()
-                            }
-                        }
-                    }
-                } catch (t: Throwable) {}
-            }
 
             hookedPluginLoaders.add(classLoader)
             Log.i(TAG, "Control Center Plugin hooks successfully attached!")
@@ -3007,7 +2930,7 @@ object ControlCenterHook {
                     val injector = getInjectorM.invoke(slider)
                     if (injector != null) {
                         val setVertM = injector.javaClass.getMethod("setVertical", Boolean::class.javaPrimitiveType)
-                        setVertM.invoke(injector, false)
+                        setVertM.invoke(injector, !isHorizontal)
                     }
                 } catch (t: Throwable) {}
 
