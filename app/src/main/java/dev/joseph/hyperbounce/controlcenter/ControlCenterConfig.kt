@@ -652,12 +652,42 @@ object ControlCenterConfigHolder {
     }
 
     fun updateAllVisibleTileBadges() {
-        val rv = (sRecyclerView?.get() as? ViewGroup) ?: return
-        rv.post {
+        var rv = (sRecyclerView?.get() as? ViewGroup)
+        if (rv == null) {
             try {
-                val childCount = rv.childCount
-                for (i in 0 until childCount) {
-                    val itemView = rv.getChildAt(i) ?: continue
+                val adp = sMainPanelAdapter
+                if (adp != null) {
+                    val f = adp.javaClass.getDeclaredField("recyclerView")
+                    f.isAccessible = true
+                    rv = f.get(adp) as? ViewGroup
+                    if (rv != null) {
+                        sRecyclerView = WeakReference(rv)
+                    }
+                }
+            } catch (t: Throwable) {}
+        }
+        val targetRv = rv ?: return
+        targetRv.post {
+            try {
+                val rvs = mutableListOf<ViewGroup>(targetRv)
+                val decor = targetRv.rootView
+                if (decor != null) {
+                    val ctx = targetRv.context
+                    val panelIds = arrayOf("main_panel", "right_main_panel", "left_main_panel", "right_panel", "left_panel")
+                    for (pIdStr in panelIds) {
+                        val rvId = ctx.resources.getIdentifier(pIdStr, "id", ctx.packageName)
+                        if (rvId != 0) {
+                            val pRv = decor.findViewById<View>(rvId) as? ViewGroup
+                            if (pRv != null && !rvs.contains(pRv)) {
+                                rvs.add(pRv)
+                            }
+                        }
+                    }
+                }
+                for (pRv in rvs) {
+                    val childCount = pRv.childCount
+                    for (i in 0 until childCount) {
+                        val itemView = pRv.getChildAt(i) ?: continue
                     if (ControlCenterHook.isChildOfContainer(itemView)) continue
 
                     val spec = getOrResolveTileSpec(itemView) ?: continue
@@ -831,6 +861,7 @@ object ControlCenterConfigHolder {
                 Log.e(TAG, "updateAllVisibleTileBadges error", t)
             }
         }
+        }
     }
 
     @Volatile private var sLastExitEditTime: Long = 0L
@@ -881,14 +912,29 @@ object ControlCenterConfigHolder {
         val ctx = context ?: rootView?.context ?: sRecyclerView?.get()?.context ?: sLastKnownContext
         var rv = (sRecyclerView?.get() as? ViewGroup)
         if (rv == null && rootView != null) {
-            var cur: View? = rootView
-            while (cur != null) {
-                if (cur is ViewGroup && cur.javaClass.name.contains("RecyclerView")) {
-                    rv = cur
-                    sRecyclerView = WeakReference(cur)
-                    break
+            val panelIds = arrayOf("main_panel", "right_main_panel", "left_main_panel", "right_panel", "left_panel")
+            val targetCtx = ctx ?: rootView.context
+            for (pIdStr in panelIds) {
+                val rvId = targetCtx?.resources?.getIdentifier(pIdStr, "id", targetCtx.packageName) ?: 0
+                if (rvId != 0) {
+                    val foundRv = (rootView.rootView ?: rootView).findViewById<View>(rvId) as? ViewGroup
+                    if (foundRv != null) {
+                        rv = foundRv
+                        sRecyclerView = WeakReference(foundRv)
+                        break
+                    }
                 }
-                cur = cur.parent as? View
+            }
+            if (rv == null) {
+                var cur: View? = rootView
+                while (cur != null) {
+                    if (cur is ViewGroup && cur.javaClass.name.contains("RecyclerView")) {
+                        rv = cur
+                        sRecyclerView = WeakReference(cur)
+                        break
+                    }
+                    cur = cur.parent as? View
+                }
             }
         }
         updateAllVisibleTileBadges()
@@ -923,14 +969,29 @@ object ControlCenterConfigHolder {
 
         var rv = (sRecyclerView?.get() as? ViewGroup)
         if (rv == null && rootView != null) {
-            var cur: View? = rootView
-            while (cur != null) {
-                if (cur is ViewGroup && cur.javaClass.name.contains("RecyclerView")) {
-                    rv = cur
-                    sRecyclerView = WeakReference(cur)
-                    break
+            val panelIds = arrayOf("main_panel", "right_main_panel", "left_main_panel", "right_panel", "left_panel")
+            val targetCtx = ctx ?: rootView.context
+            for (pIdStr in panelIds) {
+                val rvId = targetCtx?.resources?.getIdentifier(pIdStr, "id", targetCtx.packageName) ?: 0
+                if (rvId != 0) {
+                    val foundRv = (rootView.rootView ?: rootView).findViewById<View>(rvId) as? ViewGroup
+                    if (foundRv != null) {
+                        rv = foundRv
+                        sRecyclerView = WeakReference(foundRv)
+                        break
+                    }
                 }
-                cur = cur.parent as? View
+            }
+            if (rv == null) {
+                var cur: View? = rootView
+                while (cur != null) {
+                    if (cur is ViewGroup && cur.javaClass.name.contains("RecyclerView")) {
+                        rv = cur
+                        sRecyclerView = WeakReference(cur)
+                        break
+                    }
+                    cur = cur.parent as? View
+                }
             }
         }
 

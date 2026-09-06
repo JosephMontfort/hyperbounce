@@ -424,7 +424,23 @@ object ControlCenterHook {
                                                 val getCtxMethod = modeCtrl.javaClass.getMethod("getContext")
                                                 getCtxMethod.invoke(modeCtrl) as? Context
                                             } catch (t: Throwable) { null }
-                                            ControlCenterConfigHolder.onEnterEditMode(context = ctx)
+                                            val modeView = try {
+                                                val getViewM = modeCtrl.javaClass.getMethod("getView")
+                                                getViewM.invoke(modeCtrl) as? View
+                                            } catch (t: Throwable) { null }
+                                            val rvObj = try {
+                                                val f = modeCtrl.javaClass.getDeclaredField("rightMainPanel")
+                                                f.isAccessible = true
+                                                f.get(modeCtrl) as? ViewGroup
+                                            } catch (t: Throwable) { null } ?: try {
+                                                val f = modeCtrl.javaClass.getDeclaredField("leftMainPanel")
+                                                f.isAccessible = true
+                                                f.get(modeCtrl) as? ViewGroup
+                                            } catch (t: Throwable) { null }
+                                            if (rvObj != null) {
+                                                ControlCenterConfigHolder.sRecyclerView = java.lang.ref.WeakReference(rvObj)
+                                            }
+                                            ControlCenterConfigHolder.onEnterEditMode(rootView = modeView ?: rvObj, context = ctx)
                                         }
                                     } else {
                                         ControlCenterConfigHolder.sIsEditMode = false
@@ -1608,6 +1624,16 @@ object ControlCenterHook {
                                 } else null
                                 val itemView = holderView ?: (tileViewObj as? View)
                                 if (itemView is View) {
+                                    if (ControlCenterConfigHolder.sRecyclerView?.get() == null) {
+                                        var p = itemView.parent
+                                        while (p != null) {
+                                            if (p is ViewGroup && p.javaClass.name.contains("RecyclerView")) {
+                                                ControlCenterConfigHolder.sRecyclerView = java.lang.ref.WeakReference(p as View)
+                                                break
+                                            }
+                                            p = p.parent
+                                        }
+                                    }
                                     val ctx = itemView.context
                                     val density = ctx.resources.displayMetrics.density
 

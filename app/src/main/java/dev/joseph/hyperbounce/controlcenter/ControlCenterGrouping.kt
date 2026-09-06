@@ -1336,6 +1336,20 @@ object ControlCenterGrouping {
                             finalGroupBtn.setImageDrawable(GroupGridDrawable(false))
                         }
                     }
+                    if (ControlCenterConfigHolder.sRecyclerView?.get() == null) {
+                        val decor = root.rootView
+                        val panelIds = arrayOf("main_panel", "right_main_panel", "left_main_panel", "right_panel", "left_panel")
+                        for (pIdStr in panelIds) {
+                            val rvId = ctx.resources.getIdentifier(pIdStr, "id", ctx.packageName)
+                            if (rvId != 0) {
+                                val foundRv = decor.findViewById<View>(rvId)
+                                if (foundRv != null) {
+                                    ControlCenterConfigHolder.sRecyclerView = java.lang.ref.WeakReference(foundRv)
+                                    break
+                                }
+                            }
+                        }
+                    }
                     ControlCenterConfigHolder.updateAllVisibleTileBadges()
                     if (structural) {
                         ControlCenterConfigHolder.refreshAdapter(root, ctx, true)
@@ -1376,6 +1390,20 @@ object ControlCenterGrouping {
                         } else {
                             ControlCenterConfigHolder.sIsDisassembleMode = false
                             finalDisassembleBtn.setImageDrawable(UngroupHeaderDrawable(false))
+                        }
+                    }
+                    if (ControlCenterConfigHolder.sRecyclerView?.get() == null) {
+                        val decor = root.rootView
+                        val panelIds = arrayOf("main_panel", "right_main_panel", "left_main_panel", "right_panel", "left_panel")
+                        for (pIdStr in panelIds) {
+                            val rvId = ctx.resources.getIdentifier(pIdStr, "id", ctx.packageName)
+                            if (rvId != 0) {
+                                val foundRv = decor.findViewById<View>(rvId)
+                                if (foundRv != null) {
+                                    ControlCenterConfigHolder.sRecyclerView = java.lang.ref.WeakReference(foundRv)
+                                    break
+                                }
+                            }
                         }
                     }
                     ControlCenterConfigHolder.updateAllVisibleTileBadges()
