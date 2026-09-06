@@ -406,7 +406,7 @@ object ControlCenterFullUnlock {
         if (spec != null) {
             val g = ControlCenterConfigHolder.isGroupAnchor(spec)
             if (g != null) {
-                if (g.specs.size == 4) return Pair(2, 2)
+                if (g.is2x2Group()) return Pair(2, 2)
                 if (g.specs.size == 2) return if (g.isVertical) Pair(1, 2) else Pair(2, 1)
             }
             if (ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)) return Pair(2, 2)

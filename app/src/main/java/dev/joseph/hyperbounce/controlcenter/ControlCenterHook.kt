@@ -1269,6 +1269,22 @@ object ControlCenterHook {
                                             val holder = ControlCenterGrouping.createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, true)
                                             if (holder != null) return@intercept holder
                                         }
+                                        if (viewType == 2281) {
+                                            val holder = ControlCenterGrouping.createGroupedExpandedViewHolder(parent, qsListCtrl, classLoader)
+                                            if (holder != null) return@intercept holder
+                                        }
+                                        if (viewType == 2282) {
+                                            val holder = ControlCenterGrouping.createGroupedVerticalCardsViewHolder(parent, qsListCtrl, classLoader)
+                                            if (holder != null) return@intercept holder
+                                        }
+                                        if (viewType == 2283) {
+                                            val holder = ControlCenterGrouping.createGroupedMixedExpCircViewHolder(parent, qsListCtrl, classLoader)
+                                            if (holder != null) return@intercept holder
+                                        }
+                                        if (viewType == 2284) {
+                                            val holder = ControlCenterGrouping.createGroupedMixedVertCircViewHolder(parent, qsListCtrl, classLoader)
+                                            if (holder != null) return@intercept holder
+                                        }
                                         if (viewType == 2273) {
                                             val holder = ControlCenterGrouping.createCardViewHolder(parent, qsListCtrl, classLoader)
                                             if (holder != null) return@intercept holder
@@ -1304,7 +1320,7 @@ object ControlCenterHook {
                             if (args != null && args.size >= 2) {
                                 val parent = args[0] as ViewGroup
                                 val vt = args[1] as Int
-                                if (vt == 2274 || vt == 2275 || vt == 2276 || vt == 2273 || vt == 2277 || vt == 2278) {
+                                if (vt == 2274 || vt == 2275 || vt == 2276 || vt in 2281..2284 || vt == 2273 || vt == 2277 || vt == 2278) {
                                     try {
                                         val adapterObj = chain.thisObject
                                         ControlCenterConfigHolder.sMainPanelAdapter = adapterObj
@@ -1324,6 +1340,18 @@ object ControlCenterHook {
                                             if (holder != null) return@intercept holder
                                         } else if (vt == 2276) {
                                             val holder = ControlCenterGrouping.createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, true)
+                                            if (holder != null) return@intercept holder
+                                        } else if (vt == 2281) {
+                                            val holder = ControlCenterGrouping.createGroupedExpandedViewHolder(parent, qsListCtrl, classLoader)
+                                            if (holder != null) return@intercept holder
+                                        } else if (vt == 2282) {
+                                            val holder = ControlCenterGrouping.createGroupedVerticalCardsViewHolder(parent, qsListCtrl, classLoader)
+                                            if (holder != null) return@intercept holder
+                                        } else if (vt == 2283) {
+                                            val holder = ControlCenterGrouping.createGroupedMixedExpCircViewHolder(parent, qsListCtrl, classLoader)
+                                            if (holder != null) return@intercept holder
+                                        } else if (vt == 2284) {
+                                            val holder = ControlCenterGrouping.createGroupedMixedVertCircViewHolder(parent, qsListCtrl, classLoader)
                                             if (holder != null) return@intercept holder
                                         } else if (vt == 2273) {
                                             val holder = ControlCenterGrouping.createCardViewHolder(parent, qsListCtrl, classLoader)
@@ -1471,8 +1499,19 @@ object ControlCenterHook {
                                 if (spec != null) {
                                     val g = ControlCenterConfigHolder.isGroupAnchor(spec)
                                     if (g != null) {
-                                        if (g.specs.size == 4) return@intercept 2274
-                                        if (g.specs.size == 2) return@intercept if (g.isVertical) 2276 else 2275
+                                        when (g.getEffectiveLayoutType()) {
+                                            "2_EXPANDED" -> return@intercept 2281
+                                            "2_VERTICAL" -> return@intercept 2282
+                                            "1_EXP_2_CIRC" -> return@intercept 2283
+                                            "1_VERT_2_CIRC" -> return@intercept 2284
+                                            "4_CIRCULAR" -> return@intercept 2274
+                                            "2_CIRCULAR_VERT" -> return@intercept 2276
+                                            "2_CIRCULAR_HORIZ" -> return@intercept 2275
+                                            else -> {
+                                                if (g.specs.size == 4) return@intercept 2274
+                                                if (g.specs.size == 2) return@intercept if (g.isVertical) 2276 else 2275
+                                            }
+                                        }
                                     }
                                     if (ControlCenterConfigHolder.sCircularCardSpecs.contains(spec)) {
                                         return@intercept 8453
@@ -1503,7 +1542,7 @@ object ControlCenterHook {
                                 if (spec != null) {
                                     val g = ControlCenterConfigHolder.isGroupAnchor(spec)
                                     if (g != null) {
-                                        if (g.specs.size == 4) return@intercept 2
+                                        if (g.is2x2Group()) return@intercept 2
                                         if (g.specs.size == 2) return@intercept if (g.isVertical) 1 else 2
                                     }
                                     if (ControlCenterConfigHolder.sCircularCardSpecs.contains(spec)) {
@@ -1823,10 +1862,29 @@ object ControlCenterHook {
                                                 rotateBtn.isClickable = true
                                                 rotateBtn.setOnClickListener {
                                                     try {
-                                                        group.isVertical = !group.isVertical
+                                                        when (group.getEffectiveLayoutType()) {
+                                                            "2_CIRCULAR_VERT", "2_CIRCULAR_HORIZ" -> {
+                                                                group.isVertical = !group.isVertical
+                                                                group.layoutType = if (group.isVertical) "2_CIRCULAR_VERT" else "2_CIRCULAR_HORIZ"
+                                                            }
+                                                            "2_EXPANDED", "2_VERTICAL" -> {
+                                                                java.util.Collections.swap(group.specs, 0, 1)
+                                                            }
+                                                            "1_EXP_2_CIRC", "1_VERT_2_CIRC", "4_CIRCULAR" -> {
+                                                                java.util.Collections.rotate(group.specs, 1)
+                                                            }
+                                                            else -> {
+                                                                if (group.specs.size == 2) {
+                                                                    group.isVertical = !group.isVertical
+                                                                } else {
+                                                                    java.util.Collections.rotate(group.specs, 1)
+                                                                }
+                                                            }
+                                                        }
                                                         ControlCenterConfigHolder.savePriorities(ctx)
                                                         ControlCenterConfigHolder.refreshRecyclerView(itemView)
                                                         ControlCenterConfigHolder.updateAllVisibleTileBadges()
+                                                        ControlCenterConfigHolder.refreshAdapter(itemView.rootView, ctx, true)
                                                     } catch (t: Throwable) {
                                                         Log.e(TAG, "Rotate group click error", t)
                                                     }
@@ -1877,22 +1935,8 @@ object ControlCenterHook {
 
                                             var subHolders = itemView.getTag(0x7f099993) as? Array<Any?>
                                             if (subHolders == null) {
-                                                subHolders = arrayOfNulls(4)
-                                                var subHolderCtor: Constructor<*>? = null
-                                                try {
-                                                    val subHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSItemViewHolder", false, classLoader)
-                                                    for (c in subHolderClass.declaredConstructors) {
-                                                        if (c.parameterTypes.size == 2) {
-                                                            subHolderCtor = c
-                                                            break
-                                                        }
-                                                    }
-                                                    if (subHolderCtor == null && subHolderClass.declaredConstructors.isNotEmpty()) {
-                                                        subHolderCtor = subHolderClass.declaredConstructors[0]
-                                                    }
-                                                    subHolderCtor?.isAccessible = true
-                                                } catch (t: Throwable) {}
-
+                                                val count = Math.min(4, group.specs.size)
+                                                subHolders = arrayOfNulls(count)
                                                 var mainPanelController: Any? = null
                                                 try {
                                                     val mainPanelControllerField = record.javaClass.getDeclaredField("mainPanelController")
@@ -1902,16 +1946,12 @@ object ControlCenterHook {
                                                     mainPanelController = getMethod?.invoke(mainPanelCtrlLazy)
                                                 } catch (t: Throwable) {}
 
-                                                for (i in 0 until 4) {
+                                                for (i in 0 until count) {
                                                     val childTile = ControlCenterGrouping.getChildTileAt(container, i)
-                                                    if (childTile != null && subHolderCtor != null) {
-                                                        try {
-                                                            subHolders[i] = if (subHolderCtor.parameterTypes.size == 2) {
-                                                                subHolderCtor.newInstance(childTile, mainPanelController)
-                                                            } else {
-                                                                subHolderCtor.newInstance(childTile)
-                                                            }
-                                                        } catch (t: Throwable) {}
+                                                    if (childTile != null) {
+                                                        val h = ControlCenterGrouping.createSubHolderForView(childTile, mainPanelController, classLoader)
+                                                        ControlCenterGrouping.attachSubHolder(h)
+                                                        subHolders[i] = h
                                                     }
                                                 }
                                                 itemView.setTag(0x7f099993, subHolders)
@@ -4710,7 +4750,9 @@ class TileResizeDragTouchListener(
                             }
                         }
                         STATE_WIDE_1 -> { // 4x1
-                            if (dy > snapDistY) {
+                            if (dx < -snapDistX && dy > snapDistY * 1.5f) {
+                                targetState = STATE_TALL_4
+                            } else if (dy > snapDistY) {
                                 targetState = if (dx < -snapDistX * 1.5f) STATE_LARGE else STATE_WIDE_2
                             } else if (dx < -snapDistX) {
                                 targetState = if (dy > snapDistY * 0.5f) STATE_LARGE else STATE_EXPANDED
@@ -4734,7 +4776,9 @@ class TileResizeDragTouchListener(
                             }
                         }
                         STATE_TALL_4 -> { // 2x4
-                            if (dy < -snapDistY) {
+                            if (dx > snapDistX && dy < -snapDistY * 1.5f) {
+                                targetState = STATE_WIDE_1
+                            } else if (dy < -snapDistY) {
                                 if (dy < -snapDistY * 2.2f) {
                                     targetState = if (dx > snapDistX) STATE_WIDE_1 else STATE_EXPANDED
                                 } else {
@@ -4757,23 +4801,8 @@ class TileResizeDragTouchListener(
                         }
                     }
 
-                    if (targetState != initialState) {
-                        val targetW = when (targetState) {
-                            STATE_VERTICAL -> oneColW
-                            STATE_WIDE_1, STATE_WIDE_2 -> fourColW
-                            else -> twoColW
-                        }
-                        val targetH = when (targetState) {
-                            STATE_EXPANDED, STATE_WIDE_1 -> row1H
-                            STATE_TALL_4 -> row4H
-                            else -> row2H
-                        }
-                        previewW = targetW
-                        previewH = targetH
-                    } else {
-                        previewW = (originWidth + dx).coerceIn(oneColW * 0.7f, fourColW * 1.05f)
-                        previewH = (originHeight + dy).coerceIn(row1H * 0.7f, row4H * 1.05f)
-                    }
+                    previewW = (originWidth + dx).coerceIn(oneColW * 0.85f, fourColW * 1.05f)
+                    previewH = (originHeight + dy).coerceIn(row1H * 0.85f, row4H * 1.05f)
                     previewRadius = cardRadius
                 } else {
                     val deltaW = (cardWidth2x1 - unitWidth1x1).coerceAtLeast(40f * density)

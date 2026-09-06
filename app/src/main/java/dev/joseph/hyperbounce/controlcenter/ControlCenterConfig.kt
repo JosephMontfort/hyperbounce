@@ -55,8 +55,29 @@ data class ControlCenterConfig(
 data class TileGroup(
     val id: String,
     val specs: MutableList<String>,
-    var isVertical: Boolean = false
-)
+    var isVertical: Boolean = false,
+    var layoutType: String = "",
+    var cardSpec: String = ""
+) {
+    fun getEffectiveLayoutType(): String {
+        if (layoutType.isNotEmpty()) return layoutType
+        return when {
+            specs.size == 4 -> "4_CIRCULAR"
+            specs.size == 2 -> if (isVertical) "2_CIRCULAR_VERT" else "2_CIRCULAR_HORIZ"
+            specs.size == 3 -> "1_EXP_2_CIRC"
+            else -> "4_CIRCULAR"
+        }
+    }
+
+    fun is2x2Group(): Boolean {
+        val type = getEffectiveLayoutType()
+        return type == "4_CIRCULAR" ||
+               type == "2_EXPANDED" ||
+               type == "2_VERTICAL" ||
+               type == "1_EXP_2_CIRC" ||
+               type == "1_VERT_2_CIRC"
+    }
+}
 
 object ControlCenterConfigHolder {
     private const val TAG = "HyperBounce_CC"
@@ -252,8 +273,10 @@ object ControlCenterConfigHolder {
                                     for (sp in parts[2].split(",")) {
                                         if (sp.trim().isNotEmpty()) gSpecs.add(sp.trim())
                                     }
-                                    if (gSpecs.size == 4 || gSpecs.size == 2) {
-                                        newGroups.add(TileGroup(gId, gSpecs, isVert))
+                                    val layoutType = if (parts.size >= 4) parts[3] else ""
+                                    val cardSpec = if (parts.size >= 5) parts[4] else ""
+                                    if (gSpecs.size in 2..4) {
+                                        newGroups.add(TileGroup(gId, gSpecs, isVert, layoutType, cardSpec))
                                     }
                                 }
                             }
@@ -337,8 +360,10 @@ object ControlCenterConfigHolder {
                                 for (sp in parts[2].split(",")) {
                                     if (sp.trim().isNotEmpty()) gSpecs.add(sp.trim())
                                 }
-                                if (gSpecs.size == 4 || gSpecs.size == 2) {
-                                    newGroups.add(TileGroup(gId, gSpecs, isVert))
+                                val layoutType = if (parts.size >= 4) parts[3] else ""
+                                val cardSpec = if (parts.size >= 5) parts[4] else ""
+                                if (gSpecs.size in 2..4) {
+                                    newGroups.add(TileGroup(gId, gSpecs, isVert, layoutType, cardSpec))
                                 }
                             }
                         }
@@ -398,13 +423,14 @@ object ControlCenterConfigHolder {
 
             val groupsSb = StringBuilder()
             for (g in sTileGroups) {
-                if (g.specs.size == 4 || g.specs.size == 2) {
+                if (g.specs.size in 2..4) {
                     if (groupsSb.isNotEmpty()) groupsSb.append(";")
                     groupsSb.append(g.id).append(":").append(if (g.isVertical) "V" else "H").append(":")
                     for (i in 0 until g.specs.size) {
                         if (i > 0) groupsSb.append(",")
                         groupsSb.append(g.specs[i])
                     }
+                    groupsSb.append(":").append(g.layoutType).append(":").append(g.cardSpec)
                 }
             }
             json.put("tile_groups_v2", groupsSb.toString())
@@ -527,11 +553,20 @@ object ControlCenterConfigHolder {
         } catch (t: Throwable) {}
     }
 
+    fun getTileArea(spec: String?): Int {
+        if (spec == null) return 1
+        val isCard = ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true))
+        val isCircCard = isCard && sCircularCardSpecs.contains(spec)
+        val isExp = sExpandedTileSpecs.contains(spec) || (isCard && !isCircCard && !sVerticalTileSpecs.contains(spec) && !sLargeTileSpecs.contains(spec))
+        val isVert = sVerticalTileSpecs.contains(spec)
+        return if (isExp || isVert) 2 else 1
+    }
+
     fun isGroupAnchor(spec: String?): TileGroup? {
         if (spec == null) return null
         if (!sHasLoadedPriorities && sLastKnownContext != null) loadSavedPriorities(sLastKnownContext)
         for (g in sTileGroups) {
-            if ((g.specs.size == 4 || g.specs.size == 2) && spec == g.specs[0]) {
+            if (g.specs.size in 2..4 && spec == g.specs[0]) {
                 return g
             }
         }
@@ -542,7 +577,7 @@ object ControlCenterConfigHolder {
         if (spec == null) return false
         if (!sHasLoadedPriorities && sLastKnownContext != null) loadSavedPriorities(sLastKnownContext)
         for (g in sTileGroups) {
-            if (g.specs.size == 4 || g.specs.size == 2) {
+            if (g.specs.size in 2..4) {
                 for (i in 1 until g.specs.size) {
                     if (spec == g.specs[i]) return true
                 }
@@ -926,9 +961,23 @@ object ControlCenterConfigHolder {
                         continue
                     }
 
-                    // Handling for standard tiles & cards (Wi-Fi, Cell, normal tiles)
+                    // Handling for standard tiles & cards (Wi-Fi, Cell, normal tiles, and groups)
                     val group = isGroupAnchor(spec)
-                    if (group != null && group.specs.size == 2) {
+                    if (group != null) {
+                        if (rotateBtn == null && itemView is ViewGroup) {
+                            val rSize = (32 * density).toInt()
+                            rotateBtn = ImageView(itemView.context).apply {
+                                id = rotateTag
+                                val lp = android.widget.FrameLayout.LayoutParams(rSize, rSize).apply {
+                                    gravity = android.view.Gravity.TOP or android.view.Gravity.END
+                                    val m = (6 * density).toInt()
+                                    setMargins(0, m, m, 0)
+                                }
+                                layoutParams = lp
+                                setImageDrawable(RotateIconDrawable())
+                            }
+                            itemView.addView(rotateBtn)
+                        }
                         if (rotateBtn != null) {
                             val shouldShowRotate = !sIsGroupSelectMode && !sIsDisassembleMode
                             rotateBtn.visibility = if (shouldShowRotate) View.VISIBLE else View.GONE
@@ -937,12 +986,31 @@ object ControlCenterConfigHolder {
                                 rotateBtn.isClickable = true
                                 rotateBtn.setOnClickListener {
                                     try {
-                                        group.isVertical = !group.isVertical
+                                        when (group.getEffectiveLayoutType()) {
+                                            "2_CIRCULAR_VERT", "2_CIRCULAR_HORIZ" -> {
+                                                group.isVertical = !group.isVertical
+                                                group.layoutType = if (group.isVertical) "2_CIRCULAR_VERT" else "2_CIRCULAR_HORIZ"
+                                            }
+                                            "2_EXPANDED", "2_VERTICAL" -> {
+                                                java.util.Collections.swap(group.specs, 0, 1)
+                                            }
+                                            "1_EXP_2_CIRC", "1_VERT_2_CIRC", "4_CIRCULAR" -> {
+                                                java.util.Collections.rotate(group.specs, 1)
+                                            }
+                                            else -> {
+                                                if (group.specs.size == 2) {
+                                                    group.isVertical = !group.isVertical
+                                                } else {
+                                                    java.util.Collections.rotate(group.specs, 1)
+                                                }
+                                            }
+                                        }
                                         savePriorities(itemView.context)
                                         refreshRecyclerView(itemView)
                                         updateAllVisibleTileBadges()
+                                        refreshAdapter(itemView.rootView, itemView.context, true)
                                     } catch (t: Throwable) {
-                                        Log.e(TAG, "Rotate 2-tile group error", t)
+                                        Log.e(TAG, "Rotate group error", t)
                                     }
                                 }
                             } else {
@@ -961,7 +1029,8 @@ object ControlCenterConfigHolder {
                             resizeHandle.setOnClickListener(null)
                             resizeHandle.isClickable = false
                         }
-                        if (isCircular) {
+                        val isGroupable = !isSlider && !isMedia && !isLarge && (isGroupAnchor(spec) == null) && !isGroupChild(spec)
+                        if (isGroupable) {
                             if (selectBadge == null && itemView is ViewGroup) {
                                 selectBadge = ImageView(itemView.context).apply {
                                     id = selectTag
@@ -989,20 +1058,33 @@ object ControlCenterConfigHolder {
                                     if (sSelectedTileSpecs.contains(spec)) {
                                         sSelectedTileSpecs.remove(spec)
                                     } else {
-                                        sSelectedTileSpecs.add(spec)
+                                        val currentArea = sSelectedTileSpecs.sumOf { getTileArea(it) }
+                                        val tileArea = getTileArea(spec)
+                                        if (currentArea + tileArea <= 4) {
+                                            sSelectedTileSpecs.add(spec)
+                                        } else {
+                                            it.performHapticFeedback(android.view.HapticFeedbackConstants.REJECT)
+                                            return@OnClickListener
+                                        }
                                     }
+                                    it.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
                                     val curScd = selectBadge.drawable as? SelectCircleDrawable
                                     curScd?.setChecked(sSelectedTileSpecs.contains(spec))
                                     selectBadge.invalidate()
                                 }
                                 selectBadge.setOnClickListener(toggleSelect)
 
-                                if (curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
+                                if (isCircular && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
                                     val bw2 = selectBadge.measuredWidth.takeIf { it > 0 } ?: (26 * density).toInt()
                                     val bh2 = selectBadge.measuredHeight.takeIf { it > 0 } ?: (26 * density).toInt()
                                     val iLeft = curIconFrame.left
                                     val iTop = curIconFrame.top
                                     selectBadge.layout(iLeft, iTop, iLeft + bw2, iTop + bh2)
+                                } else {
+                                    val bw2 = selectBadge.measuredWidth.takeIf { it > 0 } ?: (26 * density).toInt()
+                                    val bh2 = selectBadge.measuredHeight.takeIf { it > 0 } ?: (26 * density).toInt()
+                                    val m = (8 * density).toInt()
+                                    selectBadge.layout(m, m, m + bw2, m + bh2)
                                 }
                             }
                         } else if (selectBadge != null) {
@@ -1019,6 +1101,20 @@ object ControlCenterConfigHolder {
                         }
                         val group = isGroupAnchor(spec)
                         if (group != null) {
+                            if (selectBadge == null && itemView is ViewGroup) {
+                                selectBadge = ImageView(itemView.context).apply {
+                                    id = selectTag
+                                    val badgeSize2 = (26 * density).toInt()
+                                    val lp = android.widget.FrameLayout.LayoutParams(badgeSize2, badgeSize2).apply {
+                                        gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                                        val margin = (6 * density).toInt()
+                                        setMargins(margin, margin, 0, 0)
+                                    }
+                                    layoutParams = lp
+                                    setImageDrawable(SelectCircleDrawable())
+                                }
+                                itemView.addView(selectBadge)
+                            }
                             if (selectBadge != null) {
                                 val scd = (selectBadge.drawable as? SelectCircleDrawable) ?: SelectCircleDrawable()
                                 scd.setChecked(sSelectedDisassembleGroups.contains(group.id))
@@ -1033,11 +1129,16 @@ object ControlCenterConfigHolder {
                                     } else {
                                         sSelectedDisassembleGroups.add(group.id)
                                     }
+                                    it.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
                                     val curScd = selectBadge.drawable as? SelectCircleDrawable
                                     curScd?.setChecked(sSelectedDisassembleGroups.contains(group.id))
                                     selectBadge.invalidate()
                                 }
                                 selectBadge.setOnClickListener(toggleDisassembleSelect)
+                                val bw2 = selectBadge.measuredWidth.takeIf { it > 0 } ?: (26 * density).toInt()
+                                val bh2 = selectBadge.measuredHeight.takeIf { it > 0 } ?: (26 * density).toInt()
+                                val m = (6 * density).toInt()
+                                selectBadge.layout(m, m, m + bw2, m + bh2)
                             }
                         } else if (selectBadge != null) {
                             selectBadge.visibility = View.GONE

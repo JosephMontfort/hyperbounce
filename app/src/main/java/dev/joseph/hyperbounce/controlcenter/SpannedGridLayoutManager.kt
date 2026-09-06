@@ -163,7 +163,8 @@ class SpannedGridLayoutManager : GridLayoutManager {
                 return if (ControlCenterConfigHolder.sVolumeSliderHorizontal) intArrayOf(2, 1) else intArrayOf(1, 2)
             }
             // 2274: Grouped 4-Tile Card Container -> 2x2
-            if (viewType == 2274) {
+            // 2281..2284: Grouped Containers -> 2x2
+            if (viewType == 2274 || viewType in 2281..2284) {
                 return intArrayOf(2, 2)
             }
             // 2275: Grouped 2-Tile Horizontal -> 2x1

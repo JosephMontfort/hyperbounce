@@ -35,24 +35,516 @@ object ControlCenterGrouping {
         return null
     }
 
-    fun getChildTileAt(container: ViewGroup?, index: Int): View? {
-        if (container == null) return null
-        if (container.childCount > 0 && container.getChildAt(0) is LinearLayout && (container.getChildAt(0) as LinearLayout).childCount > 0 && !container.getChildAt(0).javaClass.name.contains("QSTileItemView")) {
-            val rowIndex = index / 2
-            val colIndex = index % 2
-            if (rowIndex < container.childCount) {
-                val row = container.getChildAt(rowIndex)
-                if (row is ViewGroup && colIndex < row.childCount) {
-                    return row.getChildAt(colIndex)
+    fun getAllChildTiles(parent: ViewGroup): List<View> {
+        val list = mutableListOf<View>()
+        fun findTiles(vg: ViewGroup) {
+            for (i in 0 until vg.childCount) {
+                val c = vg.getChildAt(i) ?: continue
+                val cName = c.javaClass.name
+                if (cName.contains("QSTileItemView") || cName.contains("QSCardItemView")) {
+                    list.add(c)
+                } else if (c is ViewGroup && c.id != 0x7f099998 && c.id != 0x7f099992) {
+                    findTiles(c)
                 }
             }
-            return null
-        } else {
-            if (index < container.childCount) {
-                return container.getChildAt(index)
-            }
-            return null
         }
+        findTiles(parent)
+        return list
+    }
+
+    fun getChildTileAt(container: ViewGroup?, index: Int): View? {
+        if (container == null) return null
+        val tiles = getAllChildTiles(container)
+        if (index in tiles.indices) return tiles[index]
+        return null
+    }
+
+    fun getMainPanelController(qsListCtrl: Any?): Any? {
+        if (qsListCtrl == null) return null
+        return try {
+            val mainPanelControllerField = qsListCtrl.javaClass.getDeclaredField("mainPanelController")
+            mainPanelControllerField.isAccessible = true
+            val mainPanelCtrlLazy = mainPanelControllerField.get(qsListCtrl)
+            val getMethod = mainPanelCtrlLazy?.javaClass?.getMethod("get")
+            getMethod?.invoke(mainPanelCtrlLazy)
+        } catch (t: Throwable) { null }
+    }
+
+    fun createSubHolderForView(childView: View, mainPanelController: Any?, classLoader: ClassLoader): Any? {
+        try {
+            val isCard = childView.javaClass.name.contains("QSCardItemView")
+            if (isCard) {
+                val cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader)
+                for (c in cardHolderClass.declaredConstructors) {
+                    if (c.parameterTypes.size == 1 && c.parameterTypes[0].isAssignableFrom(childView.javaClass)) {
+                        c.isAccessible = true
+                        return c.newInstance(childView)
+                    }
+                }
+                if (cardHolderClass.declaredConstructors.isNotEmpty()) {
+                    val c = cardHolderClass.declaredConstructors[0]
+                    c.isAccessible = true
+                    return c.newInstance(childView)
+                }
+            } else {
+                val subHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSItemViewHolder", false, classLoader)
+                for (c in subHolderClass.declaredConstructors) {
+                    if (c.parameterTypes.size == 2) {
+                        c.isAccessible = true
+                        return c.newInstance(childView, mainPanelController)
+                    }
+                }
+                if (subHolderClass.declaredConstructors.isNotEmpty()) {
+                    val c = subHolderClass.declaredConstructors[0]
+                    c.isAccessible = true
+                    return c.newInstance(childView)
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "createSubHolderForView error", t)
+        }
+        return null
+    }
+
+    fun attachSubHolder(holder: Any?) {
+        if (holder == null) return
+        var sc: Class<*>? = holder.javaClass
+        while (sc != null) {
+            try {
+                val af = sc.getDeclaredField("attached")
+                af.isAccessible = true
+                af.setBoolean(holder, true)
+            } catch (t: Throwable) {}
+            try {
+                val mpaField = sc.getDeclaredField("mainPanelAdapter")
+                mpaField.isAccessible = true
+                if (ControlCenterConfigHolder.sMainPanelAdapter != null) {
+                    mpaField.set(holder, ControlCenterConfigHolder.sMainPanelAdapter)
+                }
+            } catch (t: Throwable) {}
+            try {
+                val fcField = sc.getDeclaredField("frameCallback")
+                fcField.isAccessible = true
+                if (ControlCenterConfigHolder.sFrameCallback != null) {
+                    fcField.set(holder, ControlCenterConfigHolder.sFrameCallback)
+                }
+            } catch (t: Throwable) {}
+            sc = sc.superclass
+        }
+    }
+
+    fun inflateChildCardView(ctx: Context, sysUIContext: Context, classLoader: ClassLoader): ViewGroup {
+        val cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader)
+        val inflateMethod = cardBindingClass.getMethod("inflate", LayoutInflater::class.java, ViewGroup::class.java, Boolean::class.javaPrimitiveType)
+        val binding = inflateMethod.invoke(null, LayoutInflater.from(ctx), null, false)
+        val getRootMethod = cardBindingClass.getMethod("getRoot")
+        val root = getRootMethod.invoke(binding) as ViewGroup
+
+        val cardIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemIconView", false, classLoader)
+        var cardIconCtor: Constructor<*>? = null
+        for (c in cardIconViewClass.declaredConstructors) {
+            if (c.parameterTypes.size == 5) {
+                cardIconCtor = c
+                break
+            }
+        }
+        if (cardIconCtor == null) {
+            cardIconCtor = cardIconViewClass.declaredConstructors[0]
+        }
+        cardIconCtor.isAccessible = true
+        val cardIconView = if (cardIconCtor.parameterTypes.size == 5) {
+            cardIconCtor.newInstance(root.context, sysUIContext, null, 4, null)
+        } else {
+            cardIconCtor.newInstance(root.context, sysUIContext)
+        }
+        val initCardMethod = root.javaClass.getMethod("init", cardIconViewClass)
+        initCardMethod.invoke(root, cardIconView)
+        return root
+    }
+
+    fun inflateChildTileView(ctx: Context, sysUIContext: Context, classLoader: ClassLoader, blurEnabled: Boolean, density: Float): View {
+        val tileLayoutId = ctx.resources.getIdentifier("qs_tile_item_view", "layout", ctx.packageName)
+        val childTile = LayoutInflater.from(ctx).inflate(tileLayoutId, null, false)
+        val tileIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemIconView", false, classLoader)
+        var iconCtor: Constructor<*>? = null
+        for (c in tileIconViewClass.declaredConstructors) {
+            if (c.parameterTypes.size == 5) {
+                iconCtor = c
+                break
+            }
+        }
+        if (iconCtor == null) iconCtor = tileIconViewClass.declaredConstructors[0]
+        iconCtor.isAccessible = true
+        val iconView = if (iconCtor.parameterTypes.size == 5) {
+            iconCtor.newInstance(ctx, sysUIContext, false, 4, null)
+        } else {
+            iconCtor.newInstance(ctx, sysUIContext, false)
+        }
+        val initMethod = childTile.javaClass.getMethod("init", tileIconViewClass)
+        initMethod.invoke(childTile, iconView)
+
+        val iconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
+        val iconFrame = childTile.findViewById<View>(iconFrameId)
+        if (iconFrame != null) {
+            val iflp = iconFrame.layoutParams
+            if (iflp is FrameLayout.LayoutParams) {
+                iflp.gravity = Gravity.CENTER
+                iflp.topMargin = 0
+                iflp.bottomMargin = 0
+                iconFrame.layoutParams = iflp
+            }
+            if (blurEnabled) {
+                val discBg = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.parseColor("#38FFFFFF"))
+                    setStroke(Math.max(1, (1.5f * density).toInt()), Color.parseColor("#80FFFFFF"))
+                }
+                iconFrame.background = discBg
+            } else {
+                iconFrame.background = null
+            }
+        }
+        return childTile
+    }
+
+    fun adjustCardToVertical(root: View, density: Float, ctx: Context) {
+        try {
+            val scaleContentResId = ctx.resources.getIdentifier("scale_content", "id", ctx.packageName)
+            val scaleContent = if (scaleContentResId != 0) root.findViewById<LinearLayout>(scaleContentResId) else null
+            if (scaleContent != null) {
+                scaleContent.orientation = LinearLayout.VERTICAL
+                scaleContent.gravity = Gravity.CENTER_HORIZONTAL
+
+                if (scaleContent.childCount > 0) {
+                    val iconChild = scaleContent.getChildAt(0)
+                    val iconLp = iconChild.layoutParams as? LinearLayout.LayoutParams
+                    if (iconLp != null) {
+                        iconLp.gravity = Gravity.CENTER_HORIZONTAL
+                        iconLp.topMargin = (12 * density).toInt()
+                        iconLp.bottomMargin = (4 * density).toInt()
+                        iconChild.layoutParams = iconLp
+                    }
+                }
+
+                val labelContResId = ctx.resources.getIdentifier("label_container", "id", ctx.packageName)
+                val labelCont = if (labelContResId != 0) root.findViewById<LinearLayout>(labelContResId) else null
+                if (labelCont != null) {
+                    val lblLp = labelCont.layoutParams as? LinearLayout.LayoutParams
+                    if (lblLp != null) {
+                        lblLp.gravity = Gravity.CENTER_HORIZONTAL
+                        lblLp.marginStart = (4 * density).toInt()
+                        lblLp.marginEnd = (4 * density).toInt()
+                        labelCont.layoutParams = lblLp
+                    }
+
+                    val titleResId = ctx.resources.getIdentifier("title", "id", ctx.packageName)
+                    val titleView = if (titleResId != 0) labelCont.findViewById<TextView>(titleResId) else null
+                    titleView?.gravity = Gravity.CENTER
+
+                    val statusResId = ctx.resources.getIdentifier("status", "id", ctx.packageName)
+                    val statusView = if (statusResId != 0) labelCont.findViewById<TextView>(statusResId) else null
+                    statusView?.gravity = Gravity.CENTER
+                }
+            }
+        } catch (t: Throwable) {}
+    }
+
+    fun createGroupRootContainer(parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader, isVerticalLayout: Boolean = false): Pair<ViewGroup, ViewGroup> {
+        val ctx = parent.context
+        val density = ctx.resources.displayMetrics.density
+
+        val sysUIContextField = qsListCtrl?.javaClass?.getDeclaredField("sysUIContext")
+        sysUIContextField?.isAccessible = true
+        val sysUIContext = (sysUIContextField?.get(qsListCtrl) as? Context) ?: ctx
+
+        val cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader)
+        val inflateMethod = cardBindingClass.getMethod("inflate", LayoutInflater::class.java, ViewGroup::class.java, Boolean::class.javaPrimitiveType)
+        val binding = inflateMethod.invoke(null, LayoutInflater.from(ctx), parent, false)
+
+        val getRootMethod = cardBindingClass.getMethod("getRoot")
+        val root = getRootMethod.invoke(binding) as ViewGroup
+
+        try {
+            val cardIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemIconView", false, classLoader)
+            var cardIconCtor: Constructor<*>? = null
+            for (c in cardIconViewClass.declaredConstructors) {
+                if (c.parameterTypes.size == 5) {
+                    cardIconCtor = c
+                    break
+                }
+            }
+            if (cardIconCtor == null) {
+                cardIconCtor = cardIconViewClass.declaredConstructors[0]
+            }
+            cardIconCtor.isAccessible = true
+            val cardIconView = if (cardIconCtor.parameterTypes.size == 5) {
+                cardIconCtor.newInstance(root.context, sysUIContext, null, 4, null)
+            } else {
+                cardIconCtor.newInstance(root.context, sysUIContext)
+            }
+
+            val initCardMethod = root.javaClass.getMethod("init", cardIconViewClass)
+            initCardMethod.invoke(root, cardIconView)
+        } catch (t: Throwable) {
+            Log.e(TAG, "QSCardItemView init error", t)
+        }
+
+        root.removeAllViews()
+
+        val res2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
+        val cardH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId) else (157 * density).toInt()
+        val rlp = root.layoutParams
+        if (rlp != null) {
+            rlp.width = ViewGroup.LayoutParams.MATCH_PARENT
+            rlp.height = cardH
+            root.layoutParams = rlp
+        } else {
+            root.layoutParams = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, cardH)
+        }
+
+        val wrapper = FrameLayout(ctx).apply {
+            id = 0x7f099996
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        }
+
+        val container = LinearLayout(ctx).apply {
+            id = 0x7f099995
+            orientation = if (isVerticalLayout) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            val pad = (6 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+        wrapper.addView(container, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+
+        val disassembleIndicator = ImageView(ctx).apply {
+            id = 0x7f099998
+            val dSize = (26 * density).toInt()
+            val dlp = FrameLayout.LayoutParams(dSize, dSize).apply {
+                gravity = Gravity.TOP or Gravity.START
+                val dMargin = (6 * density).toInt()
+                setMargins(dMargin, dMargin, 0, 0)
+            }
+            layoutParams = dlp
+            setImageDrawable(SelectCircleDrawable())
+            visibility = View.GONE
+        }
+        wrapper.addView(disassembleIndicator)
+
+        val rotateBtn = ImageView(ctx).apply {
+            id = 0x7f099992
+            val rSize = (32 * density).toInt()
+            val rlp = FrameLayout.LayoutParams(rSize, rSize).apply {
+                gravity = Gravity.TOP or Gravity.END
+                val rMargin = (6 * density).toInt()
+                setMargins(0, rMargin, rMargin, 0)
+            }
+            layoutParams = rlp
+            setImageDrawable(RotateIconDrawable())
+            visibility = View.GONE
+        }
+        wrapper.addView(rotateBtn)
+
+        root.addView(wrapper)
+
+        container.isClickable = false
+        container.isFocusable = false
+        root.isClickable = false
+        root.isFocusable = false
+
+        return Pair(root, container)
+    }
+
+    fun wrapInCardViewHolder(root: ViewGroup, classLoader: ClassLoader): Any? {
+        applyGroupContainerStyle(root, classLoader)
+        root.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            applyGroupContainerStyle(v, classLoader)
+        }
+        val cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader)
+        val qsItemViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSItemView", false, classLoader)
+        val holderCtor = cardHolderClass.getConstructor(qsItemViewClass)
+        return holderCtor.newInstance(root)
+    }
+
+    fun createGroupedExpandedViewHolder(parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader): Any? {
+        try {
+            val ctx = parent.context
+            val density = ctx.resources.displayMetrics.density
+            val sysUIContextField = qsListCtrl?.javaClass?.getDeclaredField("sysUIContext")
+            sysUIContextField?.isAccessible = true
+            val sysUIContext = (sysUIContextField?.get(qsListCtrl) as? Context) ?: ctx
+
+            val (root, container) = createGroupRootContainer(parent, qsListCtrl, classLoader, isVerticalLayout = false)
+            val mainPanelController = getMainPanelController(qsListCtrl)
+            val subHolders = arrayOfNulls<Any>(2)
+
+            for (i in 0 until 2) {
+                val childCard = inflateChildCardView(ctx, sysUIContext, classLoader)
+                val clp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f).apply {
+                    val m = (3 * density).toInt()
+                    if (i == 0) setMargins(0, 0, 0, m) else setMargins(0, m, 0, 0)
+                }
+                container.addView(childCard, clp)
+                val holder = createSubHolderForView(childCard, mainPanelController, classLoader)
+                attachSubHolder(holder)
+                subHolders[i] = holder
+            }
+
+            root.setTag(0x7f099993, subHolders)
+            return wrapInCardViewHolder(root, classLoader)
+        } catch (t: Throwable) {
+            Log.e(TAG, "createGroupedExpandedViewHolder error", t)
+        }
+        return null
+    }
+
+    fun createGroupedVerticalCardsViewHolder(parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader): Any? {
+        try {
+            val ctx = parent.context
+            val density = ctx.resources.displayMetrics.density
+            val sysUIContextField = qsListCtrl?.javaClass?.getDeclaredField("sysUIContext")
+            sysUIContextField?.isAccessible = true
+            val sysUIContext = (sysUIContextField?.get(qsListCtrl) as? Context) ?: ctx
+
+            val (root, container) = createGroupRootContainer(parent, qsListCtrl, classLoader, isVerticalLayout = true)
+            val mainPanelController = getMainPanelController(qsListCtrl)
+            val subHolders = arrayOfNulls<Any>(2)
+
+            for (i in 0 until 2) {
+                val childCard = inflateChildCardView(ctx, sysUIContext, classLoader)
+                adjustCardToVertical(childCard, density, ctx)
+                val clp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f).apply {
+                    val m = (3 * density).toInt()
+                    if (i == 0) setMargins(0, 0, m, 0) else setMargins(m, 0, 0, 0)
+                }
+                container.addView(childCard, clp)
+                val holder = createSubHolderForView(childCard, mainPanelController, classLoader)
+                attachSubHolder(holder)
+                subHolders[i] = holder
+            }
+
+            root.setTag(0x7f099993, subHolders)
+            return wrapInCardViewHolder(root, classLoader)
+        } catch (t: Throwable) {
+            Log.e(TAG, "createGroupedVerticalCardsViewHolder error", t)
+        }
+        return null
+    }
+
+    fun createGroupedMixedExpCircViewHolder(parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader): Any? {
+        try {
+            val ctx = parent.context
+            val density = ctx.resources.displayMetrics.density
+            val sysUIContextField = qsListCtrl?.javaClass?.getDeclaredField("sysUIContext")
+            sysUIContextField?.isAccessible = true
+            val sysUIContext = (sysUIContextField?.get(qsListCtrl) as? Context) ?: ctx
+
+            val (root, container) = createGroupRootContainer(parent, qsListCtrl, classLoader, isVerticalLayout = false)
+            val mainPanelController = getMainPanelController(qsListCtrl)
+            val subHolders = arrayOfNulls<Any>(3)
+
+            val childCard = inflateChildCardView(ctx, sysUIContext, classLoader)
+            val clp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f).apply {
+                val m = (3 * density).toInt()
+                setMargins(0, 0, 0, m)
+            }
+            container.addView(childCard, clp)
+            val cardHolder = createSubHolderForView(childCard, mainPanelController, classLoader)
+            attachSubHolder(cardHolder)
+            subHolders[0] = cardHolder
+
+            var blurEnabled = false
+            try {
+                val ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader)
+                val getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context::class.java)
+                blurEnabled = getBlurM.invoke(null, ctx) as Boolean
+            } catch (t: Throwable) {}
+
+            val circRow = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+            }
+            val rlp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f).apply {
+                val m = (3 * density).toInt()
+                setMargins(0, m, 0, 0)
+            }
+            container.addView(circRow, rlp)
+
+            for (i in 0 until 2) {
+                val childTile = inflateChildTileView(ctx, sysUIContext, classLoader, blurEnabled, density)
+                val tlp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f).apply {
+                    gravity = Gravity.CENTER
+                }
+                circRow.addView(childTile, tlp)
+                val tileHolder = createSubHolderForView(childTile, mainPanelController, classLoader)
+                attachSubHolder(tileHolder)
+                subHolders[1 + i] = tileHolder
+            }
+
+            root.setTag(0x7f099993, subHolders)
+            return wrapInCardViewHolder(root, classLoader)
+        } catch (t: Throwable) {
+            Log.e(TAG, "createGroupedMixedExpCircViewHolder error", t)
+        }
+        return null
+    }
+
+    fun createGroupedMixedVertCircViewHolder(parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader): Any? {
+        try {
+            val ctx = parent.context
+            val density = ctx.resources.displayMetrics.density
+            val sysUIContextField = qsListCtrl?.javaClass?.getDeclaredField("sysUIContext")
+            sysUIContextField?.isAccessible = true
+            val sysUIContext = (sysUIContextField?.get(qsListCtrl) as? Context) ?: ctx
+
+            val (root, container) = createGroupRootContainer(parent, qsListCtrl, classLoader, isVerticalLayout = true)
+            val mainPanelController = getMainPanelController(qsListCtrl)
+            val subHolders = arrayOfNulls<Any>(3)
+
+            val childCard = inflateChildCardView(ctx, sysUIContext, classLoader)
+            adjustCardToVertical(childCard, density, ctx)
+            val clp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f).apply {
+                val m = (3 * density).toInt()
+                setMargins(0, 0, m, 0)
+            }
+            container.addView(childCard, clp)
+            val cardHolder = createSubHolderForView(childCard, mainPanelController, classLoader)
+            attachSubHolder(cardHolder)
+            subHolders[0] = cardHolder
+
+            var blurEnabled = false
+            try {
+                val ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader)
+                val getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context::class.java)
+                blurEnabled = getBlurM.invoke(null, ctx) as Boolean
+            } catch (t: Throwable) {}
+
+            val circCol = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+            }
+            val rlp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f).apply {
+                val m = (3 * density).toInt()
+                setMargins(m, 0, 0, 0)
+            }
+            container.addView(circCol, rlp)
+
+            for (i in 0 until 2) {
+                val childTile = inflateChildTileView(ctx, sysUIContext, classLoader, blurEnabled, density)
+                val tlp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f).apply {
+                    gravity = Gravity.CENTER
+                }
+                circCol.addView(childTile, tlp)
+                val tileHolder = createSubHolderForView(childTile, mainPanelController, classLoader)
+                attachSubHolder(tileHolder)
+                subHolders[1 + i] = tileHolder
+            }
+
+            root.setTag(0x7f099993, subHolders)
+            return wrapInCardViewHolder(root, classLoader)
+        } catch (t: Throwable) {
+            Log.e(TAG, "createGroupedMixedVertCircViewHolder error", t)
+        }
+        return null
     }
 
     fun applyGroupContainerStyle(view: View?, classLoader: ClassLoader) {
@@ -1315,21 +1807,79 @@ object ControlCenterGrouping {
                         finalGroupBtn.setImageDrawable(GroupGridDrawable(true))
                         finalDisassembleBtn?.setImageDrawable(UngroupHeaderDrawable(false))
                     } else {
-                        if (ControlCenterConfigHolder.sSelectedTileSpecs.size == 4 || ControlCenterConfigHolder.sSelectedTileSpecs.size == 2) {
-                            val groupId = "group_" + System.currentTimeMillis()
+                        if (ControlCenterConfigHolder.sSelectedTileSpecs.isNotEmpty()) {
                             val selectedSpecs = ArrayList(ControlCenterConfigHolder.sSelectedTileSpecs)
+                            val expSpecs = mutableListOf<String>()
+                            val vertSpecs = mutableListOf<String>()
+                            val circSpecs = mutableListOf<String>()
                             for (spec in selectedSpecs) {
-                                ControlCenterConfigHolder.sExpandedTileSpecs.remove(spec)
-                                ControlCenterConfigHolder.sVerticalTileSpecs.remove(spec)
-                                ControlCenterConfigHolder.sLargeTileSpecs.remove(spec)
+                                val isCard = ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true))
+                                val isCircCard = isCard && ControlCenterConfigHolder.sCircularCardSpecs.contains(spec)
+                                val isExp = ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) || (isCard && !isCircCard && !ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) && !ControlCenterConfigHolder.sLargeTileSpecs.contains(spec))
+                                val isVert = ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)
+                                when {
+                                    isExp -> expSpecs.add(spec)
+                                    isVert -> vertSpecs.add(spec)
+                                    else -> circSpecs.add(spec)
+                                }
                             }
-                            ControlCenterConfigHolder.sTileGroups.add(TileGroup(groupId, selectedSpecs, false))
-                            ControlCenterFullUnlock.onGroupCreated(groupId, selectedSpecs, ctx)
-                            ControlCenterConfigHolder.sIsGroupSelectMode = false
-                            ControlCenterConfigHolder.sSelectedTileSpecs.clear()
-                            finalGroupBtn.setImageDrawable(GroupGridDrawable(false))
-                            ControlCenterConfigHolder.savePriorities(ctx)
-                            structural = true
+
+                            var valid = false
+                            var determinedLayoutType = ""
+                            var determinedCardSpec = ""
+                            val finalOrderedSpecs = mutableListOf<String>()
+
+                            if (circSpecs.size == 4 && expSpecs.isEmpty() && vertSpecs.isEmpty()) {
+                                valid = true
+                                determinedLayoutType = "4_CIRCULAR"
+                                finalOrderedSpecs.addAll(circSpecs)
+                            } else if (circSpecs.size == 2 && expSpecs.isEmpty() && vertSpecs.isEmpty()) {
+                                valid = true
+                                determinedLayoutType = "2_CIRCULAR_HORIZ"
+                                finalOrderedSpecs.addAll(circSpecs)
+                            } else if (expSpecs.size == 2 && vertSpecs.isEmpty() && circSpecs.isEmpty()) {
+                                valid = true
+                                determinedLayoutType = "2_EXPANDED"
+                                finalOrderedSpecs.addAll(expSpecs)
+                            } else if (vertSpecs.size == 2 && expSpecs.isEmpty() && circSpecs.isEmpty()) {
+                                valid = true
+                                determinedLayoutType = "2_VERTICAL"
+                                finalOrderedSpecs.addAll(vertSpecs)
+                            } else if (expSpecs.size == 1 && circSpecs.size == 2 && vertSpecs.isEmpty()) {
+                                valid = true
+                                determinedLayoutType = "1_EXP_2_CIRC"
+                                determinedCardSpec = expSpecs[0]
+                                finalOrderedSpecs.add(expSpecs[0])
+                                finalOrderedSpecs.addAll(circSpecs)
+                            } else if (vertSpecs.size == 1 && circSpecs.size == 2 && expSpecs.isEmpty()) {
+                                valid = true
+                                determinedLayoutType = "1_VERT_2_CIRC"
+                                determinedCardSpec = vertSpecs[0]
+                                finalOrderedSpecs.add(vertSpecs[0])
+                                finalOrderedSpecs.addAll(circSpecs)
+                            }
+
+                            if (valid) {
+                                val groupId = "group_" + System.currentTimeMillis()
+                                for (spec in finalOrderedSpecs) {
+                                    ControlCenterConfigHolder.sExpandedTileSpecs.remove(spec)
+                                    ControlCenterConfigHolder.sVerticalTileSpecs.remove(spec)
+                                    ControlCenterConfigHolder.sLargeTileSpecs.remove(spec)
+                                }
+                                val isVert = determinedLayoutType == "2_CIRCULAR_VERT" || determinedLayoutType == "2_VERTICAL" || determinedLayoutType == "1_VERT_2_CIRC"
+                                val newGroup = TileGroup(groupId, finalOrderedSpecs, isVert, determinedLayoutType, determinedCardSpec)
+                                ControlCenterConfigHolder.sTileGroups.add(newGroup)
+                                ControlCenterFullUnlock.onGroupCreated(groupId, finalOrderedSpecs, ctx)
+                                ControlCenterConfigHolder.sIsGroupSelectMode = false
+                                ControlCenterConfigHolder.sSelectedTileSpecs.clear()
+                                finalGroupBtn.setImageDrawable(GroupGridDrawable(false))
+                                ControlCenterConfigHolder.savePriorities(ctx)
+                                structural = true
+                            } else {
+                                ControlCenterConfigHolder.sIsGroupSelectMode = false
+                                ControlCenterConfigHolder.sSelectedTileSpecs.clear()
+                                finalGroupBtn.setImageDrawable(GroupGridDrawable(false))
+                            }
                         } else {
                             ControlCenterConfigHolder.sIsGroupSelectMode = false
                             ControlCenterConfigHolder.sSelectedTileSpecs.clear()
@@ -1380,6 +1930,36 @@ object ControlCenterGrouping {
 
                         if (toRemove.isNotEmpty()) {
                             val removedGroups = ControlCenterConfigHolder.sTileGroups.filter { toRemove.contains(it.id) }
+                            for (rg in removedGroups) {
+                                val effectiveType = rg.getEffectiveLayoutType()
+                                when (effectiveType) {
+                                    "2_EXPANDED" -> {
+                                        for (s in rg.specs) {
+                                            ControlCenterConfigHolder.sExpandedTileSpecs.add(s)
+                                        }
+                                    }
+                                    "2_VERTICAL" -> {
+                                        for (s in rg.specs) {
+                                            ControlCenterConfigHolder.sVerticalTileSpecs.add(s)
+                                        }
+                                    }
+                                    "1_EXP_2_CIRC" -> {
+                                        val card = if (rg.cardSpec.isNotEmpty()) rg.cardSpec else rg.specs.firstOrNull()
+                                        if (card != null) {
+                                            ControlCenterConfigHolder.sExpandedTileSpecs.add(card)
+                                        }
+                                    }
+                                    "1_VERT_2_CIRC" -> {
+                                        val card = if (rg.cardSpec.isNotEmpty()) rg.cardSpec else rg.specs.firstOrNull()
+                                        if (card != null) {
+                                            ControlCenterConfigHolder.sVerticalTileSpecs.add(card)
+                                        }
+                                    }
+                                    else -> {
+                                        // Circular tiles remain circular
+                                    }
+                                }
+                            }
                             ControlCenterConfigHolder.sTileGroups.removeAll { g -> toRemove.contains(g.id) }
                             ControlCenterFullUnlock.onGroupsDisassembled(removedGroups, ctx)
                             ControlCenterConfigHolder.sSelectedDisassembleGroups.clear()
