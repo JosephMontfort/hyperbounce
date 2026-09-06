@@ -2189,9 +2189,16 @@ object ControlCenterHook {
                                                     curLp.height = tallH
                                                     itemView.layoutParams = curLp
                                                 }
-                                            } else if (ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)) {
+                                            } else if (ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) || spec == "wifi" || spec == "cell") {
                                                 if (curLp != null && curLp.height != cardH) {
                                                     curLp.height = cardH
+                                                    itemView.layoutParams = curLp
+                                                }
+                                            } else {
+                                                val unitRowHId = ctx.resources.getIdentifier("control_center_universal_1_row_with_margin_size", "dimen", ctx.packageName)
+                                                val unitRowH = if (unitRowHId != 0) ctx.resources.getDimensionPixelSize(unitRowHId) else (80 * density).toInt()
+                                                if (curLp != null && (curLp.height > unitRowH || curLp.height == tallH)) {
+                                                    curLp.height = unitRowH
                                                     itemView.layoutParams = curLp
                                                 }
                                             }
@@ -3345,7 +3352,8 @@ object ControlCenterHook {
                                 audioContainer.layoutParams = acLp
                             }
 
-                            val btnSize = (28 * density).toInt()
+                            val btnSize = (34 * density).toInt()
+                            val playSize = (38 * density).toInt()
                             val prevLp = prev?.layoutParams
                             if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
                                 prevLp.width = btnSize
@@ -3364,8 +3372,8 @@ object ControlCenterHook {
                             }
                             val playLp = play?.layoutParams
                             if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
-                                playLp.width = btnSize
-                                playLp.height = btnSize
+                                playLp.width = playSize
+                                playLp.height = playSize
                                 setField(playLp, "startToEnd", prevId)
                                 setField(playLp, "endToStart", nextId)
                                 setField(playLp, "topToTop", pId)
@@ -3475,8 +3483,8 @@ object ControlCenterHook {
                                 audioContainer.layoutParams = acLp
                             }
 
-                            val btnSize = (26 * density).toInt()
-                            val playSize = (28 * density).toInt()
+                            val btnSize = (32 * density).toInt()
+                            val playSize = (38 * density).toInt()
                             val prevLp = prev?.layoutParams
                             if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
                                 prevLp.width = btnSize
