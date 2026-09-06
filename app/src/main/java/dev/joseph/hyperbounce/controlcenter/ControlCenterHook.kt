@@ -2134,6 +2134,7 @@ object ControlCenterHook {
                                             itemView.setTag(0x7f099991, true)
                                             itemView.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ ->
                                                 val curHandle = itemView.findViewById<ImageView>(resizeTag)
+                                                val curBadge = itemView.findViewById<ImageView>(selectTag)
                                                 if (!ControlCenterConfigHolder.sIsEditMode) {
                                                     if (curHandle != null) {
                                                         curHandle.visibility = View.GONE
@@ -2141,23 +2142,43 @@ object ControlCenterHook {
                                                         curHandle.setOnClickListener(null)
                                                         curHandle.isClickable = false
                                                     }
+                                                    if (curBadge != null) {
+                                                        curBadge.visibility = View.GONE
+                                                        curBadge.setOnClickListener(null)
+                                                        curBadge.isClickable = false
+                                                    }
                                                     return@addOnLayoutChangeListener
                                                 }
                                                 val w = r - l
                                                 val h = b - t
                                                 if (w > 0 && h > 0) {
-                                                    if (curHandle != null) {
-                                                        if (!ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode) {
+                                                    val curIconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
+                                                    val curIsExp = ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)
+                                                    val curIsVert = ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)
+                                                    val curIsLarge = ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)
+                                                    val curIsCirc = ControlCenterConfigHolder.sCircularCardSpecs.contains(spec) || (!curIsExp && !curIsVert && !curIsLarge && !itemView.javaClass.name.contains("Card"))
+
+                                                    if (ControlCenterConfigHolder.sIsGroupSelectMode) {
+                                                        if (curBadge != null && curBadge.visibility == View.VISIBLE) {
+                                                            val bw2 = (26 * density).toInt()
+                                                            val bh2 = (26 * density).toInt()
+                                                            if (curIsCirc && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
+                                                                val iLeft = curIconFrame.left
+                                                                val iTop = curIconFrame.top
+                                                                curBadge.layout(iLeft, iTop, iLeft + bw2, iTop + bh2)
+                                                            } else {
+                                                                val m = (8 * density).toInt()
+                                                                curBadge.layout(m, m, m + bw2, m + bh2)
+                                                            }
+                                                            curBadge.bringToFront()
+                                                        }
+                                                    } else if (curHandle != null) {
+                                                        if (!ControlCenterConfigHolder.sIsDisassembleMode) {
                                                             curHandle.visibility = View.VISIBLE
                                                         }
                                                         if (curHandle.visibility == View.VISIBLE) {
                                                             val bw = curHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
                                                             val bh = curHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
-                                                            val curIconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
-                                                            val curIsExp = ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)
-                                                            val curIsVert = ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)
-                                                            val curIsLarge = ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)
-                                                            val curIsCirc = ControlCenterConfigHolder.sCircularCardSpecs.contains(spec) || (!curIsExp && !curIsVert && !curIsLarge && !itemView.javaClass.name.contains("Card"))
                                                             if (curIsCirc && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
                                                                 val iRight = curIconFrame.right
                                                                 val iBottom = curIconFrame.bottom
@@ -2255,6 +2276,16 @@ object ControlCenterHook {
                                                 scd.setChecked(ControlCenterConfigHolder.sSelectedTileSpecs.contains(spec))
                                                 selectBadge.setImageDrawable(scd)
                                                 selectBadge.visibility = View.VISIBLE
+                                                val bw2 = (26 * density).toInt()
+                                                val bh2 = (26 * density).toInt()
+                                                if (isCircular && iconFrame != null && iconFrame.width > 0 && iconFrame.height > 0) {
+                                                    val iLeft = iconFrame.left
+                                                    val iTop = iconFrame.top
+                                                    selectBadge.layout(iLeft, iTop, iLeft + bw2, iTop + bh2)
+                                                } else {
+                                                    val m = (8 * density).toInt()
+                                                    selectBadge.layout(m, m, m + bw2, m + bh2)
+                                                }
                                                 selectBadge.bringToFront()
                                                 selectBadge.isClickable = true
 
@@ -4712,13 +4743,13 @@ class TileResizeDragTouchListener(
                 var targetState = initialState
 
                 if (isMediaSpec) {
-                    val snapDistX = (oneColW + 10f * density) * 0.38f
-                    val snapDistY = (row1H + 10f * density) * 0.38f
+                    val snapDistX = (oneColW + 10f * density) * 0.35f
+                    val snapDistY = (row1H + 10f * density) * 0.35f
 
                     when (initialState) {
                         STATE_LARGE -> { // 2x2
                             if (dx > snapDistX) {
-                                targetState = if (dy < -snapDistY) STATE_WIDE_1 else STATE_WIDE_2
+                                targetState = if (dy < -snapDistY * 0.6f) STATE_WIDE_1 else STATE_WIDE_2
                             } else if (dx < -snapDistX) {
                                 targetState = STATE_VERTICAL
                             } else if (dy > snapDistY) {
@@ -4729,19 +4760,19 @@ class TileResizeDragTouchListener(
                         }
                         STATE_EXPANDED -> { // 2x1
                             if (dx > snapDistX) {
-                                targetState = if (dy > snapDistY) STATE_WIDE_2 else STATE_WIDE_1
+                                targetState = if (dy > snapDistY * 0.6f) STATE_WIDE_2 else STATE_WIDE_1
                             } else if (dy > snapDistY) {
-                                targetState = if (dy > snapDistY * 2.2f) STATE_TALL_4 else STATE_LARGE
+                                targetState = if (dy > snapDistY * 2.0f) STATE_TALL_4 else STATE_LARGE
                             } else if (dx < -snapDistX && dy > snapDistY * 0.5f) {
                                 targetState = STATE_VERTICAL
                             }
                         }
                         STATE_VERTICAL -> { // 1x2
                             if (dx > snapDistX) {
-                                if (dx > snapDistX * 2.2f) {
-                                    targetState = if (dy < -snapDistY) STATE_WIDE_1 else STATE_WIDE_2
+                                if (dx > snapDistX * 2.0f) {
+                                    targetState = if (dy < -snapDistY * 0.6f) STATE_WIDE_1 else STATE_WIDE_2
                                 } else {
-                                    targetState = if (dy < -snapDistY) STATE_EXPANDED else STATE_LARGE
+                                    targetState = if (dy < -snapDistY * 0.6f) STATE_EXPANDED else STATE_LARGE
                                 }
                             } else if (dy > snapDistY) {
                                 targetState = STATE_TALL_4
@@ -4750,7 +4781,7 @@ class TileResizeDragTouchListener(
                             }
                         }
                         STATE_WIDE_1 -> { // 4x1
-                            if (dx < -snapDistX && dy > snapDistY * 1.5f) {
+                            if (dx < -snapDistX && dy > snapDistY * 1.2f) {
                                 targetState = STATE_TALL_4
                             } else if (dy > snapDistY) {
                                 targetState = if (dx < -snapDistX * 1.5f) STATE_LARGE else STATE_WIDE_2
@@ -4766,7 +4797,7 @@ class TileResizeDragTouchListener(
                                     targetState = STATE_TALL_4
                                 } else if (dy < -snapDistY) {
                                     targetState = STATE_EXPANDED
-                                } else if (dx < -snapDistX * 2.5f) {
+                                } else if (dx < -snapDistX * 2.2f) {
                                     targetState = STATE_VERTICAL
                                 } else {
                                     targetState = STATE_LARGE
@@ -4776,10 +4807,10 @@ class TileResizeDragTouchListener(
                             }
                         }
                         STATE_TALL_4 -> { // 2x4
-                            if (dx > snapDistX && dy < -snapDistY * 1.5f) {
+                            if (dx > snapDistX && dy < -snapDistY * 1.2f) {
                                 targetState = STATE_WIDE_1
                             } else if (dy < -snapDistY) {
-                                if (dy < -snapDistY * 2.2f) {
+                                if (dy < -snapDistY * 2.0f) {
                                     targetState = if (dx > snapDistX) STATE_WIDE_1 else STATE_EXPANDED
                                 } else {
                                     if (dx > snapDistX) {
@@ -4794,6 +4825,10 @@ class TileResizeDragTouchListener(
                                 targetState = STATE_WIDE_2
                             } else if (dx < -snapDistX && dy < -snapDistY * 0.5f) {
                                 targetState = STATE_VERTICAL
+                            } else if (dx > snapDistX) {
+                                targetState = STATE_WIDE_2
+                            } else if (dx < -snapDistX) {
+                                targetState = STATE_VERTICAL
                             }
                         }
                         else -> {
@@ -4801,8 +4836,27 @@ class TileResizeDragTouchListener(
                         }
                     }
 
-                    previewW = (originWidth + dx).coerceIn(oneColW * 0.85f, fourColW * 1.05f)
-                    previewH = (originHeight + dy).coerceIn(row1H * 0.85f, row4H * 1.05f)
+                    val (targetW, targetH) = when (targetState) {
+                        STATE_EXPANDED -> Pair(twoColW, row1H)     // 2x1
+                        STATE_VERTICAL -> Pair(oneColW, row2H)     // 1x2
+                        STATE_LARGE -> Pair(twoColW, row2H)        // 2x2
+                        STATE_WIDE_1 -> Pair(fourColW, row1H)      // 4x1
+                        STATE_WIDE_2 -> Pair(fourColW, row2H)      // 4x2
+                        STATE_TALL_4 -> Pair(twoColW, row4H)       // 2x4
+                        else -> Pair(originWidth, originHeight)
+                    }
+
+                    val rawW = (originWidth + dx).coerceIn(oneColW * 0.75f, fourColW * 1.05f)
+                    val rawH = (originHeight + dy).coerceIn(row1H * 0.75f, row4H * 1.05f)
+
+                    if (targetState != initialState) {
+                        val snapFactor = 0.60f
+                        previewW = lerp(rawW, targetW, snapFactor)
+                        previewH = lerp(rawH, targetH, snapFactor)
+                    } else {
+                        previewW = rawW
+                        previewH = rawH
+                    }
                     previewRadius = cardRadius
                 } else {
                     val deltaW = (cardWidth2x1 - unitWidth1x1).coerceAtLeast(40f * density)

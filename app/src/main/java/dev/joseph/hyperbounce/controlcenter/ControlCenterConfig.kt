@@ -618,7 +618,16 @@ object ControlCenterConfigHolder {
                 f.isAccessible = true
                 f.get(r) as? String
             } catch (t2: Throwable) {
-                null
+                try {
+                    val getTileM = r.javaClass.getMethod("getTile")
+                    val tileObj = getTileM.invoke(r)
+                    if (tileObj != null) {
+                        val getSpecM = tileObj.javaClass.getMethod("getTileSpec")
+                        getSpecM.invoke(tileObj) as? String
+                    } else null
+                } catch (t3: Throwable) {
+                    null
+                }
             }
         }
     }
@@ -709,7 +718,8 @@ object ControlCenterConfigHolder {
             var cls: Class<*>? = itemView.javaClass
             while (cls != null && cls != Any::class.java) {
                 for (f in cls.declaredFields) {
-                    if (f.name == "spec" || f.name == "mSpec") {
+                    val fn = f.name
+                    if (fn == "spec" || fn == "mSpec" || fn.contains("spec", ignoreCase = true)) {
                         f.isAccessible = true
                         val s = f.get(itemView) as? String
                         if (!s.isNullOrEmpty()) {
@@ -717,9 +727,31 @@ object ControlCenterConfigHolder {
                             return s
                         }
                     }
-                    if (f.name == "record" || f.name == "mRecord" || f.name == "item" || f.name == "mItem") {
+                    if (fn == "record" || fn == "mRecord" || fn.contains("item", ignoreCase = true) || fn.contains("record", ignoreCase = true)) {
                         f.isAccessible = true
                         val rec = f.get(itemView)
+                        if (rec != null) {
+                            val s = getRecordSpec(rec)
+                            if (!s.isNullOrEmpty()) {
+                                itemView.setTag(0x7f099990, s)
+                                return s
+                            }
+                        }
+                    }
+                }
+                for (m in cls.declaredMethods) {
+                    val mn = m.name
+                    if ((mn.startsWith("getSpec") || mn == "getSpec") && m.parameterTypes.isEmpty()) {
+                        m.isAccessible = true
+                        val s = m.invoke(itemView) as? String
+                        if (!s.isNullOrEmpty()) {
+                            itemView.setTag(0x7f099990, s)
+                            return s
+                        }
+                    }
+                    if ((mn.startsWith("getItem") || mn.startsWith("getRecord")) && m.parameterTypes.isEmpty()) {
+                        m.isAccessible = true
+                        val rec = m.invoke(itemView)
                         if (rec != null) {
                             val s = getRecordSpec(rec)
                             if (!s.isNullOrEmpty()) {
@@ -742,9 +774,32 @@ object ControlCenterConfigHolder {
                     var vhCls: Class<*>? = vh.javaClass
                     while (vhCls != null && vhCls != Any::class.java) {
                         for (f in vhCls.declaredFields) {
-                            if (f.name == "record" || f.name == "mRecord" || f.name == "item" || f.name == "mItem") {
+                            val fn = f.name
+                            if (fn == "record" || fn == "mRecord" || fn.contains("item", ignoreCase = true) || fn.contains("record", ignoreCase = true)) {
                                 f.isAccessible = true
                                 val rec = f.get(vh)
+                                if (rec != null) {
+                                    val s = getRecordSpec(rec)
+                                    if (!s.isNullOrEmpty()) {
+                                        itemView.setTag(0x7f099990, s)
+                                        return s
+                                    }
+                                }
+                            }
+                        }
+                        for (m in vhCls.declaredMethods) {
+                            val mn = m.name
+                            if ((mn.startsWith("getSpec") || mn == "getSpec") && m.parameterTypes.isEmpty()) {
+                                m.isAccessible = true
+                                val s = m.invoke(vh) as? String
+                                if (!s.isNullOrEmpty()) {
+                                    itemView.setTag(0x7f099990, s)
+                                    return s
+                                }
+                            }
+                            if ((mn.startsWith("getItem") || mn.startsWith("getRecord")) && m.parameterTypes.isEmpty()) {
+                                m.isAccessible = true
+                                val rec = m.invoke(vh)
                                 if (rec != null) {
                                     val s = getRecordSpec(rec)
                                     if (!s.isNullOrEmpty()) {
@@ -1031,6 +1086,10 @@ object ControlCenterConfigHolder {
                         }
                         val isGroupable = !isSlider && !isMedia && !isLarge && (isGroupAnchor(spec) == null) && !isGroupChild(spec)
                         if (isGroupable) {
+                            if (itemView is ViewGroup) {
+                                itemView.clipChildren = false
+                                itemView.clipToPadding = false
+                            }
                             if (selectBadge == null && itemView is ViewGroup) {
                                 selectBadge = ImageView(itemView.context).apply {
                                     id = selectTag
@@ -1044,6 +1103,50 @@ object ControlCenterConfigHolder {
                                     setImageDrawable(SelectCircleDrawable())
                                 }
                                 itemView.addView(selectBadge)
+                            }
+
+                            if (itemView.getTag(0x7f099991) == null) {
+                                itemView.setTag(0x7f099991, true)
+                                itemView.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ ->
+                                    val curHandle = itemView.findViewById<ImageView>(resizeTag)
+                                    val curBadge = itemView.findViewById<ImageView>(selectTag)
+                                    if (!sIsEditMode) {
+                                        curHandle?.visibility = View.GONE
+                                        curBadge?.visibility = View.GONE
+                                        return@addOnLayoutChangeListener
+                                    }
+                                    val w = r - l
+                                    val h = b - t
+                                    if (w > 0 && h > 0) {
+                                        val curIconF = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
+                                        if (sIsGroupSelectMode) {
+                                            if (curBadge != null && curBadge.visibility == View.VISIBLE) {
+                                                val bw2 = (26 * density).toInt()
+                                                val bh2 = (26 * density).toInt()
+                                                if (isCircular && curIconF != null && curIconF.width > 0 && curIconF.height > 0) {
+                                                    val iLeft = curIconF.left
+                                                    val iTop = curIconF.top
+                                                    curBadge.layout(iLeft, iTop, iLeft + bw2, iTop + bh2)
+                                                } else {
+                                                    val m = (8 * density).toInt()
+                                                    curBadge.layout(m, m, m + bw2, m + bh2)
+                                                }
+                                                curBadge.bringToFront()
+                                            }
+                                        } else if (curHandle != null && curHandle.visibility == View.VISIBLE) {
+                                            val bw = curHandle.measuredWidth.takeIf { it > 0 } ?: (38 * density).toInt()
+                                            val bh = curHandle.measuredHeight.takeIf { it > 0 } ?: (38 * density).toInt()
+                                            if (isCircular && curIconF != null && curIconF.width > 0 && curIconF.height > 0) {
+                                                val iRight = curIconF.right
+                                                val iBottom = curIconF.bottom
+                                                curHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
+                                            } else {
+                                                curHandle.layout(w - bw, h - bh, w, h)
+                                            }
+                                            curHandle.bringToFront()
+                                        }
+                                    }
+                                }
                             }
 
                             if (selectBadge != null) {
@@ -1074,18 +1177,17 @@ object ControlCenterConfigHolder {
                                 }
                                 selectBadge.setOnClickListener(toggleSelect)
 
+                                val bw2 = (26 * density).toInt()
+                                val bh2 = (26 * density).toInt()
                                 if (isCircular && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
-                                    val bw2 = selectBadge.measuredWidth.takeIf { it > 0 } ?: (26 * density).toInt()
-                                    val bh2 = selectBadge.measuredHeight.takeIf { it > 0 } ?: (26 * density).toInt()
                                     val iLeft = curIconFrame.left
                                     val iTop = curIconFrame.top
                                     selectBadge.layout(iLeft, iTop, iLeft + bw2, iTop + bh2)
                                 } else {
-                                    val bw2 = selectBadge.measuredWidth.takeIf { it > 0 } ?: (26 * density).toInt()
-                                    val bh2 = selectBadge.measuredHeight.takeIf { it > 0 } ?: (26 * density).toInt()
                                     val m = (8 * density).toInt()
                                     selectBadge.layout(m, m, m + bw2, m + bh2)
                                 }
+                                selectBadge.bringToFront()
                             }
                         } else if (selectBadge != null) {
                             selectBadge.visibility = View.GONE
