@@ -33,6 +33,7 @@ object ControlCenterHook {
     private const val TAG = "HyperBounce_CC_Hook"
     private val hookedPluginLoaders = CopyOnWriteArrayList<ClassLoader>()
     @Volatile private var sysuiHooked = false
+    @Volatile var sMediaPlayerViewHolder: java.lang.ref.WeakReference<Any>? = null
 
     fun initSystemUIHooks(module: XposedModule, classLoader: ClassLoader?) {
         if (classLoader == null || sysuiHooked) return
@@ -2597,6 +2598,74 @@ object ControlCenterHook {
                 }
             } catch (t: Throwable) {}
 
+            // 16c. Hook MediaPlayerViewHolder for persistent layout on updateMetaData, updateSize, setDetailAvailable
+            try {
+                val mediaHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.media.MediaPlayerController\$MediaPlayerViewHolder", false, classLoader)
+                for (m in mediaHolderClass.declaredMethods) {
+                    if (m.name == "updateMetaData" || m.name == "updateSize" || m.name == "setDetailAvailable") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            try {
+                                val size = ControlCenterConfigHolder.sMediaPlayerSize
+                                if (size == "2x1" || size == "1x2") {
+                                    applyMediaPlayerLayout(chain.thisObject)
+                                }
+                            } catch (t: Throwable) {}
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            // 16d. Hook MediaPanelAnimator for secondary panel expand/collapse persistence
+            try {
+                val mediaAnimClass = Class.forName("miui.systemui.controlcenter.panel.secondary.media.MediaPanelAnimator", false, classLoader)
+                for (m in mediaAnimClass.declaredMethods) {
+                    if (m.name == "onAnimComplete") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            try {
+                                val size = ControlCenterConfigHolder.sMediaPlayerSize
+                                if (size == "2x1" || size == "1x2") {
+                                    val anim = chain.thisObject
+                                    val fromViewF = mediaAnimClass.getDeclaredField("fromView")
+                                    fromViewF.isAccessible = true
+                                    val fromView = fromViewF.get(anim)
+                                    if (fromView != null) {
+                                        applyMediaPlayerLayout(fromView)
+                                    } else {
+                                        sMediaPlayerViewHolder?.get()?.let { applyMediaPlayerLayout(it) }
+                                    }
+                                }
+                            } catch (t: Throwable) {}
+                            result
+                        }
+                    } else if (m.name == "relayoutNoPlayView") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val size = ControlCenterConfigHolder.sMediaPlayerSize
+                            if (size == "2x1" || size == "1x2") {
+                                try {
+                                    val anim = chain.thisObject
+                                    val fromViewF = mediaAnimClass.getDeclaredField("fromView")
+                                    fromViewF.isAccessible = true
+                                    val fromView = fromViewF.get(anim)
+                                    if (fromView != null) {
+                                        applyMediaPlayerLayout(fromView)
+                                    } else {
+                                        sMediaPlayerViewHolder?.get()?.let { applyMediaPlayerLayout(it) }
+                                    }
+                                } catch (t: Throwable) {}
+                                return@intercept null
+                            }
+                            chain.proceed()
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
             // 17. Full 100% Unlock (Zero Boundaries & Dynamic Landscape Flow)
             try {
                 ControlCenterFullUnlock.init(module, classLoader)
@@ -3118,6 +3187,7 @@ object ControlCenterHook {
             } ?: return
 
             itemView.setTag(0x7f099990, "media")
+            sMediaPlayerViewHolder = java.lang.ref.WeakReference(holder)
 
             val ctx = itemView.context
             val density = ctx.resources.displayMetrics.density
@@ -3165,11 +3235,37 @@ object ControlCenterHook {
                     title?.visibility = View.GONE
                     artist?.visibility = View.GONE
                     emptyState?.visibility = View.GONE
+                    if (emptyState?.layoutParams != null && emptyState.layoutParams.width != 0) {
+                        emptyState.layoutParams.width = 0
+                    }
                     deviceIcon?.visibility = View.GONE
                     prev?.visibility = View.GONE
                     next?.visibility = View.GONE
                     cover?.visibility = View.VISIBLE
                     play?.visibility = View.VISIBLE
+
+                    cover?.alpha = 1f
+                    cover?.scaleX = 1f
+                    cover?.scaleY = 1f
+                    cover?.translationX = 0f
+                    cover?.translationY = 0f
+
+                    play?.alpha = 1f
+                    play?.scaleX = 1f
+                    play?.scaleY = 1f
+                    play?.translationX = 0f
+                    play?.translationY = 0f
+
+                    audioContainer?.alpha = 1f
+                    audioContainer?.scaleX = 1f
+                    audioContainer?.scaleY = 1f
+                    audioContainer?.translationX = 0f
+                    audioContainer?.translationY = 0f
+
+                    if (cover is ImageView && cover.drawable == null) {
+                        val defCoverId = ctx.resources.getIdentifier("miplay_cover_default", "drawable", ctx.packageName)
+                        if (defCoverId != 0) cover.setImageResource(defCoverId)
+                    }
 
                     if (cover != null && ControlCenterConfigHolder.isConstraintLayout(itemView)) {
                         try {
@@ -3228,11 +3324,37 @@ object ControlCenterHook {
                     title?.visibility = View.GONE
                     artist?.visibility = View.GONE
                     emptyState?.visibility = View.GONE
+                    if (emptyState?.layoutParams != null && emptyState.layoutParams.width != 0) {
+                        emptyState.layoutParams.width = 0
+                    }
                     deviceIcon?.visibility = View.GONE
                     prev?.visibility = View.GONE
                     next?.visibility = View.GONE
                     cover?.visibility = View.VISIBLE
                     play?.visibility = View.VISIBLE
+
+                    cover?.alpha = 1f
+                    cover?.scaleX = 1f
+                    cover?.scaleY = 1f
+                    cover?.translationX = 0f
+                    cover?.translationY = 0f
+
+                    play?.alpha = 1f
+                    play?.scaleX = 1f
+                    play?.scaleY = 1f
+                    play?.translationX = 0f
+                    play?.translationY = 0f
+
+                    audioContainer?.alpha = 1f
+                    audioContainer?.scaleX = 1f
+                    audioContainer?.scaleY = 1f
+                    audioContainer?.translationX = 0f
+                    audioContainer?.translationY = 0f
+
+                    if (cover is ImageView && cover.drawable == null) {
+                        val defCoverId = ctx.resources.getIdentifier("miplay_cover_default", "drawable", ctx.packageName)
+                        if (defCoverId != 0) cover.setImageResource(defCoverId)
+                    }
 
                     if (cover != null && ControlCenterConfigHolder.isConstraintLayout(itemView)) {
                         try {
@@ -3288,7 +3410,39 @@ object ControlCenterHook {
                         curLp.height = tallH
                         itemView.layoutParams = curLp
                     }
+                    try {
+                        val updateSizeM = holderClass.getDeclaredMethod("updateSize")
+                        updateSizeM.isAccessible = true
+                        updateSizeM.invoke(holder)
+                    } catch (t: Throwable) {}
                 }
+            }
+
+            val listenerTag = 0x7f099991
+            if (itemView.getTag(listenerTag) == null) {
+                val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                    val isLand = ctx.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+                    val curSize = if (isLand) "4x1" else ControlCenterConfigHolder.sMediaPlayerSize
+                    if (curSize == "2x1" || curSize == "1x2" || curSize == "4x1") {
+                        if (title?.visibility != View.GONE) title?.visibility = View.GONE
+                        if (artist?.visibility != View.GONE) artist?.visibility = View.GONE
+                        if (emptyState?.visibility != View.GONE) emptyState?.visibility = View.GONE
+                        if (emptyState?.layoutParams != null && emptyState.layoutParams.width != 0) {
+                            emptyState.layoutParams.width = 0
+                        }
+                        if (deviceIcon?.visibility != View.GONE) deviceIcon?.visibility = View.GONE
+                        if (prev?.visibility != View.GONE) prev?.visibility = View.GONE
+                        if (next?.visibility != View.GONE) next?.visibility = View.GONE
+                        if (cover?.visibility != View.VISIBLE) cover?.visibility = View.VISIBLE
+                        if (play?.visibility != View.VISIBLE) play?.visibility = View.VISIBLE
+                        if (cover is ImageView && cover.drawable == null) {
+                            val defCoverId = ctx.resources.getIdentifier("miplay_cover_default", "drawable", ctx.packageName)
+                            if (defCoverId != 0) cover.setImageResource(defCoverId)
+                        }
+                    }
+                }
+                itemView.addOnLayoutChangeListener(layoutListener)
+                itemView.setTag(listenerTag, layoutListener)
             }
 
             val resizeTag = 0x7f099999
