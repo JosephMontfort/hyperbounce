@@ -176,6 +176,10 @@ object ControlCenterFullUnlock {
         if (sOrderLoaded || context == null) return
         sOrderLoaded = true
         try {
+            if (!ControlCenterConfigHolder.sHasLoadedPriorities) {
+                ControlCenterConfigHolder.loadSavedPriorities(context)
+            }
+
             // 1. Settings.Secure
             var savedStr = try {
                 Settings.Secure.getString(context.contentResolver, SECURE_KEY_UNIFIED_ORDER)
@@ -192,6 +196,7 @@ object ControlCenterFullUnlock {
                 if (list.isNotEmpty()) {
                     sUnifiedSlotOrder.clear()
                     sUnifiedSlotOrder.addAll(list)
+                    cleanStaleSlots()
                     Log.i(TAG, "Loaded saved unified slot order (${sUnifiedSlotOrder.size} items): $sUnifiedSlotOrder")
                     return
                 }
@@ -225,6 +230,135 @@ object ControlCenterFullUnlock {
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to save unified slot order", t)
             }
+        }
+    }
+
+    /**
+     * Purges stale groups, stale member tiles, and duplicate slots from both
+     * sKnownSlots and sUnifiedSlotOrder to guarantee consistent layout state.
+     */
+    fun cleanStaleSlots() {
+        try {
+            val activeGroupIds = ControlCenterConfigHolder.sTileGroups.map { "group:${it.id}" }.toSet()
+            val groupedTileSpecs = HashSet<String>()
+            for (g in ControlCenterConfigHolder.sTileGroups) {
+                groupedTileSpecs.addAll(g.specs)
+            }
+
+            // 1. Remove group slots that are no longer active
+            sKnownSlots.keys.removeIf { it.startsWith("group:") && !activeGroupIds.contains(it) }
+            sUnifiedSlotOrder.removeIf { it.startsWith("group:") && !activeGroupIds.contains(it) }
+            sProxyCache.keys.removeIf { it.startsWith("group:") && !activeGroupIds.contains(it) }
+            sProxyHandlers.keys.removeIf { it.startsWith("group:") && !activeGroupIds.contains(it) }
+
+            // 2. Remove standalone tile slots for tiles that belong to an active group
+            for (spec in groupedTileSpecs) {
+                sKnownSlots.remove("tile:$spec")
+                sUnifiedSlotOrder.remove("tile:$spec")
+                sProxyCache.remove("tile:$spec")
+                sProxyHandlers.remove("tile:$spec")
+            }
+
+            // 3. Deduplicate sUnifiedSlotOrder while preserving order
+            val seen = HashSet<String>()
+            val deduped = ArrayList<String>()
+            for (id in sUnifiedSlotOrder) {
+                if (seen.add(id)) {
+                    deduped.add(id)
+                }
+            }
+            if (deduped.size != sUnifiedSlotOrder.size) {
+                sUnifiedSlotOrder.clear()
+                sUnifiedSlotOrder.addAll(deduped)
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "cleanStaleSlots error", t)
+        }
+    }
+
+    /**
+     * Called when a new TileGroup is created. Replaces member tiles in sUnifiedSlotOrder
+     * with the new group slot and purges standalone slots.
+     */
+    fun onGroupCreated(groupId: String, specs: List<String>, context: Context?) {
+        try {
+            val groupSlotId = "group:$groupId"
+            var insertIdx = -1
+            for (spec in specs) {
+                val tileId = "tile:$spec"
+                val idx = sUnifiedSlotOrder.indexOf(tileId)
+                if (idx >= 0 && (insertIdx == -1 || idx < insertIdx)) {
+                    insertIdx = idx
+                }
+                sKnownSlots.remove(tileId)
+                sProxyCache.remove(tileId)
+                sProxyHandlers.remove(tileId)
+            }
+            for (spec in specs) {
+                sUnifiedSlotOrder.remove("tile:$spec")
+            }
+            if (insertIdx >= 0 && insertIdx <= sUnifiedSlotOrder.size) {
+                sUnifiedSlotOrder.add(insertIdx, groupSlotId)
+            } else {
+                sUnifiedSlotOrder.add(groupSlotId)
+            }
+            cleanStaleSlots()
+            saveOrder(context)
+        } catch (t: Throwable) {
+            Log.e(TAG, "onGroupCreated error", t)
+        }
+    }
+
+    /**
+     * Called when TileGroups are disassembled. Replaces the group slot in sUnifiedSlotOrder
+     * with the member tiles and purges the group slot.
+     */
+    fun onGroupsDisassembled(removedGroups: List<TileGroup>, context: Context?) {
+        try {
+            for (g in removedGroups) {
+                val groupSlotId = "group:${g.id}"
+                sKnownSlots.remove(groupSlotId)
+                sProxyCache.remove(groupSlotId)
+                sProxyHandlers.remove(groupSlotId)
+                val idx = sUnifiedSlotOrder.indexOf(groupSlotId)
+                sUnifiedSlotOrder.remove(groupSlotId)
+
+                val memberTileIds = g.specs.map { "tile:$it" }
+                if (idx >= 0 && idx <= sUnifiedSlotOrder.size) {
+                    sUnifiedSlotOrder.addAll(idx, memberTileIds)
+                } else {
+                    sUnifiedSlotOrder.addAll(memberTileIds)
+                }
+            }
+            cleanStaleSlots()
+            saveOrder(context)
+        } catch (t: Throwable) {
+            Log.e(TAG, "onGroupsDisassembled error", t)
+        }
+    }
+
+    /**
+     * Clears all unified order state and caches on reset.
+     */
+    fun resetOrder(context: Context?) {
+        try {
+            sUnifiedSlotOrder.clear()
+            sKnownSlots.clear()
+            sProxyCache.clear()
+            sProxyHandlers.clear()
+            sOrderLoaded = false
+            val targetCtx = context ?: ControlCenterConfigHolder.sLastKnownContext
+            if (targetCtx != null) {
+                try {
+                    val prefs = targetCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    prefs.edit().remove(PREF_UNIFIED_ORDER).apply()
+                } catch (t: Throwable) {}
+                try {
+                    Settings.Secure.putString(targetCtx.contentResolver, SECURE_KEY_UNIFIED_ORDER, "")
+                } catch (t: Throwable) {}
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "resetOrder error", t)
         }
     }
 
@@ -403,6 +537,8 @@ object ControlCenterFullUnlock {
             val context = ctxField.get(adapter) as? Context ?: ControlCenterConfigHolder.sLastKnownContext
             if (context != null) loadOrder(context)
 
+            cleanStaleSlots()
+
             val isLandscape = context?.resources?.configuration?.orientation == Configuration.ORIENTATION_LANDSCAPE
             ControlCenterConfigHolder.sMainPanelAdapter = adapter
 
@@ -510,21 +646,35 @@ object ControlCenterFullUnlock {
                             val isDividerOrHeader = (vt == 8398 || vt == 3484337 || vt == 8397)
 
                             if (isAdded && !isDividerOrHeader) {
-                                val g = if (spec != null) ControlCenterConfigHolder.isGroupAnchor(spec) else null
-                                val id = if (g != null) "group:${g.id}" else "tile:$spec"
+                                if (spec != null) {
+                                    val group = ControlCenterConfigHolder.findGroupForSpec(spec)
+                                    if (group != null) {
+                                        if (ControlCenterConfigHolder.isGroupAnchor(spec) != null) {
+                                            val id = "group:${group.id}"
+                                            val spans = getItemSpans(item, vt, spec)
+                                            sKnownSlots[id] = SlotItem(id, controller, item, vt, spans.first, spans.second)
+                                        }
+                                        sKnownSlots.remove("tile:$spec")
+                                        sUnifiedSlotOrder.remove("tile:$spec")
+                                        continue
+                                    }
+                                }
+                                val id = "tile:$spec"
                                 val spans = getItemSpans(item, vt, spec)
                                 sKnownSlots[id] = SlotItem(id, controller, item, vt, spans.first, spans.second)
                             } else {
+                                if (spec != null) {
+                                    sKnownSlots.remove("tile:$spec")
+                                    sUnifiedSlotOrder.remove("tile:$spec")
+                                }
                                 // Potential footer item: either divider/header or unadded available tile
                                 if (isDividerOrHeader) {
                                     rawFooterItems.add(item)
                                 } else if (spec != null) {
                                     // Check if tile is ALREADY an active tile in our unified slots!
                                     val isAlreadyActive = sKnownSlots.containsKey("tile:$spec") ||
-                                            sKnownSlots.containsKey("group:$spec") ||
                                             sUnifiedSlotOrder.contains("tile:$spec") ||
-                                            sUnifiedSlotOrder.contains("group:$spec") ||
-                                            ControlCenterConfigHolder.isGroupAnchor(spec) != null
+                                            ControlCenterConfigHolder.isGroupMember(spec)
 
                                     // Deduplicate available tiles so the same spec never appears multiple times
                                     if (!isAlreadyActive && !seenAvailableSpecs.contains(spec)) {
@@ -667,6 +817,8 @@ object ControlCenterFullUnlock {
                 }
             }
 
+            cleanStaleSlots()
+
             // Order active slots according to sUnifiedSlotOrder
             val orderedSlots = ArrayList<SlotItem>()
             val remainingAvailable = LinkedHashMap(sKnownSlots)
@@ -681,6 +833,15 @@ object ControlCenterFullUnlock {
             // Append any new active items not yet in sUnifiedSlotOrder
             var orderUpdated = false
             for ((newId, slot) in remainingAvailable) {
+                if (newId.startsWith("tile:")) {
+                    val spec = newId.substring(5)
+                    if (ControlCenterConfigHolder.isGroupMember(spec)) continue
+                }
+                if (newId.startsWith("group:")) {
+                    val gId = newId.substring(6)
+                    val activeIds = ControlCenterConfigHolder.sTileGroups.map { it.id }.toSet()
+                    if (!activeIds.contains(gId)) continue
+                }
                 orderedSlots.add(slot)
                 sUnifiedSlotOrder.add(newId)
                 orderUpdated = true
@@ -877,6 +1038,7 @@ object ControlCenterFullUnlock {
     fun onExitEditMode() {
         sAdapterQsFooters.clear()
         sAdapterWordless.clear()
+        cleanStaleSlots()
         val adapter = ControlCenterConfigHolder.sMainPanelAdapter
         if (adapter != null) {
             val cl = adapter.javaClass.classLoader

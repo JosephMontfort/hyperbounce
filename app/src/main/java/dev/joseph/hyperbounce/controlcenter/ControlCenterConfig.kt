@@ -441,8 +441,7 @@ object ControlCenterConfigHolder {
             sComponentPriorities["DeviceCenterEntryController"] = 50
             sComponentPriorities["DeviceControlsEntryController"] = 51
             sComponentPriorities["QSListController"] = 100
-            ControlCenterFullUnlock.sUnifiedSlotOrder.clear()
-            ControlCenterFullUnlock.saveOrder(ctx)
+            ControlCenterFullUnlock.resetOrder(ctx)
 
             savePriorities(ctx)
             sExplicitReset = false

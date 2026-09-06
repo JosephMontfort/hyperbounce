@@ -1317,12 +1317,14 @@ object ControlCenterGrouping {
                     } else {
                         if (ControlCenterConfigHolder.sSelectedTileSpecs.size == 4 || ControlCenterConfigHolder.sSelectedTileSpecs.size == 2) {
                             val groupId = "group_" + System.currentTimeMillis()
-                            for (spec in ControlCenterConfigHolder.sSelectedTileSpecs) {
+                            val selectedSpecs = ArrayList(ControlCenterConfigHolder.sSelectedTileSpecs)
+                            for (spec in selectedSpecs) {
                                 ControlCenterConfigHolder.sExpandedTileSpecs.remove(spec)
                                 ControlCenterConfigHolder.sVerticalTileSpecs.remove(spec)
                                 ControlCenterConfigHolder.sLargeTileSpecs.remove(spec)
                             }
-                            ControlCenterConfigHolder.sTileGroups.add(TileGroup(groupId, ArrayList(ControlCenterConfigHolder.sSelectedTileSpecs), false))
+                            ControlCenterConfigHolder.sTileGroups.add(TileGroup(groupId, selectedSpecs, false))
+                            ControlCenterFullUnlock.onGroupCreated(groupId, selectedSpecs, ctx)
                             ControlCenterConfigHolder.sIsGroupSelectMode = false
                             ControlCenterConfigHolder.sSelectedTileSpecs.clear()
                             finalGroupBtn.setImageDrawable(GroupGridDrawable(false))
@@ -1363,7 +1365,9 @@ object ControlCenterGrouping {
                         }
 
                         if (toRemove.isNotEmpty()) {
+                            val removedGroups = ControlCenterConfigHolder.sTileGroups.filter { toRemove.contains(it.id) }
                             ControlCenterConfigHolder.sTileGroups.removeAll { g -> toRemove.contains(g.id) }
+                            ControlCenterFullUnlock.onGroupsDisassembled(removedGroups, ctx)
                             ControlCenterConfigHolder.sSelectedDisassembleGroups.clear()
                             ControlCenterConfigHolder.sIsDisassembleMode = false
                             finalDisassembleBtn.setImageDrawable(UngroupHeaderDrawable(false))
