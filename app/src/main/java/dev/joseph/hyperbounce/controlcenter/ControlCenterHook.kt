@@ -3247,6 +3247,8 @@ object ControlCenterHook {
             val nextId = ensureId(next)
             val titleId = ensureId(title)
             val artistId = ensureId(artist)
+            val deviceIconId = ensureId(deviceIcon)
+            val emptyStateId = ensureId(emptyState)
             val audioContainerId = ensureId(audioContainer)
 
             val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
