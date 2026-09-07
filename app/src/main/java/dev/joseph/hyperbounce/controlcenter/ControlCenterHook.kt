@@ -1950,7 +1950,7 @@ object ControlCenterHook {
                                             itemView.setTag(0x7f099994, group)
                                             ControlCenterGrouping.applyGroupContainerStyle(itemView, classLoader, group)
 
-                                            if (container is ControlCenterGrouping.DynamicGroupContainer) {
+                                            if (container is DynamicGroupContainer) {
                                                 if (container.getTag(0x7f099997) != group.id) {
                                                     container.removeAllViews()
                                                     container.setTag(0x7f099997, group.id)
