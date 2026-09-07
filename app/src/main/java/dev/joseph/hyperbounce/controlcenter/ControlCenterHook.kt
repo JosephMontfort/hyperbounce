@@ -1960,18 +1960,12 @@ object ControlCenterHook {
                                                     if (layoutRes != null) {
                                                         container.placedTiles = layoutRes.placedTiles
                                                         val dynamicSubHolders = arrayOfNulls<Any>(group.specs.size)
-                                                        var mainPanelController: Any? = null
-                                                        try {
-                                                            val mainPanelControllerField = record.javaClass.getDeclaredField("mainPanelController")
-                                                            mainPanelControllerField.isAccessible = true
-                                                            val mainPanelCtrlLazy = mainPanelControllerField.get(record)
-                                                            val getMethod = mainPanelCtrlLazy?.javaClass?.getMethod("get")
-                                                            mainPanelController = getMethod?.invoke(mainPanelCtrlLazy)
-                                                        } catch (t: Throwable) {}
+                                                        val mainPanelController = ControlCenterGrouping.getMainPanelController(activeQsListCtrl)
+                                                            ?: ControlCenterGrouping.getMainPanelController(ControlCenterConfigHolder.sQSListController)
 
                                                         for (i in group.specs.indices) {
                                                             val pt = layoutRes.placedTiles[i]
-                                                            val child = ControlCenterGrouping.inflateTileForType(pt.type, container, ControlCenterConfigHolder.sQSListController, classLoader)
+                                                            val child = ControlCenterGrouping.inflateTileForType(pt.type, container, activeQsListCtrl ?: ControlCenterConfigHolder.sQSListController, classLoader)
                                                             container.addView(child)
                                                             val h = ControlCenterGrouping.createSubHolderForView(child, mainPanelController, classLoader)
                                                             ControlCenterGrouping.attachSubHolder(h)
@@ -1987,14 +1981,8 @@ object ControlCenterHook {
                                             if (subHolders == null) {
                                                 val count = group.specs.size
                                                 subHolders = arrayOfNulls(count)
-                                                var mainPanelController: Any? = null
-                                                try {
-                                                    val mainPanelControllerField = record.javaClass.getDeclaredField("mainPanelController")
-                                                    mainPanelControllerField.isAccessible = true
-                                                    val mainPanelCtrlLazy = mainPanelControllerField.get(record)
-                                                    val getMethod = mainPanelCtrlLazy?.javaClass?.getMethod("get")
-                                                    mainPanelController = getMethod?.invoke(mainPanelCtrlLazy)
-                                                } catch (t: Throwable) {}
+                                                val mainPanelController = ControlCenterGrouping.getMainPanelController(activeQsListCtrl)
+                                                    ?: ControlCenterGrouping.getMainPanelController(ControlCenterConfigHolder.sQSListController)
 
                                                 for (i in 0 until count) {
                                                     val childTile = ControlCenterGrouping.getChildTileAt(container, i)

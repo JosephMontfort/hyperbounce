@@ -37,6 +37,10 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
     var rowCount: Int = 2
     var placedTiles: List<PlacedTile> = emptyList()
 
+    override fun generateDefaultLayoutParams(): ViewGroup.LayoutParams {
+        return ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val w = MeasureSpec.getSize(widthMeasureSpec)
         val h = MeasureSpec.getSize(heightMeasureSpec)
@@ -57,8 +61,8 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
             val colSpan = pt?.colSpan ?: 1
             val rowSpan = pt?.rowSpan ?: 1
 
-            val childW = if (colSpan == 2) availW else colW
-            val childH = if (rowSpan == 2) (2 * rowH + gap) else rowH
+            val childW = if (colSpan >= 2) availW else colW
+            val childH = if (rowSpan > 1) (rowSpan * rowH + (rowSpan - 1) * gap) else rowH
 
             child.measure(
                 MeasureSpec.makeMeasureSpec(childW, MeasureSpec.EXACTLY),
@@ -87,8 +91,8 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
 
             val childLeft = pad + col * (colW + gap)
             val childTop = pad + row * (rowH + gap)
-            val childW = if (colSpan == 2) availW else colW
-            val childH = if (rowSpan == 2) (2 * rowH + gap) else rowH
+            val childW = if (colSpan >= 2) availW else colW
+            val childH = if (rowSpan > 1) (rowSpan * rowH + (rowSpan - 1) * gap) else rowH
 
             child.layout(childLeft, childTop, childLeft + childW, childTop + childH)
         }
@@ -304,9 +308,10 @@ object ControlCenterGrouping {
     fun inflateTileForType(type: String, parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader): View {
         val ctx = parent.context
         val density = ctx.resources.displayMetrics.density
-        val sysUIContextField = qsListCtrl?.javaClass?.getDeclaredField("sysUIContext")
+        val activeCtrl = qsListCtrl ?: ControlCenterConfigHolder.sQSListController
+        val sysUIContextField = activeCtrl?.javaClass?.getDeclaredField("sysUIContext")
         sysUIContextField?.isAccessible = true
-        val sysUIContext = (sysUIContextField?.get(qsListCtrl) as? Context) ?: ctx
+        val sysUIContext = (sysUIContextField?.get(activeCtrl) as? Context) ?: ctx
 
         return when (type) {
             "E" -> inflateChildCardView(ctx, sysUIContext, classLoader)
@@ -322,7 +327,7 @@ object ControlCenterGrouping {
                     val getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context::class.java)
                     blurEnabled = getBlurM.invoke(null, ctx) as Boolean
                 } catch (t: Throwable) {}
-                inflateChildTileView(ctx, sysUIContext, classLoader, blurEnabled, density)
+                inflateChildTileView(ctx, parent, sysUIContext, classLoader, blurEnabled, density)
             }
         }
     }
@@ -378,8 +383,15 @@ object ControlCenterGrouping {
 
     fun createSubHolderForView(childView: View, mainPanelController: Any?, classLoader: ClassLoader): Any? {
         try {
+            val mpc = mainPanelController ?: getMainPanelController(ControlCenterConfigHolder.sQSListController)
             val isCard = childView.javaClass.name.contains("QSCardItemView")
             if (isCard) {
+                if (mpc != null) {
+                    try {
+                        val setMainCtrlMethod = childView.javaClass.getMethod("setMainPanelController", Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController", false, classLoader))
+                        setMainCtrlMethod.invoke(childView, mpc)
+                    } catch (t: Throwable) {}
+                }
                 val cardHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardViewHolder", false, classLoader)
                 for (c in cardHolderClass.declaredConstructors) {
                     if (c.parameterTypes.size == 1 && c.parameterTypes[0].isAssignableFrom(childView.javaClass)) {
@@ -393,11 +405,17 @@ object ControlCenterGrouping {
                     return c.newInstance(childView)
                 }
             } else {
+                if (mpc != null) {
+                    try {
+                        val setMainCtrlMethod = childView.javaClass.getMethod("setMainPanelController", Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController", false, classLoader))
+                        setMainCtrlMethod.invoke(childView, mpc)
+                    } catch (t: Throwable) {}
+                }
                 val subHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSItemViewHolder", false, classLoader)
                 for (c in subHolderClass.declaredConstructors) {
                     if (c.parameterTypes.size == 2) {
                         c.isAccessible = true
-                        return c.newInstance(childView, mainPanelController)
+                        return c.newInstance(childView, mpc)
                     }
                 }
                 if (subHolderClass.declaredConstructors.isNotEmpty()) {
@@ -468,9 +486,9 @@ object ControlCenterGrouping {
         return root
     }
 
-    fun inflateChildTileView(ctx: Context, sysUIContext: Context, classLoader: ClassLoader, blurEnabled: Boolean, density: Float): View {
+    fun inflateChildTileView(ctx: Context, parent: ViewGroup? = null, sysUIContext: Context, classLoader: ClassLoader, blurEnabled: Boolean, density: Float): View {
         val tileLayoutId = ctx.resources.getIdentifier("qs_tile_item_view", "layout", ctx.packageName)
-        val childTile = LayoutInflater.from(ctx).inflate(tileLayoutId, null, false)
+        val childTile = LayoutInflater.from(ctx).inflate(tileLayoutId, parent, false)
         val tileIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemIconView", false, classLoader)
         var iconCtor: Constructor<*>? = null
         for (c in tileIconViewClass.declaredConstructors) {
@@ -488,6 +506,13 @@ object ControlCenterGrouping {
         }
         val initMethod = childTile.javaClass.getMethod("init", tileIconViewClass)
         initMethod.invoke(childTile, iconView)
+
+        val tileLabelId = ctx.resources.getIdentifier("tile_label", "id", ctx.packageName)
+        if (tileLabelId != 0) {
+            val tileLabel = childTile.findViewById<View>(tileLabelId)
+            tileLabel?.visibility = View.GONE
+            tileLabel?.alpha = 0.0f
+        }
 
         val iconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
         val iconFrame = childTile.findViewById<View>(iconFrameId)
