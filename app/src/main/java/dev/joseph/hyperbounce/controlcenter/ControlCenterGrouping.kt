@@ -327,7 +327,7 @@ object ControlCenterGrouping {
                     val getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context::class.java)
                     blurEnabled = getBlurM.invoke(null, ctx) as Boolean
                 } catch (t: Throwable) {}
-                inflateChildTileView(ctx, parent, sysUIContext, classLoader, blurEnabled, density)
+                inflateChildTileView(ctx, sysUIContext, classLoader, blurEnabled, density, parent)
             }
         }
     }
@@ -486,7 +486,7 @@ object ControlCenterGrouping {
         return root
     }
 
-    fun inflateChildTileView(ctx: Context, parent: ViewGroup? = null, sysUIContext: Context, classLoader: ClassLoader, blurEnabled: Boolean, density: Float): View {
+    fun inflateChildTileView(ctx: Context, sysUIContext: Context, classLoader: ClassLoader, blurEnabled: Boolean, density: Float, parent: ViewGroup? = null): View {
         val tileLayoutId = ctx.resources.getIdentifier("qs_tile_item_view", "layout", ctx.packageName)
         val childTile = LayoutInflater.from(ctx).inflate(tileLayoutId, parent, false)
         val tileIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemIconView", false, classLoader)
