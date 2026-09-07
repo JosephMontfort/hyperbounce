@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Outline
 import android.os.Handler
@@ -915,8 +916,8 @@ object ControlCenterHook {
                             m.isAccessible = true
                             module.hook(m).intercept { chain ->
                                 when (simpleName) {
-                                    "BrightnessSliderController" -> if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) 2 else 1
-                                    "VolumeSliderController" -> if (ControlCenterConfigHolder.sVolumeSliderHorizontal) 2 else 1
+                                    "BrightnessSliderController" -> if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) ControlCenterConfigHolder.sBrightnessSliderWidth else 1
+                                    "VolumeSliderController" -> if (ControlCenterConfigHolder.sVolumeSliderHorizontal) ControlCenterConfigHolder.sVolumeSliderWidth else 1
                                     "MediaPlayerController" -> when (ControlCenterConfigHolder.sMediaPlayerSize) {
                                         "1x2", "1x1" -> 1
                                         "4x1", "4x2" -> 4
@@ -2784,6 +2785,51 @@ object ControlCenterHook {
                             } catch (t: Throwable) {}
                             result
                         }
+                    } else if (m.name == "performFlip") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val holder = chain.thisObject
+                            val rawArgs = chain.args
+                            val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                            val bitmap = args?.getOrNull(0) as? Bitmap
+                            try {
+                                val bField = holder.javaClass.getDeclaredField("binding")
+                                bField.isAccessible = true
+                                val binding = bField.get(holder)
+                                val cField = binding?.javaClass?.getField("cover")
+                                val cover = cField?.get(binding) as? View
+                                cover?.let {
+                                    it.rotationY = 0f
+                                    it.scaleX = 1f
+                                    it.scaleY = 1f
+                                }
+                                val setCoverM = holder.javaClass.getDeclaredMethod("setCover", Bitmap::class.java, Boolean::class.javaPrimitiveType)
+                                setCoverM.isAccessible = true
+                                setCoverM.invoke(holder, bitmap, false)
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "performFlip hook error", t)
+                            }
+                            null
+                        }
+                    } else if (m.name == "setCover") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            try {
+                                val holder = chain.thisObject
+                                val bField = holder.javaClass.getDeclaredField("binding")
+                                bField.isAccessible = true
+                                val binding = bField.get(holder)
+                                val cField = binding?.javaClass?.getField("cover")
+                                val cover = cField?.get(binding) as? View
+                                cover?.let {
+                                    it.rotationY = 0f
+                                    it.scaleX = 1f
+                                    it.scaleY = 1f
+                                }
+                            } catch (t: Throwable) {}
+                            result
+                        }
                     }
                 }
             } catch (t: Throwable) {}
@@ -3445,6 +3491,7 @@ object ControlCenterHook {
                 v?.alpha = 1f
                 v?.scaleX = 1f
                 v?.scaleY = 1f
+                v?.rotationY = 0f
                 v?.translationX = 0f
                 v?.translationY = 0f
             }
@@ -4425,7 +4472,7 @@ object ControlCenterHook {
             if (isHorizontal) {
                 val lp = toggleSliderView.layoutParams
                 if (lp != null) {
-                    lp.width = stockH
+                    lp.width = ViewGroup.LayoutParams.MATCH_PARENT
                     lp.height = cardH
                     if (lp is ViewGroup.MarginLayoutParams) {
                         lp.topMargin = (72 * density).toInt()
@@ -4624,6 +4671,9 @@ class TileResizeDragTouchListener(
         private const val STATE_TALL_4 = 6
     }
 
+    private val isBrightnessSpec = "brightness".equals(spec, ignoreCase = true)
+    private val isVolumeSpec = "volume".equals(spec, ignoreCase = true)
+    private val isSliderSpec = isBrightnessSpec || isVolumeSpec
     private val isMediaSpec = "media".equals(spec, ignoreCase = true)
     private var downRawX = 0f
     private var downRawY = 0f
@@ -4644,6 +4694,7 @@ class TileResizeDragTouchListener(
     private var cardHeight1x2 = 0f
     private var oneColW = 0f
     private var twoColW = 0f
+    private var threeColW = 0f
     private var fourColW = 0f
     private var row1H = 0f
     private var row2H = 0f
@@ -4691,7 +4742,11 @@ class TileResizeDragTouchListener(
                 candidateTargetState = -1
 
                 initialState = when {
-                    "media".equals(spec, ignoreCase = true) -> when (ControlCenterConfigHolder.sMediaPlayerSize) {
+                    isSliderSpec -> {
+                        val w = if (isBrightnessSpec) ControlCenterConfigHolder.sBrightnessSliderWidth else ControlCenterConfigHolder.sVolumeSliderWidth
+                        w.coerceIn(2, 4)
+                    }
+                    isMediaSpec -> when (ControlCenterConfigHolder.sMediaPlayerSize) {
                         "2x2" -> STATE_LARGE
                         "2x1" -> STATE_EXPANDED
                         "1x2" -> STATE_VERTICAL
@@ -4742,46 +4797,55 @@ class TileResizeDragTouchListener(
 
                     oneColW = colW
                     twoColW = calcTwoColW
+                    threeColW = colW * 3f + 2f * gap
                     fourColW = if (rvContentW > 100f * density) rvContentW else (colW * 4f + 3f * gap)
                     row1H = cardH
                     row2H = tallH
                     row4H = 4f * cardH + 3f * gap
 
-                    when (initialState) {
-                        STATE_NORMAL -> {
-                            unitWidth1x1 = originWidth
-                            unitHeight1x1 = originHeight
-                            cardWidth2x1 = twoColW.coerceAtLeast(originWidth * 2f + gap)
-                            cardHeight1x2 = tallH
+                    if (isSliderSpec) {
+                        originWidth = when (initialState) {
+                            3 -> threeColW
+                            4 -> fourColW
+                            else -> twoColW
                         }
-                        STATE_EXPANDED -> {
-                            cardWidth2x1 = originWidth
-                            unitHeight1x1 = originHeight
-                            unitWidth1x1 = colW.coerceAtLeast(56f * density)
-                            cardHeight1x2 = tallH
-                        }
-                        STATE_VERTICAL -> {
-                            unitWidth1x1 = originWidth
-                            cardHeight1x2 = originHeight
-                            unitHeight1x1 = colW.coerceAtLeast(56f * density)
-                            cardWidth2x1 = twoColW.coerceAtLeast(originWidth * 2f + gap)
-                        }
-                        STATE_LARGE -> {
-                            cardWidth2x1 = originWidth
-                            cardHeight1x2 = originHeight
-                            unitWidth1x1 = colW.coerceAtLeast(56f * density)
-                            unitHeight1x1 = colW.coerceAtLeast(56f * density)
-                        }
-                        STATE_WIDE_1, STATE_WIDE_2, STATE_TALL_4 -> {
-                            cardWidth2x1 = twoColW
-                            cardHeight1x2 = tallH
-                            unitWidth1x1 = colW.coerceAtLeast(56f * density)
-                            unitHeight1x1 = colW.coerceAtLeast(56f * density)
+                        originHeight = row1H
+                    } else {
+                        when (initialState) {
+                            STATE_NORMAL -> {
+                                unitWidth1x1 = originWidth
+                                unitHeight1x1 = originHeight
+                                cardWidth2x1 = twoColW.coerceAtLeast(originWidth * 2f + gap)
+                                cardHeight1x2 = tallH
+                            }
+                            STATE_EXPANDED -> {
+                                cardWidth2x1 = originWidth
+                                unitHeight1x1 = originHeight
+                                unitWidth1x1 = colW.coerceAtLeast(56f * density)
+                                cardHeight1x2 = tallH
+                            }
+                            STATE_VERTICAL -> {
+                                unitWidth1x1 = originWidth
+                                cardHeight1x2 = originHeight
+                                unitHeight1x1 = colW.coerceAtLeast(56f * density)
+                                cardWidth2x1 = twoColW.coerceAtLeast(originWidth * 2f + gap)
+                            }
+                            STATE_LARGE -> {
+                                cardWidth2x1 = originWidth
+                                cardHeight1x2 = originHeight
+                                unitWidth1x1 = colW.coerceAtLeast(56f * density)
+                                unitHeight1x1 = colW.coerceAtLeast(56f * density)
+                            }
+                            STATE_WIDE_1, STATE_WIDE_2, STATE_TALL_4 -> {
+                                cardWidth2x1 = twoColW
+                                cardHeight1x2 = tallH
+                                unitWidth1x1 = colW.coerceAtLeast(56f * density)
+                                unitHeight1x1 = colW.coerceAtLeast(56f * density)
+                            }
                         }
                     }
 
-                    val isMediaSpec = "media".equals(spec, ignoreCase = true)
-                    val initialRadius = if (initialState == STATE_NORMAL && !isMediaSpec) Math.min(originWidth, originHeight) / 2f else cardRadius
+                    val initialRadius = if (initialState == STATE_NORMAL && !isMediaSpec && !isSliderSpec) Math.min(originWidth, originHeight) / 2f else cardRadius
                     ghostDrawable = TileResizeGhostDrawable(density).apply {
                         setOriginBounds(originLeft, originTop, originWidth, originHeight, initialRadius)
                     }
@@ -4815,7 +4879,27 @@ class TileResizeDragTouchListener(
                 var previewRadius = cardRadius
                 var targetState = initialState
 
-                if (isMediaSpec) {
+                if (isSliderSpec) {
+                    val rawW = (originWidth + dx).coerceIn(twoColW * 0.85f, fourColW * 1.05f)
+                    targetState = when {
+                        rawW > (threeColW + fourColW) / 2f -> 4
+                        rawW > (twoColW + threeColW) / 2f -> 3
+                        else -> 2
+                    }
+                    val targetW = when (targetState) {
+                        3 -> threeColW
+                        4 -> fourColW
+                        else -> twoColW
+                    }
+                    if (targetState != initialState) {
+                        val snapFactor = 0.60f
+                        previewW = lerp(rawW, targetW, snapFactor)
+                    } else {
+                        previewW = rawW
+                    }
+                    previewH = row1H
+                    previewRadius = cardRadius
+                } else if (isMediaSpec) {
                     val snapDistX = (oneColW + 10f * density) * 0.35f
                     val snapDistY = (row1H + 10f * density) * 0.35f
 
@@ -5117,7 +5201,9 @@ class TileResizeDragTouchListener(
                 if (isDragging) {
                     if (candidateTargetState != -1 && candidateTargetState != initialState) {
                         v.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                        if (isMediaSpec) {
+                        if (isSliderSpec) {
+                            ControlCenterConfigHolder.setSliderWidth(ctx, isBrightnessSpec, candidateTargetState, tileView)
+                        } else if (isMediaSpec) {
                             val targetMediaSize = when (candidateTargetState) {
                                 STATE_EXPANDED -> "2x1"
                                 STATE_VERTICAL -> "1x2"
@@ -5139,7 +5225,11 @@ class TileResizeDragTouchListener(
                     }
                 } else {
                     v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                    ControlCenterConfigHolder.toggleTileSize(ctx, spec, tileView)
+                    if (isSliderSpec) {
+                        ControlCenterConfigHolder.cycleSliderWidth(ctx, isBrightnessSpec, tileView)
+                    } else {
+                        ControlCenterConfigHolder.toggleTileSize(ctx, spec, tileView)
+                    }
                 }
                 isDragging = false
                 candidateTargetState = -1

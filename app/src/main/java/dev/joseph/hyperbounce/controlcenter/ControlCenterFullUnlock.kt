@@ -388,12 +388,12 @@ object ControlCenterFullUnlock {
                 else -> Pair(2, 2)
             }
         }
-        // 2. Sliders -> 1x2 vertical or 2x1 horizontal
+        // 2. Sliders -> 1x2 vertical or 2..4x1 horizontal
         if (viewType == 3484338 || item.javaClass.name.contains("Brightness")) {
-            return if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) Pair(2, 1) else Pair(1, 2)
+            return if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) Pair(ControlCenterConfigHolder.sBrightnessSliderWidth, 1) else Pair(1, 2)
         }
         if (viewType == 3484339 || item.javaClass.name.contains("Volume")) {
-            return if (ControlCenterConfigHolder.sVolumeSliderHorizontal) Pair(2, 1) else Pair(1, 2)
+            return if (ControlCenterConfigHolder.sVolumeSliderHorizontal) Pair(ControlCenterConfigHolder.sVolumeSliderWidth, 1) else Pair(1, 2)
         }
         if (item.javaClass.name.contains("Slider")) {
             return Pair(1, 2)

@@ -7,6 +7,7 @@ import android.net.Uri
 import android.text.TextUtils
 import android.util.Log
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -111,6 +112,8 @@ object ControlCenterConfigHolder {
     @Volatile var sMediaPlayerSize: String = "2x2"
     @Volatile var sBrightnessSliderHorizontal: Boolean = false
     @Volatile var sVolumeSliderHorizontal: Boolean = false
+    @Volatile var sBrightnessSliderWidth: Int = 2
+    @Volatile var sVolumeSliderWidth: Int = 2
     val sComponentPriorities = ConcurrentHashMap<String, Int>().apply {
         put("CompactQS", 0)
         put("CompactQSCard", 1)
@@ -273,6 +276,8 @@ object ControlCenterConfigHolder {
                     if (sMediaPlayerSize == "1x1") sMediaPlayerSize = "2x2"
                     sBrightnessSliderHorizontal = json.optBoolean("brightness_slider_horizontal", sBrightnessSliderHorizontal)
                     sVolumeSliderHorizontal = json.optBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
+                    sBrightnessSliderWidth = json.optInt("brightness_slider_width", sBrightnessSliderWidth).coerceIn(2, 4)
+                    sVolumeSliderWidth = json.optInt("volume_slider_width", sVolumeSliderWidth).coerceIn(2, 4)
 
                     if (json.has("tile_groups_v2")) {
                         val grpV2 = json.optString("tile_groups_v2", "")
@@ -363,6 +368,8 @@ object ControlCenterConfigHolder {
                 sMediaPlayerSize = prefs.getString("media_player_size", sMediaPlayerSize) ?: "2x2"
                 sBrightnessSliderHorizontal = prefs.getBoolean("brightness_slider_horizontal", sBrightnessSliderHorizontal)
                 sVolumeSliderHorizontal = prefs.getBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
+                sBrightnessSliderWidth = prefs.getInt("brightness_slider_width", sBrightnessSliderWidth).coerceIn(2, 4)
+                sVolumeSliderWidth = prefs.getInt("volume_slider_width", sVolumeSliderWidth).coerceIn(2, 4)
 
                 if (prefs.contains("tile_groups_v2")) {
                     val groupsStrV2 = prefs.getString("tile_groups_v2", "") ?: ""
@@ -440,6 +447,8 @@ object ControlCenterConfigHolder {
             json.put("media_player_size", sMediaPlayerSize)
             json.put("brightness_slider_horizontal", sBrightnessSliderHorizontal)
             json.put("volume_slider_horizontal", sVolumeSliderHorizontal)
+            json.put("brightness_slider_width", sBrightnessSliderWidth)
+            json.put("volume_slider_width", sVolumeSliderWidth)
 
             val groupsSb = StringBuilder()
             for (g in sTileGroups) {
@@ -489,6 +498,8 @@ object ControlCenterConfigHolder {
                 editor.putString("media_player_size", sMediaPlayerSize)
                 editor.putBoolean("brightness_slider_horizontal", sBrightnessSliderHorizontal)
                 editor.putBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
+                editor.putInt("brightness_slider_width", sBrightnessSliderWidth)
+                editor.putInt("volume_slider_width", sVolumeSliderWidth)
                 editor.putString("tile_groups_v2", groupsSb.toString())
                 editor.apply()
             }
@@ -526,6 +537,8 @@ object ControlCenterConfigHolder {
             sMediaPlayerSize = "2x2"
             sBrightnessSliderHorizontal = false
             sVolumeSliderHorizontal = false
+            sBrightnessSliderWidth = 2
+            sVolumeSliderWidth = 2
             sIsWifiFirst = true
             sComponentPriorities.clear()
             sComponentPriorities["CompactQS"] = 0
@@ -964,7 +977,6 @@ object ControlCenterConfigHolder {
 
                     // Special Handling for Sliders
                     if (isSlider) {
-                        if (resizeHandle != null) resizeHandle.visibility = View.GONE
                         if (selectBadge != null) selectBadge.visibility = View.GONE
 
                         if (rotateBtn == null && itemView is ViewGroup) {
@@ -981,13 +993,14 @@ object ControlCenterConfigHolder {
                             }
                             itemView.addView(rotateBtn)
                         }
+                        val isBright = "brightness".equals(spec, ignoreCase = true)
+                        val isHoriz = if (isBright) sBrightnessSliderHorizontal else sVolumeSliderHorizontal
                         if (rotateBtn != null) {
                             val shouldShowRotate = !sIsGroupSelectMode && !sIsDisassembleMode
                             rotateBtn.visibility = if (shouldShowRotate) View.VISIBLE else View.GONE
                             if (shouldShowRotate) {
                                 rotateBtn.bringToFront()
                                 rotateBtn.isClickable = true
-                                val isBright = "brightness".equals(spec, ignoreCase = true)
                                 rotateBtn.setOnClickListener {
                                     toggleSliderOrientation(itemView.context, isBright, itemView)
                                 }
@@ -996,6 +1009,50 @@ object ControlCenterConfigHolder {
                                 rotateBtn.setOnClickListener(null)
                             }
                         }
+
+                        // Resize Handle for Sliders (Only when horizontal!)
+                        if (isHoriz) {
+                            val badgeSize = (38 * density).toInt()
+                            if (resizeHandle == null && itemView is ViewGroup) {
+                                resizeHandle = ImageView(itemView.context).apply {
+                                    id = resizeTag
+                                    layoutParams = createMediaBadgeLayoutParams(itemView, badgeSize)
+                                    setImageDrawable(CurvedResizeHandleDrawable(density))
+                                }
+                                itemView.addView(resizeHandle)
+                            } else if (resizeHandle != null && isConstraintLayout(itemView) && !resizeHandle.layoutParams.javaClass.name.contains("ConstraintLayout")) {
+                                resizeHandle.layoutParams = createMediaBadgeLayoutParams(itemView as ViewGroup, badgeSize)
+                            }
+                            if (resizeHandle != null) {
+                                val shouldShowResize = !sIsGroupSelectMode && !sIsDisassembleMode
+                                resizeHandle.visibility = if (shouldShowResize) View.VISIBLE else View.GONE
+                                if (shouldShowResize) {
+                                    val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
+                                    val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
+                                    if (itemView.width > 0 && itemView.height > 0) {
+                                        resizeHandle.layout(itemView.width - bw, itemView.height - bh, itemView.width, itemView.height)
+                                    }
+                                    resizeHandle.bringToFront()
+                                    resizeHandle.isClickable = true
+                                    resizeHandle.setOnClickListener {
+                                        cycleSliderWidth(itemView.context, isBright, itemView)
+                                    }
+                                    resizeHandle.setOnTouchListener(TileResizeDragTouchListener(itemView.context, if (isBright) "brightness" else "volume", itemView, density))
+                                } else {
+                                    resizeHandle.isClickable = false
+                                    resizeHandle.setOnClickListener(null)
+                                    resizeHandle.setOnTouchListener(null)
+                                }
+                            }
+                        } else {
+                            if (resizeHandle != null) {
+                                resizeHandle.visibility = View.GONE
+                                resizeHandle.isClickable = false
+                                resizeHandle.setOnClickListener(null)
+                                resizeHandle.setOnTouchListener(null)
+                            }
+                        }
+
                         continue
                     }
 
@@ -1738,6 +1795,38 @@ object ControlCenterConfigHolder {
             sBrightnessSliderHorizontal = !sBrightnessSliderHorizontal
         } else {
             sVolumeSliderHorizontal = !sVolumeSliderHorizontal
+        }
+        savePriorities(ctx)
+        refreshRecyclerView(tileView)
+    }
+
+    fun cycleSliderWidth(ctx: Context, isBrightness: Boolean, tileView: View?) {
+        if (isBrightness) {
+            sBrightnessSliderWidth = when (sBrightnessSliderWidth) {
+                2 -> 3
+                3 -> 4
+                4 -> 2
+                else -> 2
+            }
+        } else {
+            sVolumeSliderWidth = when (sVolumeSliderWidth) {
+                2 -> 3
+                3 -> 4
+                4 -> 2
+                else -> 2
+            }
+        }
+        savePriorities(ctx)
+        refreshRecyclerView(tileView)
+        tileView?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+
+    fun setSliderWidth(ctx: Context, isBrightness: Boolean, width: Int, tileView: View?) {
+        val clamped = width.coerceIn(2, 4)
+        if (isBrightness) {
+            sBrightnessSliderWidth = clamped
+        } else {
+            sVolumeSliderWidth = clamped
         }
         savePriorities(ctx)
         refreshRecyclerView(tileView)

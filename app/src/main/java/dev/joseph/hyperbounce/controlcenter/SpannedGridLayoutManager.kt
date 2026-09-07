@@ -154,13 +154,13 @@ class SpannedGridLayoutManager : GridLayoutManager {
                     else -> intArrayOf(2, 2)
                 }
             }
-            // 3484338 / 274442: Brightness Slider -> 1x2 vertical or 2x1 horizontal
+            // 3484338 / 274442: Brightness Slider -> 1x2 vertical or 2..4x1 horizontal
             if (viewType == 3484338 || viewType == 274442) {
-                return if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) intArrayOf(2, 1) else intArrayOf(1, 2)
+                return if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) intArrayOf(ControlCenterConfigHolder.sBrightnessSliderWidth, 1) else intArrayOf(1, 2)
             }
-            // 3484339 / 865269: Volume Slider -> 1x2 vertical or 2x1 horizontal
+            // 3484339 / 865269: Volume Slider -> 1x2 vertical or 2..4x1 horizontal
             if (viewType == 3484339 || viewType == 865269) {
-                return if (ControlCenterConfigHolder.sVolumeSliderHorizontal) intArrayOf(2, 1) else intArrayOf(1, 2)
+                return if (ControlCenterConfigHolder.sVolumeSliderHorizontal) intArrayOf(ControlCenterConfigHolder.sVolumeSliderWidth, 1) else intArrayOf(1, 2)
             }
             // 2274: Grouped 4-Tile Card Container -> 2x2
             // 2281..2284: Grouped Containers -> 2x2
