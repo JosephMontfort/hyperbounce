@@ -203,6 +203,8 @@ class SelectCircleDrawable : Drawable() {
         invalidateSelf()
     }
 
+    fun setSelected(selected: Boolean) = setChecked(selected)
+
     override fun draw(canvas: Canvas) {
         val w = bounds.width().toFloat()
         val h = bounds.height().toFloat()

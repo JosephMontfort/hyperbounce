@@ -261,6 +261,10 @@ object ControlCenterFullUnlock {
                 sUnifiedSlotOrder.remove("card:$spec")
                 sProxyCache.remove("card:$spec")
                 sProxyHandlers.remove("card:$spec")
+                sKnownSlots.remove("component:$spec")
+                sUnifiedSlotOrder.remove("component:$spec")
+                sProxyCache.remove("component:$spec")
+                sProxyHandlers.remove("component:$spec")
             }
 
             // 3. Deduplicate sUnifiedSlotOrder while preserving order
@@ -291,22 +295,32 @@ object ControlCenterFullUnlock {
             for (spec in specs) {
                 val tileId = "tile:$spec"
                 val cardId = "card:$spec"
+                val compId = "component:$spec"
                 val idx1 = sUnifiedSlotOrder.indexOf(tileId)
                 val idx2 = sUnifiedSlotOrder.indexOf(cardId)
-                val idx = if (idx1 >= 0) idx1 else idx2
+                val idx3 = sUnifiedSlotOrder.indexOf(compId)
+                val idx = when {
+                    idx1 >= 0 -> idx1
+                    idx2 >= 0 -> idx2
+                    else -> idx3
+                }
                 if (idx >= 0 && (insertIdx == -1 || idx < insertIdx)) {
                     insertIdx = idx
                 }
                 sKnownSlots.remove(tileId)
                 sKnownSlots.remove(cardId)
+                sKnownSlots.remove(compId)
                 sProxyCache.remove(tileId)
                 sProxyCache.remove(cardId)
+                sProxyCache.remove(compId)
                 sProxyHandlers.remove(tileId)
                 sProxyHandlers.remove(cardId)
+                sProxyHandlers.remove(compId)
             }
             for (spec in specs) {
                 sUnifiedSlotOrder.remove("tile:$spec")
                 sUnifiedSlotOrder.remove("card:$spec")
+                sUnifiedSlotOrder.remove("component:$spec")
             }
             if (insertIdx >= 0 && insertIdx <= sUnifiedSlotOrder.size) {
                 sUnifiedSlotOrder.add(insertIdx, groupSlotId)
@@ -334,7 +348,13 @@ object ControlCenterFullUnlock {
                 val idx = sUnifiedSlotOrder.indexOf(groupSlotId)
                 sUnifiedSlotOrder.remove(groupSlotId)
 
-                val memberTileIds = g.specs.map { if (it == "wifi" || it == "cell") "card:$it" else "tile:$it" }
+                val memberTileIds = g.specs.map {
+                    when (it) {
+                        "wifi", "cell" -> "card:$it"
+                        "brightness", "volume", "media" -> "component:$it"
+                        else -> "tile:$it"
+                    }
+                }
                 if (idx >= 0 && idx <= sUnifiedSlotOrder.size) {
                     sUnifiedSlotOrder.addAll(idx, memberTileIds)
                 } else {
@@ -388,12 +408,12 @@ object ControlCenterFullUnlock {
                 else -> Pair(2, 2)
             }
         }
-        // 2. Sliders -> 1x2 vertical or 2x1 horizontal
+        // 2. Sliders -> 1x2 vertical or 2..4x1 horizontal
         if (viewType == 3484338 || item.javaClass.name.contains("Brightness")) {
-            return if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) Pair(2, 1) else Pair(1, 2)
+            return if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) Pair(ControlCenterConfigHolder.sBrightnessSliderWidth, 1) else Pair(1, 2)
         }
         if (viewType == 3484339 || item.javaClass.name.contains("Volume")) {
-            return if (ControlCenterConfigHolder.sVolumeSliderHorizontal) Pair(2, 1) else Pair(1, 2)
+            return if (ControlCenterConfigHolder.sVolumeSliderHorizontal) Pair(ControlCenterConfigHolder.sVolumeSliderWidth, 1) else Pair(1, 2)
         }
         if (item.javaClass.name.contains("Slider")) {
             return Pair(1, 2)
@@ -402,12 +422,11 @@ object ControlCenterFullUnlock {
         if (viewType == 338423 || viewType == 2668765) {
             return Pair(2, 1)
         }
-        // 4. Cards (Wi-Fi, Cell) & Circular tiles
+        // 4. Cards (Wi-Fi, Cell) & Circular tiles & Groups
         if (spec != null) {
             val g = ControlCenterConfigHolder.isGroupAnchor(spec)
             if (g != null) {
-                if (g.is2x2Group()) return Pair(2, 2)
-                if (g.specs.size == 2) return if (g.isVertical) Pair(1, 2) else Pair(2, 1)
+                return Pair(2, g.getEffectiveRowCount())
             }
             if (ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)) return Pair(2, 2)
             if (ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)) return Pair(1, 2)
@@ -637,14 +656,29 @@ object ControlCenterFullUnlock {
                             sKnownSlots[id] = SlotItem(id, controller, item, vt, spans.first, spans.second)
                         }
                     } else if (ctrlName.contains("MediaPlayerController")) {
+                        if (ControlCenterConfigHolder.isGroupChild("media")) {
+                            sKnownSlots.remove("component:media")
+                            sUnifiedSlotOrder.remove("component:media")
+                            continue
+                        }
                         val item = items.firstOrNull() ?: controller
                         val spans = getItemSpans(item, 3484336, null)
                         sKnownSlots["component:media"] = SlotItem("component:media", controller, item, 3484336, spans.first, spans.second)
                     } else if (ctrlName.contains("BrightnessSliderController")) {
+                        if (ControlCenterConfigHolder.isGroupChild("brightness")) {
+                            sKnownSlots.remove("component:brightness")
+                            sUnifiedSlotOrder.remove("component:brightness")
+                            continue
+                        }
                         val item = items.firstOrNull() ?: controller
                         val spans = getItemSpans(item, 3484338, null)
                         sKnownSlots["component:brightness"] = SlotItem("component:brightness", controller, item, 3484338, spans.first, spans.second)
                     } else if (ctrlName.contains("VolumeSliderController")) {
+                        if (ControlCenterConfigHolder.isGroupChild("volume")) {
+                            sKnownSlots.remove("component:volume")
+                            sUnifiedSlotOrder.remove("component:volume")
+                            continue
+                        }
                         val item = items.firstOrNull() ?: controller
                         val spans = getItemSpans(item, 3484339, null)
                         sKnownSlots["component:volume"] = SlotItem("component:volume", controller, item, 3484339, spans.first, spans.second)
@@ -1203,6 +1237,9 @@ object ControlCenterFullUnlock {
 
                                             // 1. NEVER include compact QS cards (they create duplicate circular wifi/cell)
                                             if (cName.contains("CompactQS") || cName.contains("CompactQSCard")) continue
+                                            if (cName.contains("BrightnessSliderController") && ControlCenterConfigHolder.isGroupChild("brightness")) continue
+                                            if (cName.contains("VolumeSliderController") && ControlCenterConfigHolder.isGroupChild("volume")) continue
+                                            if (cName.contains("MediaPlayerController") && ControlCenterConfigHolder.isGroupChild("media")) continue
 
                                             // 2. Check if the controller is available for landscape
                                             val isAvail = try {

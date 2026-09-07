@@ -110,8 +110,8 @@ object ControlCenterGrouping {
         for (i in specs.indices) {
             val spec = specs[i]
             val type = tileSizesList[i]
-            val colSpan = if (type == "E") 2 else 1
-            val rowSpan = if (type == "V") 2 else 1
+            val colSpan = if (type == "E" || type == "M") 2 else 1
+            val rowSpan = if (type == "V" || type == "M") 2 else 1
 
             var startR = -1
             var startC = -1
@@ -185,11 +185,21 @@ object ControlCenterGrouping {
                 }
                 else -> {
                     for (s in group.specs) {
+                        val isBright = "brightness".equals(s, ignoreCase = true)
+                        val isVol = "volume".equals(s, ignoreCase = true)
+                        val isMed = "media".equals(s, ignoreCase = true)
                         val isCard = ("wifi".equals(s, ignoreCase = true) || "cell".equals(s, ignoreCase = true))
                         val isCircCard = isCard && ControlCenterConfigHolder.sCircularCardSpecs.contains(s)
                         val isExp = ControlCenterConfigHolder.sExpandedTileSpecs.contains(s) || (isCard && !isCircCard && !ControlCenterConfigHolder.sVerticalTileSpecs.contains(s) && !ControlCenterConfigHolder.sLargeTileSpecs.contains(s))
                         val isVert = ControlCenterConfigHolder.sVerticalTileSpecs.contains(s)
                         when {
+                            isBright -> if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) inferred.add("E") else inferred.add("V")
+                            isVol -> if (ControlCenterConfigHolder.sVolumeSliderHorizontal) inferred.add("E") else inferred.add("V")
+                            isMed -> when (ControlCenterConfigHolder.sMediaPlayerSize) {
+                                "2x1" -> inferred.add("E")
+                                "1x2" -> inferred.add("V")
+                                else -> inferred.add("M")
+                            }
                             isExp -> inferred.add("E")
                             isVert -> inferred.add("V")
                             else -> inferred.add("C")
@@ -330,6 +340,75 @@ object ControlCenterGrouping {
                 inflateChildTileView(ctx, sysUIContext, classLoader, blurEnabled, density, parent)
             }
         }
+    }
+
+    fun createChildViewForSpec(spec: String, type: String, parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader): Pair<View, Any?> {
+        val isBright = "brightness".equals(spec, ignoreCase = true)
+        val isVol = "volume".equals(spec, ignoreCase = true)
+        val isMed = "media".equals(spec, ignoreCase = true)
+
+        if (isBright || isVol) {
+            val dist = ControlCenterFullUnlock.sDistributor
+            var ctrl: Any? = null
+            if (dist != null) {
+                try {
+                    val mName = if (isBright) "getBrightnessSliderController" else "getVolumeSliderController"
+                    val m = dist.javaClass.getMethod(mName)
+                    ctrl = m.invoke(dist)
+                } catch (t: Throwable) {}
+            }
+            if (ctrl != null) {
+                try {
+                    val getHolderM = ctrl.javaClass.getMethod("getHolder")
+                    var h = getHolderM.invoke(ctrl)
+                    if (h == null) {
+                        val vt = if (isBright) 274442 else 865269
+                        val createVhM = ctrl.javaClass.getMethod("createViewHolder", ViewGroup::class.java, Int::class.javaPrimitiveType)
+                        h = createVhM.invoke(ctrl, parent, vt)
+                        val onBindM = ctrl.javaClass.getMethod("onBindViewHolder")
+                        onBindM.invoke(ctrl)
+                    }
+                    val iv = getViewHolderItemView(h)
+                    if (iv != null) {
+                        (iv.parent as? ViewGroup)?.removeView(iv)
+                        return Pair(iv, h)
+                    }
+                } catch (t: Throwable) {
+                    Log.e(TAG, "createChildViewForSpec slider error", t)
+                }
+            }
+        } else if (isMed) {
+            val dist = ControlCenterFullUnlock.sDistributor
+            var ctrl: Any? = null
+            if (dist != null) {
+                try {
+                    val m = dist.javaClass.getMethod("getMediaPlayerController")
+                    ctrl = m.invoke(dist)
+                } catch (t: Throwable) {}
+            }
+            if (ctrl != null) {
+                try {
+                    val getHolderM = ctrl.javaClass.getMethod("getHolder")
+                    var h = getHolderM.invoke(ctrl)
+                    if (h == null) {
+                        val createVhM = ctrl.javaClass.getMethod("createViewHolder", ViewGroup::class.java, Int::class.javaPrimitiveType)
+                        h = createVhM.invoke(ctrl, parent, 63342)
+                        val onBindM = ctrl.javaClass.getMethod("onBindViewHolder")
+                        onBindM.invoke(ctrl)
+                    }
+                    val iv = getViewHolderItemView(h)
+                    if (iv != null) {
+                        (iv.parent as? ViewGroup)?.removeView(iv)
+                        return Pair(iv, h)
+                    }
+                } catch (t: Throwable) {
+                    Log.e(TAG, "createChildViewForSpec media error", t)
+                }
+            }
+        }
+
+        val child = inflateTileForType(type, parent, qsListCtrl, classLoader)
+        return Pair(child, null)
     }
 
     fun getViewHolderItemView(holder: Any?): View? {
@@ -2193,11 +2272,21 @@ object ControlCenterGrouping {
                             val selectedSpecs = ArrayList(ControlCenterConfigHolder.sSelectedTileSpecs)
                             val tileSizesList = mutableListOf<String>()
                             for (spec in selectedSpecs) {
+                                val isBright = "brightness".equals(spec, ignoreCase = true)
+                                val isVol = "volume".equals(spec, ignoreCase = true)
+                                val isMed = "media".equals(spec, ignoreCase = true)
                                 val isCard = ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true))
                                 val isCircCard = isCard && ControlCenterConfigHolder.sCircularCardSpecs.contains(spec)
                                 val isExp = ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) || (isCard && !isCircCard && !ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) && !ControlCenterConfigHolder.sLargeTileSpecs.contains(spec))
                                 val isVert = ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)
                                 when {
+                                    isBright -> if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) tileSizesList.add("E") else tileSizesList.add("V")
+                                    isVol -> if (ControlCenterConfigHolder.sVolumeSliderHorizontal) tileSizesList.add("E") else tileSizesList.add("V")
+                                    isMed -> when (ControlCenterConfigHolder.sMediaPlayerSize) {
+                                        "2x1" -> tileSizesList.add("E")
+                                        "1x2" -> tileSizesList.add("V")
+                                        else -> tileSizesList.add("M")
+                                    }
                                     isExp -> tileSizesList.add("E")
                                     isVert -> tileSizesList.add("V")
                                     else -> tileSizesList.add("C")
