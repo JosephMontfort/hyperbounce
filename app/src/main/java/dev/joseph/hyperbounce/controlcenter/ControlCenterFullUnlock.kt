@@ -328,7 +328,7 @@ object ControlCenterFullUnlock {
                 sUnifiedSlotOrder.add(groupSlotId)
             }
 
-            val group = ControlCenterConfigHolder.findGroupById(groupId)
+            val group: TileGroup? = ControlCenterConfigHolder.findGroupById(groupId)
             if (group != null) {
                 var hostController: Any? = null
                 var hostItem: Any? = null

@@ -635,6 +635,11 @@ object ControlCenterConfigHolder {
         return null
     }
 
+    fun findGroupById(id: String?): TileGroup? {
+        if (id == null) return null
+        return sTileGroups.firstOrNull { it.id == id }
+    }
+
     fun isGroupMember(spec: String?): Boolean {
         return findGroupForSpec(spec) != null
     }
