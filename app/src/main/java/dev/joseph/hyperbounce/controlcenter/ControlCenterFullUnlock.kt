@@ -64,7 +64,7 @@ object ControlCenterFullUnlock {
         val id: String,
         val owner: Any,
         val item: Any,
-        val viewType: Int,
+        var viewType: Int,
         var spanW: Int,
         var spanH: Int
     )
