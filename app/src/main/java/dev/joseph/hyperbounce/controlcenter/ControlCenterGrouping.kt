@@ -465,31 +465,27 @@ object ControlCenterGrouping {
             val ctrl = getControllerForSpec(spec)
             if (ctrl != null) {
                 try {
-                    val getHolderM = ctrl.javaClass.getMethod("getHolder")
-                    var h = getHolderM.invoke(ctrl)
-                    if (h == null) {
-                        val vt = if (isBright) 274442 else 865269
-                        val createVhM = ctrl.javaClass.getMethod("createViewHolder", ViewGroup::class.java, Int::class.javaPrimitiveType)
-                        h = createVhM.invoke(ctrl, parent, vt)
-                        if (h != null) {
-                            try {
-                                var cls: Class<*>? = ctrl.javaClass
-                                while (cls != null) {
-                                    try {
-                                        val setHM = cls.getDeclaredMethod("setHolder", Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader))
-                                        setHM.isAccessible = true
-                                        setHM.invoke(ctrl, h)
-                                        break
-                                    } catch (e: NoSuchMethodException) {
-                                        cls = cls.superclass
-                                    }
+                    val vt = if (isBright) 274442 else 865269
+                    val createVhM = ctrl.javaClass.getMethod("createViewHolder", ViewGroup::class.java, Int::class.javaPrimitiveType)
+                    val h = createVhM.invoke(ctrl, parent, vt)
+                    if (h != null) {
+                        try {
+                            var cls: Class<*>? = ctrl.javaClass
+                            while (cls != null) {
+                                try {
+                                    val setHM = cls.getDeclaredMethod("setHolder", Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader))
+                                    setHM.isAccessible = true
+                                    setHM.invoke(ctrl, h)
+                                    break
+                                } catch (e: NoSuchMethodException) {
+                                    cls = cls.superclass
                                 }
-                            } catch (t: Throwable) {}
-                            try {
-                                val onBindM = ctrl.javaClass.getMethod("onBindViewHolder")
-                                onBindM.invoke(ctrl)
-                            } catch (t: Throwable) {}
-                        }
+                            }
+                        } catch (t: Throwable) {}
+                        try {
+                            val onBindM = ctrl.javaClass.getMethod("onBindViewHolder")
+                            onBindM.invoke(ctrl)
+                        } catch (t: Throwable) {}
                     }
                     val iv = getViewHolderItemView(h)
                     if (iv != null) {
@@ -519,30 +515,26 @@ object ControlCenterGrouping {
             val ctrl = getControllerForSpec(spec)
             if (ctrl != null) {
                 try {
-                    val getHolderM = ctrl.javaClass.getMethod("getHolder")
-                    var h = getHolderM.invoke(ctrl)
-                    if (h == null) {
-                        val createVhM = ctrl.javaClass.getMethod("createViewHolder", ViewGroup::class.java, Int::class.javaPrimitiveType)
-                        h = createVhM.invoke(ctrl, parent, 63342)
-                        if (h != null) {
-                            try {
-                                var cls: Class<*>? = ctrl.javaClass
-                                while (cls != null) {
-                                    try {
-                                        val setHM = cls.getDeclaredMethod("setHolder", Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader))
-                                        setHM.isAccessible = true
-                                        setHM.invoke(ctrl, h)
-                                        break
-                                    } catch (e: NoSuchMethodException) {
-                                        cls = cls.superclass
-                                    }
+                    val createVhM = ctrl.javaClass.getMethod("createViewHolder", ViewGroup::class.java, Int::class.javaPrimitiveType)
+                    val h = createVhM.invoke(ctrl, parent, 63342)
+                    if (h != null) {
+                        try {
+                            var cls: Class<*>? = ctrl.javaClass
+                            while (cls != null) {
+                                try {
+                                    val setHM = cls.getDeclaredMethod("setHolder", Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader))
+                                    setHM.isAccessible = true
+                                    setHM.invoke(ctrl, h)
+                                    break
+                                } catch (e: NoSuchMethodException) {
+                                    cls = cls.superclass
                                 }
-                            } catch (t: Throwable) {}
-                            try {
-                                val onBindM = ctrl.javaClass.getMethod("onBindViewHolder")
-                                onBindM.invoke(ctrl)
-                            } catch (t: Throwable) {}
-                        }
+                            }
+                        } catch (t: Throwable) {}
+                        try {
+                            val onBindM = ctrl.javaClass.getMethod("onBindViewHolder")
+                            onBindM.invoke(ctrl)
+                        } catch (t: Throwable) {}
                     }
                     val iv = getViewHolderItemView(h)
                     if (iv != null) {

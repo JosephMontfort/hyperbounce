@@ -953,6 +953,26 @@ object ControlCenterHook {
                                 }
                             }
                         }
+
+                        if (m.name == "getType" && m.parameterTypes.isEmpty()) {
+                            m.isAccessible = true
+                            module.hook(m).intercept { chain ->
+                                val spec = when (simpleName) {
+                                    "BrightnessSliderController" -> "brightness"
+                                    "VolumeSliderController" -> "volume"
+                                    "MediaPlayerController" -> "media"
+                                    else -> null
+                                }
+                                if (spec != null) {
+                                    val grp = ControlCenterConfigHolder.findGroupForSpec(spec)
+                                    if (grp != null) {
+                                        val effRows = grp.getEffectiveRowCount()
+                                        return@intercept 2284 + Math.max(1, Math.min(6, effRows))
+                                    }
+                                }
+                                chain.proceed()
+                            }
+                        }
                     }
                 } catch (t: Throwable) {}
             }
@@ -1426,6 +1446,9 @@ object ControlCenterHook {
                                     }
                                     if (grp != null) {
                                         val effRows = grp.getEffectiveRowCount()
+                                        if (grp.hasComponent()) {
+                                            return@intercept 2284 + Math.max(1, Math.min(6, effRows))
+                                        }
                                         return@intercept when (grp.getEffectiveLayoutType()) {
                                             "2_EXPANDED" -> 2281
                                             "2_VERTICAL" -> 2282
@@ -1437,6 +1460,7 @@ object ControlCenterHook {
                                             else -> 2284 + Math.max(1, Math.min(6, effRows))
                                         }
                                     }
+                                    return@intercept slot.viewType
                                 }
                             } catch (t: Throwable) {}
                             chain.proceed()
@@ -3073,6 +3097,7 @@ object ControlCenterHook {
                     for (i in group.specs.indices) {
                         val pt = layoutRes.placedTiles[i]
                         val (child, existingHolder) = ControlCenterGrouping.createChildViewForSpec(pt.spec, pt.type, container, activeQsList ?: ControlCenterConfigHolder.sQSListController, classLoader)
+                        (child.parent as? ViewGroup)?.removeView(child)
                         container.addView(child)
                         val h = existingHolder ?: ControlCenterGrouping.createSubHolderForView(child, mainPanelController, classLoader)
                         if (existingHolder == null) {

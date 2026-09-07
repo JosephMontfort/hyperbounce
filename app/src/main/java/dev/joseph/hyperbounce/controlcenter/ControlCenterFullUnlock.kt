@@ -1229,10 +1229,21 @@ object ControlCenterFullUnlock {
             val remainingAvailable = LinkedHashMap(sKnownSlots)
 
             for (savedId in sUnifiedSlotOrder) {
+                val memberSpec = when {
+                    savedId.startsWith("tile:") -> savedId.substring(5)
+                    savedId.startsWith("card:") -> savedId.substring(5)
+                    savedId.startsWith("component:") -> savedId.substring(10)
+                    else -> null
+                }
+                if (memberSpec != null && ControlCenterConfigHolder.isGroupMember(memberSpec)) {
+                    remainingAvailable.remove(savedId)
+                    continue
+                }
                 var slot = remainingAvailable.remove(savedId)
                 if (slot == null) {
                     when {
                         savedId == "component:brightness" -> {
+                            if (ControlCenterConfigHolder.isGroupMember("brightness")) continue
                             val ctrl = ControlCenterConfigHolder.sBrightnessSliderController ?: ControlCenterGrouping.getControllerForSpec("brightness")
                             if (ctrl != null) {
                                 val spans = getItemSpans(ctrl, 3484338, null)
@@ -1241,6 +1252,7 @@ object ControlCenterFullUnlock {
                             }
                         }
                         savedId == "component:volume" -> {
+                            if (ControlCenterConfigHolder.isGroupMember("volume")) continue
                             val ctrl = ControlCenterConfigHolder.sVolumeSliderController ?: ControlCenterGrouping.getControllerForSpec("volume")
                             if (ctrl != null) {
                                 val spans = getItemSpans(ctrl, 3484339, null)
@@ -1249,6 +1261,7 @@ object ControlCenterFullUnlock {
                             }
                         }
                         savedId == "component:media" -> {
+                            if (ControlCenterConfigHolder.isGroupMember("media")) continue
                             val ctrl = ControlCenterConfigHolder.sMediaPlayerController ?: ControlCenterGrouping.getControllerForSpec("media")
                             if (ctrl != null) {
                                 val spans = getItemSpans(ctrl, 3484336, null)
@@ -1258,6 +1271,7 @@ object ControlCenterFullUnlock {
                         }
                         savedId.startsWith("tile:") -> {
                             val spec = savedId.substring(5)
+                            if (ControlCenterConfigHolder.isGroupMember(spec)) continue
                             val rec = ControlCenterConfigHolder.sAllQSRecords.firstOrNull { ControlCenterConfigHolder.getRecordSpec(it) == spec }
                             if (rec != null) {
                                 val spans = getItemSpans(rec, 2272, spec)
@@ -1267,6 +1281,7 @@ object ControlCenterFullUnlock {
                         }
                         savedId.startsWith("card:") -> {
                             val spec = savedId.substring(5)
+                            if (ControlCenterConfigHolder.isGroupMember(spec)) continue
                             val rec = ControlCenterConfigHolder.sAllQSRecords.firstOrNull { ControlCenterConfigHolder.getRecordSpec(it) == spec }
                             if (rec != null) {
                                 val spans = getItemSpans(rec, 2273, spec)
@@ -1307,6 +1322,10 @@ object ControlCenterFullUnlock {
                                     if (hostItem != null) break
                                 }
                                 if (hostItem == null) {
+                                    hostItem = ControlCenterConfigHolder.sAllQSRecords.firstOrNull()
+                                    hostCtrl = ControlCenterConfigHolder.sQSListController
+                                }
+                                if (hostItem == null) {
                                     for (spec in grp.specs) {
                                         val ctrl = ControlCenterGrouping.getControllerForSpec(spec)
                                         if (ctrl != null) {
@@ -1317,8 +1336,7 @@ object ControlCenterFullUnlock {
                                     }
                                 }
                                 if (hostItem == null) {
-                                    hostItem = ControlCenterConfigHolder.sAllQSRecords.firstOrNull()
-                                        ?: ControlCenterGrouping.getControllerForSpec("brightness")
+                                    hostItem = ControlCenterGrouping.getControllerForSpec("brightness")
                                         ?: ControlCenterConfigHolder.sQSListController
                                     hostCtrl = ControlCenterConfigHolder.sQSListController ?: hostItem
                                 }
@@ -1338,10 +1356,13 @@ object ControlCenterFullUnlock {
             // Append any new active items not yet in sUnifiedSlotOrder
             var orderUpdated = false
             for ((newId, slot) in remainingAvailable) {
-                if (newId.startsWith("tile:")) {
-                    val spec = newId.substring(5)
-                    if (ControlCenterConfigHolder.isGroupMember(spec)) continue
+                val memberSpec = when {
+                    newId.startsWith("tile:") -> newId.substring(5)
+                    newId.startsWith("card:") -> newId.substring(5)
+                    newId.startsWith("component:") -> newId.substring(10)
+                    else -> null
                 }
+                if (memberSpec != null && ControlCenterConfigHolder.isGroupMember(memberSpec)) continue
                 if (newId.startsWith("group:")) {
                     val gId = newId.substring(6)
                     val activeIds = ControlCenterConfigHolder.sTileGroups.map { it.id }.toSet()

@@ -69,7 +69,15 @@ data class TileGroup(
 
     fun getEffectiveRowCount(): Int {
         if (rowCount in 1..6) return rowCount
-        val type = getEffectiveLayoutType()
+        if (hasComponent()) return 2
+        val type = layoutType.ifEmpty {
+            when {
+                specs.size == 4 -> "4_CIRCULAR"
+                specs.size == 2 -> if (isVertical) "2_CIRCULAR_VERT" else "2_CIRCULAR_HORIZ"
+                specs.size == 3 -> "1_EXP_2_CIRC"
+                else -> "2_VERTICAL"
+            }
+        }
         return when (type) {
             "2_CIRCULAR_HORIZ" -> 1
             "2_CIRCULAR_VERT" -> 2
