@@ -154,7 +154,11 @@ object ControlCenterGrouping {
             }
         }
 
+        val hasComponent = specs.any {
+            it.equals("brightness", true) || it.equals("volume", true) || it.equals("media", true)
+        }
         val layoutType = when {
+            hasComponent -> "DYNAMIC_${h}R"
             h == 2 && specs.size == 4 && tileSizesList.all { it == "C" } -> "4_CIRCULAR"
             h == 1 && specs.size == 2 && tileSizesList.all { it == "C" } -> "2_CIRCULAR_HORIZ"
             h == 2 && specs.size == 2 && tileSizesList.all { it == "E" } -> "2_EXPANDED"
@@ -490,14 +494,16 @@ object ControlCenterGrouping {
                     val iv = getViewHolderItemView(h)
                     if (iv != null) {
                         (iv.parent as? ViewGroup)?.removeView(iv)
-                        val lp = iv.layoutParams
+                        val lp = iv.layoutParams ?: ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                        lp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                        lp.height = ViewGroup.LayoutParams.MATCH_PARENT
                         if (lp is ViewGroup.MarginLayoutParams) {
                             lp.topMargin = 0
                             lp.bottomMargin = 0
                             lp.leftMargin = 0
                             lp.rightMargin = 0
-                            iv.layoutParams = lp
                         }
+                        iv.layoutParams = lp
                         if (h != null) {
                             try {
                                 ControlCenterHook.applySliderLayoutAndTouch(h)
@@ -541,14 +547,16 @@ object ControlCenterGrouping {
                     val iv = getViewHolderItemView(h)
                     if (iv != null) {
                         (iv.parent as? ViewGroup)?.removeView(iv)
-                        val lp = iv.layoutParams
+                        val lp = iv.layoutParams ?: ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                        lp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                        lp.height = ViewGroup.LayoutParams.MATCH_PARENT
                         if (lp is ViewGroup.MarginLayoutParams) {
                             lp.topMargin = 0
                             lp.bottomMargin = 0
                             lp.leftMargin = 0
                             lp.rightMargin = 0
-                            iv.layoutParams = lp
                         }
+                        iv.layoutParams = lp
                         if (h != null) {
                             try {
                                 ControlCenterHook.applyMediaPlayerLayout(h)

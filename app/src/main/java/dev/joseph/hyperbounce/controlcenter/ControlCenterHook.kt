@@ -928,6 +928,19 @@ object ControlCenterHook {
                                     "VolumeSliderController" -> ControlCenterConfigHolder.sVolumeSliderController = chain.thisObject
                                     "MediaPlayerController" -> ControlCenterConfigHolder.sMediaPlayerController = chain.thisObject
                                 }
+                                val spec = when (simpleName) {
+                                    "BrightnessSliderController" -> "brightness"
+                                    "VolumeSliderController" -> "volume"
+                                    "MediaPlayerController" -> "media"
+                                    else -> null
+                                }
+                                if (spec != null) {
+                                    val grp = ControlCenterConfigHolder.isGroupAnchor(spec) ?: ControlCenterConfigHolder.findGroupForSpec(spec)
+                                    if (grp != null) {
+                                        if (grp.getEffectiveLayoutType() == "2_CIRCULAR_VERT") return@intercept 1
+                                        return@intercept 2
+                                    }
+                                }
                                 when (simpleName) {
                                     "BrightnessSliderController" -> if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) ControlCenterConfigHolder.sBrightnessSliderWidth else 1
                                     "VolumeSliderController" -> if (ControlCenterConfigHolder.sVolumeSliderHorizontal) ControlCenterConfigHolder.sVolumeSliderWidth else 1
@@ -1602,7 +1615,7 @@ object ControlCenterHook {
                                 specField.isAccessible = true
                                 val spec = specField.get(record) as? String
                                 if (spec != null) {
-                                    val g = ControlCenterConfigHolder.isGroupAnchor(spec)
+                                    val g = ControlCenterConfigHolder.isGroupAnchor(spec) ?: ControlCenterConfigHolder.findGroupForSpec(spec)
                                     if (g != null) {
                                         if (g.getEffectiveLayoutType() == "2_CIRCULAR_VERT") return@intercept 1
                                         return@intercept 2
@@ -2561,6 +2574,36 @@ object ControlCenterHook {
                 }
             } catch (t: Throwable) {}
 
+            // 16bb. Hook MainPanelAdapter$layoutManager$1$1.getSpanSize for dynamic span mapping
+            try {
+                val spanLookupClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelAdapter\$layoutManager\$1\$1", false, classLoader)
+                for (m in spanLookupClass.declaredMethods) {
+                    if (m.name == "getSpanSize" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Int::class.javaPrimitiveType) {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            try {
+                                val thisObj = chain.thisObject
+                                val pos = chain.args[0] as Int
+                                var adapter: Any? = null
+                                try {
+                                    val adapterField = spanLookupClass.getDeclaredField("this\$0")
+                                    adapterField.isAccessible = true
+                                    adapter = adapterField.get(thisObj)
+                                } catch (t: Throwable) {}
+                                if (adapter == null) adapter = ControlCenterConfigHolder.sMainPanelAdapter
+                                if (adapter != null) {
+                                    val slot = ControlCenterFullUnlock.getSlotForAdapterPosition(adapter, pos)
+                                    if (slot != null) {
+                                        return@intercept slot.spanW
+                                    }
+                                }
+                            } catch (t: Throwable) {}
+                            chain.proceed()
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
             // 16c. Hook MediaPlayerViewHolder for persistent layout on updateMetaData, updateSize, setDetailAvailable
             try {
                 val mediaHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.media.MediaPlayerController\$MediaPlayerViewHolder", false, classLoader)
@@ -3352,7 +3395,11 @@ object ControlCenterHook {
             val isInsideGroup = ControlCenterGrouping.isInsideDynamicGroup(itemView) || ControlCenterConfigHolder.isGroupMember(if (isBrightness) "brightness" else "volume")
             if (curLp != null) {
                 curLp.width = ViewGroup.LayoutParams.MATCH_PARENT
-                curLp.height = if (isHorizontal) cardH else tallH
+                if (!isInsideGroup) {
+                    curLp.height = if (isHorizontal) cardH else tallH
+                } else {
+                    curLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+                }
                 if (isInsideGroup && curLp is ViewGroup.MarginLayoutParams) {
                     curLp.topMargin = 0
                     curLp.bottomMargin = 0
@@ -3523,6 +3570,9 @@ object ControlCenterHook {
             val curLp = itemView.layoutParams
             if (curLp != null) {
                 curLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                if (isInsideGroup) {
+                    curLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+                }
                 if (isInsideGroup && curLp is ViewGroup.MarginLayoutParams) {
                     curLp.topMargin = 0
                     curLp.bottomMargin = 0
@@ -3648,7 +3698,7 @@ object ControlCenterHook {
 
                     when (size) {
                         "2x1" -> {
-                            if (curLp != null && curLp.height != cardH) {
+                            if (!isInsideGroup && curLp != null && curLp.height != cardH) {
                                 curLp.height = cardH
                                 itemView.layoutParams = curLp
                             }
@@ -3722,7 +3772,7 @@ object ControlCenterHook {
                         }
 
                         "1x2" -> {
-                            if (curLp != null && curLp.height != tallH) {
+                            if (!isInsideGroup && curLp != null && curLp.height != tallH) {
                                 curLp.height = tallH
                                 itemView.layoutParams = curLp
                             }
@@ -3796,7 +3846,7 @@ object ControlCenterHook {
                         }
 
                         "4x1" -> {
-                            if (curLp != null && curLp.height != cardH) {
+                            if (!isInsideGroup && curLp != null && curLp.height != cardH) {
                                 curLp.height = cardH
                                 itemView.layoutParams = curLp
                             }
@@ -3939,7 +3989,7 @@ object ControlCenterHook {
                         }
 
                         "4x2" -> {
-                            if (curLp != null && curLp.height != tallH) {
+                            if (!isInsideGroup && curLp != null && curLp.height != tallH) {
                                 curLp.height = tallH
                                 itemView.layoutParams = curLp
                             }
@@ -4105,7 +4155,7 @@ object ControlCenterHook {
                         }
 
                         "2x4" -> {
-                            if (curLp != null && curLp.height != fourRowsH) {
+                            if (!isInsideGroup && curLp != null && curLp.height != fourRowsH) {
                                 curLp.height = fourRowsH
                                 itemView.layoutParams = curLp
                             }
@@ -4275,7 +4325,7 @@ object ControlCenterHook {
                         }
 
                         else -> { // "2x2" Stock
-                            if (curLp != null && curLp.height != tallH) {
+                            if (!isInsideGroup && curLp != null && curLp.height != tallH) {
                                 curLp.height = tallH
                                 itemView.layoutParams = curLp
                             }

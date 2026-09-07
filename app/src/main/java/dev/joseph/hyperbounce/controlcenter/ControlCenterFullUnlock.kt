@@ -361,15 +361,19 @@ object ControlCenterFullUnlock {
                 }
                 if (hostController != null && hostItem != null) {
                     val effRows = group.getEffectiveRowCount()
-                    val vt = when (group.getEffectiveLayoutType()) {
-                        "2_EXPANDED" -> 2281
-                        "2_VERTICAL" -> 2282
-                        "1_EXP_2_CIRC" -> 2283
-                        "1_VERT_2_CIRC" -> 2284
-                        "4_CIRCULAR" -> 2274
-                        "2_CIRCULAR_VERT" -> 2276
-                        "2_CIRCULAR_HORIZ" -> 2275
-                        else -> 2284 + Math.max(1, Math.min(6, effRows))
+                    val vt = if (group.hasComponent()) {
+                        2284 + Math.max(1, Math.min(6, effRows))
+                    } else {
+                        when (group.getEffectiveLayoutType()) {
+                            "2_EXPANDED" -> 2281
+                            "2_VERTICAL" -> 2282
+                            "1_EXP_2_CIRC" -> 2283
+                            "1_VERT_2_CIRC" -> 2284
+                            "4_CIRCULAR" -> 2274
+                            "2_CIRCULAR_VERT" -> 2276
+                            "2_CIRCULAR_HORIZ" -> 2275
+                            else -> 2284 + Math.max(1, Math.min(6, effRows))
+                        }
                     }
                     sKnownSlots[groupSlotId] = SlotItem(groupSlotId, hostController, hostItem, vt, 2, effRows)
                 }
@@ -488,6 +492,26 @@ object ControlCenterFullUnlock {
      * Calculates width and height spans for any item.
      */
     fun getItemSpans(item: Any, viewType: Int, spec: String?): Pair<Int, Int> {
+        // Groups FIRST - never allow group host items to be mistaken for single sliders/tiles!
+        if (viewType in 2285..2290) {
+            return Pair(2, viewType - 2284)
+        }
+        if (viewType in 2281..2284 || viewType == 2274) {
+            return Pair(2, 2)
+        }
+        if (viewType == 2275) {
+            return Pair(2, 1)
+        }
+        if (viewType == 2276) {
+            return Pair(1, 2)
+        }
+        if (spec != null) {
+            val g = ControlCenterConfigHolder.isGroupAnchor(spec) ?: ControlCenterConfigHolder.findGroupForSpec(spec)
+            if (g != null) {
+                return Pair(2, g.getEffectiveRowCount())
+            }
+        }
+
         // 1. Media Player -> dynamic size
         if (viewType == 3484336 || item.javaClass.name.contains("MediaPlayer")) {
             return when (ControlCenterConfigHolder.sMediaPlayerSize) {
@@ -515,10 +539,6 @@ object ControlCenterFullUnlock {
         }
         // 4. Cards (Wi-Fi, Cell) & Circular tiles & Groups
         if (spec != null) {
-            val g = ControlCenterConfigHolder.isGroupAnchor(spec)
-            if (g != null) {
-                return Pair(2, g.getEffectiveRowCount())
-            }
             if (ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)) return Pair(2, 2)
             if (ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)) return Pair(1, 2)
             if (ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)) return Pair(2, 1)
@@ -637,19 +657,6 @@ object ControlCenterFullUnlock {
             val getItemViewTypeMethod = vh.javaClass.getMethod("getItemViewType")
             val vt = getItemViewTypeMethod.invoke(vh) as Int
 
-            if (spec == "wifi") return "card:wifi"
-            if (spec == "cell") return "card:cell"
-            if (spec != null) {
-                val g = ControlCenterConfigHolder.isGroupAnchor(spec)
-                if (g != null) return "group:${g.id}"
-                return "tile:$spec"
-            }
-            if (vt == 3484336 || vt == 63342) return "component:media"
-            if (vt == 3484338 || vt == 274442) return "component:brightness"
-            if (vt == 3484339 || vt == 865269) return "component:volume"
-            if (vt == 338423) return "component:device_center"
-            if (vt == 2668765) return "component:device_controls"
-
             val itemViewField = try { vh.javaClass.getField("itemView") } catch (e: Throwable) { null }
             val iv = itemViewField?.get(vh) as? View
             val grpTag = iv?.getTag(0x7f099994) as? TileGroup
@@ -657,6 +664,28 @@ object ControlCenterFullUnlock {
             val dynContainer = iv?.findViewById<View>(0x7f099995)
             val dynId = dynContainer?.getTag(0x7f099997) as? String
             if (dynId != null) return "group:$dynId"
+
+            if (spec == "wifi") return "card:wifi"
+            if (spec == "cell") return "card:cell"
+            if (spec != null) {
+                val g = ControlCenterConfigHolder.isGroupAnchor(spec) ?: ControlCenterConfigHolder.findGroupForSpec(spec)
+                if (g != null) return "group:${g.id}"
+                return "tile:$spec"
+            }
+            if (vt == 3484336 || vt == 63342) {
+                val g = ControlCenterConfigHolder.findGroupForSpec("media")
+                return if (g != null) "group:${g.id}" else "component:media"
+            }
+            if (vt == 3484338 || vt == 274442) {
+                val g = ControlCenterConfigHolder.findGroupForSpec("brightness")
+                return if (g != null) "group:${g.id}" else "component:brightness"
+            }
+            if (vt == 3484339 || vt == 865269) {
+                val g = ControlCenterConfigHolder.findGroupForSpec("volume")
+                return if (g != null) "group:${g.id}" else "component:volume"
+            }
+            if (vt == 338423) return "component:device_center"
+            if (vt == 2668765) return "component:device_controls"
         } catch (t: Throwable) {}
         return null
     }
@@ -682,9 +711,18 @@ object ControlCenterFullUnlock {
                         }
                     }
                     val cName = content.javaClass.name
-                    if (cName.contains("BrightnessSliderController")) return sKnownSlots["component:brightness"]
-                    if (cName.contains("VolumeSliderController")) return sKnownSlots["component:volume"]
-                    if (cName.contains("MediaPlayerController")) return sKnownSlots["component:media"]
+                    if (cName.contains("BrightnessSliderController")) {
+                        val grp = ControlCenterConfigHolder.findGroupForSpec("brightness")
+                        return if (grp != null) sKnownSlots["group:${grp.id}"] else sKnownSlots["component:brightness"]
+                    }
+                    if (cName.contains("VolumeSliderController")) {
+                        val grp = ControlCenterConfigHolder.findGroupForSpec("volume")
+                        return if (grp != null) sKnownSlots["group:${grp.id}"] else sKnownSlots["component:volume"]
+                    }
+                    if (cName.contains("MediaPlayerController")) {
+                        val grp = ControlCenterConfigHolder.findGroupForSpec("media")
+                        return if (grp != null) sKnownSlots["group:${grp.id}"] else sKnownSlots["component:media"]
+                    }
 
                     val item = list.getOrNull(remaining)
                     if (item != null) {
@@ -799,6 +837,23 @@ object ControlCenterFullUnlock {
                     } else if (ctrlName.contains("MediaPlayerController")) {
                         ControlCenterConfigHolder.sMediaPlayerController = realController
                         if (ControlCenterConfigHolder.isGroupMember("media")) {
+                            val group = ControlCenterConfigHolder.findGroupForSpec("media")
+                            if (group != null && ControlCenterConfigHolder.isGroupAnchor("media") != null) {
+                                val id = "group:${group.id}"
+                                val item = items.firstOrNull() ?: controller
+                                val effRows = group.getEffectiveRowCount()
+                                val vt = if (group.hasComponent()) 2284 + Math.max(1, Math.min(6, effRows)) else when (group.getEffectiveLayoutType()) {
+                                    "2_EXPANDED" -> 2281
+                                    "2_VERTICAL" -> 2282
+                                    "1_EXP_2_CIRC" -> 2283
+                                    "1_VERT_2_CIRC" -> 2284
+                                    "4_CIRCULAR" -> 2274
+                                    "2_CIRCULAR_VERT" -> 2276
+                                    "2_CIRCULAR_HORIZ" -> 2275
+                                    else -> 2284 + Math.max(1, Math.min(6, effRows))
+                                }
+                                sKnownSlots[id] = SlotItem(id, controller, item, vt, 2, effRows)
+                            }
                             sKnownSlots.remove("component:media")
                             sUnifiedSlotOrder.remove("component:media")
                             continue
@@ -809,6 +864,23 @@ object ControlCenterFullUnlock {
                     } else if (ctrlName.contains("BrightnessSliderController")) {
                         ControlCenterConfigHolder.sBrightnessSliderController = realController
                         if (ControlCenterConfigHolder.isGroupMember("brightness")) {
+                            val group = ControlCenterConfigHolder.findGroupForSpec("brightness")
+                            if (group != null && ControlCenterConfigHolder.isGroupAnchor("brightness") != null) {
+                                val id = "group:${group.id}"
+                                val item = items.firstOrNull() ?: controller
+                                val effRows = group.getEffectiveRowCount()
+                                val vt = if (group.hasComponent()) 2284 + Math.max(1, Math.min(6, effRows)) else when (group.getEffectiveLayoutType()) {
+                                    "2_EXPANDED" -> 2281
+                                    "2_VERTICAL" -> 2282
+                                    "1_EXP_2_CIRC" -> 2283
+                                    "1_VERT_2_CIRC" -> 2284
+                                    "4_CIRCULAR" -> 2274
+                                    "2_CIRCULAR_VERT" -> 2276
+                                    "2_CIRCULAR_HORIZ" -> 2275
+                                    else -> 2284 + Math.max(1, Math.min(6, effRows))
+                                }
+                                sKnownSlots[id] = SlotItem(id, controller, item, vt, 2, effRows)
+                            }
                             sKnownSlots.remove("component:brightness")
                             sUnifiedSlotOrder.remove("component:brightness")
                             continue
@@ -819,6 +891,23 @@ object ControlCenterFullUnlock {
                     } else if (ctrlName.contains("VolumeSliderController")) {
                         ControlCenterConfigHolder.sVolumeSliderController = realController
                         if (ControlCenterConfigHolder.isGroupMember("volume")) {
+                            val group = ControlCenterConfigHolder.findGroupForSpec("volume")
+                            if (group != null && ControlCenterConfigHolder.isGroupAnchor("volume") != null) {
+                                val id = "group:${group.id}"
+                                val item = items.firstOrNull() ?: controller
+                                val effRows = group.getEffectiveRowCount()
+                                val vt = if (group.hasComponent()) 2284 + Math.max(1, Math.min(6, effRows)) else when (group.getEffectiveLayoutType()) {
+                                    "2_EXPANDED" -> 2281
+                                    "2_VERTICAL" -> 2282
+                                    "1_EXP_2_CIRC" -> 2283
+                                    "1_VERT_2_CIRC" -> 2284
+                                    "4_CIRCULAR" -> 2274
+                                    "2_CIRCULAR_VERT" -> 2276
+                                    "2_CIRCULAR_HORIZ" -> 2275
+                                    else -> 2284 + Math.max(1, Math.min(6, effRows))
+                                }
+                                sKnownSlots[id] = SlotItem(id, controller, item, vt, 2, effRows)
+                            }
                             sKnownSlots.remove("component:volume")
                             sUnifiedSlotOrder.remove("component:volume")
                             continue
@@ -1038,17 +1127,21 @@ object ControlCenterFullUnlock {
                     }
                     if (hostController != null && hostItem != null) {
                         val effRows = group.getEffectiveRowCount()
-                        val vt = when (group.getEffectiveLayoutType()) {
-                            "2_EXPANDED" -> 2281
-                            "2_VERTICAL" -> 2282
-                            "1_EXP_2_CIRC" -> 2283
-                            "1_VERT_2_CIRC" -> 2284
-                            "4_CIRCULAR" -> 2274
-                            "2_CIRCULAR_VERT" -> 2276
-                            "2_CIRCULAR_HORIZ" -> 2275
-                            else -> 2284 + Math.max(1, Math.min(6, effRows))
+                        val vt = if (group.hasComponent()) {
+                            2284 + Math.max(1, Math.min(6, effRows))
+                        } else {
+                            when (group.getEffectiveLayoutType()) {
+                                "2_EXPANDED" -> 2281
+                                "2_VERTICAL" -> 2282
+                                "1_EXP_2_CIRC" -> 2283
+                                "1_VERT_2_CIRC" -> 2284
+                                "4_CIRCULAR" -> 2274
+                                "2_CIRCULAR_VERT" -> 2276
+                                "2_CIRCULAR_HORIZ" -> 2275
+                                else -> 2284 + Math.max(1, Math.min(6, effRows))
+                            }
                         }
-                        sKnownSlots[groupId] = SlotItem(groupId, hostController, hostItem, vt, 2, effRows)
+                        sKnownSlots[groupId] = SlotItem(groupId, hostController, hostItem, vt, if (group.getEffectiveLayoutType() == "2_CIRCULAR_VERT") 1 else 2, effRows)
                     }
                 }
 
@@ -1107,8 +1200,20 @@ object ControlCenterFullUnlock {
 
             cleanStaleSlots()
 
-            // Dynamically refresh slot spans to reflect any recent size/rotation changes
             for ((slotId, slot) in sKnownSlots) {
+                if (slotId.startsWith("group:")) {
+                    val gId = slotId.substring(6)
+                    val grp = ControlCenterConfigHolder.sTileGroups.firstOrNull { it.id == gId }
+                    if (grp != null) {
+                        val effRows = grp.getEffectiveRowCount()
+                        slot.spanW = if (grp.getEffectiveLayoutType() == "2_CIRCULAR_VERT") 1 else 2
+                        slot.spanH = effRows
+                        if (grp.hasComponent()) {
+                            slot.viewType = 2284 + Math.max(1, Math.min(6, effRows))
+                        }
+                    }
+                    continue
+                }
                 val spec = when {
                     slotId.startsWith("tile:") -> slotId.substring(5)
                     slotId.startsWith("card:") -> slotId.substring(5)
@@ -1174,20 +1279,51 @@ object ControlCenterFullUnlock {
                             val grp = ControlCenterConfigHolder.sTileGroups.firstOrNull { it.id == gId }
                             if (grp != null) {
                                 val effRows = grp.getEffectiveRowCount()
-                                val vt = when (grp.getEffectiveLayoutType()) {
-                                    "2_EXPANDED" -> 2281
-                                    "2_VERTICAL" -> 2282
-                                    "1_EXP_2_CIRC" -> 2283
-                                    "1_VERT_2_CIRC" -> 2284
-                                    "4_CIRCULAR" -> 2274
-                                    "2_CIRCULAR_VERT" -> 2276
-                                    "2_CIRCULAR_HORIZ" -> 2275
-                                    else -> 2284 + Math.max(1, Math.min(6, effRows))
+                                val vt = if (grp.hasComponent()) {
+                                    2284 + Math.max(1, Math.min(6, effRows))
+                                } else {
+                                    when (grp.getEffectiveLayoutType()) {
+                                        "2_EXPANDED" -> 2281
+                                        "2_VERTICAL" -> 2282
+                                        "1_EXP_2_CIRC" -> 2283
+                                        "1_VERT_2_CIRC" -> 2284
+                                        "4_CIRCULAR" -> 2274
+                                        "2_CIRCULAR_VERT" -> 2276
+                                        "2_CIRCULAR_HORIZ" -> 2275
+                                        else -> 2284 + Math.max(1, Math.min(6, effRows))
+                                    }
                                 }
-                                val hostCtrl = ControlCenterConfigHolder.sQSListController ?: ControlCenterGrouping.getControllerForSpec(grp.specs.firstOrNull() ?: "")
-                                val hostItem = ControlCenterConfigHolder.sAllQSRecords.firstOrNull() ?: hostCtrl
+                                var hostCtrl: Any? = null
+                                var hostItem: Any? = null
+                                for (spec in grp.specs) {
+                                    for (rec in ControlCenterConfigHolder.sAllQSRecords) {
+                                        val s = ControlCenterConfigHolder.getRecordSpec(rec)
+                                        if (s != null && s.equals(spec, ignoreCase = true)) {
+                                            hostItem = rec
+                                            hostCtrl = ControlCenterConfigHolder.sQSListController
+                                            break
+                                        }
+                                    }
+                                    if (hostItem != null) break
+                                }
+                                if (hostItem == null) {
+                                    for (spec in grp.specs) {
+                                        val ctrl = ControlCenterGrouping.getControllerForSpec(spec)
+                                        if (ctrl != null) {
+                                            hostCtrl = ctrl
+                                            hostItem = ctrl
+                                            break
+                                        }
+                                    }
+                                }
+                                if (hostItem == null) {
+                                    hostItem = ControlCenterConfigHolder.sAllQSRecords.firstOrNull()
+                                        ?: ControlCenterGrouping.getControllerForSpec("brightness")
+                                        ?: ControlCenterConfigHolder.sQSListController
+                                    hostCtrl = ControlCenterConfigHolder.sQSListController ?: hostItem
+                                }
                                 if (hostCtrl != null && hostItem != null) {
-                                    slot = SlotItem(savedId, hostCtrl, hostItem, vt, 2, effRows)
+                                    slot = SlotItem(savedId, hostCtrl, hostItem, vt, if (grp.getEffectiveLayoutType() == "2_CIRCULAR_VERT") 1 else 2, effRows)
                                     sKnownSlots[savedId] = slot
                                 }
                             }

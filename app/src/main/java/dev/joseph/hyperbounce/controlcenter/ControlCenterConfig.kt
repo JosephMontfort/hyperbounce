@@ -63,6 +63,10 @@ data class TileGroup(
     var rowCount: Int = 2,
     var tileSizes: String = ""
 ) {
+    fun hasComponent(): Boolean = specs.any {
+        it.equals("brightness", true) || it.equals("volume", true) || it.equals("media", true)
+    }
+
     fun getEffectiveRowCount(): Int {
         if (rowCount in 1..6) return rowCount
         val type = getEffectiveLayoutType()
@@ -74,6 +78,7 @@ data class TileGroup(
     }
 
     fun getEffectiveLayoutType(): String {
+        if (hasComponent()) return "DYNAMIC_${getEffectiveRowCount()}R"
         if (layoutType.isNotEmpty()) return layoutType
         return when {
             specs.size == 4 -> "4_CIRCULAR"
