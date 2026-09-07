@@ -419,22 +419,22 @@ object ControlCenterFullUnlock {
                         "brightness" -> {
                             val ctrl = ControlCenterConfigHolder.sBrightnessSliderController ?: ControlCenterGrouping.getControllerForSpec("brightness")
                             if (ctrl != null) {
-                                val spans = getItemSpans(ctrl, 3484338, null)
-                                sKnownSlots["component:brightness"] = SlotItem("component:brightness", ctrl, ctrl, 3484338, spans.first, spans.second)
+                                val spans = getItemSpans(ctrl, 274442, null)
+                                sKnownSlots["component:brightness"] = SlotItem("component:brightness", ctrl, ctrl, 274442, spans.first, spans.second)
                             }
                         }
                         "volume" -> {
                             val ctrl = ControlCenterConfigHolder.sVolumeSliderController ?: ControlCenterGrouping.getControllerForSpec("volume")
                             if (ctrl != null) {
-                                val spans = getItemSpans(ctrl, 3484339, null)
-                                sKnownSlots["component:volume"] = SlotItem("component:volume", ctrl, ctrl, 3484339, spans.first, spans.second)
+                                val spans = getItemSpans(ctrl, 865269, null)
+                                sKnownSlots["component:volume"] = SlotItem("component:volume", ctrl, ctrl, 865269, spans.first, spans.second)
                             }
                         }
                         "media" -> {
                             val ctrl = ControlCenterConfigHolder.sMediaPlayerController ?: ControlCenterGrouping.getControllerForSpec("media")
                             if (ctrl != null) {
-                                val spans = getItemSpans(ctrl, 3484336, null)
-                                sKnownSlots["component:media"] = SlotItem("component:media", ctrl, ctrl, 3484336, spans.first, spans.second)
+                                val spans = getItemSpans(ctrl, 63342, null)
+                                sKnownSlots["component:media"] = SlotItem("component:media", ctrl, ctrl, 63342, spans.first, spans.second)
                             }
                         }
                         "wifi", "cell" -> {
@@ -859,8 +859,8 @@ object ControlCenterFullUnlock {
                             continue
                         }
                         val item = items.firstOrNull() ?: controller
-                        val spans = getItemSpans(item, 3484336, null)
-                        sKnownSlots["component:media"] = SlotItem("component:media", controller, item, 3484336, spans.first, spans.second)
+                        val spans = getItemSpans(item, 63342, null)
+                        sKnownSlots["component:media"] = SlotItem("component:media", controller, item, 63342, spans.first, spans.second)
                     } else if (ctrlName.contains("BrightnessSliderController")) {
                         ControlCenterConfigHolder.sBrightnessSliderController = realController
                         if (ControlCenterConfigHolder.isGroupMember("brightness")) {
@@ -886,8 +886,8 @@ object ControlCenterFullUnlock {
                             continue
                         }
                         val item = items.firstOrNull() ?: controller
-                        val spans = getItemSpans(item, 3484338, null)
-                        sKnownSlots["component:brightness"] = SlotItem("component:brightness", controller, item, 3484338, spans.first, spans.second)
+                        val spans = getItemSpans(item, 274442, null)
+                        sKnownSlots["component:brightness"] = SlotItem("component:brightness", controller, item, 274442, spans.first, spans.second)
                     } else if (ctrlName.contains("VolumeSliderController")) {
                         ControlCenterConfigHolder.sVolumeSliderController = realController
                         if (ControlCenterConfigHolder.isGroupMember("volume")) {
@@ -913,8 +913,8 @@ object ControlCenterFullUnlock {
                             continue
                         }
                         val item = items.firstOrNull() ?: controller
-                        val spans = getItemSpans(item, 3484339, null)
-                        sKnownSlots["component:volume"] = SlotItem("component:volume", controller, item, 3484339, spans.first, spans.second)
+                        val spans = getItemSpans(item, 865269, null)
+                        sKnownSlots["component:volume"] = SlotItem("component:volume", controller, item, 865269, spans.first, spans.second)
                     } else if (ctrlName.contains("DeviceCenterEntryController")) {
                         // Check if available in settings
                         val isAvail = try {
@@ -1246,8 +1246,8 @@ object ControlCenterFullUnlock {
                             if (ControlCenterConfigHolder.isGroupMember("brightness")) continue
                             val ctrl = ControlCenterConfigHolder.sBrightnessSliderController ?: ControlCenterGrouping.getControllerForSpec("brightness")
                             if (ctrl != null) {
-                                val spans = getItemSpans(ctrl, 3484338, null)
-                                slot = SlotItem(savedId, ctrl, ctrl, 3484338, spans.first, spans.second)
+                                val spans = getItemSpans(ctrl, 274442, null)
+                                slot = SlotItem(savedId, ctrl, ctrl, 274442, spans.first, spans.second)
                                 sKnownSlots[savedId] = slot
                             }
                         }
@@ -1255,8 +1255,8 @@ object ControlCenterFullUnlock {
                             if (ControlCenterConfigHolder.isGroupMember("volume")) continue
                             val ctrl = ControlCenterConfigHolder.sVolumeSliderController ?: ControlCenterGrouping.getControllerForSpec("volume")
                             if (ctrl != null) {
-                                val spans = getItemSpans(ctrl, 3484339, null)
-                                slot = SlotItem(savedId, ctrl, ctrl, 3484339, spans.first, spans.second)
+                                val spans = getItemSpans(ctrl, 865269, null)
+                                slot = SlotItem(savedId, ctrl, ctrl, 865269, spans.first, spans.second)
                                 sKnownSlots[savedId] = slot
                             }
                         }
@@ -1264,8 +1264,8 @@ object ControlCenterFullUnlock {
                             if (ControlCenterConfigHolder.isGroupMember("media")) continue
                             val ctrl = ControlCenterConfigHolder.sMediaPlayerController ?: ControlCenterGrouping.getControllerForSpec("media")
                             if (ctrl != null) {
-                                val spans = getItemSpans(ctrl, 3484336, null)
-                                slot = SlotItem(savedId, ctrl, ctrl, 3484336, spans.first, spans.second)
+                                val spans = getItemSpans(ctrl, 63342, null)
+                                slot = SlotItem(savedId, ctrl, ctrl, 63342, spans.first, spans.second)
                                 sKnownSlots[savedId] = slot
                             }
                         }

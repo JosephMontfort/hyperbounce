@@ -1460,7 +1460,9 @@ object ControlCenterHook {
                                             else -> 2284 + Math.max(1, Math.min(6, effRows))
                                         }
                                     }
-                                    return@intercept slot.viewType
+                                    if (slot.viewType == 2277 || slot.viewType == 2278) {
+                                        return@intercept slot.viewType
+                                    }
                                 }
                             } catch (t: Throwable) {}
                             chain.proceed()
