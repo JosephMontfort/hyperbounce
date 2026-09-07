@@ -17,6 +17,7 @@ import android.widget.TextView
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
+import java.lang.reflect.Proxy
 
 data class PlacedTile(
     val spec: String,
@@ -342,21 +343,122 @@ object ControlCenterGrouping {
         }
     }
 
+    fun isInsideDynamicGroup(v: View?): Boolean {
+        var p = v?.parent
+        while (p != null) {
+            if (p is DynamicGroupContainer) return true
+            if (p is View && (p.id == 0x7f099995 || p.id == 0x7f099996)) return true
+            p = p.parent
+        }
+        return false
+    }
+
+    fun getControllerForSpec(spec: String): Any? {
+        val isBright = "brightness".equals(spec, ignoreCase = true)
+        val isVol = "volume".equals(spec, ignoreCase = true)
+        val isMed = "media".equals(spec, ignoreCase = true)
+
+        if (isBright && ControlCenterConfigHolder.sBrightnessSliderController != null) {
+            return ControlCenterConfigHolder.sBrightnessSliderController
+        }
+        if (isVol && ControlCenterConfigHolder.sVolumeSliderController != null) {
+            return ControlCenterConfigHolder.sVolumeSliderController
+        }
+        if (isMed && ControlCenterConfigHolder.sMediaPlayerController != null) {
+            return ControlCenterConfigHolder.sMediaPlayerController
+        }
+
+        // Try distributor.getChildControllers() / distributor.childControllers
+        val dist = ControlCenterFullUnlock.sDistributor
+        if (dist != null) {
+            try {
+                val m = dist.javaClass.getMethod("getChildControllers")
+                val list = m.invoke(dist) as? List<*>
+                if (list != null) {
+                    for (c in list) {
+                        if (c == null) continue
+                        val name = c.javaClass.name
+                        if (isBright && name.contains("BrightnessSliderController")) {
+                            ControlCenterConfigHolder.sBrightnessSliderController = c
+                            return c
+                        }
+                        if (isVol && name.contains("VolumeSliderController")) {
+                            ControlCenterConfigHolder.sVolumeSliderController = c
+                            return c
+                        }
+                        if (isMed && name.contains("MediaPlayerController")) {
+                            ControlCenterConfigHolder.sMediaPlayerController = c
+                            return c
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+            try {
+                val f = dist.javaClass.getDeclaredField("childControllers")
+                f.isAccessible = true
+                val list = f.get(dist) as? List<*>
+                if (list != null) {
+                    for (c in list) {
+                        if (c == null) continue
+                        val name = c.javaClass.name
+                        if (isBright && name.contains("BrightnessSliderController")) {
+                            ControlCenterConfigHolder.sBrightnessSliderController = c
+                            return c
+                        }
+                        if (isVol && name.contains("VolumeSliderController")) {
+                            ControlCenterConfigHolder.sVolumeSliderController = c
+                            return c
+                        }
+                        if (isMed && name.contains("MediaPlayerController")) {
+                            ControlCenterConfigHolder.sMediaPlayerController = c
+                            return c
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+        }
+
+        // Fallback: check contentMap keys in sMainPanelAdapter or sRightAdapter or sLeftAdapter
+        val adapters = listOfNotNull(ControlCenterConfigHolder.sMainPanelAdapter, ControlCenterFullUnlock.sRightAdapter, ControlCenterFullUnlock.sLeftAdapter)
+        for (adapter in adapters) {
+            try {
+                val f = adapter.javaClass.getDeclaredField("contentMap")
+                f.isAccessible = true
+                val map = f.get(adapter) as? Map<*, *>
+                if (map != null) {
+                    for (key in map.keys) {
+                        if (key == null) continue
+                        val target = if (Proxy.isProxyClass(key.javaClass)) {
+                            (Proxy.getInvocationHandler(key) as? ControlCenterFullUnlock.ProxyContentHandler)?.target ?: key
+                        } else key
+                        val name = target.javaClass.name
+                        if (isBright && name.contains("BrightnessSliderController")) {
+                            ControlCenterConfigHolder.sBrightnessSliderController = target
+                            return target
+                        }
+                        if (isVol && name.contains("VolumeSliderController")) {
+                            ControlCenterConfigHolder.sVolumeSliderController = target
+                            return target
+                        }
+                        if (isMed && name.contains("MediaPlayerController")) {
+                            ControlCenterConfigHolder.sMediaPlayerController = target
+                            return target
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+        }
+
+        return null
+    }
+
     fun createChildViewForSpec(spec: String, type: String, parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader): Pair<View, Any?> {
         val isBright = "brightness".equals(spec, ignoreCase = true)
         val isVol = "volume".equals(spec, ignoreCase = true)
         val isMed = "media".equals(spec, ignoreCase = true)
 
         if (isBright || isVol) {
-            val dist = ControlCenterFullUnlock.sDistributor
-            var ctrl: Any? = null
-            if (dist != null) {
-                try {
-                    val mName = if (isBright) "getBrightnessSliderController" else "getVolumeSliderController"
-                    val m = dist.javaClass.getMethod(mName)
-                    ctrl = m.invoke(dist)
-                } catch (t: Throwable) {}
-            }
+            val ctrl = getControllerForSpec(spec)
             if (ctrl != null) {
                 try {
                     val getHolderM = ctrl.javaClass.getMethod("getHolder")
@@ -365,12 +467,42 @@ object ControlCenterGrouping {
                         val vt = if (isBright) 274442 else 865269
                         val createVhM = ctrl.javaClass.getMethod("createViewHolder", ViewGroup::class.java, Int::class.javaPrimitiveType)
                         h = createVhM.invoke(ctrl, parent, vt)
-                        val onBindM = ctrl.javaClass.getMethod("onBindViewHolder")
-                        onBindM.invoke(ctrl)
+                        if (h != null) {
+                            try {
+                                var cls: Class<*>? = ctrl.javaClass
+                                while (cls != null) {
+                                    try {
+                                        val setHM = cls.getDeclaredMethod("setHolder", Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader))
+                                        setHM.isAccessible = true
+                                        setHM.invoke(ctrl, h)
+                                        break
+                                    } catch (e: NoSuchMethodException) {
+                                        cls = cls.superclass
+                                    }
+                                }
+                            } catch (t: Throwable) {}
+                            try {
+                                val onBindM = ctrl.javaClass.getMethod("onBindViewHolder")
+                                onBindM.invoke(ctrl)
+                            } catch (t: Throwable) {}
+                        }
                     }
                     val iv = getViewHolderItemView(h)
                     if (iv != null) {
                         (iv.parent as? ViewGroup)?.removeView(iv)
+                        val lp = iv.layoutParams
+                        if (lp is ViewGroup.MarginLayoutParams) {
+                            lp.topMargin = 0
+                            lp.bottomMargin = 0
+                            lp.leftMargin = 0
+                            lp.rightMargin = 0
+                            iv.layoutParams = lp
+                        }
+                        if (h != null) {
+                            try {
+                                ControlCenterHook.applySliderLayoutAndTouch(h)
+                            } catch (t: Throwable) {}
+                        }
                         return Pair(iv, h)
                     }
                 } catch (t: Throwable) {
@@ -378,14 +510,7 @@ object ControlCenterGrouping {
                 }
             }
         } else if (isMed) {
-            val dist = ControlCenterFullUnlock.sDistributor
-            var ctrl: Any? = null
-            if (dist != null) {
-                try {
-                    val m = dist.javaClass.getMethod("getMediaPlayerController")
-                    ctrl = m.invoke(dist)
-                } catch (t: Throwable) {}
-            }
+            val ctrl = getControllerForSpec(spec)
             if (ctrl != null) {
                 try {
                     val getHolderM = ctrl.javaClass.getMethod("getHolder")
@@ -393,12 +518,42 @@ object ControlCenterGrouping {
                     if (h == null) {
                         val createVhM = ctrl.javaClass.getMethod("createViewHolder", ViewGroup::class.java, Int::class.javaPrimitiveType)
                         h = createVhM.invoke(ctrl, parent, 63342)
-                        val onBindM = ctrl.javaClass.getMethod("onBindViewHolder")
-                        onBindM.invoke(ctrl)
+                        if (h != null) {
+                            try {
+                                var cls: Class<*>? = ctrl.javaClass
+                                while (cls != null) {
+                                    try {
+                                        val setHM = cls.getDeclaredMethod("setHolder", Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader))
+                                        setHM.isAccessible = true
+                                        setHM.invoke(ctrl, h)
+                                        break
+                                    } catch (e: NoSuchMethodException) {
+                                        cls = cls.superclass
+                                    }
+                                }
+                            } catch (t: Throwable) {}
+                            try {
+                                val onBindM = ctrl.javaClass.getMethod("onBindViewHolder")
+                                onBindM.invoke(ctrl)
+                            } catch (t: Throwable) {}
+                        }
                     }
                     val iv = getViewHolderItemView(h)
                     if (iv != null) {
                         (iv.parent as? ViewGroup)?.removeView(iv)
+                        val lp = iv.layoutParams
+                        if (lp is ViewGroup.MarginLayoutParams) {
+                            lp.topMargin = 0
+                            lp.bottomMargin = 0
+                            lp.leftMargin = 0
+                            lp.rightMargin = 0
+                            iv.layoutParams = lp
+                        }
+                        if (h != null) {
+                            try {
+                                ControlCenterHook.applyMediaPlayerLayout(h)
+                            } catch (t: Throwable) {}
+                        }
                         return Pair(iv, h)
                     }
                 } catch (t: Throwable) {
@@ -426,12 +581,20 @@ object ControlCenterGrouping {
     }
 
     fun getAllChildTiles(parent: ViewGroup): List<View> {
+        if (parent is DynamicGroupContainer) {
+            val list = mutableListOf<View>()
+            for (i in 0 until parent.childCount) {
+                val c = parent.getChildAt(i) ?: continue
+                list.add(c)
+            }
+            return list
+        }
         val list = mutableListOf<View>()
         fun findTiles(vg: ViewGroup) {
             for (i in 0 until vg.childCount) {
                 val c = vg.getChildAt(i) ?: continue
                 val cName = c.javaClass.name
-                if (cName.contains("QSTileItemView") || cName.contains("QSCardItemView")) {
+                if (cName.contains("QSTileItemView") || cName.contains("QSCardItemView") || cName.contains("ToggleSlider") || cName.contains("MediaPlayer")) {
                     list.add(c)
                 } else if (c is ViewGroup && c.id != 0x7f099998 && c.id != 0x7f099992) {
                     findTiles(c)
@@ -444,6 +607,10 @@ object ControlCenterGrouping {
 
     fun getChildTileAt(container: ViewGroup?, index: Int): View? {
         if (container == null) return null
+        if (container is DynamicGroupContainer) {
+            if (index in 0 until container.childCount) return container.getChildAt(index)
+            return null
+        }
         val tiles = getAllChildTiles(container)
         if (index in tiles.indices) return tiles[index]
         return null

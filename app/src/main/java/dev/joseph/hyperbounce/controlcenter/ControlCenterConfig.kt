@@ -139,6 +139,10 @@ object ControlCenterConfigHolder {
     @Volatile var sIsUserFlicking: Boolean = false
     @Volatile var sPendingOrientationRebind: Boolean = false
 
+    @Volatile var sBrightnessSliderController: Any? = null
+    @Volatile var sVolumeSliderController: Any? = null
+    @Volatile var sMediaPlayerController: Any? = null
+
     @Volatile var sQSListController: Any? = null
     @Volatile var sMainPanelAdapter: Any? = null
     // Typed as View to avoid class loading dependencies on androidx.recyclerview in SystemUI
@@ -1053,7 +1057,7 @@ object ControlCenterConfigHolder {
                         }
 
                         // Group Selection Badge for Sliders!
-                        val canGroupSlider = sIsGroupSelectMode && (isGroupAnchor(spec) == null) && !isGroupChild(spec)
+                        val canGroupSlider = sIsGroupSelectMode && !isGroupMember(spec)
                         if (canGroupSlider) {
                             if (itemView is ViewGroup) {
                                 itemView.clipChildren = false
@@ -1136,7 +1140,7 @@ object ControlCenterConfigHolder {
                         // Group Selection Badge for Media Player!
                         // Allowed ONLY when size is "1x2", "2x1", or "2x2"
                         val isEligibleMediaSize = sMediaPlayerSize in listOf("1x2", "2x1", "2x2")
-                        val canGroupMedia = sIsGroupSelectMode && isEligibleMediaSize && (isGroupAnchor(spec) == null) && !isGroupChild(spec)
+                        val canGroupMedia = sIsGroupSelectMode && isEligibleMediaSize && !isGroupMember(spec)
                         if (canGroupMedia) {
                             if (itemView is ViewGroup) {
                                 itemView.clipChildren = false
@@ -1261,7 +1265,7 @@ object ControlCenterConfigHolder {
                             resizeHandle.setOnClickListener(null)
                             resizeHandle.isClickable = false
                         }
-                        val isGroupable = !isSlider && !isMedia && !isLarge && (isGroupAnchor(spec) == null) && !isGroupChild(spec)
+                        val isGroupable = !isSlider && !isMedia && !isLarge && !isGroupMember(spec)
                         if (isGroupable) {
                             if (itemView is ViewGroup) {
                                 itemView.clipChildren = false
