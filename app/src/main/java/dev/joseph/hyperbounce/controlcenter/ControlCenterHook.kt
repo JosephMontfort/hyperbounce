@@ -1285,6 +1285,10 @@ object ControlCenterHook {
                                             val holder = ControlCenterGrouping.createGroupedMixedVertCircViewHolder(parent, qsListCtrl, classLoader)
                                             if (holder != null) return@intercept holder
                                         }
+                                        if (viewType in 2285..2290) {
+                                            val holder = ControlCenterGrouping.createDynamicGroupViewHolder(parent, qsListCtrl, classLoader, viewType - 2284)
+                                            if (holder != null) return@intercept holder
+                                        }
                                         if (viewType == 2273) {
                                             val holder = ControlCenterGrouping.createCardViewHolder(parent, qsListCtrl, classLoader)
                                             if (holder != null) return@intercept holder
@@ -1320,7 +1324,7 @@ object ControlCenterHook {
                             if (args != null && args.size >= 2) {
                                 val parent = args[0] as ViewGroup
                                 val vt = args[1] as Int
-                                if (vt == 2274 || vt == 2275 || vt == 2276 || vt in 2281..2284 || vt == 2273 || vt == 2277 || vt == 2278) {
+                                if (vt == 2274 || vt == 2275 || vt == 2276 || vt in 2281..2284 || vt in 2285..2290 || vt == 2273 || vt == 2277 || vt == 2278) {
                                     try {
                                         val adapterObj = chain.thisObject
                                         ControlCenterConfigHolder.sMainPanelAdapter = adapterObj
@@ -1352,6 +1356,9 @@ object ControlCenterHook {
                                             if (holder != null) return@intercept holder
                                         } else if (vt == 2284) {
                                             val holder = ControlCenterGrouping.createGroupedMixedVertCircViewHolder(parent, qsListCtrl, classLoader)
+                                            if (holder != null) return@intercept holder
+                                        } else if (vt in 2285..2290) {
+                                            val holder = ControlCenterGrouping.createDynamicGroupViewHolder(parent, qsListCtrl, classLoader, vt - 2284)
                                             if (holder != null) return@intercept holder
                                         } else if (vt == 2273) {
                                             val holder = ControlCenterGrouping.createCardViewHolder(parent, qsListCtrl, classLoader)
@@ -1499,6 +1506,7 @@ object ControlCenterHook {
                                 if (spec != null) {
                                     val g = ControlCenterConfigHolder.isGroupAnchor(spec)
                                     if (g != null) {
+                                        val h = g.getEffectiveRowCount()
                                         when (g.getEffectiveLayoutType()) {
                                             "2_EXPANDED" -> return@intercept 2281
                                             "2_VERTICAL" -> return@intercept 2282
@@ -1508,8 +1516,8 @@ object ControlCenterHook {
                                             "2_CIRCULAR_VERT" -> return@intercept 2276
                                             "2_CIRCULAR_HORIZ" -> return@intercept 2275
                                             else -> {
-                                                if (g.specs.size == 4) return@intercept 2274
-                                                if (g.specs.size == 2) return@intercept if (g.isVertical) 2276 else 2275
+                                                val clampedH = Math.max(1, Math.min(6, h))
+                                                return@intercept (2284 + clampedH)
                                             }
                                         }
                                     }
@@ -1542,8 +1550,8 @@ object ControlCenterHook {
                                 if (spec != null) {
                                     val g = ControlCenterConfigHolder.isGroupAnchor(spec)
                                     if (g != null) {
-                                        if (g.is2x2Group()) return@intercept 2
-                                        if (g.specs.size == 2) return@intercept if (g.isVertical) 1 else 2
+                                        if (g.getEffectiveLayoutType() == "2_CIRCULAR_VERT") return@intercept 1
+                                        return@intercept 2
                                     }
                                     if (ControlCenterConfigHolder.sCircularCardSpecs.contains(spec)) {
                                         return@intercept 1
@@ -1705,8 +1713,16 @@ object ControlCenterHook {
                                                         if (ControlCenterConfigHolder.sSelectedTileSpecs.contains(spec)) {
                                                             ControlCenterConfigHolder.sSelectedTileSpecs.remove(spec)
                                                         } else {
-                                                            ControlCenterConfigHolder.sSelectedTileSpecs.add(spec)
+                                                            val currentArea = ControlCenterConfigHolder.sSelectedTileSpecs.sumOf { ControlCenterConfigHolder.getTileArea(it) }
+                                                            val tileArea = ControlCenterConfigHolder.getTileArea(spec)
+                                                            if (currentArea + tileArea <= 12) {
+                                                                ControlCenterConfigHolder.sSelectedTileSpecs.add(spec)
+                                                            } else {
+                                                                tileView?.performHapticFeedback(android.view.HapticFeedbackConstants.REJECT)
+                                                                return@intercept null
+                                                            }
                                                         }
+                                                        tileView?.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
                                                         ControlCenterConfigHolder.updateAllVisibleTileBadges()
                                                         return@intercept null
                                                     }
@@ -1931,11 +1947,45 @@ object ControlCenterHook {
                                                 if (s != null && !recordMap.containsKey(s)) recordMap[s] = r
                                             }
 
-                                            ControlCenterGrouping.applyGroupContainerStyle(itemView, classLoader)
+                                            itemView.setTag(0x7f099994, group)
+                                            ControlCenterGrouping.applyGroupContainerStyle(itemView, classLoader, group)
+
+                                            if (container is ControlCenterGrouping.DynamicGroupContainer) {
+                                                if (container.getTag(0x7f099997) != group.id) {
+                                                    container.removeAllViews()
+                                                    container.setTag(0x7f099997, group.id)
+                                                    container.rowCount = group.getEffectiveRowCount()
+
+                                                    val layoutRes = ControlCenterGrouping.computeGroupLayoutForGroup(group)
+                                                    if (layoutRes != null) {
+                                                        container.placedTiles = layoutRes.placedTiles
+                                                        val dynamicSubHolders = arrayOfNulls<Any>(group.specs.size)
+                                                        var mainPanelController: Any? = null
+                                                        try {
+                                                            val mainPanelControllerField = record.javaClass.getDeclaredField("mainPanelController")
+                                                            mainPanelControllerField.isAccessible = true
+                                                            val mainPanelCtrlLazy = mainPanelControllerField.get(record)
+                                                            val getMethod = mainPanelCtrlLazy?.javaClass?.getMethod("get")
+                                                            mainPanelController = getMethod?.invoke(mainPanelCtrlLazy)
+                                                        } catch (t: Throwable) {}
+
+                                                        for (i in group.specs.indices) {
+                                                            val pt = layoutRes.placedTiles[i]
+                                                            val child = ControlCenterGrouping.inflateTileForType(pt.type, container, ControlCenterConfigHolder.sQSListController, classLoader)
+                                                            container.addView(child)
+                                                            val h = ControlCenterGrouping.createSubHolderForView(child, mainPanelController, classLoader)
+                                                            ControlCenterGrouping.attachSubHolder(h)
+                                                            dynamicSubHolders[i] = h
+                                                        }
+                                                        itemView.setTag(0x7f099993, dynamicSubHolders)
+                                                    }
+                                                    container.requestLayout()
+                                                }
+                                            }
 
                                             var subHolders = itemView.getTag(0x7f099993) as? Array<Any?>
                                             if (subHolders == null) {
-                                                val count = Math.min(4, group.specs.size)
+                                                val count = group.specs.size
                                                 subHolders = arrayOfNulls(count)
                                                 var mainPanelController: Any? = null
                                                 try {
@@ -1957,11 +2007,12 @@ object ControlCenterHook {
                                                 itemView.setTag(0x7f099993, subHolders)
                                             }
 
-                                            for (i in 0 until Math.min(4, group.specs.size)) {
+                                            val bindCount = if (subHolders != null) Math.min(subHolders.size, group.specs.size) else group.specs.size
+                                            for (i in 0 until bindCount) {
                                                 val childSpec = group.specs[i]
                                                 val childView = ControlCenterGrouping.getChildTileAt(container, i)
                                                 val childRecord = recordMap[childSpec]
-                                                val subHolder = if (i < subHolders.size) subHolders[i] else null
+                                                val subHolder = if (subHolders != null && i < subHolders.size) subHolders[i] else null
 
                                                 if (childRecord != null && subHolder != null && childView != null) {
                                                     try {
@@ -2065,6 +2116,23 @@ object ControlCenterHook {
                                             }
                                             itemView.setOnClickListener(toggleDisassembleSelect)
                                             itemView.isClickable = true
+                                        } else if (isEdit && !ControlCenterConfigHolder.sIsGroupSelectMode) {
+                                            if (indicatorBadge != null) {
+                                                indicatorBadge.visibility = View.GONE
+                                                indicatorBadge.setOnClickListener(null)
+                                                indicatorBadge.isClickable = false
+                                            }
+                                            val toggleTransparent = View.OnClickListener {
+                                                group.isTransparent = !group.isTransparent
+                                                ControlCenterGrouping.applyGroupContainerStyle(itemView, classLoader, group)
+                                                ControlCenterConfigHolder.savePriorities(ctx)
+                                                it.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                                            }
+                                            itemView.setOnClickListener(toggleTransparent)
+                                            itemView.isClickable = true
+                                            val wrapper = itemView.findViewById<View>(0x7f099996)
+                                            wrapper?.setOnClickListener(toggleTransparent)
+                                            wrapper?.isClickable = true
                                         } else {
                                             if (indicatorBadge != null) {
                                                 indicatorBadge.visibility = View.GONE
@@ -2073,6 +2141,9 @@ object ControlCenterHook {
                                             }
                                             itemView.setOnClickListener(null)
                                             itemView.isClickable = false
+                                            val wrapper = itemView.findViewById<View>(0x7f099996)
+                                            wrapper?.setOnClickListener(null)
+                                            wrapper?.isClickable = false
                                         }
                                     } else {
                                         // Standard Single Tile / Card Customization Badge
@@ -2294,8 +2365,16 @@ object ControlCenterHook {
                                                         if (ControlCenterConfigHolder.sSelectedTileSpecs.contains(spec)) {
                                                             ControlCenterConfigHolder.sSelectedTileSpecs.remove(spec)
                                                         } else {
-                                                            ControlCenterConfigHolder.sSelectedTileSpecs.add(spec)
+                                                            val currentArea = ControlCenterConfigHolder.sSelectedTileSpecs.sumOf { ControlCenterConfigHolder.getTileArea(it) }
+                                                            val tileArea = ControlCenterConfigHolder.getTileArea(spec)
+                                                            if (currentArea + tileArea <= 12) {
+                                                                ControlCenterConfigHolder.sSelectedTileSpecs.add(spec)
+                                                            } else {
+                                                                it.performHapticFeedback(android.view.HapticFeedbackConstants.REJECT)
+                                                                return@OnClickListener
+                                                            }
                                                         }
+                                                        it.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
                                                         val curScd = selectBadge.drawable as? SelectCircleDrawable
                                                         curScd?.setChecked(ControlCenterConfigHolder.sSelectedTileSpecs.contains(spec))
                                                         selectBadge.invalidate()
@@ -2428,12 +2507,20 @@ object ControlCenterHook {
                                                     val scd = (selectBadge.drawable as? SelectCircleDrawable) ?: SelectCircleDrawable()
                                                     if (spec != null) {
                                                         scd.setChecked(ControlCenterConfigHolder.sSelectedTileSpecs.contains(spec))
-                                                        val toggleSelect = View.OnClickListener {
+                                                         val toggleSelect = View.OnClickListener {
                                                             if (ControlCenterConfigHolder.sSelectedTileSpecs.contains(spec)) {
                                                                 ControlCenterConfigHolder.sSelectedTileSpecs.remove(spec)
                                                             } else {
-                                                                ControlCenterConfigHolder.sSelectedTileSpecs.add(spec)
+                                                                val currentArea = ControlCenterConfigHolder.sSelectedTileSpecs.sumOf { ControlCenterConfigHolder.getTileArea(it) }
+                                                                val tileArea = ControlCenterConfigHolder.getTileArea(spec)
+                                                                if (currentArea + tileArea <= 12) {
+                                                                    ControlCenterConfigHolder.sSelectedTileSpecs.add(spec)
+                                                                } else {
+                                                                    it.performHapticFeedback(android.view.HapticFeedbackConstants.REJECT)
+                                                                    return@OnClickListener
+                                                                }
                                                             }
+                                                            it.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
                                                             val curScd = selectBadge.drawable as? SelectCircleDrawable
                                                             curScd?.setChecked(ControlCenterConfigHolder.sSelectedTileSpecs.contains(spec))
                                                             selectBadge.invalidate()
@@ -2463,14 +2550,12 @@ object ControlCenterHook {
 
                                             val container = itemView.findViewById<ViewGroup>(0x7f099995)
                                             if (container != null) {
-                                                for (i in 0 until 4) {
-                                                    val childTile = ControlCenterGrouping.getChildTileAt(container, i)
-                                                    if (childTile != null) {
-                                                        hideAllCustomBadges(childTile)
-                                                        childTile.isClickable = true
-                                                        childTile.isLongClickable = true
-                                                        childTile.isFocusable = true
-                                                    }
+                                                val childTiles = ControlCenterGrouping.getAllChildTiles(container)
+                                                for (childTile in childTiles) {
+                                                    hideAllCustomBadges(childTile)
+                                                    childTile.isClickable = true
+                                                    childTile.isLongClickable = true
+                                                    childTile.isFocusable = true
                                                 }
                                             }
 
@@ -2509,7 +2594,7 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             val itemView = chain.thisObject as? View
                             if (itemView != null && itemView.findViewById<View>(0x7f099995) != null) {
-                                if (ControlCenterConfigHolder.sIsDisassembleMode) {
+                                if (ControlCenterConfigHolder.sIsDisassembleMode || (ControlCenterConfigHolder.sIsEditMode && !ControlCenterConfigHolder.sIsGroupSelectMode)) {
                                     chain.proceed()
                                 } else {
                                     false
@@ -2524,7 +2609,7 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             val itemView = chain.thisObject as? View
                             if (itemView != null && itemView.findViewById<View>(0x7f099995) != null) {
-                                if (ControlCenterConfigHolder.sIsDisassembleMode) {
+                                if (ControlCenterConfigHolder.sIsDisassembleMode || (ControlCenterConfigHolder.sIsEditMode && !ControlCenterConfigHolder.sIsGroupSelectMode)) {
                                     chain.proceed()
                                 } else {
                                     true

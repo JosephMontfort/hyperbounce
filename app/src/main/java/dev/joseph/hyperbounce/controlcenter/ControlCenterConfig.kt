@@ -50,22 +50,35 @@ data class ControlCenterConfig(
 )
 
 /**
- * Represents a grouped multi-tile container (2x2 with 4 tiles, 2x1 horizontal, or 1x2 vertical).
+ * Represents a grouped multi-tile container (dynamic 2-column container up to 6 rows).
  */
 data class TileGroup(
     val id: String,
     val specs: MutableList<String>,
     var isVertical: Boolean = false,
     var layoutType: String = "",
-    var cardSpec: String = ""
+    var cardSpec: String = "",
+    var isTransparent: Boolean = false,
+    var rowCount: Int = 2,
+    var tileSizes: String = ""
 ) {
+    fun getEffectiveRowCount(): Int {
+        if (rowCount in 1..6) return rowCount
+        val type = getEffectiveLayoutType()
+        return when (type) {
+            "2_CIRCULAR_HORIZ" -> 1
+            "2_CIRCULAR_VERT" -> 2
+            else -> 2
+        }
+    }
+
     fun getEffectiveLayoutType(): String {
         if (layoutType.isNotEmpty()) return layoutType
         return when {
             specs.size == 4 -> "4_CIRCULAR"
             specs.size == 2 -> if (isVertical) "2_CIRCULAR_VERT" else "2_CIRCULAR_HORIZ"
             specs.size == 3 -> "1_EXP_2_CIRC"
-            else -> "4_CIRCULAR"
+            else -> "DYNAMIC_${getEffectiveRowCount()}R"
         }
     }
 
@@ -75,7 +88,8 @@ data class TileGroup(
                type == "2_EXPANDED" ||
                type == "2_VERTICAL" ||
                type == "1_EXP_2_CIRC" ||
-               type == "1_VERT_2_CIRC"
+               type == "1_VERT_2_CIRC" ||
+               (getEffectiveRowCount() == 2)
     }
 }
 
@@ -275,8 +289,11 @@ object ControlCenterConfigHolder {
                                     }
                                     val layoutType = if (parts.size >= 4) parts[3] else ""
                                     val cardSpec = if (parts.size >= 5) parts[4] else ""
-                                    if (gSpecs.size in 2..4) {
-                                        newGroups.add(TileGroup(gId, gSpecs, isVert, layoutType, cardSpec))
+                                    val isTransparent = if (parts.size >= 6) "T".equals(parts[5], ignoreCase = true) else false
+                                    val rowCount = if (parts.size >= 7) parts[6].toIntOrNull() ?: 2 else 2
+                                    val tileSizes = if (parts.size >= 8) parts[7] else ""
+                                    if (gSpecs.size >= 2) {
+                                        newGroups.add(TileGroup(gId, gSpecs, isVert, layoutType, cardSpec, isTransparent, rowCount, tileSizes))
                                     }
                                 }
                             }
@@ -362,8 +379,11 @@ object ControlCenterConfigHolder {
                                 }
                                 val layoutType = if (parts.size >= 4) parts[3] else ""
                                 val cardSpec = if (parts.size >= 5) parts[4] else ""
-                                if (gSpecs.size in 2..4) {
-                                    newGroups.add(TileGroup(gId, gSpecs, isVert, layoutType, cardSpec))
+                                val isTransparent = if (parts.size >= 6) "T".equals(parts[5], ignoreCase = true) else false
+                                val rowCount = if (parts.size >= 7) parts[6].toIntOrNull() ?: 2 else 2
+                                val tileSizes = if (parts.size >= 8) parts[7] else ""
+                                if (gSpecs.size >= 2) {
+                                    newGroups.add(TileGroup(gId, gSpecs, isVert, layoutType, cardSpec, isTransparent, rowCount, tileSizes))
                                 }
                             }
                         }
@@ -423,7 +443,7 @@ object ControlCenterConfigHolder {
 
             val groupsSb = StringBuilder()
             for (g in sTileGroups) {
-                if (g.specs.size in 2..4) {
+                if (g.specs.size >= 2) {
                     if (groupsSb.isNotEmpty()) groupsSb.append(";")
                     groupsSb.append(g.id).append(":").append(if (g.isVertical) "V" else "H").append(":")
                     for (i in 0 until g.specs.size) {
@@ -431,6 +451,9 @@ object ControlCenterConfigHolder {
                         groupsSb.append(g.specs[i])
                     }
                     groupsSb.append(":").append(g.layoutType).append(":").append(g.cardSpec)
+                    groupsSb.append(":").append(if (g.isTransparent) "T" else "F")
+                    groupsSb.append(":").append(g.getEffectiveRowCount())
+                    groupsSb.append(":").append(g.tileSizes)
                 }
             }
             json.put("tile_groups_v2", groupsSb.toString())
@@ -566,7 +589,7 @@ object ControlCenterConfigHolder {
         if (spec == null) return null
         if (!sHasLoadedPriorities && sLastKnownContext != null) loadSavedPriorities(sLastKnownContext)
         for (g in sTileGroups) {
-            if (g.specs.size in 2..4 && spec == g.specs[0]) {
+            if (g.specs.size >= 2 && spec == g.specs[0]) {
                 return g
             }
         }
@@ -577,7 +600,7 @@ object ControlCenterConfigHolder {
         if (spec == null) return false
         if (!sHasLoadedPriorities && sLastKnownContext != null) loadSavedPriorities(sLastKnownContext)
         for (g in sTileGroups) {
-            if (g.specs.size in 2..4) {
+            if (g.specs.size >= 2) {
                 for (i in 1 until g.specs.size) {
                     if (spec == g.specs[i]) return true
                 }
@@ -1019,6 +1042,20 @@ object ControlCenterConfigHolder {
                     // Handling for standard tiles & cards (Wi-Fi, Cell, normal tiles, and groups)
                     val group = isGroupAnchor(spec)
                     if (group != null) {
+                        ControlCenterGrouping.applyGroupContainerStyle(itemView, itemView.context.classLoader, group)
+                        val wrapper = itemView.findViewById<View>(0x7f099996)
+                        if (!sIsGroupSelectMode && !sIsDisassembleMode) {
+                            val toggleTransparent = View.OnClickListener {
+                                group.isTransparent = !group.isTransparent
+                                ControlCenterGrouping.applyGroupContainerStyle(itemView, itemView.context.classLoader, group)
+                                savePriorities(itemView.context)
+                                it.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                            }
+                            itemView.setOnClickListener(toggleTransparent)
+                            itemView.isClickable = true
+                            wrapper?.setOnClickListener(toggleTransparent)
+                            wrapper?.isClickable = true
+                        }
                         if (rotateBtn == null && itemView is ViewGroup) {
                             val rSize = (32 * density).toInt()
                             rotateBtn = ImageView(itemView.context).apply {
@@ -1163,7 +1200,7 @@ object ControlCenterConfigHolder {
                                     } else {
                                         val currentArea = sSelectedTileSpecs.sumOf { getTileArea(it) }
                                         val tileArea = getTileArea(spec)
-                                        if (currentArea + tileArea <= 4) {
+                                        if (currentArea + tileArea <= 12) {
                                             sSelectedTileSpecs.add(spec)
                                         } else {
                                             it.performHapticFeedback(android.view.HapticFeedbackConstants.REJECT)
@@ -1254,6 +1291,15 @@ object ControlCenterConfigHolder {
                             selectBadge.setOnClickListener(null)
                             selectBadge.isClickable = false
                         }
+                        if (group != null) {
+                            if (resizeHandle != null) {
+                                resizeHandle.visibility = View.GONE
+                                resizeHandle.setOnTouchListener(null)
+                                resizeHandle.setOnClickListener(null)
+                                resizeHandle.isClickable = false
+                            }
+                            continue
+                        }
                         val badgeSize = (38 * density).toInt()
                         if (resizeHandle == null && itemView is ViewGroup) {
                             resizeHandle = ImageView(itemView.context).apply {
@@ -1321,14 +1367,16 @@ object ControlCenterConfigHolder {
                 val container = itemView.findViewById<ViewGroup>(0x7f099995)
                 if (container != null) {
                     container.isClickable = false
-                    for (cIdx in 0 until 4) {
-                        val child = ControlCenterGrouping.getChildTileAt(container, cIdx)
-                        if (child != null) {
-                            ControlCenterHook.hideAllCustomBadges(child)
-                            child.isClickable = true
-                            child.isLongClickable = true
-                            child.isFocusable = true
-                        }
+                    val allTiles = ControlCenterGrouping.getAllChildTiles(container)
+                    for (child in allTiles) {
+                        ControlCenterHook.hideAllCustomBadges(child)
+                        child.isClickable = true
+                        child.isLongClickable = true
+                        child.isFocusable = true
+                    }
+                    val group = isGroupAnchor(spec) ?: (itemView.getTag(0x7f099994) as? TileGroup)
+                    if (group != null) {
+                        ControlCenterGrouping.applyGroupContainerStyle(itemView, itemView.context.classLoader, group)
                     }
                 }
             }

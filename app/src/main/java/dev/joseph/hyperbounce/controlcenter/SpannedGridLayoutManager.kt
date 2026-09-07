@@ -167,6 +167,11 @@ class SpannedGridLayoutManager : GridLayoutManager {
             if (viewType == 2274 || viewType in 2281..2284) {
                 return intArrayOf(2, 2)
             }
+            // 2285..2290: Dynamic Group Containers -> 2 columns x H rows (1..6)
+            if (viewType in 2285..2290) {
+                val h = viewType - 2284
+                return intArrayOf(2, h)
+            }
             // 2275: Grouped 2-Tile Horizontal -> 2x1
             if (viewType == 2275) {
                 return intArrayOf(2, 1)
@@ -252,7 +257,7 @@ class SpannedGridLayoutManager : GridLayoutManager {
         for (pos in 0 until itemCount) {
             val spans = getItemSpans(pos)
             val wSpans = Math.max(1, Math.min(4, spans[0]))
-            val hSpans = Math.max(1, Math.min(2, spans[1]))
+            val hSpans = Math.max(1, Math.min(6, spans[1]))
 
             var adapter: RecyclerView.Adapter<*>? = mAttachedRv?.adapter ?: (ControlCenterConfigHolder.sMainPanelAdapter as? RecyclerView.Adapter<*>)
             val vt = if (adapter != null && pos in 0 until adapter.itemCount) {
@@ -347,16 +352,15 @@ class SpannedGridLayoutManager : GridLayoutManager {
         for (pos in 0 until itemCount) {
             val spans = getItemSpans(pos)
             val wSpans = Math.max(1, Math.min(4, spans[0]))
-            val hSpans = Math.max(1, Math.min(2, spans[1]))
+            val hSpans = Math.max(1, Math.min(6, spans[1]))
             val r = mItemRowIndices[pos]
             val c = mItemColIndices[pos]
 
             val left = padLeft + c * (colWidth + gapX)
             val top = rowTops[r]
             val right = left + wSpans * colWidth + (wSpans - 1) * gapX
-            val itemHeight = if (hSpans == 2) {
-                val nextR = Math.min(MAX_ROWS - 1, r + 1)
-                rowHeights[r] + gapY + rowHeights[nextR]
+            val itemHeight = if (hSpans > 1) {
+                (0 until hSpans).sumOf { dr -> rowHeights[Math.min(MAX_ROWS - 1, r + dr)] } + (hSpans - 1) * gapY
             } else {
                 rowHeights[r]
             }

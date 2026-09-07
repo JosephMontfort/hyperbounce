@@ -18,8 +18,314 @@ import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 
+data class PlacedTile(
+    val spec: String,
+    val col: Int,
+    val row: Int,
+    val colSpan: Int,
+    val rowSpan: Int,
+    val type: String
+)
+
+data class GroupLayoutResult(
+    val rowCount: Int,
+    val placedTiles: List<PlacedTile>,
+    val layoutType: String
+)
+
+class DynamicGroupContainer(context: Context) : ViewGroup(context) {
+    var rowCount: Int = 2
+    var placedTiles: List<PlacedTile> = emptyList()
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val w = MeasureSpec.getSize(widthMeasureSpec)
+        val h = MeasureSpec.getSize(heightMeasureSpec)
+        setMeasuredDimension(w, h)
+
+        val density = resources.displayMetrics.density
+        val pad = (6 * density).toInt()
+        val availW = Math.max(0, w - 2 * pad)
+        val gap = (6 * density).toInt()
+        val colW = Math.max(0, (availW - gap) / 2)
+        val totalGapsY = Math.max(0, rowCount - 1) * gap
+        val availH = Math.max(0, h - 2 * pad - totalGapsY)
+        val rowH = if (rowCount > 0) Math.max(0, availH / rowCount) else 0
+
+        for (i in 0 until childCount) {
+            val child = getChildAt(i) ?: continue
+            val pt = if (i < placedTiles.size) placedTiles[i] else null
+            val colSpan = pt?.colSpan ?: 1
+            val rowSpan = pt?.rowSpan ?: 1
+
+            val childW = if (colSpan == 2) availW else colW
+            val childH = if (rowSpan == 2) (2 * rowH + gap) else rowH
+
+            child.measure(
+                MeasureSpec.makeMeasureSpec(childW, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(childH, MeasureSpec.EXACTLY)
+            )
+        }
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        val density = resources.displayMetrics.density
+        val pad = (6 * density).toInt()
+        val availW = Math.max(0, (r - l) - 2 * pad)
+        val gap = (6 * density).toInt()
+        val colW = Math.max(0, (availW - gap) / 2)
+        val totalGapsY = Math.max(0, rowCount - 1) * gap
+        val availH = Math.max(0, (b - t) - 2 * pad - totalGapsY)
+        val rowH = if (rowCount > 0) Math.max(0, availH / rowCount) else 0
+
+        for (i in 0 until childCount) {
+            val child = getChildAt(i) ?: continue
+            val pt = if (i < placedTiles.size) placedTiles[i] else null
+            val col = pt?.col ?: (i % 2)
+            val row = pt?.row ?: (i / 2)
+            val colSpan = pt?.colSpan ?: 1
+            val rowSpan = pt?.rowSpan ?: 1
+
+            val childLeft = pad + col * (colW + gap)
+            val childTop = pad + row * (rowH + gap)
+            val childW = if (colSpan == 2) availW else colW
+            val childH = if (rowSpan == 2) (2 * rowH + gap) else rowH
+
+            child.layout(childLeft, childTop, childLeft + childW, childTop + childH)
+        }
+    }
+}
+
 object ControlCenterGrouping {
     private const val TAG = "HyperBounce_CC_Group"
+
+    fun computeGroupLayout(specs: List<String>, tileSizesList: List<String>): GroupLayoutResult? {
+        if (specs.size < 2 || specs.size != tileSizesList.size) return null
+        val grid = Array(6) { arrayOfNulls<String>(2) }
+        val placed = mutableListOf<PlacedTile>()
+
+        for (i in specs.indices) {
+            val spec = specs[i]
+            val type = tileSizesList[i]
+            val colSpan = if (type == "E") 2 else 1
+            val rowSpan = if (type == "V") 2 else 1
+
+            var startR = -1
+            var startC = -1
+            findLoop@ for (r in 0 until 6) {
+                for (c in 0 until 2) {
+                    if (grid[r][c] == null) {
+                        startR = r
+                        startC = c
+                        break@findLoop
+                    }
+                }
+            }
+            if (startR == -1) return null
+
+            if (startC + colSpan > 2) return null
+            if (startR + rowSpan > 6) return null
+
+            for (dr in 0 until rowSpan) {
+                for (dc in 0 until colSpan) {
+                    if (grid[startR + dr][startC + dc] != null) return null
+                }
+            }
+
+            for (dr in 0 until rowSpan) {
+                for (dc in 0 until colSpan) {
+                    grid[startR + dr][startC + dc] = spec
+                }
+            }
+
+            placed.add(PlacedTile(spec, startC, startR, colSpan, rowSpan, type))
+        }
+
+        val h = placed.maxOf { it.row + it.rowSpan }
+        if (h !in 1..6) return null
+
+        for (r in 0 until h) {
+            for (c in 0 until 2) {
+                if (grid[r][c] == null) return null
+            }
+        }
+
+        val layoutType = when {
+            h == 2 && specs.size == 4 && tileSizesList.all { it == "C" } -> "4_CIRCULAR"
+            h == 1 && specs.size == 2 && tileSizesList.all { it == "C" } -> "2_CIRCULAR_HORIZ"
+            h == 2 && specs.size == 2 && tileSizesList.all { it == "E" } -> "2_EXPANDED"
+            h == 2 && specs.size == 2 && tileSizesList.all { it == "V" } -> "2_VERTICAL"
+            h == 2 && specs.size == 3 && tileSizesList[0] == "E" && tileSizesList[1] == "C" && tileSizesList[2] == "C" -> "1_EXP_2_CIRC"
+            h == 2 && specs.size == 3 && tileSizesList[0] == "V" && tileSizesList[1] == "C" && tileSizesList[2] == "C" -> "1_VERT_2_CIRC"
+            else -> "DYNAMIC_${h}R"
+        }
+
+        return GroupLayoutResult(h, placed, layoutType)
+    }
+
+    fun computeGroupLayoutForGroup(group: TileGroup): GroupLayoutResult? {
+        val sizes = if (group.tileSizes.isNotEmpty()) {
+            group.tileSizes.split(",")
+        } else {
+            val inferred = mutableListOf<String>()
+            val effectiveType = group.getEffectiveLayoutType()
+            when (effectiveType) {
+                "2_EXPANDED" -> for (s in group.specs) inferred.add("E")
+                "2_VERTICAL" -> for (s in group.specs) inferred.add("V")
+                "1_EXP_2_CIRC" -> {
+                    inferred.add("E")
+                    for (i in 1 until group.specs.size) inferred.add("C")
+                }
+                "1_VERT_2_CIRC" -> {
+                    inferred.add("V")
+                    for (i in 1 until group.specs.size) inferred.add("C")
+                }
+                else -> {
+                    for (s in group.specs) {
+                        val isCard = ("wifi".equals(s, ignoreCase = true) || "cell".equals(s, ignoreCase = true))
+                        val isCircCard = isCard && ControlCenterConfigHolder.sCircularCardSpecs.contains(s)
+                        val isExp = ControlCenterConfigHolder.sExpandedTileSpecs.contains(s) || (isCard && !isCircCard && !ControlCenterConfigHolder.sVerticalTileSpecs.contains(s) && !ControlCenterConfigHolder.sLargeTileSpecs.contains(s))
+                        val isVert = ControlCenterConfigHolder.sVerticalTileSpecs.contains(s)
+                        when {
+                            isExp -> inferred.add("E")
+                            isVert -> inferred.add("V")
+                            else -> inferred.add("C")
+                        }
+                    }
+                }
+            }
+            inferred
+        }
+        return computeGroupLayout(group.specs, sizes)
+    }
+
+    fun createDynamicGroupViewHolder(parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader, rowCount: Int): Any? {
+        try {
+            val ctx = parent.context
+            val density = ctx.resources.displayMetrics.density
+
+            val sysUIContextField = qsListCtrl?.javaClass?.getDeclaredField("sysUIContext")
+            sysUIContextField?.isAccessible = true
+            val sysUIContext = (sysUIContextField?.get(qsListCtrl) as? Context) ?: ctx
+
+            val cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader)
+            val inflateMethod = cardBindingClass.getMethod("inflate", LayoutInflater::class.java, ViewGroup::class.java, Boolean::class.javaPrimitiveType)
+            val binding = inflateMethod.invoke(null, LayoutInflater.from(ctx), parent, false)
+
+            val getRootMethod = cardBindingClass.getMethod("getRoot")
+            val root = getRootMethod.invoke(binding) as ViewGroup
+
+            try {
+                val cardIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemIconView", false, classLoader)
+                var cardIconCtor: Constructor<*>? = null
+                for (c in cardIconViewClass.declaredConstructors) {
+                    if (c.parameterTypes.size == 5) {
+                        cardIconCtor = c
+                        break
+                    }
+                }
+                if (cardIconCtor == null) {
+                    cardIconCtor = cardIconViewClass.declaredConstructors[0]
+                }
+                cardIconCtor.isAccessible = true
+                val cardIconView = if (cardIconCtor.parameterTypes.size == 5) {
+                    cardIconCtor.newInstance(root.context, sysUIContext, null, 4, null)
+                } else {
+                    cardIconCtor.newInstance(root.context, sysUIContext)
+                }
+                val initCardMethod = root.javaClass.getMethod("init", cardIconViewClass)
+                initCardMethod.invoke(root, cardIconView)
+            } catch (t: Throwable) {
+                Log.e(TAG, "QSCardItemView init error", t)
+            }
+
+            root.removeAllViews()
+
+            val res1RowId = ctx.resources.getIdentifier("control_center_universal_1_row_size", "dimen", ctx.packageName)
+            val unitHeight = if (res1RowId != 0) ctx.resources.getDimensionPixelSize(res1RowId) else (76 * density).toInt()
+            val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
+            val gapY = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId) else (10 * density).toInt()
+
+            val res2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
+            val cardH = if (rowCount == 2 && res2RowsId != 0) {
+                ctx.resources.getDimensionPixelSize(res2RowsId)
+            } else {
+                rowCount * unitHeight + (rowCount - 1) * gapY
+            }
+
+            val rlp = root.layoutParams
+            if (rlp != null) {
+                rlp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                rlp.height = cardH
+                root.layoutParams = rlp
+            } else {
+                root.layoutParams = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, cardH)
+            }
+
+            val wrapper = FrameLayout(ctx).apply {
+                id = 0x7f099996
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            }
+
+            val container = DynamicGroupContainer(ctx).apply {
+                id = 0x7f099995
+                this.rowCount = rowCount
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            }
+            wrapper.addView(container)
+
+            val disassembleIndicator = ImageView(ctx).apply {
+                id = 0x7f099998
+                val dSize = (26 * density).toInt()
+                val dlp = FrameLayout.LayoutParams(dSize, dSize).apply {
+                    gravity = Gravity.TOP or Gravity.START
+                    val dMargin = (6 * density).toInt()
+                    setMargins(dMargin, dMargin, 0, 0)
+                }
+                layoutParams = dlp
+                setImageDrawable(SelectCircleDrawable())
+                visibility = View.GONE
+            }
+            wrapper.addView(disassembleIndicator)
+
+            root.addView(wrapper)
+
+            container.isClickable = false
+            container.isFocusable = false
+            root.isClickable = false
+            root.isFocusable = false
+
+            return wrapInCardViewHolder(root, classLoader)
+        } catch (t: Throwable) {
+            Log.e(TAG, "createDynamicGroupViewHolder error", t)
+        }
+        return null
+    }
+
+    fun inflateTileForType(type: String, parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader): View {
+        val ctx = parent.context
+        val density = ctx.resources.displayMetrics.density
+        val sysUIContextField = qsListCtrl?.javaClass?.getDeclaredField("sysUIContext")
+        sysUIContextField?.isAccessible = true
+        val sysUIContext = (sysUIContextField?.get(qsListCtrl) as? Context) ?: ctx
+
+        return when (type) {
+            "E" -> inflateChildCardView(ctx, sysUIContext, classLoader)
+            "V" -> {
+                val v = inflateChildCardView(ctx, sysUIContext, classLoader)
+                adjustCardToVertical(v, density, ctx)
+                v
+            }
+            else -> {
+                var blurEnabled = false
+                try {
+                    val ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader)
+                    val getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context::class.java)
+                    blurEnabled = getBlurM.invoke(null, ctx) as Boolean
+                } catch (t: Throwable) {}
+                inflateChildTileView(ctx, sysUIContext, classLoader, blurEnabled, density)
+            }
+        }
+    }
 
     fun getViewHolderItemView(holder: Any?): View? {
         if (holder == null) return null
@@ -547,12 +853,63 @@ object ControlCenterGrouping {
         return null
     }
 
-    fun applyGroupContainerStyle(view: View?, classLoader: ClassLoader) {
+    fun applyGroupContainerStyle(view: View?, classLoader: ClassLoader, group: TileGroup? = null) {
         if (view == null) return
         try {
             val ctx = view.context
+            val density = ctx.resources.displayMetrics.density
             val radiusResId = ctx.resources.getIdentifier("control_center_universal_corner_radius", "dimen", ctx.packageName)
-            val cornerRadius = if (radiusResId != 0) ctx.resources.getDimension(radiusResId) else 20f * ctx.resources.displayMetrics.density
+            val cornerRadius = if (radiusResId != 0) ctx.resources.getDimension(radiusResId) else 20f * density
+
+            val g = group ?: (view.getTag(0x7f099994) as? TileGroup)
+            if (group != null) {
+                view.setTag(0x7f099994, group)
+            }
+
+            val isTransparent = g?.isTransparent == true
+            val isEdit = ControlCenterConfigHolder.sIsEditMode
+
+            if (isTransparent) {
+                try {
+                    val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
+                    val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
+                    setModeMethod.invoke(null, view, 0)
+                    val clearBlendMethod = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
+                    clearBlendMethod.invoke(null, view)
+                } catch (t: Throwable) {}
+
+                try {
+                    val commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
+                    val commonUtils = commonUtilsClass.getDeclaredField("INSTANCE").get(null)
+                    val clearEffect = commonUtilsClass.getMethod("clearMiBlurBlendEffect", View::class.java)
+                    clearEffect.invoke(commonUtils, view)
+                } catch (t: Throwable) {}
+
+                if (isEdit) {
+                    val strokeW = Math.max(1, (1.5f * density).toInt())
+                    val outlineDrawable = GradientDrawable().apply {
+                        this.cornerRadius = cornerRadius
+                        setColor(Color.TRANSPARENT)
+                        setStroke(strokeW, Color.parseColor("#44FFFFFF"))
+                    }
+                    view.background = outlineDrawable
+                    view.outlineProvider = object : android.view.ViewOutlineProvider() {
+                        override fun getOutline(v: View, outline: android.graphics.Outline) {
+                            outline.setRoundRect(0, 0, v.width, v.height, cornerRadius)
+                        }
+                    }
+                    view.clipToOutline = true
+                } else {
+                    view.background = null
+                    view.outlineProvider = null
+                    view.clipToOutline = false
+                }
+                if (view is ViewGroup) {
+                    view.clipChildren = true
+                }
+                view.invalidateOutline()
+                return
+            }
 
             // Check if Background Blur is enabled in system
             var blurEnabled = false
@@ -1809,76 +2166,50 @@ object ControlCenterGrouping {
                     } else {
                         if (ControlCenterConfigHolder.sSelectedTileSpecs.isNotEmpty()) {
                             val selectedSpecs = ArrayList(ControlCenterConfigHolder.sSelectedTileSpecs)
-                            val expSpecs = mutableListOf<String>()
-                            val vertSpecs = mutableListOf<String>()
-                            val circSpecs = mutableListOf<String>()
+                            val tileSizesList = mutableListOf<String>()
                             for (spec in selectedSpecs) {
                                 val isCard = ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true))
                                 val isCircCard = isCard && ControlCenterConfigHolder.sCircularCardSpecs.contains(spec)
                                 val isExp = ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) || (isCard && !isCircCard && !ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) && !ControlCenterConfigHolder.sLargeTileSpecs.contains(spec))
                                 val isVert = ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)
                                 when {
-                                    isExp -> expSpecs.add(spec)
-                                    isVert -> vertSpecs.add(spec)
-                                    else -> circSpecs.add(spec)
+                                    isExp -> tileSizesList.add("E")
+                                    isVert -> tileSizesList.add("V")
+                                    else -> tileSizesList.add("C")
                                 }
                             }
 
-                            var valid = false
-                            var determinedLayoutType = ""
-                            var determinedCardSpec = ""
-                            val finalOrderedSpecs = mutableListOf<String>()
-
-                            if (circSpecs.size == 4 && expSpecs.isEmpty() && vertSpecs.isEmpty()) {
-                                valid = true
-                                determinedLayoutType = "4_CIRCULAR"
-                                finalOrderedSpecs.addAll(circSpecs)
-                            } else if (circSpecs.size == 2 && expSpecs.isEmpty() && vertSpecs.isEmpty()) {
-                                valid = true
-                                determinedLayoutType = "2_CIRCULAR_HORIZ"
-                                finalOrderedSpecs.addAll(circSpecs)
-                            } else if (expSpecs.size == 2 && vertSpecs.isEmpty() && circSpecs.isEmpty()) {
-                                valid = true
-                                determinedLayoutType = "2_EXPANDED"
-                                finalOrderedSpecs.addAll(expSpecs)
-                            } else if (vertSpecs.size == 2 && expSpecs.isEmpty() && circSpecs.isEmpty()) {
-                                valid = true
-                                determinedLayoutType = "2_VERTICAL"
-                                finalOrderedSpecs.addAll(vertSpecs)
-                            } else if (expSpecs.size == 1 && circSpecs.size == 2 && vertSpecs.isEmpty()) {
-                                valid = true
-                                determinedLayoutType = "1_EXP_2_CIRC"
-                                determinedCardSpec = expSpecs[0]
-                                finalOrderedSpecs.add(expSpecs[0])
-                                finalOrderedSpecs.addAll(circSpecs)
-                            } else if (vertSpecs.size == 1 && circSpecs.size == 2 && expSpecs.isEmpty()) {
-                                valid = true
-                                determinedLayoutType = "1_VERT_2_CIRC"
-                                determinedCardSpec = vertSpecs[0]
-                                finalOrderedSpecs.add(vertSpecs[0])
-                                finalOrderedSpecs.addAll(circSpecs)
-                            }
-
-                            if (valid) {
+                            val layoutResult = computeGroupLayout(selectedSpecs, tileSizesList)
+                            if (layoutResult != null) {
                                 val groupId = "group_" + System.currentTimeMillis()
-                                for (spec in finalOrderedSpecs) {
+                                for (spec in selectedSpecs) {
                                     ControlCenterConfigHolder.sExpandedTileSpecs.remove(spec)
                                     ControlCenterConfigHolder.sVerticalTileSpecs.remove(spec)
                                     ControlCenterConfigHolder.sLargeTileSpecs.remove(spec)
                                 }
-                                val isVert = determinedLayoutType == "2_CIRCULAR_VERT" || determinedLayoutType == "2_VERTICAL" || determinedLayoutType == "1_VERT_2_CIRC"
-                                val newGroup = TileGroup(groupId, finalOrderedSpecs, isVert, determinedLayoutType, determinedCardSpec)
+                                val isVert = layoutResult.layoutType == "2_CIRCULAR_VERT" || layoutResult.layoutType == "2_VERTICAL" || layoutResult.layoutType == "1_VERT_2_CIRC"
+                                val cardSpec = if (selectedSpecs.isNotEmpty() && tileSizesList[0] != "C") selectedSpecs[0] else ""
+                                val tileSizesStr = tileSizesList.joinToString(",")
+                                val newGroup = TileGroup(
+                                    id = groupId,
+                                    specs = selectedSpecs,
+                                    isVertical = isVert,
+                                    layoutType = layoutResult.layoutType,
+                                    cardSpec = cardSpec,
+                                    isTransparent = false,
+                                    rowCount = layoutResult.rowCount,
+                                    tileSizes = tileSizesStr
+                                )
                                 ControlCenterConfigHolder.sTileGroups.add(newGroup)
-                                ControlCenterFullUnlock.onGroupCreated(groupId, finalOrderedSpecs, ctx)
+                                ControlCenterFullUnlock.onGroupCreated(groupId, selectedSpecs, ctx)
                                 ControlCenterConfigHolder.sIsGroupSelectMode = false
                                 ControlCenterConfigHolder.sSelectedTileSpecs.clear()
                                 finalGroupBtn.setImageDrawable(GroupGridDrawable(false))
                                 ControlCenterConfigHolder.savePriorities(ctx)
                                 structural = true
                             } else {
-                                ControlCenterConfigHolder.sIsGroupSelectMode = false
-                                ControlCenterConfigHolder.sSelectedTileSpecs.clear()
-                                finalGroupBtn.setImageDrawable(GroupGridDrawable(false))
+                                android.widget.Toast.makeText(ctx, "Unsupported group", android.widget.Toast.LENGTH_SHORT).show()
+                                finalGroupBtn.performHapticFeedback(android.view.HapticFeedbackConstants.REJECT)
                             }
                         } else {
                             ControlCenterConfigHolder.sIsGroupSelectMode = false
@@ -1931,32 +2262,43 @@ object ControlCenterGrouping {
                         if (toRemove.isNotEmpty()) {
                             val removedGroups = ControlCenterConfigHolder.sTileGroups.filter { toRemove.contains(it.id) }
                             for (rg in removedGroups) {
-                                val effectiveType = rg.getEffectiveLayoutType()
-                                when (effectiveType) {
-                                    "2_EXPANDED" -> {
-                                        for (s in rg.specs) {
-                                            ControlCenterConfigHolder.sExpandedTileSpecs.add(s)
+                                val sizes = if (rg.tileSizes.isNotEmpty()) rg.tileSizes.split(",") else emptyList()
+                                if (sizes.size == rg.specs.size) {
+                                    for (i in rg.specs.indices) {
+                                        val s = rg.specs[i]
+                                        when (sizes[i]) {
+                                            "E" -> ControlCenterConfigHolder.sExpandedTileSpecs.add(s)
+                                            "V" -> ControlCenterConfigHolder.sVerticalTileSpecs.add(s)
                                         }
                                     }
-                                    "2_VERTICAL" -> {
-                                        for (s in rg.specs) {
-                                            ControlCenterConfigHolder.sVerticalTileSpecs.add(s)
+                                } else {
+                                    val effectiveType = rg.getEffectiveLayoutType()
+                                    when (effectiveType) {
+                                        "2_EXPANDED" -> {
+                                            for (s in rg.specs) {
+                                                ControlCenterConfigHolder.sExpandedTileSpecs.add(s)
+                                            }
                                         }
-                                    }
-                                    "1_EXP_2_CIRC" -> {
-                                        val card = if (rg.cardSpec.isNotEmpty()) rg.cardSpec else rg.specs.firstOrNull()
-                                        if (card != null) {
-                                            ControlCenterConfigHolder.sExpandedTileSpecs.add(card)
+                                        "2_VERTICAL" -> {
+                                            for (s in rg.specs) {
+                                                ControlCenterConfigHolder.sVerticalTileSpecs.add(s)
+                                            }
                                         }
-                                    }
-                                    "1_VERT_2_CIRC" -> {
-                                        val card = if (rg.cardSpec.isNotEmpty()) rg.cardSpec else rg.specs.firstOrNull()
-                                        if (card != null) {
-                                            ControlCenterConfigHolder.sVerticalTileSpecs.add(card)
+                                        "1_EXP_2_CIRC" -> {
+                                            val card = if (rg.cardSpec.isNotEmpty()) rg.cardSpec else rg.specs.firstOrNull()
+                                            if (card != null) {
+                                                ControlCenterConfigHolder.sExpandedTileSpecs.add(card)
+                                            }
                                         }
-                                    }
-                                    else -> {
-                                        // Circular tiles remain circular
+                                        "1_VERT_2_CIRC" -> {
+                                            val card = if (rg.cardSpec.isNotEmpty()) rg.cardSpec else rg.specs.firstOrNull()
+                                            if (card != null) {
+                                                ControlCenterConfigHolder.sVerticalTileSpecs.add(card)
+                                            }
+                                        }
+                                        else -> {
+                                            // Circular tiles remain circular
+                                        }
                                     }
                                 }
                             }
