@@ -42,7 +42,16 @@ object NotificationSheetHook {
     private const val TAG_ORIG_MARGIN_END = 0x7E010002
 
     @Volatile
-    var currentStatusBarState: Int = 0 // 0 = SHADE, 1 = KEYGUARD, 2 = SHADE_LOCKED
+    var currentStatusBarState: Int = 1 // 0 = SHADE, 1 = KEYGUARD, 2 = SHADE_LOCKED
+
+    @Volatile
+    private var isShadeOpen = false
+
+    @Volatile
+    var isShadeSwitching: Boolean = false
+
+    @Volatile
+    var isControlCenterExpanded: Boolean = false
 
     private var containerRef: WeakReference<ViewGroup>? = null
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -53,9 +62,27 @@ object NotificationSheetHook {
     @Volatile
     private var lastUnlockTriggerTime = 0L
 
+    fun isKeyguard(context: Context?): Boolean {
+        if (currentStatusBarState != 0) return true
+        if (context != null) {
+            try {
+                val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+                if (km?.isKeyguardLocked == true) return true
+            } catch (_: Throwable) {}
+        }
+        return false
+    }
+
+    fun isControlCenterActive(): Boolean {
+        return isShadeSwitching || isControlCenterExpanded
+    }
+
     fun init(module: XposedModule, classLoader: ClassLoader) {
         // 1. Hook StatusBarStateControllerImpl to track active shade / lockscreen state
         hookStatusBarState(module, classLoader)
+
+        // 1b. Hook ShadeSwitchControllerImpl and ControlCenterImpl to prevent unlock bounce on switch
+        hookShadeSwitch(module, classLoader)
 
         // 2. Hook MiuiNQSContainer (notification_container_parent) for lifecycle, glass & pill injection
         hookContainerParent(module, classLoader)
@@ -84,7 +111,7 @@ object NotificationSheetHook {
         // 10. Hook AmbientState to prevent isFullyHidden from hiding stack
         hookAmbientState(module, classLoader)
 
-        // 11. Hook ExpandableViewBase to neutralize all row hide/scale/alpha animations
+        // 11. Hook ExpandableViewBase to neutralize row scale/alpha/translationX animations
         hookExpandableViewBase(module, classLoader)
 
         // 12. Hook MiuiPanelAnimValueObjectImpl to keep alpha and scale at 1.0f
@@ -112,13 +139,18 @@ object NotificationSheetHook {
                                 currentStatusBarState = newState
 
                                 if (newState != 0) {
-                                    // Not in unlocked shade (e.g. keyguard active): restore container translation
+                                    isShadeOpen = false
+                                    // Not in unlocked shade (e.g. keyguard active): hide glass sheet and home pill
                                     mainHandler.post {
                                         val container = containerRef?.get()
-                                        if (container != null && !isLockScreenManaging(container)) {
-                                            container.translationY = 0.0f
+                                        if (container != null) {
                                             val sheet = container.findViewWithTag<View>(TAG_GLASS_SHEET)
                                             sheet?.visibility = View.GONE
+                                            val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
+                                            pill?.visibility = View.GONE
+                                            if (!isLockScreenManaging(container)) {
+                                                container.translationY = 0.0f
+                                            }
                                         }
                                     }
                                 }
@@ -132,6 +164,70 @@ object NotificationSheetHook {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook StatusBarStateControllerImpl", t)
+        }
+    }
+
+    private fun hookShadeSwitch(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val sscClass = Class.forName("com.miui.systemui.shade.ShadeSwitchControllerImpl", false, classLoader)
+            for (m in sscClass.declaredMethods) {
+                when (m.name) {
+                    "setSwitching" -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                try {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                                    val switching = args[0] as Boolean
+                                    isShadeSwitching = switching
+                                    if (switching) {
+                                        isShadeOpen = false
+                                    }
+                                } catch (_: Throwable) {}
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                    "switchToControlCenter" -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                isShadeSwitching = true
+                                isShadeOpen = false
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook ShadeSwitchControllerImpl", t)
+        }
+
+        try {
+            val ccClass = Class.forName("com.miui.systemui.controlcenter.ControlCenterImpl", false, classLoader)
+            for (m in ccClass.declaredMethods) {
+                when (m.name) {
+                    "expand" -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                isControlCenterExpanded = true
+                                isShadeOpen = false
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                    "collapse" -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                isControlCenterExpanded = false
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook ControlCenterImpl", t)
         }
     }
 
@@ -234,11 +330,16 @@ object NotificationSheetHook {
                 nssl.clipToPadding = false
                 nssl.visibility = View.VISIBLE
             }
-            ensureGlassSheetInjected(container)
-            ensureHomePillInjected(container)
-            adjustNotificationMargins(container)
-            val frac = if (lastAppliedFraction >= 0f) lastAppliedFraction else 0f
-            applyExpansionFractionInternal(frac)
+            if (isKeyguard(container.context)) {
+                container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
+                container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
+            } else {
+                ensureGlassSheetInjected(container)
+                ensureHomePillInjected(container)
+                adjustNotificationMargins(container)
+                val frac = if (lastAppliedFraction >= 0f) lastAppliedFraction else 0f
+                applyExpansionFractionInternal(frac)
+            }
         }
     }
 
@@ -247,7 +348,7 @@ object NotificationSheetHook {
             val cfg = NotificationSheetConfigHolder.sheet
             var sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
 
-            if (!cfg.enabled) {
+            if (!cfg.enabled || isKeyguard(container.context)) {
                 sheet?.visibility = View.GONE
                 return
             }
@@ -255,7 +356,7 @@ object NotificationSheetHook {
             if (sheet == null) {
                 sheet = NotificationGlassSheetView(container.context).apply {
                     tag = TAG_GLASS_SHEET
-                    visibility = View.VISIBLE
+                    visibility = View.GONE
                 }
                 val lp = try {
                     val lpClass = Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams", false, container.context.classLoader)
@@ -291,7 +392,7 @@ object NotificationSheetHook {
             val cfg = NotificationSheetConfigHolder.sheet
             var pillWrapper = container.findViewWithTag<ViewGroup>(TAG_HOME_PILL)
 
-            if (!cfg.enabled) {
+            if (!cfg.enabled || isKeyguard(container.context)) {
                 pillWrapper?.visibility = View.GONE
                 return
             }
@@ -307,7 +408,7 @@ object NotificationSheetHook {
 
                 val wrapper = android.widget.FrameLayout(context).apply {
                     tag = TAG_HOME_PILL
-                    visibility = View.VISIBLE
+                    visibility = View.GONE
                     clipChildren = false
                     clipToPadding = false
                 }
@@ -525,6 +626,22 @@ object NotificationSheetHook {
     }
 
     fun notifyCloseOverHomescreen(context: Context) {
+        if (!isShadeOpen) {
+            Log.d(TAG, "notifyCloseOverHomescreen: shade was not open, skipping")
+            return
+        }
+        isShadeOpen = false
+
+        if (currentStatusBarState != 0 || isKeyguard(context)) {
+            Log.d(TAG, "notifyCloseOverHomescreen: keyguard active, skipping")
+            return
+        }
+
+        if (isControlCenterActive()) {
+            Log.d(TAG, "notifyCloseOverHomescreen: control center active or switching, skipping")
+            return
+        }
+
         val now = System.currentTimeMillis()
         if (now - lastUnlockTriggerTime < 800L) return
         lastUnlockTriggerTime = now
@@ -827,7 +944,11 @@ object NotificationSheetHook {
     private fun applyExpansionFractionInternal(fraction: Float, prevFraction: Float = -1f) {
         val container = containerRef?.get() ?: return
         val cfg = NotificationSheetConfigHolder.sheet
-        if (!cfg.enabled || currentStatusBarState != 0) return
+        if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard(container.context)) {
+            container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
+            container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
+            return
+        }
 
         var viewHeight = container.height.toFloat()
         if (viewHeight <= 0f) {
@@ -842,6 +963,9 @@ object NotificationSheetHook {
 
         container.visibility = if (fraction > 0.001f) View.VISIBLE else View.INVISIBLE
 
+        ensureGlassSheetInjected(container)
+        ensureHomePillInjected(container)
+
         val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
         if (sheet != null) {
             sheet.visibility = if (fraction > 0.005f) View.VISIBLE else View.INVISIBLE
@@ -853,6 +977,10 @@ object NotificationSheetHook {
         val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
         if (pill != null) {
             pill.visibility = if (fraction > 0.005f) View.VISIBLE else View.INVISIBLE
+        }
+
+        if (fraction >= 0.7f && !isControlCenterActive()) {
+            isShadeOpen = true
         }
 
         if (fraction <= 0.001f && prevFraction > 0.05f) {
@@ -873,11 +1001,6 @@ object NotificationSheetHook {
                             if (cfg.enabled && currentStatusBarState == 0) {
                                 val nssl = chain.thisObject as? ViewGroup
                                 if (nssl != null) {
-                                    val h = if (nssl.height > 0) nssl.height.toFloat() else nssl.resources.displayMetrics.heightPixels.toFloat()
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                    args[0] = h
-
                                     try {
                                         val ambientStateField = nssl.javaClass.getDeclaredField("mAmbientState")
                                         ambientStateField.isAccessible = true
@@ -888,7 +1011,7 @@ object NotificationSheetHook {
                                         }
                                     } catch (_: Throwable) {}
 
-                                    val res = chain.proceed(args)
+                                    val res = chain.proceed()
                                     nssl.visibility = View.VISIBLE
                                     return res
                                 }
@@ -993,7 +1116,7 @@ object NotificationSheetHook {
                             }
                         })
                     }
-                    (m.name == "setExtTranslationX" || m.name == "setExtTranslationY") && m.parameterTypes.size == 1 && m.parameterTypes[0] == Float::class.javaPrimitiveType -> {
+                    m.name == "setExtTranslationX" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Float::class.javaPrimitiveType -> {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 val cfg = NotificationSheetConfigHolder.sheet
@@ -1075,12 +1198,6 @@ object NotificationSheetHook {
                                             transXF.isAccessible = true
                                             transXF.setFloat(obj, 0.0f)
                                         } catch (_: Throwable) {}
-
-                                        try {
-                                            val transYF = obj.javaClass.getDeclaredField("expandTransY")
-                                            transYF.isAccessible = true
-                                            transYF.setFloat(obj, 0.0f)
-                                        } catch (_: Throwable) {}
                                     }
                                 }
                             } catch (_: Throwable) {}
@@ -1136,25 +1253,6 @@ object NotificationSheetHook {
                         })
                     }
 
-                    // Stop staggered row vertical translation: keep translationY = 0.0f for all types
-                    m.name == "setFolmeTranslationYForType" &&
-                    m.parameterTypes.size == 3 &&
-                    m.parameterTypes[1] == Float::class.javaPrimitiveType &&
-                    m.parameterTypes[2] == Int::class.javaPrimitiveType -> {
-                        module.hook(m).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val cfg = NotificationSheetConfigHolder.sheet
-                                if (cfg.enabled && currentStatusBarState == 0) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                    args[1] = 0.0f
-                                    return chain.proceed(args)
-                                }
-                                return chain.proceed()
-                            }
-                        })
-                    }
-
                     // Keep full alpha for static rows in sheet container: keep alpha = 1.0f for all types
                     m.name == "setFolmeAlphaForType" &&
                     m.parameterTypes.size == 3 &&
@@ -1184,23 +1282,6 @@ object NotificationSheetHook {
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
                                     args[1] = 1.0f
-                                    return chain.proceed(args)
-                                }
-                                return chain.proceed()
-                            }
-                        })
-                    }
-
-                    m.name == "setFolmeTranslationZForType" &&
-                    m.parameterTypes.size == 2 &&
-                    m.parameterTypes[1] == Float::class.javaPrimitiveType -> {
-                        module.hook(m).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val cfg = NotificationSheetConfigHolder.sheet
-                                if (cfg.enabled && currentStatusBarState == 0) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                    args[1] = 0.0f
                                     return chain.proceed(args)
                                 }
                                 return chain.proceed()
