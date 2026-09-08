@@ -326,7 +326,11 @@ object ScreenUnlockHook {
             val receiver = object : android.content.BroadcastReceiver() {
                 override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
                     Log.d(TAG, "Received ACTION_TRIGGER_UNLOCK_ANIMATION broadcast")
-                    val launcher = getLauncherActivity(c) ?: return
+                    val launcher = getLauncherActivity(c)
+                    if (launcher == null) {
+                        Log.w(TAG, "Cannot trigger unlock animation: launcher activity is null")
+                        return
+                    }
                     launcher.runOnUiThread {
                         triggerUnlockAnimationOnLauncher(launcher)
                     }
