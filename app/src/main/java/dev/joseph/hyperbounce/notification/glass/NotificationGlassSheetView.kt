@@ -93,11 +93,11 @@ class NotificationGlassSheetView @JvmOverloads constructor(
             )
 
             val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
-                // Base subtle dark gradient so the glass tint is deep and elegant
+                // Base solid dark gradient so the glass tint has rich contrast and specular pop
                 val basePaint = Paint().apply {
                     shader = LinearGradient(
                         0f, 0f, 0f, screenH.toFloat(),
-                        0x4418181B.toInt(), 0x660F0F12.toInt(),
+                        0xFF18181C.toInt(), 0xFF0E0E12.toInt(),
                         Shader.TileMode.CLAMP
                     )
                 }
@@ -129,9 +129,20 @@ class NotificationGlassSheetView @JvmOverloads constructor(
     }
 
     private fun drawFallbackBorder(canvas: Canvas, w: Float, h: Float, radius: Float) {
-        fallbackBorderPaint.strokeWidth = 1.5f * resources.displayMetrics.density
+        val density = resources.displayMetrics.density
+        fallbackBorderPaint.strokeWidth = 2.0f * density
         boundsRect.set(0f, 0f, w, h)
-        // Draw 3-sided border around sheet (open at top)
-        canvas.drawRoundRect(boundsRect, radius, radius, fallbackBorderPaint)
+        val radii = floatArrayOf(0f, 0f, 0f, 0f, radius, radius, radius, radius)
+        val path = android.graphics.Path().apply {
+            addRoundRect(boundsRect, radii, android.graphics.Path.Direction.CW)
+        }
+        canvas.drawPath(path, fallbackBorderPaint)
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            renderer?.release()
+        }
     }
 }
