@@ -36,6 +36,7 @@ object ControlCenterHook {
     @Volatile private var sysuiHooked = false
     @Volatile var sMediaPlayerViewHolder: java.lang.ref.WeakReference<Any>? = null
     @Volatile var sLastMediaPlayerMetaData: Any? = null
+    private val sInChangeVisible = ThreadLocal<Boolean>()
 
     fun initSystemUIHooks(module: XposedModule, classLoader: ClassLoader?) {
         if (classLoader == null || sysuiHooked) return
@@ -513,16 +514,8 @@ object ControlCenterHook {
                                     if (stateObj != null) {
                                         val stateStr = stateObj.toString()
                                         if ("STARTED" == stateStr) {
-                                            if (ControlCenterConfigHolder.sPendingOrientationRebind) {
-                                                ControlCenterConfigHolder.sPendingOrientationRebind = false
-                                                ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
-                                                val windowView = chain.thisObject as? View
-                                                if (windowView != null) {
-                                                    ControlCenterConfigHolder.refreshAdapter(windowView, windowView.context)
-                                                }
-                                            } else {
-                                                ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
-                                            }
+                                            ControlCenterConfigHolder.sPendingOrientationRebind = false
+                                            ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
                                         } else if ("STOPPED" == stateStr || "DESTROYED" == stateStr) {
                                             if (ControlCenterConfigHolder.sIsEditMode) {
                                                 val windowView = chain.thisObject as? View
@@ -670,6 +663,62 @@ object ControlCenterHook {
                                     }
                                 }
                             } catch (t: Throwable) {}
+                            result
+                        }
+                    }
+
+                    if (m.name == "changeVisible" && m.parameterTypes.size == 3) {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            if (sInChangeVisible.get() == true) return@intercept result
+                            try {
+                                sInChangeVisible.set(true)
+                                val holder = chain.thisObject
+                                val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
+                                if (itemView != null) {
+                                    val subHolders = itemView.getTag(0x7f099993) as? Array<*>
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                    val z2 = (args?.getOrNull(0) as? Boolean) ?: true
+                                    val z3 = (args?.getOrNull(1) as? Boolean) ?: true
+                                    val z4 = (args?.getOrNull(2) as? Boolean) ?: false
+
+                                    if (subHolders != null) {
+                                        for (subHolder in subHolders) {
+                                            if (subHolder != null) {
+                                                try {
+                                                    val cvM = subHolder.javaClass.getMethod(
+                                                        "changeVisible",
+                                                        Boolean::class.javaPrimitiveType,
+                                                        Boolean::class.javaPrimitiveType,
+                                                        Boolean::class.javaPrimitiveType
+                                                    )
+                                                    cvM.isAccessible = true
+                                                    cvM.invoke(subHolder, z2, z3, z4)
+                                                } catch (t: Throwable) {}
+                                            }
+                                        }
+                                    }
+
+                                    if (z2) {
+                                        val container = itemView.findViewById<ViewGroup>(0x7f099995)
+                                        if (container != null) {
+                                            container.visibility = View.VISIBLE
+                                            container.alpha = 1.0f
+                                            for (i in 0 until container.childCount) {
+                                                val c = container.getChildAt(i)
+                                                if (c != null) {
+                                                    c.visibility = View.VISIBLE
+                                                    c.alpha = 1.0f
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (t: Throwable) {} finally {
+                                sInChangeVisible.set(false)
+                            }
                             result
                         }
                     }
@@ -1911,172 +1960,19 @@ object ControlCenterHook {
                                             }
                                         }
 
-                                        val container = itemView.findViewById<ViewGroup>(0x7f099995)
-                                        if (container != null) {
-                                            val recordMap = HashMap<String, Any>()
-                                            var activeQsListCtrl: Any? = null
-                                            try {
-                                                val qsListCtrlField = qsRecordClass.getDeclaredField("qsListController")
-                                                qsListCtrlField.isAccessible = true
-                                                val lazyQsList = qsListCtrlField.get(record)
-                                                if (lazyQsList != null) {
-                                                    val getM = lazyQsList.javaClass.getMethod("get")
-                                                    activeQsListCtrl = getM.invoke(lazyQsList)
-                                                }
-                                            } catch (t: Throwable) {}
-                                            if (activeQsListCtrl == null) activeQsListCtrl = ControlCenterConfigHolder.sQSListController
-
-                                            if (activeQsListCtrl != null) {
-                                                val listFieldNames = arrayOf("addedTiles", "copiedTiles", "systemTiles", "packageTiles", "records")
-                                                for (fn in listFieldNames) {
-                                                    try {
-                                                        val f = activeQsListCtrl.javaClass.getDeclaredField(fn)
-                                                        f.isAccessible = true
-                                                        val list = f.get(activeQsListCtrl) as? List<*>
-                                                        if (list != null) {
-                                                            for (r in list) {
-                                                                val s = ControlCenterConfigHolder.getRecordSpec(r)
-                                                                if (s != null && !recordMap.containsKey(s) && r != null) recordMap[s] = r
-                                                            }
-                                                        }
-                                                    } catch (t: Throwable) {}
-                                                }
+                                        var activeQsListCtrl: Any? = null
+                                        try {
+                                            val qsListCtrlField = qsRecordClass.getDeclaredField("qsListController")
+                                            qsListCtrlField.isAccessible = true
+                                            val lazyQsList = qsListCtrlField.get(record)
+                                            if (lazyQsList != null) {
+                                                val getM = lazyQsList.javaClass.getMethod("get")
+                                                activeQsListCtrl = getM.invoke(lazyQsList)
                                             }
+                                        } catch (t: Throwable) {}
+                                        if (activeQsListCtrl == null) activeQsListCtrl = ControlCenterConfigHolder.sQSListController
 
-                                            for (r in ControlCenterConfigHolder.sAllQSRecords) {
-                                                val s = ControlCenterConfigHolder.getRecordSpec(r)
-                                                if (s != null && !recordMap.containsKey(s)) recordMap[s] = r
-                                            }
-
-                                            itemView.setTag(0x7f099994, group)
-                                            ControlCenterGrouping.applyGroupContainerStyle(itemView, classLoader, group)
-
-                                            if (container is DynamicGroupContainer) {
-                                                if (container.getTag(0x7f099997) != group.id) {
-                                                    container.removeAllViews()
-                                                    container.setTag(0x7f099997, group.id)
-                                                    container.rowCount = group.getEffectiveRowCount()
-
-                                                    val layoutRes = ControlCenterGrouping.computeGroupLayoutForGroup(group)
-                                                    if (layoutRes != null) {
-                                                        container.placedTiles = layoutRes.placedTiles
-                                                        val dynamicSubHolders = arrayOfNulls<Any>(group.specs.size)
-                                                        val mainPanelController = ControlCenterGrouping.getMainPanelController(activeQsListCtrl)
-                                                            ?: ControlCenterGrouping.getMainPanelController(ControlCenterConfigHolder.sQSListController)
-
-                                                        for (i in group.specs.indices) {
-                                                            val pt = layoutRes.placedTiles[i]
-                                                            val child = ControlCenterGrouping.inflateTileForType(pt.type, container, activeQsListCtrl ?: ControlCenterConfigHolder.sQSListController, classLoader)
-                                                            container.addView(child)
-                                                            val h = ControlCenterGrouping.createSubHolderForView(child, mainPanelController, classLoader)
-                                                            ControlCenterGrouping.attachSubHolder(h)
-                                                            dynamicSubHolders[i] = h
-                                                        }
-                                                        itemView.setTag(0x7f099993, dynamicSubHolders)
-                                                    }
-                                                    container.requestLayout()
-                                                }
-                                            }
-
-                                            var subHolders = itemView.getTag(0x7f099993) as? Array<Any?>
-                                            if (subHolders == null) {
-                                                val count = group.specs.size
-                                                subHolders = arrayOfNulls(count)
-                                                val mainPanelController = ControlCenterGrouping.getMainPanelController(activeQsListCtrl)
-                                                    ?: ControlCenterGrouping.getMainPanelController(ControlCenterConfigHolder.sQSListController)
-
-                                                for (i in 0 until count) {
-                                                    val childTile = ControlCenterGrouping.getChildTileAt(container, i)
-                                                    if (childTile != null) {
-                                                        val h = ControlCenterGrouping.createSubHolderForView(childTile, mainPanelController, classLoader)
-                                                        ControlCenterGrouping.attachSubHolder(h)
-                                                        subHolders[i] = h
-                                                    }
-                                                }
-                                                itemView.setTag(0x7f099993, subHolders)
-                                            }
-
-                                            val bindCount = if (subHolders != null) Math.min(subHolders.size, group.specs.size) else group.specs.size
-                                            for (i in 0 until bindCount) {
-                                                val childSpec = group.specs[i]
-                                                val childView = ControlCenterGrouping.getChildTileAt(container, i)
-                                                val childRecord = recordMap[childSpec]
-                                                val subHolder = if (subHolders != null && i < subHolders.size) subHolders[i] else null
-
-                                                if (childRecord != null && subHolder != null && childView != null) {
-                                                    try {
-                                                        for (shM in subHolder.javaClass.methods) {
-                                                            if (shM.name.startsWith("setItem")) {
-                                                                shM.invoke(subHolder, childRecord)
-                                                                break
-                                                            }
-                                                        }
-                                                        val setHolderMethod = childRecord.javaClass.getMethod("setHolder", Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader))
-                                                        setHolderMethod.invoke(childRecord, subHolder)
-
-                                                        val onBindMethod = childRecord.javaClass.getMethod("onBindViewHolder")
-                                                        onBindMethod.invoke(childRecord)
-
-                                                        var vhCls: Class<*>? = subHolder.javaClass
-                                                        while (vhCls != null) {
-                                                            try {
-                                                                val af = vhCls.getDeclaredField("attached")
-                                                                af.isAccessible = true
-                                                                af.setBoolean(subHolder, true)
-                                                                break
-                                                            } catch (t: Throwable) { vhCls = vhCls.superclass }
-                                                        }
-
-                                                        try {
-                                                            val modeClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController\$Mode", false, classLoader)
-                                                            val currentMode = modeClass.getMethod("valueOf", String::class.java).invoke(null, if (isEdit) "EDIT" else "NORMAL")
-                                                            val updateModeMethod = childRecord.javaClass.getMethod("updateMode", modeClass, Boolean::class.javaPrimitiveType)
-                                                            updateModeMethod.invoke(childRecord, currentMode, false)
-                                                        } catch (t: Throwable) {}
-
-                                                        try {
-                                                            val addCb = childRecord.javaClass.getMethod("addCallback")
-                                                            addCb.invoke(childRecord)
-                                                        } catch (t: Throwable) {}
-
-                                                        try {
-                                                            val getTileM = childRecord.javaClass.getMethod("getTile")
-                                                            val tileObj = getTileM.invoke(childRecord)
-                                                            if (tileObj != null) {
-                                                                val setLisM = tileObj.javaClass.getMethod("setListening", Any::class.java, Boolean::class.javaPrimitiveType)
-                                                                setLisM.invoke(tileObj, childRecord, true)
-                                                                val refM = tileObj.javaClass.getMethod("refreshState")
-                                                                refM.invoke(tileObj)
-
-                                                                val getStateM = tileObj.javaClass.getMethod("getState")
-                                                                val curState = getStateM.invoke(tileObj)
-                                                                if (curState != null) {
-                                                                    for (vm in childView.javaClass.methods) {
-                                                                        if (vm.name == "updateState" && vm.parameterTypes.size == 3) {
-                                                                            vm.isAccessible = true
-                                                                            vm.invoke(childView, curState, true, false)
-                                                                            break
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        } catch (t: Throwable) {}
-
-                                                        if (isEdit) {
-                                                            childView.isClickable = false
-                                                            childView.isLongClickable = false
-                                                            childView.isFocusable = false
-                                                        } else {
-                                                            childView.isClickable = true
-                                                            childView.isLongClickable = true
-                                                            childView.isFocusable = true
-                                                        }
-                                                    } catch (t: Throwable) {
-                                                        Log.e(TAG, "Sub-tile binding error: $childSpec", t)
-                                                    }
-                                                }
-                                            }
-                                        }
+                                        ControlCenterGrouping.rebindGroupContainer(itemView, group, activeQsListCtrl, classLoader)
 
                                         // Disassemble Selection Indicator
                                         val selectTag = 0x7f099998
@@ -2650,6 +2546,19 @@ object ControlCenterHook {
                                 }
                                 val itemView = ControlCenterGrouping.getViewHolderItemView(cardHolder)
                                 if (itemView != null) {
+                                    val container = itemView.findViewById<ViewGroup>(0x7f099995)
+                                    if (container != null) {
+                                        container.visibility = View.VISIBLE
+                                        for (i in 0 until container.childCount) {
+                                            val c = container.getChildAt(i)
+                                            if (c != null) {
+                                                c.visibility = View.VISIBLE
+                                                if (!ControlCenterConfigHolder.sIsEditMode) {
+                                                    c.alpha = 1.0f
+                                                }
+                                            }
+                                        }
+                                    }
                                     val subHolders = itemView.getTag(0x7f099993) as? Array<*>
                                     if (subHolders != null) {
                                         for (subHolder in subHolders) {
@@ -3123,6 +3032,26 @@ object ControlCenterHook {
             applySliderLayoutAndTouch(holder)
         } else if (hName.contains("MediaPlayerViewHolder")) {
             applyMediaPlayerLayout(holder)
+        } else {
+            val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
+            if (itemView != null && itemView.findViewById<ViewGroup>(0x7f099995) != null) {
+                var group = itemView.getTag(0x7f099994) as? TileGroup
+                if (group == null) {
+                    val spec = itemView.getTag(0x7f099990) as? String
+                        ?: try {
+                            val itemF = holder.javaClass.getDeclaredField("item")
+                            itemF.isAccessible = true
+                            ControlCenterConfigHolder.getRecordSpec(itemF.get(holder))
+                        } catch (t: Throwable) { null }
+                    if (spec != null) {
+                        itemView.setTag(0x7f099990, spec)
+                        group = ControlCenterConfigHolder.isGroupAnchor(spec)
+                    }
+                }
+                if (group != null) {
+                    ControlCenterGrouping.rebindGroupContainer(itemView, group, null, classLoader)
+                }
+            }
         }
     }
 

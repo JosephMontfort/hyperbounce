@@ -6,3 +6,5 @@
 /build
 /app/build
 *.keystore
+# Added by code-review-graph
+.code-review-graph/

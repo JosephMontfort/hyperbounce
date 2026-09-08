@@ -95,6 +95,13 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
             val childH = if (rowSpan > 1) (rowSpan * rowH + (rowSpan - 1) * gap) else rowH
 
             child.layout(childLeft, childTop, childLeft + childW, childTop + childH)
+
+            if (child.visibility != View.VISIBLE) {
+                child.visibility = View.VISIBLE
+            }
+            if (child.alpha < 1.0f && !ControlCenterConfigHolder.sIsEditMode) {
+                child.alpha = 1.0f
+            }
         }
     }
 }
@@ -1022,6 +1029,218 @@ object ControlCenterGrouping {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "applyGroupContainerStyle error", t)
+        }
+    }
+
+    fun rebindGroupContainer(
+        anchorView: View,
+        group: TileGroup?,
+        qsListCtrl: Any?,
+        classLoader: ClassLoader,
+        forceRebuild: Boolean = false
+    ) {
+        try {
+            val container = anchorView.findViewById<ViewGroup>(0x7f099995) ?: return
+            val resolvedGroup = group 
+                ?: (anchorView.getTag(0x7f099994) as? TileGroup)
+                ?: ControlCenterConfigHolder.isGroupAnchor(anchorView.getTag(0x7f099990) as? String)
+                ?: return
+
+            anchorView.setTag(0x7f099994, resolvedGroup)
+            applyGroupContainerStyle(anchorView, classLoader, resolvedGroup)
+
+            val ctx = anchorView.context
+            val density = ctx.resources.displayMetrics.density
+            val rowCount = resolvedGroup.getEffectiveRowCount()
+            val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin_y", "dimen", ctx.packageName)
+            val resUnitId = ctx.resources.getIdentifier("control_center_universal_unit_height", "dimen", ctx.packageName)
+            val unitHeight = if (resUnitId != 0) ctx.resources.getDimensionPixelSize(resUnitId) else (78 * density).toInt()
+            val gapY = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId) else (10 * density).toInt()
+            val res2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
+            val cardH = if (rowCount == 2 && res2RowsId != 0) {
+                ctx.resources.getDimensionPixelSize(res2RowsId)
+            } else {
+                rowCount * unitHeight + (rowCount - 1) * gapY
+            }
+
+            val alp = anchorView.layoutParams
+            if (alp != null && alp.height != cardH) {
+                alp.height = cardH
+                anchorView.layoutParams = alp
+            }
+
+            val isEdit = ControlCenterConfigHolder.sIsEditMode
+            if (!isEdit) {
+                for (i in 0 until 4) {
+                    val childTile = getChildTileAt(container, i)
+                    if (childTile != null) {
+                        ControlCenterHook.hideAllCustomBadges(childTile)
+                        childTile.isClickable = true
+                        childTile.isLongClickable = true
+                        childTile.isFocusable = true
+                    }
+                }
+            }
+
+            val activeCtrl = qsListCtrl ?: ControlCenterConfigHolder.sQSListController
+            val recordMap = HashMap<String, Any>()
+            if (activeCtrl != null) {
+                val listFieldNames = arrayOf("addedTiles", "copiedTiles", "systemTiles", "packageTiles", "records")
+                for (fn in listFieldNames) {
+                    try {
+                        val f = activeCtrl.javaClass.getDeclaredField(fn)
+                        f.isAccessible = true
+                        val list = f.get(activeCtrl) as? List<*>
+                        if (list != null) {
+                            for (r in list) {
+                                val s = ControlCenterConfigHolder.getRecordSpec(r)
+                                if (s != null && !recordMap.containsKey(s) && r != null) recordMap[s] = r
+                            }
+                        }
+                    } catch (t: Throwable) {}
+                }
+            }
+
+            for (r in ControlCenterConfigHolder.sAllQSRecords) {
+                val s = ControlCenterConfigHolder.getRecordSpec(r)
+                if (s != null && !recordMap.containsKey(s) && r != null) recordMap[s] = r
+            }
+
+            if (container is DynamicGroupContainer) {
+                if (forceRebuild || container.childCount == 0 || container.getTag(0x7f099997) != resolvedGroup.id) {
+                    container.removeAllViews()
+                    container.setTag(0x7f099997, resolvedGroup.id)
+                    container.rowCount = rowCount
+
+                    val layoutRes = computeGroupLayoutForGroup(resolvedGroup)
+                    if (layoutRes != null) {
+                        container.placedTiles = layoutRes.placedTiles
+                        val dynamicSubHolders = arrayOfNulls<Any>(resolvedGroup.specs.size)
+                        val mainPanelController = getMainPanelController(activeCtrl)
+                            ?: getMainPanelController(ControlCenterConfigHolder.sQSListController)
+
+                        for (i in resolvedGroup.specs.indices) {
+                            val pt = layoutRes.placedTiles[i]
+                            val child = inflateTileForType(pt.type, container, activeCtrl, classLoader)
+                            container.addView(child)
+                            val h = createSubHolderForView(child, mainPanelController, classLoader)
+                            attachSubHolder(h)
+                            dynamicSubHolders[i] = h
+                        }
+                        anchorView.setTag(0x7f099993, dynamicSubHolders)
+                    }
+                    container.requestLayout()
+                }
+            }
+
+            var subHolders = anchorView.getTag(0x7f099993) as? Array<Any?>
+            if (subHolders == null) {
+                val count = resolvedGroup.specs.size
+                subHolders = arrayOfNulls(count)
+                val mainPanelController = getMainPanelController(activeCtrl)
+                    ?: getMainPanelController(ControlCenterConfigHolder.sQSListController)
+
+                for (i in 0 until count) {
+                    val childTile = getChildTileAt(container, i)
+                    if (childTile != null) {
+                        val h = createSubHolderForView(childTile, mainPanelController, classLoader)
+                        attachSubHolder(h)
+                        subHolders[i] = h
+                    }
+                }
+                anchorView.setTag(0x7f099993, subHolders)
+            }
+
+            val bindCount = if (subHolders != null) Math.min(subHolders.size, resolvedGroup.specs.size) else resolvedGroup.specs.size
+            for (i in 0 until bindCount) {
+                val childSpec = resolvedGroup.specs[i]
+                val childView = getChildTileAt(container, i)
+                val childRecord = recordMap[childSpec]
+                val subHolder = if (subHolders != null && i < subHolders.size) subHolders[i] else null
+
+                if (childView != null) {
+                    childView.visibility = View.VISIBLE
+                    if (!isEdit) {
+                        childView.alpha = 1.0f
+                    }
+                }
+
+                if (childRecord != null && subHolder != null && childView != null) {
+                    try {
+                        for (shM in subHolder.javaClass.methods) {
+                            if (shM.name.startsWith("setItem")) {
+                                shM.invoke(subHolder, childRecord)
+                                break
+                            }
+                        }
+                        val setHolderMethod = childRecord.javaClass.getMethod("setHolder", Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader))
+                        setHolderMethod.invoke(childRecord, subHolder)
+
+                        val onBindMethod = childRecord.javaClass.getMethod("onBindViewHolder")
+                        onBindMethod.invoke(childRecord)
+
+                        var vhCls: Class<*>? = subHolder.javaClass
+                        while (vhCls != null) {
+                            try {
+                                val af = vhCls.getDeclaredField("attached")
+                                af.isAccessible = true
+                                af.setBoolean(subHolder, true)
+                                break
+                            } catch (t: Throwable) { vhCls = vhCls.superclass }
+                        }
+
+                        try {
+                            val modeClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController\$Mode", false, classLoader)
+                            val currentMode = modeClass.getMethod("valueOf", String::class.java).invoke(null, if (isEdit) "EDIT" else "NORMAL")
+                            val updateModeMethod = childRecord.javaClass.getMethod("updateMode", modeClass, Boolean::class.javaPrimitiveType)
+                            updateModeMethod.invoke(childRecord, currentMode, false)
+                        } catch (t: Throwable) {}
+
+                        try {
+                            val addCb = childRecord.javaClass.getMethod("addCallback")
+                            addCb.invoke(childRecord)
+                        } catch (t: Throwable) {}
+
+                        try {
+                            val getTileM = childRecord.javaClass.getMethod("getTile")
+                            val tileObj = getTileM.invoke(childRecord)
+                            if (tileObj != null) {
+                                val setLisM = tileObj.javaClass.getMethod("setListening", Any::class.java, Boolean::class.javaPrimitiveType)
+                                setLisM.invoke(tileObj, childRecord, true)
+                                val refM = tileObj.javaClass.getMethod("refreshState")
+                                refM.invoke(tileObj)
+
+                                val getStateM = tileObj.javaClass.getMethod("getState")
+                                val curState = getStateM.invoke(tileObj)
+                                if (curState != null) {
+                                    for (vm in childView.javaClass.methods) {
+                                        if (vm.name == "updateState" && vm.parameterTypes.size == 3) {
+                                            vm.isAccessible = true
+                                            vm.invoke(childView, curState, true, false)
+                                            break
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (t: Throwable) {}
+
+                        if (isEdit) {
+                            childView.isClickable = false
+                            childView.isLongClickable = false
+                            childView.isFocusable = false
+                        } else {
+                            childView.isClickable = true
+                            childView.isLongClickable = true
+                            childView.isFocusable = true
+                        }
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "rebindGroupContainer subHolder error: $childSpec", t)
+                    }
+                }
+            }
+            container.requestLayout()
+        } catch (t: Throwable) {
+            Log.e(TAG, "rebindGroupContainer error", t)
         }
     }
 
