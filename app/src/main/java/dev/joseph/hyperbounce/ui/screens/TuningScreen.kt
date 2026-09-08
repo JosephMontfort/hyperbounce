@@ -81,7 +81,7 @@ fun TuningScreen(
                 title = "Notification Center",
                 subtitle = if (repository.notificationSheet.enabled) "iOS Glass Sheet & Static Flow" else "Off",
                 colors = colors,
-                iconTint = colors.accentIndigo,
+                iconTint = colors.accentPurple,
                 onClick = { onNavigate(Destination.NotificationCenterSheet) },
                 icon = { dev.joseph.hyperbounce.ui.components.SlidersIcon(color = Color.White, size = 15.dp) }
             )
