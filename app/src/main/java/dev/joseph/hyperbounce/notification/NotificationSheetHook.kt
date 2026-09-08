@@ -125,39 +125,21 @@ object NotificationSheetHook {
     }
 
     private fun hookContainerParent(module: XposedModule, classLoader: ClassLoader) {
+        // Point 1: NotificationsQuickSettingsContainer.onFinishInflate()
         try {
-            val containerClass = Class.forName("com.android.systemui.shade.MiuiNQSContainer", false, classLoader)
-            for (m: Method in containerClass.declaredMethods) {
-                if (m.name == "onAttachedToWindow") {
+            val nqscClass = Class.forName("com.android.systemui.shade.NotificationsQuickSettingsContainer", false, classLoader)
+            for (m: Method in nqscClass.declaredMethods) {
+                if (m.name == "onFinishInflate" && m.parameterTypes.isEmpty()) {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
                             try {
-                                val container = chain.thisObject as? ViewGroup ?: return result
-                                containerRef = WeakReference(container)
-                                mainHandler.post {
-                                    ensureGlassSheetInjected(container)
-                                    ensureHomePillInjected(container)
-                                    adjustNotificationMargins(container)
+                                val container = chain.thisObject as? ViewGroup
+                                if (container != null) {
+                                    onContainerAcquired(container)
                                 }
                             } catch (t: Throwable) {
-                                Log.e(TAG, "Error in onAttachedToWindow hook", t)
-                            }
-                            return result
-                        }
-                    })
-                } else if (m.name == "onLayout" && m.parameterTypes.size == 5) {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
-                            val result = chain.proceed()
-                            try {
-                                val container = chain.thisObject as? ViewGroup ?: return result
-                                containerRef = WeakReference(container)
-                                ensureGlassSheetInjected(container)
-                                ensureHomePillInjected(container)
-                                adjustNotificationMargins(container)
-                            } catch (t: Throwable) {
-                                Log.e(TAG, "Error in onLayout hook", t)
+                                Log.e(TAG, "Error in NotificationsQuickSettingsContainer.onFinishInflate hook", t)
                             }
                             return result
                         }
@@ -165,7 +147,73 @@ object NotificationSheetHook {
                 }
             }
         } catch (t: Throwable) {
-            Log.e(TAG, "Failed to hook MiuiNQSContainer", t)
+            Log.e(TAG, "Failed to hook NotificationsQuickSettingsContainer", t)
+        }
+
+        // Point 2: MiuiNQSContainer.onMeasure(int, int)
+        try {
+            val miuiNqsClass = Class.forName("com.android.systemui.shade.MiuiNQSContainer", false, classLoader)
+            for (m: Method in miuiNqsClass.declaredMethods) {
+                if (m.name == "onMeasure" && m.parameterTypes.size == 2) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val result = chain.proceed()
+                            try {
+                                val container = chain.thisObject as? ViewGroup
+                                if (container != null && (containerRef?.get() != container || container.findViewWithTag<View>(TAG_GLASS_SHEET) == null)) {
+                                    onContainerAcquired(container)
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "Error in MiuiNQSContainer.onMeasure hook", t)
+                            }
+                            return result
+                        }
+                    })
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook MiuiNQSContainer.onMeasure", t)
+        }
+
+        // Point 3: NotificationPanelViewController.onFinishInflate()
+        try {
+            val npvcClass = Class.forName("com.android.systemui.shade.NotificationPanelViewController", false, classLoader)
+            for (m: Method in npvcClass.declaredMethods) {
+                if (m.name == "onFinishInflate" && m.parameterTypes.isEmpty()) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val result = chain.proceed()
+                            try {
+                                val npvc = chain.thisObject
+                                if (npvc != null) {
+                                    val field = npvc.javaClass.getDeclaredField("mNotificationContainerParent")
+                                    field.isAccessible = true
+                                    val container = field.get(npvc) as? ViewGroup
+                                    if (container != null) {
+                                        onContainerAcquired(container)
+                                    }
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "Error in NotificationPanelViewController.onFinishInflate hook", t)
+                            }
+                            return result
+                        }
+                    })
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook NotificationPanelViewController.onFinishInflate", t)
+        }
+    }
+
+    private fun onContainerAcquired(container: ViewGroup) {
+        containerRef = WeakReference(container)
+        mainHandler.post {
+            ensureGlassSheetInjected(container)
+            ensureHomePillInjected(container)
+            adjustNotificationMargins(container)
+            val frac = if (lastAppliedFraction >= 0f) lastAppliedFraction else 0f
+            applyExpansionFractionInternal(frac)
         }
     }
 
@@ -182,24 +230,23 @@ object NotificationSheetHook {
             if (sheet == null) {
                 sheet = NotificationGlassSheetView(container.context).apply {
                     tag = TAG_GLASS_SHEET
-                    visibility = View.INVISIBLE
+                    visibility = View.VISIBLE
                 }
                 val lp = try {
                     val lpClass = Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams", false, container.context.classLoader)
                     val constructor = lpClass.getConstructor(Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-                    val inst = constructor.newInstance(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    ) as ViewGroup.MarginLayoutParams
+                    // 0, 0 in ConstraintLayout = MATCH_CONSTRAINT
+                    val inst = constructor.newInstance(0, 0) as ViewGroup.MarginLayoutParams
                     applyConstraintParentParams(inst, container)
                     inst
                 } catch (_: Throwable) {
-                    ViewGroup.MarginLayoutParams(
+                    android.widget.FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                 }
                 container.addView(sheet, 0, lp)
+                Log.d(TAG, "Injected NotificationGlassSheetView successfully")
             }
 
             // Bind the real-time blurred shade background layer (ShadeBackgroundView)
@@ -217,49 +264,66 @@ object NotificationSheetHook {
     private fun ensureHomePillInjected(container: ViewGroup) {
         try {
             val cfg = NotificationSheetConfigHolder.sheet
-            var pill = container.findViewWithTag<View>(TAG_HOME_PILL)
+            var pillWrapper = container.findViewWithTag<ViewGroup>(TAG_HOME_PILL)
 
             if (!cfg.enabled) {
-                pill?.visibility = View.GONE
+                pillWrapper?.visibility = View.GONE
                 return
             }
 
-            if (pill == null) {
+            if (pillWrapper == null) {
                 val context = container.context
                 val density = context.resources.displayMetrics.density
                 val pillW = (cfg.pillWidth.coerceAtLeast(40f) * density).toInt()
                 val pillH = (cfg.pillHeight.coerceAtLeast(2f) * density).toInt()
                 val radius = pillH / 2f
                 val bMargin = (cfg.pillBottomMargin * density).toInt()
+                val touchTargetH = (44f * density).toInt()
 
-                pill = View(context).apply {
+                val wrapper = android.widget.FrameLayout(context).apply {
                     tag = TAG_HOME_PILL
+                    visibility = View.VISIBLE
+                    clipChildren = false
+                    clipToPadding = false
+                }
+
+                val pillBar = View(context).apply {
                     background = GradientDrawable().apply {
                         shape = GradientDrawable.RECTANGLE
                         setColor(0xF0FFFFFF.toInt())
                         cornerRadius = radius
                     }
                     elevation = 16f * density
-                    visibility = if (lastAppliedFraction > 0.005f) View.VISIBLE else View.INVISIBLE
                 }
+                val barLp = android.widget.FrameLayout.LayoutParams(
+                    pillW,
+                    pillH,
+                    android.view.Gravity.CENTER
+                )
+                wrapper.addView(pillBar, barLp)
 
                 val lp = try {
                     val lpClass = Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams", false, container.context.classLoader)
                     val constructor = lpClass.getConstructor(Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-                    val inst = constructor.newInstance(pillW, pillH) as ViewGroup.MarginLayoutParams
-                    inst.bottomMargin = bMargin
+                    val inst = constructor.newInstance(pillW, touchTargetH) as ViewGroup.MarginLayoutParams
+                    inst.bottomMargin = (bMargin - ((touchTargetH - pillH) / 2)).coerceAtLeast(0)
                     lpClass.getField("bottomToBottom").setInt(inst, 0)
                     lpClass.getField("startToStart").setInt(inst, 0)
                     lpClass.getField("endToEnd").setInt(inst, 0)
                     inst
                 } catch (_: Throwable) {
-                    android.widget.FrameLayout.LayoutParams(pillW, pillH, android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL).apply {
-                        bottomMargin = bMargin
+                    android.widget.FrameLayout.LayoutParams(
+                        pillW,
+                        touchTargetH,
+                        android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL
+                    ).apply {
+                        bottomMargin = (bMargin - ((touchTargetH - pillH) / 2)).coerceAtLeast(0)
                     }
                 }
 
-                setupPillTouchListener(pill, container)
-                container.addView(pill, lp)
+                setupPillTouchListener(wrapper, container)
+                container.addView(wrapper, lp)
+                Log.d(TAG, "Injected home indicator pill successfully")
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to inject home pill", t)
@@ -280,6 +344,8 @@ object NotificationSheetHook {
                     isPillDragging = true
                     pillTouchDownY = event.rawY
                     pillInitialTransY = container.translationY
+                    container.requestDisallowInterceptTouchEvent(true)
+                    container.parent?.requestDisallowInterceptTouchEvent(true)
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -300,11 +366,13 @@ object NotificationSheetHook {
                     } else false
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    container.requestDisallowInterceptTouchEvent(false)
+                    container.parent?.requestDisallowInterceptTouchEvent(false)
                     if (isPillDragging) {
                         isPillDragging = false
                         val dy = event.rawY - pillTouchDownY
                         val density = pill.resources.displayMetrics.density
-                        val threshold = 50f * density
+                        val threshold = 40f * density
 
                         if (dy < -threshold) {
                             // Swiped up enough to close: collapse shade and trigger homescreen unlock anim if on launcher
@@ -347,7 +415,7 @@ object NotificationSheetHook {
             val tasks = am.getRunningTasks(1)
             if (!tasks.isNullOrEmpty()) {
                 val topPkg = tasks[0].topActivity?.packageName
-                return topPkg == "com.miui.home"
+                return topPkg == "com.miui.home" || topPkg == "com.mi.android.globallauncher" || topPkg == "com.miui.fliphome"
             }
         } catch (e: Throwable) {
             Log.e(TAG, "Error checking top activity", e)
@@ -362,11 +430,9 @@ object NotificationSheetHook {
 
         if (isHomeScreenTop(context)) {
             try {
-                val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
-                    setPackage("com.miui.home")
-                }
+                val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
                 context.sendBroadcast(intent)
-                Log.d(TAG, "Dispatched ACTION_TRIGGER_UNLOCK_ANIMATION to com.miui.home")
+                Log.d(TAG, "Dispatched ACTION_TRIGGER_UNLOCK_ANIMATION")
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to send unlock broadcast", t)
             }
@@ -555,6 +621,30 @@ object NotificationSheetHook {
                             }
                         })
                     }
+                    m.name == "setExpandHeight" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Float::class.javaPrimitiveType -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val result = chain.proceed()
+                                try {
+                                    val cfg = NotificationSheetConfigHolder.sheet
+                                    if (!cfg.enabled || currentStatusBarState != 0) return result
+
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                                    val expandHeight = (args[0] as Number).toFloat()
+                                    val controller = chain.thisObject
+                                    if (controller != null) {
+                                        val threshField = controller.javaClass.getDeclaredField("expandThresh")
+                                        threshField.isAccessible = true
+                                        val thresh = (threshField.get(controller) as Number).toFloat()
+                                        val fraction = if (thresh > 0f) (expandHeight / thresh).coerceIn(0.0f, 1.0f) else 0.0f
+                                        applyExpansionFraction(fraction)
+                                    }
+                                } catch (_: Throwable) {}
+                                return result
+                            }
+                        })
+                    }
                     m.name.startsWith("notifyExpandHeightChanged") && m.parameterTypes.size == 4 -> {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -617,20 +707,21 @@ object NotificationSheetHook {
     }
 
     fun applyExpansionFraction(fraction: Float) {
+        val prev = lastAppliedFraction
         val f = fraction.coerceIn(0.0f, 1.0f)
         if (abs(f - lastAppliedFraction) < 0.001f) return
         lastAppliedFraction = f
 
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            applyExpansionFractionInternal(f)
+            applyExpansionFractionInternal(f, prev)
         } else {
             mainHandler.post {
-                applyExpansionFractionInternal(f)
+                applyExpansionFractionInternal(f, prev)
             }
         }
     }
 
-    private fun applyExpansionFractionInternal(fraction: Float) {
+    private fun applyExpansionFractionInternal(fraction: Float, prevFraction: Float = -1f) {
         val container = containerRef?.get() ?: return
         val cfg = NotificationSheetConfigHolder.sheet
         if (!cfg.enabled || currentStatusBarState != 0) return
@@ -657,6 +748,10 @@ object NotificationSheetHook {
         val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
         if (pill != null) {
             pill.visibility = if (fraction > 0.005f) View.VISIBLE else View.INVISIBLE
+        }
+
+        if (fraction <= 0.001f && prevFraction > 0.05f) {
+            notifyCloseOverHomescreen(container.context)
         }
     }
 

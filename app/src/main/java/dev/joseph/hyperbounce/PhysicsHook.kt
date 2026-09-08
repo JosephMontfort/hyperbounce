@@ -80,7 +80,7 @@ class PhysicsHook : XposedModule() {
                     dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initPluginHooks(this, param.classLoader)
                 }
 
-                param.packageName == "com.miui.home" -> {
+                param.packageName == "com.miui.home" || param.packageName == "com.mi.android.globallauncher" -> {
                     if (prefs != null) {
                         try {
                             dev.joseph.hyperbounce.launcher.LauncherConfigHolder.update(prefs)

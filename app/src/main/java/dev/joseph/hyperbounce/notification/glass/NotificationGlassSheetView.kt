@@ -41,10 +41,22 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
     var shadeBackgroundView: View? = null
 
+    init {
+        setWillNotDraw(false)
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val parent = parent as? View
-        val w = if (parent != null && parent.width > 0) parent.width else resources.displayMetrics.widthPixels
-        val h = if (parent != null && parent.height > 0) parent.height else resources.displayMetrics.heightPixels
+        val w = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY) {
+            MeasureSpec.getSize(widthMeasureSpec)
+        } else {
+            if (parent != null && parent.width > 0) parent.width else resources.displayMetrics.widthPixels
+        }
+        val h = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) {
+            MeasureSpec.getSize(heightMeasureSpec)
+        } else {
+            if (parent != null && parent.height > 0) parent.height else resources.displayMetrics.heightPixels
+        }
         setMeasuredDimension(w, h)
     }
 

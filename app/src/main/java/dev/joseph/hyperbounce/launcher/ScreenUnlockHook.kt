@@ -35,6 +35,7 @@ object ScreenUnlockHook {
     private var sTagFieldsCached = false
 
     private var sLauncherRef: java.lang.ref.WeakReference<android.app.Activity>? = null
+    private var sClassLoader: ClassLoader? = null
     private var isReceiverRegistered = false
 
     fun updateVelocity(velocity: Float) {
@@ -44,8 +45,18 @@ object ScreenUnlockHook {
 
     fun init(module: XposedInterface, classLoader: ClassLoader?) {
         if (classLoader == null) return
+        sClassLoader = classLoader
 
         hookBaseLauncher(module, classLoader)
+
+        try {
+            val appClass = Class.forName("com.miui.home.launcher.Application", false, classLoader)
+            val appMethod = appClass.getMethod("getLauncherApplication")
+            val app = appMethod.invoke(null) as? android.content.Context
+            if (app != null) {
+                registerUnlockReceiver(app)
+            }
+        } catch (_: Throwable) {}
 
         try {
             val userPresentClass = Class.forName(
@@ -263,7 +274,11 @@ object ScreenUnlockHook {
             val baseLauncherClass = Class.forName("com.miui.home.launcher.BaseLauncher", false, classLoader)
             for (m in baseLauncherClass.declaredMethods) {
                 if ((m.name == "onCreate" && m.parameterTypes.size == 1 && m.parameterTypes[0] == android.os.Bundle::class.java) ||
-                    (m.name == "onResume" && m.parameterTypes.isEmpty())
+                    (m.name == "onStart" && m.parameterTypes.isEmpty()) ||
+                    (m.name == "onResume" && m.parameterTypes.isEmpty()) ||
+                    (m.name == "onWindowFocusChanged" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Boolean::class.javaPrimitiveType) ||
+                    (m.name == "dispatchTouchEvent" && m.parameterTypes.size == 1 && m.parameterTypes[0] == android.view.MotionEvent::class.java) ||
+                    (m.name == "onAttachedToWindow" && m.parameterTypes.isEmpty())
                 ) {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -287,22 +302,41 @@ object ScreenUnlockHook {
         }
     }
 
-    private fun registerUnlockReceiver(activity: android.app.Activity) {
+    private fun getLauncherActivity(context: android.content.Context?): android.app.Activity? {
+        sLauncherRef?.get()?.let { return it }
+        val cl = sClassLoader ?: context?.classLoader
+        if (cl != null) {
+            try {
+                val appClass = Class.forName("com.miui.home.launcher.Application", false, cl)
+                val method = appClass.getMethod("getLauncher")
+                val launcher = method.invoke(null) as? android.app.Activity
+                if (launcher != null) {
+                    sLauncherRef = java.lang.ref.WeakReference(launcher)
+                    return launcher
+                }
+            } catch (_: Throwable) {}
+        }
+        return null
+    }
+
+    private fun registerUnlockReceiver(context: android.content.Context) {
         if (isReceiverRegistered) return
         try {
             val filter = android.content.IntentFilter("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
             val receiver = object : android.content.BroadcastReceiver() {
-                override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
-                    val launcher = sLauncherRef?.get() ?: return
+                override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
+                    Log.d(TAG, "Received ACTION_TRIGGER_UNLOCK_ANIMATION broadcast")
+                    val launcher = getLauncherActivity(c) ?: return
                     launcher.runOnUiThread {
                         triggerUnlockAnimationOnLauncher(launcher)
                     }
                 }
             }
+            val appCtx = context.applicationContext ?: context
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                activity.applicationContext.registerReceiver(receiver, filter, android.content.Context.RECEIVER_EXPORTED)
+                appCtx.registerReceiver(receiver, filter, android.content.Context.RECEIVER_EXPORTED)
             } else {
-                activity.applicationContext.registerReceiver(receiver, filter)
+                appCtx.registerReceiver(receiver, filter)
             }
             isReceiverRegistered = true
             Log.d(TAG, "Registered ACTION_TRIGGER_UNLOCK_ANIMATION receiver successfully")
@@ -315,36 +349,17 @@ object ScreenUnlockHook {
         try {
             if (launcher.isFinishing || launcher.isDestroyed) return
 
-            // Verify launcher is in foreground / not stopped
-            val isStarted = try {
-                val m = launcher.javaClass.getMethod("isStarted")
-                m.invoke(launcher) as? Boolean ?: true
-            } catch (_: Throwable) {
-                true
-            }
-            if (!isStarted) return
-
-            // Verify normal launcher state (not in edit mode, not overview)
-            val isInStateNormal = try {
-                val lsClass = Class.forName("com.miui.home.launcher.LauncherState", false, launcher.classLoader)
-                val normalField = lsClass.getField("NORMAL")
-                val normalState = normalField.get(null)
-                val isInStateMethod = launcher.javaClass.getMethod("isInState", lsClass)
-                isInStateMethod.invoke(launcher, normalState) as? Boolean ?: true
-            } catch (_: Throwable) {
-                true
-            }
-            if (!isInStateNormal) return
-
             val getUserPresentAnimMethod = launcher.javaClass.getMethod("getUserPresentAnimation")
             val userPresentAnim = getUserPresentAnimMethod.invoke(launcher)
             if (userPresentAnim != null) {
                 try {
                     userPresentAnim.javaClass.getMethod("prepareAnimation").invoke(userPresentAnim)
-                } catch (_: Throwable) {}
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Error in prepareAnimation", e)
+                }
                 try {
                     userPresentAnim.javaClass.getMethod("showAnimation").invoke(userPresentAnim)
-                    Log.d(TAG, "Triggered showAnimation from notification sheet close")
+                    Log.d(TAG, "Triggered showAnimation from notification sheet close successfully")
                 } catch (e: Throwable) {
                     Log.e(TAG, "Failed to call showAnimation", e)
                 }
