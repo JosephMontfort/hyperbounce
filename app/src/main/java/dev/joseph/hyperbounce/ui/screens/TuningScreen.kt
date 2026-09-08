@@ -78,6 +78,15 @@ fun TuningScreen(
             )
             RowDivider(colors.separator)
             SettingsNavRow(
+                title = "Notification Center",
+                subtitle = if (repository.notificationSheet.enabled) "iOS Glass Sheet & Static Flow" else "Off",
+                colors = colors,
+                iconTint = colors.accentIndigo,
+                onClick = { onNavigate(Destination.NotificationCenterSheet) },
+                icon = { dev.joseph.hyperbounce.ui.components.SlidersIcon(color = Color.White, size = 15.dp) }
+            )
+            RowDivider(colors.separator)
+            SettingsNavRow(
                 title = "PIN Pad Physics",
                 subtitle = if (repository.lockScreenKeypad.enabled) "Fluid iOS Geometry & Jelly Squish" else "Off",
                 colors = colors,

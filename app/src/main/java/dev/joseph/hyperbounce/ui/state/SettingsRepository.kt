@@ -90,6 +90,7 @@ class SettingsRepository(context: Context) {
 
     val globalGlass = GlobalGlassHolder()
     val lockScreenSheet = LockScreenSheetHolder()
+    val notificationSheet = NotificationSheetHolder()
     val lockScreenKeypad = LockScreenKeypadHolder()
     val screenUnlock = ScreenUnlockHolder()
     val appTransition = AppTransitionHolder()
@@ -128,6 +129,7 @@ class SettingsRepository(context: Context) {
         sliderGlass.reloadFromDefaults()
         globalGlass.reloadFromDefaults()
         lockScreenSheet.reloadFromDefaults()
+        notificationSheet.reloadFromDefaults()
         lockScreenKeypad.reloadFromDefaults()
         screenUnlock.reloadFromDefaults()
         appTransition.reloadFromDefaults()
@@ -414,6 +416,62 @@ class SettingsRepository(context: Context) {
             pillWidth = defaults.pillWidth
             pillHeight = defaults.pillHeight
             pillBottomMargin = defaults.pillBottomMargin
+        }
+    }
+
+    // --- notification center sheet settings (Feature 7) ------------------------------------
+
+    inner class NotificationSheetHolder {
+        private val defaults = NotificationSheetSettings()
+
+        var enabled by prefsBooleanState("notif_sheet_enabled", defaults.enabled); private set
+        var refractionHeight by prefsFloatState("notif_card_refraction_height", defaults.refractionHeight); private set
+        var bevelWidth by prefsFloatState("notif_card_bevel_width", defaults.bevelWidth); private set
+        var leftBevelWidth by prefsFloatState("notif_card_left_bevel", defaults.leftBevelWidth); private set
+        var rightBevelWidth by prefsFloatState("notif_card_right_bevel", defaults.rightBevelWidth); private set
+        var bottomBevelWidth by prefsFloatState("notif_card_bottom_bevel", defaults.bottomBevelWidth); private set
+        var dispersionStrength by prefsFloatState("notif_card_dispersion", defaults.dispersionStrength); private set
+        var specularStrength by prefsFloatState("notif_card_specular", defaults.specularStrength); private set
+        var innerShadow by prefsFloatState("notif_card_inner_shadow", defaults.innerShadow); private set
+        var saturationFactor by prefsFloatState("notif_card_saturation", defaults.saturationFactor); private set
+        var blurRadius by prefsFloatState("notif_card_blur_radius", defaults.blurRadius); private set
+        var cornerRadius by prefsFloatState("notif_card_corner_radius", defaults.cornerRadius); private set
+        var sideMargin by prefsFloatState("notif_side_margin", defaults.sideMargin); private set
+
+        fun snapshot(): NotificationSheetSettings = NotificationSheetSettings(
+            enabled, refractionHeight, bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
+            dispersionStrength, specularStrength, innerShadow, saturationFactor, blurRadius,
+            cornerRadius, sideMargin
+        )
+
+        @JvmName("setNotifSheetEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
+        @JvmName("setNotifSheetRefractionHeightPref") fun setRefractionHeight(v: Float) { refractionHeight = v }
+        @JvmName("setNotifSheetBevelWidthPref") fun setBevelWidth(v: Float) { bevelWidth = v }
+        @JvmName("setNotifSheetLeftBevelWidthPref") fun setLeftBevelWidth(v: Float) { leftBevelWidth = v }
+        @JvmName("setNotifSheetRightBevelWidthPref") fun setRightBevelWidth(v: Float) { rightBevelWidth = v }
+        @JvmName("setNotifSheetBottomBevelWidthPref") fun setBottomBevelWidth(v: Float) { bottomBevelWidth = v }
+        @JvmName("setNotifSheetDispersionStrengthPref") fun setDispersionStrength(v: Float) { dispersionStrength = v }
+        @JvmName("setNotifSheetSpecularStrengthPref") fun setSpecularStrength(v: Float) { specularStrength = v }
+        @JvmName("setNotifSheetInnerShadowPref") fun setInnerShadow(v: Float) { innerShadow = v }
+        @JvmName("setNotifSheetSaturationFactorPref") fun setSaturationFactor(v: Float) { saturationFactor = v }
+        @JvmName("setNotifSheetBlurRadiusPref") fun setBlurRadius(v: Float) { blurRadius = v }
+        @JvmName("setNotifSheetCornerRadiusPref") fun setCornerRadius(v: Float) { cornerRadius = v }
+        @JvmName("setNotifSheetSideMarginPref") fun setSideMargin(v: Float) { sideMargin = v }
+
+        fun reloadFromDefaults() {
+            enabled = defaults.enabled
+            refractionHeight = defaults.refractionHeight
+            bevelWidth = defaults.bevelWidth
+            leftBevelWidth = defaults.leftBevelWidth
+            rightBevelWidth = defaults.rightBevelWidth
+            bottomBevelWidth = defaults.bottomBevelWidth
+            dispersionStrength = defaults.dispersionStrength
+            specularStrength = defaults.specularStrength
+            innerShadow = defaults.innerShadow
+            saturationFactor = defaults.saturationFactor
+            blurRadius = defaults.blurRadius
+            cornerRadius = defaults.cornerRadius
+            sideMargin = defaults.sideMargin
         }
     }
 

@@ -133,6 +133,23 @@ data class LockScreenSheetSettings(
     val pillBottomMargin: Float = 9.0f
 )
 
+/** Feature 7: Notification Center iOS Sheet & Liquid Glass Refraction Settings */
+data class NotificationSheetSettings(
+    val enabled: Boolean = true,
+    val refractionHeight: Float = 50.0f,
+    val bevelWidth: Float = 28.0f,
+    val leftBevelWidth: Float = 28.0f,
+    val rightBevelWidth: Float = 28.0f,
+    val bottomBevelWidth: Float = 28.0f,
+    val dispersionStrength: Float = 0.08f,
+    val specularStrength: Float = 0.90f,
+    val innerShadow: Float = 0.40f,
+    val saturationFactor: Float = 120.0f,
+    val blurRadius: Float = 0.0f,
+    val cornerRadius: Float = 36.0f,
+    val sideMargin: Float = 14.0f
+)
+
 /** Feature 2: Liquid Glass 2.0 Button PIN Pad Engine Settings */
 data class LockScreenKeypadSettings(
     val enabled: Boolean = true,

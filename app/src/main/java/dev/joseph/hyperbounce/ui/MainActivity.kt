@@ -54,6 +54,7 @@ import dev.joseph.hyperbounce.ui.screens.EngineScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadDelaysScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadScreen
 import dev.joseph.hyperbounce.ui.screens.LockScreenSheetScreen
+import dev.joseph.hyperbounce.ui.screens.NotificationCenterSheetScreen
 import dev.joseph.hyperbounce.ui.screens.ScreenUnlockScreen
 import dev.joseph.hyperbounce.ui.screens.SettingsScreen
 import dev.joseph.hyperbounce.ui.screens.TuningScreen
@@ -197,6 +198,13 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                         )
 
                         Destination.LockScreenSheet -> LockScreenSheetScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.NotificationCenterSheet -> NotificationCenterSheetScreen(
                             repository = repository,
                             colors = colors,
                             backdrop = backdrop,

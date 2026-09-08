@@ -50,9 +50,11 @@ class PhysicsHook : XposedModule() {
                         try {
                             dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
                             dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
+                            dev.joseph.hyperbounce.notification.NotificationSheetConfigHolder.updateFromPrefs(prefs)
                             prefs.registerOnSharedPreferenceChangeListener { _, _ ->
                                 dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
                                 dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
+                                dev.joseph.hyperbounce.notification.NotificationSheetConfigHolder.updateFromPrefs(prefs)
                             }
                         } catch (t: Throwable) {
                             Log.e("HyperBounce", "Failed to bind remote preferences in SystemUI", t)
@@ -61,6 +63,7 @@ class PhysicsHook : XposedModule() {
                     dev.joseph.hyperbounce.lockscreen.LockScreenSheetHook.init(this, param.classLoader)
                     dev.joseph.hyperbounce.lockscreen.KeypadPhysicsHook.init(this, param.classLoader)
                     dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initSystemUIHooks(this, param.classLoader)
+                    dev.joseph.hyperbounce.notification.NotificationSheetHook.init(this, param.classLoader)
                 }
 
                 param.packageName == "miui.systemui.plugin" -> {
