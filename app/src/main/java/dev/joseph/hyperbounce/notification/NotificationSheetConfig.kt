@@ -17,7 +17,11 @@ data class NotificationSheetConfig(
     var blurRadius: Float = 0.0f,
     var cornerRadius: Float = 36.0f,
     // Notification item horizontal margin inset
-    var sideMargin: Float = 14.0f
+    var sideMargin: Float = 14.0f,
+    // Home indicator pill
+    var pillWidth: Float = 156.0f,
+    var pillHeight: Float = 6.0f,
+    var pillBottomMargin: Float = 9.0f
 )
 
 object NotificationSheetConfigHolder {
@@ -37,5 +41,8 @@ object NotificationSheetConfigHolder {
         sheet.blurRadius = prefs.getFloat("notif_card_blur_radius", 0.0f)
         sheet.cornerRadius = prefs.getFloat("notif_card_corner_radius", 36.0f)
         sheet.sideMargin = prefs.getFloat("notif_side_margin", 14.0f)
+        sheet.pillWidth = prefs.getFloat("notif_pill_width", 156.0f)
+        sheet.pillHeight = prefs.getFloat("notif_pill_height", 6.0f)
+        sheet.pillBottomMargin = prefs.getFloat("notif_pill_bottom_margin", 9.0f)
     }
 }
