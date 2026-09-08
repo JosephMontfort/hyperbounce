@@ -141,6 +141,7 @@ class GlassLensRenderer {
                 half4 sG = content.eval(cG);
                 half4 sB = content.eval(cB);
 
+                float contentAlpha = clamp((sR.a + sG.a + sB.a) * 0.33333, 0.0, 1.0);
                 float3 col = float3(sR.r, sG.g, sB.b);
 
                 // Vibrancy curve
@@ -152,15 +153,17 @@ class GlassLensRenderer {
                 col = clamp(mix(float3(lum), col, amount), float3(0.0), float3(1.0));
 
                 // Backside inner shadow
-                float shadowW = clamp(maxBevel, 4.0, 28.0);
-                float shadowBand = pow(clamp(1.0 + d / shadowW, 0.0, 1.0), 1.5);
-                float ish = shadowBand * facingNeg * innerShadow;
-                col = col * (1.0 - 0.45 * ish);
+                if (innerShadow > 0.001) {
+                    float shadowW = clamp(maxBevel, 4.0, 28.0);
+                    float shadowBand = pow(clamp(1.0 + d / shadowW, 0.0, 1.0), 1.5);
+                    float ish = shadowBand * facingNeg * innerShadow;
+                    col = col * (1.0 - 0.45 * ish);
+                }
 
                 col += float3(spec);
                 col = clamp(col, float3(0.0), float3(1.0));
 
-                float edgeAlpha = clamp(slope + spec * 0.85, 0.0, 1.0) * cov;
+                float edgeAlpha = clamp(slope * contentAlpha + spec * 0.85, 0.0, 1.0) * cov;
 
                 return half4(col * edgeAlpha, edgeAlpha);
             }

@@ -12,7 +12,7 @@ data class NotificationSheetConfig(
     var bottomBevelWidth: Float = 28.0f,
     var dispersionStrength: Float = 0.08f,
     var specularStrength: Float = 0.90f,
-    var innerShadow: Float = 0.40f,
+    var innerShadow: Float = 0.0f,
     var saturationFactor: Float = 120.0f,
     var blurRadius: Float = 0.0f,
     var cornerRadius: Float = 36.0f,
@@ -36,7 +36,7 @@ object NotificationSheetConfigHolder {
         sheet.bottomBevelWidth = prefs.getFloat("notif_card_bottom_bevel", 28.0f)
         sheet.dispersionStrength = prefs.getFloat("notif_card_dispersion", 0.08f)
         sheet.specularStrength = prefs.getFloat("notif_card_specular", 0.90f)
-        sheet.innerShadow = prefs.getFloat("notif_card_inner_shadow", 0.40f)
+        sheet.innerShadow = prefs.getFloat("notif_card_inner_shadow", 0.0f)
         sheet.saturationFactor = prefs.getFloat("notif_card_saturation", 120.0f)
         sheet.blurRadius = prefs.getFloat("notif_card_blur_radius", 0.0f)
         sheet.cornerRadius = prefs.getFloat("notif_card_corner_radius", 36.0f)

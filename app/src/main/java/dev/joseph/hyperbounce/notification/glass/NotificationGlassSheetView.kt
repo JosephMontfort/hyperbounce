@@ -105,16 +105,6 @@ class NotificationGlassSheetView @JvmOverloads constructor(
             )
 
             val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
-                // Base solid dark gradient so the glass tint has rich contrast and specular pop
-                val basePaint = Paint().apply {
-                    shader = LinearGradient(
-                        0f, 0f, 0f, screenH.toFloat(),
-                        0xFF18181C.toInt(), 0xFF0E0E12.toInt(),
-                        Shader.TileMode.CLAMP
-                    )
-                }
-                recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), basePaint)
-
                 // Refract the live blurred shade background layer (ShadeBackgroundView)
                 val shadeBg = shadeBackgroundView
                 if (shadeBg != null && shadeBg.visibility == VISIBLE) {
