@@ -51,6 +51,22 @@ object ScreenUnlockHook {
 
         try {
             val appClass = Class.forName("com.miui.home.launcher.Application", false, classLoader)
+            for (m in appClass.declaredMethods) {
+                if (m.name == "onCreate" && m.parameterTypes.isEmpty()) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val result = chain.proceed()
+                            try {
+                                val app = chain.thisObject as? android.content.Context
+                                if (app != null) {
+                                    registerUnlockReceiver(app)
+                                }
+                            } catch (_: Throwable) {}
+                            return result
+                        }
+                    })
+                }
+            }
             val appMethod = appClass.getMethod("getLauncherApplication")
             val app = appMethod.invoke(null) as? android.content.Context
             if (app != null) {
@@ -353,14 +369,29 @@ object ScreenUnlockHook {
         try {
             if (launcher.isFinishing || launcher.isDestroyed) return
 
-            val getUserPresentAnimMethod = launcher.javaClass.getMethod("getUserPresentAnimation")
-            val userPresentAnim = getUserPresentAnimMethod.invoke(launcher)
-            if (userPresentAnim != null) {
+            Log.d(TAG, "triggerUnlockAnimationOnLauncher: executing on $launcher")
+
+            // 1. Prepare animation on current screen icons
+            var prepared = false
+            try {
+                val prepMethod = launcher.javaClass.getMethod("prepareAnimationForUnlock")
+                prepared = (prepMethod.invoke(launcher) as? Boolean) ?: false
+            } catch (_: Throwable) {}
+
+            val getUserPresentAnimMethod = try {
+                launcher.javaClass.getMethod("getUserPresentAnimation")
+            } catch (_: Throwable) { null }
+
+            val userPresentAnim = getUserPresentAnimMethod?.invoke(launcher)
+
+            if (!prepared && userPresentAnim != null) {
                 try {
                     userPresentAnim.javaClass.getMethod("prepareAnimation").invoke(userPresentAnim)
-                } catch (e: Throwable) {
-                    Log.e(TAG, "Error in prepareAnimation", e)
-                }
+                } catch (_: Throwable) {}
+            }
+
+            // 2. Play animation
+            if (userPresentAnim != null) {
                 try {
                     userPresentAnim.javaClass.getMethod("showAnimation").invoke(userPresentAnim)
                     Log.d(TAG, "Triggered showAnimation from notification sheet close successfully")
@@ -368,6 +399,12 @@ object ScreenUnlockHook {
                     Log.e(TAG, "Failed to call showAnimation", e)
                 }
             }
+
+            // 3. Trigger showPresent if available for boosting render thread
+            try {
+                val showPresentMethod = launcher.javaClass.getMethod("showPresent")
+                showPresentMethod.invoke(launcher)
+            } catch (_: Throwable) {}
         } catch (t: Throwable) {
             Log.e(TAG, "Error triggering unlock animation on launcher", t)
         }

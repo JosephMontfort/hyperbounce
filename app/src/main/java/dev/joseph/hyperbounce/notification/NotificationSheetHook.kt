@@ -14,6 +14,7 @@ import android.view.ViewGroup
 import android.view.ViewParent
 import android.view.animation.DecelerateInterpolator
 import dev.joseph.hyperbounce.notification.glass.NotificationGlassSheetView
+import dev.joseph.hyperbounce.notification.glass.RealtimeBackdropHelper
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
@@ -588,6 +589,7 @@ object NotificationSheetHook {
                                 .setInterpolator(DecelerateInterpolator())
                                 .withEndAction {
                                     applyExpansionFraction(0.0f)
+                                    notifyCloseOverHomescreen(pill.context)
                                     triggerShadeClose(pill.context)
                                 }
                                 .start()
@@ -623,6 +625,20 @@ object NotificationSheetHook {
     }
 
     fun isHomeScreenTop(context: Context): Boolean {
+        var homePkg: String? = null
+        try {
+            val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val resolveInfo = context.packageManager?.resolveActivity(homeIntent, 0)
+            homePkg = resolveInfo?.activityInfo?.packageName
+        } catch (_: Throwable) {}
+
+        fun isLauncher(pkg: String?): Boolean {
+            if (pkg.isNullOrEmpty()) return false
+            if (pkg == homePkg) return true
+            if (pkg == "com.miui.home" || pkg == "com.mi.android.globallauncher" || pkg == "com.miui.fliphome" || pkg.contains("launcher")) return true
+            return false
+        }
+
         // 1. Check via Miui CommonUtil.isTopActivityLauncher(context)
         try {
             val commonUtilClass = Class.forName("com.miui.systemui.util.CommonUtil", false, context.classLoader)
@@ -632,83 +648,96 @@ object NotificationSheetHook {
                 Log.d(TAG, "isHomeScreenTop: true via CommonUtil")
                 return true
             }
-        } catch (t: Throwable) {
-            Log.d(TAG, "isHomeScreenTop: CommonUtil check failed: ${t.message}")
-        }
+        } catch (_: Throwable) {}
 
-        // 2. Check via ActivityManagerWrapper
-        try {
-            val amwClass = Class.forName("com.android.systemui.shared.system.ActivityManagerWrapper", false, context.classLoader)
-            val sInstanceField = amwClass.getDeclaredField("sInstance")
-            sInstanceField.isAccessible = true
-            val sInstance = sInstanceField.get(null)
-            val getRunningTaskMethod = amwClass.getMethod("getRunningTask")
-            val task = getRunningTaskMethod.invoke(sInstance)
-            if (task != null) {
-                val isHomeMethod = amwClass.getMethod("isHomeTask", task.javaClass)
-                val isHome = isHomeMethod.invoke(null, task) as? Boolean
-                if (isHome == true) {
-                    Log.d(TAG, "isHomeScreenTop: true via ActivityManagerWrapper.isHomeTask")
-                    return true
-                }
-                val topActivityField = task.javaClass.getField("topActivity")
-                val comp = topActivityField.get(task) as? ComponentName
-                val pkg = comp?.packageName
-                if (pkg == "com.miui.home" || pkg == "com.mi.android.globallauncher" || pkg == "com.miui.fliphome") {
-                    Log.d(TAG, "isHomeScreenTop: true via ActivityManagerWrapper topActivity pkg=$pkg")
-                    return true
-                }
-            }
-        } catch (t: Throwable) {
-            Log.d(TAG, "isHomeScreenTop: ActivityManagerWrapper check failed: ${t.message}")
-        }
-
-        // 3. Check via ActivityTaskManager.getInstance().getTasks(1, false)
+        // 2. Check via ActivityTaskManager.getService().getFocusedRootTaskInfo() and getAllRootTaskInfos()
         try {
             val atmClass = Class.forName("android.app.ActivityTaskManager")
-            val getInstanceMethod = atmClass.getMethod("getInstance")
-            val atm = getInstanceMethod.invoke(null)
-            val getTasksMethod = atmClass.getMethod("getTasks", Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
-            val tasks = getTasksMethod.invoke(atm, 1, false) as? List<*>
-            if (!tasks.isNullOrEmpty()) {
-                val task = tasks[0]
+            val getServiceMethod = atmClass.getMethod("getService")
+            val atm = getServiceMethod.invoke(null)
+            if (atm != null) {
+                try {
+                    val getFocusedMethod = atm.javaClass.getMethod("getFocusedRootTaskInfo")
+                    val focusedTask = getFocusedMethod.invoke(atm)
+                    if (focusedTask != null) {
+                        val topActField = focusedTask.javaClass.getField("topActivity")
+                        val topAct = topActField.get(focusedTask) as? ComponentName
+                        if (isLauncher(topAct?.packageName)) {
+                            Log.d(TAG, "isHomeScreenTop: true via getFocusedRootTaskInfo (${topAct?.packageName})")
+                            return true
+                        }
+                    }
+                } catch (_: Throwable) {}
+
+                try {
+                    val getAllMethod = atm.javaClass.getMethod("getAllRootTaskInfos")
+                    val taskInfosObj = getAllMethod.invoke(atm)
+                    val taskList = when (taskInfosObj) {
+                        is List<*> -> taskInfosObj
+                        is Array<*> -> taskInfosObj.toList()
+                        else -> null
+                    }
+                    if (taskList != null) {
+                        for (taskInfo in taskList) {
+                            if (taskInfo == null) continue
+                            val isVisibleField = taskInfo.javaClass.getField("isVisible")
+                            val isVisible = isVisibleField.getBoolean(taskInfo)
+                            val topActivityField = taskInfo.javaClass.getField("topActivity")
+                            val topActivity = topActivityField.get(taskInfo) as? ComponentName
+                            if (isVisible && isLauncher(topActivity?.packageName)) {
+                                Log.d(TAG, "isHomeScreenTop: true via getAllRootTaskInfos (${topActivity?.packageName})")
+                                return true
+                            }
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+        } catch (_: Throwable) {}
+
+        // 3. Check via ActivityManagerWrapper
+        try {
+            val amwClass = Class.forName("com.android.systemui.shared.system.ActivityManagerWrapper", false, context.classLoader)
+            val getInstanceMethod = try {
+                amwClass.getMethod("getInstance")
+            } catch (_: Throwable) { null }
+            val sInstance = getInstanceMethod?.invoke(null) ?: run {
+                val f = amwClass.getDeclaredField("sInstance")
+                f.isAccessible = true
+                f.get(null)
+            }
+            if (sInstance != null) {
+                val getRunningTaskMethod = amwClass.getMethod("getRunningTask")
+                val task = getRunningTaskMethod.invoke(sInstance)
                 if (task != null) {
-                    val configField = task.javaClass.getField("configuration")
-                    val config = configField.get(task)
-                    val windowConfigField = config.javaClass.getField("windowConfiguration")
-                    val windowConfig = windowConfigField.get(config)
-                    val getActivityTypeMethod = windowConfig.javaClass.getMethod("getActivityType")
-                    val actType = (getActivityTypeMethod.invoke(windowConfig) as? Number)?.toInt()
-                    if (actType == 2) { // ACTIVITY_TYPE_HOME = 2
-                        Log.d(TAG, "isHomeScreenTop: true via ActivityTaskManager activityType=2")
+                    val isHomeMethod = try {
+                        amwClass.getMethod("isHomeTask", task.javaClass)
+                    } catch (_: Throwable) { null }
+                    val isHome = isHomeMethod?.invoke(null, task) as? Boolean
+                    if (isHome == true) {
+                        Log.d(TAG, "isHomeScreenTop: true via ActivityManagerWrapper.isHomeTask")
                         return true
                     }
                     val topActivityField = task.javaClass.getField("topActivity")
                     val comp = topActivityField.get(task) as? ComponentName
-                    val pkg = comp?.packageName
-                    if (pkg == "com.miui.home" || pkg == "com.mi.android.globallauncher" || pkg == "com.miui.fliphome") {
-                        Log.d(TAG, "isHomeScreenTop: true via ActivityTaskManager topActivity pkg=$pkg")
+                    if (isLauncher(comp?.packageName)) {
+                        Log.d(TAG, "isHomeScreenTop: true via ActivityManagerWrapper topActivity pkg=${comp?.packageName}")
                         return true
                     }
                 }
             }
-        } catch (t: Throwable) {
-            Log.d(TAG, "isHomeScreenTop: ActivityTaskManager check failed: ${t.message}")
-        }
+        } catch (_: Throwable) {}
 
-        // 4. Fallback: ActivityManager.getRunningTasks(1) or ResolveActivity for Home
+        // 4. Fallback: ActivityManager.getRunningTasks(10)
         try {
-            val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-            val resolveInfo = context.packageManager?.resolveActivity(homeIntent, 0)
-            val defaultHomePkg = resolveInfo?.activityInfo?.packageName
-
             val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-            val tasks = am?.getRunningTasks(1)
+            val tasks = am?.getRunningTasks(10)
             if (!tasks.isNullOrEmpty()) {
-                val topPkg = tasks[0].topActivity?.packageName
-                if (topPkg != null && (topPkg == defaultHomePkg || topPkg == "com.miui.home" || topPkg == "com.mi.android.globallauncher" || topPkg == "com.miui.fliphome")) {
-                    Log.d(TAG, "isHomeScreenTop: true via ActivityManager fallback pkg=$topPkg")
-                    return true
+                for (task in tasks) {
+                    val topPkg = task.topActivity?.packageName
+                    if (isLauncher(topPkg)) {
+                        Log.d(TAG, "isHomeScreenTop: true via ActivityManager fallback pkg=$topPkg")
+                        return true
+                    }
                 }
             }
         } catch (_: Throwable) {}
@@ -734,14 +763,21 @@ object NotificationSheetHook {
         }
 
         val now = System.currentTimeMillis()
-        if (now - lastUnlockTriggerTime < 800L) return
+        if (now - lastUnlockTriggerTime < 500L) return
         lastUnlockTriggerTime = now
 
         if (isHomeScreenTop(context)) {
             try {
-                val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
-                context.sendBroadcast(intent)
-                Log.d(TAG, "Dispatched ACTION_TRIGGER_UNLOCK_ANIMATION")
+                val pkgs = arrayOf("com.miui.home", "com.mi.android.globallauncher")
+                for (pkg in pkgs) {
+                    val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
+                        setPackage(pkg)
+                    }
+                    context.sendBroadcast(intent)
+                }
+                val generalIntent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
+                context.sendBroadcast(generalIntent)
+                Log.d(TAG, "Dispatched ACTION_TRIGGER_UNLOCK_ANIMATION to launcher successfully")
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to send unlock broadcast", t)
             }
@@ -942,6 +978,11 @@ object NotificationSheetHook {
                                     if (!anim) {
                                         applyExpansionFraction(0.0f)
                                     }
+                                    RealtimeBackdropHelper.stopLiveRefresh()
+                                    val container = containerRef?.get()
+                                    if (container != null) {
+                                        notifyCloseOverHomescreen(container.context)
+                                    }
                                 } catch (_: Throwable) {}
                                 return result
                             }
@@ -962,6 +1003,7 @@ object NotificationSheetHook {
                                                 isShadeOpen = true
                                             }
                                         } else {
+                                            RealtimeBackdropHelper.stopLiveRefresh()
                                             val container = containerRef?.get()
                                             if (container != null) {
                                                 notifyCloseOverHomescreen(container.context)
@@ -1018,6 +1060,7 @@ object NotificationSheetHook {
             }
             container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
             container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
+            RealtimeBackdropHelper.stopLiveRefresh()
             if (prevFraction > 0.05f) {
                 notifyCloseOverHomescreen(container.context)
             }
@@ -1050,9 +1093,21 @@ object NotificationSheetHook {
             pill.visibility = View.VISIBLE
         }
 
-        // Only mark shade as opened when pulled down past 95% full expansion
-        if (fraction >= 0.95f && !isControlCenterActive()) {
+        // Trigger backdrop capture when drag starts
+        if (fraction in 0.05f..0.35f && prevFraction < 0.05f) {
+            RealtimeBackdropHelper.triggerCapture(container.context) {
+                sheet?.invalidate()
+            }
+        }
+
+        // Mark shade as opened once pulled down past 40%
+        if (fraction >= 0.40f && !isControlCenterActive()) {
             isShadeOpen = true
+        }
+
+        // Start live refresh when fully open
+        if (fraction >= 0.90f && sheet != null) {
+            RealtimeBackdropHelper.startLiveRefresh(container.context, sheet)
         }
     }
 

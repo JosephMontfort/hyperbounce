@@ -106,21 +106,29 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
             val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
                 recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
-                val wp = LockScreenWallpaperHelper.getLiveLockWallpaper(context)
-                if (wp != null) {
-                    wp.setBounds(0, 0, screenW, screenH)
-                    wp.draw(recordingCanvas)
+                val backdropBmp = RealtimeBackdropHelper.getLatestBackdropBitmap()
+                if (backdropBmp != null && !backdropBmp.isRecycled) {
+                    val destRect = android.graphics.Rect(0, 0, screenW, screenH)
+                    recordingCanvas.drawBitmap(backdropBmp, null, destRect, null)
                     // Apply notification shade dark scrim
                     recordingCanvas.drawColor(0x80101014.toInt())
                 } else {
-                    val p = Paint().apply {
-                        shader = LinearGradient(
-                            0f, 0f, 0f, screenH.toFloat(),
-                            0xFF2A2A2E.toInt(), 0xFF101014.toInt(),
-                            Shader.TileMode.CLAMP
-                        )
+                    val wp = LockScreenWallpaperHelper.getLiveLockWallpaper(context)
+                    if (wp != null) {
+                        wp.setBounds(0, 0, screenW, screenH)
+                        wp.draw(recordingCanvas)
+                        // Apply notification shade dark scrim
+                        recordingCanvas.drawColor(0x80101014.toInt())
+                    } else {
+                        val p = Paint().apply {
+                            shader = LinearGradient(
+                                0f, 0f, 0f, screenH.toFloat(),
+                                0xFF2A2A2E.toInt(), 0xFF101014.toInt(),
+                                Shader.TileMode.CLAMP
+                            )
+                        }
+                        recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), p)
                     }
-                    recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), p)
                 }
             }
 
@@ -147,10 +155,12 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         super.onAttachedToWindow()
         LockScreenWallpaperHelper.registerIfNeeded(context)
         LockScreenWallpaperHelper.triggerAsyncWallpaperLoad(context)
+        RealtimeBackdropHelper.triggerCapture(context) { invalidate() }
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        RealtimeBackdropHelper.stopLiveRefresh()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             renderer?.release()
         }
