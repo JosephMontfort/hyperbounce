@@ -55,6 +55,7 @@ object NotificationSheetHook {
     @Volatile
     var isControlCenterExpanded: Boolean = false
 
+    private var controlCenterRef: WeakReference<Any>? = null
     private var containerRef: WeakReference<ViewGroup>? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -63,11 +64,6 @@ object NotificationSheetHook {
 
     @Volatile
     private var lastUnlockTriggerTime = 0L
-
-    @Volatile
-    var isPillDragging = false
-    private var pillTouchDownY = 0f
-    private var pillInitialTransY = 0f
 
     // Real-time over-pull stretch bounce offset
     @Volatile
@@ -85,7 +81,16 @@ object NotificationSheetHook {
     }
 
     fun isControlCenterActive(): Boolean {
-        return isShadeSwitching || isControlCenterExpanded
+        if (isShadeSwitching || isControlCenterExpanded) return true
+        val cc = controlCenterRef?.get()
+        if (cc != null) {
+            try {
+                val method = cc.javaClass.getMethod("getExpanded")
+                val expanded = method.invoke(cc) as? Boolean
+                if (expanded == true) return true
+            } catch (_: Throwable) {}
+        }
+        return false
     }
 
     private val isUnlockedShadeActive: Boolean
@@ -152,7 +157,7 @@ object NotificationSheetHook {
                                 if (newState != 0) {
                                     isShadeOpen = false
                                     hasFullyOpened = false
-                                    isPillDragging = false
+                                    hasTriggeredUnlockForCurrentOpen = true
                                     currentStretchOffset = 0f
                                     mainHandler.post {
                                         val container = containerRef?.get()
@@ -181,6 +186,7 @@ object NotificationSheetHook {
     }
 
     private fun hookShadeSwitch(module: XposedModule, classLoader: ClassLoader) {
+        // 1. Hook ShadeSwitchControllerImpl
         try {
             val sscClass = Class.forName("com.miui.systemui.shade.ShadeSwitchControllerImpl", false, classLoader)
             for (m in sscClass.declaredMethods) {
@@ -194,8 +200,18 @@ object NotificationSheetHook {
                                     val switching = args[0] as Boolean
                                     isShadeSwitching = switching
                                     if (switching) {
+                                        try {
+                                            val f = chain.thisObject?.javaClass?.getDeclaredField("toCtrl")
+                                            f?.isAccessible = true
+                                            if (f?.getBoolean(chain.thisObject) == true) {
+                                                isControlCenterExpanded = true
+                                                hasFullyOpened = false
+                                                hasTriggeredUnlockForCurrentOpen = true
+                                            }
+                                        } catch (_: Throwable) {}
                                         isShadeOpen = false
                                         hasFullyOpened = false
+                                        hasTriggeredUnlockForCurrentOpen = true
                                         currentStretchOffset = 0f
                                         hideSheetForControlCenter()
                                     }
@@ -207,11 +223,22 @@ object NotificationSheetHook {
                     "switchToControlCenter" -> {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
+                                isControlCenterExpanded = true
                                 isShadeSwitching = true
                                 isShadeOpen = false
                                 hasFullyOpened = false
+                                hasTriggeredUnlockForCurrentOpen = true
                                 currentStretchOffset = 0f
                                 hideSheetForControlCenter()
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                    "switchToNotification" -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                isControlCenterExpanded = false
+                                isShadeSwitching = false
                                 return chain.proceed()
                             }
                         })
@@ -222,26 +249,35 @@ object NotificationSheetHook {
             Log.e(TAG, "Failed to hook ShadeSwitchControllerImpl", t)
         }
 
+        // 2. Hook ControlCenterImpl
         try {
             val ccClass = Class.forName("com.miui.systemui.controlcenter.ControlCenterImpl", false, classLoader)
             for (m in ccClass.declaredMethods) {
                 when (m.name) {
-                    "expand" -> {
+                    "expand", "switchShow" -> {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
+                                if (chain.thisObject != null) {
+                                    controlCenterRef = WeakReference(chain.thisObject)
+                                }
                                 isControlCenterExpanded = true
                                 isShadeOpen = false
                                 hasFullyOpened = false
+                                hasTriggeredUnlockForCurrentOpen = true
                                 currentStretchOffset = 0f
                                 hideSheetForControlCenter()
                                 return chain.proceed()
                             }
                         })
                     }
-                    "collapse" -> {
+                    "collapse", "switchHide" -> {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
+                                if (chain.thisObject != null) {
+                                    controlCenterRef = WeakReference(chain.thisObject)
+                                }
                                 isControlCenterExpanded = false
+                                isShadeSwitching = false
                                 return chain.proceed()
                             }
                         })
@@ -250,6 +286,73 @@ object NotificationSheetHook {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook ControlCenterImpl", t)
+        }
+
+        // 3. Hook NotificationShadeWrapper (switched to/from control center)
+        try {
+            val nswClass = Class.forName("com.miui.systemui.shade.NotificationShadeWrapper", false, classLoader)
+            for (m in nswClass.declaredMethods) {
+                when (m.name) {
+                    "switchHide" -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                isControlCenterExpanded = true
+                                isShadeSwitching = true
+                                isShadeOpen = false
+                                hasFullyOpened = false
+                                hasTriggeredUnlockForCurrentOpen = true
+                                currentStretchOffset = 0f
+                                hideSheetForControlCenter()
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                    "switchShow" -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                isControlCenterExpanded = false
+                                isShadeSwitching = false
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook NotificationShadeWrapper", t)
+        }
+
+        // 4. Hook NotificationPanelViewControllerInjector.onNotificationAppearChanged
+        try {
+            val npvcInjClass = Class.forName("com.android.systemui.shade.NotificationPanelViewControllerInjector", false, classLoader)
+            for (m in npvcInjClass.declaredMethods) {
+                if (m.name == "onNotificationAppearChanged" && m.parameterTypes.size == 2 &&
+                    m.parameterTypes[0] == Boolean::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            try {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                                val appear = args[0] as Boolean
+                                if (!appear) {
+                                    // Notification panel is disappearing in favor of Control Center
+                                    isControlCenterExpanded = true
+                                    isShadeSwitching = true
+                                    isShadeOpen = false
+                                    hasFullyOpened = false
+                                    hasTriggeredUnlockForCurrentOpen = true
+                                    currentStretchOffset = 0f
+                                    hideSheetForControlCenter()
+                                }
+                            } catch (_: Throwable) {}
+                            return chain.proceed()
+                        }
+                    })
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook NotificationPanelViewControllerInjector.onNotificationAppearChanged", t)
         }
     }
 
@@ -441,6 +544,9 @@ object NotificationSheetHook {
                     visibility = View.GONE
                     clipChildren = false
                     clipToPadding = false
+                    isClickable = false
+                    isFocusable = false
+                    isEnabled = false
                 }
 
                 val pillBar = View(context).apply {
@@ -450,6 +556,9 @@ object NotificationSheetHook {
                         cornerRadius = radius
                     }
                     elevation = 16f * density
+                    isClickable = false
+                    isFocusable = false
+                    isEnabled = false
                 }
                 val barLp = android.widget.FrameLayout.LayoutParams(
                     pillW,
@@ -477,7 +586,6 @@ object NotificationSheetHook {
                     }
                 }
 
-                setupPillTouchListener(wrapper, container)
                 container.addView(wrapper, lp)
                 Log.d(TAG, "Injected home indicator pill successfully")
             }
@@ -538,68 +646,7 @@ object NotificationSheetHook {
         }
     }
 
-    private fun setupPillTouchListener(pill: View, container: ViewGroup) {
-        pill.setOnTouchListener { _, event ->
-            val cfg = NotificationSheetConfigHolder.sheet
-            if (!cfg.enabled || currentStatusBarState != 0 || isControlCenterActive()) return@setOnTouchListener false
 
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    isPillDragging = true
-                    pillTouchDownY = event.rawY
-                    pillInitialTransY = pill.translationY
-                    container.requestDisallowInterceptTouchEvent(true)
-                    container.parent?.requestDisallowInterceptTouchEvent(true)
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (isPillDragging) {
-                        val dy = event.rawY - pillTouchDownY
-                        if (dy < 0f) { // Dragging upward to close
-                            val newTransY = (pillInitialTransY + dy).coerceAtMost(0f)
-                            var viewHeight = container.height.toFloat()
-                            if (viewHeight <= 0f) viewHeight = container.resources.displayMetrics.heightPixels.toFloat()
-                            if (viewHeight <= 0f) viewHeight = 2400f
-                            val fraction = (1.0f + (newTransY / viewHeight)).coerceIn(0.0f, 1.0f)
-                            applyExpansionFraction(fraction)
-                        }
-                        true
-                    } else false
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    container.requestDisallowInterceptTouchEvent(false)
-                    container.parent?.requestDisallowInterceptTouchEvent(false)
-                    if (isPillDragging) {
-                        isPillDragging = false
-                        val dy = event.rawY - pillTouchDownY
-                        val density = pill.resources.displayMetrics.density
-                        val threshold = 40f * density
-
-                        if (dy < -threshold) {
-                            // Dismiss shade via system collapsePanels
-                            triggerShadeClose(pill.context)
-                        } else {
-                            // Rebound sheet and pill back to open
-                            val sheet = container.findViewWithTag<View>(TAG_GLASS_SHEET)
-                            sheet?.animate()
-                                ?.translationY(0f)
-                                ?.setDuration(220)
-                                ?.setInterpolator(DecelerateInterpolator(1.5f))
-                                ?.start()
-                            pill.animate()
-                                .translationY(0f)
-                                .setDuration(220)
-                                .setInterpolator(DecelerateInterpolator(1.5f))
-                                .start()
-                            applyExpansionFraction(1.0f)
-                        }
-                        true
-                    } else false
-                }
-                else -> false
-            }
-        }
-    }
 
     fun triggerShadeClose(context: Context) {
         try {
@@ -897,11 +944,11 @@ object NotificationSheetHook {
                                 val fVal = (args[1] as Number).toFloat()
 
                                 if (callerName.contains("NotificationPanelExpansionAnimator")) {
-                                    if (!isPillDragging && isUnlockedShadeActive) {
+                                    if (isUnlockedShadeActive) {
                                         applyExpansionFraction(fVal)
                                     }
                                 } else if (callerName.contains("NotificationPanelStretchAnimator")) {
-                                    if (!isPillDragging && isUnlockedShadeActive) {
+                                    if (isUnlockedShadeActive) {
                                         applyStretchOffset(fVal)
                                     }
                                 }
@@ -933,7 +980,7 @@ object NotificationSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
                             try {
-                                if (!isPillDragging && isUnlockedShadeActive) {
+                                if (isUnlockedShadeActive) {
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
                                     val frac = (args[0] as Number).toFloat()
@@ -963,7 +1010,7 @@ object NotificationSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
                             try {
-                                if (!isPillDragging && isUnlockedShadeActive) {
+                                if (isUnlockedShadeActive) {
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
                                     val frac = (args[0] as Number).toFloat()
@@ -971,16 +1018,62 @@ object NotificationSheetHook {
                                     val tracking = args[2] as Boolean
                                     applyExpansionFraction(frac)
 
-                                    if (frac >= 0.999f && !tracking) {
+                                    if (frac >= 0.999f && !tracking && expanded) {
                                         isShadeOpen = true
                                         hasFullyOpened = true
                                         hasTriggeredUnlockForCurrentOpen = false
+                                    } else if (frac <= 0.001f && !tracking && !expanded) {
+                                        if (hasFullyOpened && !hasTriggeredUnlockForCurrentOpen && !isControlCenterActive()) {
+                                            val container = containerRef?.get()
+                                            if (container != null && currentStatusBarState == 0) {
+                                                notifyCloseOverHomescreen(container.context)
+                                            }
+                                        }
+                                        hasFullyOpened = false
+                                        isShadeOpen = false
                                     }
                                 }
                             } catch (t: Throwable) {
                                 Log.e(TAG, "Error in onPanelExpansionChanged hook", t)
                             }
                             return result
+                        }
+                    })
+                } else if (m.name == "updateStateInternal" && m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == Int::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            try {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                                val state = (args[0] as Number).toInt()
+                                when (state) {
+                                    0 -> { // CLOSED
+                                        if (hasFullyOpened && !hasTriggeredUnlockForCurrentOpen && !isControlCenterActive()) {
+                                            val container = containerRef?.get()
+                                            if (container != null && currentStatusBarState == 0) {
+                                                notifyCloseOverHomescreen(container.context)
+                                            }
+                                        }
+                                        hasFullyOpened = false
+                                        isShadeOpen = false
+                                    }
+                                    1 -> { // OPENING
+                                        // In-transit: do not set hasFullyOpened
+                                    }
+                                    2 -> { // OPEN (genuinely fully expanded)
+                                        if (isUnlockedShadeActive) {
+                                            hasFullyOpened = true
+                                            isShadeOpen = true
+                                            hasTriggeredUnlockForCurrentOpen = false
+                                        }
+                                    }
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "Error in updateStateInternal hook", t)
+                            }
+                            return chain.proceed()
                         }
                     })
                 }
@@ -1005,16 +1098,16 @@ object NotificationSheetHook {
                                     appF.isAccessible = true
                                     val appearance = appF.getBoolean(ctrl)
                                     if (appearance) {
-                                        if (isUnlockedShadeActive && lastAppliedFraction >= 0.99f) {
+                                        if (isUnlockedShadeActive && lastAppliedFraction >= 0.999f) {
                                             isShadeOpen = true
                                             hasFullyOpened = true
                                             hasTriggeredUnlockForCurrentOpen = false
                                         }
                                     } else {
                                         RealtimeBackdropHelper.stopLiveRefresh()
-                                        if (hasFullyOpened) {
+                                        if (hasFullyOpened && !hasTriggeredUnlockForCurrentOpen && !isControlCenterActive()) {
                                             val container = containerRef?.get()
-                                            if (container != null && currentStatusBarState == 0 && !isControlCenterActive()) {
+                                            if (container != null && currentStatusBarState == 0) {
                                                 notifyCloseOverHomescreen(container.context)
                                             }
                                         }
@@ -1115,7 +1208,7 @@ object NotificationSheetHook {
             pill?.visibility = View.GONE
             pill?.translationY = -viewHeight
             RealtimeBackdropHelper.stopLiveRefresh()
-            if (hasFullyOpened) {
+            if (hasFullyOpened && !hasTriggeredUnlockForCurrentOpen && !isControlCenterActive()) {
                 notifyCloseOverHomescreen(container.context)
             }
             hasFullyOpened = false
