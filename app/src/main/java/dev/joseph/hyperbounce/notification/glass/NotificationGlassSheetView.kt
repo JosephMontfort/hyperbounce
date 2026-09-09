@@ -10,7 +10,7 @@ import android.os.Build
 import android.util.AttributeSet
 import android.view.View
 import dev.joseph.hyperbounce.lockscreen.glass.GlassLensRenderer
-import dev.joseph.hyperbounce.lockscreen.wallpaper.LockScreenWallpaperHelper
+import dev.joseph.hyperbounce.lockscreen.glass.LockScreenWallpaperHelper
 import dev.joseph.hyperbounce.notification.NotificationSheetConfigHolder
 import kotlin.math.max
 
