@@ -47,6 +47,9 @@ object NotificationSheetHook {
     private var isShadeOpen = false
 
     @Volatile
+    var hasFullyOpened: Boolean = false
+
+    @Volatile
     var isShadeSwitching: Boolean = false
 
     @Volatile
@@ -68,6 +71,19 @@ object NotificationSheetHook {
 
     @Volatile
     private var isDismissingCoordinator = false
+
+    // Real-time continuous touch drag tracking
+    @Volatile
+    private var isTrackingDrag = false
+    private var dragTouchDownY = 0f
+    private var dragTouchDownX = 0f
+    private var dragStartFraction = 0f
+    private var lastProcessedEventTime = 0L
+    private var lastProcessedAction = -1
+
+    // Real-time over-pull stretch bounce offset
+    @Volatile
+    private var currentStretchOffset = 0f
 
     fun isKeyguard(context: Context?): Boolean {
         if (currentStatusBarState != 0) return true
@@ -100,7 +116,10 @@ object NotificationSheetHook {
         // 2. Hook MiuiNQSContainer (notification_container_parent) for lifecycle, glass & pill injection
         hookContainerParent(module, classLoader)
 
-        // 3. Hook FloatFlowProperty to capture 120Hz continuous Folme expansion
+        // 2b. Hook touch stream on NotificationPanelViewControllerInjector & NotificationPanelView for 120Hz continuous drag
+        hookPanelTouch(module, classLoader)
+
+        // 3. Hook FloatFlowProperty to capture 120Hz continuous Folme expansion & over-pull stretch
         hookFloatFlowProperty(module, classLoader)
 
         // 4. Hook NotificationHeaderExpandController (expansion tracking)
@@ -126,6 +145,9 @@ object NotificationSheetHook {
 
         // 11. Hook ViewStateInjectorImpl to neutralize individual row Folme translation/scale/alpha
         hookViewStateInjector(module, classLoader)
+
+        // 12. Hook ExpandableViewBase to ensure static row visibility & alpha during pull down
+        hookExpandableViewBase(module, classLoader)
     }
 
     private fun hideSheetForControlCenter() {
@@ -159,8 +181,11 @@ object NotificationSheetHook {
 
                                 if (newState != 0) {
                                     isShadeOpen = false
+                                    hasFullyOpened = false
                                     isDismissingCoordinator = false
                                     isPillDragging = false
+                                    isTrackingDrag = false
+                                    currentStretchOffset = 0f
                                     mainHandler.post {
                                         val container = containerRef?.get()
                                         if (container != null) {
@@ -202,6 +227,9 @@ object NotificationSheetHook {
                                     isShadeSwitching = switching
                                     if (switching) {
                                         isShadeOpen = false
+                                        hasFullyOpened = false
+                                        isTrackingDrag = false
+                                        currentStretchOffset = 0f
                                         hideSheetForControlCenter()
                                     }
                                 } catch (_: Throwable) {}
@@ -214,6 +242,9 @@ object NotificationSheetHook {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 isShadeSwitching = true
                                 isShadeOpen = false
+                                hasFullyOpened = false
+                                isTrackingDrag = false
+                                currentStretchOffset = 0f
                                 hideSheetForControlCenter()
                                 return chain.proceed()
                             }
@@ -234,6 +265,9 @@ object NotificationSheetHook {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 isControlCenterExpanded = true
                                 isShadeOpen = false
+                                hasFullyOpened = false
+                                isTrackingDrag = false
+                                currentStretchOffset = 0f
                                 hideSheetForControlCenter()
                                 return chain.proceed()
                             }
@@ -613,28 +647,42 @@ object NotificationSheetHook {
             isDismissingCoordinator = true
         }
 
-        Log.d(TAG, "requestShadeDismiss triggered by $source")
+        Log.d(TAG, "requestShadeDismiss triggered by $source, hasFullyOpened=$hasFullyOpened")
 
-        // 1. Dispatch unlock broadcast to launcher ONCE
-        notifyCloseOverHomescreen(context)
-
-        // 2. Animate container smoothly off-screen ONCE
-        var viewHeight = container.height.toFloat()
-        if (viewHeight <= 0f) viewHeight = container.resources.displayMetrics.heightPixels.toFloat()
-        if (viewHeight <= 0f) viewHeight = 2400f
-
-        container.animate()
-            .translationY(-viewHeight)
-            .setDuration(220)
-            .setInterpolator(DecelerateInterpolator(1.5f))
-            .withEndAction {
-                applyExpansionFraction(0.0f)
-                isDismissingCoordinator = false
-                if (source != "system_hide") {
-                    triggerShadeClose(context)
-                }
+        val dismissAction = Runnable {
+            // 1. Dispatch unlock broadcast to launcher ONCE only if shade was fully opened
+            if (hasFullyOpened) {
+                notifyCloseOverHomescreen(context)
+            } else {
+                Log.d(TAG, "requestShadeDismiss: incomplete pull dismissal, skipping unlock broadcast")
             }
-            .start()
+
+            // 2. Animate container smoothly off-screen ONCE
+            var viewHeight = container.height.toFloat()
+            if (viewHeight <= 0f) viewHeight = container.resources.displayMetrics.heightPixels.toFloat()
+            if (viewHeight <= 0f) viewHeight = 2400f
+
+            container.animate()
+                .translationY(-viewHeight)
+                .setDuration(220)
+                .setInterpolator(DecelerateInterpolator(1.5f))
+                .withEndAction {
+                    applyExpansionFraction(0.0f)
+                    hasFullyOpened = false
+                    isShadeOpen = false
+                    isDismissingCoordinator = false
+                    if (source != "system_hide") {
+                        triggerShadeClose(context)
+                    }
+                }
+                .start()
+        }
+
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            dismissAction.run()
+        } else {
+            mainHandler.post(dismissAction)
+        }
     }
 
     private fun triggerShadeClose(context: Context) {
@@ -773,11 +821,12 @@ object NotificationSheetHook {
     private var hasTriggeredUnlockForCurrentOpen = false
 
     fun notifyCloseOverHomescreen(context: Context) {
-        if (!isShadeOpen || hasTriggeredUnlockForCurrentOpen) {
-            Log.d(TAG, "notifyCloseOverHomescreen: shade was not open or already triggered, skipping")
+        if (!hasFullyOpened || hasTriggeredUnlockForCurrentOpen) {
+            Log.d(TAG, "notifyCloseOverHomescreen: shade was not fully opened or already triggered, skipping")
             return
         }
         hasTriggeredUnlockForCurrentOpen = true
+        hasFullyOpened = false
         isShadeOpen = false
 
         if (currentStatusBarState != 0 || isKeyguard(context)) {
@@ -927,12 +976,17 @@ object NotificationSheetHook {
                             val result = chain.proceed()
                             try {
                                 val callerName = chain.thisObject?.javaClass?.name ?: ""
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                                val fVal = (args[1] as Number).toFloat()
+
                                 if (callerName.contains("NotificationPanelExpansionAnimator")) {
+                                    if (!isPillDragging && !isDismissingCoordinator && isUnlockedShadeActive && !isTrackingDrag) {
+                                        applyExpansionFraction(fVal)
+                                    }
+                                } else if (callerName.contains("NotificationPanelStretchAnimator")) {
                                     if (!isPillDragging && !isDismissingCoordinator && isUnlockedShadeActive) {
-                                        val rawArgs = chain.args
-                                        val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
-                                        val frac = (args[1] as Number).toFloat()
-                                        applyExpansionFraction(frac)
+                                        applyStretchOffset(fVal)
                                     }
                                 }
                             } catch (t: Throwable) {
@@ -963,7 +1017,7 @@ object NotificationSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
                             try {
-                                if (!isPillDragging && !isDismissingCoordinator && isUnlockedShadeActive) {
+                                if (!isPillDragging && !isDismissingCoordinator && isUnlockedShadeActive && !isTrackingDrag) {
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
                                     val frac = (args[0] as Number).toFloat()
@@ -993,7 +1047,7 @@ object NotificationSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
                             try {
-                                if (!isPillDragging && !isDismissingCoordinator && isUnlockedShadeActive) {
+                                if (!isPillDragging && !isDismissingCoordinator && isUnlockedShadeActive && !isTrackingDrag) {
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
                                     val frac = (args[0] as Number).toFloat()
@@ -1022,10 +1076,6 @@ object NotificationSheetHook {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 val result = chain.proceed()
                                 try {
-                                    if (currentStatusBarState == 0 && !isControlCenterActive()) {
-                                        isShadeOpen = true
-                                        hasTriggeredUnlockForCurrentOpen = false
-                                    }
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
                                     val anim = args[0] as Boolean
@@ -1039,13 +1089,22 @@ object NotificationSheetHook {
                                                     .setInterpolator(DecelerateInterpolator(1.5f))
                                                     .withEndAction {
                                                         applyExpansionFraction(1.0f)
+                                                        hasFullyOpened = true
+                                                        isShadeOpen = true
+                                                        hasTriggeredUnlockForCurrentOpen = false
                                                     }
                                                     .start()
                                             } else {
                                                 applyExpansionFraction(1.0f)
+                                                hasFullyOpened = true
+                                                isShadeOpen = true
+                                                hasTriggeredUnlockForCurrentOpen = false
                                             }
                                         } else {
                                             applyExpansionFraction(1.0f)
+                                            hasFullyOpened = true
+                                            isShadeOpen = true
+                                            hasTriggeredUnlockForCurrentOpen = false
                                         }
                                     }
                                 } catch (_: Throwable) {}
@@ -1069,7 +1128,11 @@ object NotificationSheetHook {
                                         requestShadeDismiss(container.context, "system_hide")
                                     } else {
                                         applyExpansionFraction(0.0f)
-                                        notifyCloseOverHomescreen(container.context)
+                                        if (hasFullyOpened) {
+                                            notifyCloseOverHomescreen(container.context)
+                                        }
+                                        hasFullyOpened = false
+                                        isShadeOpen = false
                                     }
                                 }
                                 return chain.proceed()
@@ -1089,16 +1152,19 @@ object NotificationSheetHook {
                                         if (appearance) {
                                             if (currentStatusBarState == 0 && !isControlCenterActive()) {
                                                 isShadeOpen = true
+                                                hasFullyOpened = true
                                                 hasTriggeredUnlockForCurrentOpen = false
                                             }
                                         } else {
                                             RealtimeBackdropHelper.stopLiveRefresh()
-                                            if (!isDismissingCoordinator) {
+                                            if (!isDismissingCoordinator && hasFullyOpened) {
                                                 val container = containerRef?.get()
                                                 if (container != null && currentStatusBarState == 0 && !isControlCenterActive()) {
                                                     notifyCloseOverHomescreen(container.context)
                                                 }
                                             }
+                                            hasFullyOpened = false
+                                            isShadeOpen = false
                                         }
                                     }
                                 } catch (_: Throwable) {}
@@ -1110,6 +1176,41 @@ object NotificationSheetHook {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook NotificationPanelExpandController", t)
+        }
+    }
+
+    fun applyStretchOffset(stretchPx: Float) {
+        val offset = stretchPx.coerceAtLeast(0f)
+        if (abs(offset - currentStretchOffset) < 0.5f) return
+        currentStretchOffset = offset
+        val container = containerRef?.get() ?: return
+        if (currentStatusBarState != 0 || isControlCenterActive()) return
+
+        if (lastAppliedFraction >= 0.99f || isShadeOpen || hasFullyOpened) {
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                container.translationY = offset
+                container.findViewWithTag<View>(TAG_GLASS_SHEET)?.invalidate()
+            } else {
+                mainHandler.post {
+                    container.translationY = offset
+                    container.findViewWithTag<View>(TAG_GLASS_SHEET)?.invalidate()
+                }
+            }
+        }
+    }
+
+    fun animateStretchRelease() {
+        val container = containerRef?.get() ?: return
+        if (currentStretchOffset <= 0.01f) return
+        mainHandler.post {
+            container.animate()
+                .translationY(0f)
+                .setDuration(260)
+                .setInterpolator(DecelerateInterpolator(1.8f))
+                .withEndAction {
+                    currentStretchOffset = 0f
+                }
+                .start()
         }
     }
 
@@ -1149,20 +1250,31 @@ object NotificationSheetHook {
             container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
             container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
             RealtimeBackdropHelper.stopLiveRefresh()
-            if (prevFraction > 0.05f) {
+            if (hasFullyOpened) {
                 notifyCloseOverHomescreen(container.context)
             }
+            hasFullyOpened = false
             isShadeOpen = false
+            currentStretchOffset = 0f
             return
         }
 
         // True Paper Sheet Motion: translates the parent container downward as one solid card.
         // Bottommost notifications are naturally at the bottom of the container and enter view first!
         val upwardOffset = (fraction - 1.0f) * viewHeight
-        container.translationY = upwardOffset
+        val finalY = if (fraction >= 0.99f && currentStretchOffset > 0.01f) currentStretchOffset else upwardOffset
+        container.translationY = finalY
         container.scaleX = 1.0f
         container.scaleY = 1.0f
         container.visibility = View.VISIBLE
+
+        // Keep notification stack scroller visible and fully opaque
+        val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
+        val nssl = if (nsslId != 0) container.findViewById<View>(nsslId) else null
+        if (nssl != null) {
+            nssl.visibility = View.VISIBLE
+            nssl.alpha = 1.0f
+        }
 
         ensureGlassSheetInjected(container)
         ensureHomePillInjected(container)
@@ -1187,9 +1299,10 @@ object NotificationSheetHook {
             }
         }
 
-        // Mark shade as opened once pulled down past 75% while opening
-        if (fraction >= 0.75f && fraction >= prevFraction && !isControlCenterActive()) {
+        // Shade is confirmed fully opened ONLY when fraction reaches completion
+        if (fraction >= 0.98f && !isControlCenterActive()) {
             isShadeOpen = true
+            hasFullyOpened = true
             hasTriggeredUnlockForCurrentOpen = false
         }
 
@@ -1229,15 +1342,12 @@ object NotificationSheetHook {
                                                 afField.isAccessible = true
                                                 afField.setFloat(ambientState, 1.0f)
                                             } catch (_: Throwable) {}
-                                            try {
-                                                val stField = ambientState.javaClass.getField("mStackTranslation")
-                                                stField.setFloat(ambientState, 0.0f)
-                                            } catch (_: Throwable) {}
                                         }
                                     } catch (_: Throwable) {}
 
                                     val res = chain.proceed(args)
                                     nssl.visibility = View.VISIBLE
+                                    nssl.alpha = 1.0f
                                     return res
                                 }
                             }
@@ -1494,6 +1604,319 @@ object NotificationSheetHook {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook ViewStateInjectorImpl", t)
+        }
+    }
+
+    private fun handlePanelTouch(event: MotionEvent, source: String): Boolean {
+        val cfg = NotificationSheetConfigHolder.sheet
+        if (!cfg.enabled || currentStatusBarState != 0 || isControlCenterActive() || isPillDragging || isDismissingCoordinator) {
+            isTrackingDrag = false
+            return false
+        }
+
+        val eventTime = event.eventTime
+        val action = event.actionMasked
+
+        // Deduplicate if received from both handleExternalTouch and dispatchTouchEvent
+        if (eventTime == lastProcessedEventTime && action == lastProcessedAction && action != MotionEvent.ACTION_MOVE) {
+            return false
+        }
+        lastProcessedEventTime = eventTime
+        lastProcessedAction = action
+
+        when (action) {
+            MotionEvent.ACTION_DOWN -> {
+                dragTouchDownY = event.rawY
+                dragTouchDownX = event.rawX
+                dragStartFraction = if (hasFullyOpened || isShadeOpen) 1.0f else (if (lastAppliedFraction >= 0f) lastAppliedFraction else 0.0f)
+                isTrackingDrag = false
+                currentStretchOffset = 0f
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val deltaY = event.rawY - dragTouchDownY
+                val deltaX = event.rawX - dragTouchDownX
+
+                if (!isTrackingDrag) {
+                    val density = containerRef?.get()?.resources?.displayMetrics?.density ?: 2.5f
+                    val slop = 8f * density
+                    if (abs(deltaY) > slop && abs(deltaY) > abs(deltaX) * 1.1f) {
+                        isTrackingDrag = true
+                    }
+                }
+
+                if (isTrackingDrag) {
+                    val container = containerRef?.get()
+                    var viewHeight = container?.height?.toFloat() ?: 0f
+                    if (viewHeight <= 0f) viewHeight = container?.resources?.displayMetrics?.heightPixels?.toFloat() ?: 2400f
+                    if (viewHeight <= 0f) viewHeight = 2400f
+
+                    if (dragStartFraction < 0.5f) {
+                        // Pulling down from closed state (opening)
+                        val rawFrac = (deltaY / viewHeight).coerceAtLeast(0.0f)
+                        if (rawFrac <= 1.0f) {
+                            currentStretchOffset = 0f
+                            applyExpansionFraction(rawFrac)
+                        } else {
+                            // Over-pull past full expansion: rubber-band bounce
+                            applyExpansionFraction(1.0f)
+                            val overPull = (deltaY - viewHeight) * 0.35f
+                            applyStretchOffset(overPull)
+                        }
+                    } else {
+                        // Dragging when already fully opened
+                        if (deltaY > 0f) {
+                            // Over-pull downward bounce
+                            val stretch = deltaY * 0.35f
+                            applyStretchOffset(stretch)
+                        } else {
+                            // Swiping upward to close
+                            currentStretchOffset = 0f
+                            val rawFrac = (1.0f + deltaY / (viewHeight * 0.85f)).coerceIn(0.0f, 1.0f)
+                            applyExpansionFraction(rawFrac)
+                        }
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (currentStretchOffset > 0.5f) {
+                    animateStretchRelease()
+                }
+                if (isTrackingDrag) {
+                    val container = containerRef?.get()
+                    val currentFrac = lastAppliedFraction
+                    val wasFullyOpened = hasFullyOpened
+                    isTrackingDrag = false
+
+                    if (container != null && currentStatusBarState == 0 && !isControlCenterActive()) {
+                        if (!wasFullyOpened && currentFrac in 0.01f..0.45f) {
+                            // Incomplete pull: snap back off-screen without unlock animation
+                            mainHandler.postDelayed({
+                                if (!isShadeOpen && !hasFullyOpened && lastAppliedFraction in 0.01f..0.45f) {
+                                    var vh = container.height.toFloat()
+                                    if (vh <= 0f) vh = container.resources.displayMetrics.heightPixels.toFloat()
+                                    if (vh <= 0f) vh = 2400f
+                                    container.animate()
+                                        .translationY(-vh)
+                                        .setDuration(200)
+                                        .setInterpolator(DecelerateInterpolator(1.5f))
+                                        .withEndAction {
+                                            applyExpansionFraction(0.0f)
+                                            hasFullyOpened = false
+                                            isShadeOpen = false
+                                        }
+                                        .start()
+                                }
+                            }, 80)
+                        } else if (!wasFullyOpened && currentFrac >= 0.75f) {
+                            // Near full pull: settle open
+                            mainHandler.postDelayed({
+                                if (!hasFullyOpened && lastAppliedFraction >= 0.75f) {
+                                    container.animate()
+                                        .translationY(0f)
+                                        .setDuration(200)
+                                        .setInterpolator(DecelerateInterpolator(1.5f))
+                                        .withEndAction {
+                                            applyExpansionFraction(1.0f)
+                                            hasFullyOpened = true
+                                            isShadeOpen = true
+                                        }
+                                        .start()
+                                }
+                            }, 80)
+                        } else if (wasFullyOpened && currentFrac < 0.65f) {
+                            // Fully opened previously, dragged up significantly to dismiss
+                            requestShadeDismiss(container.context, "drag_collapse")
+                        } else if (wasFullyOpened && currentFrac in 0.65f..0.98f) {
+                            // Fully opened previously, dragged up slightly then released: rebound open
+                            container.animate()
+                                .translationY(0f)
+                                .setDuration(200)
+                                .setInterpolator(DecelerateInterpolator(1.5f))
+                                .withEndAction {
+                                    applyExpansionFraction(1.0f)
+                                }
+                                .start()
+                        }
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    private fun hookPanelTouch(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val npvcInjClass = Class.forName("com.android.systemui.shade.NotificationPanelViewControllerInjector", false, classLoader)
+            for (m: Method in npvcInjClass.declaredMethods) {
+                if (m.name == "handleExternalTouch" && m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == MotionEvent::class.java
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            try {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                                val event = args[0] as? MotionEvent
+                                if (event != null) {
+                                    handlePanelTouch(event, "npvc_external")
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "Error handling external touch", t)
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked NotificationPanelViewControllerInjector.handleExternalTouch")
+                    break
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook NotificationPanelViewControllerInjector.handleExternalTouch", t)
+        }
+
+        try {
+            val npvClass = Class.forName("com.android.systemui.shade.NotificationPanelView", false, classLoader)
+            for (m: Method in npvClass.declaredMethods) {
+                if (m.name == "dispatchTouchEvent" && m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == MotionEvent::class.java
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            try {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                                val event = args[0] as? MotionEvent
+                                if (event != null) {
+                                    handlePanelTouch(event, "npv_dispatch")
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "Error handling npv dispatch touch", t)
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked NotificationPanelView.dispatchTouchEvent")
+                    break
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook NotificationPanelView.dispatchTouchEvent", t)
+        }
+    }
+
+    private fun isRowPinned(view: Any?): Boolean {
+        if (view == null) return false
+        return try {
+            val m = view.javaClass.getMethod("isPinned")
+            m.invoke(view) as? Boolean ?: false
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun hookExpandableViewBase(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val ebClass = Class.forName("com.miui.systemui.notification.row.ExpandableViewBase", false, classLoader)
+
+            for (m: Method in ebClass.declaredMethods) {
+                when {
+                    m.name == "getExtAlpha" && m.parameterTypes.isEmpty() -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                if (isUnlockedShadeActive && !isRowPinned(chain.thisObject)) {
+                                    return 1.0f
+                                }
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                    m.name == "setExtAlpha" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Float::class.javaPrimitiveType -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                if (isUnlockedShadeActive && !isRowPinned(chain.thisObject)) {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
+                                    args[0] = 1.0f
+                                    return chain.proceed(args)
+                                }
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                    m.name == "getExtTransitionAlpha" && m.parameterTypes.isEmpty() -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                if (isUnlockedShadeActive && !isRowPinned(chain.thisObject)) {
+                                    return 1.0f
+                                }
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                    m.name == "setExtTransitionAlpha" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Float::class.javaPrimitiveType -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                if (isUnlockedShadeActive && !isRowPinned(chain.thisObject)) {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
+                                    args[0] = 1.0f
+                                    return chain.proceed(args)
+                                }
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                    (m.name == "getExtScaleX" || m.name == "getExtScaleY") && m.parameterTypes.isEmpty() -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                if (isUnlockedShadeActive && !isRowPinned(chain.thisObject)) {
+                                    return 1.0f
+                                }
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                    (m.name == "setExtScaleX" || m.name == "setExtScaleY") && m.parameterTypes.size == 1 && m.parameterTypes[0] == Float::class.javaPrimitiveType -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                if (isUnlockedShadeActive && !isRowPinned(chain.thisObject)) {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
+                                    args[0] = 1.0f
+                                    return chain.proceed(args)
+                                }
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                    (m.name == "getExtTranslationX" || m.name == "getExtTranslationY") && m.parameterTypes.isEmpty() -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                if (isUnlockedShadeActive && !isRowPinned(chain.thisObject)) {
+                                    return 0.0f
+                                }
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                    (m.name == "setExtTranslationX" || m.name == "setExtTranslationY") && m.parameterTypes.size == 1 && m.parameterTypes[0] == Float::class.javaPrimitiveType -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                if (isUnlockedShadeActive && !isRowPinned(chain.thisObject)) {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
+                                    args[0] = 0.0f
+                                    return chain.proceed(args)
+                                }
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                }
+            }
+            Log.d(TAG, "Hooked ExpandableViewBase ext properties successfully")
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook ExpandableViewBase", t)
         }
     }
 }
