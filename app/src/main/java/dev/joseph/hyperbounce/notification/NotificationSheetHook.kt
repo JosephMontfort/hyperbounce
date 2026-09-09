@@ -112,16 +112,10 @@ object NotificationSheetHook {
         // 10. Hook AmbientState to prevent isFullyHidden from hiding stack
         hookAmbientState(module, classLoader)
 
-        // 11. Hook ExpandableViewBase to neutralize row scale/alpha/translationX animations
-        hookExpandableViewBase(module, classLoader)
-
-        // 12. Hook MiuiPanelAnimValueObjectImpl to keep alpha and scale at 1.0f and disable staggered drop
+        // 11. Hook MiuiPanelAnimValueObjectImpl to reset anim fields
         hookMiuiPanelAnim(module, classLoader)
 
-        // 12b. Hook MiuiNotificationPanelAnimControllerImpl to disable visible animation stagger
-        hookMiuiAnimController(module, classLoader)
-
-        // 13. Hook ViewStateInjectorImpl to eliminate stock rolling and row scaling animations
+        // 12. Hook ViewStateInjectorImpl to eliminate stock rolling and row scaling animations
         hookViewStateInjector(module, classLoader)
     }
 
@@ -339,8 +333,9 @@ object NotificationSheetHook {
     private fun onContainerAcquired(container: ViewGroup) {
         containerRef = WeakReference(container)
         mainHandler.post {
-            container.clipChildren = false
-            container.clipToPadding = false
+            registerSettingsReceiver(container.context)
+            container.clipChildren = true
+            container.clipToPadding = true
             val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
             val nssl = if (nsslId != 0) container.findViewById<ViewGroup>(nsslId) else null
             if (nssl != null) {
@@ -487,6 +482,58 @@ object NotificationSheetHook {
         }
     }
 
+    private var isSettingsReceiverRegistered = false
+
+    private fun registerSettingsReceiver(context: Context) {
+        if (isSettingsReceiverRegistered) return
+        try {
+            val filter = android.content.IntentFilter("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED")
+            val receiver = object : android.content.BroadcastReceiver() {
+                override fun onReceive(c: Context?, intent: android.content.Intent?) {
+                    val key = intent?.getStringExtra("key") ?: return
+                    val cfg = NotificationSheetConfigHolder.sheet
+                    var handled = true
+                    when (key) {
+                        "notif_sheet_enabled" -> cfg.enabled = intent.getBooleanExtra("value_boolean", cfg.enabled)
+                        "notif_card_refraction_height" -> cfg.refractionHeight = intent.getFloatExtra("value_float", cfg.refractionHeight)
+                        "notif_card_bevel_width" -> cfg.bevelWidth = intent.getFloatExtra("value_float", cfg.bevelWidth)
+                        "notif_card_left_bevel" -> cfg.leftBevelWidth = intent.getFloatExtra("value_float", cfg.leftBevelWidth)
+                        "notif_card_right_bevel" -> cfg.rightBevelWidth = intent.getFloatExtra("value_float", cfg.rightBevelWidth)
+                        "notif_card_bottom_bevel" -> cfg.bottomBevelWidth = intent.getFloatExtra("value_float", cfg.bottomBevelWidth)
+                        "notif_card_dispersion" -> cfg.dispersionStrength = intent.getFloatExtra("value_float", cfg.dispersionStrength)
+                        "notif_card_specular" -> cfg.specularStrength = intent.getFloatExtra("value_float", cfg.specularStrength)
+                        "notif_card_inner_shadow" -> cfg.innerShadow = intent.getFloatExtra("value_float", cfg.innerShadow)
+                        "notif_card_saturation" -> cfg.saturationFactor = intent.getFloatExtra("value_float", cfg.saturationFactor)
+                        "notif_card_blur_radius" -> cfg.blurRadius = intent.getFloatExtra("value_float", cfg.blurRadius)
+                        "notif_card_corner_radius" -> cfg.cornerRadius = intent.getFloatExtra("value_float", cfg.cornerRadius)
+                        "notif_side_margin" -> cfg.sideMargin = intent.getFloatExtra("value_float", cfg.sideMargin)
+                        "notif_pill_width" -> cfg.pillWidth = intent.getFloatExtra("value_float", cfg.pillWidth)
+                        "notif_pill_height" -> cfg.pillHeight = intent.getFloatExtra("value_float", cfg.pillHeight)
+                        "notif_pill_bottom_margin" -> cfg.pillBottomMargin = intent.getFloatExtra("value_float", cfg.pillBottomMargin)
+                        else -> handled = false
+                    }
+                    if (handled) {
+                        mainHandler.post {
+                            val container = containerRef?.get() ?: return@post
+                            adjustNotificationMargins(container)
+                            container.findViewWithTag<View>(TAG_GLASS_SHEET)?.invalidate()
+                        }
+                    }
+                }
+            }
+            val appCtx = context.applicationContext ?: context
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                appCtx.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                appCtx.registerReceiver(receiver, filter)
+            }
+            isSettingsReceiverRegistered = true
+            Log.d(TAG, "Registered ACTION_SETTINGS_CHANGED receiver in SystemUI")
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to register settings receiver in SystemUI", t)
+        }
+    }
+
     private var isPillDragging = false
     private var pillTouchDownY = 0f
     private var pillInitialTransY = 0f
@@ -510,14 +557,11 @@ object NotificationSheetHook {
                         val dy = event.rawY - pillTouchDownY
                         if (dy < 0f) { // Dragging upward to close
                             val newTransY = (pillInitialTransY + dy).coerceAtMost(0f)
-                            container.translationY = newTransY
                             var viewHeight = container.height.toFloat()
                             if (viewHeight <= 0f) viewHeight = container.resources.displayMetrics.heightPixels.toFloat()
                             if (viewHeight <= 0f) viewHeight = 2400f
                             val fraction = (1.0f + (newTransY / viewHeight)).coerceIn(0.0f, 1.0f)
-                            val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
-                            sheet?.visibility = if (fraction > 0.005f) View.VISIBLE else View.INVISIBLE
-                            sheet?.invalidate()
+                            applyExpansionFraction(fraction)
                         }
                         true
                     } else false
@@ -531,9 +575,22 @@ object NotificationSheetHook {
                         val density = pill.resources.displayMetrics.density
                         val threshold = 40f * density
 
+                        var viewHeight = container.height.toFloat()
+                        if (viewHeight <= 0f) viewHeight = container.resources.displayMetrics.heightPixels.toFloat()
+                        if (viewHeight <= 0f) viewHeight = 2400f
+
                         if (dy < -threshold) {
-                            // Swiped up enough to close: collapse shade and trigger homescreen unlock anim if on launcher
-                            triggerShadeClose(pill.context)
+                            // Swiped up enough to close: animate container smoothly off-screen,
+                            // then trigger shade close!
+                            container.animate()
+                                .translationY(-viewHeight)
+                                .setDuration(220)
+                                .setInterpolator(DecelerateInterpolator())
+                                .withEndAction {
+                                    applyExpansionFraction(0.0f)
+                                    triggerShadeClose(pill.context)
+                                }
+                                .start()
                         } else {
                             // Rebound back to open
                             container.animate()
@@ -541,7 +598,7 @@ object NotificationSheetHook {
                                 .setDuration(220)
                                 .setInterpolator(DecelerateInterpolator())
                                 .withEndAction {
-                                    container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)?.invalidate()
+                                    applyExpansionFraction(1.0f)
                                 }
                                 .start()
                         }
@@ -555,7 +612,6 @@ object NotificationSheetHook {
 
     private fun triggerShadeClose(context: Context) {
         try {
-            notifyCloseOverHomescreen(context)
             val sbService = context.getSystemService("statusbar")
             if (sbService != null) {
                 val collapseMethod = sbService.javaClass.getMethod("collapsePanels")
@@ -640,14 +696,18 @@ object NotificationSheetHook {
             Log.d(TAG, "isHomeScreenTop: ActivityTaskManager check failed: ${t.message}")
         }
 
-        // 4. Fallback: ActivityManager.getRunningTasks(1)
+        // 4. Fallback: ActivityManager.getRunningTasks(1) or ResolveActivity for Home
         try {
+            val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val resolveInfo = context.packageManager?.resolveActivity(homeIntent, 0)
+            val defaultHomePkg = resolveInfo?.activityInfo?.packageName
+
             val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
             val tasks = am?.getRunningTasks(1)
             if (!tasks.isNullOrEmpty()) {
                 val topPkg = tasks[0].topActivity?.packageName
-                if (topPkg == "com.miui.home" || topPkg == "com.mi.android.globallauncher" || topPkg == "com.miui.fliphome") {
-                    Log.d(TAG, "isHomeScreenTop: true via ActivityManager fallback")
+                if (topPkg != null && (topPkg == defaultHomePkg || topPkg == "com.miui.home" || topPkg == "com.mi.android.globallauncher" || topPkg == "com.miui.fliphome")) {
+                    Log.d(TAG, "isHomeScreenTop: true via ActivityManager fallback pkg=$topPkg")
                     return true
                 }
             }
@@ -726,7 +786,7 @@ object NotificationSheetHook {
             val extraMargin = if (cfg.enabled) (cfg.sideMargin * density).toInt() else 0
             val targetStart = origStart + extraMargin
             val targetEnd = origEnd + extraMargin
-            val bottomClearance = if (cfg.enabled) ((cfg.pillBottomMargin + cfg.pillHeight + 20f) * density).toInt() else 0
+            val bottomClearance = if (cfg.enabled) ((cfg.pillBottomMargin + cfg.pillHeight + 24f) * density).toInt() else 0
 
             var changed = false
             if (lp.marginStart != targetStart || lp.marginEnd != targetEnd) {
@@ -745,6 +805,9 @@ object NotificationSheetHook {
                 nssl.requestLayout()
             }
             if (nssl is ViewGroup) {
+                if (nssl.paddingBottom != bottomClearance) {
+                    nssl.setPadding(nssl.paddingLeft, nssl.paddingTop, nssl.paddingRight, bottomClearance)
+                }
                 nssl.clipChildren = true
                 nssl.clipToPadding = true
             }
@@ -854,6 +917,9 @@ object NotificationSheetHook {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 val result = chain.proceed()
                                 try {
+                                    if (currentStatusBarState == 0 && !isControlCenterActive()) {
+                                        isShadeOpen = true
+                                    }
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
                                     val anim = args[0] as Boolean
@@ -876,9 +942,31 @@ object NotificationSheetHook {
                                     if (!anim) {
                                         applyExpansionFraction(0.0f)
                                     }
-                                    val container = containerRef?.get()
-                                    if (container != null) {
-                                        notifyCloseOverHomescreen(container.context)
+                                } catch (_: Throwable) {}
+                                return result
+                            }
+                        })
+                    }
+                    m.name == "onExpandFinish" && m.parameterTypes.isEmpty() -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val result = chain.proceed()
+                                try {
+                                    val ctrl = chain.thisObject
+                                    if (ctrl != null) {
+                                        val appF = ctrl.javaClass.getDeclaredField("appearance")
+                                        appF.isAccessible = true
+                                        val appearance = appF.getBoolean(ctrl)
+                                        if (appearance) {
+                                            if (currentStatusBarState == 0 && !isControlCenterActive()) {
+                                                isShadeOpen = true
+                                            }
+                                        } else {
+                                            val container = containerRef?.get()
+                                            if (container != null) {
+                                                notifyCloseOverHomescreen(container.context)
+                                            }
+                                        }
                                     }
                                 } catch (_: Throwable) {}
                                 return result
@@ -893,37 +981,8 @@ object NotificationSheetHook {
     }
 
     private fun hookNpvc(module: XposedModule, classLoader: ClassLoader) {
-        try {
-            val npvcClass = Class.forName("com.android.systemui.shade.NotificationPanelViewController", false, classLoader)
-            for (m: Method in npvcClass.declaredMethods) {
-                if (m.name == "fling\$2" && m.parameterTypes.size == 4 &&
-                    m.parameterTypes[2] == Boolean::class.javaPrimitiveType
-                ) {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
-                            val result = chain.proceed()
-                            try {
-                                val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
-                                val expanding = args[2] as Boolean
-                                if (!expanding && currentStatusBarState == 0) {
-                                    val npvc = chain.thisObject
-                                    val viewField = npvc.javaClass.getDeclaredField("mView")
-                                    viewField.isAccessible = true
-                                    val view = viewField.get(npvc) as? View
-                                    if (view != null) {
-                                        notifyCloseOverHomescreen(view.context)
-                                    }
-                                }
-                            } catch (_: Throwable) {}
-                            return result
-                        }
-                    })
-                }
-            }
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to hook NotificationPanelViewController", t)
-        }
+        // NPVC fling hook is no longer used for early unlock triggering;
+        // unlock animation is cleanly triggered when shade collapse finishes.
     }
 
     fun applyExpansionFraction(fraction: Float) {
@@ -1013,27 +1072,31 @@ object NotificationSheetHook {
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
                                     val reqHeight = (args[0] as Number).toFloat()
-                                    val viewH = nssl.height.toFloat().coerceAtLeast(2000f)
-                                    val targetH = kotlin.math.max(reqHeight, viewH)
-                                    args[0] = targetH
+                                    if (reqHeight > 0.01f && lastAppliedFraction > 0.01f) {
+                                        val viewH = nssl.height.toFloat().coerceAtLeast(2000f)
+                                        val targetH = kotlin.math.max(reqHeight, viewH)
+                                        args[0] = targetH
 
-                                    try {
-                                        val ambientStateField = nssl.javaClass.getDeclaredField("mAmbientState")
-                                        ambientStateField.isAccessible = true
-                                        val ambientState = ambientStateField.get(nssl)
-                                        if (ambientState != null) {
-                                            val pvField = ambientState.javaClass.getField("panelVisible")
-                                            pvField.setBoolean(ambientState, true)
-                                            try {
-                                                val afField = ambientState.javaClass.getDeclaredField("mAppearFraction")
-                                                afField.isAccessible = true
-                                                afField.setFloat(ambientState, 1.0f)
-                                            } catch (_: Throwable) {}
-                                        }
-                                    } catch (_: Throwable) {}
+                                        try {
+                                            val ambientStateField = nssl.javaClass.getDeclaredField("mAmbientState")
+                                            ambientStateField.isAccessible = true
+                                            val ambientState = ambientStateField.get(nssl)
+                                            if (ambientState != null) {
+                                                val pvField = ambientState.javaClass.getField("panelVisible")
+                                                pvField.setBoolean(ambientState, true)
+                                                try {
+                                                    val afField = ambientState.javaClass.getDeclaredField("mAppearFraction")
+                                                    afField.isAccessible = true
+                                                    afField.setFloat(ambientState, 1.0f)
+                                                } catch (_: Throwable) {}
+                                            }
+                                        } catch (_: Throwable) {}
+                                    }
 
                                     val res = chain.proceed(args)
-                                    nssl.visibility = View.VISIBLE
+                                    if (lastAppliedFraction > 0.01f) {
+                                        nssl.visibility = View.VISIBLE
+                                    }
                                     return res
                                 }
                             }
@@ -1049,7 +1112,9 @@ object NotificationSheetHook {
                             if (cfg.enabled && currentStatusBarState == 0) {
                                 val rawArgs = chain.args
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                args[0] = 1.0f
+                                if (lastAppliedFraction > 0.01f) {
+                                    args[0] = 1.0f
+                                }
                                 return chain.proceed(args)
                             }
                             return chain.proceed()
@@ -1104,91 +1169,6 @@ object NotificationSheetHook {
         }
     }
 
-    private fun hookExpandableViewBase(module: XposedModule, classLoader: ClassLoader) {
-        try {
-            val ebClass = Class.forName("com.miui.systemui.notification.row.ExpandableViewBase", false, classLoader)
-            for (m in ebClass.declaredMethods) {
-                when {
-                    m.name == "setExtAlpha" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Float::class.javaPrimitiveType -> {
-                        module.hook(m).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val cfg = NotificationSheetConfigHolder.sheet
-                                if (cfg.enabled && currentStatusBarState == 0) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                    args[0] = 1.0f
-                                    return chain.proceed(args)
-                                }
-                                return chain.proceed()
-                            }
-                        })
-                    }
-                    (m.name == "setExtScaleX" || m.name == "setExtScaleY") && m.parameterTypes.size == 1 && m.parameterTypes[0] == Float::class.javaPrimitiveType -> {
-                        module.hook(m).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val cfg = NotificationSheetConfigHolder.sheet
-                                if (cfg.enabled && currentStatusBarState == 0) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                    args[0] = 1.0f
-                                    return chain.proceed(args)
-                                }
-                                return chain.proceed()
-                            }
-                        })
-                    }
-                    m.name == "setExtTranslationX" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Float::class.javaPrimitiveType -> {
-                        module.hook(m).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val cfg = NotificationSheetConfigHolder.sheet
-                                if (cfg.enabled && currentStatusBarState == 0) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                    args[0] = 0.0f
-                                    return chain.proceed(args)
-                                }
-                                return chain.proceed()
-                            }
-                        })
-                    }
-                    m.name == "setExtTransitionAlpha" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Float::class.javaPrimitiveType -> {
-                        module.hook(m).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val cfg = NotificationSheetConfigHolder.sheet
-                                if (cfg.enabled && currentStatusBarState == 0) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                    args[0] = 1.0f
-                                    return chain.proceed(args)
-                                }
-                                return chain.proceed()
-                            }
-                        })
-                    }
-                    m.name == "setOriginAlpha" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Float::class.javaPrimitiveType -> {
-                        module.hook(m).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val cfg = NotificationSheetConfigHolder.sheet
-                                if (cfg.enabled && currentStatusBarState == 0) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                    val alpha = (args[0] as Number).toFloat()
-                                    if (alpha < 0.05f) {
-                                        args[0] = 1.0f
-                                        return chain.proceed(args)
-                                    }
-                                }
-                                return chain.proceed()
-                            }
-                        })
-                    }
-                }
-            }
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to hook ExpandableViewBase", t)
-        }
-    }
-
     private fun hookMiuiPanelAnim(module: XposedModule, classLoader: ClassLoader) {
         try {
             val animClass = Class.forName("com.android.systemui.shade.MiuiPanelAnimValueObjectImpl", false, classLoader)
@@ -1199,15 +1179,7 @@ object NotificationSheetHook {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 val cfg = NotificationSheetConfigHolder.sheet
                                 if (cfg.enabled && currentStatusBarState == 0) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                    // args[2] is show (boolean), args[3] is animate (boolean)
-                                    // Force animate = false so MiuiPanelAnimValueObjectImpl does setTo(STATE_PANEL_APPEARED)
-                                    // immediately without staggered drop animation!
-                                    if (args.size > 3 && args[2] == true) {
-                                        args[3] = false
-                                    }
-                                    val result = chain.proceed(args)
+                                    val result = chain.proceed()
                                     neutralizeAnimObjectFields(chain.thisObject)
                                     return result
                                 }
@@ -1220,13 +1192,7 @@ object NotificationSheetHook {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 val cfg = NotificationSheetConfigHolder.sheet
                                 if (cfg.enabled && currentStatusBarState == 0) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                    // args[0] is animate (boolean). Force false to skip Folme friction translation.
-                                    if (args.isNotEmpty()) {
-                                        args[0] = false
-                                    }
-                                    val result = chain.proceed(args)
+                                    val result = chain.proceed()
                                     neutralizeAnimObjectFields(chain.thisObject)
                                     return result
                                 }
@@ -1262,36 +1228,6 @@ object NotificationSheetHook {
         } catch (_: Throwable) {}
     }
 
-    private fun hookMiuiAnimController(module: XposedModule, classLoader: ClassLoader) {
-        try {
-            val ctrlClass = Class.forName("com.android.systemui.shade.MiuiNotificationPanelAnimControllerImpl", false, classLoader)
-            for (m in ctrlClass.declaredMethods) {
-                if (m.name == "startPanelVisibleAnimation" && m.parameterTypes.size == 3 &&
-                    m.parameterTypes[0] == Boolean::class.javaPrimitiveType &&
-                    m.parameterTypes[1] == Boolean::class.javaPrimitiveType
-                ) {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
-                            val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.enabled && currentStatusBarState == 0) {
-                                val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                // args[0] = visible, args[1] = animate. Force animate = false
-                                if (args[0] == true) {
-                                    args[1] = false
-                                }
-                                return chain.proceed(args)
-                            }
-                            return chain.proceed()
-                        }
-                    })
-                }
-            }
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to hook MiuiNotificationPanelAnimControllerImpl", t)
-        }
-    }
-
     private fun hookViewStateInjector(module: XposedModule, classLoader: ClassLoader) {
         try {
             val vsiClass = Class.forName("com.android.systemui.statusbar.notification.stack.ViewStateInjectorImpl", false, classLoader)
@@ -1315,7 +1251,7 @@ object NotificationSheetHook {
                         })
                     }
 
-                    // Stop individual row scale animations: keep scale = 1.0f for all types
+                    // Stop individual row scale animations for TYPE_PANEL_OBJECT (11018): keep scale = 1.0f
                     (m.name == "setFolmeScaleXForType" || m.name == "setFolmeScaleYForType") &&
                     m.parameterTypes.size == 3 &&
                     m.parameterTypes[1] == Float::class.javaPrimitiveType &&
@@ -1326,15 +1262,18 @@ object NotificationSheetHook {
                                 if (cfg.enabled && currentStatusBarState == 0) {
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                    args[1] = 1.0f
-                                    return chain.proceed(args)
+                                    val type = (args[2] as? Number)?.toInt() ?: -1
+                                    if (type == 11018) {
+                                        args[1] = 1.0f
+                                        return chain.proceed(args)
+                                    }
                                 }
                                 return chain.proceed()
                             }
                         })
                     }
 
-                    // Keep full alpha for static rows in sheet container: keep alpha = 1.0f for all types
+                    // Stop individual row alpha animations for TYPE_PANEL_OBJECT (11018): keep alpha = 1.0f
                     m.name == "setFolmeAlphaForType" &&
                     m.parameterTypes.size == 3 &&
                     m.parameterTypes[1] == Float::class.javaPrimitiveType &&
@@ -1345,25 +1284,33 @@ object NotificationSheetHook {
                                 if (cfg.enabled && currentStatusBarState == 0) {
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                    args[1] = 1.0f
-                                    return chain.proceed(args)
+                                    val type = (args[2] as? Number)?.toInt() ?: -1
+                                    if (type == 11018) {
+                                        args[1] = 1.0f
+                                        return chain.proceed(args)
+                                    }
                                 }
                                 return chain.proceed()
                             }
                         })
                     }
 
-                    m.name == "setFolmeTransitionAlphaForType" &&
-                    m.parameterTypes.size == 2 &&
-                    m.parameterTypes[1] == Float::class.javaPrimitiveType -> {
+                    // Stop staggered vertical drop for TYPE_PANEL_OBJECT (11018): keep translationY = 0.0f
+                    m.name == "setFolmeTranslationYForType" &&
+                    m.parameterTypes.size == 3 &&
+                    m.parameterTypes[1] == Float::class.javaPrimitiveType &&
+                    m.parameterTypes[2] == Int::class.javaPrimitiveType -> {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 val cfg = NotificationSheetConfigHolder.sheet
                                 if (cfg.enabled && currentStatusBarState == 0) {
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                    args[1] = 1.0f
-                                    return chain.proceed(args)
+                                    val type = (args[2] as? Number)?.toInt() ?: -1
+                                    if (type == 11018) {
+                                        args[1] = 0.0f
+                                        return chain.proceed(args)
+                                    }
                                 }
                                 return chain.proceed()
                             }

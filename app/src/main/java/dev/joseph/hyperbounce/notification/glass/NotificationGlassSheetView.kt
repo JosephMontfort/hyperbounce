@@ -10,14 +10,15 @@ import android.os.Build
 import android.util.AttributeSet
 import android.view.View
 import dev.joseph.hyperbounce.lockscreen.glass.GlassLensRenderer
+import dev.joseph.hyperbounce.lockscreen.wallpaper.LockScreenWallpaperHelper
 import dev.joseph.hyperbounce.notification.NotificationSheetConfigHolder
 import kotlin.math.max
 
 /**
  * iOS-style Notification Center 3-Edge Liquid Glass Container Sheet View.
  * Renders the Apple iOS Liquid Glass 2.0 optical refraction model around
- * the notification container sheet without sampling wallpaper, refracting the
- * real-time blurred shade background layer (ShadeBackgroundView).
+ * the notification container sheet, refracting the backdrop wallpaper darkened
+ * by the shade scrim layer.
  */
 class NotificationGlassSheetView @JvmOverloads constructor(
     context: Context,
@@ -37,7 +38,6 @@ class NotificationGlassSheetView @JvmOverloads constructor(
     }
     private val boundsRect = RectF()
     private val location = IntArray(2)
-    private val shadeBgLocation = IntArray(2)
 
     var shadeBackgroundView: View? = null
 
@@ -105,20 +105,22 @@ class NotificationGlassSheetView @JvmOverloads constructor(
             )
 
             val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
-                // Refract the live blurred shade background layer (ShadeBackgroundView)
-                val shadeBg = shadeBackgroundView
-                if (shadeBg != null && shadeBg.visibility == VISIBLE) {
-                    shadeBg.getLocationOnScreen(shadeBgLocation)
-                    val shadeX = shadeBgLocation[0]
-                    val shadeY = shadeBgLocation[1]
-
-                    recordingCanvas.save()
-                    recordingCanvas.translate(
-                        margin.toFloat() - viewX.toFloat() + shadeX.toFloat(),
-                        margin.toFloat() - viewY.toFloat() + shadeY.toFloat()
-                    )
-                    shadeBg.draw(recordingCanvas)
-                    recordingCanvas.restore()
+                recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
+                val wp = LockScreenWallpaperHelper.getLiveLockWallpaper(context)
+                if (wp != null) {
+                    wp.setBounds(0, 0, screenW, screenH)
+                    wp.draw(recordingCanvas)
+                    // Apply notification shade dark scrim
+                    recordingCanvas.drawColor(0x80101014.toInt())
+                } else {
+                    val p = Paint().apply {
+                        shader = LinearGradient(
+                            0f, 0f, 0f, screenH.toFloat(),
+                            0xFF2A2A2E.toInt(), 0xFF101014.toInt(),
+                            Shader.TileMode.CLAMP
+                        )
+                    }
+                    recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), p)
                 }
             }
 
@@ -139,6 +141,12 @@ class NotificationGlassSheetView @JvmOverloads constructor(
             addRoundRect(boundsRect, radii, android.graphics.Path.Direction.CW)
         }
         canvas.drawPath(path, fallbackBorderPaint)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        LockScreenWallpaperHelper.registerIfNeeded(context)
+        LockScreenWallpaperHelper.triggerAsyncWallpaperLoad(context)
     }
 
     override fun onDetachedFromWindow() {

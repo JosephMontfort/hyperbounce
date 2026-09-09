@@ -25,6 +25,7 @@ package dev.joseph.hyperbounce.ui.state
  */
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -37,10 +38,32 @@ private const val PREFS_NAME = "hyperbounce_settings"
 
 class SettingsRepository(context: Context) {
 
+    companion object {
+        private var appContext: Context? = null
+
+        fun sendSettingsChangedBroadcast(key: String, value: Any?) {
+            val ctx = appContext ?: return
+            try {
+                val intent = Intent("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED").apply {
+                    putExtra("key", key)
+                    when (value) {
+                        is Boolean -> putExtra("value_boolean", value)
+                        is Float -> putExtra("value_float", value)
+                        is Int -> putExtra("value_int", value)
+                        is Long -> putExtra("value_long", value)
+                        is String -> putExtra("value_string", value)
+                    }
+                }
+                ctx.sendBroadcast(intent)
+            } catch (_: Throwable) {}
+        }
+    }
+
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     init {
+        appContext = context.applicationContext
         // Local prefs (above) are this app's own always-available source of truth — the UI
         // never waits on the Xposed service. This just also mirrors everything out to the
         // hooks once/if that service becomes available: every individual write already
@@ -1108,6 +1131,7 @@ private class PrefBooleanDelegate(
         state = value
         prefs.edit().putBoolean(key, value).apply()
         XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putBoolean(key, value)?.apply()
+        SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
 }
 
@@ -1122,6 +1146,7 @@ private class PrefLongDelegate(
         state = value
         prefs.edit().putLong(key, value).apply()
         XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putLong(key, value)?.apply()
+        SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
 }
 
@@ -1136,6 +1161,7 @@ private class PrefIntDelegate(
         state = value
         prefs.edit().putInt(key, value).apply()
         XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putInt(key, value)?.apply()
+        SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
 }
 
@@ -1150,6 +1176,7 @@ private class PrefFloatDelegate(
         state = value
         prefs.edit().putFloat(key, value).apply()
         XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, value)?.apply()
+        SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
 }
 
@@ -1168,5 +1195,6 @@ private class PrefEnumDelegate<E : Enum<E>>(
         state = value
         prefs.edit().putString(key, value.name).apply()
         XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putString(key, value.name)?.apply()
+        SettingsRepository.sendSettingsChangedBroadcast(key, value.name)
     }
 }
