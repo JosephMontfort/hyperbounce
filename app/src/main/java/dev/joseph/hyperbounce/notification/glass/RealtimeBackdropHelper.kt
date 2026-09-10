@@ -17,14 +17,15 @@ import java.util.concurrent.Executors
  * active apps, homescreen) for optical liquid glass refraction.
  *
  * Uses Android 14 / HyperOS ScreenCapture APIs excluding the NotificationShade layer so that
- * underlying apps are sampled continuously without blocking the UI thread (120 FPS).
+ * underlying apps and homescreen are sampled continuously in real time without blocking
+ * the UI thread.
  */
 object RealtimeBackdropHelper {
     private const val TAG = "HyperBounce_Backdrop"
 
     @Volatile private var latestBitmap: Bitmap? = null
-    @Volatile private var isCapturing = false
-    @Volatile private var lastCaptureTime = 0L
+    @Volatile private var isRefreshing = false
+    @Volatile private var refreshSessionId = 0
 
     private val bgExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -43,9 +44,6 @@ object RealtimeBackdropHelper {
     private var setExcludeLayersMethod: Method? = null
     private var setFrameScaleMethod: Method? = null
     private var buildCaptureArgsMethod: Method? = null
-
-    private var isRefreshing = false
-    private var refreshRunnable: Runnable? = null
 
     private fun initReflection() {
         if (initializedReflection) return
@@ -90,66 +88,57 @@ object RealtimeBackdropHelper {
         }
     }
 
+    private fun captureDisplayInternal(context: Context): Bitmap? {
+        initReflection()
+        val wms = wmsInstance ?: return null
+        val capMethod = captureDisplayMethod ?: return null
+        val syncMethod = createSyncListenerMethod ?: return null
+        val bConstructor = builderConstructor ?: return null
+        val buildMethod = buildCaptureArgsMethod ?: return null
+
+        val dm = context.resources.displayMetrics
+        val screenW = dm.widthPixels
+        val screenH = dm.heightPixels
+        val bounds = Rect(0, 0, screenW, screenH)
+
+        val builder = bConstructor.newInstance()
+        setSourceCropMethod?.invoke(builder, bounds)
+        setCaptureSecureLayersMethod?.invoke(builder, true)
+        setAllowProtectedMethod?.invoke(builder, true)
+        setCaptureModeMethod?.invoke(builder, 1) // 1 = exclude layers
+        setExcludeLayersMethod?.invoke(
+            builder,
+            arrayOf("StatusBar#", "NavigationBar0#", "DynamicIslandWindow#", "NotificationShade#")
+        )
+        // 0.35f scale gives crisp liquid refraction while consuming negligible RAM/GPU bandwidth
+        setFrameScaleMethod?.invoke(builder, 0.35f)
+
+        val captureArgs = buildMethod.invoke(builder)
+        val syncListener = syncMethod.invoke(null)
+        capMethod.invoke(wms, 0, captureArgs, syncListener)
+
+        val buffer = getBufferMethod?.invoke(syncListener) ?: return null
+        return asBitmapMethod?.invoke(buffer) as? Bitmap
+    }
+
     fun getLatestBackdropBitmap(): Bitmap? {
         val bmp = latestBitmap
         return if (bmp != null && !bmp.isRecycled) bmp else null
     }
 
     fun triggerCapture(context: Context, onCaptured: (() -> Unit)? = null) {
-        val now = System.currentTimeMillis()
-        if (now - lastCaptureTime < 100L && latestBitmap != null) {
-            return
-        }
-        if (isCapturing) return
-        isCapturing = true
-
+        val appContext = context.applicationContext ?: context
         bgExecutor.execute {
             try {
-                initReflection()
-                val wms = wmsInstance
-                val capMethod = captureDisplayMethod
-                val syncMethod = createSyncListenerMethod
-                val bConstructor = builderConstructor
-                val buildMethod = buildCaptureArgsMethod
-
-                if (wms != null && capMethod != null && syncMethod != null && bConstructor != null && buildMethod != null) {
-                    val dm = context.resources.displayMetrics
-                    val screenW = dm.widthPixels
-                    val screenH = dm.heightPixels
-                    val bounds = Rect(0, 0, screenW, screenH)
-
-                    val builder = bConstructor.newInstance()
-                    setSourceCropMethod?.invoke(builder, bounds)
-                    setCaptureSecureLayersMethod?.invoke(builder, true)
-                    setAllowProtectedMethod?.invoke(builder, true)
-                    setCaptureModeMethod?.invoke(builder, 1) // 1 = exclude layers
-                    setExcludeLayersMethod?.invoke(
-                        builder,
-                        arrayOf("StatusBar#", "NavigationBar0#", "DynamicIslandWindow#", "NotificationShade#")
-                    )
-                    // 0.35f scale gives crisp liquid refraction while consuming negligible RAM/GPU bandwidth
-                    setFrameScaleMethod?.invoke(builder, 0.35f)
-
-                    val captureArgs = buildMethod.invoke(builder)
-                    val syncListener = syncMethod.invoke(null)
-                    capMethod.invoke(wms, 0, captureArgs, syncListener)
-
-                    val buffer = getBufferMethod?.invoke(syncListener)
-                    if (buffer != null) {
-                        val bmp = asBitmapMethod?.invoke(buffer) as? Bitmap
-                        if (bmp != null) {
-                            latestBitmap = bmp
-                            lastCaptureTime = System.currentTimeMillis()
-                            mainHandler.post {
-                                onCaptured?.invoke()
-                            }
-                        }
+                val bmp = captureDisplayInternal(appContext)
+                if (bmp != null) {
+                    latestBitmap = bmp
+                    mainHandler.post {
+                        onCaptured?.invoke()
                     }
                 }
             } catch (t: Throwable) {
-                Log.e(TAG, "performCapture failed", t)
-            } finally {
-                isCapturing = false
+                Log.e(TAG, "triggerCapture failed", t)
             }
         }
     }
@@ -157,40 +146,50 @@ object RealtimeBackdropHelper {
     fun startLiveRefresh(context: Context, sheetView: View) {
         if (isRefreshing) return
         isRefreshing = true
+        val sessionId = ++refreshSessionId
         val weakSheet = WeakReference(sheetView)
+        val appContext = context.applicationContext ?: context
 
-        // Capture immediately for initial frame
-        triggerCapture(context) {
-            weakSheet.get()?.invalidate()
-        }
-
-        refreshRunnable = object : Runnable {
-            override fun run() {
-                if (!isRefreshing) return
+        bgExecutor.execute {
+            while (isRefreshing && sessionId == refreshSessionId) {
                 val sheet = weakSheet.get()
                 if (sheet == null || sheet.visibility != View.VISIBLE) {
-                    stopLiveRefresh()
-                    return
+                    if (sessionId == refreshSessionId) {
+                        isRefreshing = false
+                    }
+                    break
                 }
-                triggerCapture(context) {
-                    sheet.invalidate()
+                try {
+                    val bmp = captureDisplayInternal(appContext)
+                    if (bmp != null && sessionId == refreshSessionId) {
+                        latestBitmap = bmp
+                        mainHandler.post {
+                            if (sessionId == refreshSessionId) {
+                                weakSheet.get()?.invalidate()
+                            }
+                        }
+                    }
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Live capture error", t)
                 }
-                mainHandler.postDelayed(this, 1000L)
+
+                try {
+                    Thread.sleep(60L) // ~16 FPS continuous real-time backdrop updates
+                } catch (_: InterruptedException) {
+                    break
+                }
             }
         }
-        mainHandler.postDelayed(refreshRunnable!!, 1000L)
     }
 
     fun stopLiveRefresh() {
         isRefreshing = false
-        refreshRunnable?.let { mainHandler.removeCallbacks(it) }
-        refreshRunnable = null
+        refreshSessionId++
     }
 
     fun release() {
         stopLiveRefresh()
         bgExecutor.execute {
-            latestBitmap?.recycle()
             latestBitmap = null
         }
     }

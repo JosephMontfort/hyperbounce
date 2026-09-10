@@ -52,31 +52,6 @@ object NotificationSheetHook {
     val hasFullyOpened: Boolean
         get() = isShadeFullyOpen
 
-    fun onShadeAppearanceChanged(appearance: Boolean) {
-        if (appearance) {
-            if (isUnlockedShadeActive) {
-                isShadeFullyOpen = true
-                hasTriggeredUnlockForCurrentOpen = false
-                isShadeOpen = true
-                Log.d(TAG, "onShadeAppearanceChanged: appearance=true -> armed for unlock")
-            }
-        } else {
-            // Closing begins
-            if (isShadeFullyOpen && !hasTriggeredUnlockForCurrentOpen) {
-                hasTriggeredUnlockForCurrentOpen = true
-                isShadeFullyOpen = false
-                val container = containerRef?.get()
-                if (container != null && currentStatusBarState == 0 && !isControlCenterActive()) {
-                    Log.d(TAG, "onShadeAppearanceChanged: appearance=false -> firing simultaneous unlock")
-                    notifyCloseOverHomescreen(container.context)
-                }
-            } else {
-                isShadeFullyOpen = false
-                hasTriggeredUnlockForCurrentOpen = true
-            }
-        }
-    }
-
     @Volatile
     private var isShadeOpen = false
 
@@ -1032,24 +1007,6 @@ object NotificationSheetHook {
                             return result
                         }
                     })
-                } else if (m.name == "onAppearanceChanged" && m.parameterTypes.size == 2 &&
-                    m.parameterTypes[0] == Boolean::class.javaPrimitiveType &&
-                    m.parameterTypes[1] == Boolean::class.javaPrimitiveType
-                ) {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
-                            val result = chain.proceed()
-                            try {
-                                val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
-                                val appearance = args[0] as Boolean
-                                onShadeAppearanceChanged(appearance)
-                            } catch (t: Throwable) {
-                                Log.e(TAG, "Error in onAppearanceChanged hook", t)
-                            }
-                            return result
-                        }
-                    })
                 }
             }
         } catch (t: Throwable) {
@@ -1232,18 +1189,26 @@ object NotificationSheetHook {
         val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
 
         // Arming: Shade has reached full expansion
-        if (fraction >= 0.95f) {
+        if (fraction >= 0.96f) {
             isShadeFullyOpen = true
             hasTriggeredUnlockForCurrentOpen = false
             isShadeOpen = true
         }
 
-        // Trigger on closing start: As soon as closing begins from fully open, fire unlock animation simultaneously
-        if (fraction < 0.90f && isShadeFullyOpen && !hasTriggeredUnlockForCurrentOpen) {
+        // Motion vector calculation: delta < 0 means closing, delta >= 0 means opening
+        val delta = if (prevFraction >= 0f) fraction - prevFraction else 0f
+
+        // Simultaneous unlock trigger:
+        // ONLY triggers when:
+        // 1. Shade has genuinely reached full open (isShadeFullyOpen == true).
+        // 2. Gesture is strictly CLOSING (delta < -0.005f). Never triggers while pulling down (delta >= 0)!
+        // 3. User begins closing gesture (fraction < 0.92f && fraction > 0.15f).
+        // 4. Has not yet fired for the current open session.
+        if (isShadeFullyOpen && !hasTriggeredUnlockForCurrentOpen && delta < -0.005f && fraction < 0.92f && fraction > 0.15f) {
             hasTriggeredUnlockForCurrentOpen = true
             isShadeFullyOpen = false
             if (currentStatusBarState == 0 && !isControlCenterActive()) {
-                Log.d(TAG, "Drag closing below 0.90 -> triggering simultaneous unlock animation")
+                Log.d(TAG, "Closing gesture started (delta=$delta, frac=$fraction) -> triggering simultaneous unlock animation")
                 notifyCloseOverHomescreen(container.context)
             }
         }
@@ -1276,6 +1241,8 @@ object NotificationSheetHook {
         if (curSheet != null) {
             curSheet.visibility = View.VISIBLE
             curSheet.translationY = finalSheetY
+            // Continuous 100% real-time refresh whenever sheet is open or opening on both homescreen and apps
+            RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
         }
 
         val curPill = pill ?: container.findViewWithTag<View>(TAG_HOME_PILL)
@@ -1283,23 +1250,6 @@ object NotificationSheetHook {
             curPill.visibility = View.VISIBLE
             curPill.translationY = if (fraction >= 0.95f && currentStretchOffset > 0.01f) currentStretchOffset else upwardOffset
             curPill.alpha = (fraction - 0.2f).coerceIn(0f, 1f)
-        }
-
-        val isHome = isHomeScreenTop(container.context)
-
-        // Trigger backdrop capture ONCE when drag begins (both on homescreen and apps)
-        if (fraction in 0.02f..0.25f && prevFraction < 0.02f) {
-            RealtimeBackdropHelper.triggerCapture(container.context) {
-                curSheet?.invalidate()
-            }
-        }
-
-        // Live refresh management: NEVER poll during swipe gestures to prevent jank/stutter/SurfaceFlinger stalls.
-        // Only refresh when shade is stationary and fully open (fraction >= 0.98f) over a non-homescreen app.
-        if (fraction >= 0.98f && !isHome && curSheet != null) {
-            RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
-        } else {
-            RealtimeBackdropHelper.stopLiveRefresh()
         }
     }
 
