@@ -6,7 +6,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.joseph.hyperbounce.ui.components.AppGridIcon
 import dev.joseph.hyperbounce.ui.components.GlassCard
+import dev.joseph.hyperbounce.ui.components.LockIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
@@ -64,6 +66,7 @@ fun NotificationCenterSheetScreen(
                     backdrop = backdrop,
                     checked = sheet.lockWallpaperEnabled,
                     onCheckedChange = sheet::setLockWallpaperEnabled,
+                    icon = { LockIcon(color = Color.White, size = 15.dp) },
                     enabled = sheet.enabled
                 )
                 if (sheet.lockWallpaperEnabled) {
@@ -76,6 +79,7 @@ fun NotificationCenterSheetScreen(
                         backdrop = backdrop,
                         checked = sheet.lockWallpaperHomescreenOnly,
                         onCheckedChange = sheet::setLockWallpaperHomescreenOnly,
+                        icon = { AppGridIcon(color = Color.White, size = 15.dp) },
                         enabled = sheet.enabled && sheet.lockWallpaperEnabled
                     )
                 }
