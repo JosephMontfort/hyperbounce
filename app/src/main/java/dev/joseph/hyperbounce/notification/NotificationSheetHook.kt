@@ -76,7 +76,16 @@ object NotificationSheetHook {
     private var currentStretchOffset = 0f
 
     @Volatile
-    var isHomeScreenCached: Boolean = false
+    var isHomeScreenCached: Boolean = true
+
+    @Volatile
+    var isWallpaperSessionLatched: Boolean = false
+
+    @Volatile
+    var isSessionWallpaperActive: Boolean = false
+
+    @Volatile
+    var isNotificationLaunchInProgress: Boolean = false
 
     @Volatile
     private var lastHomeCheckTime: Long = 0L
@@ -86,7 +95,7 @@ object NotificationSheetHook {
 
     fun isHomeScreenTopCached(context: Context, forceRefresh: Boolean = false): Boolean {
         val now = System.currentTimeMillis()
-        if (!forceRefresh && (now - lastHomeCheckTime < 1500L)) {
+        if (!forceRefresh && (now - lastHomeCheckTime < 2000L)) {
             return isHomeScreenCached
         }
         val result = isHomeScreenTop(context)
@@ -97,14 +106,14 @@ object NotificationSheetHook {
 
     fun onUserTouchDown(context: Context) {
         isUserTrackingTouch = true
-        if (lastAppliedFraction <= 0.05f) {
+        if (lastAppliedFraction <= 0.05f && !isWallpaperSessionLatched) {
             isHomeScreenTopCached(context, forceRefresh = true)
         }
     }
 
     fun onUserTouchReleased(context: Context) {
         isUserTrackingTouch = false
-        if (isShadeFullyOpen && !hasTriggeredUnlockForCurrentOpen && lastAppliedFraction < 0.95f) {
+        if (isShadeFullyOpen && !hasTriggeredUnlockForCurrentOpen && !isNotificationLaunchInProgress && lastAppliedFraction < 0.95f) {
             hasTriggeredUnlockForCurrentOpen = true
             isShadeFullyOpen = false
             if (currentStatusBarState == 0 && !isControlCenterActive()) {
@@ -115,7 +124,7 @@ object NotificationSheetHook {
     }
 
     fun onClosingAnimationStarted(context: Context) {
-        if (isShadeFullyOpen && !hasTriggeredUnlockForCurrentOpen) {
+        if (isShadeFullyOpen && !hasTriggeredUnlockForCurrentOpen && !isNotificationLaunchInProgress) {
             hasTriggeredUnlockForCurrentOpen = true
             isShadeFullyOpen = false
             if (currentStatusBarState == 0 && !isControlCenterActive()) {
@@ -126,18 +135,16 @@ object NotificationSheetHook {
     }
 
     fun onNotificationLaunchStarted() {
+        isNotificationLaunchInProgress = true
         isShadeOpen = false
         isShadeFullyOpen = false
         hasTriggeredUnlockForCurrentOpen = true
         RealtimeBackdropHelper.stopLiveRefresh()
         mainHandler.post {
             val container = containerRef?.get() ?: return@post
-            val sheet = container.findViewWithTag<View>(TAG_GLASS_SHEET)
-            sheet?.animate()?.cancel()
-            sheet?.visibility = View.GONE
             val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
             pill?.animate()?.cancel()
-            pill?.visibility = View.GONE
+            pill?.animate()?.alpha(0f)?.setDuration(150)?.start()
         }
     }
 
@@ -208,8 +215,11 @@ object NotificationSheetHook {
         // 9. Hook Touch Tracking for instant unlock trigger on finger release
         hookTouchTracking(module, classLoader)
 
-        // 10. Hook Notification Launch to instantly hide sheet wallpaper without flicker
+        // 10. Hook Notification Launch to disarm unlock and preserve wallpaper without flicker
         hookNotificationLaunch(module, classLoader)
+
+        // 11. Hook MiuiTopActivityObserver to keep isHomeScreenCached up-to-date in background with zero IPC
+        hookTopActivityObserver(module, classLoader)
     }
 
     private fun hookWakeUpCoordinator(module: XposedModule, classLoader: ClassLoader) {
@@ -247,6 +257,9 @@ object NotificationSheetHook {
     }
 
     private fun hideSheetForControlCenter() {
+        isWallpaperSessionLatched = false
+        isSessionWallpaperActive = false
+        isNotificationLaunchInProgress = false
         mainHandler.post {
             val container = containerRef?.get() ?: return@post
             container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
@@ -282,6 +295,9 @@ object NotificationSheetHook {
                                     isControlCenterExpanded = false
                                     isShadeSwitching = false
                                     currentStretchOffset = 0f
+                                    isWallpaperSessionLatched = false
+                                    isSessionWallpaperActive = false
+                                    isNotificationLaunchInProgress = false
                                     mainHandler.post {
                                         val container = containerRef?.get()
                                         if (container != null) {
@@ -538,6 +554,7 @@ object NotificationSheetHook {
         containerRef = WeakReference(container)
         mainHandler.post {
             registerSettingsReceiver(container.context)
+            isHomeScreenCached = isHomeScreenTop(container.context)
             // Keep container clip settings stock
             container.clipChildren = false
             container.clipToPadding = false
@@ -779,9 +796,17 @@ object NotificationSheetHook {
             val commonUtilClass = Class.forName("com.miui.systemui.util.CommonUtil", false, context.classLoader)
             val method = commonUtilClass.getMethod("isTopActivityLauncher", Context::class.java)
             val result = method.invoke(null, context) as? Boolean
-            if (result == true) {
-                Log.d(TAG, "isHomeScreenTop: true via CommonUtil")
-                return true
+            if (result != null) {
+                return result
+            }
+        } catch (_: Throwable) {}
+
+        // 1b. Check via CommonUtil.getTopActivity()
+        try {
+            val commonUtilClass = Class.forName("com.miui.systemui.util.CommonUtil", false, context.classLoader)
+            val topAct = commonUtilClass.getMethod("getTopActivity").invoke(null) as? ComponentName
+            if (topAct != null) {
+                return isLauncher(topAct.packageName)
             }
         } catch (_: Throwable) {}
 
@@ -873,11 +898,16 @@ object NotificationSheetHook {
             }
         } catch (_: Throwable) {}
 
-        return false
+        return true
     }
 
     fun notifyCloseOverHomescreen(context: Context) {
         isShadeOpen = false
+
+        if (isNotificationLaunchInProgress) {
+            Log.d(TAG, "notifyCloseOverHomescreen: notification launch in progress, skipping")
+            return
+        }
 
         if (currentStatusBarState != 0 || isKeyguard(context)) {
             Log.d(TAG, "notifyCloseOverHomescreen: keyguard active, skipping")
@@ -1120,6 +1150,9 @@ object NotificationSheetHook {
                                         isShadeOpen = false
                                         isShadeFullyOpen = false
                                         hasTriggeredUnlockForCurrentOpen = true
+                                        isWallpaperSessionLatched = false
+                                        isSessionWallpaperActive = false
+                                        isNotificationLaunchInProgress = false
                                     }
                                     2 -> { // OPEN (genuinely fully expanded)
                                         if (isUnlockedShadeActive) {
@@ -1167,6 +1200,9 @@ object NotificationSheetHook {
                                         isShadeOpen = false
                                         isShadeFullyOpen = false
                                         hasTriggeredUnlockForCurrentOpen = true
+                                        isWallpaperSessionLatched = false
+                                        isSessionWallpaperActive = false
+                                        isNotificationLaunchInProgress = false
                                     }
                                 }
                             } catch (_: Throwable) {}
@@ -1261,11 +1297,6 @@ object NotificationSheetHook {
             isShadeOpen = true
         }
 
-        // Cache refresh when beginning expansion from closed state
-        if (prevFraction <= 0.02f && fraction > 0.02f) {
-            isHomeScreenTopCached(container.context, forceRefresh = true)
-        }
-
         if (fraction <= 0.015f) {
             sheet?.animate()?.cancel()
             sheet?.visibility = View.GONE
@@ -1273,12 +1304,24 @@ object NotificationSheetHook {
             pill?.animate()?.cancel()
             pill?.visibility = View.GONE
             pill?.translationY = -viewHeight
+            pill?.alpha = 1.0f
             RealtimeBackdropHelper.stopLiveRefresh()
             isShadeFullyOpen = false
             hasTriggeredUnlockForCurrentOpen = true
             isShadeOpen = false
             currentStretchOffset = 0f
+            isWallpaperSessionLatched = false
+            isSessionWallpaperActive = false
+            isNotificationLaunchInProgress = false
             return
+        }
+
+        // Latch wallpaper active state on the very first frame of expansion so it NEVER flips or glitches mid-gesture!
+        if (!isWallpaperSessionLatched && fraction > 0.015f) {
+            val isHome = isHomeScreenTopCached(container.context)
+            val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            isSessionWallpaperActive = cfg.lockWallpaperEnabled && !isLandscape && (!cfg.lockWallpaperHomescreenOnly || isHome)
+            isWallpaperSessionLatched = true
         }
 
         ensureGlassSheetInjected(container)
@@ -1300,11 +1343,7 @@ object NotificationSheetHook {
 
             // Wallpaper background gating:
             // When lock wallpaper background is displayed, skip live backdrop refresh to save battery
-            val isHome = isHomeScreenTopCached(container.context)
-            val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-            val isWallpaperActive = cfg.lockWallpaperEnabled && !isLandscape && (!cfg.lockWallpaperHomescreenOnly || isHome)
-
-            if (isWallpaperActive) {
+            if (isSessionWallpaperActive) {
                 RealtimeBackdropHelper.stopLiveRefresh()
             } else {
                 RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
@@ -1313,14 +1352,16 @@ object NotificationSheetHook {
 
         val curPill = pill ?: container.findViewWithTag<View>(TAG_HOME_PILL)
         if (curPill != null) {
-            if (currentStretchOffset <= 0.01f) {
-                curPill.animate().cancel()
-                curPill.translationY = upwardOffset
-            } else if (fraction >= 0.95f) {
-                curPill.translationY = currentStretchOffset
+            if (!isNotificationLaunchInProgress) {
+                if (currentStretchOffset <= 0.01f) {
+                    curPill.animate().cancel()
+                    curPill.translationY = upwardOffset
+                } else if (fraction >= 0.95f) {
+                    curPill.translationY = currentStretchOffset
+                }
+                curPill.visibility = View.VISIBLE
+                curPill.alpha = (fraction - 0.2f).coerceIn(0f, 1f)
             }
-            curPill.visibility = View.VISIBLE
-            curPill.alpha = (fraction - 0.2f).coerceIn(0f, 1f)
         }
     }
 
@@ -1537,11 +1578,11 @@ object NotificationSheetHook {
             Log.e(TAG, "Failed to hook NotificationLaunchAnimationInteractor", t)
         }
 
-        // 3. Hook StatusBarNotificationActivityStarter.launchFullScreenIntent
+        // 3. Hook StatusBarNotificationActivityStarter.launchFullScreenIntent & startNotificationIntentPublic
         try {
             val sbnasClass = Class.forName("com.android.systemui.statusbar.phone.StatusBarNotificationActivityStarter", false, classLoader)
             for (m: Method in sbnasClass.declaredMethods) {
-                if (m.name == "launchFullScreenIntent" || m.name == "startNotificationIntent") {
+                if (m.name == "launchFullScreenIntent" || m.name.startsWith("startNotificationIntent")) {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             onNotificationLaunchStarted()
@@ -1551,5 +1592,30 @@ object NotificationSheetHook {
                 }
             }
         } catch (_: Throwable) {}
+    }
+
+    private fun hookTopActivityObserver(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val observerClass = Class.forName("com.miui.systemui.functions.MiuiTopActivityObserver", false, classLoader)
+            for (m: Method in observerClass.declaredMethods) {
+                if (m.name == "updateTopActivity") {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val result = chain.proceed()
+                            try {
+                                val container = containerRef?.get()
+                                if (container != null && !isWallpaperSessionLatched) {
+                                    isHomeScreenCached = isHomeScreenTop(container.context)
+                                }
+                            } catch (_: Throwable) {}
+                            return result
+                        }
+                    })
+                    Log.d(TAG, "Hooked MiuiTopActivityObserver.${m.name}")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook MiuiTopActivityObserver", t)
+        }
     }
 }
