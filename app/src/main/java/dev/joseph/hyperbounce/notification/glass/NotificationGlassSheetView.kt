@@ -115,6 +115,9 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 canvas.drawColor(0x33000000.toInt())
                 canvas.restoreToCount(count)
             }
+            // User requirement: When wallpaper background is active, do NOT render liquid glass optical refraction effects!
+            drawFallbackBorder(canvas, w.toFloat(), h.toFloat(), cornerRadius)
+            return
         }
 
         getLocationOnScreen(location)

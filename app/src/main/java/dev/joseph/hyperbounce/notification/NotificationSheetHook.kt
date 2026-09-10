@@ -1142,7 +1142,9 @@ object NotificationSheetHook {
         mainHandler.post {
             val sheet = container.findViewWithTag<View>(TAG_GLASS_SHEET)
             val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
+            sheet?.animate()?.cancel()
             sheet?.translationY = 0f
+            pill?.animate()?.cancel()
             pill?.animate()
                 ?.translationY(0f)
                 ?.setDuration(260)
@@ -1179,11 +1181,8 @@ object NotificationSheetHook {
             return
         }
 
-        var viewHeight = container.height.toFloat()
-        if (viewHeight <= 0f) {
-            viewHeight = container.resources.displayMetrics.heightPixels.toFloat()
-        }
-        if (viewHeight <= 0f) viewHeight = 2400f
+        val screenHeight = container.resources.displayMetrics.heightPixels.toFloat()
+        val viewHeight = if (container.height > screenHeight * 0.8f) container.height.toFloat() else screenHeight
 
         val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
         val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
@@ -1214,8 +1213,10 @@ object NotificationSheetHook {
         }
 
         if (fraction <= 0.015f) {
+            sheet?.animate()?.cancel()
             sheet?.visibility = View.GONE
             sheet?.translationY = -viewHeight
+            pill?.animate()?.cancel()
             pill?.visibility = View.GONE
             pill?.translationY = -viewHeight
             RealtimeBackdropHelper.stopLiveRefresh()
@@ -1239,16 +1240,32 @@ object NotificationSheetHook {
 
         val curSheet = sheet ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
         if (curSheet != null) {
+            curSheet.animate().cancel()
             curSheet.visibility = View.VISIBLE
             curSheet.translationY = finalSheetY
-            // Continuous 100% real-time refresh whenever sheet is open or opening on both homescreen and apps
-            RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
+
+            // Wallpaper background gating:
+            // When lock wallpaper background is displayed, skip live backdrop refresh to save battery
+            val isHome = isHomeScreenTop(container.context)
+            val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            val isWallpaperActive = cfg.lockWallpaperEnabled && !isLandscape && (!cfg.lockWallpaperHomescreenOnly || isHome)
+
+            if (isWallpaperActive) {
+                RealtimeBackdropHelper.stopLiveRefresh()
+            } else {
+                RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
+            }
         }
 
         val curPill = pill ?: container.findViewWithTag<View>(TAG_HOME_PILL)
         if (curPill != null) {
+            if (currentStretchOffset <= 0.01f) {
+                curPill.animate().cancel()
+                curPill.translationY = upwardOffset
+            } else if (fraction >= 0.95f) {
+                curPill.translationY = currentStretchOffset
+            }
             curPill.visibility = View.VISIBLE
-            curPill.translationY = if (fraction >= 0.95f && currentStretchOffset > 0.01f) currentStretchOffset else upwardOffset
             curPill.alpha = (fraction - 0.2f).coerceIn(0f, 1f)
         }
     }
