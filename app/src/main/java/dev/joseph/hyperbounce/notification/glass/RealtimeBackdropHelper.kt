@@ -167,9 +167,7 @@ object RealtimeBackdropHelper {
 
         // Capture immediately for initial frame
         triggerCapture(context) {
-            val s = weakSheet.get()
-            (s as? NotificationGlassSheetView)?.markDirty()
-            s?.invalidate()
+            weakSheet.get()?.invalidate()
         }
 
         refreshRunnable = object : Runnable {
@@ -181,13 +179,12 @@ object RealtimeBackdropHelper {
                     return
                 }
                 triggerCapture(context) {
-                    (sheet as? NotificationGlassSheetView)?.markDirty()
                     sheet.invalidate()
                 }
-                mainHandler.postDelayed(this, 100L)
+                mainHandler.postDelayed(this, 180L)
             }
         }
-        mainHandler.postDelayed(refreshRunnable!!, 100L)
+        mainHandler.postDelayed(refreshRunnable!!, 180L)
     }
 
     fun stopLiveRefresh() {
