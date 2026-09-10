@@ -61,6 +61,15 @@ class NotificationGlassSheetView @JvmOverloads constructor(
     }
 
     @Volatile
+    var currentSheetTranslationY: Float = 0f
+
+    fun updateSheetTranslationY(finalY: Float) {
+        currentSheetTranslationY = finalY
+        translationY = finalY
+        invalidate()
+    }
+
+    @Volatile
     private var isContentDirty = true
 
     fun markDirty() {
@@ -99,11 +108,8 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val needsRecord = isContentDirty
         isContentDirty = false
 
-        if (needsRecord) {
-            getLocationOnScreen(location)
-        }
-        val viewX = location[0]
-        val viewY = location[1]
+        val sOffsetX = -margin.toFloat()
+        val sOffsetY = currentSheetTranslationY - margin.toFloat()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderer != null) {
             val params = GlassLensRenderer.LensParams(
@@ -121,8 +127,12 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 blurRadius = cfg.blurRadius * density
             )
 
-            val success = renderer.draw(canvas, w, h, params, margin, needsRecord) { recordingCanvas ->
-                recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
+            val success = renderer.draw(
+                canvas, w, h, params, margin,
+                sheetOffsetX = sOffsetX,
+                sheetOffsetY = sOffsetY,
+                needsRecord = needsRecord
+            ) { recordingCanvas ->
                 val backdropBmp = RealtimeBackdropHelper.getLatestBackdropBitmap()
                 if (backdropBmp != null && !backdropBmp.isRecycled) {
                     val destRect = android.graphics.Rect(0, 0, screenW, screenH)
