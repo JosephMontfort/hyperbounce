@@ -91,7 +91,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         // Draw attached unblurred lock screen wallpaper background if enabled
         val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || w > h
         val shouldDrawWallpaper = cfg.lockWallpaperEnabled && !isLandscape &&
-                (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenTop(context))
+                (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
 
         if (shouldDrawWallpaper) {
             val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
