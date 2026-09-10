@@ -138,16 +138,10 @@ object RealtimeBackdropHelper {
                     if (buffer != null) {
                         val bmp = asBitmapMethod?.invoke(buffer) as? Bitmap
                         if (bmp != null) {
-                            val old = latestBitmap
                             latestBitmap = bmp
                             lastCaptureTime = System.currentTimeMillis()
                             mainHandler.post {
                                 onCaptured?.invoke()
-                            }
-                            if (old != null && old != bmp && !old.isRecycled) {
-                                try {
-                                    old.recycle()
-                                } catch (_: Throwable) {}
                             }
                         }
                     }

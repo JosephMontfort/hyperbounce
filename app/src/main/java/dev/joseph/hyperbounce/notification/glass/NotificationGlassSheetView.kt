@@ -139,8 +139,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
             val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
                 recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
-                val isHome = dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenTop(context)
-                val backdropBmp = if (!isHome) RealtimeBackdropHelper.getLatestBackdropBitmap() else null
+                val backdropBmp = RealtimeBackdropHelper.getLatestBackdropBitmap()
                 if (backdropBmp != null && !backdropBmp.isRecycled) {
                     val destRect = android.graphics.Rect(0, 0, screenW, screenH)
                     recordingCanvas.drawBitmap(backdropBmp, null, destRect, null)
@@ -178,11 +177,15 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val density = resources.displayMetrics.density
         fallbackBorderPaint.strokeWidth = 2.0f * density
         boundsRect.set(0f, 0f, w, h)
-        val radii = floatArrayOf(0f, 0f, 0f, 0f, radius, radius, radius, radius)
-        val path = android.graphics.Path().apply {
-            addRoundRect(boundsRect, radii, android.graphics.Path.Direction.CW)
-        }
-        canvas.drawPath(path, fallbackBorderPaint)
+        sheetClipPath.reset()
+        val radii = floatArrayOf(
+            0f, 0f,
+            0f, 0f,
+            radius, radius,
+            radius, radius
+        )
+        sheetClipPath.addRoundRect(boundsRect, radii, android.graphics.Path.Direction.CW)
+        canvas.drawPath(sheetClipPath, fallbackBorderPaint)
     }
 
     override fun onAttachedToWindow() {
@@ -191,9 +194,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         LockScreenWallpaperHelper.triggerAsyncWallpaperLoad(context)
         LockScreenWallpaperHelper.addUnblurredWallpaperListener(wallpaperLoadListener)
         LockScreenWallpaperHelper.triggerAsyncUnblurredWallpaperLoad(context)
-        if (!dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenTop(context)) {
-            RealtimeBackdropHelper.triggerCapture(context) { invalidate() }
-        }
+        RealtimeBackdropHelper.triggerCapture(context) { invalidate() }
     }
 
     override fun onDetachedFromWindow() {
