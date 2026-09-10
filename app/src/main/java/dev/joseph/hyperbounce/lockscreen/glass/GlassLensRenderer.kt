@@ -195,15 +195,12 @@ class GlassLensRenderer {
 
     val isAvailable: Boolean get() = !shaderBroken
 
-    private var hasRecorded = false
-
     fun draw(
         canvas: Canvas,
         width: Int,
         height: Int,
         params: LensParams,
         margin: Int,
-        needsRecord: Boolean = true,
         recordContent: (recordingCanvas: Canvas) -> Unit
     ): Boolean {
         if (shaderBroken || !canvas.isHardwareAccelerated) return false
@@ -217,8 +214,7 @@ class GlassLensRenderer {
             return false
         }
 
-        val effectNeedsUpdate = params != lastParams || width != lastWidth || height != lastHeight || margin != lastMargin
-        if (effectNeedsUpdate) {
+        if (params != lastParams || width != lastWidth || height != lastHeight || margin != lastMargin) {
             try {
                 renderNode.setRenderEffect(buildEffect(sh, params, margin, width, height))
             } catch (e: Exception) {
@@ -232,15 +228,12 @@ class GlassLensRenderer {
             lastMargin = margin
         }
 
-        if (needsRecord || !hasRecorded || effectNeedsUpdate) {
-            renderNode.setPosition(-margin, -margin, width + margin, height + margin)
-            val recordingCanvas = renderNode.beginRecording(width + 2 * margin, height + 2 * margin)
-            try {
-                recordContent(recordingCanvas)
-            } finally {
-                renderNode.endRecording()
-            }
-            hasRecorded = true
+        renderNode.setPosition(-margin, -margin, width + margin, height + margin)
+        val recordingCanvas = renderNode.beginRecording(width + 2 * margin, height + 2 * margin)
+        try {
+            recordContent(recordingCanvas)
+        } finally {
+            renderNode.endRecording()
         }
 
         canvas.drawRenderNode(renderNode)

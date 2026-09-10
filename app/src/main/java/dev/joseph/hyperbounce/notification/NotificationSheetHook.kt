@@ -801,7 +801,25 @@ object NotificationSheetHook {
         return false
     }
 
-    private var hasTriggeredUnlockForCurrentOpen = false
+    private var hasTriggeredUnlockForCurrentOpen = true
+
+    fun tryTriggerUnlockOnClose(context: Context, source: String) {
+        val wasFullyOpened = hasFullyOpened || lifecycleState == ShadeLifecycleState.CLOSING_FROM_OPEN
+        if (!wasFullyOpened) {
+            Log.d(TAG, "tryTriggerUnlockOnClose ($source): not fully opened (state=$lifecycleState), skipping")
+            lifecycleState = ShadeLifecycleState.CLOSED
+            isShadeOpen = false
+            return
+        }
+        if (hasTriggeredUnlockForCurrentOpen) {
+            Log.d(TAG, "tryTriggerUnlockOnClose ($source): already triggered, skipping")
+            lifecycleState = ShadeLifecycleState.CLOSED
+            isShadeOpen = false
+            return
+        }
+        Log.d(TAG, "tryTriggerUnlockOnClose ($source): triggering unlock animation!")
+        notifyCloseOverHomescreen(context)
+    }
 
     fun notifyCloseOverHomescreen(context: Context) {
         if (hasTriggeredUnlockForCurrentOpen) {
@@ -823,8 +841,8 @@ object NotificationSheetHook {
         }
 
         val now = System.currentTimeMillis()
-        if (now - lastUnlockTriggerTime < 800L) {
-            Log.d(TAG, "notifyCloseOverHomescreen: debounced (within 800ms)")
+        if (now - lastUnlockTriggerTime < 500L) {
+            Log.d(TAG, "notifyCloseOverHomescreen: debounced (within 500ms)")
             return
         }
         lastUnlockTriggerTime = now
@@ -1043,47 +1061,52 @@ object NotificationSheetHook {
                                 if (isUnlockedShadeActive) {
                                     applyExpansionFraction(frac)
 
+                                    val isGenuinelyOpen = (expanded && frac >= 0.70f) || frac >= 0.88f
+
                                     when (lifecycleState) {
                                         ShadeLifecycleState.CLOSED -> {
                                             if (frac > 0.01f) {
                                                 lifecycleState = ShadeLifecycleState.PULLING_DOWN
+                                                hasTriggeredUnlockForCurrentOpen = true // DISARMED during pull-down from closed
                                             }
                                         }
                                         ShadeLifecycleState.PULLING_DOWN -> {
-                                            if (frac >= 0.995f) {
+                                            if (isGenuinelyOpen) {
                                                 lifecycleState = ShadeLifecycleState.FULLY_OPENED
                                                 isShadeOpen = true
-                                                hasTriggeredUnlockForCurrentOpen = false
+                                                hasTriggeredUnlockForCurrentOpen = false // ARMED for close!
                                                 val container = containerRef?.get()
                                                 val curSheet = container?.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
                                                 if (curSheet != null) {
                                                     RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
                                                 }
-                                            } else if (frac <= 0.001f && !tracking) {
+                                            } else if (frac <= 0.02f && !tracking) {
                                                 // Snapped back to 0 without reaching full open: no unlock trigger!
                                                 lifecycleState = ShadeLifecycleState.CLOSED
                                                 isShadeOpen = false
+                                                hasTriggeredUnlockForCurrentOpen = true
                                                 RealtimeBackdropHelper.stopLiveRefresh()
                                             }
                                         }
                                         ShadeLifecycleState.FULLY_OPENED -> {
-                                            if (frac < 0.98f) {
+                                            if (frac < 0.85f) {
                                                 // Closing gesture started from fully open
                                                 lifecycleState = ShadeLifecycleState.CLOSING_FROM_OPEN
                                             }
                                         }
                                         ShadeLifecycleState.CLOSING_FROM_OPEN -> {
-                                            if (frac >= 0.995f) {
+                                            if (isGenuinelyOpen) {
                                                 // Pulled back down to full open
                                                 lifecycleState = ShadeLifecycleState.FULLY_OPENED
-                                            } else if (frac <= 0.001f && !tracking) {
+                                            } else if (frac <= 0.05f) {
                                                 // Completed closing from fully open: trigger unlock animation!
-                                                lifecycleState = ShadeLifecycleState.CLOSED
-                                                isShadeOpen = false
                                                 RealtimeBackdropHelper.stopLiveRefresh()
                                                 val container = containerRef?.get()
                                                 if (container != null && currentStatusBarState == 0 && !isControlCenterActive()) {
-                                                    notifyCloseOverHomescreen(container.context)
+                                                    tryTriggerUnlockOnClose(container.context, "onPanelExpansionChanged")
+                                                } else {
+                                                    lifecycleState = ShadeLifecycleState.CLOSED
+                                                    isShadeOpen = false
                                                 }
                                             }
                                         }
@@ -1106,18 +1129,13 @@ object NotificationSheetHook {
                                 val state = (args[0] as Number).toInt()
                                 when (state) {
                                     0 -> { // CLOSED
-                                        if (lifecycleState == ShadeLifecycleState.CLOSING_FROM_OPEN) {
-                                            lifecycleState = ShadeLifecycleState.CLOSED
-                                            isShadeOpen = false
-                                            RealtimeBackdropHelper.stopLiveRefresh()
-                                            val container = containerRef?.get()
-                                            if (container != null && currentStatusBarState == 0 && !isControlCenterActive()) {
-                                                notifyCloseOverHomescreen(container.context)
-                                            }
+                                        RealtimeBackdropHelper.stopLiveRefresh()
+                                        val container = containerRef?.get()
+                                        if (container != null && currentStatusBarState == 0 && !isControlCenterActive()) {
+                                            tryTriggerUnlockOnClose(container.context, "updateStateInternal(0)")
                                         } else {
                                             lifecycleState = ShadeLifecycleState.CLOSED
                                             isShadeOpen = false
-                                            RealtimeBackdropHelper.stopLiveRefresh()
                                         }
                                     }
                                     1 -> { // OPENING / IN-FLIGHT
@@ -1125,6 +1143,7 @@ object NotificationSheetHook {
                                             lifecycleState = ShadeLifecycleState.CLOSING_FROM_OPEN
                                         } else if (lifecycleState == ShadeLifecycleState.CLOSED) {
                                             lifecycleState = ShadeLifecycleState.PULLING_DOWN
+                                            hasTriggeredUnlockForCurrentOpen = true
                                         }
                                     }
                                     2 -> { // OPEN (genuinely fully expanded)
@@ -1163,21 +1182,20 @@ object NotificationSheetHook {
                                     appF.isAccessible = true
                                     val appearance = appF.getBoolean(ctrl)
                                     if (appearance) {
-                                        if (isUnlockedShadeActive && lastAppliedFraction >= 0.99f) {
+                                        if (isUnlockedShadeActive && lastAppliedFraction >= 0.80f) {
                                             lifecycleState = ShadeLifecycleState.FULLY_OPENED
                                             isShadeOpen = true
                                             hasTriggeredUnlockForCurrentOpen = false
                                         }
                                     } else {
                                         RealtimeBackdropHelper.stopLiveRefresh()
-                                        if (lifecycleState == ShadeLifecycleState.CLOSING_FROM_OPEN) {
-                                            val container = containerRef?.get()
-                                            if (container != null && currentStatusBarState == 0 && !isControlCenterActive()) {
-                                                notifyCloseOverHomescreen(container.context)
-                                            }
+                                        val container = containerRef?.get()
+                                        if (container != null && currentStatusBarState == 0 && !isControlCenterActive()) {
+                                            tryTriggerUnlockOnClose(container.context, "onExpandFinish(false)")
+                                        } else {
+                                            lifecycleState = ShadeLifecycleState.CLOSED
+                                            isShadeOpen = false
                                         }
-                                        lifecycleState = ShadeLifecycleState.CLOSED
-                                        isShadeOpen = false
                                     }
                                 }
                             } catch (_: Throwable) {}
@@ -1198,11 +1216,12 @@ object NotificationSheetHook {
         val container = containerRef?.get() ?: return
         if (currentStatusBarState != 0 || isControlCenterActive()) return
 
-        if (lastAppliedFraction >= 0.99f || isShadeOpen || hasFullyOpened) {
+        if (lastAppliedFraction >= 0.85f || isShadeOpen || hasFullyOpened) {
             val updateAction = Runnable {
                 val sheet = container.findViewWithTag<View>(TAG_GLASS_SHEET)
                 val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
-                sheet?.translationY = offset
+                // Over-pull bounce: wallpaper sheet remains pinned at 0f so top is never cut off!
+                sheet?.translationY = 0f
                 pill?.translationY = offset
             }
             if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -1219,11 +1238,7 @@ object NotificationSheetHook {
         mainHandler.post {
             val sheet = container.findViewWithTag<View>(TAG_GLASS_SHEET)
             val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
-            sheet?.animate()
-                ?.translationY(0f)
-                ?.setDuration(260)
-                ?.setInterpolator(DecelerateInterpolator(1.8f))
-                ?.start()
+            sheet?.translationY = 0f
             pill?.animate()
                 ?.translationY(0f)
                 ?.setDuration(260)
@@ -1266,12 +1281,15 @@ object NotificationSheetHook {
         val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
         val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
 
-        if (fraction <= 0.001f) {
+        if (fraction <= 0.02f) {
             sheet?.visibility = View.GONE
             sheet?.translationY = -viewHeight
             pill?.visibility = View.GONE
             pill?.translationY = -viewHeight
             RealtimeBackdropHelper.stopLiveRefresh()
+            if (currentStatusBarState == 0 && !isControlCenterActive()) {
+                tryTriggerUnlockOnClose(container.context, "applyExpansionFraction(<=0.02)")
+            }
             currentStretchOffset = 0f
             return
         }
@@ -1283,25 +1301,26 @@ object NotificationSheetHook {
         container.translationY = 0.0f
 
         val upwardOffset = (fraction - 1.0f) * viewHeight
-        val finalY = if (fraction >= 0.99f && currentStretchOffset > 0.01f) currentStretchOffset else upwardOffset
+        // Cap sheet translation at 0f: during pulldown, slides from -viewHeight to 0f.
+        // Once fully open or during over-pull, remains locked at 0f so the top is never blank/cut off!
+        val finalSheetY = kotlin.math.min(0f, upwardOffset)
 
         val curSheet = sheet ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
         if (curSheet != null) {
             curSheet.visibility = View.VISIBLE
-            curSheet.translationY = finalY
+            curSheet.translationY = finalSheetY
         }
 
         val curPill = pill ?: container.findViewWithTag<View>(TAG_HOME_PILL)
         if (curPill != null) {
             curPill.visibility = View.VISIBLE
-            curPill.translationY = finalY
+            curPill.translationY = if (fraction >= 0.95f && currentStretchOffset > 0.01f) currentStretchOffset else upwardOffset
             curPill.alpha = (fraction - 0.2f).coerceIn(0f, 1f)
         }
 
         // Trigger backdrop capture when drag starts
         if (fraction in 0.05f..0.35f && prevFraction < 0.05f) {
             RealtimeBackdropHelper.triggerCapture(container.context) {
-                curSheet?.markDirty()
                 curSheet?.invalidate()
             }
         }
