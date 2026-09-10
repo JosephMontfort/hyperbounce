@@ -4,6 +4,8 @@ import android.content.SharedPreferences
 
 data class NotificationSheetConfig(
     var enabled: Boolean = true,
+    var lockWallpaperEnabled: Boolean = false,
+    var lockWallpaperHomescreenOnly: Boolean = false,
     // Optics (Liquid Glass 2.0)
     var refractionHeight: Float = 50.0f,
     var bevelWidth: Float = 28.0f,
@@ -29,6 +31,8 @@ object NotificationSheetConfigHolder {
 
     fun updateFromPrefs(prefs: SharedPreferences) {
         sheet.enabled = prefs.getBoolean("notif_sheet_enabled", true)
+        sheet.lockWallpaperEnabled = prefs.getBoolean("notif_sheet_lock_wallpaper_enabled", false)
+        sheet.lockWallpaperHomescreenOnly = prefs.getBoolean("notif_sheet_lock_wallpaper_homescreen_only", false)
         sheet.refractionHeight = prefs.getFloat("notif_card_refraction_height", 50.0f)
         sheet.bevelWidth = prefs.getFloat("notif_card_bevel_width", 28.0f)
         sheet.leftBevelWidth = prefs.getFloat("notif_card_left_bevel", 28.0f)

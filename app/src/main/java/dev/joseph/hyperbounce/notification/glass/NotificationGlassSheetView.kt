@@ -37,6 +37,10 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         strokeWidth = 2.0f
     }
     private val boundsRect = RectF()
+    private val sheetClipPath = android.graphics.Path()
+    private val wallpaperLoadListener = {
+        postInvalidateOnAnimation()
+    }
     private val location = IntArray(2)
 
     var shadeBackgroundView: View? = null
@@ -58,15 +62,6 @@ class NotificationGlassSheetView @JvmOverloads constructor(
             if (parent != null && parent.height > 0) parent.height else resources.displayMetrics.heightPixels
         }
         setMeasuredDimension(w, h)
-    }
-
-    @Volatile
-    var currentSheetTranslationY: Float = 0f
-
-    fun updateSheetTranslationY(finalY: Float) {
-        currentSheetTranslationY = finalY
-        translationY = finalY
-        invalidate()
     }
 
     @Volatile
@@ -105,11 +100,43 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val screenW = resources.displayMetrics.widthPixels
         val screenH = resources.displayMetrics.heightPixels
 
+        // Draw attached unblurred lock screen wallpaper background if enabled
+        val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || w > h
+        val shouldDrawWallpaper = cfg.lockWallpaperEnabled && !isLandscape &&
+                (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenTop(context))
+
+        if (shouldDrawWallpaper) {
+            val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
+            if (unblurredWp != null) {
+                val count = canvas.save()
+                sheetClipPath.reset()
+                val radii = floatArrayOf(
+                    0f, 0f,
+                    0f, 0f,
+                    cornerRadius, cornerRadius,
+                    cornerRadius, cornerRadius
+                )
+                boundsRect.set(0f, 0f, w.toFloat(), h.toFloat())
+                sheetClipPath.addRoundRect(boundsRect, radii, android.graphics.Path.Direction.CW)
+                canvas.clipPath(sheetClipPath)
+
+                unblurredWp.setBounds(0, 0, w, h)
+                unblurredWp.draw(canvas)
+
+                // Subtle dark scrim (20% black) so notification text & icons remain crystal clear against bright wallpapers
+                canvas.drawColor(0x33000000.toInt())
+                canvas.restoreToCount(count)
+            }
+        }
+
         val needsRecord = isContentDirty
         isContentDirty = false
 
-        val sOffsetX = -margin.toFloat()
-        val sOffsetY = currentSheetTranslationY - margin.toFloat()
+        if (needsRecord) {
+            getLocationOnScreen(location)
+        }
+        val viewX = location[0]
+        val viewY = location[1]
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderer != null) {
             val params = GlassLensRenderer.LensParams(
@@ -127,12 +154,8 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 blurRadius = cfg.blurRadius * density
             )
 
-            val success = renderer.draw(
-                canvas, w, h, params, margin,
-                sheetOffsetX = sOffsetX,
-                sheetOffsetY = sOffsetY,
-                needsRecord = needsRecord
-            ) { recordingCanvas ->
+            val success = renderer.draw(canvas, w, h, params, margin, needsRecord) { recordingCanvas ->
+                recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
                 val backdropBmp = RealtimeBackdropHelper.getLatestBackdropBitmap()
                 if (backdropBmp != null && !backdropBmp.isRecycled) {
                     val destRect = android.graphics.Rect(0, 0, screenW, screenH)
@@ -183,6 +206,8 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         markDirty()
         LockScreenWallpaperHelper.registerIfNeeded(context)
         LockScreenWallpaperHelper.triggerAsyncWallpaperLoad(context)
+        LockScreenWallpaperHelper.addUnblurredWallpaperListener(wallpaperLoadListener)
+        LockScreenWallpaperHelper.triggerAsyncUnblurredWallpaperLoad(context)
         RealtimeBackdropHelper.triggerCapture(context) {
             markDirty()
             invalidate()
@@ -191,6 +216,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        LockScreenWallpaperHelper.removeUnblurredWallpaperListener(wallpaperLoadListener)
         RealtimeBackdropHelper.stopLiveRefresh()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             renderer?.release()

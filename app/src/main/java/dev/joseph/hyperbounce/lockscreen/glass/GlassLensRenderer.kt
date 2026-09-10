@@ -26,8 +26,6 @@ class GlassLensRenderer {
             uniform shader content;
             uniform float  margin;
             uniform float2 viewSize;
-            uniform float2 canvasSize;
-            uniform float2 sheetOffset;
             uniform float  cornerRadius;
             uniform float3 edgeBevels; // x = left, y = right, z = bottom
             uniform float  refractPx;
@@ -128,14 +126,13 @@ class GlassLensRenderer {
                 float refr = refractPx;
                 float2 offset = -n * (slope * refr);
 
-                // Physical chromatic dispersion with real-time sheet offset mapping
-                float2 bgCoord = coord + sheetOffset;
-                float2 cR = bgCoord + offset * (1.0 - dispersion * slope);
-                float2 cG = bgCoord + offset;
-                float2 cB = bgCoord + offset * (1.0 + dispersion * slope);
+                // Physical chromatic dispersion
+                float2 cR = coord + offset * (1.0 - dispersion * slope);
+                float2 cG = coord + offset;
+                float2 cB = coord + offset * (1.0 + dispersion * slope);
 
-                float2 lo = float2(1.0, 1.0);
-                float2 hi = canvasSize - float2(2.0, 2.0);
+                float2 lo = float2(margin + 1.0, margin + 1.0);
+                float2 hi = lo + viewSize - float2(2.0, 2.0);
                 cR = clamp(cR, lo, hi);
                 cG = clamp(cG, lo, hi);
                 cB = clamp(cB, lo, hi);
@@ -195,8 +192,6 @@ class GlassLensRenderer {
     private var lastWidth = 0
     private var lastHeight = 0
     private var lastMargin = -1
-    private var lastSheetOffsetX = Float.NaN
-    private var lastSheetOffsetY = Float.NaN
 
     val isAvailable: Boolean get() = !shaderBroken
 
@@ -208,8 +203,6 @@ class GlassLensRenderer {
         height: Int,
         params: LensParams,
         margin: Int,
-        sheetOffsetX: Float = 0f,
-        sheetOffsetY: Float = 0f,
         needsRecord: Boolean = true,
         recordContent: (recordingCanvas: Canvas) -> Unit
     ): Boolean {
@@ -224,11 +217,10 @@ class GlassLensRenderer {
             return false
         }
 
-        val effectNeedsUpdate = params != lastParams || width != lastWidth || height != lastHeight || margin != lastMargin ||
-                sheetOffsetX != lastSheetOffsetX || sheetOffsetY != lastSheetOffsetY
+        val effectNeedsUpdate = params != lastParams || width != lastWidth || height != lastHeight || margin != lastMargin
         if (effectNeedsUpdate) {
             try {
-                renderNode.setRenderEffect(buildEffect(sh, params, margin, width, height, sheetOffsetX, sheetOffsetY))
+                renderNode.setRenderEffect(buildEffect(sh, params, margin, width, height))
             } catch (e: Exception) {
                 Log.e(TAG, "Lens 2.0 RenderEffect build failed", e)
                 shaderBroken = true
@@ -238,11 +230,9 @@ class GlassLensRenderer {
             lastWidth = width
             lastHeight = height
             lastMargin = margin
-            lastSheetOffsetX = sheetOffsetX
-            lastSheetOffsetY = sheetOffsetY
         }
 
-        if (needsRecord || !hasRecorded) {
+        if (needsRecord || !hasRecorded || effectNeedsUpdate) {
             renderNode.setPosition(-margin, -margin, width + margin, height + margin)
             val recordingCanvas = renderNode.beginRecording(width + 2 * margin, height + 2 * margin)
             try {
@@ -262,14 +252,10 @@ class GlassLensRenderer {
         p: LensParams,
         margin: Int,
         width: Int,
-        height: Int,
-        sheetOffsetX: Float,
-        sheetOffsetY: Float
+        height: Int
     ): RenderEffect {
         sh.setFloatUniform("margin", margin.toFloat())
         sh.setFloatUniform("viewSize", width.toFloat(), height.toFloat())
-        sh.setFloatUniform("canvasSize", (width + 2 * margin).toFloat(), (height + 2 * margin).toFloat())
-        sh.setFloatUniform("sheetOffset", sheetOffsetX, sheetOffsetY)
         sh.setFloatUniform("cornerRadius", p.cornerRadius)
         sh.setFloatUniform("edgeBevels", p.leftBevel, p.rightBevel, p.bottomBevel)
         sh.setFloatUniform("refractPx", p.refract)
@@ -294,8 +280,5 @@ class GlassLensRenderer {
         renderNode.discardDisplayList()
         shader = null
         lastParams = null
-        lastSheetOffsetX = Float.NaN
-        lastSheetOffsetY = Float.NaN
-        hasRecorded = false
     }
 }

@@ -448,6 +448,8 @@ class SettingsRepository(context: Context) {
         private val defaults = NotificationSheetSettings()
 
         var enabled by prefsBooleanState("notif_sheet_enabled", defaults.enabled); private set
+        var lockWallpaperEnabled by prefsBooleanState("notif_sheet_lock_wallpaper_enabled", defaults.lockWallpaperEnabled); private set
+        var lockWallpaperHomescreenOnly by prefsBooleanState("notif_sheet_lock_wallpaper_homescreen_only", defaults.lockWallpaperHomescreenOnly); private set
         var refractionHeight by prefsFloatState("notif_card_refraction_height", defaults.refractionHeight); private set
         var bevelWidth by prefsFloatState("notif_card_bevel_width", defaults.bevelWidth); private set
         var leftBevelWidth by prefsFloatState("notif_card_left_bevel", defaults.leftBevelWidth); private set
@@ -462,12 +464,15 @@ class SettingsRepository(context: Context) {
         var sideMargin by prefsFloatState("notif_side_margin", defaults.sideMargin); private set
 
         fun snapshot(): NotificationSheetSettings = NotificationSheetSettings(
-            enabled, refractionHeight, bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
+            enabled, lockWallpaperEnabled, lockWallpaperHomescreenOnly,
+            refractionHeight, bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
             dispersionStrength, specularStrength, innerShadow, saturationFactor, blurRadius,
             cornerRadius, sideMargin
         )
 
         @JvmName("setNotifSheetEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
+        @JvmName("setNotifSheetLockWallpaperEnabledPref") fun setLockWallpaperEnabled(v: Boolean) { lockWallpaperEnabled = v }
+        @JvmName("setNotifSheetLockWallpaperHomescreenOnlyPref") fun setLockWallpaperHomescreenOnly(v: Boolean) { lockWallpaperHomescreenOnly = v }
         @JvmName("setNotifSheetRefractionHeightPref") fun setRefractionHeight(v: Float) { refractionHeight = v }
         @JvmName("setNotifSheetBevelWidthPref") fun setBevelWidth(v: Float) { bevelWidth = v }
         @JvmName("setNotifSheetLeftBevelWidthPref") fun setLeftBevelWidth(v: Float) { leftBevelWidth = v }
@@ -483,6 +488,8 @@ class SettingsRepository(context: Context) {
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
+            lockWallpaperEnabled = defaults.lockWallpaperEnabled
+            lockWallpaperHomescreenOnly = defaults.lockWallpaperHomescreenOnly
             refractionHeight = defaults.refractionHeight
             bevelWidth = defaults.bevelWidth
             leftBevelWidth = defaults.leftBevelWidth

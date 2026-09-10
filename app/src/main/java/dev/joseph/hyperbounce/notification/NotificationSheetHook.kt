@@ -629,6 +629,8 @@ object NotificationSheetHook {
                     var handled = true
                     when (key) {
                         "notif_sheet_enabled" -> cfg.enabled = intent.getBooleanExtra("value_boolean", cfg.enabled)
+                        "notif_sheet_lock_wallpaper_enabled" -> cfg.lockWallpaperEnabled = intent.getBooleanExtra("value_boolean", cfg.lockWallpaperEnabled)
+                        "notif_sheet_lock_wallpaper_homescreen_only" -> cfg.lockWallpaperHomescreenOnly = intent.getBooleanExtra("value_boolean", cfg.lockWallpaperHomescreenOnly)
                         "notif_card_refraction_height" -> cfg.refractionHeight = intent.getFloatExtra("value_float", cfg.refractionHeight)
                         "notif_card_bevel_width" -> cfg.bevelWidth = intent.getFloatExtra("value_float", cfg.bevelWidth)
                         "notif_card_left_bevel" -> cfg.leftBevelWidth = intent.getFloatExtra("value_float", cfg.leftBevelWidth)
@@ -1198,9 +1200,9 @@ object NotificationSheetHook {
 
         if (lastAppliedFraction >= 0.99f || isShadeOpen || hasFullyOpened) {
             val updateAction = Runnable {
-                val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+                val sheet = container.findViewWithTag<View>(TAG_GLASS_SHEET)
                 val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
-                sheet?.updateSheetTranslationY(offset)
+                sheet?.translationY = offset
                 pill?.translationY = offset
             }
             if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -1215,16 +1217,12 @@ object NotificationSheetHook {
         val container = containerRef?.get() ?: return
         if (currentStretchOffset <= 0.01f) return
         mainHandler.post {
-            val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+            val sheet = container.findViewWithTag<View>(TAG_GLASS_SHEET)
             val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
             sheet?.animate()
                 ?.translationY(0f)
                 ?.setDuration(260)
                 ?.setInterpolator(DecelerateInterpolator(1.8f))
-                ?.setUpdateListener { anim ->
-                    val y = anim.animatedValue as? Float ?: sheet.translationY
-                    sheet.updateSheetTranslationY(y)
-                }
                 ?.start()
             pill?.animate()
                 ?.translationY(0f)
@@ -1270,7 +1268,7 @@ object NotificationSheetHook {
 
         if (fraction <= 0.001f) {
             sheet?.visibility = View.GONE
-            sheet?.updateSheetTranslationY(-viewHeight)
+            sheet?.translationY = -viewHeight
             pill?.visibility = View.GONE
             pill?.translationY = -viewHeight
             RealtimeBackdropHelper.stopLiveRefresh()
@@ -1290,7 +1288,7 @@ object NotificationSheetHook {
         val curSheet = sheet ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
         if (curSheet != null) {
             curSheet.visibility = View.VISIBLE
-            curSheet.updateSheetTranslationY(finalY)
+            curSheet.translationY = finalY
         }
 
         val curPill = pill ?: container.findViewWithTag<View>(TAG_HOME_PILL)

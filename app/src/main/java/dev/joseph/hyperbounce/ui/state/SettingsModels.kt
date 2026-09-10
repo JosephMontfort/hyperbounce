@@ -136,6 +136,8 @@ data class LockScreenSheetSettings(
 /** Feature 7: Notification Center iOS Sheet & Liquid Glass Refraction Settings */
 data class NotificationSheetSettings(
     val enabled: Boolean = true,
+    val lockWallpaperEnabled: Boolean = false,
+    val lockWallpaperHomescreenOnly: Boolean = false,
     val refractionHeight: Float = 50.0f,
     val bevelWidth: Float = 28.0f,
     val leftBevelWidth: Float = 28.0f,

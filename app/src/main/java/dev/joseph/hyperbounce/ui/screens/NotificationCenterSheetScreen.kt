@@ -54,6 +54,39 @@ fun NotificationCenterSheetScreen(
         }
 
         item {
+            SectionHeader("Sheet Wallpaper Background", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "Lock Screen Wallpaper Background",
+                    subtitle = if (sheet.lockWallpaperEnabled) "Unblurred lockscreen wallpaper attached to the sheet, rolling down with it" else "Disabled (Transparent glass sheet)",
+                    colors = colors,
+                    iconTint = colors.accentPurple,
+                    backdrop = backdrop,
+                    checked = sheet.lockWallpaperEnabled,
+                    onCheckedChange = sheet::setLockWallpaperEnabled,
+                    enabled = sheet.enabled
+                )
+                if (sheet.lockWallpaperEnabled) {
+                    RowDivider(colors.separator)
+                    SettingsToggleRow(
+                        title = "Homescreen Only",
+                        subtitle = if (sheet.lockWallpaperHomescreenOnly) "Active only when pulling down over homescreen; uses transparent glass over running apps" else "Active everywhere (over homescreen and apps)",
+                        colors = colors,
+                        iconTint = colors.accentGreen,
+                        backdrop = backdrop,
+                        checked = sheet.lockWallpaperHomescreenOnly,
+                        onCheckedChange = sheet::setLockWallpaperHomescreenOnly,
+                        enabled = sheet.enabled && sheet.lockWallpaperEnabled
+                    )
+                }
+            }
+            SectionFooter(
+                "Attaches your crisp, unblurred lock screen wallpaper to the notification container sheet. Automatically disabled in landscape orientation to prevent distortion.",
+                colors
+            )
+        }
+
+        item {
             SectionHeader("Optics & Refraction (Liquid Glass 2.0)", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
