@@ -60,6 +60,18 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         setMeasuredDimension(w, h)
     }
 
+    @Volatile
+    private var isContentDirty = true
+
+    fun markDirty() {
+        isContentDirty = true
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        markDirty()
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (visibility != VISIBLE) return
@@ -84,7 +96,12 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val screenW = resources.displayMetrics.widthPixels
         val screenH = resources.displayMetrics.heightPixels
 
-        getLocationOnScreen(location)
+        val needsRecord = isContentDirty
+        isContentDirty = false
+
+        if (needsRecord) {
+            getLocationOnScreen(location)
+        }
         val viewX = location[0]
         val viewY = location[1]
 
@@ -104,7 +121,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 blurRadius = cfg.blurRadius * density
             )
 
-            val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
+            val success = renderer.draw(canvas, w, h, params, margin, needsRecord) { recordingCanvas ->
                 recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
                 val backdropBmp = RealtimeBackdropHelper.getLatestBackdropBitmap()
                 if (backdropBmp != null && !backdropBmp.isRecycled) {
@@ -153,9 +170,13 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        markDirty()
         LockScreenWallpaperHelper.registerIfNeeded(context)
         LockScreenWallpaperHelper.triggerAsyncWallpaperLoad(context)
-        RealtimeBackdropHelper.triggerCapture(context) { invalidate() }
+        RealtimeBackdropHelper.triggerCapture(context) {
+            markDirty()
+            invalidate()
+        }
     }
 
     override fun onDetachedFromWindow() {

@@ -100,6 +100,9 @@ object NotificationSheetHook {
         }
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
+        // 0. Crash prevention: Hook NotificationWakeUpCoordinator to prevent early NPE before stackScrollerController is injected
+        hookWakeUpCoordinator(module, classLoader)
+
         // 1. Hook StatusBarStateControllerImpl to track active shade / lockscreen state
         hookStatusBarState(module, classLoader)
 
@@ -123,6 +126,40 @@ object NotificationSheetHook {
 
         // 8. Hook ViewStateInjectorImpl to center the notification drop (no horizontal blanket rollout)
         hookViewStateInjector(module, classLoader)
+    }
+
+    private fun hookWakeUpCoordinator(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val nwcClass = Class.forName("com.android.systemui.statusbar.notification.NotificationWakeUpCoordinator", false, classLoader)
+            var stackField: Field? = null
+            try {
+                stackField = nwcClass.getDeclaredField("stackScrollerController")
+                stackField.isAccessible = true
+            } catch (_: Throwable) {}
+
+            val guardedMethods = setOf("updateDozeAmount", "updateHideAmount", "notifyAnimationStart", "setWakingUp", "setHardDozeAmountOverride")
+            for (m in nwcClass.declaredMethods) {
+                if (m.name in guardedMethods) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val inst = chain.thisObject
+                            if (inst != null && stackField != null) {
+                                val controller = stackField.get(inst)
+                                if (controller == null) {
+                                    // stackScrollerController has not yet been injected by NotificationPanelViewController.
+                                    // Return early to prevent NPE during early SystemUI startup.
+                                    return null
+                                }
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                }
+            }
+            Log.d(TAG, "Hooked NotificationWakeUpCoordinator successfully")
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook NotificationWakeUpCoordinator", t)
+        }
     }
 
     private fun hideSheetForControlCenter() {
@@ -214,6 +251,14 @@ object NotificationSheetHook {
                                         hasTriggeredUnlockForCurrentOpen = true
                                         currentStretchOffset = 0f
                                         hideSheetForControlCenter()
+                                    } else {
+                                        try {
+                                            val f = chain.thisObject?.javaClass?.getDeclaredField("toCtrl")
+                                            f?.isAccessible = true
+                                            if (f?.getBoolean(chain.thisObject) == false) {
+                                                isControlCenterExpanded = false
+                                            }
+                                        } catch (_: Throwable) {}
                                     }
                                 } catch (_: Throwable) {}
                                 return chain.proceed()
@@ -286,73 +331,6 @@ object NotificationSheetHook {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook ControlCenterImpl", t)
-        }
-
-        // 3. Hook NotificationShadeWrapper (switched to/from control center)
-        try {
-            val nswClass = Class.forName("com.miui.systemui.shade.NotificationShadeWrapper", false, classLoader)
-            for (m in nswClass.declaredMethods) {
-                when (m.name) {
-                    "switchHide" -> {
-                        module.hook(m).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any? {
-                                isControlCenterExpanded = true
-                                isShadeSwitching = true
-                                isShadeOpen = false
-                                hasFullyOpened = false
-                                hasTriggeredUnlockForCurrentOpen = true
-                                currentStretchOffset = 0f
-                                hideSheetForControlCenter()
-                                return chain.proceed()
-                            }
-                        })
-                    }
-                    "switchShow" -> {
-                        module.hook(m).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any? {
-                                isControlCenterExpanded = false
-                                isShadeSwitching = false
-                                return chain.proceed()
-                            }
-                        })
-                    }
-                }
-            }
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to hook NotificationShadeWrapper", t)
-        }
-
-        // 4. Hook NotificationPanelViewControllerInjector.onNotificationAppearChanged
-        try {
-            val npvcInjClass = Class.forName("com.android.systemui.shade.NotificationPanelViewControllerInjector", false, classLoader)
-            for (m in npvcInjClass.declaredMethods) {
-                if (m.name == "onNotificationAppearChanged" && m.parameterTypes.size == 2 &&
-                    m.parameterTypes[0] == Boolean::class.javaPrimitiveType
-                ) {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
-                            try {
-                                val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
-                                val appear = args[0] as Boolean
-                                if (!appear) {
-                                    // Notification panel is disappearing in favor of Control Center
-                                    isControlCenterExpanded = true
-                                    isShadeSwitching = true
-                                    isShadeOpen = false
-                                    hasFullyOpened = false
-                                    hasTriggeredUnlockForCurrentOpen = true
-                                    currentStretchOffset = 0f
-                                    hideSheetForControlCenter()
-                                }
-                            } catch (_: Throwable) {}
-                            return chain.proceed()
-                        }
-                    })
-                }
-            }
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to hook NotificationPanelViewControllerInjector.onNotificationAppearChanged", t)
         }
     }
 
@@ -537,7 +515,6 @@ object NotificationSheetHook {
                 val pillH = (cfg.pillHeight.coerceAtLeast(2f) * density).toInt()
                 val radius = pillH / 2f
                 val bMargin = (cfg.pillBottomMargin * density).toInt()
-                val touchTargetH = (48f * density).toInt()
 
                 val wrapper = android.widget.FrameLayout(context).apply {
                     tag = TAG_HOME_PILL
@@ -547,6 +524,7 @@ object NotificationSheetHook {
                     isClickable = false
                     isFocusable = false
                     isEnabled = false
+                    setOnTouchListener { _, _ -> false }
                 }
 
                 val pillBar = View(context).apply {
@@ -559,6 +537,7 @@ object NotificationSheetHook {
                     isClickable = false
                     isFocusable = false
                     isEnabled = false
+                    setOnTouchListener { _, _ -> false }
                 }
                 val barLp = android.widget.FrameLayout.LayoutParams(
                     pillW,
@@ -570,8 +549,8 @@ object NotificationSheetHook {
                 val lp = try {
                     val lpClass = Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams", false, container.context.classLoader)
                     val constructor = lpClass.getConstructor(Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-                    val inst = constructor.newInstance(pillW, touchTargetH) as ViewGroup.MarginLayoutParams
-                    inst.bottomMargin = (bMargin - ((touchTargetH - pillH) / 2)).coerceAtLeast(0)
+                    val inst = constructor.newInstance(pillW, pillH) as ViewGroup.MarginLayoutParams
+                    inst.bottomMargin = bMargin
                     lpClass.getField("bottomToBottom").setInt(inst, 0)
                     lpClass.getField("startToStart").setInt(inst, 0)
                     lpClass.getField("endToEnd").setInt(inst, 0)
@@ -579,10 +558,10 @@ object NotificationSheetHook {
                 } catch (_: Throwable) {
                     android.widget.FrameLayout.LayoutParams(
                         pillW,
-                        touchTargetH,
+                        pillH,
                         android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL
                     ).apply {
-                        bottomMargin = (bMargin - ((touchTargetH - pillH) / 2)).coerceAtLeast(0)
+                        bottomMargin = bMargin
                     }
                 }
 
@@ -763,18 +742,14 @@ object NotificationSheetHook {
             }
         } catch (_: Throwable) {}
 
-        // 4. Fallback: ActivityManager.getRunningTasks(10)
+        // 4. Fallback: ActivityManager.getRunningTasks(1)
         try {
             val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-            val tasks = am?.getRunningTasks(10)
-            if (!tasks.isNullOrEmpty()) {
-                for (task in tasks) {
-                    val topPkg = task.topActivity?.packageName
-                    if (isLauncher(topPkg)) {
-                        Log.d(TAG, "isHomeScreenTop: true via ActivityManager fallback pkg=$topPkg")
-                        return true
-                    }
-                }
+            val tasks = am?.getRunningTasks(1)
+            val topPkg = tasks?.firstOrNull()?.topActivity?.packageName
+            if (isLauncher(topPkg)) {
+                Log.d(TAG, "isHomeScreenTop: true via ActivityManager fallback pkg=$topPkg")
+                return true
             }
         } catch (_: Throwable) {}
 
@@ -1022,6 +997,13 @@ object NotificationSheetHook {
                                         isShadeOpen = true
                                         hasFullyOpened = true
                                         hasTriggeredUnlockForCurrentOpen = false
+                                        val container = containerRef?.get()
+                                        val curSheet = container?.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+                                        if (curSheet != null) {
+                                            RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
+                                        }
+                                    } else if (tracking && frac < 0.95f) {
+                                        hasFullyOpened = false
                                     } else if (frac <= 0.001f && !tracking && !expanded) {
                                         if (hasFullyOpened && !hasTriggeredUnlockForCurrentOpen && !isControlCenterActive()) {
                                             val container = containerRef?.get()
@@ -1031,6 +1013,7 @@ object NotificationSheetHook {
                                         }
                                         hasFullyOpened = false
                                         isShadeOpen = false
+                                        RealtimeBackdropHelper.stopLiveRefresh()
                                     }
                                 }
                             } catch (t: Throwable) {
@@ -1058,9 +1041,11 @@ object NotificationSheetHook {
                                         }
                                         hasFullyOpened = false
                                         isShadeOpen = false
+                                        RealtimeBackdropHelper.stopLiveRefresh()
                                     }
                                     1 -> { // OPENING
                                         // In-transit: do not set hasFullyOpened
+                                        hasFullyOpened = false
                                     }
                                     2 -> { // OPEN (genuinely fully expanded)
                                         if (isUnlockedShadeActive) {
@@ -1138,7 +1123,6 @@ object NotificationSheetHook {
                 val sheet = container.findViewWithTag<View>(TAG_GLASS_SHEET)
                 val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
                 sheet?.translationY = offset
-                sheet?.invalidate()
                 pill?.translationY = offset
             }
             if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -1230,7 +1214,6 @@ object NotificationSheetHook {
         if (curSheet != null) {
             curSheet.visibility = View.VISIBLE
             curSheet.translationY = finalY
-            curSheet.invalidate()
         }
 
         val curPill = pill ?: container.findViewWithTag<View>(TAG_HOME_PILL)
@@ -1243,12 +1226,15 @@ object NotificationSheetHook {
         // Trigger backdrop capture when drag starts
         if (fraction in 0.05f..0.35f && prevFraction < 0.05f) {
             RealtimeBackdropHelper.triggerCapture(container.context) {
+                curSheet?.markDirty()
                 curSheet?.invalidate()
             }
         }
 
-        // Start live refresh when fully open
-        if (fraction >= 0.90f && curSheet != null) {
+        // Live refresh management: continuously sample real underlying layer in real time
+        if (fraction <= 0.01f) {
+            RealtimeBackdropHelper.stopLiveRefresh()
+        } else if (fraction > 0.05f && curSheet != null) {
             RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
         }
     }
