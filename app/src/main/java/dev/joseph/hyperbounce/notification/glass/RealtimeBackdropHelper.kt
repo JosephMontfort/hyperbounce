@@ -181,10 +181,10 @@ object RealtimeBackdropHelper {
                 triggerCapture(context) {
                     sheet.invalidate()
                 }
-                mainHandler.postDelayed(this, 180L)
+                mainHandler.postDelayed(this, 1000L)
             }
         }
-        mainHandler.postDelayed(refreshRunnable!!, 180L)
+        mainHandler.postDelayed(refreshRunnable!!, 1000L)
     }
 
     fun stopLiveRefresh() {

@@ -139,14 +139,15 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
             val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
                 recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
-                val backdropBmp = RealtimeBackdropHelper.getLatestBackdropBitmap()
+                val isHome = dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenTop(context)
+                val backdropBmp = if (!isHome) RealtimeBackdropHelper.getLatestBackdropBitmap() else null
                 if (backdropBmp != null && !backdropBmp.isRecycled) {
                     val destRect = android.graphics.Rect(0, 0, screenW, screenH)
                     recordingCanvas.drawBitmap(backdropBmp, null, destRect, null)
                     // Apply notification shade dark scrim
                     recordingCanvas.drawColor(0x80101014.toInt())
                 } else {
-                    val wp = LockScreenWallpaperHelper.getLiveLockWallpaper(context)
+                    val wp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context) ?: LockScreenWallpaperHelper.getLiveLockWallpaper(context)
                     if (wp != null) {
                         wp.setBounds(0, 0, screenW, screenH)
                         wp.draw(recordingCanvas)
@@ -190,7 +191,9 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         LockScreenWallpaperHelper.triggerAsyncWallpaperLoad(context)
         LockScreenWallpaperHelper.addUnblurredWallpaperListener(wallpaperLoadListener)
         LockScreenWallpaperHelper.triggerAsyncUnblurredWallpaperLoad(context)
-        RealtimeBackdropHelper.triggerCapture(context) { invalidate() }
+        if (!dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenTop(context)) {
+            RealtimeBackdropHelper.triggerCapture(context) { invalidate() }
+        }
     }
 
     override fun onDetachedFromWindow() {

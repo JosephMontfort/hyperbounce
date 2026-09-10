@@ -43,18 +43,14 @@ object NotificationSheetHook {
     @Volatile
     var currentStatusBarState: Int = 1 // 0 = SHADE, 1 = KEYGUARD, 2 = SHADE_LOCKED
 
-    enum class ShadeLifecycleState {
-        CLOSED,
-        PULLING_DOWN,
-        FULLY_OPENED,
-        CLOSING_FROM_OPEN
-    }
+    @Volatile
+    private var maxExpansionReached = 0f
 
     @Volatile
-    var lifecycleState: ShadeLifecycleState = ShadeLifecycleState.CLOSED
+    private var isTrackingClosingAfterFullOpen = false
 
     val hasFullyOpened: Boolean
-        get() = lifecycleState == ShadeLifecycleState.FULLY_OPENED || lifecycleState == ShadeLifecycleState.CLOSING_FROM_OPEN
+        get() = maxExpansionReached >= 0.90f
 
     @Volatile
     private var isShadeOpen = false
@@ -209,8 +205,8 @@ object NotificationSheetHook {
 
                                 if (newState != 0) {
                                     isShadeOpen = false
-                                    lifecycleState = ShadeLifecycleState.CLOSED
-                                    hasTriggeredUnlockForCurrentOpen = true
+                                    maxExpansionReached = 0f
+                                    isTrackingClosingAfterFullOpen = false
                                     isControlCenterExpanded = false
                                     isShadeSwitching = false
                                     currentStretchOffset = 0f
@@ -260,13 +256,13 @@ object NotificationSheetHook {
                                             f?.isAccessible = true
                                             if (f?.getBoolean(chain.thisObject) == true) {
                                                 isControlCenterExpanded = true
-                                                lifecycleState = ShadeLifecycleState.CLOSED
-                                                hasTriggeredUnlockForCurrentOpen = true
+                                                maxExpansionReached = 0f
+                                                isTrackingClosingAfterFullOpen = false
                                             }
                                         } catch (_: Throwable) {}
                                         isShadeOpen = false
-                                        lifecycleState = ShadeLifecycleState.CLOSED
-                                        hasTriggeredUnlockForCurrentOpen = true
+                                        maxExpansionReached = 0f
+                                        isTrackingClosingAfterFullOpen = false
                                         currentStretchOffset = 0f
                                         hideSheetForControlCenter()
                                     } else {
@@ -289,8 +285,8 @@ object NotificationSheetHook {
                                 isControlCenterExpanded = true
                                 isShadeSwitching = true
                                 isShadeOpen = false
-                                lifecycleState = ShadeLifecycleState.CLOSED
-                                hasTriggeredUnlockForCurrentOpen = true
+                                maxExpansionReached = 0f
+                                isTrackingClosingAfterFullOpen = false
                                 currentStretchOffset = 0f
                                 hideSheetForControlCenter()
                                 return chain.proceed()
@@ -302,6 +298,8 @@ object NotificationSheetHook {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 isControlCenterExpanded = false
                                 isShadeSwitching = false
+                                maxExpansionReached = 0f
+                                isTrackingClosingAfterFullOpen = false
                                 return chain.proceed()
                             }
                         })
@@ -325,8 +323,8 @@ object NotificationSheetHook {
                                 }
                                 isControlCenterExpanded = true
                                 isShadeOpen = false
-                                lifecycleState = ShadeLifecycleState.CLOSED
-                                hasTriggeredUnlockForCurrentOpen = true
+                                maxExpansionReached = 0f
+                                isTrackingClosingAfterFullOpen = false
                                 currentStretchOffset = 0f
                                 hideSheetForControlCenter()
                                 return chain.proceed()
@@ -341,6 +339,8 @@ object NotificationSheetHook {
                                 }
                                 isControlCenterExpanded = false
                                 isShadeSwitching = false
+                                maxExpansionReached = 0f
+                                isTrackingClosingAfterFullOpen = false
                                 return chain.proceed()
                             }
                         })
@@ -360,6 +360,8 @@ object NotificationSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             isControlCenterExpanded = false
                             isShadeSwitching = false
+                            maxExpansionReached = 0f
+                            isTrackingClosingAfterFullOpen = false
                             return chain.proceed()
                         }
                     })
@@ -367,7 +369,8 @@ object NotificationSheetHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             isControlCenterExpanded = true
-                            lifecycleState = ShadeLifecycleState.CLOSED
+                            maxExpansionReached = 0f
+                            isTrackingClosingAfterFullOpen = false
                             hideSheetForControlCenter()
                             return chain.proceed()
                         }
@@ -801,33 +804,7 @@ object NotificationSheetHook {
         return false
     }
 
-    private var hasTriggeredUnlockForCurrentOpen = true
-
-    fun tryTriggerUnlockOnClose(context: Context, source: String) {
-        val wasFullyOpened = hasFullyOpened || lifecycleState == ShadeLifecycleState.CLOSING_FROM_OPEN
-        if (!wasFullyOpened) {
-            Log.d(TAG, "tryTriggerUnlockOnClose ($source): not fully opened (state=$lifecycleState), skipping")
-            lifecycleState = ShadeLifecycleState.CLOSED
-            isShadeOpen = false
-            return
-        }
-        if (hasTriggeredUnlockForCurrentOpen) {
-            Log.d(TAG, "tryTriggerUnlockOnClose ($source): already triggered, skipping")
-            lifecycleState = ShadeLifecycleState.CLOSED
-            isShadeOpen = false
-            return
-        }
-        Log.d(TAG, "tryTriggerUnlockOnClose ($source): triggering unlock animation!")
-        notifyCloseOverHomescreen(context)
-    }
-
     fun notifyCloseOverHomescreen(context: Context) {
-        if (hasTriggeredUnlockForCurrentOpen) {
-            Log.d(TAG, "notifyCloseOverHomescreen: already triggered, skipping")
-            return
-        }
-        hasTriggeredUnlockForCurrentOpen = true
-        lifecycleState = ShadeLifecycleState.CLOSED
         isShadeOpen = false
 
         if (currentStatusBarState != 0 || isKeyguard(context)) {
@@ -1051,66 +1028,9 @@ object NotificationSheetHook {
                                 val rawArgs = chain.args
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
                                 val frac = (args[0] as Number).toFloat()
-                                val expanded = args[1] as Boolean
-                                val tracking = args[2] as Boolean
-
-                                if (frac > 0.02f && !isShadeSwitching) {
-                                    isControlCenterExpanded = false
-                                }
 
                                 if (isUnlockedShadeActive) {
                                     applyExpansionFraction(frac)
-
-                                    val isGenuinelyOpen = (expanded && frac >= 0.70f) || frac >= 0.88f
-
-                                    when (lifecycleState) {
-                                        ShadeLifecycleState.CLOSED -> {
-                                            if (frac > 0.01f) {
-                                                lifecycleState = ShadeLifecycleState.PULLING_DOWN
-                                                hasTriggeredUnlockForCurrentOpen = true // DISARMED during pull-down from closed
-                                            }
-                                        }
-                                        ShadeLifecycleState.PULLING_DOWN -> {
-                                            if (isGenuinelyOpen) {
-                                                lifecycleState = ShadeLifecycleState.FULLY_OPENED
-                                                isShadeOpen = true
-                                                hasTriggeredUnlockForCurrentOpen = false // ARMED for close!
-                                                val container = containerRef?.get()
-                                                val curSheet = container?.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
-                                                if (curSheet != null) {
-                                                    RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
-                                                }
-                                            } else if (frac <= 0.02f && !tracking) {
-                                                // Snapped back to 0 without reaching full open: no unlock trigger!
-                                                lifecycleState = ShadeLifecycleState.CLOSED
-                                                isShadeOpen = false
-                                                hasTriggeredUnlockForCurrentOpen = true
-                                                RealtimeBackdropHelper.stopLiveRefresh()
-                                            }
-                                        }
-                                        ShadeLifecycleState.FULLY_OPENED -> {
-                                            if (frac < 0.85f) {
-                                                // Closing gesture started from fully open
-                                                lifecycleState = ShadeLifecycleState.CLOSING_FROM_OPEN
-                                            }
-                                        }
-                                        ShadeLifecycleState.CLOSING_FROM_OPEN -> {
-                                            if (isGenuinelyOpen) {
-                                                // Pulled back down to full open
-                                                lifecycleState = ShadeLifecycleState.FULLY_OPENED
-                                            } else if (frac <= 0.05f) {
-                                                // Completed closing from fully open: trigger unlock animation!
-                                                RealtimeBackdropHelper.stopLiveRefresh()
-                                                val container = containerRef?.get()
-                                                if (container != null && currentStatusBarState == 0 && !isControlCenterActive()) {
-                                                    tryTriggerUnlockOnClose(container.context, "onPanelExpansionChanged")
-                                                } else {
-                                                    lifecycleState = ShadeLifecycleState.CLOSED
-                                                    isShadeOpen = false
-                                                }
-                                            }
-                                        }
-                                    }
                                 }
                             } catch (t: Throwable) {
                                 Log.e(TAG, "Error in onPanelExpansionChanged hook", t)
@@ -1130,27 +1050,15 @@ object NotificationSheetHook {
                                 when (state) {
                                     0 -> { // CLOSED
                                         RealtimeBackdropHelper.stopLiveRefresh()
-                                        val container = containerRef?.get()
-                                        if (container != null && currentStatusBarState == 0 && !isControlCenterActive()) {
-                                            tryTriggerUnlockOnClose(container.context, "updateStateInternal(0)")
-                                        } else {
-                                            lifecycleState = ShadeLifecycleState.CLOSED
-                                            isShadeOpen = false
-                                        }
-                                    }
-                                    1 -> { // OPENING / IN-FLIGHT
-                                        if (lifecycleState == ShadeLifecycleState.FULLY_OPENED) {
-                                            lifecycleState = ShadeLifecycleState.CLOSING_FROM_OPEN
-                                        } else if (lifecycleState == ShadeLifecycleState.CLOSED) {
-                                            lifecycleState = ShadeLifecycleState.PULLING_DOWN
-                                            hasTriggeredUnlockForCurrentOpen = true
-                                        }
+                                        isShadeOpen = false
+                                        maxExpansionReached = 0f
+                                        isTrackingClosingAfterFullOpen = false
                                     }
                                     2 -> { // OPEN (genuinely fully expanded)
                                         if (isUnlockedShadeActive) {
-                                            lifecycleState = ShadeLifecycleState.FULLY_OPENED
                                             isShadeOpen = true
-                                            hasTriggeredUnlockForCurrentOpen = false
+                                            maxExpansionReached = 1.0f
+                                            isTrackingClosingAfterFullOpen = true
                                         }
                                     }
                                 }
@@ -1183,19 +1091,15 @@ object NotificationSheetHook {
                                     val appearance = appF.getBoolean(ctrl)
                                     if (appearance) {
                                         if (isUnlockedShadeActive && lastAppliedFraction >= 0.80f) {
-                                            lifecycleState = ShadeLifecycleState.FULLY_OPENED
                                             isShadeOpen = true
-                                            hasTriggeredUnlockForCurrentOpen = false
+                                            maxExpansionReached = 1.0f
+                                            isTrackingClosingAfterFullOpen = true
                                         }
                                     } else {
                                         RealtimeBackdropHelper.stopLiveRefresh()
-                                        val container = containerRef?.get()
-                                        if (container != null && currentStatusBarState == 0 && !isControlCenterActive()) {
-                                            tryTriggerUnlockOnClose(container.context, "onExpandFinish(false)")
-                                        } else {
-                                            lifecycleState = ShadeLifecycleState.CLOSED
-                                            isShadeOpen = false
-                                        }
+                                        isShadeOpen = false
+                                        maxExpansionReached = 0f
+                                        isTrackingClosingAfterFullOpen = false
                                     }
                                 }
                             } catch (_: Throwable) {}
@@ -1269,6 +1173,9 @@ object NotificationSheetHook {
         if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard(container.context) || isControlCenterActive()) {
             container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
             container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
+            maxExpansionReached = 0f
+            isTrackingClosingAfterFullOpen = false
+            RealtimeBackdropHelper.stopLiveRefresh()
             return
         }
 
@@ -1281,15 +1188,33 @@ object NotificationSheetHook {
         val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
         val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
 
-        if (fraction <= 0.02f) {
+        // Peak tracking: track maximum expansion during this gesture
+        if (fraction > maxExpansionReached) {
+            maxExpansionReached = fraction
+        }
+        if (maxExpansionReached >= 0.90f) {
+            isTrackingClosingAfterFullOpen = true
+        }
+
+        if (fraction <= 0.015f) {
             sheet?.visibility = View.GONE
             sheet?.translationY = -viewHeight
             pill?.visibility = View.GONE
             pill?.translationY = -viewHeight
             RealtimeBackdropHelper.stopLiveRefresh()
-            if (currentStatusBarState == 0 && !isControlCenterActive()) {
-                tryTriggerUnlockOnClose(container.context, "applyExpansionFraction(<=0.02)")
+
+            // Trigger unlock animation ONLY if the shade was fully opened and is now closed over homescreen
+            if (isTrackingClosingAfterFullOpen && maxExpansionReached >= 0.90f) {
+                isTrackingClosingAfterFullOpen = false
+                maxExpansionReached = 0f
+                if (currentStatusBarState == 0 && !isControlCenterActive()) {
+                    notifyCloseOverHomescreen(container.context)
+                }
+            } else {
+                isTrackingClosingAfterFullOpen = false
+                maxExpansionReached = 0f
             }
+
             currentStretchOffset = 0f
             return
         }
@@ -1318,18 +1243,21 @@ object NotificationSheetHook {
             curPill.alpha = (fraction - 0.2f).coerceIn(0f, 1f)
         }
 
-        // Trigger backdrop capture when drag starts
-        if (fraction in 0.05f..0.35f && prevFraction < 0.05f) {
+        val isHome = isHomeScreenTop(container.context)
+
+        // Trigger backdrop capture ONCE when drag begins if not on homescreen
+        if (!isHome && fraction in 0.04f..0.20f && prevFraction < 0.04f) {
             RealtimeBackdropHelper.triggerCapture(container.context) {
                 curSheet?.invalidate()
             }
         }
 
-        // Live refresh management: continuously sample real underlying layer in real time
-        if (fraction <= 0.01f) {
-            RealtimeBackdropHelper.stopLiveRefresh()
-        } else if (fraction > 0.05f && curSheet != null) {
+        // Live refresh management: NEVER poll during swipe gestures to prevent jank/stutter/SurfaceFlinger stalls.
+        // Only refresh when shade is stationary and fully open (fraction >= 0.98f) over a non-homescreen app.
+        if (fraction >= 0.98f && !isHome && curSheet != null) {
             RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
+        } else {
+            RealtimeBackdropHelper.stopLiveRefresh()
         }
     }
 
