@@ -37,8 +37,6 @@ object ScreenUnlockHook {
     private var sLauncherRef: java.lang.ref.WeakReference<android.app.Activity>? = null
     private var sClassLoader: ClassLoader? = null
     private var isReceiverRegistered = false
-    @Volatile
-    private var lastUnlockAnimTriggerTime = 0L
 
     fun updateVelocity(velocity: Float) {
         latestVelocity = velocity
@@ -343,12 +341,6 @@ object ScreenUnlockHook {
             val filter = android.content.IntentFilter("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
             val receiver = object : android.content.BroadcastReceiver() {
                 override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
-                    val now = System.currentTimeMillis()
-                    if (now - lastUnlockAnimTriggerTime < 600L) {
-                        Log.d(TAG, "Debounced duplicate ACTION_TRIGGER_UNLOCK_ANIMATION broadcast within 600ms")
-                        return
-                    }
-                    lastUnlockAnimTriggerTime = now
                     Log.d(TAG, "Received ACTION_TRIGGER_UNLOCK_ANIMATION broadcast")
                     val launcher = getLauncherActivity(c)
                     if (launcher == null) {

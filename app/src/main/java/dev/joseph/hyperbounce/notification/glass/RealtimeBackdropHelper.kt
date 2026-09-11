@@ -159,22 +159,22 @@ object RealtimeBackdropHelper {
                     }
                     break
                 }
-
-                val frameStart = System.currentTimeMillis()
                 try {
                     val bmp = captureDisplayInternal(appContext)
                     if (bmp != null && sessionId == refreshSessionId) {
                         latestBitmap = bmp
-                        sheet.postInvalidateOnAnimation()
+                        mainHandler.post {
+                            if (sessionId == refreshSessionId) {
+                                weakSheet.get()?.invalidate()
+                            }
+                        }
                     }
                 } catch (t: Throwable) {
                     Log.e(TAG, "Live capture error", t)
                 }
 
-                val elapsed = System.currentTimeMillis() - frameStart
-                val sleepTime = (16L - elapsed).coerceIn(1L, 16L) // 60 FPS pacing (~16.6ms per frame)
                 try {
-                    Thread.sleep(sleepTime)
+                    Thread.sleep(60L) // ~16 FPS continuous real-time backdrop updates
                 } catch (_: InterruptedException) {
                     break
                 }

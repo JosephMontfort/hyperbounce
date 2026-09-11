@@ -73,8 +73,8 @@ class GlassLensRenderer {
                     // Bottom-Left Corner: Elliptical Continuous Blend (zero crease, zero overlap)
                     float u = 1.0 - p.x / wL;
                     float v = 1.0 - (viewSize.y - p.y) / wB;
-                    float dist = clamp(sqrt(u * u + v * v), 0.0, 1.0);
-                    slope = dist * dist * (3.0 - 2.0 * dist);
+                    float dist = sqrt(u * u + v * v);
+                    slope = pow(clamp(dist, 0.0, 1.0), 2.0);
                     float2 cornerN = float2(-u / wL, v / wB);
                     float lenN = length(cornerN);
                     n = lenN > 0.0001 ? cornerN / lenN : float2(-0.7071, 0.7071);
@@ -82,25 +82,25 @@ class GlassLensRenderer {
                     // Bottom-Right Corner: Elliptical Continuous Blend (zero crease, zero overlap)
                     float u = 1.0 - (viewSize.x - p.x) / wR;
                     float v = 1.0 - (viewSize.y - p.y) / wB;
-                    float dist = clamp(sqrt(u * u + v * v), 0.0, 1.0);
-                    slope = dist * dist * (3.0 - 2.0 * dist);
+                    float dist = sqrt(u * u + v * v);
+                    slope = pow(clamp(dist, 0.0, 1.0), 2.0);
                     float2 cornerN = float2(u / wR, v / wB);
                     float lenN = length(cornerN);
                     n = lenN > 0.0001 ? cornerN / lenN : float2(0.7071, 0.7071);
                 } else if (inLeft) {
                     // Straight Left Edge
-                    float u = clamp(1.0 - p.x / wL, 0.0, 1.0);
-                    slope = u * u * (3.0 - 2.0 * u);
+                    float u = 1.0 - p.x / wL;
+                    slope = pow(clamp(u, 0.0, 1.0), 2.0);
                     n = float2(-1.0, 0.0);
                 } else if (inRight) {
                     // Straight Right Edge
-                    float u = clamp(1.0 - (viewSize.x - p.x) / wR, 0.0, 1.0);
-                    slope = u * u * (3.0 - 2.0 * u);
+                    float u = 1.0 - (viewSize.x - p.x) / wR;
+                    slope = pow(clamp(u, 0.0, 1.0), 2.0);
                     n = float2(1.0, 0.0);
                 } else if (inBottom) {
                     // Straight Bottom Edge
-                    float v = clamp(1.0 - (viewSize.y - p.y) / wB, 0.0, 1.0);
-                    slope = v * v * (3.0 - 2.0 * v);
+                    float v = 1.0 - (viewSize.y - p.y) / wB;
+                    slope = pow(clamp(v, 0.0, 1.0), 2.0);
                     n = float2(0.0, 1.0);
                 }
 
@@ -122,12 +122,9 @@ class GlassLensRenderer {
                     return half4(0.0);
                 }
 
-                // Inward monotonic refraction along the 3 edges
-                // Bounded displacement guarantees strictly positive derivative: d(sample_coord)/d(coord) > 0.
-                // Eliminates vertical and horizontal caustic inversion so underlying icons/text remain strictly upright!
-                float curBevel = inBottom ? wB : (inLeft ? wL : wR);
-                float effRefr = min(refractPx, curBevel * 0.45);
-                float2 offset = -n * (slope * effRefr);
+                // Inward refraction along the 3 edges
+                float refr = refractPx;
+                float2 offset = -n * (slope * refr);
 
                 // Physical chromatic dispersion
                 float2 cR = coord + offset * (1.0 - dispersion * slope);

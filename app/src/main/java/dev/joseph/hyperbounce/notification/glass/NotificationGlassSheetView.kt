@@ -90,12 +90,8 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
         // Draw attached unblurred lock screen wallpaper background if enabled
         val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || w > h
-        val shouldDrawWallpaper = if (dev.joseph.hyperbounce.notification.NotificationSheetHook.isWallpaperSessionLatched) {
-            dev.joseph.hyperbounce.notification.NotificationSheetHook.isSessionWallpaperActive
-        } else {
-            cfg.lockWallpaperEnabled && !isLandscape &&
-                    (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
-        }
+        val shouldDrawWallpaper = cfg.lockWallpaperEnabled && !isLandscape &&
+                (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenTop(context))
 
         if (shouldDrawWallpaper) {
             val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
@@ -119,9 +115,6 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 canvas.drawColor(0x33000000.toInt())
                 canvas.restoreToCount(count)
             }
-            // User requirement: When wallpaper background is active, do NOT render liquid glass optical refraction effects!
-            drawFallbackBorder(canvas, w.toFloat(), h.toFloat(), cornerRadius)
-            return
         }
 
         getLocationOnScreen(location)
