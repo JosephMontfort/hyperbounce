@@ -1497,16 +1497,11 @@ object NotificationSheetHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.enabled && cfg.depthWallpaperEnabled && currentStatusBarState == 0) {
-                                if (lastAppliedFraction < 0.95f) {
-                                    val rawArgs = chain.args
-                                    if (rawArgs is Array<*>) {
-                                        @Suppress("UNCHECKED_CAST")
-                                        (rawArgs as Array<Any?>)[0] = 0.0f
-                                    } else if (rawArgs is MutableList<*>) {
-                                        @Suppress("UNCHECKED_CAST")
-                                        (rawArgs as MutableList<Any?>)[0] = 0.0f
-                                    }
+                            if (cfg.enabled && cfg.depthWallpaperEnabled && currentStatusBarState == 0 && lastAppliedFraction < 0.95f) {
+                                val args = chain.args.toTypedArray()
+                                if (args.isNotEmpty()) {
+                                    args[0] = 0.0f
+                                    return chain.proceed(args)
                                 }
                             }
                             return chain.proceed()
@@ -1526,16 +1521,11 @@ object NotificationSheetHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.enabled && cfg.depthWallpaperEnabled && currentStatusBarState == 0) {
-                                if (lastAppliedFraction < 0.95f) {
-                                    val rawArgs = chain.args
-                                    if (rawArgs is Array<*>) {
-                                        @Suppress("UNCHECKED_CAST")
-                                        (rawArgs as Array<Any?>)[1] = 0
-                                    } else if (rawArgs is MutableList<*>) {
-                                        @Suppress("UNCHECKED_CAST")
-                                        (rawArgs as MutableList<Any?>)[1] = 0
-                                    }
+                            if (cfg.enabled && cfg.depthWallpaperEnabled && currentStatusBarState == 0 && lastAppliedFraction < 0.95f) {
+                                val args = chain.args.toTypedArray()
+                                if (args.size >= 2) {
+                                    args[1] = 0
+                                    return chain.proceed(args)
                                 }
                             }
                             return chain.proceed()
