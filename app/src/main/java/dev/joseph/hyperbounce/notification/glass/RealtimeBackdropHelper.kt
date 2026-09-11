@@ -110,8 +110,8 @@ object RealtimeBackdropHelper {
             builder,
             arrayOf("StatusBar#", "NavigationBar0#", "DynamicIslandWindow#", "NotificationShade#")
         )
-        // 0.35f scale gives crisp liquid refraction while consuming negligible RAM/GPU bandwidth
-        setFrameScaleMethod?.invoke(builder, 0.35f)
+        // 0.30f scale gives crisp liquid refraction while consuming negligible RAM/GPU bandwidth
+        setFrameScaleMethod?.invoke(builder, 0.30f)
 
         val captureArgs = buildMethod.invoke(builder)
         val syncListener = syncMethod.invoke(null)
@@ -160,23 +160,27 @@ object RealtimeBackdropHelper {
                     break
                 }
                 try {
+                    val startTime = System.currentTimeMillis()
                     val bmp = captureDisplayInternal(appContext)
                     if (bmp != null && sessionId == refreshSessionId) {
                         latestBitmap = bmp
                         mainHandler.post {
                             if (sessionId == refreshSessionId) {
-                                weakSheet.get()?.invalidate()
+                                weakSheet.get()?.postInvalidateOnAnimation()
                             }
                         }
                     }
+                    val elapsed = System.currentTimeMillis() - startTime
+                    val sleepTime = (16L - elapsed).coerceIn(1L, 16L)
+                    Thread.sleep(sleepTime)
                 } catch (t: Throwable) {
+                    if (t is InterruptedException) break
                     Log.e(TAG, "Live capture error", t)
-                }
-
-                try {
-                    Thread.sleep(60L) // ~16 FPS continuous real-time backdrop updates
-                } catch (_: InterruptedException) {
-                    break
+                    try {
+                        Thread.sleep(16L)
+                    } catch (_: InterruptedException) {
+                        break
+                    }
                 }
             }
         }

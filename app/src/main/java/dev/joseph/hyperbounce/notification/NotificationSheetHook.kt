@@ -75,6 +75,19 @@ object NotificationSheetHook {
     @Volatile
     private var currentStretchOffset = 0f
 
+    @Volatile
+    var isHomeScreenCached: Boolean = false
+
+    @Volatile
+    var isLaunchingNotificationActivity: Boolean = false
+
+    fun updateHomeScreenCache(context: Context?) {
+        if (context == null) return
+        try {
+            isHomeScreenCached = isHomeScreenTop(context)
+        } catch (_: Throwable) {}
+    }
+
     fun isKeyguard(context: Context?): Boolean {
         if (currentStatusBarState != 0) return true
         if (context != null) {
@@ -138,6 +151,9 @@ object NotificationSheetHook {
 
         // 8. Hook ViewStateInjectorImpl to center the notification drop (no horizontal blanket rollout)
         hookViewStateInjector(module, classLoader)
+
+        // 9. Hook StatusBarTransitionAnimatorController to track activity launch from notification clicks
+        hookTransitionAnimatorController(module, classLoader)
     }
 
     private fun hookWakeUpCoordinator(module: XposedModule, classLoader: ClassLoader) {
@@ -824,7 +840,7 @@ object NotificationSheetHook {
         }
         lastUnlockTriggerTime = now
 
-        if (isHomeScreenTop(context)) {
+        if (isHomeScreenCached || isHomeScreenTop(context)) {
             try {
                 val pkgs = arrayOf("com.miui.home", "com.mi.android.globallauncher")
                 for (pkg in pkgs) {
@@ -1018,27 +1034,7 @@ object NotificationSheetHook {
         try {
             val sesClass = Class.forName("com.android.systemui.shade.ShadeExpansionStateManager", false, classLoader)
             for (m: Method in sesClass.declaredMethods) {
-                if (m.name == "onPanelExpansionChanged" && m.parameterTypes.size == 3 &&
-                    m.parameterTypes[0] == Float::class.javaPrimitiveType
-                ) {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
-                            val result = chain.proceed()
-                            try {
-                                val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
-                                val frac = (args[0] as Number).toFloat()
-
-                                if (isUnlockedShadeActive) {
-                                    applyExpansionFraction(frac)
-                                }
-                            } catch (t: Throwable) {
-                                Log.e(TAG, "Error in onPanelExpansionChanged hook", t)
-                            }
-                            return result
-                        }
-                    })
-                } else if (m.name == "updateStateInternal" && m.parameterTypes.size == 1 &&
+                if (m.name == "updateStateInternal" && m.parameterTypes.size == 1 &&
                     m.parameterTypes[0] == Int::class.javaPrimitiveType
                 ) {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
@@ -1053,6 +1049,15 @@ object NotificationSheetHook {
                                         isShadeOpen = false
                                         isShadeFullyOpen = false
                                         hasTriggeredUnlockForCurrentOpen = true
+                                        isLaunchingNotificationActivity = false
+                                    }
+                                    1 -> { // OPENING
+                                        if (isUnlockedShadeActive) {
+                                            val container = containerRef?.get()
+                                            if (container != null) {
+                                                updateHomeScreenCache(container.context)
+                                            }
+                                        }
                                     }
                                     2 -> { // OPEN (genuinely fully expanded)
                                         if (isUnlockedShadeActive) {
@@ -1104,6 +1109,34 @@ object NotificationSheetHook {
                                 }
                             } catch (_: Throwable) {}
                             return result
+                        }
+                    })
+                } else if (m.name == "hide" && m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == Boolean::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val rawArgs = chain.args
+                            val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                            val animated = args[0] as Boolean
+                            try {
+                                if (isUnlockedShadeActive) {
+                                    val container = containerRef?.get()
+                                    if (container != null && isShadeOpen && !hasTriggeredUnlockForCurrentOpen && !isLaunchingNotificationActivity) {
+                                        hasTriggeredUnlockForCurrentOpen = true
+                                        if (isHomeScreenCached) {
+                                            notifyCloseOverHomescreen(container.context)
+                                        }
+                                    }
+                                    isShadeFullyOpen = false
+                                    if (!animated) {
+                                        applyExpansionFraction(0.0f)
+                                    }
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "Error in NotificationPanelExpandController.hide hook", t)
+                            }
+                            return chain.proceed()
                         }
                     })
                 }
@@ -1175,8 +1208,15 @@ object NotificationSheetHook {
             container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
             isShadeFullyOpen = false
             hasTriggeredUnlockForCurrentOpen = true
+            isLaunchingNotificationActivity = false
             RealtimeBackdropHelper.stopLiveRefresh()
             return
+        }
+
+        // Prime home screen cache at gesture opening start
+        if (!isShadeOpen && fraction > 0.015f) {
+            isShadeOpen = true
+            updateHomeScreenCache(container.context)
         }
 
         var viewHeight = container.height.toFloat()
@@ -1189,7 +1229,7 @@ object NotificationSheetHook {
         val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
 
         // Arming: Shade has reached full expansion
-        if (fraction >= 0.96f) {
+        if (fraction >= 0.95f) {
             isShadeFullyOpen = true
             hasTriggeredUnlockForCurrentOpen = false
             isShadeOpen = true
@@ -1200,14 +1240,15 @@ object NotificationSheetHook {
 
         // Simultaneous unlock trigger:
         // ONLY triggers when:
-        // 1. Shade has genuinely reached full open (isShadeFullyOpen == true).
-        // 2. Gesture is strictly CLOSING (delta < -0.005f). Never triggers while pulling down (delta >= 0)!
-        // 3. User begins closing gesture (fraction < 0.92f && fraction > 0.15f).
-        // 4. Has not yet fired for the current open session.
-        if (isShadeFullyOpen && !hasTriggeredUnlockForCurrentOpen && delta < -0.005f && fraction < 0.92f && fraction > 0.15f) {
+        // 1. Shade has reached full open.
+        // 2. Gesture is strictly CLOSING (delta < -0.008f). Never triggers during pull-down.
+        // 3. Fraction has crossed below the spring rebound threshold (fraction <= 0.85f && fraction > 0.15f).
+        // 4. Not an app launch from notification click.
+        // 5. Has not yet fired for the current open session.
+        if (isShadeFullyOpen && !hasTriggeredUnlockForCurrentOpen && delta < -0.008f && fraction <= 0.85f && fraction > 0.15f) {
             hasTriggeredUnlockForCurrentOpen = true
             isShadeFullyOpen = false
-            if (currentStatusBarState == 0 && !isControlCenterActive()) {
+            if (currentStatusBarState == 0 && !isControlCenterActive() && !isLaunchingNotificationActivity) {
                 Log.d(TAG, "Closing gesture started (delta=$delta, frac=$fraction) -> triggering simultaneous unlock animation")
                 notifyCloseOverHomescreen(container.context)
             }
@@ -1222,6 +1263,7 @@ object NotificationSheetHook {
             isShadeFullyOpen = false
             hasTriggeredUnlockForCurrentOpen = true
             isShadeOpen = false
+            isLaunchingNotificationActivity = false
             currentStretchOffset = 0f
             return
         }
@@ -1234,13 +1276,25 @@ object NotificationSheetHook {
 
         val upwardOffset = (fraction - 1.0f) * viewHeight
         // Cap sheet translation at 0f: during pulldown, slides from -viewHeight to 0f.
-        // Once fully open or during over-pull, remains locked at 0f so the top is never blank/cut off!
-        val finalSheetY = kotlin.math.min(0f, upwardOffset)
+        // Once fully open (or during over-pull / spring rebound), remains pinned at 0f so top is never cut off!
+        val finalSheetY = if (isShadeFullyOpen) {
+            if (fraction >= 0.85f) {
+                0f
+            } else {
+                ((fraction / 0.85f) - 1.0f) * viewHeight
+            }
+        } else {
+            kotlin.math.min(0f, upwardOffset)
+        }
 
         val curSheet = sheet ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
         if (curSheet != null) {
             curSheet.visibility = View.VISIBLE
+            val prevY = curSheet.translationY
             curSheet.translationY = finalSheetY
+            if (abs(prevY - finalSheetY) > 0.5f) {
+                curSheet.postInvalidateOnAnimation()
+            }
             // Continuous 100% real-time refresh whenever sheet is open or opening on both homescreen and apps
             RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
         }
@@ -1248,7 +1302,14 @@ object NotificationSheetHook {
         val curPill = pill ?: container.findViewWithTag<View>(TAG_HOME_PILL)
         if (curPill != null) {
             curPill.visibility = View.VISIBLE
-            curPill.translationY = if (fraction >= 0.95f && currentStretchOffset > 0.01f) currentStretchOffset else upwardOffset
+            val pillOffset = if (isShadeFullyOpen && fraction < 0.85f) {
+                ((fraction / 0.85f) - 1.0f) * viewHeight
+            } else if (fraction >= 0.95f && currentStretchOffset > 0.01f) {
+                currentStretchOffset
+            } else {
+                upwardOffset
+            }
+            curPill.translationY = pillOffset
             curPill.alpha = (fraction - 0.2f).coerceIn(0f, 1f)
         }
     }
@@ -1280,6 +1341,36 @@ object NotificationSheetHook {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook ViewStateInjectorImpl", t)
+        }
+    }
+
+    private fun hookTransitionAnimatorController(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val controllerClass = Class.forName("com.android.systemui.statusbar.phone.StatusBarTransitionAnimatorController", false, classLoader)
+            for (m: Method in controllerClass.declaredMethods) {
+                if (m.name == "onTransitionAnimationStart" && m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == Boolean::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            if (currentStatusBarState == 0) {
+                                isLaunchingNotificationActivity = true
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                } else if (m.name == "onTransitionAnimationEnd" || m.name == "onTransitionAnimationCancelled") {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            isLaunchingNotificationActivity = false
+                            return chain.proceed()
+                        }
+                    })
+                }
+            }
+            Log.d(TAG, "Hooked StatusBarTransitionAnimatorController successfully")
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook StatusBarTransitionAnimatorController", t)
         }
     }
 }

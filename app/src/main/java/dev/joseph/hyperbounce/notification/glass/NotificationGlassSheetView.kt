@@ -38,6 +38,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
     }
     private val boundsRect = RectF()
     private val sheetClipPath = android.graphics.Path()
+    private val backdropDestRect = android.graphics.Rect()
     private val wallpaperLoadListener = {
         postInvalidateOnAnimation()
     }
@@ -91,7 +92,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         // Draw attached unblurred lock screen wallpaper background if enabled
         val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || w > h
         val shouldDrawWallpaper = cfg.lockWallpaperEnabled && !isLandscape &&
-                (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenTop(context))
+                (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
 
         if (shouldDrawWallpaper) {
             val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
@@ -141,8 +142,8 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
                 val backdropBmp = RealtimeBackdropHelper.getLatestBackdropBitmap()
                 if (backdropBmp != null && !backdropBmp.isRecycled) {
-                    val destRect = android.graphics.Rect(0, 0, screenW, screenH)
-                    recordingCanvas.drawBitmap(backdropBmp, null, destRect, null)
+                    backdropDestRect.set(0, 0, screenW, screenH)
+                    recordingCanvas.drawBitmap(backdropBmp, null, backdropDestRect, null)
                 } else {
                     val wp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
                         ?: LockScreenWallpaperHelper.getLiveLockWallpaper(context)
@@ -192,11 +193,12 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        dev.joseph.hyperbounce.notification.NotificationSheetHook.updateHomeScreenCache(context)
         LockScreenWallpaperHelper.registerIfNeeded(context)
         LockScreenWallpaperHelper.triggerAsyncWallpaperLoad(context)
         LockScreenWallpaperHelper.addUnblurredWallpaperListener(wallpaperLoadListener)
         LockScreenWallpaperHelper.triggerAsyncUnblurredWallpaperLoad(context)
-        RealtimeBackdropHelper.triggerCapture(context) { invalidate() }
+        RealtimeBackdropHelper.triggerCapture(context) { postInvalidateOnAnimation() }
     }
 
     override fun onDetachedFromWindow() {
