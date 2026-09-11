@@ -455,12 +455,17 @@ class SettingsRepository(context: Context) {
         var glassEffectsEnabled by prefsBooleanState("notif_sheet_glass_effects_enabled", defaults.glassEffectsEnabled); private set
         var glassOnlyWithoutWallpaper by prefsBooleanState("notif_sheet_glass_only_without_wallpaper", defaults.glassOnlyWithoutWallpaper); private set
         var refractionHeight by prefsFloatState("notif_card_refraction_height", defaults.refractionHeight); private set
+        var sideRefraction by prefsFloatState("notif_card_side_refraction", defaults.sideRefraction); private set
+        var bottomRefraction by prefsFloatState("notif_card_bottom_refraction", defaults.bottomRefraction); private set
         var bevelWidth by prefsFloatState("notif_card_bevel_width", defaults.bevelWidth); private set
         var leftBevelWidth by prefsFloatState("notif_card_left_bevel", defaults.leftBevelWidth); private set
         var rightBevelWidth by prefsFloatState("notif_card_right_bevel", defaults.rightBevelWidth); private set
         var bottomBevelWidth by prefsFloatState("notif_card_bottom_bevel", defaults.bottomBevelWidth); private set
         var dispersionStrength by prefsFloatState("notif_card_dispersion", defaults.dispersionStrength); private set
         var specularStrength by prefsFloatState("notif_card_specular", defaults.specularStrength); private set
+        var hairlineStrength by prefsFloatState("notif_card_hairline", defaults.hairlineStrength); private set
+        var innerGlowStrength by prefsFloatState("notif_card_inner_glow", defaults.innerGlowStrength); private set
+        var rimSoftness by prefsFloatState("notif_card_rim_softness", defaults.rimSoftness); private set
         var innerShadow by prefsFloatState("notif_card_inner_shadow", defaults.innerShadow); private set
         var saturationFactor by prefsFloatState("notif_card_saturation", defaults.saturationFactor); private set
         var blurRadius by prefsFloatState("notif_card_blur_radius", defaults.blurRadius); private set
@@ -471,8 +476,10 @@ class SettingsRepository(context: Context) {
             enabled, lockWallpaperEnabled, lockWallpaperHomescreenOnly,
             depthWallpaperEnabled, depthCustomSubject,
             glassEffectsEnabled, glassOnlyWithoutWallpaper,
-            refractionHeight, bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
-            dispersionStrength, specularStrength, innerShadow, saturationFactor, blurRadius,
+            refractionHeight, sideRefraction, bottomRefraction,
+            bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
+            dispersionStrength, specularStrength, hairlineStrength, innerGlowStrength, rimSoftness,
+            innerShadow, saturationFactor, blurRadius,
             cornerRadius, sideMargin
         )
 
@@ -484,12 +491,17 @@ class SettingsRepository(context: Context) {
         @JvmName("setNotifSheetGlassEffectsEnabledPref") fun setGlassEffectsEnabled(v: Boolean) { glassEffectsEnabled = v }
         @JvmName("setNotifSheetGlassOnlyWithoutWallpaperPref") fun setGlassOnlyWithoutWallpaper(v: Boolean) { glassOnlyWithoutWallpaper = v }
         @JvmName("setNotifSheetRefractionHeightPref") fun setRefractionHeight(v: Float) { refractionHeight = v }
+        @JvmName("setNotifSheetSideRefractionPref") fun setSideRefraction(v: Float) { sideRefraction = v }
+        @JvmName("setNotifSheetBottomRefractionPref") fun setBottomRefraction(v: Float) { bottomRefraction = v }
         @JvmName("setNotifSheetBevelWidthPref") fun setBevelWidth(v: Float) { bevelWidth = v }
         @JvmName("setNotifSheetLeftBevelWidthPref") fun setLeftBevelWidth(v: Float) { leftBevelWidth = v }
         @JvmName("setNotifSheetRightBevelWidthPref") fun setRightBevelWidth(v: Float) { rightBevelWidth = v }
         @JvmName("setNotifSheetBottomBevelWidthPref") fun setBottomBevelWidth(v: Float) { bottomBevelWidth = v }
         @JvmName("setNotifSheetDispersionStrengthPref") fun setDispersionStrength(v: Float) { dispersionStrength = v }
         @JvmName("setNotifSheetSpecularStrengthPref") fun setSpecularStrength(v: Float) { specularStrength = v }
+        @JvmName("setNotifSheetHairlineStrengthPref") fun setHairlineStrength(v: Float) { hairlineStrength = v }
+        @JvmName("setNotifSheetInnerGlowStrengthPref") fun setInnerGlowStrength(v: Float) { innerGlowStrength = v }
+        @JvmName("setNotifSheetRimSoftnessPref") fun setRimSoftness(v: Float) { rimSoftness = v }
         @JvmName("setNotifSheetInnerShadowPref") fun setInnerShadow(v: Float) { innerShadow = v }
         @JvmName("setNotifSheetSaturationFactorPref") fun setSaturationFactor(v: Float) { saturationFactor = v }
         @JvmName("setNotifSheetBlurRadiusPref") fun setBlurRadius(v: Float) { blurRadius = v }
@@ -505,12 +517,17 @@ class SettingsRepository(context: Context) {
             glassEffectsEnabled = defaults.glassEffectsEnabled
             glassOnlyWithoutWallpaper = defaults.glassOnlyWithoutWallpaper
             refractionHeight = defaults.refractionHeight
+            sideRefraction = defaults.sideRefraction
+            bottomRefraction = defaults.bottomRefraction
             bevelWidth = defaults.bevelWidth
             leftBevelWidth = defaults.leftBevelWidth
             rightBevelWidth = defaults.rightBevelWidth
             bottomBevelWidth = defaults.bottomBevelWidth
             dispersionStrength = defaults.dispersionStrength
             specularStrength = defaults.specularStrength
+            hairlineStrength = defaults.hairlineStrength
+            innerGlowStrength = defaults.innerGlowStrength
+            rimSoftness = defaults.rimSoftness
             innerShadow = defaults.innerShadow
             saturationFactor = defaults.saturationFactor
             blurRadius = defaults.blurRadius

@@ -257,14 +257,27 @@ fun NotificationCenterSheetScreen(
             SectionHeader("Optics & Refraction (Liquid Glass 2.0)", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
-                    title = "Inward Refraction Displacement",
-                    subtitle = "Real-time lens magnification offset along edges",
+                    title = "Side Edges Refraction",
+                    subtitle = "Inward lens magnification and curvature along left and right borders",
                     colors = colors,
                     backdrop = backdrop,
-                    value = sheet.refractionHeight,
-                    onValueChange = sheet::setRefractionHeight,
-                    valueRange = 0.0f..160.0f,
-                    defaultValue = 50.0f,
+                    value = sheet.sideRefraction,
+                    onValueChange = sheet::setSideRefraction,
+                    valueRange = 0.0f..120.0f,
+                    defaultValue = 32.0f,
+                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
+                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Bottom Edge Refraction",
+                    subtitle = "Upward lens refraction along the bottom rim (calibrated against stretching)",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.bottomRefraction,
+                    onValueChange = sheet::setBottomRefraction,
+                    valueRange = 0.0f..80.0f,
+                    defaultValue = 18.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheet.enabled && sheet.glassEffectsEnabled
                 )
@@ -277,34 +290,21 @@ fun NotificationCenterSheetScreen(
                     value = sheet.dispersionStrength,
                     onValueChange = sheet::setDispersionStrength,
                     valueRange = 0.0f..0.30f,
-                    defaultValue = 0.08f,
+                    defaultValue = 0.03f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = sheet.enabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
-                    title = "Specular Highlight Intensity",
-                    subtitle = "Surface directional lighting rim brightness",
+                    title = "Caustic Rim Softness",
+                    subtitle = "Normal-directed 3-tap sample smoothing radius along glass bevels",
                     colors = colors,
                     backdrop = backdrop,
-                    value = sheet.specularStrength,
-                    onValueChange = sheet::setSpecularStrength,
-                    valueRange = 0.0f..2.0f,
-                    defaultValue = 0.90f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = sheet.enabled && sheet.glassEffectsEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Inner Shadow Depth",
-                    subtitle = "Bevel inner groove shadow depth factor",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.innerShadow,
-                    onValueChange = sheet::setInnerShadow,
-                    valueRange = 0.0f..1.0f,
-                    defaultValue = 0.40f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    value = sheet.rimSoftness,
+                    onValueChange = sheet::setRimSoftness,
+                    valueRange = 0.0f..8.0f,
+                    defaultValue = 2.0f,
+                    valueLabel = { String.format(Locale.US, "%.1f dp", it) },
                     enabled = sheet.enabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
@@ -335,7 +335,68 @@ fun NotificationCenterSheetScreen(
                 )
             }
             SectionFooter(
-                "Refracts the live blurred shade background layer without sampling or modifying the wallpaper.",
+                "Refracts underlying applications and wallpapers with crystal-clear 100% transparent interior.",
+                colors
+            )
+        }
+
+        item {
+            SectionHeader("Glass Lighting & Specular Highlights", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsSliderRow(
+                    title = "Specular Highlight Intensity",
+                    subtitle = "Master surface lighting rim brightness",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.specularStrength,
+                    onValueChange = sheet::setSpecularStrength,
+                    valueRange = 0.0f..2.0f,
+                    defaultValue = 0.90f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Perimeter Hairline Brightness",
+                    subtitle = "Crisp Apple-style white edge boundary reflection along all 3 rims",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.hairlineStrength,
+                    onValueChange = sheet::setHairlineStrength,
+                    valueRange = 0.0f..2.0f,
+                    defaultValue = 0.75f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Inner Glow Band Intensity",
+                    subtitle = "Soft refractive inner light diffusion inside bevel slopes",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.innerGlowStrength,
+                    onValueChange = sheet::setInnerGlowStrength,
+                    valueRange = 0.0f..1.0f,
+                    defaultValue = 0.20f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Inner Shadow Depth",
+                    subtitle = "Bevel inner groove shadow depth factor",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.innerShadow,
+                    onValueChange = sheet::setInnerShadow,
+                    valueRange = 0.0f..1.0f,
+                    defaultValue = 0.40f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
+                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                )
+            }
+            SectionFooter(
+                "Simulates directional specular gleam and omnidirectional rim reflection across all glass edges.",
                 colors
             )
         }

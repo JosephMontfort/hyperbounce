@@ -110,8 +110,9 @@ object RealtimeBackdropHelper {
             builder,
             arrayOf("StatusBar#", "NavigationBar0#", "DynamicIslandWindow#", "NotificationShade#")
         )
-        // 0.30f scale gives crisp liquid refraction while consuming negligible RAM/GPU bandwidth
-        setFrameScaleMethod?.invoke(builder, 0.30f)
+        // High fidelity frame scale: 1.0f on 1080p, capped at 1080px wide on higher res screens
+        val captureScale = if (screenW <= 1080) 1.0f else (1080f / screenW.toFloat()).coerceIn(0.75f, 1.0f)
+        setFrameScaleMethod?.invoke(builder, captureScale)
 
         val captureArgs = buildMethod.invoke(builder)
         val syncListener = syncMethod.invoke(null)

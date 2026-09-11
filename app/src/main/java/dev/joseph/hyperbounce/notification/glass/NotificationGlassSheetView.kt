@@ -99,9 +99,14 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val rightBevel = cfg.rightBevelWidth * density
         val bottomBevel = cfg.bottomBevelWidth * density
         val maxBevel = max(max(leftBevel, rightBevel), bottomBevel)
-        val refractAmount = cfg.refractionHeight * density
+
+        val leftRefract = cfg.sideRefraction * density
+        val rightRefract = cfg.sideRefraction * density
+        val bottomRefract = cfg.bottomRefraction * density
+        val maxRefract = max(max(leftRefract, rightRefract), bottomRefract)
+
         val cornerRadius = cfg.cornerRadius * density
-        val margin = ((maxBevel + refractAmount * 0.4f) + 16f * density).toInt().coerceAtLeast(32)
+        val margin = ((maxBevel + maxRefract * 0.45f) + 16f * density).toInt().coerceAtLeast(32)
 
         val screenW = resources.displayMetrics.widthPixels
         val screenH = resources.displayMetrics.heightPixels
@@ -161,50 +166,38 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 leftBevel = leftBevel,
                 rightBevel = rightBevel,
                 bottomBevel = bottomBevel,
-                refract = refractAmount,
+                refract = maxRefract,
+                leftRefract = leftRefract,
+                rightRefract = rightRefract,
+                bottomRefract = bottomRefract,
                 dispersion = cfg.dispersionStrength,
                 lightX = 0f,
                 lightY = 1f,
                 spec = cfg.specularStrength,
+                hairline = cfg.hairlineStrength,
+                innerGlow = cfg.innerGlowStrength,
                 innerShadow = cfg.innerShadow,
                 saturation = cfg.saturationFactor,
+                rimSoftness = cfg.rimSoftness,
                 blurRadius = cfg.blurRadius * density
             )
 
-            glassRendered = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
-                // Step A: Draw background behind shade window in full screen coordinates
-                recordingCanvas.save()
-                recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
-                val backdropBmp = RealtimeBackdropHelper.getLatestBackdropBitmap()
-                if (backdropBmp != null && !backdropBmp.isRecycled) {
-                    backdropDestRect.set(0, 0, screenW, screenH)
-                    recordingCanvas.drawBitmap(backdropBmp, null, backdropDestRect, null)
-                } else {
-                    val wp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
-                        ?: LockScreenWallpaperHelper.getLiveLockWallpaper(context)
-                        ?: try {
-                            val wm = android.app.WallpaperManager.getInstance(context)
-                            wm.peekDrawable() ?: wm.drawable
-                        } catch (_: Throwable) { null }
-                    if (wp != null) {
-                        wp.setBounds(0, 0, screenW, screenH)
-                        wp.draw(recordingCanvas)
-                    } else {
-                        val p = Paint().apply {
-                            shader = LinearGradient(
-                                0f, 0f, screenW.toFloat(), screenH.toFloat(),
-                                intArrayOf(0xFF3B3B48.toInt(), 0xFF22222A.toInt(), 0xFF121216.toInt()),
-                                null,
-                                Shader.TileMode.CLAMP
-                            )
-                        }
-                        recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), p)
-                    }
-                }
-                recordingCanvas.restore()
-
-                // Step B: Draw sheet foreground (wallpaper & subject) onto recordingCanvas with margin offset,
-                // so the liquid glass bevel normals optically refract the actual opaque image under the edges!
+            val backdropBmp = RealtimeBackdropHelper.getLatestBackdropBitmap()
+            glassRendered = renderer.draw(
+                canvas = canvas,
+                width = w,
+                height = h,
+                params = params,
+                margin = margin,
+                backdropBmp = backdropBmp,
+                viewX = viewX,
+                viewY = viewY,
+                screenW = screenW,
+                screenH = screenH
+            ) { recordingCanvas ->
+                // Draw sheet foreground (wallpaper & subject) ONLY onto recordingCanvas with margin offset.
+                // Note: The backdrop is fed directly into the AGSL shader's backdrop input so that
+                // the non-refracted interior remains 100% transparent and crystal clear!
                 recordingCanvas.save()
                 recordingCanvas.translate(margin.toFloat(), margin.toFloat())
                 drawSheetForeground(recordingCanvas, w, h, cornerRadius, isDepthActive, fadeAlpha, subjectBmp, shouldDrawWallpaper)
