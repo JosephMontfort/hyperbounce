@@ -47,6 +47,15 @@ object NotificationSheetHook {
     private var isShadeFullyOpen = false
 
     @Volatile
+    private var hasFullyOpenedForCurrentSession = false
+
+    @Volatile
+    private var isUserTouchingShade = false
+
+    @Volatile
+    private var touchDownY = 0f
+
+    @Volatile
     private var hasTriggeredUnlockForCurrentOpen = false
 
     val hasFullyOpened: Boolean
@@ -154,6 +163,9 @@ object NotificationSheetHook {
 
         // 9. Hook StatusBarTransitionAnimatorController to track activity launch from notification clicks
         hookTransitionAnimatorController(module, classLoader)
+
+        // 10. Hook NotificationPanelView.dispatchTouchEvent for touch tracking and touch-release unlock trigger
+        hookNotificationPanelView(module, classLoader)
     }
 
     private fun hookWakeUpCoordinator(module: XposedModule, classLoader: ClassLoader) {
@@ -650,6 +662,8 @@ object NotificationSheetHook {
                         "notif_sheet_enabled" -> cfg.enabled = intent.getBooleanExtra("value_boolean", cfg.enabled)
                         "notif_sheet_lock_wallpaper_enabled" -> cfg.lockWallpaperEnabled = intent.getBooleanExtra("value_boolean", cfg.lockWallpaperEnabled)
                         "notif_sheet_lock_wallpaper_homescreen_only" -> cfg.lockWallpaperHomescreenOnly = intent.getBooleanExtra("value_boolean", cfg.lockWallpaperHomescreenOnly)
+                        "notif_sheet_glass_effects_enabled" -> cfg.glassEffectsEnabled = intent.getBooleanExtra("value_boolean", cfg.glassEffectsEnabled)
+                        "notif_sheet_glass_only_without_wallpaper" -> cfg.glassOnlyWithoutWallpaper = intent.getBooleanExtra("value_boolean", cfg.glassOnlyWithoutWallpaper)
                         "notif_card_refraction_height" -> cfg.refractionHeight = intent.getFloatExtra("value_float", cfg.refractionHeight)
                         "notif_card_bevel_width" -> cfg.bevelWidth = intent.getFloatExtra("value_float", cfg.bevelWidth)
                         "notif_card_left_bevel" -> cfg.leftBevelWidth = intent.getFloatExtra("value_float", cfg.leftBevelWidth)
@@ -671,6 +685,9 @@ object NotificationSheetHook {
                         mainHandler.post {
                             val container = containerRef?.get() ?: return@post
                             adjustNotificationMargins(container)
+                            if (!cfg.glassEffectsEnabled) {
+                                RealtimeBackdropHelper.stopLiveRefresh()
+                            }
                             container.findViewWithTag<View>(TAG_GLASS_SHEET)?.invalidate()
                         }
                     }
@@ -1048,6 +1065,7 @@ object NotificationSheetHook {
                                         RealtimeBackdropHelper.stopLiveRefresh()
                                         isShadeOpen = false
                                         isShadeFullyOpen = false
+                                        hasFullyOpenedForCurrentSession = false
                                         hasTriggeredUnlockForCurrentOpen = true
                                         isLaunchingNotificationActivity = false
                                     }
@@ -1063,6 +1081,7 @@ object NotificationSheetHook {
                                         if (isUnlockedShadeActive) {
                                             isShadeOpen = true
                                             isShadeFullyOpen = true
+                                            hasFullyOpenedForCurrentSession = true
                                             hasTriggeredUnlockForCurrentOpen = false
                                         }
                                     }
@@ -1098,12 +1117,14 @@ object NotificationSheetHook {
                                         if (isUnlockedShadeActive && lastAppliedFraction >= 0.80f) {
                                             isShadeOpen = true
                                             isShadeFullyOpen = true
+                                            hasFullyOpenedForCurrentSession = true
                                             hasTriggeredUnlockForCurrentOpen = false
                                         }
                                     } else {
                                         RealtimeBackdropHelper.stopLiveRefresh()
                                         isShadeOpen = false
                                         isShadeFullyOpen = false
+                                        hasFullyOpenedForCurrentSession = false
                                         hasTriggeredUnlockForCurrentOpen = true
                                     }
                                 }
@@ -1122,8 +1143,9 @@ object NotificationSheetHook {
                             try {
                                 if (isUnlockedShadeActive) {
                                     val container = containerRef?.get()
-                                    if (container != null && isShadeOpen && !hasTriggeredUnlockForCurrentOpen && !isLaunchingNotificationActivity) {
+                                    if (container != null && hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen && !isLaunchingNotificationActivity) {
                                         hasTriggeredUnlockForCurrentOpen = true
+                                        hasFullyOpenedForCurrentSession = false
                                         if (isHomeScreenCached) {
                                             notifyCloseOverHomescreen(container.context)
                                         }
@@ -1231,6 +1253,7 @@ object NotificationSheetHook {
         // Arming: Shade has reached full expansion
         if (fraction >= 0.95f) {
             isShadeFullyOpen = true
+            hasFullyOpenedForCurrentSession = true
             hasTriggeredUnlockForCurrentOpen = false
             isShadeOpen = true
         }
@@ -1238,18 +1261,20 @@ object NotificationSheetHook {
         // Motion vector calculation: delta < 0 means closing, delta >= 0 means opening
         val delta = if (prevFraction >= 0f) fraction - prevFraction else 0f
 
-        // Simultaneous unlock trigger:
+        // Programmatic closing unlock trigger (fallback when touch release already happened or programmatic close):
         // ONLY triggers when:
-        // 1. Shade has reached full open.
-        // 2. Gesture is strictly CLOSING (delta < -0.008f). Never triggers during pull-down.
-        // 3. Fraction has crossed below the spring rebound threshold (fraction <= 0.85f && fraction > 0.15f).
-        // 4. Not an app launch from notification click.
-        // 5. Has not yet fired for the current open session.
-        if (isShadeFullyOpen && !hasTriggeredUnlockForCurrentOpen && delta < -0.008f && fraction <= 0.85f && fraction > 0.15f) {
+        // 1. Shade has reached full open in current session.
+        // 2. User is NOT touching the screen (!isUserTouchingShade).
+        // 3. Gesture is strictly CLOSING (delta < -0.008f). Never triggers during pull-down.
+        // 4. Fraction has crossed below the spring rebound threshold (fraction <= 0.85f && fraction > 0.15f).
+        // 5. Not an app launch from notification click.
+        // 6. Has not yet fired for the current open session.
+        if (hasFullyOpenedForCurrentSession && !isUserTouchingShade && !hasTriggeredUnlockForCurrentOpen && delta < -0.008f && fraction <= 0.85f && fraction > 0.15f) {
             hasTriggeredUnlockForCurrentOpen = true
             isShadeFullyOpen = false
+            hasFullyOpenedForCurrentSession = false
             if (currentStatusBarState == 0 && !isControlCenterActive() && !isLaunchingNotificationActivity) {
-                Log.d(TAG, "Closing gesture started (delta=$delta, frac=$fraction) -> triggering simultaneous unlock animation")
+                Log.d(TAG, "Closing gesture animation (delta=$delta, frac=$fraction) -> triggering simultaneous unlock animation")
                 notifyCloseOverHomescreen(container.context)
             }
         }
@@ -1261,6 +1286,7 @@ object NotificationSheetHook {
             pill?.translationY = -viewHeight
             RealtimeBackdropHelper.stopLiveRefresh()
             isShadeFullyOpen = false
+            hasFullyOpenedForCurrentSession = false
             hasTriggeredUnlockForCurrentOpen = true
             isShadeOpen = false
             isLaunchingNotificationActivity = false
@@ -1295,21 +1321,23 @@ object NotificationSheetHook {
             if (abs(prevY - finalSheetY) > 0.5f) {
                 curSheet.postInvalidateOnAnimation()
             }
-            // Continuous 100% real-time refresh whenever sheet is open or opening on both homescreen and apps
-            RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
+            // Refresh backdrop only if glass effects are actively required
+            val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height
+            val shouldDrawWallpaper = cfg.lockWallpaperEnabled && !isLandscape &&
+                    (!cfg.lockWallpaperHomescreenOnly || isHomeScreenCached)
+            val shouldRenderGlass = cfg.glassEffectsEnabled && (!cfg.glassOnlyWithoutWallpaper || !shouldDrawWallpaper)
+            if (shouldRenderGlass) {
+                RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
+            } else {
+                RealtimeBackdropHelper.stopLiveRefresh()
+            }
         }
 
         val curPill = pill ?: container.findViewWithTag<View>(TAG_HOME_PILL)
         if (curPill != null) {
             curPill.visibility = View.VISIBLE
-            val pillOffset = if (isShadeFullyOpen && fraction < 0.85f) {
-                ((fraction / 0.85f) - 1.0f) * viewHeight
-            } else if (fraction >= 0.95f && currentStretchOffset > 0.01f) {
-                currentStretchOffset
-            } else {
-                upwardOffset
-            }
-            curPill.translationY = pillOffset
+            // Pill is stably pinned to the sheet's bottom edge with stretch offset when sheet is fully open
+            curPill.translationY = finalSheetY + (if (finalSheetY == 0f) currentStretchOffset else 0f)
             curPill.alpha = (fraction - 0.2f).coerceIn(0f, 1f)
         }
     }
@@ -1371,6 +1399,62 @@ object NotificationSheetHook {
             Log.d(TAG, "Hooked StatusBarTransitionAnimatorController successfully")
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook StatusBarTransitionAnimatorController", t)
+        }
+    }
+
+    private fun hookNotificationPanelView(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val npvClass = Class.forName("com.android.systemui.shade.NotificationPanelView", false, classLoader)
+            for (m: Method in npvClass.declaredMethods) {
+                if (m.name == "dispatchTouchEvent" && m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == MotionEvent::class.java
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val rawArgs = chain.args
+                            val event = (if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as? MotionEvent
+                            if (event != null) {
+                                handlePanelTouchEvent(event)
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked NotificationPanelView.dispatchTouchEvent successfully")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook NotificationPanelView", t)
+        }
+    }
+
+    private fun handlePanelTouchEvent(event: MotionEvent) {
+        if (!isUnlockedShadeActive) return
+        val container = containerRef?.get() ?: return
+        val density = container.resources.displayMetrics.density
+
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                isUserTouchingShade = true
+                touchDownY = event.rawY
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val wasTouching = isUserTouchingShade
+                isUserTouchingShade = false
+                val dy = event.rawY - touchDownY
+
+                if (event.actionMasked == MotionEvent.ACTION_UP && wasTouching) {
+                    val isClosingGesture = (dy < -25f * density) || (lastAppliedFraction < 0.92f && dy < 0f)
+                    if (hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen &&
+                        !isLaunchingNotificationActivity && isClosingGesture && lastAppliedFraction > 0.05f
+                    ) {
+                        hasTriggeredUnlockForCurrentOpen = true
+                        isShadeFullyOpen = false
+                        hasFullyOpenedForCurrentSession = false
+                        Log.d(TAG, "ACTION_UP closing release detected (dy=$dy, frac=$lastAppliedFraction) -> triggering simultaneous unlock")
+                        notifyCloseOverHomescreen(container.context)
+                    }
+                }
+            }
         }
     }
 }

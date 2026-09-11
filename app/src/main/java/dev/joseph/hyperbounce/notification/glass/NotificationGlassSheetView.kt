@@ -122,7 +122,9 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val viewX = location[0]
         val viewY = location[1]
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderer != null) {
+        val shouldRenderGlass = cfg.glassEffectsEnabled && (!cfg.glassOnlyWithoutWallpaper || !shouldDrawWallpaper)
+
+        if (shouldRenderGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderer != null) {
             val params = GlassLensRenderer.LensParams(
                 cornerRadius = cornerRadius,
                 leftBevel = leftBevel,
@@ -198,7 +200,9 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         LockScreenWallpaperHelper.triggerAsyncWallpaperLoad(context)
         LockScreenWallpaperHelper.addUnblurredWallpaperListener(wallpaperLoadListener)
         LockScreenWallpaperHelper.triggerAsyncUnblurredWallpaperLoad(context)
-        RealtimeBackdropHelper.triggerCapture(context) { postInvalidateOnAnimation() }
+        if (cfg.glassEffectsEnabled) {
+            RealtimeBackdropHelper.triggerCapture(context) { postInvalidateOnAnimation() }
+        }
     }
 
     override fun onDetachedFromWindow() {

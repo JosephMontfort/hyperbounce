@@ -450,6 +450,8 @@ class SettingsRepository(context: Context) {
         var enabled by prefsBooleanState("notif_sheet_enabled", defaults.enabled); private set
         var lockWallpaperEnabled by prefsBooleanState("notif_sheet_lock_wallpaper_enabled", defaults.lockWallpaperEnabled); private set
         var lockWallpaperHomescreenOnly by prefsBooleanState("notif_sheet_lock_wallpaper_homescreen_only", defaults.lockWallpaperHomescreenOnly); private set
+        var glassEffectsEnabled by prefsBooleanState("notif_sheet_glass_effects_enabled", defaults.glassEffectsEnabled); private set
+        var glassOnlyWithoutWallpaper by prefsBooleanState("notif_sheet_glass_only_without_wallpaper", defaults.glassOnlyWithoutWallpaper); private set
         var refractionHeight by prefsFloatState("notif_card_refraction_height", defaults.refractionHeight); private set
         var bevelWidth by prefsFloatState("notif_card_bevel_width", defaults.bevelWidth); private set
         var leftBevelWidth by prefsFloatState("notif_card_left_bevel", defaults.leftBevelWidth); private set
@@ -465,6 +467,7 @@ class SettingsRepository(context: Context) {
 
         fun snapshot(): NotificationSheetSettings = NotificationSheetSettings(
             enabled, lockWallpaperEnabled, lockWallpaperHomescreenOnly,
+            glassEffectsEnabled, glassOnlyWithoutWallpaper,
             refractionHeight, bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
             dispersionStrength, specularStrength, innerShadow, saturationFactor, blurRadius,
             cornerRadius, sideMargin
@@ -473,6 +476,8 @@ class SettingsRepository(context: Context) {
         @JvmName("setNotifSheetEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
         @JvmName("setNotifSheetLockWallpaperEnabledPref") fun setLockWallpaperEnabled(v: Boolean) { lockWallpaperEnabled = v }
         @JvmName("setNotifSheetLockWallpaperHomescreenOnlyPref") fun setLockWallpaperHomescreenOnly(v: Boolean) { lockWallpaperHomescreenOnly = v }
+        @JvmName("setNotifSheetGlassEffectsEnabledPref") fun setGlassEffectsEnabled(v: Boolean) { glassEffectsEnabled = v }
+        @JvmName("setNotifSheetGlassOnlyWithoutWallpaperPref") fun setGlassOnlyWithoutWallpaper(v: Boolean) { glassOnlyWithoutWallpaper = v }
         @JvmName("setNotifSheetRefractionHeightPref") fun setRefractionHeight(v: Float) { refractionHeight = v }
         @JvmName("setNotifSheetBevelWidthPref") fun setBevelWidth(v: Float) { bevelWidth = v }
         @JvmName("setNotifSheetLeftBevelWidthPref") fun setLeftBevelWidth(v: Float) { leftBevelWidth = v }
@@ -490,6 +495,8 @@ class SettingsRepository(context: Context) {
             enabled = defaults.enabled
             lockWallpaperEnabled = defaults.lockWallpaperEnabled
             lockWallpaperHomescreenOnly = defaults.lockWallpaperHomescreenOnly
+            glassEffectsEnabled = defaults.glassEffectsEnabled
+            glassOnlyWithoutWallpaper = defaults.glassOnlyWithoutWallpaper
             refractionHeight = defaults.refractionHeight
             bevelWidth = defaults.bevelWidth
             leftBevelWidth = defaults.leftBevelWidth

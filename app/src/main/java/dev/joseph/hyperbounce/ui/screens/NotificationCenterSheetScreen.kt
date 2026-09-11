@@ -91,6 +91,41 @@ fun NotificationCenterSheetScreen(
         }
 
         item {
+            SectionHeader("3-Edge Liquid Glass Effects", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "3-Edge Liquid Glass Effects",
+                    subtitle = if (sheet.glassEffectsEnabled) "Real-time optical refraction, dispersion, and specular highlight along edges" else "Disabled by default (Clean border outline without shader overhead)",
+                    colors = colors,
+                    iconTint = colors.accentBlue,
+                    backdrop = backdrop,
+                    checked = sheet.glassEffectsEnabled,
+                    onCheckedChange = sheet::setGlassEffectsEnabled,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) },
+                    enabled = sheet.enabled
+                )
+                if (sheet.glassEffectsEnabled) {
+                    RowDivider(colors.separator)
+                    SettingsToggleRow(
+                        title = "Only Without Lockscreen Wallpaper",
+                        subtitle = if (sheet.glassOnlyWithoutWallpaper) "Show glass effects only when lockscreen wallpaper is not actively shown on the sheet" else "Always show glass effects when enabled",
+                        colors = colors,
+                        iconTint = colors.accentPurple,
+                        backdrop = backdrop,
+                        checked = sheet.glassOnlyWithoutWallpaper,
+                        onCheckedChange = sheet::setGlassOnlyWithoutWallpaper,
+                        icon = { LockIcon(color = Color.White, size = 15.dp) },
+                        enabled = sheet.enabled && sheet.glassEffectsEnabled
+                    )
+                }
+            }
+            SectionFooter(
+                "Enables real-time AGSL refractive glass shader along left, right, and bottom sheet edges. Disabled by default to save GPU and capture overhead.",
+                colors
+            )
+        }
+
+        item {
             SectionHeader("Optics & Refraction (Liquid Glass 2.0)", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
@@ -103,7 +138,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..160.0f,
                     defaultValue = 50.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled
+                    enabled = sheet.enabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -116,7 +151,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..0.30f,
                     defaultValue = 0.08f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = sheet.enabled
+                    enabled = sheet.enabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -129,7 +164,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..2.0f,
                     defaultValue = 0.90f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = sheet.enabled
+                    enabled = sheet.enabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -142,7 +177,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..1.0f,
                     defaultValue = 0.40f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = sheet.enabled
+                    enabled = sheet.enabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -155,7 +190,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 50.0f..200.0f,
                     defaultValue = 120.0f,
                     valueLabel = { String.format(Locale.US, "%.0f%%", it) },
-                    enabled = sheet.enabled
+                    enabled = sheet.enabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -168,7 +203,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..60.0f,
                     defaultValue = 0.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled
+                    enabled = sheet.enabled && sheet.glassEffectsEnabled
                 )
             }
             SectionFooter(
@@ -190,7 +225,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..80.0f,
                     defaultValue = 28.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled
+                    enabled = sheet.enabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -203,7 +238,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..80.0f,
                     defaultValue = 28.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled
+                    enabled = sheet.enabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -216,7 +251,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..80.0f,
                     defaultValue = 28.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled
+                    enabled = sheet.enabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
