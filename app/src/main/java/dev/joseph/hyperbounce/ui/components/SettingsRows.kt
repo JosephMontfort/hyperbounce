@@ -9,7 +9,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -147,7 +146,7 @@ fun SettingsClickableRow(
             .background(colors.label.copy(alpha = bgAlpha))
             .clickable(
                 interactionSource = interactionSource,
-                indication = rememberRipple(color = colors.label.copy(alpha = 0.25f)),
+                indication = null,
                 onClick = onClick
             )
             .fillMaxWidth()

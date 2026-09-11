@@ -684,7 +684,7 @@ object NotificationSheetHook {
                         DepthWallpaperHelper.clearCache(c ?: context)
                         DepthWallpaperHelper.triggerAsyncSubjectGeneration(c ?: context, forceRefresh = true) {
                             mainHandler.post {
-                                lastAppliedNotificationContainer?.get()?.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)?.postInvalidateOnAnimation()
+                                containerRef?.get()?.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)?.postInvalidateOnAnimation()
                             }
                         }
                         return
@@ -707,7 +707,7 @@ object NotificationSheetHook {
                             DepthWallpaperHelper.clearCache(c ?: context)
                             DepthWallpaperHelper.triggerAsyncSubjectGeneration(c ?: context, forceRefresh = true) {
                                 mainHandler.post {
-                                    lastAppliedNotificationContainer?.get()?.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)?.postInvalidateOnAnimation()
+                                    containerRef?.get()?.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)?.postInvalidateOnAnimation()
                                 }
                             }
                         }
