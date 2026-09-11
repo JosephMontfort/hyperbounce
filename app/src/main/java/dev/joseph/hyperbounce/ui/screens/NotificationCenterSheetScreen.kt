@@ -43,7 +43,11 @@ fun NotificationCenterSheetScreen(
     val sheet = repository.notificationSheet
     val context = androidx.compose.ui.platform.LocalContext.current
     var isScanning by remember { mutableStateOf(false) }
-    var hasCustomSubject by remember { mutableStateOf(DepthWallpaperHelper.hasCustomSubject(context)) }
+    var hasCustomSubject by remember { mutableStateOf(DepthWallpaperHelper.hasCustomSubject(context) || sheet.depthCustomSubject) }
+
+    LaunchedEffect(sheet.depthWallpaperEnabled, sheet.depthCustomSubject) {
+        hasCustomSubject = DepthWallpaperHelper.hasCustomSubject(context) || sheet.depthCustomSubject
+    }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -139,13 +143,7 @@ fun NotificationCenterSheetScreen(
                     checked = sheet.depthWallpaperEnabled,
                     onCheckedChange = { enabled ->
                         sheet.setDepthWallpaperEnabled(enabled)
-                        if (enabled) {
-                            DepthWallpaperHelper.triggerAsyncSubjectGeneration(context)
-                            try {
-                                val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
-                                context.sendBroadcast(intent)
-                            } catch (_: Throwable) {}
-                        }
+                        hasCustomSubject = DepthWallpaperHelper.hasCustomSubject(context) || sheet.depthCustomSubject
                     },
                     icon = { LockIcon(color = Color.White, size = 15.dp) },
                     enabled = sheet.enabled

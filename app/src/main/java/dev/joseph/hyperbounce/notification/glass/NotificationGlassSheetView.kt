@@ -50,6 +50,8 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
     var shadeBackgroundView: View? = null
 
+    var isClosingFromFullOpen: Boolean = false
+
     var expansionFraction: Float = 0f
         set(value) {
             if (kotlin.math.abs(field - value) > 0.005f) {
@@ -111,7 +113,9 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val subjectBmp = if (isDepthActive) DepthWallpaperHelper.getSubjectBitmap(context) else null
 
         val fadeAlpha = if (isDepthActive) {
-            if (expansionFraction >= 0.90f) {
+            if (isClosingFromFullOpen) {
+                1f
+            } else if (expansionFraction >= 0.90f) {
                 ((expansionFraction - 0.90f) / 0.10f).coerceIn(0f, 1f)
             } else {
                 0f
@@ -121,7 +125,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         }
 
         if (isDepthActive && subjectBmp != null && !subjectBmp.isRecycled) {
-            val canvasY = -translationY
+            val canvasY = if (isClosingFromFullOpen) 0f else -translationY
             val bmpW = subjectBmp.width.toFloat()
             val bmpH = subjectBmp.height.toFloat()
             val screenAspect = w.toFloat() / h.toFloat()
@@ -144,15 +148,13 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val shouldDrawWallpaper = !isDepthActive && cfg.lockWallpaperEnabled && !isLandscape &&
                 (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
 
-        // 1. Draw sheet foreground (wallpaper & subject) directly to screen canvas
-        drawSheetForeground(canvas, w, h, cornerRadius, isDepthActive, fadeAlpha, subjectBmp, shouldDrawWallpaper)
-
         getLocationOnScreen(location)
         val viewX = location[0]
         val viewY = location[1]
 
         val shouldRenderGlass = cfg.glassEffectsEnabled && (!cfg.glassOnlyWithoutWallpaper || (!shouldDrawWallpaper && !isDepthActive))
 
+        var glassRendered = false
         if (shouldRenderGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderer != null) {
             val params = GlassLensRenderer.LensParams(
                 cornerRadius = cornerRadius,
@@ -169,7 +171,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 blurRadius = cfg.blurRadius * density
             )
 
-            val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
+            glassRendered = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
                 // Step A: Draw background behind shade window in full screen coordinates
                 recordingCanvas.save()
                 recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
@@ -208,11 +210,10 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 drawSheetForeground(recordingCanvas, w, h, cornerRadius, isDepthActive, fadeAlpha, subjectBmp, shouldDrawWallpaper)
                 recordingCanvas.restore()
             }
+        }
 
-            if (!success) {
-                drawFallbackBorder(canvas, w.toFloat(), h.toFloat(), cornerRadius)
-            }
-        } else {
+        if (!glassRendered) {
+            drawSheetForeground(canvas, w, h, cornerRadius, isDepthActive, fadeAlpha, subjectBmp, shouldDrawWallpaper)
             drawFallbackBorder(canvas, w.toFloat(), h.toFloat(), cornerRadius)
         }
     }
@@ -240,11 +241,12 @@ class NotificationGlassSheetView @JvmOverloads constructor(
             sheetClipPath.addRoundRect(boundsRect, radii, android.graphics.Path.Direction.CW)
             targetCanvas.clipPath(sheetClipPath)
 
-            if (fadeAlpha > 0f) {
+            val drawWpAlpha = if (isClosingFromFullOpen) 1f else fadeAlpha
+            if (drawWpAlpha > 0f) {
                 val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
                 if (unblurredWp != null) {
                     unblurredWp.setBounds(0, 0, w, h)
-                    unblurredWp.alpha = (fadeAlpha * 255).toInt()
+                    unblurredWp.alpha = (drawWpAlpha * 255).toInt()
                     unblurredWp.draw(targetCanvas)
                 }
             }

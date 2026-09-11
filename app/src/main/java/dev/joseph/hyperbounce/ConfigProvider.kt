@@ -134,7 +134,28 @@ class ConfigProvider : ContentProvider() {
             "cc_layout.json"
         )
         if (segment in allowedFiles) {
-            val file = File(ctx.filesDir, segment)
+            var file = File(ctx.filesDir, segment)
+            if ((!file.exists() || file.length() == 0L) && segment == "lock_depth_subject.png") {
+                val customFile = File(ctx.filesDir, "custom_depth_subject.png")
+                if (customFile.exists() && customFile.length() > 0L) {
+                    try {
+                        customFile.copyTo(file, overwrite = true)
+                    } catch (_: Throwable) {}
+                    if (!file.exists() || file.length() == 0L) {
+                        file = customFile
+                    }
+                } else {
+                    val segFile = File(ctx.filesDir, "segmented_depth_subject.png")
+                    if (segFile.exists() && segFile.length() > 0L) {
+                        try {
+                            segFile.copyTo(file, overwrite = true)
+                        } catch (_: Throwable) {}
+                        if (!file.exists() || file.length() == 0L) {
+                            file = segFile
+                        }
+                    }
+                }
+            }
             if (file.exists() && file.length() > 0) {
                 return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
             }

@@ -80,7 +80,30 @@ object DepthWallpaperHelper {
             return inMemory
         }
 
-        // 1. Check persistent local disk cache
+        // 1. Check custom subject file first
+        try {
+            val customFile = File(context.filesDir, CUSTOM_FILENAME)
+            if (customFile.exists() && customFile.length() > 0) {
+                val opts = BitmapFactory.Options().apply {
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+                val customBmp = BitmapFactory.decodeFile(customFile.absolutePath, opts)
+                if (customBmp != null) {
+                    cachedSubjectBitmap = customBmp
+                    try {
+                        val activeFile = File(context.filesDir, CACHE_FILENAME)
+                        if (!activeFile.exists() || activeFile.length() == 0L) {
+                            customFile.copyTo(activeFile, overwrite = true)
+                        }
+                    } catch (_: Throwable) {}
+                    return customBmp
+                }
+            }
+        } catch (t: Throwable) {
+            Log.d(TAG, "Custom subject disk lookup failed: ${t.message}")
+        }
+
+        // 2. Check persistent local disk cache
         try {
             val file = File(context.filesDir, CACHE_FILENAME)
             if (file.exists() && file.length() > 0) {
@@ -97,7 +120,7 @@ object DepthWallpaperHelper {
             Log.d(TAG, "Local disk cache lookup failed: ${t.message}")
         }
 
-        // 2. Fetch from ConfigProvider across processes (crucial when running in SystemUI)
+        // 3. Fetch from ConfigProvider across processes (crucial when running in SystemUI)
         try {
             val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/$CACHE_FILENAME")
             context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
@@ -124,7 +147,7 @@ object DepthWallpaperHelper {
             Log.d(TAG, "ConfigProvider openFile lookup failed: ${t.message}")
         }
 
-        // 3. Trigger asynchronous background generation if not already processing
+        // 4. Trigger asynchronous background generation if not already processing
         triggerAsyncSubjectGeneration(context)
         return null
     }
@@ -140,6 +163,19 @@ object DepthWallpaperHelper {
         if (isProcessing) {
             Log.d(TAG, "Segmentation is already in progress, skipping request")
             return
+        }
+
+        val customFile = File(context.filesDir, CUSTOM_FILENAME)
+        if (!forceRefresh && customFile.exists() && customFile.length() > 0) {
+            try {
+                val diskBmp = BitmapFactory.decodeFile(customFile.absolutePath)
+                if (diskBmp != null) {
+                    cachedSubjectBitmap = diskBmp
+                    onComplete?.let { cb -> mainHandler.post { cb(diskBmp) } }
+                    notifyListeners()
+                    return
+                }
+            } catch (_: Throwable) {}
         }
 
         val localFile = File(context.filesDir, CACHE_FILENAME)
@@ -463,7 +499,42 @@ object DepthWallpaperHelper {
     }
 
     private fun loadSourceWallpaperBitmap(context: Context): Bitmap? {
-        // 1. Try unblurred lock wallpaper from LockScreenWallpaperHelper
+        // 1. Direct lock wallpaper file (/data/system/users/0/wallpaper_lock)
+        try {
+            val lockFile = File("/data/system/users/0/wallpaper_lock")
+            val target = if (lockFile.exists() && lockFile.canRead() && lockFile.length() > 0) lockFile else {
+                val sysFile = File("/data/system/users/0/wallpaper")
+                if (sysFile.exists() && sysFile.canRead() && sysFile.length() > 0) sysFile else null
+            }
+            if (target != null) {
+                val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+                val bmp = BitmapFactory.decodeFile(target.absolutePath, opts)
+                if (bmp != null) return bmp
+            }
+        } catch (t: Throwable) {
+            Log.d(TAG, "Direct wallpaper file decode: ${t.message}")
+        }
+
+        // 2. Root fallback: copy via su to app cache if direct access is restricted
+        try {
+            val cacheTmp = File(context.cacheDir, "wp_source_temp.jpg")
+            val cmd = "cp /data/system/users/0/wallpaper_lock ${cacheTmp.absolutePath} 2>/dev/null || cp /data/system/users/0/wallpaper ${cacheTmp.absolutePath} 2>/dev/null ; chmod 666 ${cacheTmp.absolutePath}"
+            val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
+            val exit = proc.waitFor()
+            if (exit == 0 && cacheTmp.exists() && cacheTmp.length() > 0) {
+                val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+                val bmp = BitmapFactory.decodeFile(cacheTmp.absolutePath, opts)
+                try { cacheTmp.delete() } catch (_: Throwable) {}
+                if (bmp != null) {
+                    Log.d(TAG, "Loaded wallpaper via su root fallback (${bmp.width}x${bmp.height})")
+                    return bmp
+                }
+            }
+        } catch (t: Throwable) {
+            Log.d(TAG, "Root wallpaper copy fallback failed: ${t.message}")
+        }
+
+        // 3. Try unblurred lock wallpaper from LockScreenWallpaperHelper
         try {
             val d = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
             if (d is BitmapDrawable && d.bitmap != null && !d.bitmap.isRecycled) {
@@ -482,28 +553,14 @@ object DepthWallpaperHelper {
             Log.d(TAG, "LockScreenWallpaperHelper load: ${t.message}")
         }
 
-        // 2. Direct lock wallpaper file (/data/system/users/0/wallpaper_lock)
-        try {
-            val lockFile = File("/data/system/users/0/wallpaper_lock")
-            val target = if (lockFile.exists() && lockFile.length() > 0) lockFile else {
-                val sysFile = File("/data/system/users/0/wallpaper")
-                if (sysFile.exists() && sysFile.length() > 0) sysFile else null
-            }
-            if (target != null) {
-                val bmp = BitmapFactory.decodeFile(target.absolutePath)
-                if (bmp != null) return bmp
-            }
-        } catch (t: Throwable) {
-            Log.d(TAG, "Direct wallpaper file decode: ${t.message}")
-        }
-
-        // 3. WallpaperManager getWallpaperFile
+        // 4. WallpaperManager getWallpaperFile
         try {
             val wm = WallpaperManager.getInstance(context)
             val pfd = wm.getWallpaperFile(WallpaperManager.FLAG_LOCK) ?: wm.getWallpaperFile(WallpaperManager.FLAG_SYSTEM)
             if (pfd != null) {
                 pfd.use {
-                    val bmp = BitmapFactory.decodeFileDescriptor(it.fileDescriptor)
+                    val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+                    val bmp = BitmapFactory.decodeFileDescriptor(it.fileDescriptor, null, opts)
                     if (bmp != null) return bmp
                 }
             }
@@ -511,7 +568,7 @@ object DepthWallpaperHelper {
             Log.d(TAG, "WallpaperManager pfd decode: ${t.message}")
         }
 
-        // 4. Fallback: WallpaperManager.drawable / peekDrawable
+        // 5. Fallback: WallpaperManager.drawable / peekDrawable
         try {
             val wm = WallpaperManager.getInstance(context)
             val d: Drawable? = wm.drawable ?: wm.peekDrawable()
@@ -535,6 +592,10 @@ object DepthWallpaperHelper {
     }
 
     fun clearCache(context: Context) {
+        val customFile = File(context.filesDir, CUSTOM_FILENAME)
+        if (customFile.exists() && customFile.length() > 0) {
+            return
+        }
         cachedSubjectBitmap = null
         try {
             val file = File(context.filesDir, CACHE_FILENAME)

@@ -239,6 +239,7 @@ object NotificationSheetHook {
             sheet?.visibility = View.VISIBLE
             sheet?.expansionFraction = 1.0f
             sheet?.translationY = 0.0f
+            sheet?.isClosingFromFullOpen = false
             sheet?.postInvalidateOnAnimation()
             pill?.visibility = View.VISIBLE
             pill?.translationY = 0.0f
@@ -1422,6 +1423,7 @@ object NotificationSheetHook {
         if (fraction <= 0.015f) {
             sheet?.visibility = View.GONE
             sheet?.translationY = -viewHeight
+            sheet?.isClosingFromFullOpen = false
             pill?.visibility = View.GONE
             pill?.translationY = -viewHeight
             RealtimeBackdropHelper.stopLiveRefresh()
@@ -1456,6 +1458,7 @@ object NotificationSheetHook {
         val curSheet = sheet ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
         if (curSheet != null) {
             curSheet.visibility = View.VISIBLE
+            curSheet.isClosingFromFullOpen = hasFullyOpenedForCurrentSession && fraction < 0.95f
             curSheet.expansionFraction = fraction
             val prevY = curSheet.translationY
             curSheet.translationY = finalSheetY
@@ -1475,7 +1478,7 @@ object NotificationSheetHook {
 
             // Suppress background blur and dimming when iOS 27 Depth Wallpaper is active
             if (cfg.depthWallpaperEnabled && currentStatusBarState == 0) {
-                val bgAlpha = if (fraction >= 0.90f) ((fraction - 0.90f) / 0.10f).coerceIn(0f, 1f) else 0f
+                val bgAlpha = if (curSheet.isClosingFromFullOpen) 1f else if (fraction >= 0.90f) ((fraction - 0.90f) / 0.10f).coerceIn(0f, 1f) else 0f
                 curSheet.shadeBackgroundView?.alpha = bgAlpha
                 themeBackgroundViewRef?.get()?.alpha = bgAlpha
             }

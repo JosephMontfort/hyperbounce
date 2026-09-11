@@ -11,12 +11,12 @@ data class NotificationSheetConfig(
     var glassEffectsEnabled: Boolean = false,
     var glassOnlyWithoutWallpaper: Boolean = false,
     // Optics (Liquid Glass 2.0)
-    var refractionHeight: Float = 50.0f,
+    var refractionHeight: Float = 24.0f,
     var bevelWidth: Float = 28.0f,
     var leftBevelWidth: Float = 28.0f,
     var rightBevelWidth: Float = 28.0f,
     var bottomBevelWidth: Float = 28.0f,
-    var dispersionStrength: Float = 0.08f,
+    var dispersionStrength: Float = 0.025f,
     var specularStrength: Float = 0.90f,
     var innerShadow: Float = 0.0f,
     var saturationFactor: Float = 120.0f,
@@ -41,12 +41,12 @@ object NotificationSheetConfigHolder {
         sheet.depthCustomSubject = prefs.getBoolean("notif_sheet_depth_custom_subject", false)
         sheet.glassEffectsEnabled = prefs.getBoolean("notif_sheet_glass_effects_enabled", false)
         sheet.glassOnlyWithoutWallpaper = prefs.getBoolean("notif_sheet_glass_only_without_wallpaper", false)
-        sheet.refractionHeight = prefs.getFloat("notif_card_refraction_height", 50.0f)
+        sheet.refractionHeight = prefs.getFloat("notif_card_refraction_height", 24.0f)
         sheet.bevelWidth = prefs.getFloat("notif_card_bevel_width", 28.0f)
         sheet.leftBevelWidth = prefs.getFloat("notif_card_left_bevel", 28.0f)
         sheet.rightBevelWidth = prefs.getFloat("notif_card_right_bevel", 28.0f)
         sheet.bottomBevelWidth = prefs.getFloat("notif_card_bottom_bevel", 28.0f)
-        sheet.dispersionStrength = prefs.getFloat("notif_card_dispersion", 0.08f)
+        sheet.dispersionStrength = prefs.getFloat("notif_card_dispersion", 0.025f)
         sheet.specularStrength = prefs.getFloat("notif_card_specular", 0.90f)
         sheet.innerShadow = prefs.getFloat("notif_card_inner_shadow", 0.0f)
         sheet.saturationFactor = prefs.getFloat("notif_card_saturation", 120.0f)
