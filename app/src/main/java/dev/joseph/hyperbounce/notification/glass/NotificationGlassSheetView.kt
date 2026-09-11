@@ -196,6 +196,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         dev.joseph.hyperbounce.notification.NotificationSheetHook.updateHomeScreenCache(context)
+        val cfg = NotificationSheetConfigHolder.sheet
         LockScreenWallpaperHelper.registerIfNeeded(context)
         LockScreenWallpaperHelper.triggerAsyncWallpaperLoad(context)
         LockScreenWallpaperHelper.addUnblurredWallpaperListener(wallpaperLoadListener)
