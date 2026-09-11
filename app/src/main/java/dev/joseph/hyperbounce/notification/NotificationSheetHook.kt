@@ -242,8 +242,8 @@ object NotificationSheetHook {
             sheet?.postInvalidateOnAnimation()
             pill?.visibility = View.VISIBLE
             pill?.translationY = 0.0f
-            if (cfg.depthWallpaperEnabled) {
-                RealtimeBackdropHelper.startLiveRefresh(container.context)
+            if (cfg.depthWallpaperEnabled && sheet != null) {
+                RealtimeBackdropHelper.startLiveRefresh(container.context, sheet)
             }
         }
     }
