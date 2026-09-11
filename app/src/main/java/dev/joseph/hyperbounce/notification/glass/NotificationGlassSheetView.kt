@@ -1,6 +1,7 @@
 package dev.joseph.hyperbounce.notification.glass
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
@@ -107,107 +108,50 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || w > h
         val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
         val isDepthActive = cfg.depthWallpaperEnabled && !isLandscape && isUnlocked
+        val subjectBmp = if (isDepthActive) DepthWallpaperHelper.getSubjectBitmap(context) else null
 
-        if (isDepthActive) {
-            val subjectBmp = DepthWallpaperHelper.getSubjectBitmap(context)
-            val count = canvas.save()
-            sheetClipPath.reset()
-            val radii = floatArrayOf(
-                0f, 0f,
-                0f, 0f,
-                cornerRadius, cornerRadius,
-                cornerRadius, cornerRadius
-            )
-            boundsRect.set(0f, 0f, w.toFloat(), h.toFloat())
-            sheetClipPath.addRoundRect(boundsRect, radii, android.graphics.Path.Direction.CW)
-            canvas.clipPath(sheetClipPath)
-
-            // When shade is pulling down (fraction < 0.90f), background is 100% transparent.
-            // As shade reaches 90%-100% full open, cross-fade in the unblurred lock screen wallpaper:
-            val fadeAlpha = if (expansionFraction >= 0.90f) {
+        val fadeAlpha = if (isDepthActive) {
+            if (expansionFraction >= 0.90f) {
                 ((expansionFraction - 0.90f) / 0.10f).coerceIn(0f, 1f)
             } else {
                 0f
             }
-
-            if (fadeAlpha > 0f) {
-                val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
-                if (unblurredWp != null) {
-                    unblurredWp.setBounds(0, 0, w, h)
-                    unblurredWp.alpha = (fadeAlpha * 255).toInt()
-                    unblurredWp.draw(canvas)
-                }
-            }
-
-            // Draw the stationary subject pinned to physical screen coordinates (0, 0, screenW, screenH)
-            // curSheet has translationY, so in canvas coordinates screen Y=0 is at -translationY.
-            // Canvas clipping to boundsRect (0, 0, w, h) automatically clips the subject at the descending sheet bottom!
-            if (subjectBmp != null && !subjectBmp.isRecycled) {
-                val canvasY = -translationY
-                val bmpW = subjectBmp.width.toFloat()
-                val bmpH = subjectBmp.height.toFloat()
-                val screenAspect = w.toFloat() / h.toFloat()
-                val bmpAspect = bmpW / bmpH
-
-                // If aspect ratio is close to screen aspect ratio (e.g. full wallpaper cutout)
-                val isFullScreenCutout = kotlin.math.abs(bmpAspect - screenAspect) / screenAspect < 0.08f
-
-                if (isFullScreenCutout) {
-                    subjectDstRect.set(0, canvasY.toInt(), w, (canvasY + h).toInt())
-                } else {
-                    // Fit nicely preserving aspect ratio (e.g. cropped subject cutout from user)
-                    val scale = kotlin.math.min(w.toFloat() / bmpW, h.toFloat() / bmpH)
-                    val scaledW = bmpW * scale
-                    val scaledH = bmpH * scale
-                    val left = (w - scaledW) / 2f
-                    val top = canvasY + (h - scaledH) / 2f
-                    subjectDstRect.set(left.toInt(), top.toInt(), (left + scaledW).toInt(), (top + scaledH).toInt())
-                }
-                canvas.drawBitmap(subjectBmp, null, subjectDstRect, subjectPaint)
-            }
-
-            if (fadeAlpha > 0f) {
-                canvas.drawColor(((0x33 * fadeAlpha).toInt() shl 24))
-            }
-
-            canvas.restoreToCount(count)
         } else {
-            val shouldDrawWallpaper = cfg.lockWallpaperEnabled && !isLandscape &&
-                    (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
+            0f
+        }
 
-            if (shouldDrawWallpaper) {
-                val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
-                if (unblurredWp != null) {
-                    val count = canvas.save()
-                    sheetClipPath.reset()
-                    val radii = floatArrayOf(
-                        0f, 0f,
-                        0f, 0f,
-                        cornerRadius, cornerRadius,
-                        cornerRadius, cornerRadius
-                    )
-                    boundsRect.set(0f, 0f, w.toFloat(), h.toFloat())
-                    sheetClipPath.addRoundRect(boundsRect, radii, android.graphics.Path.Direction.CW)
-                    canvas.clipPath(sheetClipPath)
+        if (isDepthActive && subjectBmp != null && !subjectBmp.isRecycled) {
+            val canvasY = -translationY
+            val bmpW = subjectBmp.width.toFloat()
+            val bmpH = subjectBmp.height.toFloat()
+            val screenAspect = w.toFloat() / h.toFloat()
+            val bmpAspect = bmpW / bmpH
 
-                    unblurredWp.setBounds(0, 0, w, h)
-                    unblurredWp.alpha = 255
-                    unblurredWp.draw(canvas)
+            val isFullScreenCutout = kotlin.math.abs(bmpAspect - screenAspect) / screenAspect < 0.08f
 
-                    // Subtle dark scrim (20% black) so notification text & icons remain crystal clear against bright wallpapers
-                    canvas.drawColor(0x33000000.toInt())
-                    canvas.restoreToCount(count)
-                }
+            if (isFullScreenCutout) {
+                subjectDstRect.set(0, canvasY.toInt(), w, (canvasY + h).toInt())
+            } else {
+                val scale = kotlin.math.min(w.toFloat() / bmpW, h.toFloat() / bmpH)
+                val scaledW = bmpW * scale
+                val scaledH = bmpH * scale
+                val left = (w - scaledW) / 2f
+                val top = canvasY + (h - scaledH) / 2f
+                subjectDstRect.set(left.toInt(), top.toInt(), (left + scaledW).toInt(), (top + scaledH).toInt())
             }
         }
+
+        val shouldDrawWallpaper = !isDepthActive && cfg.lockWallpaperEnabled && !isLandscape &&
+                (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
+
+        // 1. Draw sheet foreground (wallpaper & subject) directly to screen canvas
+        drawSheetForeground(canvas, w, h, cornerRadius, isDepthActive, fadeAlpha, subjectBmp, shouldDrawWallpaper)
 
         getLocationOnScreen(location)
         val viewX = location[0]
         val viewY = location[1]
 
-        val shouldDrawWallpaperLegacy = cfg.lockWallpaperEnabled && !isLandscape &&
-                (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
-        val shouldRenderGlass = cfg.glassEffectsEnabled && (!cfg.glassOnlyWithoutWallpaper || (!shouldDrawWallpaperLegacy && !isDepthActive))
+        val shouldRenderGlass = cfg.glassEffectsEnabled && (!cfg.glassOnlyWithoutWallpaper || (!shouldDrawWallpaper && !isDepthActive))
 
         if (shouldRenderGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderer != null) {
             val params = GlassLensRenderer.LensParams(
@@ -226,6 +170,8 @@ class NotificationGlassSheetView @JvmOverloads constructor(
             )
 
             val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
+                // Step A: Draw background behind shade window in full screen coordinates
+                recordingCanvas.save()
                 recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
                 val backdropBmp = RealtimeBackdropHelper.getLatestBackdropBitmap()
                 if (backdropBmp != null && !backdropBmp.isRecycled) {
@@ -253,6 +199,14 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                         recordingCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), p)
                     }
                 }
+                recordingCanvas.restore()
+
+                // Step B: Draw sheet foreground (wallpaper & subject) onto recordingCanvas with margin offset,
+                // so the liquid glass bevel normals optically refract the actual opaque image under the edges!
+                recordingCanvas.save()
+                recordingCanvas.translate(margin.toFloat(), margin.toFloat())
+                drawSheetForeground(recordingCanvas, w, h, cornerRadius, isDepthActive, fadeAlpha, subjectBmp, shouldDrawWallpaper)
+                recordingCanvas.restore()
             }
 
             if (!success) {
@@ -260,6 +214,73 @@ class NotificationGlassSheetView @JvmOverloads constructor(
             }
         } else {
             drawFallbackBorder(canvas, w.toFloat(), h.toFloat(), cornerRadius)
+        }
+    }
+
+    private fun drawSheetForeground(
+        targetCanvas: Canvas,
+        w: Int,
+        h: Int,
+        cornerRadius: Float,
+        isDepthActive: Boolean,
+        fadeAlpha: Float,
+        subjectBmp: Bitmap?,
+        shouldDrawWallpaper: Boolean
+    ) {
+        if (isDepthActive) {
+            val count = targetCanvas.save()
+            sheetClipPath.reset()
+            val radii = floatArrayOf(
+                0f, 0f,
+                0f, 0f,
+                cornerRadius, cornerRadius,
+                cornerRadius, cornerRadius
+            )
+            boundsRect.set(0f, 0f, w.toFloat(), h.toFloat())
+            sheetClipPath.addRoundRect(boundsRect, radii, android.graphics.Path.Direction.CW)
+            targetCanvas.clipPath(sheetClipPath)
+
+            if (fadeAlpha > 0f) {
+                val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
+                if (unblurredWp != null) {
+                    unblurredWp.setBounds(0, 0, w, h)
+                    unblurredWp.alpha = (fadeAlpha * 255).toInt()
+                    unblurredWp.draw(targetCanvas)
+                }
+            }
+
+            if (subjectBmp != null && !subjectBmp.isRecycled) {
+                targetCanvas.drawBitmap(subjectBmp, null, subjectDstRect, subjectPaint)
+            }
+
+            if (fadeAlpha > 0f) {
+                targetCanvas.drawColor(((0x33 * fadeAlpha).toInt() shl 24))
+            }
+
+            targetCanvas.restoreToCount(count)
+        } else if (shouldDrawWallpaper) {
+            val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
+            if (unblurredWp != null) {
+                val count = targetCanvas.save()
+                sheetClipPath.reset()
+                val radii = floatArrayOf(
+                    0f, 0f,
+                    0f, 0f,
+                    cornerRadius, cornerRadius,
+                    cornerRadius, cornerRadius
+                )
+                boundsRect.set(0f, 0f, w.toFloat(), h.toFloat())
+                sheetClipPath.addRoundRect(boundsRect, radii, android.graphics.Path.Direction.CW)
+                targetCanvas.clipPath(sheetClipPath)
+
+                unblurredWp.setBounds(0, 0, w, h)
+                unblurredWp.alpha = 255
+                unblurredWp.draw(targetCanvas)
+
+                // Subtle dark scrim (20% black) so notification text & icons remain crystal clear against bright wallpapers
+                targetCanvas.drawColor(0x33000000.toInt())
+                targetCanvas.restoreToCount(count)
+            }
         }
     }
 

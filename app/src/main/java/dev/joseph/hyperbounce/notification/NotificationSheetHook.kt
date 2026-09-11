@@ -69,11 +69,18 @@ object NotificationSheetHook {
     var isShadeSwitching: Boolean = false
 
     @Volatile
+    var isShadeSwitchingToControlCenter: Boolean = false
+
+    @Volatile
+    var isShadeSwitchingToNotification: Boolean = false
+
+    @Volatile
     var isControlCenterExpanded: Boolean = false
 
     private var controlCenterRef: WeakReference<Any>? = null
     private var containerRef: WeakReference<ViewGroup>? = null
     private var themeBackgroundViewRef: WeakReference<View>? = null
+    private var blurAnimatorRef: WeakReference<Any>? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile
@@ -111,6 +118,8 @@ object NotificationSheetHook {
     }
 
     fun isControlCenterActive(): Boolean {
+        if (isShadeSwitchingToNotification) return false
+        if (isShadeSwitchingToControlCenter) return true
         val cc = controlCenterRef?.get()
         if (cc != null) {
             try {
@@ -118,15 +127,11 @@ object NotificationSheetHook {
                 val expanded = method.invoke(cc) as? Boolean
                 if (expanded != null) {
                     isControlCenterExpanded = expanded
-                    if (!expanded) {
-                        isShadeSwitching = false
-                    }
-                    return expanded || isShadeSwitching
+                    return expanded
                 }
             } catch (_: Throwable) {}
         }
-        if (isShadeSwitching || isControlCenterExpanded) return true
-        return false
+        return isControlCenterExpanded
     }
 
     private val isUnlockedShadeActive: Boolean
@@ -216,6 +221,48 @@ object NotificationSheetHook {
             container.scaleX = 1.0f
             container.scaleY = 1.0f
             resetNotificationMargins(container)
+            RealtimeBackdropHelper.stopLiveRefresh()
+        }
+    }
+
+    private fun showSheetForNotificationCenter() {
+        mainHandler.post {
+            val container = containerRef?.get() ?: return@post
+            val cfg = NotificationSheetConfigHolder.sheet
+            if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard(container.context) || isControlCenterActive()) {
+                return@post
+            }
+            ensureGlassSheetInjected(container)
+            ensureHomePillInjected(container)
+            val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+            val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
+            sheet?.visibility = View.VISIBLE
+            sheet?.expansionFraction = 1.0f
+            sheet?.translationY = 0.0f
+            sheet?.postInvalidateOnAnimation()
+            pill?.visibility = View.VISIBLE
+            pill?.translationY = 0.0f
+            if (cfg.depthWallpaperEnabled) {
+                RealtimeBackdropHelper.startLiveRefresh(container.context)
+            }
+        }
+    }
+
+    private fun suppressNotificationBlur() {
+        val cfg = NotificationSheetConfigHolder.sheet
+        if (cfg.enabled && cfg.depthWallpaperEnabled && currentStatusBarState == 0 && !isControlCenterActive()) {
+            val anim = blurAnimatorRef?.get() ?: return
+            try {
+                for (m in anim.javaClass.declaredMethods) {
+                    if (m.name.startsWith("updateBlurRatio")) {
+                        m.isAccessible = true
+                        m.invoke(anim, 0.0f, false)
+                        break
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to suppress blur ratio", t)
+            }
         }
     }
 
@@ -239,9 +286,13 @@ object NotificationSheetHook {
                                 if (newState != 0) {
                                     isShadeOpen = false
                                     isShadeFullyOpen = false
+                                    hasFullyOpenedForCurrentSession = false
                                     hasTriggeredUnlockForCurrentOpen = true
                                     isControlCenterExpanded = false
                                     isShadeSwitching = false
+                                    isShadeSwitchingToControlCenter = false
+                                    isShadeSwitchingToNotification = false
+                                    lastAppliedFraction = 0f
                                     currentStretchOffset = 0f
                                     mainHandler.post {
                                         val container = containerRef?.get()
@@ -283,29 +334,50 @@ object NotificationSheetHook {
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
                                     val switching = args[0] as Boolean
                                     isShadeSwitching = switching
+
+                                    val toCtrlField = chain.thisObject?.javaClass?.getDeclaredField("toCtrl")
+                                    toCtrlField?.isAccessible = true
+                                    val toCtrl = toCtrlField?.getBoolean(chain.thisObject) ?: false
+
                                     if (switching) {
-                                        try {
-                                            val f = chain.thisObject?.javaClass?.getDeclaredField("toCtrl")
-                                            f?.isAccessible = true
-                                            if (f?.getBoolean(chain.thisObject) == true) {
-                                                isControlCenterExpanded = true
-                                                isShadeFullyOpen = false
-                                                hasTriggeredUnlockForCurrentOpen = true
-                                            }
-                                        } catch (_: Throwable) {}
-                                        isShadeOpen = false
-                                        isShadeFullyOpen = false
-                                        hasTriggeredUnlockForCurrentOpen = true
-                                        currentStretchOffset = 0f
-                                        hideSheetForControlCenter()
+                                        isShadeSwitchingToControlCenter = toCtrl
+                                        isShadeSwitchingToNotification = !toCtrl
+                                        if (toCtrl) {
+                                            isControlCenterExpanded = true
+                                            isShadeOpen = false
+                                            isShadeFullyOpen = false
+                                            hasFullyOpenedForCurrentSession = false
+                                            lastAppliedFraction = 0f
+                                            hasTriggeredUnlockForCurrentOpen = true
+                                            currentStretchOffset = 0f
+                                            hideSheetForControlCenter()
+                                        } else {
+                                            isControlCenterExpanded = false
+                                            hasTriggeredUnlockForCurrentOpen = true
+                                            currentStretchOffset = 0f
+                                            showSheetForNotificationCenter()
+                                            suppressNotificationBlur()
+                                        }
                                     } else {
-                                        try {
-                                            val f = chain.thisObject?.javaClass?.getDeclaredField("toCtrl")
-                                            f?.isAccessible = true
-                                            if (f?.getBoolean(chain.thisObject) == false) {
-                                                isControlCenterExpanded = false
-                                            }
-                                        } catch (_: Throwable) {}
+                                        isShadeSwitchingToControlCenter = false
+                                        isShadeSwitchingToNotification = false
+                                        if (toCtrl) {
+                                            isControlCenterExpanded = true
+                                            isShadeOpen = false
+                                            isShadeFullyOpen = false
+                                            hasFullyOpenedForCurrentSession = false
+                                            lastAppliedFraction = 0f
+                                            hideSheetForControlCenter()
+                                        } else {
+                                            isControlCenterExpanded = false
+                                            isShadeOpen = true
+                                            isShadeFullyOpen = true
+                                            hasFullyOpenedForCurrentSession = true
+                                            hasTriggeredUnlockForCurrentOpen = false
+                                            lastAppliedFraction = 1.0f
+                                            showSheetForNotificationCenter()
+                                            suppressNotificationBlur()
+                                        }
                                     }
                                 } catch (_: Throwable) {}
                                 return chain.proceed()
@@ -317,8 +389,12 @@ object NotificationSheetHook {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 isControlCenterExpanded = true
                                 isShadeSwitching = true
+                                isShadeSwitchingToControlCenter = true
+                                isShadeSwitchingToNotification = false
                                 isShadeOpen = false
                                 isShadeFullyOpen = false
+                                hasFullyOpenedForCurrentSession = false
+                                lastAppliedFraction = 0f
                                 hasTriggeredUnlockForCurrentOpen = true
                                 currentStretchOffset = 0f
                                 hideSheetForControlCenter()
@@ -330,9 +406,16 @@ object NotificationSheetHook {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 isControlCenterExpanded = false
-                                isShadeSwitching = false
-                                isShadeFullyOpen = false
-                                hasTriggeredUnlockForCurrentOpen = true
+                                isShadeSwitching = true
+                                isShadeSwitchingToControlCenter = false
+                                isShadeSwitchingToNotification = true
+                                isShadeFullyOpen = true
+                                isShadeOpen = true
+                                hasFullyOpenedForCurrentSession = true
+                                hasTriggeredUnlockForCurrentOpen = false
+                                lastAppliedFraction = 1.0f
+                                showSheetForNotificationCenter()
+                                suppressNotificationBlur()
                                 return chain.proceed()
                             }
                         })
@@ -357,6 +440,8 @@ object NotificationSheetHook {
                                 isControlCenterExpanded = true
                                 isShadeOpen = false
                                 isShadeFullyOpen = false
+                                hasFullyOpenedForCurrentSession = false
+                                lastAppliedFraction = 0f
                                 hasTriggeredUnlockForCurrentOpen = true
                                 currentStretchOffset = 0f
                                 hideSheetForControlCenter()
@@ -371,9 +456,21 @@ object NotificationSheetHook {
                                     controlCenterRef = WeakReference(chain.thisObject)
                                 }
                                 isControlCenterExpanded = false
-                                isShadeSwitching = false
-                                isShadeFullyOpen = false
-                                hasTriggeredUnlockForCurrentOpen = true
+                                if (isShadeSwitchingToNotification) {
+                                    isShadeSwitching = false
+                                    isShadeSwitchingToNotification = false
+                                    isShadeOpen = true
+                                    isShadeFullyOpen = true
+                                    hasFullyOpenedForCurrentSession = true
+                                    hasTriggeredUnlockForCurrentOpen = false
+                                    lastAppliedFraction = 1.0f
+                                    showSheetForNotificationCenter()
+                                    suppressNotificationBlur()
+                                } else {
+                                    isShadeSwitching = false
+                                    isShadeFullyOpen = false
+                                    hasTriggeredUnlockForCurrentOpen = true
+                                }
                                 return chain.proceed()
                             }
                         })
@@ -392,9 +489,21 @@ object NotificationSheetHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             isControlCenterExpanded = false
-                            isShadeSwitching = false
-                            isShadeFullyOpen = false
-                            hasTriggeredUnlockForCurrentOpen = true
+                            if (isShadeSwitchingToNotification) {
+                                isShadeSwitching = false
+                                isShadeSwitchingToNotification = false
+                                isShadeOpen = true
+                                isShadeFullyOpen = true
+                                hasFullyOpenedForCurrentSession = true
+                                hasTriggeredUnlockForCurrentOpen = false
+                                lastAppliedFraction = 1.0f
+                                showSheetForNotificationCenter()
+                                suppressNotificationBlur()
+                            } else {
+                                isShadeSwitching = false
+                                isShadeFullyOpen = false
+                                hasTriggeredUnlockForCurrentOpen = true
+                            }
                             return chain.proceed()
                         }
                     })
@@ -402,7 +511,10 @@ object NotificationSheetHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             isControlCenterExpanded = true
+                            isShadeOpen = false
                             isShadeFullyOpen = false
+                            hasFullyOpenedForCurrentSession = false
+                            lastAppliedFraction = 0f
                             hasTriggeredUnlockForCurrentOpen = true
                             hideSheetForControlCenter()
                             return chain.proceed()
@@ -1510,8 +1622,9 @@ object NotificationSheetHook {
                 if (m.name.startsWith("updateBlurRatio")) {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
+                            chain.thisObject?.let { blurAnimatorRef = WeakReference(it) }
                             val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.enabled && cfg.depthWallpaperEnabled && currentStatusBarState == 0 && lastAppliedFraction < 0.95f) {
+                            if (cfg.enabled && cfg.depthWallpaperEnabled && currentStatusBarState == 0 && !isControlCenterActive()) {
                                 val args = chain.args.toTypedArray()
                                 if (args.isNotEmpty()) {
                                     args[0] = 0.0f
@@ -1526,30 +1639,6 @@ object NotificationSheetHook {
             }
         } catch (t: Throwable) {
             Log.d(TAG, "NotificationPanelBlurAnimator not found: ${t.message}")
-        }
-
-        try {
-            val blurUtilsClass = Class.forName("com.android.systemui.statusbar.BlurUtils", false, classLoader)
-            for (m in blurUtilsClass.declaredMethods) {
-                if (m.name == "applyBlur" && m.parameterTypes.size >= 2 && m.parameterTypes[1] == Int::class.javaPrimitiveType) {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
-                            val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.enabled && cfg.depthWallpaperEnabled && currentStatusBarState == 0 && lastAppliedFraction < 0.95f) {
-                                val args = chain.args.toTypedArray()
-                                if (args.size >= 2) {
-                                    args[1] = 0
-                                    return chain.proceed(args)
-                                }
-                            }
-                            return chain.proceed()
-                        }
-                    })
-                    Log.d(TAG, "Hooked BlurUtils.applyBlur successfully")
-                }
-            }
-        } catch (t: Throwable) {
-            Log.d(TAG, "BlurUtils not found: ${t.message}")
         }
     }
 }
