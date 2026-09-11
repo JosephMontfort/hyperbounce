@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -133,13 +135,19 @@ fun SettingsClickableRow(
     onClick: () -> Unit,
     subtitle: String? = null,
     titleColor: Color? = null,
+    trailing: (@Composable () -> Unit)? = null,
     icon: @Composable () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val bgAlpha by animateFloatAsState(if (isPressed) 0.15f else 0.0f)
+
     Row(
         Modifier
+            .background(colors.label.copy(alpha = bgAlpha))
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
+                interactionSource = interactionSource,
+                indication = rememberRipple(color = colors.label.copy(alpha = 0.25f)),
                 onClick = onClick
             )
             .fillMaxWidth()
@@ -153,6 +161,9 @@ fun SettingsClickableRow(
             if (subtitle != null) {
                 BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
             }
+        }
+        if (trailing != null) {
+            trailing()
         }
     }
 }

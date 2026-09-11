@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -34,7 +35,9 @@ import java.util.concurrent.Executors
  */
 object DepthWallpaperHelper {
     private const val TAG = "HyperBounce_DepthWP"
-    private const val CACHE_FILENAME = "lock_depth_subject.png"
+    const val CACHE_FILENAME = "lock_depth_subject.png"
+    const val CUSTOM_FILENAME = "custom_depth_subject.png"
+    const val SEGMENTED_FILENAME = "segmented_depth_subject.png"
 
     private val bgExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -68,7 +71,7 @@ object DepthWallpaperHelper {
     }
 
     /**
-     * Obtains the segmented subject bitmap if already cached in memory or on disk.
+     * Obtains the segmented or custom subject bitmap if already cached in memory or on disk.
      * Guaranteed 0ms overhead on the UI thread.
      */
     fun getSubjectBitmap(context: Context): Bitmap? {
@@ -77,7 +80,7 @@ object DepthWallpaperHelper {
             return inMemory
         }
 
-        // Check persistent disk cache
+        // 1. Check persistent local disk cache
         try {
             val file = File(context.filesDir, CACHE_FILENAME)
             if (file.exists() && file.length() > 0) {
@@ -91,10 +94,37 @@ object DepthWallpaperHelper {
                 }
             }
         } catch (t: Throwable) {
-            Log.d(TAG, "Disk cache lookup failed: ${t.message}")
+            Log.d(TAG, "Local disk cache lookup failed: ${t.message}")
         }
 
-        // Trigger asynchronous background generation if not already processing
+        // 2. Fetch from ConfigProvider across processes (crucial when running in SystemUI)
+        try {
+            val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/$CACHE_FILENAME")
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                val opts = BitmapFactory.Options().apply {
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+                val providerBmp = BitmapFactory.decodeFileDescriptor(pfd.fileDescriptor, null, opts)
+                if (providerBmp != null) {
+                    cachedSubjectBitmap = providerBmp
+                    // Cache locally in host process filesDir for instant subsequent access
+                    try {
+                        val targetFile = File(context.filesDir, CACHE_FILENAME)
+                        val tmp = File(context.filesDir, "lock_depth_subject.tmp")
+                        FileOutputStream(tmp).use { fos ->
+                            providerBmp.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                            fos.flush()
+                        }
+                        tmp.renameTo(targetFile)
+                    } catch (_: Throwable) {}
+                    return providerBmp
+                }
+            }
+        } catch (t: Throwable) {
+            Log.d(TAG, "ConfigProvider openFile lookup failed: ${t.message}")
+        }
+
+        // 3. Trigger asynchronous background generation if not already processing
         triggerAsyncSubjectGeneration(context)
         return null
     }
@@ -112,14 +142,14 @@ object DepthWallpaperHelper {
             return
         }
 
-        val file = File(context.filesDir, CACHE_FILENAME)
+        val localFile = File(context.filesDir, CACHE_FILENAME)
         if (!forceRefresh && cachedSubjectBitmap != null && !cachedSubjectBitmap!!.isRecycled) {
             onComplete?.invoke(cachedSubjectBitmap)
             return
         }
-        if (!forceRefresh && file.exists() && file.length() > 0 && cachedSubjectBitmap == null) {
+        if (!forceRefresh && localFile.exists() && localFile.length() > 0 && cachedSubjectBitmap == null) {
             try {
-                val diskBmp = BitmapFactory.decodeFile(file.absolutePath)
+                val diskBmp = BitmapFactory.decodeFile(localFile.absolutePath)
                 if (diskBmp != null) {
                     cachedSubjectBitmap = diskBmp
                     onComplete?.let { cb -> mainHandler.post { cb(diskBmp) } }
@@ -129,12 +159,62 @@ object DepthWallpaperHelper {
             } catch (_: Throwable) {}
         }
 
+        if (forceRefresh) {
+            cachedSubjectBitmap = null
+            try {
+                if (localFile.exists()) localFile.delete()
+            } catch (_: Throwable) {}
+        }
+
         isProcessing = true
         val appContext = context.applicationContext ?: context
 
         bgExecutor.execute {
             try {
+                // If running in host process (e.g. SystemUI), check if ConfigProvider already has it
+                if (!appContext.packageName.equals("dev.joseph.hyperbounce")) {
+                    try {
+                        val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/$CACHE_FILENAME")
+                        appContext.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                            val opts = BitmapFactory.Options().apply {
+                                inPreferredConfig = Bitmap.Config.ARGB_8888
+                            }
+                            val providerBmp = BitmapFactory.decodeFileDescriptor(pfd.fileDescriptor, null, opts)
+                            if (providerBmp != null) {
+                                cachedSubjectBitmap = providerBmp
+                                try {
+                                    val tmp = File(appContext.filesDir, "lock_depth_subject.tmp")
+                                    FileOutputStream(tmp).use { fos ->
+                                        providerBmp.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                                        fos.flush()
+                                    }
+                                    tmp.renameTo(localFile)
+                                } catch (_: Throwable) {}
+                                mainHandler.post { onComplete?.invoke(providerBmp) }
+                                notifyListeners()
+                                return@execute
+                            }
+                        }
+                    } catch (t: Throwable) {
+                        Log.d(TAG, "ConfigProvider lookup in triggerAsync: ${t.message}")
+                    }
+                }
+
                 Log.d(TAG, "Starting on-device MediaPipe subject segmentation...")
+
+                // Ensure MlKitContext is initialized (critical inside com.android.systemui via LSPosed)
+                try {
+                    com.google.mlkit.common.sdkinternal.MlKitContext.initializeIfNeeded(appContext)
+                } catch (t: Throwable) {
+                    try {
+                        val clazz = Class.forName("com.google.mlkit.common.sdkinternal.MlKitContext")
+                        val method = clazz.getMethod("initializeIfNeeded", Context::class.java)
+                        method.invoke(null, appContext)
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "MlKitContext initialization fallback: ${e.message}")
+                    }
+                }
+
                 val rawBitmap = loadSourceWallpaperBitmap(appContext)
                 if (rawBitmap == null) {
                     Log.w(TAG, "Failed to obtain source lock screen wallpaper bitmap for segmentation")
@@ -196,17 +276,24 @@ object DepthWallpaperHelper {
                 outBitmap.setPixels(pixels, 0, maskW, 0, 0, maskW, maskH)
                 Log.d(TAG, "Subject segmented successfully: $foregroundPixels/$totalPixels foreground pixels (${(foregroundPixels * 100f / totalPixels).toInt()}%)")
 
-                // Save to app private cache directory
+                // Save to private cache directory (both segmented and active if custom isn't active)
                 try {
+                    val segFile = File(appContext.filesDir, SEGMENTED_FILENAME)
+                    val activeFile = File(appContext.filesDir, CACHE_FILENAME)
+                    val customFile = File(appContext.filesDir, CUSTOM_FILENAME)
+
                     val tmp = File(appContext.filesDir, "lock_depth_subject.tmp")
                     FileOutputStream(tmp).use { fos ->
                         outBitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
                         fos.flush()
                     }
-                    val targetFile = File(appContext.filesDir, CACHE_FILENAME)
-                    if (tmp.renameTo(targetFile)) {
-                        Log.d(TAG, "Saved segmented subject to ${targetFile.absolutePath}")
+                    tmp.copyTo(segFile, overwrite = true)
+                    if (!customFile.exists() || customFile.length() == 0L) {
+                        tmp.renameTo(activeFile)
+                    } else {
+                        tmp.delete()
                     }
+                    Log.d(TAG, "Saved segmented subject to ${segFile.absolutePath}")
                 } catch (t: Throwable) {
                     Log.w(TAG, "Failed to save subject cache file: ${t.message}")
                 }
@@ -219,6 +306,158 @@ object DepthWallpaperHelper {
                 mainHandler.post { onComplete?.invoke(null) }
             } finally {
                 isProcessing = false
+            }
+        }
+    }
+
+    /**
+     * Checks if a custom transparent subject cutout image is currently saved.
+     */
+    fun hasCustomSubject(context: Context): Boolean {
+        val f = File(context.filesDir, CUSTOM_FILENAME)
+        if (f.exists() && f.length() > 0) return true
+        try {
+            val res = context.contentResolver.call(
+                Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                "hasCustomDepthSubject", null, null
+            )
+            return res?.getBoolean("hasCustom", false) ?: false
+        } catch (_: Throwable) {}
+        return false
+    }
+
+    /**
+     * Saves a user-uploaded image (cutout with background removed) as the active depth subject.
+     * Automatically handles EXIF rotation and memory-safe scaling.
+     */
+    fun saveCustomSubjectFromUri(
+        context: Context,
+        uri: Uri,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        val appContext = context.applicationContext ?: context
+        bgExecutor.execute {
+            try {
+                // Read EXIF orientation if available
+                var rotationDegrees = 0
+                try {
+                    appContext.contentResolver.openInputStream(uri)?.use { stream ->
+                        val exif = android.media.ExifInterface(stream)
+                        val orientation = exif.getAttributeInt(
+                            android.media.ExifInterface.TAG_ORIENTATION,
+                            android.media.ExifInterface.ORIENTATION_NORMAL
+                        )
+                        rotationDegrees = when (orientation) {
+                            android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                            android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                            android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                            else -> 0
+                        }
+                    }
+                } catch (_: Throwable) {}
+
+                val opts = BitmapFactory.Options().apply {
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+                val rawBitmap = appContext.contentResolver.openInputStream(uri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream, null, opts)
+                }
+
+                if (rawBitmap == null) {
+                    Log.w(TAG, "Failed to decode custom subject image from URI: $uri")
+                    mainHandler.post { onComplete?.invoke(false) }
+                    return@execute
+                }
+
+                // Apply EXIF rotation if needed
+                val orientedBitmap = if (rotationDegrees != 0) {
+                    val matrix = android.graphics.Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+                    Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
+                } else {
+                    rawBitmap
+                }
+
+                // Memory-safe bound capping
+                val maxDim = 2560
+                val finalBitmap = if (orientedBitmap.width > maxDim || orientedBitmap.height > maxDim) {
+                    val scale = maxDim.toFloat() / kotlin.math.max(orientedBitmap.width, orientedBitmap.height)
+                    val nw = (orientedBitmap.width * scale).toInt()
+                    val nh = (orientedBitmap.height * scale).toInt()
+                    Bitmap.createScaledBitmap(orientedBitmap, nw, nh, true)
+                } else {
+                    orientedBitmap
+                }
+
+                // Save to both CUSTOM_FILENAME and CACHE_FILENAME
+                val customFile = File(appContext.filesDir, CUSTOM_FILENAME)
+                val activeFile = File(appContext.filesDir, CACHE_FILENAME)
+                val tmp = File(appContext.filesDir, "custom_depth_subject.tmp")
+                FileOutputStream(tmp).use { fos ->
+                    finalBitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                    fos.flush()
+                }
+                tmp.copyTo(customFile, overwrite = true)
+                tmp.renameTo(activeFile)
+
+                cachedSubjectBitmap = finalBitmap
+                Log.d(TAG, "Custom depth subject saved successfully: ${finalBitmap.width}x${finalBitmap.height}")
+
+                mainHandler.post {
+                    notifyListeners()
+                    onComplete?.invoke(true)
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Error saving custom depth subject", t)
+                mainHandler.post { onComplete?.invoke(false) }
+            }
+        }
+    }
+
+    /**
+     * Clears user custom subject image and reverts back to auto lockscreen wallpaper segmentation.
+     */
+    fun clearCustomSubject(
+        context: Context,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        val appContext = context.applicationContext ?: context
+        bgExecutor.execute {
+            try {
+                val customFile = File(appContext.filesDir, CUSTOM_FILENAME)
+                if (customFile.exists()) customFile.delete()
+
+                try {
+                    appContext.contentResolver.call(
+                        Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                        "clearCustomDepthSubject", null, null
+                    )
+                } catch (_: Throwable) {}
+
+                val segFile = File(appContext.filesDir, SEGMENTED_FILENAME)
+                val activeFile = File(appContext.filesDir, CACHE_FILENAME)
+
+                if (segFile.exists() && segFile.length() > 0) {
+                    segFile.copyTo(activeFile, overwrite = true)
+                    val opts = BitmapFactory.Options().apply {
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                    }
+                    val bmp = BitmapFactory.decodeFile(activeFile.absolutePath, opts)
+                    cachedSubjectBitmap = bmp
+                    mainHandler.post {
+                        notifyListeners()
+                        onComplete?.invoke(true)
+                    }
+                } else {
+                    cachedSubjectBitmap = null
+                    if (activeFile.exists()) activeFile.delete()
+                    // Re-run wallpaper segmentation
+                    triggerAsyncSubjectGeneration(appContext, forceRefresh = true) { bmp ->
+                        onComplete?.invoke(bmp != null)
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Error clearing custom depth subject", t)
+                mainHandler.post { onComplete?.invoke(false) }
             }
         }
     }

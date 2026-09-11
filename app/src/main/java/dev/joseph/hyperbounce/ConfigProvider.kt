@@ -6,6 +6,7 @@ import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -98,6 +99,44 @@ class ConfigProvider : ContentProvider() {
                     }
                 } catch (t: Throwable) {}
                 return Bundle()
+            }
+            "hasCustomDepthSubject" -> {
+                val b = Bundle()
+                val f = File(ctx.filesDir, "custom_depth_subject.png")
+                b.putBoolean("hasCustom", f.exists() && f.length() > 0)
+                return b
+            }
+            "clearCustomDepthSubject" -> {
+                try {
+                    val customFile = File(ctx.filesDir, "custom_depth_subject.png")
+                    if (customFile.exists()) customFile.delete()
+                    val segFile = File(ctx.filesDir, "segmented_depth_subject.png")
+                    val activeFile = File(ctx.filesDir, "lock_depth_subject.png")
+                    if (segFile.exists() && segFile.length() > 0) {
+                        segFile.copyTo(activeFile, overwrite = true)
+                    } else {
+                        if (activeFile.exists()) activeFile.delete()
+                    }
+                } catch (_: Throwable) {}
+                return Bundle()
+            }
+        }
+        return null
+    }
+
+    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor? {
+        val ctx = context ?: return null
+        val segment = uri.lastPathSegment ?: return null
+        val allowedFiles = setOf(
+            "lock_depth_subject.png",
+            "custom_depth_subject.png",
+            "segmented_depth_subject.png",
+            "cc_layout.json"
+        )
+        if (segment in allowedFiles) {
+            val file = File(ctx.filesDir, segment)
+            if (file.exists() && file.length() > 0) {
+                return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
             }
         }
         return null

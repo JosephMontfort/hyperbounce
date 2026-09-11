@@ -681,7 +681,12 @@ object NotificationSheetHook {
             val receiver = object : android.content.BroadcastReceiver() {
                 override fun onReceive(c: Context?, intent: android.content.Intent?) {
                     if (intent?.action == "dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER") {
-                        DepthWallpaperHelper.triggerAsyncSubjectGeneration(c ?: context, forceRefresh = true)
+                        DepthWallpaperHelper.clearCache(c ?: context)
+                        DepthWallpaperHelper.triggerAsyncSubjectGeneration(c ?: context, forceRefresh = true) {
+                            mainHandler.post {
+                                lastAppliedNotificationContainer?.get()?.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)?.postInvalidateOnAnimation()
+                            }
+                        }
                         return
                     }
                     val key = intent?.getStringExtra("key") ?: return
@@ -695,6 +700,15 @@ object NotificationSheetHook {
                             cfg.depthWallpaperEnabled = intent.getBooleanExtra("value_boolean", cfg.depthWallpaperEnabled)
                             if (cfg.depthWallpaperEnabled) {
                                 DepthWallpaperHelper.triggerAsyncSubjectGeneration(c ?: context)
+                            }
+                        }
+                        "notif_sheet_depth_custom_subject" -> {
+                            cfg.depthCustomSubject = intent.getBooleanExtra("value_boolean", cfg.depthCustomSubject)
+                            DepthWallpaperHelper.clearCache(c ?: context)
+                            DepthWallpaperHelper.triggerAsyncSubjectGeneration(c ?: context, forceRefresh = true) {
+                                mainHandler.post {
+                                    lastAppliedNotificationContainer?.get()?.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)?.postInvalidateOnAnimation()
+                                }
                             }
                         }
                         "notif_sheet_glass_effects_enabled" -> cfg.glassEffectsEnabled = intent.getBooleanExtra("value_boolean", cfg.glassEffectsEnabled)

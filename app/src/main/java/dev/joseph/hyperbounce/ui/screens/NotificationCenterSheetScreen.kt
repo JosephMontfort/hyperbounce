@@ -1,13 +1,24 @@
 package dev.joseph.hyperbounce.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.joseph.hyperbounce.notification.glass.DepthWallpaperHelper
 import dev.joseph.hyperbounce.ui.components.AppGridIcon
 import dev.joseph.hyperbounce.ui.components.GlassCard
+import dev.joseph.hyperbounce.ui.components.ImageIcon
 import dev.joseph.hyperbounce.ui.components.LockIcon
 import dev.joseph.hyperbounce.ui.components.ResetArrowIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
@@ -17,6 +28,7 @@ import dev.joseph.hyperbounce.ui.components.SettingsClickableRow
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
 import dev.joseph.hyperbounce.ui.components.SlidersIcon
+import dev.joseph.hyperbounce.ui.components.TrashIcon
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import java.util.Locale
@@ -30,6 +42,29 @@ fun NotificationCenterSheetScreen(
 ) {
     val sheet = repository.notificationSheet
     val context = androidx.compose.ui.platform.LocalContext.current
+    var isScanning by remember { mutableStateOf(false) }
+    var hasCustomSubject by remember { mutableStateOf(DepthWallpaperHelper.hasCustomSubject(context)) }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            Toast.makeText(context, "Processing custom cutout image...", Toast.LENGTH_SHORT).show()
+            DepthWallpaperHelper.saveCustomSubjectFromUri(context, uri) { success ->
+                if (success) {
+                    hasCustomSubject = true
+                    sheet.setDepthCustomSubject(true)
+                    Toast.makeText(context, "Custom subject image applied successfully", Toast.LENGTH_SHORT).show()
+                    try {
+                        val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
+                        context.sendBroadcast(intent)
+                    } catch (_: Throwable) {}
+                } else {
+                    Toast.makeText(context, "Failed to load custom image", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     ScreenScaffold(
         title = "Notification Center",
@@ -105,9 +140,9 @@ fun NotificationCenterSheetScreen(
                     onCheckedChange = { enabled ->
                         sheet.setDepthWallpaperEnabled(enabled)
                         if (enabled) {
-                            dev.joseph.hyperbounce.notification.glass.DepthWallpaperHelper.triggerAsyncSubjectGeneration(context)
+                            DepthWallpaperHelper.triggerAsyncSubjectGeneration(context)
                             try {
-                                val intent = android.content.Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
+                                val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
                                 context.sendBroadcast(intent)
                             } catch (_: Throwable) {}
                         }
@@ -118,23 +153,68 @@ fun NotificationCenterSheetScreen(
                 if (sheet.depthWallpaperEnabled) {
                     RowDivider(colors.separator)
                     SettingsClickableRow(
-                        title = "Re-scan Depth Subject",
-                        subtitle = "Re-runs MediaPipe segmentation on active lockscreen wallpaper",
+                        title = if (hasCustomSubject) "Change Custom Subject (PNG)" else "Upload Custom Subject (PNG)",
+                        subtitle = if (hasCustomSubject) "Custom subject active (cutout). Tap to pick another" else "Use your own cutout image with background already removed",
                         colors = colors,
                         iconTint = colors.accentBlue,
                         onClick = {
-                            dev.joseph.hyperbounce.notification.glass.DepthWallpaperHelper.triggerAsyncSubjectGeneration(context, forceRefresh = true)
-                            try {
-                                val intent = android.content.Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
-                                context.sendBroadcast(intent)
-                            } catch (_: Throwable) {}
+                            imagePickerLauncher.launch("image/*")
+                        },
+                        icon = { ImageIcon(color = Color.White, size = 15.dp) }
+                    )
+                    if (hasCustomSubject) {
+                        RowDivider(colors.separator)
+                        SettingsClickableRow(
+                            title = "Remove Custom Subject",
+                            subtitle = "Revert to auto-segmentation of lockscreen wallpaper",
+                            colors = colors,
+                            iconTint = colors.accentRed,
+                            titleColor = colors.accentRed,
+                            onClick = {
+                                DepthWallpaperHelper.clearCustomSubject(context) { success ->
+                                    hasCustomSubject = false
+                                    sheet.setDepthCustomSubject(false)
+                                    Toast.makeText(context, "Reverted to lockscreen wallpaper segmentation", Toast.LENGTH_SHORT).show()
+                                    try {
+                                        val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
+                                        context.sendBroadcast(intent)
+                                    } catch (_: Throwable) {}
+                                }
+                            },
+                            icon = { TrashIcon(color = Color.White, size = 15.dp) }
+                        )
+                    }
+                    RowDivider(colors.separator)
+                    SettingsClickableRow(
+                        title = if (isScanning) "Scanning Depth Subject..." else "Re-scan Wallpaper Subject",
+                        subtitle = if (isScanning) "Extracting subject using on-device ML segmentation..." else "Re-runs MediaPipe segmentation on active lockscreen wallpaper",
+                        colors = colors,
+                        iconTint = colors.accentPurple,
+                        onClick = {
+                            if (isScanning) return@SettingsClickableRow
+                            isScanning = true
+                            Toast.makeText(context, "Scanning lockscreen wallpaper depth...", Toast.LENGTH_SHORT).show()
+                            DepthWallpaperHelper.triggerAsyncSubjectGeneration(context, forceRefresh = true) { bmp ->
+                                isScanning = false
+                                if (bmp != null) {
+                                    hasCustomSubject = false
+                                    sheet.setDepthCustomSubject(false)
+                                    Toast.makeText(context, "Depth subject extracted successfully", Toast.LENGTH_SHORT).show()
+                                    try {
+                                        val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
+                                        context.sendBroadcast(intent)
+                                    } catch (_: Throwable) {}
+                                } else {
+                                    Toast.makeText(context, "Failed to detect subject in wallpaper", Toast.LENGTH_LONG).show()
+                                }
+                            }
                         },
                         icon = { ResetArrowIcon(color = Color.White, size = 15.dp) }
                     )
                 }
             }
             SectionFooter(
-                "Isolates foreground subject from your lock screen wallpaper using on-device ML segmentation. While pulling down the shade, the background is 100% transparent with zero blur, and the subject remains fixed in place, clipped at the descending sheet's edge.",
+                "Isolates foreground subject from your lock screen wallpaper using on-device ML segmentation, or uses your custom transparent cutout image. While pulling down the shade, the background is 100% transparent with zero blur, and the subject remains fixed in place, clipped at the descending sheet's edge.",
                 colors
             )
         }

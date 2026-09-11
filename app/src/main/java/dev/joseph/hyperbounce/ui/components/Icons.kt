@@ -456,3 +456,78 @@ fun LockIcon(color: Color, size: Dp = 24.dp, strokeWidth: Dp = 2.dp) {
         )
     }
 }
+
+@Composable
+fun ImageIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 18.dp,
+    strokeWidth: Dp = 1.8.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val s = strokeWidth.toPx()
+        // Outer frame
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(s / 2, s / 2),
+            size = Size(w - s, h - s),
+            cornerRadius = CornerRadius(w * 0.15f, h * 0.15f),
+            style = Stroke(s)
+        )
+        // Sun / dot
+        drawCircle(
+            color = color,
+            radius = w * 0.08f,
+            center = Offset(w * 0.32f, h * 0.35f)
+        )
+        // Mountain peak path
+        val path = Path().apply {
+            moveTo(w * 0.16f, h * 0.76f)
+            lineTo(w * 0.42f, h * 0.48f)
+            lineTo(w * 0.60f, h * 0.66f)
+            lineTo(w * 0.72f, h * 0.54f)
+            lineTo(w * 0.84f, h * 0.76f)
+        }
+        drawPath(path, color = color, style = Stroke(s, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    }
+}
+
+@Composable
+fun TrashIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 18.dp,
+    strokeWidth: Dp = 1.8.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val s = strokeWidth.toPx()
+        // Can body
+        val bodyPath = Path().apply {
+            moveTo(w * 0.25f, h * 0.34f)
+            lineTo(w * 0.30f, h * 0.88f)
+            lineTo(w * 0.70f, h * 0.88f)
+            lineTo(w * 0.75f, h * 0.34f)
+        }
+        drawPath(bodyPath, color = color, style = Stroke(s, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        // Rim line
+        drawLine(
+            color = color,
+            start = Offset(w * 0.16f, h * 0.34f),
+            end = Offset(w * 0.84f, h * 0.34f),
+            strokeWidth = s,
+            cap = StrokeCap.Round
+        )
+        // Handle
+        val handlePath = Path().apply {
+            moveTo(w * 0.38f, h * 0.34f)
+            lineTo(w * 0.38f, h * 0.20f)
+            lineTo(w * 0.62f, h * 0.20f)
+            lineTo(w * 0.62f, h * 0.34f)
+        }
+        drawPath(handlePath, color = color, style = Stroke(s, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    }
+}

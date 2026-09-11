@@ -144,7 +144,25 @@ class NotificationGlassSheetView @JvmOverloads constructor(
             // Canvas clipping to boundsRect (0, 0, w, h) automatically clips the subject at the descending sheet bottom!
             if (subjectBmp != null && !subjectBmp.isRecycled) {
                 val canvasY = -translationY
-                subjectDstRect.set(0, canvasY.toInt(), w, (canvasY + h).toInt())
+                val bmpW = subjectBmp.width.toFloat()
+                val bmpH = subjectBmp.height.toFloat()
+                val screenAspect = w.toFloat() / h.toFloat()
+                val bmpAspect = bmpW / bmpH
+
+                // If aspect ratio is close to screen aspect ratio (e.g. full wallpaper cutout)
+                val isFullScreenCutout = kotlin.math.abs(bmpAspect - screenAspect) / screenAspect < 0.08f
+
+                if (isFullScreenCutout) {
+                    subjectDstRect.set(0, canvasY.toInt(), w, (canvasY + h).toInt())
+                } else {
+                    // Fit nicely preserving aspect ratio (e.g. cropped subject cutout from user)
+                    val scale = kotlin.math.min(w.toFloat() / bmpW, h.toFloat() / bmpH)
+                    val scaledW = bmpW * scale
+                    val scaledH = bmpH * scale
+                    val left = (w - scaledW) / 2f
+                    val top = canvasY + (h - scaledH) / 2f
+                    subjectDstRect.set(left.toInt(), top.toInt(), (left + scaledW).toInt(), (top + scaledH).toInt())
+                }
                 canvas.drawBitmap(subjectBmp, null, subjectDstRect, subjectPaint)
             }
 

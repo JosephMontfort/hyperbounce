@@ -139,6 +139,7 @@ data class NotificationSheetSettings(
     val lockWallpaperEnabled: Boolean = false,
     val lockWallpaperHomescreenOnly: Boolean = false,
     val depthWallpaperEnabled: Boolean = false,
+    val depthCustomSubject: Boolean = false,
     val glassEffectsEnabled: Boolean = false,
     val glassOnlyWithoutWallpaper: Boolean = false,
     val refractionHeight: Float = 50.0f,
