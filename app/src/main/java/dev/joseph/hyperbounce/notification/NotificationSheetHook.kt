@@ -13,6 +13,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewParent
 import android.view.animation.DecelerateInterpolator
+import dev.joseph.hyperbounce.notification.glass.DepthWallpaperHelper
 import dev.joseph.hyperbounce.notification.glass.NotificationGlassSheetView
 import dev.joseph.hyperbounce.notification.glass.RealtimeBackdropHelper
 import io.github.libxposed.api.XposedInterface
@@ -72,6 +73,7 @@ object NotificationSheetHook {
 
     private var controlCenterRef: WeakReference<Any>? = null
     private var containerRef: WeakReference<ViewGroup>? = null
+    private var themeBackgroundViewRef: WeakReference<View>? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile
@@ -164,8 +166,11 @@ object NotificationSheetHook {
         // 9. Hook StatusBarTransitionAnimatorController to track activity launch from notification clicks
         hookTransitionAnimatorController(module, classLoader)
 
-        // 10. Hook NotificationPanelView.dispatchTouchEvent for touch tracking and touch-release unlock trigger
-        hookNotificationPanelView(module, classLoader)
+        // 10. Hook NotificationShadeWindowView & NotificationPanelView for touch tracking and touch-release unlock trigger
+        hookNotificationWindowTouch(module, classLoader)
+
+        // 11. Hook NotificationPanelBlurAnimator & BlurUtils for depth wallpaper background blur suppression
+        hookBlurSuppression(module, classLoader)
     }
 
     private fun hookWakeUpCoordinator(module: XposedModule, classLoader: ClassLoader) {
@@ -567,6 +572,24 @@ object NotificationSheetHook {
                     }
                 }
             }
+
+            // Bind the Xiaomi theme_background view for depth blur suppression
+            if (themeBackgroundViewRef?.get() == null) {
+                val themeBgId = container.resources.getIdentifier("theme_background", "id", "com.android.systemui")
+                if (themeBgId != 0) {
+                    var p: ViewParent? = container.parent
+                    while (p != null) {
+                        if (p is ViewGroup) {
+                            val bg = p.findViewById<View>(themeBgId)
+                            if (bg != null) {
+                                themeBackgroundViewRef = WeakReference(bg)
+                                break
+                            }
+                        }
+                        p = p.parent
+                    }
+                }
+            }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to inject NotificationGlassSheetView", t)
         }
@@ -652,9 +675,15 @@ object NotificationSheetHook {
     private fun registerSettingsReceiver(context: Context) {
         if (isSettingsReceiverRegistered) return
         try {
-            val filter = android.content.IntentFilter("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED")
+            val filter = android.content.IntentFilter("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED").apply {
+                addAction("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
+            }
             val receiver = object : android.content.BroadcastReceiver() {
                 override fun onReceive(c: Context?, intent: android.content.Intent?) {
+                    if (intent?.action == "dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER") {
+                        DepthWallpaperHelper.triggerAsyncSubjectGeneration(c ?: context, forceRefresh = true)
+                        return
+                    }
                     val key = intent?.getStringExtra("key") ?: return
                     val cfg = NotificationSheetConfigHolder.sheet
                     var handled = true
@@ -662,6 +691,12 @@ object NotificationSheetHook {
                         "notif_sheet_enabled" -> cfg.enabled = intent.getBooleanExtra("value_boolean", cfg.enabled)
                         "notif_sheet_lock_wallpaper_enabled" -> cfg.lockWallpaperEnabled = intent.getBooleanExtra("value_boolean", cfg.lockWallpaperEnabled)
                         "notif_sheet_lock_wallpaper_homescreen_only" -> cfg.lockWallpaperHomescreenOnly = intent.getBooleanExtra("value_boolean", cfg.lockWallpaperHomescreenOnly)
+                        "notif_sheet_depth_wallpaper_enabled" -> {
+                            cfg.depthWallpaperEnabled = intent.getBooleanExtra("value_boolean", cfg.depthWallpaperEnabled)
+                            if (cfg.depthWallpaperEnabled) {
+                                DepthWallpaperHelper.triggerAsyncSubjectGeneration(c ?: context)
+                            }
+                        }
                         "notif_sheet_glass_effects_enabled" -> cfg.glassEffectsEnabled = intent.getBooleanExtra("value_boolean", cfg.glassEffectsEnabled)
                         "notif_sheet_glass_only_without_wallpaper" -> cfg.glassOnlyWithoutWallpaper = intent.getBooleanExtra("value_boolean", cfg.glassOnlyWithoutWallpaper)
                         "notif_card_refraction_height" -> cfg.refractionHeight = intent.getFloatExtra("value_float", cfg.refractionHeight)
@@ -1258,27 +1293,6 @@ object NotificationSheetHook {
             isShadeOpen = true
         }
 
-        // Motion vector calculation: delta < 0 means closing, delta >= 0 means opening
-        val delta = if (prevFraction >= 0f) fraction - prevFraction else 0f
-
-        // Programmatic closing unlock trigger (fallback when touch release already happened or programmatic close):
-        // ONLY triggers when:
-        // 1. Shade has reached full open in current session.
-        // 2. User is NOT touching the screen (!isUserTouchingShade).
-        // 3. Gesture is strictly CLOSING (delta < -0.008f). Never triggers during pull-down.
-        // 4. Fraction has crossed below the spring rebound threshold (fraction <= 0.85f && fraction > 0.15f).
-        // 5. Not an app launch from notification click.
-        // 6. Has not yet fired for the current open session.
-        if (hasFullyOpenedForCurrentSession && !isUserTouchingShade && !hasTriggeredUnlockForCurrentOpen && delta < -0.008f && fraction <= 0.85f && fraction > 0.15f) {
-            hasTriggeredUnlockForCurrentOpen = true
-            isShadeFullyOpen = false
-            hasFullyOpenedForCurrentSession = false
-            if (currentStatusBarState == 0 && !isControlCenterActive() && !isLaunchingNotificationActivity) {
-                Log.d(TAG, "Closing gesture animation (delta=$delta, frac=$fraction) -> triggering simultaneous unlock animation")
-                notifyCloseOverHomescreen(container.context)
-            }
-        }
-
         if (fraction <= 0.015f) {
             sheet?.visibility = View.GONE
             sheet?.translationY = -viewHeight
@@ -1316,6 +1330,7 @@ object NotificationSheetHook {
         val curSheet = sheet ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
         if (curSheet != null) {
             curSheet.visibility = View.VISIBLE
+            curSheet.expansionFraction = fraction
             val prevY = curSheet.translationY
             curSheet.translationY = finalSheetY
             if (abs(prevY - finalSheetY) > 0.5f) {
@@ -1330,6 +1345,13 @@ object NotificationSheetHook {
                 RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
             } else {
                 RealtimeBackdropHelper.stopLiveRefresh()
+            }
+
+            // Suppress background blur and dimming when iOS 27 Depth Wallpaper is active
+            if (cfg.depthWallpaperEnabled && currentStatusBarState == 0) {
+                val bgAlpha = if (fraction >= 0.90f) ((fraction - 0.90f) / 0.10f).coerceIn(0f, 1f) else 0f
+                curSheet.shadeBackgroundView?.alpha = bgAlpha
+                themeBackgroundViewRef?.get()?.alpha = bgAlpha
             }
         }
 
@@ -1402,28 +1424,34 @@ object NotificationSheetHook {
         }
     }
 
-    private fun hookNotificationPanelView(module: XposedModule, classLoader: ClassLoader) {
-        try {
-            val npvClass = Class.forName("com.android.systemui.shade.NotificationPanelView", false, classLoader)
-            for (m: Method in npvClass.declaredMethods) {
-                if (m.name == "dispatchTouchEvent" && m.parameterTypes.size == 1 &&
-                    m.parameterTypes[0] == MotionEvent::class.java
-                ) {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
-                            val rawArgs = chain.args
-                            val event = (if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as? MotionEvent
-                            if (event != null) {
-                                handlePanelTouchEvent(event)
+    private fun hookNotificationWindowTouch(module: XposedModule, classLoader: ClassLoader) {
+        val classNames = arrayOf(
+            "com.android.systemui.shade.NotificationShadeWindowView",
+            "com.android.systemui.shade.NotificationPanelView"
+        )
+        for (className in classNames) {
+            try {
+                val clazz = Class.forName(className, false, classLoader)
+                for (m: Method in clazz.declaredMethods) {
+                    if (m.name == "dispatchTouchEvent" && m.parameterTypes.size == 1 &&
+                        m.parameterTypes[0] == MotionEvent::class.java
+                    ) {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val rawArgs = chain.args
+                                val event = (if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as? MotionEvent
+                                if (event != null) {
+                                    handlePanelTouchEvent(event)
+                                }
+                                return chain.proceed()
                             }
-                            return chain.proceed()
-                        }
-                    })
-                    Log.d(TAG, "Hooked NotificationPanelView.dispatchTouchEvent successfully")
+                        })
+                        Log.d(TAG, "Hooked $className.dispatchTouchEvent successfully")
+                    }
                 }
+            } catch (t: Throwable) {
+                Log.d(TAG, "Failed to hook $className: ${t.message}")
             }
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to hook NotificationPanelView", t)
         }
     }
 
@@ -1437,13 +1465,16 @@ object NotificationSheetHook {
                 isUserTouchingShade = true
                 touchDownY = event.rawY
             }
+            MotionEvent.ACTION_MOVE -> {
+                isUserTouchingShade = true
+            }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val wasTouching = isUserTouchingShade
                 isUserTouchingShade = false
                 val dy = event.rawY - touchDownY
 
                 if (event.actionMasked == MotionEvent.ACTION_UP && wasTouching) {
-                    val isClosingGesture = (dy < -25f * density) || (lastAppliedFraction < 0.92f && dy < 0f)
+                    val isClosingGesture = (dy < -20f * density) || (lastAppliedFraction < 0.92f && dy < 0f)
                     if (hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen &&
                         !isLaunchingNotificationActivity && isClosingGesture && lastAppliedFraction > 0.05f
                     ) {
@@ -1455,6 +1486,66 @@ object NotificationSheetHook {
                     }
                 }
             }
+        }
+    }
+
+    private fun hookBlurSuppression(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val blurAnimClass = Class.forName("com.android.systemui.shade.NotificationPanelBlurAnimator", false, classLoader)
+            for (m in blurAnimClass.declaredMethods) {
+                if (m.name.startsWith("updateBlurRatio")) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val cfg = NotificationSheetConfigHolder.sheet
+                            if (cfg.enabled && cfg.depthWallpaperEnabled && currentStatusBarState == 0) {
+                                if (lastAppliedFraction < 0.95f) {
+                                    val rawArgs = chain.args
+                                    if (rawArgs is Array<*>) {
+                                        @Suppress("UNCHECKED_CAST")
+                                        (rawArgs as Array<Any?>)[0] = 0.0f
+                                    } else if (rawArgs is MutableList<*>) {
+                                        @Suppress("UNCHECKED_CAST")
+                                        (rawArgs as MutableList<Any?>)[0] = 0.0f
+                                    }
+                                }
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked NotificationPanelBlurAnimator.${m.name} successfully")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.d(TAG, "NotificationPanelBlurAnimator not found: ${t.message}")
+        }
+
+        try {
+            val blurUtilsClass = Class.forName("com.android.systemui.statusbar.BlurUtils", false, classLoader)
+            for (m in blurUtilsClass.declaredMethods) {
+                if (m.name == "applyBlur" && m.parameterTypes.size >= 2 && m.parameterTypes[1] == Int::class.javaPrimitiveType) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val cfg = NotificationSheetConfigHolder.sheet
+                            if (cfg.enabled && cfg.depthWallpaperEnabled && currentStatusBarState == 0) {
+                                if (lastAppliedFraction < 0.95f) {
+                                    val rawArgs = chain.args
+                                    if (rawArgs is Array<*>) {
+                                        @Suppress("UNCHECKED_CAST")
+                                        (rawArgs as Array<Any?>)[1] = 0
+                                    } else if (rawArgs is MutableList<*>) {
+                                        @Suppress("UNCHECKED_CAST")
+                                        (rawArgs as MutableList<Any?>)[1] = 0
+                                    }
+                                }
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked BlurUtils.applyBlur successfully")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.d(TAG, "BlurUtils not found: ${t.message}")
         }
     }
 }

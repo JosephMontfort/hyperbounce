@@ -450,6 +450,7 @@ class SettingsRepository(context: Context) {
         var enabled by prefsBooleanState("notif_sheet_enabled", defaults.enabled); private set
         var lockWallpaperEnabled by prefsBooleanState("notif_sheet_lock_wallpaper_enabled", defaults.lockWallpaperEnabled); private set
         var lockWallpaperHomescreenOnly by prefsBooleanState("notif_sheet_lock_wallpaper_homescreen_only", defaults.lockWallpaperHomescreenOnly); private set
+        var depthWallpaperEnabled by prefsBooleanState("notif_sheet_depth_wallpaper_enabled", defaults.depthWallpaperEnabled); private set
         var glassEffectsEnabled by prefsBooleanState("notif_sheet_glass_effects_enabled", defaults.glassEffectsEnabled); private set
         var glassOnlyWithoutWallpaper by prefsBooleanState("notif_sheet_glass_only_without_wallpaper", defaults.glassOnlyWithoutWallpaper); private set
         var refractionHeight by prefsFloatState("notif_card_refraction_height", defaults.refractionHeight); private set
@@ -467,6 +468,7 @@ class SettingsRepository(context: Context) {
 
         fun snapshot(): NotificationSheetSettings = NotificationSheetSettings(
             enabled, lockWallpaperEnabled, lockWallpaperHomescreenOnly,
+            depthWallpaperEnabled,
             glassEffectsEnabled, glassOnlyWithoutWallpaper,
             refractionHeight, bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
             dispersionStrength, specularStrength, innerShadow, saturationFactor, blurRadius,
@@ -476,6 +478,7 @@ class SettingsRepository(context: Context) {
         @JvmName("setNotifSheetEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
         @JvmName("setNotifSheetLockWallpaperEnabledPref") fun setLockWallpaperEnabled(v: Boolean) { lockWallpaperEnabled = v }
         @JvmName("setNotifSheetLockWallpaperHomescreenOnlyPref") fun setLockWallpaperHomescreenOnly(v: Boolean) { lockWallpaperHomescreenOnly = v }
+        @JvmName("setNotifSheetDepthWallpaperEnabledPref") fun setDepthWallpaperEnabled(v: Boolean) { depthWallpaperEnabled = v }
         @JvmName("setNotifSheetGlassEffectsEnabledPref") fun setGlassEffectsEnabled(v: Boolean) { glassEffectsEnabled = v }
         @JvmName("setNotifSheetGlassOnlyWithoutWallpaperPref") fun setGlassOnlyWithoutWallpaper(v: Boolean) { glassOnlyWithoutWallpaper = v }
         @JvmName("setNotifSheetRefractionHeightPref") fun setRefractionHeight(v: Float) { refractionHeight = v }

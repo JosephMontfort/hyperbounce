@@ -9,9 +9,11 @@ import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.components.AppGridIcon
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.LockIcon
+import dev.joseph.hyperbounce.ui.components.ResetArrowIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
+import dev.joseph.hyperbounce.ui.components.SettingsClickableRow
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
 import dev.joseph.hyperbounce.ui.components.SlidersIcon
@@ -86,6 +88,53 @@ fun NotificationCenterSheetScreen(
             }
             SectionFooter(
                 "Attaches your crisp, unblurred lock screen wallpaper to the notification container sheet. Automatically disabled in landscape orientation to prevent distortion.",
+                colors
+            )
+        }
+
+        item {
+            SectionHeader("iOS 27 Depth Wallpaper", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "iOS 27 Depth Wallpaper Effect",
+                    subtitle = if (sheet.depthWallpaperEnabled) "Static subject revealed over 100% transparent unblurred background as shade descends" else "Disabled by default",
+                    colors = colors,
+                    iconTint = colors.accentPurple,
+                    backdrop = backdrop,
+                    checked = sheet.depthWallpaperEnabled,
+                    onCheckedChange = { enabled ->
+                        sheet.setDepthWallpaperEnabled(enabled)
+                        if (enabled) {
+                            dev.joseph.hyperbounce.notification.glass.DepthWallpaperHelper.triggerAsyncSubjectGeneration(context)
+                            try {
+                                val intent = android.content.Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
+                                context.sendBroadcast(intent)
+                            } catch (_: Throwable) {}
+                        }
+                    },
+                    icon = { LockIcon(color = Color.White, size = 15.dp) },
+                    enabled = sheet.enabled
+                )
+                if (sheet.depthWallpaperEnabled) {
+                    RowDivider(colors.separator)
+                    SettingsClickableRow(
+                        title = "Re-scan Depth Subject",
+                        subtitle = "Re-runs MediaPipe segmentation on active lockscreen wallpaper",
+                        colors = colors,
+                        iconTint = colors.accentBlue,
+                        onClick = {
+                            dev.joseph.hyperbounce.notification.glass.DepthWallpaperHelper.triggerAsyncSubjectGeneration(context, forceRefresh = true)
+                            try {
+                                val intent = android.content.Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
+                                context.sendBroadcast(intent)
+                            } catch (_: Throwable) {}
+                        },
+                        icon = { ResetArrowIcon(color = Color.White, size = 15.dp) }
+                    )
+                }
+            }
+            SectionFooter(
+                "Isolates foreground subject from your lock screen wallpaper using on-device ML segmentation. While pulling down the shade, the background is 100% transparent with zero blur, and the subject remains fixed in place, clipped at the descending sheet's edge.",
                 colors
             )
         }
