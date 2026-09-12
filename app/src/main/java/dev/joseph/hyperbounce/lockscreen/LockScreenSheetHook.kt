@@ -313,7 +313,7 @@ object LockScreenSheetHook {
                                 if (notifCfg.enabled && notifCfg.lockScreenAsNotifCenterEnabled) {
                                     return result
                                 }
-                                val lockCfg = LockScreenSheetConfigHolder.sheet
+                                val lockCfg = LockScreenConfigHolder.sheet
                                 if (!lockCfg.enabled) {
                                     return result
                                 }
