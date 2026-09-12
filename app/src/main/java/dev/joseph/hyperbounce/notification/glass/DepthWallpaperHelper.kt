@@ -83,6 +83,25 @@ object DepthWallpaperHelper {
         // 1. Check custom subject file first
         try {
             val customFile = File(context.filesDir, CUSTOM_FILENAME)
+            if (!customFile.exists() || customFile.length() == 0L) {
+                try {
+                    val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/$CUSTOM_FILENAME")
+                    context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                        val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+                        val customBmp = BitmapFactory.decodeFileDescriptor(pfd.fileDescriptor, null, opts)
+                        if (customBmp != null) {
+                            cachedSubjectBitmap = customBmp
+                            try {
+                                FileOutputStream(customFile).use { fos ->
+                                    customBmp.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                                    fos.flush()
+                                }
+                            } catch (_: Throwable) {}
+                            return customBmp
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
             if (customFile.exists() && customFile.length() > 0) {
                 val opts = BitmapFactory.Options().apply {
                     inPreferredConfig = Bitmap.Config.ARGB_8888
@@ -165,17 +184,14 @@ object DepthWallpaperHelper {
             return
         }
 
-        val customFile = File(context.filesDir, CUSTOM_FILENAME)
-        if (!forceRefresh && customFile.exists() && customFile.length() > 0) {
-            try {
-                val diskBmp = BitmapFactory.decodeFile(customFile.absolutePath)
-                if (diskBmp != null) {
-                    cachedSubjectBitmap = diskBmp
-                    onComplete?.let { cb -> mainHandler.post { cb(diskBmp) } }
-                    notifyListeners()
-                    return
-                }
-            } catch (_: Throwable) {}
+        if (hasCustomSubject(context)) {
+            val customBmp = getSubjectBitmap(context)
+            if (customBmp != null) {
+                cachedSubjectBitmap = customBmp
+                onComplete?.let { cb -> mainHandler.post { cb(customBmp) } }
+                notifyListeners()
+                return
+            }
         }
 
         val localFile = File(context.filesDir, CACHE_FILENAME)
@@ -271,6 +287,7 @@ object DepthWallpaperHelper {
 
                 val options = SelfieSegmenterOptions.Builder()
                     .setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE)
+                    .enableRawSizeMask()
                     .build()
 
                 val segmenter = Segmentation.getClient(options)
@@ -290,10 +307,16 @@ object DepthWallpaperHelper {
                     confidences[i] = buffer.float
                 }
 
-                val pixels = IntArray(totalPixels)
-                scaledBitmap.getPixels(pixels, 0, maskW, 0, 0, maskW, maskH)
+                val sourceBmp = if (scaledBitmap.width != maskW || scaledBitmap.height != maskH) {
+                    Bitmap.createScaledBitmap(scaledBitmap, maskW, maskH, true)
+                } else {
+                    scaledBitmap
+                }
 
-                val outBitmap = refineSubjectCutout(scaledBitmap, pixels, confidences, maskW, maskH)
+                val pixels = IntArray(totalPixels)
+                sourceBmp.getPixels(pixels, 0, maskW, 0, 0, maskW, maskH)
+
+                val outBitmap = refineSubjectCutout(sourceBmp, pixels, confidences, maskW, maskH)
 
                 // Save to private cache directory (both segmented and active if custom isn't active)
                 try {
@@ -612,31 +635,24 @@ object DepthWallpaperHelper {
         // 3. Morphological Hole Filling & Speckle Suppression
         morphologicalRefine(q, w, h)
 
-        // 4. Compute refined alpha and count foreground pixels
-        val alphas = IntArray(total)
+        // 4. Compute refined alpha, preserving 100% original photo RGB fidelity
         var foregroundCount = 0
         for (i in 0 until total) {
             val prob = q[i]
-            if (prob <= 0.12f) {
-                alphas[i] = 0
-                pixels[i] = 0
-            } else if (prob >= 0.88f) {
-                alphas[i] = 255
+            if (prob <= 0.15f) {
+                pixels[i] = 0 // Fully transparent background
+            } else if (prob >= 0.85f) {
                 pixels[i] = pixels[i] or (0xFF shl 24)
                 foregroundCount++
             } else {
-                val t = (prob - 0.12f) / 0.76f
+                val t = (prob - 0.15f) / 0.70f
                 val factor = t * t * (3f - 2f * t) // smoothstep
                 val a = (factor * 255f).toInt().coerceIn(0, 255)
-                alphas[i] = a
                 val orig = pixels[i]
                 pixels[i] = (orig and 0x00FFFFFF) or (a shl 24)
                 if (a > 0) foregroundCount++
             }
         }
-
-        // 5. Studio Edge Color Decontamination (Anti-Fringe)
-        decontaminateColorEdges(pixels, alphas, w, h)
 
         outBitmap.setPixels(pixels, 0, w, 0, 0, w, h)
         Log.d(TAG, "Refined studio cutout generated: $foregroundCount/$total pixels (${(foregroundCount * 100f / total).toInt()}%)")
@@ -755,53 +771,9 @@ object DepthWallpaperHelper {
         }
     }
 
-    private fun decontaminateColorEdges(pixels: IntArray, alphas: IntArray, w: Int, h: Int) {
-        val searchR = 3
-        for (y in searchR until (h - searchR)) {
-            val row = y * w
-            for (x in searchR until (w - searchR)) {
-                val idx = row + x
-                val a = alphas[idx]
-                if (a in 8..230) {
-                    var sumR = 0
-                    var sumG = 0
-                    var sumB = 0
-                    var count = 0
-                    for (dy in -searchR..searchR) {
-                        val nRow = (y + dy) * w
-                        for (dx in -searchR..searchR) {
-                            val nIdx = nRow + (x + dx)
-                            if (alphas[nIdx] >= 245) {
-                                val c = pixels[nIdx]
-                                sumR += (c ushr 16) and 0xFF
-                                sumG += (c ushr 8) and 0xFF
-                                sumB += c and 0xFF
-                                count++
-                            }
-                        }
-                    }
-                    if (count > 0) {
-                        val targetR = sumR / count
-                        val targetG = sumG / count
-                        val targetB = sumB / count
-                        val cur = pixels[idx]
-                        val curR = (cur ushr 16) and 0xFF
-                        val curG = (cur ushr 8) and 0xFF
-                        val curB = cur and 0xFF
-                        val blend = (1.0f - a / 255.0f) * 0.75f
-                        val newR = (curR + (targetR - curR) * blend).toInt().coerceIn(0, 255)
-                        val newG = (curG + (targetG - curG) * blend).toInt().coerceIn(0, 255)
-                        val newB = (curB + (targetB - curB) * blend).toInt().coerceIn(0, 255)
-                        pixels[idx] = (a shl 24) or (newR shl 16) or (newG shl 8) or newB
-                    }
-                }
-            }
-        }
-    }
 
     fun clearCache(context: Context) {
-        val customFile = File(context.filesDir, CUSTOM_FILENAME)
-        if (customFile.exists() && customFile.length() > 0) {
+        if (hasCustomSubject(context)) {
             return
         }
         cachedSubjectBitmap = null

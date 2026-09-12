@@ -13,6 +13,8 @@ import android.view.View
 import dev.joseph.hyperbounce.lockscreen.glass.GlassLensRenderer
 import dev.joseph.hyperbounce.lockscreen.glass.LockScreenWallpaperHelper
 import dev.joseph.hyperbounce.notification.NotificationSheetConfigHolder
+import dev.joseph.hyperbounce.notification.lockscreen.LockScreenClockHelper
+import dev.joseph.hyperbounce.notification.lockscreen.LockScreenInfoReader
 import kotlin.math.max
 
 /**
@@ -46,11 +48,27 @@ class NotificationGlassSheetView @JvmOverloads constructor(
     private val depthSubjectListener = {
         postInvalidateOnAnimation()
     }
+    private val clockTickListener = {
+        postInvalidateOnAnimation()
+    }
+    private val clockConfigListener: (LockScreenInfoReader.LockScreenClockConfig) -> Unit = {
+        postInvalidateOnAnimation()
+    }
     private val location = IntArray(2)
 
     var shadeBackgroundView: View? = null
 
     var isClosingFromFullOpen: Boolean = false
+
+    var hasNotifications: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                postInvalidateOnAnimation()
+            }
+        }
+
+    private var clockMorphProgress: Float = 0f
 
     var expansionFraction: Float = 0f
         set(value) {
@@ -94,6 +112,14 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val density = resources.displayMetrics.density
         val cfg = NotificationSheetConfigHolder.sheet
         if (!cfg.enabled) return
+
+        val targetMorph = if (cfg.clockMorphOnNotifications && hasNotifications) 1.0f else 0.0f
+        if (kotlin.math.abs(clockMorphProgress - targetMorph) > 0.01f) {
+            clockMorphProgress += (targetMorph - clockMorphProgress) * 0.25f
+            postInvalidateOnAnimation()
+        } else {
+            clockMorphProgress = targetMorph
+        }
 
         val leftBevel = cfg.leftBevelWidth * density
         val rightBevel = cfg.rightBevelWidth * density
@@ -195,9 +221,6 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 screenW = screenW,
                 screenH = screenH
             ) { recordingCanvas ->
-                // Draw sheet foreground (wallpaper & subject) ONLY onto recordingCanvas with margin offset.
-                // Note: The backdrop is fed directly into the AGSL shader's backdrop input so that
-                // the non-refracted interior remains 100% transparent and crystal clear!
                 recordingCanvas.save()
                 recordingCanvas.translate(margin.toFloat(), margin.toFloat())
                 drawSheetForeground(recordingCanvas, w, h, cornerRadius, isDepthActive, fadeAlpha, subjectBmp, shouldDrawWallpaper)
@@ -221,6 +244,10 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         subjectBmp: Bitmap?,
         shouldDrawWallpaper: Boolean
     ) {
+        val density = resources.displayMetrics.density
+        val cfg = NotificationSheetConfigHolder.sheet
+        val isLockScreenActive = cfg.lockScreenAsNotifCenterEnabled
+
         if (isDepthActive) {
             val count = targetCanvas.save()
             sheetClipPath.reset()
@@ -244,6 +271,25 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 }
             }
 
+            // [Layer 1] Replicated Lock Screen Clock (BEHIND subject cutout)
+            if (isLockScreenActive) {
+                val clockAlpha = if (isClosingFromFullOpen) 1f else ((expansionFraction - 0.20f) / 0.60f).coerceIn(0f, 1f)
+                val clockConfig = LockScreenInfoReader.getConfig(context)
+                val clockY = if (isClosingFromFullOpen) 0f else (expansionFraction - 1.0f) * 40f * density
+                LockScreenClockHelper.drawClock(
+                    canvas = targetCanvas,
+                    context = context,
+                    w = w,
+                    h = h,
+                    density = density,
+                    config = clockConfig,
+                    morphFraction = clockMorphProgress,
+                    alpha = clockAlpha,
+                    translationY = clockY
+                )
+            }
+
+            // [Layer 2] iOS 27 Depth Subject Cutout (occludes clock numbers!)
             if (subjectBmp != null && !subjectBmp.isRecycled) {
                 targetCanvas.drawBitmap(subjectBmp, null, subjectDstRect, subjectPaint)
             }
@@ -253,7 +299,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
             }
 
             targetCanvas.restoreToCount(count)
-        } else if (shouldDrawWallpaper) {
+        } else if (shouldDrawWallpaper || isLockScreenActive) {
             val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
             if (unblurredWp != null) {
                 val count = targetCanvas.save()
@@ -271,6 +317,24 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 unblurredWp.setBounds(0, 0, w, h)
                 unblurredWp.alpha = 255
                 unblurredWp.draw(targetCanvas)
+
+                // Replicated Lock Screen Clock
+                if (isLockScreenActive) {
+                    val clockAlpha = if (isClosingFromFullOpen) 1f else ((expansionFraction - 0.10f) / 0.70f).coerceIn(0f, 1f)
+                    val clockConfig = LockScreenInfoReader.getConfig(context)
+                    val clockY = if (isClosingFromFullOpen) 0f else (expansionFraction - 1.0f) * 40f * density
+                    LockScreenClockHelper.drawClock(
+                        canvas = targetCanvas,
+                        context = context,
+                        w = w,
+                        h = h,
+                        density = density,
+                        config = clockConfig,
+                        morphFraction = clockMorphProgress,
+                        alpha = clockAlpha,
+                        translationY = clockY
+                    )
+                }
 
                 // Subtle dark scrim (20% black) so notification text & icons remain crystal clear against bright wallpapers
                 targetCanvas.drawColor(0x33000000.toInt())
@@ -309,12 +373,20 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         if (cfg.glassEffectsEnabled) {
             RealtimeBackdropHelper.triggerCapture(context) { postInvalidateOnAnimation() }
         }
+        if (cfg.lockScreenAsNotifCenterEnabled) {
+            LockScreenInfoReader.registerObserverIfNeeded(context)
+            LockScreenInfoReader.addListener(clockConfigListener)
+            LockScreenClockHelper.registerTimeTickReceiverIfNeeded(context)
+            LockScreenClockHelper.addTickListener(clockTickListener)
+        }
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         LockScreenWallpaperHelper.removeUnblurredWallpaperListener(wallpaperLoadListener)
         DepthWallpaperHelper.removeSubjectListener(depthSubjectListener)
+        LockScreenInfoReader.removeListener(clockConfigListener)
+        LockScreenClockHelper.removeTickListener(clockTickListener)
         RealtimeBackdropHelper.stopLiveRefresh()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             renderer?.release()

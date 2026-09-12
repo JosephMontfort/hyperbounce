@@ -219,6 +219,53 @@ fun NotificationCenterSheetScreen(
         }
 
         item {
+            SectionHeader("Lock Screen Cover Sheet", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "Lock Screen as Notification Center",
+                    subtitle = if (sheet.lockScreenAsNotifCenterEnabled) "Replicates your active HyperOS lock screen clock, depth layering & shortcuts when pulling down shade" else "Disabled (Standard notification shade)",
+                    colors = colors,
+                    iconTint = colors.accentBlue,
+                    backdrop = backdrop,
+                    checked = sheet.lockScreenAsNotifCenterEnabled,
+                    onCheckedChange = sheet::setLockScreenAsNotifCenterEnabled,
+                    icon = { LockIcon(color = Color.White, size = 15.dp) },
+                    enabled = sheet.enabled
+                )
+                if (sheet.lockScreenAsNotifCenterEnabled) {
+                    RowDivider(colors.separator)
+                    SettingsToggleRow(
+                        title = "Bottom Torch & Camera Widgets",
+                        subtitle = if (sheet.showBottomWidgets) "Quick-access flashlight and camera buttons with tactile haptics & pop-in springs" else "Hidden",
+                        colors = colors,
+                        iconTint = colors.accentOrange,
+                        backdrop = backdrop,
+                        checked = sheet.showBottomWidgets,
+                        onCheckedChange = sheet::setShowBottomWidgets,
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) },
+                        enabled = sheet.enabled && sheet.lockScreenAsNotifCenterEnabled
+                    )
+                    RowDivider(colors.separator)
+                    SettingsToggleRow(
+                        title = "Dynamic Clock Morphing",
+                        subtitle = if (sheet.clockMorphOnNotifications) "Clock smoothly scales to compact variant when notifications are present" else "Static full-size clock layout",
+                        colors = colors,
+                        iconTint = colors.accentPurple,
+                        backdrop = backdrop,
+                        checked = sheet.clockMorphOnNotifications,
+                        onCheckedChange = sheet::setClockMorphOnNotifications,
+                        icon = { AppGridIcon(color = Color.White, size = 15.dp) },
+                        enabled = sheet.enabled && sheet.lockScreenAsNotifCenterEnabled
+                    )
+                }
+            }
+            SectionFooter(
+                "Turns the notification center into an authentic replica of your lock screen. The clock sits behind the depth cutout (occluded by your subject's head) and refracts through glass bevels with 1:1 physical finger tracking.",
+                colors
+            )
+        }
+
+        item {
             SectionHeader("3-Edge Liquid Glass Effects", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(

@@ -8,6 +8,9 @@ data class NotificationSheetConfig(
     var lockWallpaperHomescreenOnly: Boolean = false,
     var depthWallpaperEnabled: Boolean = false,
     var depthCustomSubject: Boolean = false,
+    var lockScreenAsNotifCenterEnabled: Boolean = false,
+    var showBottomWidgets: Boolean = true,
+    var clockMorphOnNotifications: Boolean = true,
     var glassEffectsEnabled: Boolean = false,
     var glassOnlyWithoutWallpaper: Boolean = false,
     // Optics (Liquid Glass 2.0)
@@ -44,6 +47,9 @@ object NotificationSheetConfigHolder {
         sheet.lockWallpaperHomescreenOnly = prefs.getBoolean("notif_sheet_lock_wallpaper_homescreen_only", false)
         sheet.depthWallpaperEnabled = prefs.getBoolean("notif_sheet_depth_wallpaper_enabled", false)
         sheet.depthCustomSubject = prefs.getBoolean("notif_sheet_depth_custom_subject", false)
+        sheet.lockScreenAsNotifCenterEnabled = prefs.getBoolean("notif_sheet_lockscreen_enabled", false)
+        sheet.showBottomWidgets = prefs.getBoolean("notif_sheet_show_bottom_widgets", true)
+        sheet.clockMorphOnNotifications = prefs.getBoolean("notif_sheet_clock_morph", true)
         sheet.glassEffectsEnabled = prefs.getBoolean("notif_sheet_glass_effects_enabled", false)
         sheet.glassOnlyWithoutWallpaper = prefs.getBoolean("notif_sheet_glass_only_without_wallpaper", false)
         sheet.refractionHeight = prefs.getFloat("notif_card_refraction_height", 24.0f)

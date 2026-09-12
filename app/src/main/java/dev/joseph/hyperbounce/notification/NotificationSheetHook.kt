@@ -16,6 +16,7 @@ import android.view.animation.DecelerateInterpolator
 import dev.joseph.hyperbounce.notification.glass.DepthWallpaperHelper
 import dev.joseph.hyperbounce.notification.glass.NotificationGlassSheetView
 import dev.joseph.hyperbounce.notification.glass.RealtimeBackdropHelper
+import dev.joseph.hyperbounce.notification.lockscreen.LockScreenBottomAreaView
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
@@ -38,6 +39,7 @@ object NotificationSheetHook {
     private const val TAG = "HyperBounce_NotifSheet"
     private const val TAG_GLASS_SHEET = "hyperbounce_notif_glass_sheet"
     private const val TAG_HOME_PILL = "hyperbounce_notif_home_pill"
+    private const val TAG_BOTTOM_AFFORDANCES = "hyperbounce_notif_bottom_affordances"
     private const val TAG_ORIG_MARGIN_START = 0x7E010001
     private const val TAG_ORIG_MARGIN_END = 0x7E010002
 
@@ -217,6 +219,7 @@ object NotificationSheetHook {
             val container = containerRef?.get() ?: return@post
             container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
             container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
+            container.findViewWithTag<View>(TAG_BOTTOM_AFFORDANCES)?.visibility = View.GONE
             container.translationY = 0.0f
             container.scaleX = 1.0f
             container.scaleY = 1.0f
@@ -234,8 +237,10 @@ object NotificationSheetHook {
             }
             ensureGlassSheetInjected(container)
             ensureHomePillInjected(container)
+            ensureBottomAffordancesInjected(container)
             val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
             val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
+            val bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
             sheet?.visibility = View.VISIBLE
             sheet?.expansionFraction = 1.0f
             sheet?.translationY = 0.0f
@@ -243,6 +248,13 @@ object NotificationSheetHook {
             sheet?.postInvalidateOnAnimation()
             pill?.visibility = View.VISIBLE
             pill?.translationY = 0.0f
+            if (cfg.lockScreenAsNotifCenterEnabled && cfg.showBottomWidgets) {
+                bottomArea?.visibility = View.VISIBLE
+                bottomArea?.translationY = 0.0f
+                bottomArea?.setExpansionFraction(1.0f)
+            } else {
+                bottomArea?.visibility = View.GONE
+            }
             if (cfg.depthWallpaperEnabled && sheet != null) {
                 RealtimeBackdropHelper.startLiveRefresh(container.context, sheet)
             }
@@ -783,6 +795,58 @@ object NotificationSheetHook {
         }
     }
 
+    private fun ensureBottomAffordancesInjected(container: ViewGroup) {
+        try {
+            val cfg = NotificationSheetConfigHolder.sheet
+            var bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
+
+            if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled || !cfg.showBottomWidgets ||
+                currentStatusBarState != 0 || isKeyguard(container.context) || isControlCenterActive()) {
+                bottomArea?.visibility = View.GONE
+                return
+            }
+
+            if (bottomArea == null) {
+                bottomArea = LockScreenBottomAreaView(container.context).apply {
+                    tag = TAG_BOTTOM_AFFORDANCES
+                    visibility = View.GONE
+                }
+                val lp = try {
+                    val lpClass = Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams", false, container.context.classLoader)
+                    val constructor = lpClass.getConstructor(Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                    val inst = constructor.newInstance(0, 0) as ViewGroup.MarginLayoutParams
+                    applyConstraintParentParams(inst, container)
+                    inst
+                } catch (_: Throwable) {
+                    android.widget.FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                }
+                container.addView(bottomArea, lp)
+                Log.d(TAG, "Injected LockScreenBottomAreaView successfully")
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to inject LockScreenBottomAreaView", t)
+        }
+    }
+
+    private fun hasVisibleNotifications(container: ViewGroup): Boolean {
+        val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
+        val nssl = if (nsslId != 0) container.findViewById<ViewGroup>(nsslId) else null ?: return false
+        val count = nssl.childCount
+        for (i in 0 until count) {
+            val child = nssl.getChildAt(i)
+            if (child != null && child.visibility == View.VISIBLE && child.height > 0) {
+                val name = child.javaClass.simpleName
+                if (name.contains("NotificationRow") || name.contains("ActivatableNotification")) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
     private var isSettingsReceiverRegistered = false
 
     private fun registerSettingsReceiver(context: Context) {
@@ -812,7 +876,11 @@ object NotificationSheetHook {
                         "notif_sheet_depth_wallpaper_enabled" -> {
                             cfg.depthWallpaperEnabled = intent.getBooleanExtra("value_boolean", cfg.depthWallpaperEnabled)
                             if (cfg.depthWallpaperEnabled) {
-                                DepthWallpaperHelper.triggerAsyncSubjectGeneration(c ?: context)
+                                if (cfg.depthCustomSubject || DepthWallpaperHelper.hasCustomSubject(c ?: context)) {
+                                    Log.d(TAG, "Preserving existing custom depth subject")
+                                } else {
+                                    DepthWallpaperHelper.triggerAsyncSubjectGeneration(c ?: context)
+                                }
                             }
                         }
                         "notif_sheet_depth_custom_subject" -> {
@@ -824,6 +892,9 @@ object NotificationSheetHook {
                                 }
                             }
                         }
+                        "notif_sheet_lockscreen_enabled" -> cfg.lockScreenAsNotifCenterEnabled = intent.getBooleanExtra("value_boolean", cfg.lockScreenAsNotifCenterEnabled)
+                        "notif_sheet_show_bottom_widgets" -> cfg.showBottomWidgets = intent.getBooleanExtra("value_boolean", cfg.showBottomWidgets)
+                        "notif_sheet_clock_morph" -> cfg.clockMorphOnNotifications = intent.getBooleanExtra("value_boolean", cfg.clockMorphOnNotifications)
                         "notif_sheet_glass_effects_enabled" -> cfg.glassEffectsEnabled = intent.getBooleanExtra("value_boolean", cfg.glassEffectsEnabled)
                         "notif_sheet_glass_only_without_wallpaper" -> cfg.glassOnlyWithoutWallpaper = intent.getBooleanExtra("value_boolean", cfg.glassOnlyWithoutWallpaper)
                         "notif_card_refraction_height" -> cfg.refractionHeight = intent.getFloatExtra("value_float", cfg.refractionHeight)
@@ -1402,6 +1473,7 @@ object NotificationSheetHook {
         if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard(container.context) || isControlCenterActive()) {
             container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
             container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
+            container.findViewWithTag<View>(TAG_BOTTOM_AFFORDANCES)?.visibility = View.GONE
             isShadeFullyOpen = false
             hasTriggeredUnlockForCurrentOpen = true
             isLaunchingNotificationActivity = false
@@ -1438,6 +1510,7 @@ object NotificationSheetHook {
             sheet?.isClosingFromFullOpen = false
             pill?.visibility = View.GONE
             pill?.translationY = -viewHeight
+            container.findViewWithTag<View>(TAG_BOTTOM_AFFORDANCES)?.visibility = View.GONE
             RealtimeBackdropHelper.stopLiveRefresh()
             isShadeFullyOpen = false
             hasFullyOpenedForCurrentSession = false
@@ -1450,6 +1523,7 @@ object NotificationSheetHook {
 
         ensureGlassSheetInjected(container)
         ensureHomePillInjected(container)
+        ensureBottomAffordancesInjected(container)
 
         // Keep container translation at 0.0f; translate only the glass card and pill!
         container.translationY = 0.0f
@@ -1472,6 +1546,7 @@ object NotificationSheetHook {
             curSheet.visibility = View.VISIBLE
             curSheet.isClosingFromFullOpen = hasFullyOpenedForCurrentSession && fraction < 0.95f
             curSheet.expansionFraction = fraction
+            curSheet.hasNotifications = hasVisibleNotifications(container)
             val prevY = curSheet.translationY
             curSheet.translationY = finalSheetY
             if (abs(prevY - finalSheetY) > 0.5f) {
@@ -1502,6 +1577,17 @@ object NotificationSheetHook {
             // Pill is stably pinned to the sheet's bottom edge with stretch offset when sheet is fully open
             curPill.translationY = finalSheetY + (if (finalSheetY == 0f) currentStretchOffset else 0f)
             curPill.alpha = (fraction - 0.2f).coerceIn(0f, 1f)
+        }
+
+        val curBottom = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
+        if (curBottom != null) {
+            if (cfg.enabled && cfg.lockScreenAsNotifCenterEnabled && cfg.showBottomWidgets &&
+                currentStatusBarState == 0 && !isControlCenterActive()) {
+                curBottom.translationY = finalSheetY + (if (finalSheetY == 0f) currentStretchOffset else 0f)
+                curBottom.setExpansionFraction(fraction)
+            } else {
+                curBottom.visibility = View.GONE
+            }
         }
     }
 
