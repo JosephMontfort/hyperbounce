@@ -218,10 +218,52 @@ object RealtimeBackdropHelper {
     }
 
     fun startLiveRefresh(context: Context, sheetView: View) {
-        // Continuous 60fps capture loop removed to completely eliminate pulldown and close lag.
-        // Event-driven single capture is triggered on swipe start.
-        triggerCapture(context) {
-            sheetView.postInvalidateOnAnimation()
+        if (isRefreshing) return
+        isRefreshing = true
+        val sessionId = ++refreshSessionId
+        val weakSheet = WeakReference(sheetView)
+        val appContext = context.applicationContext ?: context
+
+        bgExecutor.execute {
+            while (isRefreshing && sessionId == refreshSessionId) {
+                val sheet = weakSheet.get()
+                if (sheet == null || sheet.visibility != View.VISIBLE) {
+                    if (sessionId == refreshSessionId) {
+                        isRefreshing = false
+                    }
+                    break
+                }
+                try {
+                    val startTime = System.currentTimeMillis()
+                    val cfg = NotificationSheetConfigHolder.sheet
+                    val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
+                    val isLandscape = appContext.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                    val isDepthActive = cfg.isDepthActive && !isLandscape && isUnlocked
+                    val shouldDrawWallpaper = !isDepthActive && cfg.isWallpaperActive && !isLandscape &&
+                            (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
+                    val needBlur = !isDepthActive && !shouldDrawWallpaper
+                    val (bmp, hwBlurred) = captureDisplayInternal(appContext, needBlur)
+                    if (bmp != null && sessionId == refreshSessionId) {
+                        updateBitmaps(bmp, hwBlurred)
+                        mainHandler.post {
+                            if (sessionId == refreshSessionId) {
+                                weakSheet.get()?.postInvalidateOnAnimation()
+                            }
+                        }
+                    }
+                    val elapsed = System.currentTimeMillis() - startTime
+                    val sleepTime = (16L - elapsed).coerceIn(1L, 16L)
+                    Thread.sleep(sleepTime)
+                } catch (t: Throwable) {
+                    if (t is InterruptedException) break
+                    Log.e(TAG, "Live capture error", t)
+                    try {
+                        Thread.sleep(16L)
+                    } catch (_: InterruptedException) {
+                        break
+                    }
+                }
+            }
         }
     }
 

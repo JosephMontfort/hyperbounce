@@ -447,5 +447,6 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             renderer?.release()
         }
+        RealtimeBackdropHelper.stopLiveRefresh()
     }
 }

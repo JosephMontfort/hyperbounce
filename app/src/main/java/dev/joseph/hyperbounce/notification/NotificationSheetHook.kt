@@ -1732,15 +1732,15 @@ object NotificationSheetHook {
                 if (abs(prevY - finalSheetY) > 0.5f) {
                     curSheet.postInvalidateOnAnimation()
                 }
-                // Refresh backdrop only on swipe start if glass effects are actively required
+                // Refresh backdrop continuously if glass effects are actively required
                 val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height
                 val shouldDrawWallpaper = cfg.isWallpaperActive && !isLandscape &&
                         (!cfg.lockWallpaperHomescreenOnly || isHomeScreenCached)
                 val shouldRenderGlass = cfg.glassEffectsEnabled && (!cfg.glassOnlyWithoutWallpaper || !shouldDrawWallpaper)
-                if (shouldRenderGlass && fraction in 0.02f..0.15f && (prevFraction < 0.02f || prevFraction < 0f)) {
-                    RealtimeBackdropHelper.triggerCapture(container.context) {
-                        curSheet.postInvalidateOnAnimation()
-                    }
+                if (shouldRenderGlass) {
+                    RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
+                } else {
+                    RealtimeBackdropHelper.stopLiveRefresh()
                 }
 
                 // Suppress background blur and dimming when iOS 27 Depth Wallpaper is active
