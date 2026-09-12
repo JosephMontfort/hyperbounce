@@ -116,7 +116,6 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
         // Draw attached unblurred lock screen wallpaper background if enabled
         val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || w > h
-        val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
         val isDepthActive = cfg.isDepthActive && !isLandscape && isUnlocked
         val subjectBmp = if (isDepthActive) DepthWallpaperHelper.getSubjectBitmap(context) else null
 
