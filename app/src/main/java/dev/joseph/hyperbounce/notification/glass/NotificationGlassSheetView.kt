@@ -180,7 +180,12 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 blurRadius = cfg.blurRadius * density
             )
 
-            val backdropBmp = RealtimeBackdropHelper.getLatestBackdropBitmap(shouldBlurBackdrop)
+            val shadeBgBmp = (shadeBackgroundView?.background as? android.graphics.drawable.BitmapDrawable)?.bitmap
+            val backdropBmp = if (shadeBgBmp != null && !shadeBgBmp.isRecycled) {
+                shadeBgBmp
+            } else {
+                RealtimeBackdropHelper.getLatestBackdropBitmap(shouldBlurBackdrop)
+            }
             glassRendered = renderer.draw(
                 canvas = canvas,
                 width = w,
@@ -216,9 +221,15 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         subjectBmp: Bitmap?,
         shouldDrawWallpaper: Boolean
     ) {
+        val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || w > h
+        if (isLandscape) {
+            // Strict landscape mode: stock Xiaomi handles all content; hyperbounce renders only glass bevels
+            return
+        }
+
         val density = resources.displayMetrics.density
         val cfg = NotificationSheetConfigHolder.sheet
-        val isLockScreenActive = cfg.enabled && cfg.lockScreenAsNotifCenterEnabled
+        val isLockScreenActive = cfg.enabled && cfg.lockScreenAsNotifCenterEnabled && !isLandscape
 
         val isClosing = isClosingMode || isClosingFromFullOpen
 

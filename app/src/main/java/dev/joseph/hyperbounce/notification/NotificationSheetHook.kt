@@ -49,6 +49,7 @@ object NotificationSheetHook {
     private const val TAG_ORIG_MARGIN_TOP = 0x7E010004
     private const val TAG_ORIG_MARGIN_BOTTOM = 0x7E010005
     private const val TAG_ORIG_PADDING_BOTTOM = 0x7E010006
+    private const val TAG_NSSL_LISTENERS_ATTACHED = 0x7E010007
 
     @Volatile
     var currentStatusBarState: Int = 1 // 0 = SHADE, 1 = KEYGUARD, 2 = SHADE_LOCKED
@@ -423,6 +424,13 @@ object NotificationSheetHook {
                                             container.scaleY = 1.0f
                                             resetNotificationMargins(container)
                                             LockScreenCoverSheetController.onShadeReset(container)
+                                            val headerId = container.resources.getIdentifier("normal_notification_header_view", "id", "com.android.systemui")
+                                            if (headerId != 0) {
+                                                container.rootView?.findViewById<View>(headerId)?.let { hView ->
+                                                    hView.alpha = 0.0f
+                                                    hView.visibility = View.GONE
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -738,6 +746,20 @@ object NotificationSheetHook {
             val nssl = if (nsslId != 0) container.findViewById<ViewGroup>(nsslId) else null
             if (nssl != null) {
                 nssl.visibility = View.VISIBLE
+                if (nssl.getTag(TAG_NSSL_LISTENERS_ATTACHED) == null) {
+                    nssl.setTag(TAG_NSSL_LISTENERS_ATTACHED, true)
+                    nssl.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                        LockScreenCoverSheetController.syncClockWithNotifications(container)
+                    }
+                    nssl.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
+                        override fun onChildViewAdded(parent: View?, child: View?) {
+                            LockScreenCoverSheetController.syncClockWithNotifications(container)
+                        }
+                        override fun onChildViewRemoved(parent: View?, child: View?) {
+                            LockScreenCoverSheetController.syncClockWithNotifications(container)
+                        }
+                    })
+                }
             }
 
             val cfg = NotificationSheetConfigHolder.sheet
@@ -796,19 +818,10 @@ object NotificationSheetHook {
                 Log.d(TAG, "Injected NotificationGlassSheetView successfully")
             }
 
-            val isImageBgActive = cfg.enabled && (
-                cfg.lockScreenAsNotifCenterEnabled ||
-                cfg.lockWallpaperEnabled ||
-                cfg.depthWallpaperEnabled
-            )
-            sheet.isClickable = isImageBgActive
-            if (isImageBgActive) {
-                sheet.setOnClickListener {
-                    // Absorb clicks on empty space when wallpaper/image background is active
-                }
-            } else {
-                sheet.setOnClickListener(null)
-            }
+            // Never consume touch events so swipe gestures between shade & control center (RTL/LTR) work seamlessly
+            sheet.isClickable = false
+            sheet.isFocusable = false
+            sheet.setOnClickListener(null)
 
             // Bind the real-time blurred shade background layer (ShadeBackgroundView)
             if (sheet.shadeBackgroundView == null) {
@@ -932,12 +945,17 @@ object NotificationSheetHook {
         try {
             val filter = android.content.IntentFilter("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED").apply {
                 addAction("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
+                addAction(android.content.Intent.ACTION_WALLPAPER_CHANGED)
             }
             val receiver = object : android.content.BroadcastReceiver() {
                 override fun onReceive(c: Context?, intent: android.content.Intent?) {
-                    if (intent?.action == "dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER") {
-                        DepthWallpaperHelper.clearCache(c ?: context)
-                        DepthWallpaperHelper.triggerAsyncSubjectGeneration(c ?: context, forceRefresh = true) {
+                    val targetCtx = c ?: context
+                    if (intent?.action == "dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER" ||
+                        intent?.action == android.content.Intent.ACTION_WALLPAPER_CHANGED
+                    ) {
+                        dev.joseph.hyperbounce.lockscreen.glass.LockScreenWallpaperHelper.clearCache(targetCtx)
+                        DepthWallpaperHelper.clearCache(targetCtx, forceClearAll = true)
+                        DepthWallpaperHelper.triggerAsyncSubjectGeneration(targetCtx, forceRefresh = true) {
                             mainHandler.post {
                                 containerRef?.get()?.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)?.postInvalidateOnAnimation()
                             }
@@ -954,17 +972,17 @@ object NotificationSheetHook {
                         "notif_sheet_depth_wallpaper_enabled" -> {
                             cfg.depthWallpaperEnabled = intent.getBooleanExtra("value_boolean", cfg.depthWallpaperEnabled)
                             if (cfg.depthWallpaperEnabled) {
-                                if (cfg.depthCustomSubject || DepthWallpaperHelper.hasCustomSubject(c ?: context)) {
+                                if (cfg.depthCustomSubject || DepthWallpaperHelper.hasCustomSubject(targetCtx)) {
                                     Log.d(TAG, "Preserving existing custom depth subject")
                                 } else {
-                                    DepthWallpaperHelper.triggerAsyncSubjectGeneration(c ?: context)
+                                    DepthWallpaperHelper.triggerAsyncSubjectGeneration(targetCtx)
                                 }
                             }
                         }
                         "notif_sheet_depth_custom_subject" -> {
                             cfg.depthCustomSubject = intent.getBooleanExtra("value_boolean", cfg.depthCustomSubject)
-                            DepthWallpaperHelper.clearCache(c ?: context)
-                            DepthWallpaperHelper.triggerAsyncSubjectGeneration(c ?: context, forceRefresh = true) {
+                            DepthWallpaperHelper.clearCache(targetCtx, forceClearAll = !cfg.depthCustomSubject)
+                            DepthWallpaperHelper.triggerAsyncSubjectGeneration(targetCtx, forceRefresh = true) {
                                 mainHandler.post {
                                     containerRef?.get()?.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)?.postInvalidateOnAnimation()
                                 }
@@ -1215,6 +1233,12 @@ object NotificationSheetHook {
 
     private fun adjustNotificationMargins(container: ViewGroup) {
         try {
+            val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            if (isLandscape) {
+                resetNotificationMargins(container)
+                return
+            }
+
             val cfg = NotificationSheetConfigHolder.sheet
             val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
             val nssl = if (nsslId != 0) container.findViewById<View>(nsslId) else null ?: return
@@ -1683,7 +1707,7 @@ object NotificationSheetHook {
             val curSheet = sheet ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
             if (curSheet != null) {
                 curSheet.visibility = View.VISIBLE
-                curSheet.isClosingMode = isClosingMode || (hasFullyOpenedForCurrentSession && fraction < 0.95f)
+                curSheet.isClosingMode = isClosingMode || (hasFullyOpenedForCurrentSession && fraction < 0.95f && (prevFraction < 0f || fraction < prevFraction))
                 curSheet.isClosingFromFullOpen = curSheet.isClosingMode
                 curSheet.expansionFraction = fraction
                 val prevY = curSheet.translationY

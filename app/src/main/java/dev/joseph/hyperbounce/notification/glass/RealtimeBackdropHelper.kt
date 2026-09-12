@@ -2,8 +2,10 @@ package dev.joseph.hyperbounce.notification.glass
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BlendMode
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Point
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
@@ -13,6 +15,7 @@ import dev.joseph.hyperbounce.notification.NotificationSheetConfigHolder
 import java.lang.ref.WeakReference
 import java.lang.reflect.Constructor
 import java.lang.reflect.Method
+import java.util.ArrayList
 import java.util.concurrent.Executors
 
 /**
@@ -48,6 +51,8 @@ object RealtimeBackdropHelper {
     private var setExcludeLayersMethod: Method? = null
     private var setFrameScaleMethod: Method? = null
     private var buildCaptureArgsMethod: Method? = null
+    private var setCaptureBlurRadiusMethod: Method? = null
+    private var setCaptureBlendsMethod: Method? = null
 
     private fun initReflection() {
         if (initializedReflection) return
@@ -76,6 +81,16 @@ object RealtimeBackdropHelper {
             setFrameScaleMethod = builderClass.getMethod("setFrameScale", Float::class.javaPrimitiveType)
             buildCaptureArgsMethod = builderClass.getMethod("build")
 
+            try {
+                setCaptureBlurRadiusMethod = builderClass.getDeclaredMethod("setCaptureBlurRadius", Int::class.javaPrimitiveType)
+                setCaptureBlurRadiusMethod?.isAccessible = true
+            } catch (_: Throwable) {}
+
+            try {
+                setCaptureBlendsMethod = builderClass.getDeclaredMethod("setCaptureBlends", ArrayList::class.java)
+                setCaptureBlendsMethod?.isAccessible = true
+            } catch (_: Throwable) {}
+
             if (wmsInstance != null) {
                 for (m in wmsInstance!!.javaClass.methods) {
                     if (m.name == "captureDisplay" && m.parameterTypes.size == 3 &&
@@ -86,19 +101,19 @@ object RealtimeBackdropHelper {
                     }
                 }
             }
-            Log.d(TAG, "ScreenCapture reflection initialized successfully")
+            Log.d(TAG, "ScreenCapture reflection initialized successfully (hasBlurRadiusMethod=${setCaptureBlurRadiusMethod != null})")
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to initialize ScreenCapture reflection", t)
         }
     }
 
-    private fun captureDisplayInternal(context: Context): Bitmap? {
+    private fun captureDisplayInternal(context: Context, needBlur: Boolean = false): Pair<Bitmap?, Boolean> {
         initReflection()
-        val wms = wmsInstance ?: return null
-        val capMethod = captureDisplayMethod ?: return null
-        val syncMethod = createSyncListenerMethod ?: return null
-        val bConstructor = builderConstructor ?: return null
-        val buildMethod = buildCaptureArgsMethod ?: return null
+        val wms = wmsInstance ?: return Pair(null, false)
+        val capMethod = captureDisplayMethod ?: return Pair(null, false)
+        val syncMethod = createSyncListenerMethod ?: return Pair(null, false)
+        val bConstructor = builderConstructor ?: return Pair(null, false)
+        val buildMethod = buildCaptureArgsMethod ?: return Pair(null, false)
 
         val dm = context.resources.displayMetrics
         val screenW = dm.widthPixels
@@ -118,24 +133,46 @@ object RealtimeBackdropHelper {
         val captureScale = if (screenW <= 1080) 1.0f else (1080f / screenW.toFloat()).coerceIn(0.75f, 1.0f)
         setFrameScaleMethod?.invoke(builder, captureScale)
 
+        var wasHardwareBlurred = false
+        if (needBlur && setCaptureBlurRadiusMethod != null) {
+            try {
+                val blurRadius = (150f * captureScale).toInt().coerceAtLeast(30)
+                setCaptureBlurRadiusMethod?.invoke(builder, blurRadius)
+                if (setCaptureBlendsMethod != null) {
+                    val blendList = ArrayList<Point>()
+                    blendList.add(Point(BlendMode.SRC_ATOP.ordinal, 1297438037))
+                    setCaptureBlendsMethod?.invoke(builder, blendList)
+                }
+                wasHardwareBlurred = true
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to apply hardware blur via setCaptureBlurRadius", t)
+            }
+        }
+
         val captureArgs = buildMethod.invoke(builder)
         val syncListener = syncMethod.invoke(null)
         capMethod.invoke(wms, 0, captureArgs, syncListener)
 
-        val buffer = getBufferMethod?.invoke(syncListener) ?: return null
-        return asBitmapMethod?.invoke(buffer) as? Bitmap
+        val buffer = getBufferMethod?.invoke(syncListener) ?: return Pair(null, false)
+        val bmp = asBitmapMethod?.invoke(buffer) as? Bitmap
+        return Pair(bmp, wasHardwareBlurred)
     }
 
-    private fun updateBitmaps(bmp: Bitmap) {
+    private fun updateBitmaps(bmp: Bitmap, wasHardwareBlurred: Boolean = false) {
         latestBitmap = bmp
         try {
             val cfg = NotificationSheetConfigHolder.sheet
             val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
-            val isDepthActive = cfg.depthWallpaperEnabled && isUnlocked
-            val shouldDrawWallpaper = !isDepthActive && cfg.lockWallpaperEnabled &&
+            val isLandscape = bmp.width > bmp.height
+            val isDepthActive = cfg.depthWallpaperEnabled && !isLandscape && isUnlocked
+            val shouldDrawWallpaper = !isDepthActive && cfg.lockWallpaperEnabled && !isLandscape &&
                     (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
             if (!isDepthActive && !shouldDrawWallpaper) {
-                latestBlurredBitmap = FastBlur.blur(bmp)
+                if (wasHardwareBlurred) {
+                    latestBlurredBitmap = bmp
+                } else {
+                    latestBlurredBitmap = FastBlur.blur(bmp)
+                }
             } else {
                 latestBlurredBitmap = null
             }
@@ -165,9 +202,16 @@ object RealtimeBackdropHelper {
         val appContext = context.applicationContext ?: context
         bgExecutor.execute {
             try {
-                val bmp = captureDisplayInternal(appContext)
+                val cfg = NotificationSheetConfigHolder.sheet
+                val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
+                val isLandscape = appContext.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                val isDepthActive = cfg.depthWallpaperEnabled && !isLandscape && isUnlocked
+                val shouldDrawWallpaper = !isDepthActive && cfg.lockWallpaperEnabled && !isLandscape &&
+                        (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
+                val needBlur = !isDepthActive && !shouldDrawWallpaper
+                val (bmp, hwBlurred) = captureDisplayInternal(appContext, needBlur)
                 if (bmp != null) {
-                    updateBitmaps(bmp)
+                    updateBitmaps(bmp, hwBlurred)
                     mainHandler.post {
                         onCaptured?.invoke()
                     }
@@ -196,9 +240,16 @@ object RealtimeBackdropHelper {
                 }
                 try {
                     val startTime = System.currentTimeMillis()
-                    val bmp = captureDisplayInternal(appContext)
+                    val cfg = NotificationSheetConfigHolder.sheet
+                    val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
+                    val isLandscape = appContext.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                    val isDepthActive = cfg.depthWallpaperEnabled && !isLandscape && isUnlocked
+                    val shouldDrawWallpaper = !isDepthActive && cfg.lockWallpaperEnabled && !isLandscape &&
+                            (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
+                    val needBlur = !isDepthActive && !shouldDrawWallpaper
+                    val (bmp, hwBlurred) = captureDisplayInternal(appContext, needBlur)
                     if (bmp != null && sessionId == refreshSessionId) {
-                        updateBitmaps(bmp)
+                        updateBitmaps(bmp, hwBlurred)
                         mainHandler.post {
                             if (sessionId == refreshSessionId) {
                                 weakSheet.get()?.postInvalidateOnAnimation()

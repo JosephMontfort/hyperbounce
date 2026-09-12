@@ -82,41 +82,41 @@ object DepthWallpaperHelper {
 
         // 1. Check custom subject file first
         try {
-            val customFile = File(context.filesDir, CUSTOM_FILENAME)
-            if (!customFile.exists() || customFile.length() == 0L) {
-                try {
-                    val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/$CUSTOM_FILENAME")
-                    context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
-                        val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
-                        val customBmp = BitmapFactory.decodeFileDescriptor(pfd.fileDescriptor, null, opts)
-                        if (customBmp != null) {
-                            cachedSubjectBitmap = customBmp
-                            try {
-                                FileOutputStream(customFile).use { fos ->
-                                    customBmp.compress(Bitmap.CompressFormat.PNG, 100, fos)
-                                    fos.flush()
-                                }
-                            } catch (_: Throwable) {}
-                            return customBmp
-                        }
-                    }
-                } catch (_: Throwable) {}
-            }
-            if (customFile.exists() && customFile.length() > 0) {
-                val opts = BitmapFactory.Options().apply {
-                    inPreferredConfig = Bitmap.Config.ARGB_8888
-                }
-                val customBmp = BitmapFactory.decodeFile(customFile.absolutePath, opts)
-                if (customBmp != null) {
-                    cachedSubjectBitmap = customBmp
+            val isCustomActive = hasCustomSubject(context)
+            if (isCustomActive) {
+                val customFile = File(context.filesDir, CUSTOM_FILENAME)
+                if (!customFile.exists() || customFile.length() == 0L) {
                     try {
-                        val activeFile = File(context.filesDir, CACHE_FILENAME)
-                        if (!activeFile.exists() || activeFile.length() == 0L) {
-                            customFile.copyTo(activeFile, overwrite = true)
+                        val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/$CUSTOM_FILENAME")
+                        context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                            val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+                            val customBmp = BitmapFactory.decodeFileDescriptor(pfd.fileDescriptor, null, opts)
+                            if (customBmp != null) {
+                                cachedSubjectBitmap = customBmp
+                                try {
+                                    FileOutputStream(customFile).use { fos ->
+                                        customBmp.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                                        fos.flush()
+                                    }
+                                } catch (_: Throwable) {}
+                                return customBmp
+                            }
                         }
                     } catch (_: Throwable) {}
-                    return customBmp
                 }
+                if (customFile.exists() && customFile.length() > 0) {
+                    val opts = BitmapFactory.Options().apply {
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                    }
+                    val customBmp = BitmapFactory.decodeFile(customFile.absolutePath, opts)
+                    if (customBmp != null) {
+                        cachedSubjectBitmap = customBmp
+                        return customBmp
+                    }
+                }
+            } else {
+                val customFile = File(context.filesDir, CUSTOM_FILENAME)
+                if (customFile.exists()) customFile.delete()
             }
         } catch (t: Throwable) {
             Log.d(TAG, "Custom subject disk lookup failed: ${t.message}")
@@ -356,16 +356,26 @@ object DepthWallpaperHelper {
      * Checks if a custom transparent subject cutout image is currently saved.
      */
     fun hasCustomSubject(context: Context): Boolean {
-        val f = File(context.filesDir, CUSTOM_FILENAME)
-        if (f.exists() && f.length() > 0) return true
+        if (context.packageName == "dev.joseph.hyperbounce") {
+            val f = File(context.filesDir, CUSTOM_FILENAME)
+            return f.exists() && f.length() > 0
+        }
+        // Running in SystemUI or other process: ask HyperBounce provider as single source of truth!
         try {
             val res = context.contentResolver.call(
                 Uri.parse("content://dev.joseph.hyperbounce.provider"),
                 "hasCustomDepthSubject", null, null
             )
-            return res?.getBoolean("hasCustom", false) ?: false
+            val hasCustom = res?.getBoolean("hasCustom", false) ?: false
+            if (!hasCustom) {
+                // Obsolete local file in host process: clean it up immediately
+                val f = File(context.filesDir, CUSTOM_FILENAME)
+                if (f.exists()) f.delete()
+            }
+            return hasCustom
         } catch (_: Throwable) {}
-        return false
+        val f = File(context.filesDir, CUSTOM_FILENAME)
+        return f.exists() && f.length() > 0
     }
 
     /**
@@ -772,14 +782,21 @@ object DepthWallpaperHelper {
     }
 
 
-    fun clearCache(context: Context) {
-        if (hasCustomSubject(context)) {
+    fun clearCache(context: Context, forceClearAll: Boolean = false) {
+        if (!forceClearAll && hasCustomSubject(context)) {
             return
         }
         cachedSubjectBitmap = null
         try {
             val file = File(context.filesDir, CACHE_FILENAME)
             if (file.exists()) file.delete()
+            if (forceClearAll) {
+                val customFile = File(context.filesDir, CUSTOM_FILENAME)
+                if (customFile.exists()) customFile.delete()
+                val segFile = File(context.filesDir, SEGMENTED_FILENAME)
+                if (segFile.exists()) segFile.delete()
+            }
         } catch (_: Throwable) {}
+        notifyListeners()
     }
 }

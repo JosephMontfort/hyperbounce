@@ -30,6 +30,37 @@ object LockScreenCoverSheetController {
     private var cachedFgClockContainerRef: WeakReference<ViewGroup>? = null
     private var cachedHeaderViewRef: WeakReference<View>? = null
 
+    @Volatile
+    var currentMorphFraction: Float = 0f
+        private set
+
+    private var targetMorphFraction: Float = 0f
+    private var morphAnimator: android.animation.ValueAnimator? = null
+
+    fun updateMorphFraction(target: Float) {
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                updateMorphFraction(target)
+            }
+            return
+        }
+        if (kotlin.math.abs(target - targetMorphFraction) < 0.01f && morphAnimator?.isRunning == true) return
+        targetMorphFraction = target
+        morphAnimator?.cancel()
+        val anim = android.animation.ValueAnimator.ofFloat(currentMorphFraction, target).apply {
+            duration = 320L
+            interpolator = android.view.animation.PathInterpolator(0.2f, 0f, 0.2f, 1f)
+            addUpdateListener { va ->
+                currentMorphFraction = va.animatedValue as Float
+                val container = dev.joseph.hyperbounce.notification.NotificationSheetHook.getContainer()
+                val sheet = container?.findViewWithTag<View>("hyperbounce_notif_glass_sheet")
+                sheet?.postInvalidateOnAnimation()
+            }
+        }
+        morphAnimator = anim
+        anim.start()
+    }
+
     /**
      * Resolves the authentic lockscreen clock views from the SystemUI view hierarchy.
      */
@@ -73,6 +104,9 @@ object LockScreenCoverSheetController {
         alpha: Float,
         translationY: Float
     ) {
+        val isLandscape = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || w > h
+        if (isLandscape) return
+
         val cfg = NotificationSheetConfigHolder.sheet
         if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled || alpha <= 0.01f) return
 
@@ -83,7 +117,12 @@ object LockScreenCoverSheetController {
         val nssl = if (nsslId != 0) container?.findViewById<ViewGroup>(nsslId) else null
         val hasNotif = if (nssl != null) hasActiveNotifications(nssl) else (lastKnownHasNotification == true)
         lastKnownHasNotification = hasNotif
-        val morphFraction = if (hasNotif) 1.0f else 0.0f
+
+        val targetFraction = if (hasNotif) 1.0f else 0.0f
+        if (kotlin.math.abs(targetFraction - targetMorphFraction) > 0.01f) {
+            updateMorphFraction(targetFraction)
+        }
+        val morph = currentMorphFraction
 
         val targetView: ViewGroup? = when (layer) {
             ClockLayer.BACKGROUND -> cachedClockContainerRef?.get()
@@ -120,12 +159,12 @@ object LockScreenCoverSheetController {
                         canScaleField.setBoolean(targetView, true)
                     } catch (_: Throwable) {}
 
-                    val clockScale = if (hasNotif) 0.68f else 1.0f
-                    val clockShiftY = if (hasNotif) -18f * density else 0f
+                    val clockScale = 1.0f - (0.32f * morph)
+                    val clockShiftY = -18f * density * morph
 
                     val saveCount = canvas.save()
                     canvas.translate(0f, translationY + clockShiftY)
-                    if (hasNotif) {
+                    if (morph > 0.001f) {
                         canvas.scale(clockScale, clockScale, viewW / 2f, 50f * density)
                     }
                     if (alpha < 0.999f) {
@@ -161,7 +200,7 @@ object LockScreenCoverSheetController {
                     h = h,
                     density = density,
                     config = clockConfig,
-                    morphFraction = morphFraction,
+                    morphFraction = morph,
                     alpha = alpha,
                     translationY = translationY
                 )
@@ -178,15 +217,9 @@ object LockScreenCoverSheetController {
         if (rootView == null) return
         try {
             val cfg = NotificationSheetConfigHolder.sheet
-            if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) {
-                // If feature is disabled, DO NOT touch stock shade header at all! Let Xiaomi manage it!
-                return
-            }
             val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
-            if (!isUnlocked) {
-                // On lockscreen, never touch or manipulate normal_notification_header_view!
-                return
-            }
+            val isLandscape = rootView.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
             var headerView = cachedHeaderViewRef?.get()
             if (headerView == null) {
                 val headerId = rootView.resources.getIdentifier("normal_notification_header_view", "id", "com.android.systemui")
@@ -197,6 +230,21 @@ object LockScreenCoverSheetController {
                     }
                 }
             }
+
+            if (!isUnlocked) {
+                // On lockscreen, normal_notification_header_view MUST ALWAYS be hidden!
+                headerView?.alpha = 0.0f
+                headerView?.visibility = View.GONE
+                return
+            }
+
+            if (isLandscape || !cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) {
+                // In landscape mode or when feature is disabled, let stock Xiaomi manage it when unlocked
+                headerView?.alpha = 1.0f
+                headerView?.visibility = View.VISIBLE
+                return
+            }
+
             if (headerView != null) {
                 headerView.alpha = 0.0f
                 headerView.visibility = View.GONE
@@ -211,9 +259,14 @@ object LockScreenCoverSheetController {
      */
     fun ensureBottomAffordancesInjected(container: ViewGroup) {
         try {
-            val cfg = NotificationSheetConfigHolder.sheet
+            val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
             var bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
+            if (isLandscape) {
+                bottomArea?.visibility = View.GONE
+                return
+            }
 
+            val cfg = NotificationSheetConfigHolder.sheet
             if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled || !cfg.showBottomWidgets) {
                 bottomArea?.visibility = View.GONE
                 return
@@ -370,6 +423,9 @@ object LockScreenCoverSheetController {
      */
     fun syncClockWithNotifications(container: ViewGroup?) {
         if (container == null) return
+        val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        if (isLandscape) return
+
         val cfg = NotificationSheetConfigHolder.sheet
         if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) return
 
@@ -380,6 +436,11 @@ object LockScreenCoverSheetController {
             val hasNotif = hasActiveNotifications(nssl)
             val notifChanged = (lastKnownHasNotification != hasNotif)
             lastKnownHasNotification = hasNotif
+
+            val targetFraction = if (hasNotif) 1.0f else 0.0f
+            if (kotlin.math.abs(targetFraction - targetMorphFraction) > 0.01f) {
+                updateMorphFraction(targetFraction)
+            }
 
             val clockContainer = getAuthenticClockContainer(container.rootView)
             if (clockContainer != null) {
@@ -459,6 +520,12 @@ object LockScreenCoverSheetController {
         currentStretchOffset: Float
     ) {
         try {
+            val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            if (isLandscape) {
+                suppressStockShadeHeader(container.rootView, false)
+                container.findViewWithTag<View>(TAG_BOTTOM_AFFORDANCES)?.visibility = View.GONE
+                return
+            }
             val cfg = NotificationSheetConfigHolder.sheet
             if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) return
 
@@ -490,6 +557,11 @@ object LockScreenCoverSheetController {
      */
     fun onShadeFullyOpened(container: ViewGroup) {
         try {
+            val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            if (isLandscape) {
+                container.findViewWithTag<View>(TAG_BOTTOM_AFFORDANCES)?.visibility = View.GONE
+                return
+            }
             val cfg = NotificationSheetConfigHolder.sheet
             if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) return
 
@@ -513,6 +585,10 @@ object LockScreenCoverSheetController {
      */
     fun onShadeReset(container: ViewGroup) {
         try {
+            currentMorphFraction = 0f
+            targetMorphFraction = 0f
+            morphAnimator?.cancel()
+
             val cfg = NotificationSheetConfigHolder.sheet
             if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) return
 
