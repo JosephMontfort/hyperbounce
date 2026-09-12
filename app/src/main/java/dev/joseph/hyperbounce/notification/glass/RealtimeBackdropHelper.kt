@@ -229,9 +229,6 @@ object RealtimeBackdropHelper {
         isRefreshing = false
         refreshSessionId++
     }
-        isRefreshing = false
-        refreshSessionId++
-    }
 
     fun release() {
         stopLiveRefresh()

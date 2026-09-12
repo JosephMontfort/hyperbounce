@@ -89,7 +89,7 @@ fun WallpaperCropperDialog(
                 Spacer(Modifier.height(6.dp))
                 BasicText(
                     "Pinch to zoom and drag to adjust position",
-                    style = HyperBounceType.caption1.copy(
+                    style = HyperBounceType.caption.copy(
                         color = Color.White.copy(alpha = 0.65f)
                     )
                 )

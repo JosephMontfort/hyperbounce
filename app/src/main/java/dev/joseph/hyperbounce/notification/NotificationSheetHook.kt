@@ -14,6 +14,7 @@ import android.view.ViewGroup
 import android.view.ViewParent
 import android.view.animation.DecelerateInterpolator
 import android.hardware.camera2.CameraManager
+import dev.joseph.hyperbounce.notification.glass.CustomWallpaperHelper
 import dev.joseph.hyperbounce.notification.glass.DepthWallpaperHelper
 import dev.joseph.hyperbounce.notification.glass.NotificationGlassSheetView
 import dev.joseph.hyperbounce.notification.glass.RealtimeBackdropHelper
