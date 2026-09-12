@@ -309,6 +309,14 @@ object LockScreenSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
                             try {
+                                val notifCfg = dev.joseph.hyperbounce.notification.NotificationSheetConfigHolder.sheet
+                                if (notifCfg.enabled && notifCfg.lockScreenAsNotifCenterEnabled) {
+                                    return result
+                                }
+                                val lockCfg = LockScreenSheetConfigHolder.sheet
+                                if (!lockCfg.enabled) {
+                                    return result
+                                }
                                 val container = chain.thisObject
                                 val canScaleField: Field = container.javaClass.getDeclaredField("mClockCanScale")
                                 canScaleField.isAccessible = true

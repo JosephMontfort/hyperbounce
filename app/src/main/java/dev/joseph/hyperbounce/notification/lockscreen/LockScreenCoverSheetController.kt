@@ -78,7 +78,11 @@ object LockScreenCoverSheetController {
 
         resolveClockViews(rootView)
 
-        val hasNotif = (lastKnownHasNotification == true)
+        val container = dev.joseph.hyperbounce.notification.NotificationSheetHook.getContainer()
+        val nsslId = container?.resources?.getIdentifier("notification_stack_scroller", "id", "com.android.systemui") ?: 0
+        val nssl = if (nsslId != 0) container?.findViewById<ViewGroup>(nsslId) else null
+        val hasNotif = if (nssl != null) hasActiveNotifications(nssl) else (lastKnownHasNotification == true)
+        lastKnownHasNotification = hasNotif
         val morphFraction = if (hasNotif) 1.0f else 0.0f
 
         val targetView: ViewGroup? = when (layer) {
@@ -110,13 +114,19 @@ object LockScreenCoverSheetController {
                     targetView.visibility = View.VISIBLE
                     targetView.alpha = 1.0f
 
-                    val clockScale = if (hasNotif) 0.72f else 1.0f
-                    val clockShiftY = if (hasNotif) -24f * density else 0f
+                    try {
+                        val canScaleField = targetView.javaClass.getDeclaredField("mClockCanScale")
+                        canScaleField.isAccessible = true
+                        canScaleField.setBoolean(targetView, true)
+                    } catch (_: Throwable) {}
+
+                    val clockScale = if (hasNotif) 0.68f else 1.0f
+                    val clockShiftY = if (hasNotif) -18f * density else 0f
 
                     val saveCount = canvas.save()
                     canvas.translate(0f, translationY + clockShiftY)
                     if (hasNotif) {
-                        canvas.scale(clockScale, clockScale, viewW / 2f, 40f * density)
+                        canvas.scale(clockScale, clockScale, viewW / 2f, 50f * density)
                     }
                     if (alpha < 0.999f) {
                         canvas.saveLayerAlpha(
@@ -253,28 +263,68 @@ object LockScreenCoverSheetController {
     }
 
     /**
-     * Counts visible notification rows inside notification_stack_scroller using the exact
-     * HyperOS Keyguard / NSSL criteria (excluding gone views and non-notification rows).
+     * Accurately determines if active notifications exist inside notification_stack_scroller.
      */
-    fun getVisibleNotificationCount(nssl: ViewGroup?): Int {
-        if (nssl == null) return 0
-        var count = 0
+    fun hasActiveNotifications(nssl: ViewGroup?): Boolean {
+        if (nssl == null) return false
+
+        // 1. If EmptyShadeView is visible, there are definitely 0 notifications
         try {
-            val childCount = nssl.childCount
-            for (i in 0 until childCount) {
+            for (i in 0 until nssl.childCount) {
                 val child = nssl.getChildAt(i) ?: continue
-                if (child.visibility != View.GONE) {
-                    val name = child.javaClass.simpleName
-                    if (name.contains("Empty") || name.contains("Footer") || name.contains("Shelf") || name.contains("SectionHeader")) {
-                        continue
-                    }
-                    if (name.contains("NotificationRow") || name.contains("MediaHeader") || name.contains("ZenMode")) {
-                        count++
+                val name = child.javaClass.simpleName
+                if (name.contains("Empty", ignoreCase = true) && child.visibility == View.VISIBLE) {
+                    return false
+                }
+            }
+        } catch (_: Throwable) {}
+
+        // 2. Query getNotGoneChildCount if available
+        try {
+            val getNotGone = nssl.javaClass.methods.firstOrNull { it.name == "getNotGoneChildCount" && it.parameterTypes.isEmpty() }
+            if (getNotGone != null) {
+                val notGone = (getNotGone.invoke(nssl) as? Number)?.toInt() ?: 0
+                if (notGone > 0) {
+                    for (i in 0 until nssl.childCount) {
+                        val child = nssl.getChildAt(i) ?: continue
+                        if (child.visibility == View.GONE) continue
+                        val name = child.javaClass.simpleName
+                        if (!name.contains("Footer", ignoreCase = true) &&
+                            !name.contains("Shelf", ignoreCase = true) &&
+                            !name.contains("SectionHeader", ignoreCase = true) &&
+                            !name.contains("Empty", ignoreCase = true)
+                        ) {
+                            return true
+                        }
                     }
                 }
             }
         } catch (_: Throwable) {}
-        return count
+
+        // 3. Fallback child scan
+        try {
+            for (i in 0 until nssl.childCount) {
+                val child = nssl.getChildAt(i) ?: continue
+                if (child.visibility == View.GONE) continue
+                val name = child.javaClass.simpleName
+                if (name.contains("Notification", ignoreCase = true) ||
+                    name.contains("Row", ignoreCase = true) ||
+                    name.contains("Media", ignoreCase = true) ||
+                    name.contains("Zen", ignoreCase = true)
+                ) {
+                    return true
+                }
+            }
+        } catch (_: Throwable) {}
+
+        return false
+    }
+
+    /**
+     * Counts visible notification rows inside notification_stack_scroller.
+     */
+    fun getVisibleNotificationCount(nssl: ViewGroup?): Int {
+        return if (hasActiveNotifications(nssl)) 1 else 0
     }
 
     /**
@@ -283,30 +333,36 @@ object LockScreenCoverSheetController {
     fun getEffectiveClockBottom(container: ViewGroup?): Int {
         if (container == null) return 0
         val density = container.resources.displayMetrics.density
-        val hasNotif = (lastKnownHasNotification == true)
+        val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
+        val nssl = if (nsslId != 0) container.findViewById<ViewGroup>(nsslId) else null
+        val hasNotif = if (nssl != null) hasActiveNotifications(nssl) else (lastKnownHasNotification == true)
+
+        if (hasNotif) {
+            return (135f * density).toInt()
+        }
+
         try {
             val clockContainer = getAuthenticClockContainer(container.rootView)
             if (clockContainer != null) {
                 val getClockBottomMethod = clockContainer.javaClass.getMethod("getClockBottom")
                 val bottom = (getClockBottomMethod.invoke(clockContainer) as? Number)?.toInt() ?: 0
-                if (bottom in (80f * density).toInt()..(450f * density).toInt()) {
-                    return if (hasNotif) kotlin.math.min(bottom, (170f * density).toInt()) else bottom
+                if (bottom in (180f * density).toInt()..(450f * density).toInt()) {
+                    return bottom
                 }
             }
         } catch (_: Throwable) {}
 
-        return if (hasNotif) (145f * density).toInt() else (320f * density).toInt()
+        return (310f * density).toInt()
     }
 
     /**
      * Synchronizes the authentic SystemUI keyguard clock with live notifications:
      * 1. Inspects notification_stack_scroller visible count.
-     * 2. Sets KeyguardClockContainer.mHasNotification = hasNotif.
-     * 3. Calls AnimationHelper.doAnimationToNotification(hasNotif, true) to trigger
+     * 2. Sets KeyguardClockContainer.mHasNotification = hasNotif and enables mClockCanScale.
+     * 3. Calls AnimationHelper.doAnimationToNotification(hasNotif, false) to trigger
      *    the authentic Xiaomi lockscreen Folme morph animation (shrink when notifications exist,
      *    expand to full size when empty).
-     * 4. Dynamically adjusts NSSL topMargin and bottomMargin so notifications flow
-     *    strictly beneath the clock and above the bottom affordances with proper clipping.
+     * 4. Applies non-destructive hardware clipBounds and padding to NSSL.
      */
     fun syncClockWithNotifications(container: ViewGroup?) {
         if (container == null) return
@@ -317,15 +373,17 @@ object LockScreenCoverSheetController {
             val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
             val nssl = if (nsslId != 0) container.findViewById<ViewGroup>(nsslId) else null
 
-            val visibleCount = getVisibleNotificationCount(nssl)
-            val hasNotif = visibleCount > 0
-
+            val hasNotif = hasActiveNotifications(nssl)
             val notifChanged = (lastKnownHasNotification != hasNotif)
             lastKnownHasNotification = hasNotif
 
             val clockContainer = getAuthenticClockContainer(container.rootView)
             if (clockContainer != null) {
                 try {
+                    val canScaleField = clockContainer.javaClass.getDeclaredField("mClockCanScale")
+                    canScaleField.isAccessible = true
+                    canScaleField.setBoolean(clockContainer, true)
+
                     val hasNotifField = clockContainer.javaClass.getDeclaredField("mHasNotification")
                     hasNotifField.isAccessible = true
                     val currentInContainer = hasNotifField.getBoolean(clockContainer)
@@ -342,7 +400,7 @@ object LockScreenCoverSheetController {
                                 Boolean::class.javaPrimitiveType,
                                 Boolean::class.javaPrimitiveType
                             )
-                            doAnimMethod.invoke(animHelper, hasNotif, true)
+                            doAnimMethod.invoke(animHelper, hasNotif, false)
                             Log.d(TAG, "Triggered authentic doAnimationToNotification(hasNotif=$hasNotif)")
                         }
 
@@ -361,42 +419,24 @@ object LockScreenCoverSheetController {
                                 }
                             }
                         } catch (_: Throwable) {}
-
-                        clockContainer.requestLayout()
                     }
                 } catch (t: Throwable) {
                     Log.e(TAG, "Error animating authentic clock view to notification state", t)
                 }
             }
 
-            // Adjust NSSL layout & margins so notification cards do not collide with clock
+            // Clean bottom clearance above camera/torch & hardware clipping below clock
             if (nssl != null) {
-                val lp = nssl.layoutParams as? ViewGroup.MarginLayoutParams
-                if (lp != null) {
-                    val density = container.resources.displayMetrics.density
-                    val clockBottom = getEffectiveClockBottom(container)
-                    val targetTop = clockBottom + (12f * density).toInt()
-                    val targetBottom = (120f * density).toInt()
-
-                    var changed = false
-                    if (lp.topMargin != targetTop) {
-                        lp.topMargin = targetTop
-                        changed = true
-                    }
-                    if (lp.bottomMargin != targetBottom) {
-                        lp.bottomMargin = targetBottom
-                        changed = true
-                    }
-                    if (changed) {
-                        nssl.layoutParams = lp
-                        nssl.requestLayout()
-                    }
-                    nssl.clipToPadding = true
-                    nssl.clipChildren = true
-                    (nssl.parent as? ViewGroup)?.clipChildren = true
-                    if (nssl.paddingTop != 0 || nssl.paddingBottom != 0) {
-                        nssl.setPadding(nssl.paddingLeft, 0, nssl.paddingRight, 0)
-                    }
+                val density = container.resources.displayMetrics.density
+                val targetPaddingBottom = (110f * density).toInt()
+                if (nssl.paddingBottom != targetPaddingBottom) {
+                    nssl.setPadding(nssl.paddingLeft, 0, nssl.paddingRight, targetPaddingBottom)
+                }
+                val clockBottom = getEffectiveClockBottom(container)
+                val clipTop = clockBottom + (8f * density).toInt()
+                val clipBottom = if (nssl.height > 0) nssl.height - (100f * density).toInt() else (container.resources.displayMetrics.heightPixels - (100f * density).toInt())
+                if (clipBottom > clipTop && nssl.width > 0) {
+                    nssl.clipBounds = android.graphics.Rect(0, clipTop, nssl.width, clipBottom)
                 }
             }
         } catch (t: Throwable) {
@@ -482,6 +522,10 @@ object LockScreenCoverSheetController {
 
             // Hide bottom affordances
             container.findViewWithTag<View>(TAG_BOTTOM_AFFORDANCES)?.visibility = View.GONE
+
+            val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
+            val nssl = if (nsslId != 0) container.findViewById<ViewGroup>(nsslId) else null
+            nssl?.clipBounds = null
 
             lastKnownHasNotification = null
         } catch (t: Throwable) {

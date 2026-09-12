@@ -1219,9 +1219,8 @@ object NotificationSheetHook {
             val targetEnd = origEnd + extraMargin
 
             val isLsCenter = isActive && cfg.lockScreenAsNotifCenterEnabled
-            val clockBottom = if (isLsCenter) LockScreenCoverSheetController.getEffectiveClockBottom(container) else 0
-            val targetTop = if (isLsCenter) clockBottom + (12f * density).toInt() else origTop
-            val targetBottom = if (isLsCenter) (120f * density).toInt() else if (isActive) ((cfg.pillBottomMargin + cfg.pillHeight + 24f) * density).toInt() else origBottom
+            val targetTop = origTop
+            val targetBottom = if (isLsCenter) origBottom else if (isActive) ((cfg.pillBottomMargin + cfg.pillHeight + 24f) * density).toInt() else origBottom
 
             var changed = false
             if (lp.marginStart != targetStart || lp.marginEnd != targetEnd) {
@@ -1231,17 +1230,16 @@ object NotificationSheetHook {
                 lp.rightMargin = targetEnd
                 changed = true
             }
-            if (lp.topMargin != targetTop) {
+            if (!isLsCenter && lp.topMargin != targetTop) {
                 lp.topMargin = targetTop
                 changed = true
             }
-            if (lp.bottomMargin != targetBottom) {
+            if (!isLsCenter && lp.bottomMargin != targetBottom) {
                 lp.bottomMargin = targetBottom
                 changed = true
             }
             if (changed) {
                 nssl.layoutParams = lp
-                nssl.requestLayout()
             }
             if (nssl is ViewGroup) {
                 val origPaddingTop = (nssl.getTag(TAG_ORIG_PADDING_TOP) as? Int) ?: run {
@@ -1255,13 +1253,18 @@ object NotificationSheetHook {
                     pb
                 }
                 if (isLsCenter) {
-                    nssl.clipToPadding = true
-                    nssl.clipChildren = true
-                    (nssl.parent as? ViewGroup)?.clipChildren = true
-                    if (nssl.paddingTop != 0 || nssl.paddingBottom != 0) {
-                        nssl.setPadding(nssl.paddingLeft, 0, nssl.paddingRight, 0)
+                    val targetPaddingBottom = (110f * density).toInt()
+                    if (nssl.paddingBottom != targetPaddingBottom || nssl.paddingTop != 0) {
+                        nssl.setPadding(nssl.paddingLeft, 0, nssl.paddingRight, targetPaddingBottom)
+                    }
+                    val clockBottom = LockScreenCoverSheetController.getEffectiveClockBottom(container)
+                    val clipTop = clockBottom + (8f * density).toInt()
+                    val clipBottom = if (nssl.height > 0) nssl.height - (100f * density).toInt() else (container.resources.displayMetrics.heightPixels - (100f * density).toInt())
+                    if (clipBottom > clipTop && nssl.width > 0) {
+                        nssl.clipBounds = android.graphics.Rect(0, clipTop, nssl.width, clipBottom)
                     }
                 } else {
+                    nssl.clipBounds = null
                     val targetPaddingTop = if (isActive) kotlin.math.max(origPaddingTop, (260f * density).toInt()) else origPaddingTop
                     val targetPaddingBottom = if (isActive) targetBottom else origPaddingBottom
                     if (nssl.paddingTop != targetPaddingTop || nssl.paddingBottom != targetPaddingBottom) {
@@ -1279,6 +1282,7 @@ object NotificationSheetHook {
             val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
             val nssl = if (nsslId != 0) container.findViewById<View>(nsslId) else null ?: return
 
+            nssl.clipBounds = null
             val lp = nssl.layoutParams as? ViewGroup.MarginLayoutParams ?: return
             val origStart = (nssl.getTag(TAG_ORIG_MARGIN_START) as? Int) ?: lp.marginStart
             val origEnd = (nssl.getTag(TAG_ORIG_MARGIN_END) as? Int) ?: lp.marginEnd
@@ -1303,7 +1307,6 @@ object NotificationSheetHook {
             }
             if (changed) {
                 nssl.layoutParams = lp
-                nssl.requestLayout()
             }
             if (nssl is ViewGroup) {
                 val origPaddingTop = (nssl.getTag(TAG_ORIG_PADDING_TOP) as? Int) ?: nssl.paddingTop
@@ -1488,9 +1491,7 @@ object NotificationSheetHook {
                                     if (container != null && hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen && !isLaunchingNotificationActivity) {
                                         hasTriggeredUnlockForCurrentOpen = true
                                         hasFullyOpenedForCurrentSession = false
-                                        if (isHomeScreenCached) {
-                                            notifyCloseOverHomescreen(container.context)
-                                        }
+                                        notifyCloseOverHomescreen(container.context)
                                     }
                                     isShadeFullyOpen = false
                                     if (!animated) {
@@ -1585,11 +1586,12 @@ object NotificationSheetHook {
                 updateHomeScreenCache(container.context)
             }
 
-            var viewHeight = container.height.toFloat()
-            if (viewHeight <= 0f) {
-                viewHeight = container.resources.displayMetrics.heightPixels.toFloat()
+            val screenHeight = container.resources.displayMetrics.heightPixels.toFloat()
+            val viewHeight = if (container.height > 0 && container.height.toFloat() >= screenHeight * 0.8f) {
+                container.height.toFloat()
+            } else {
+                screenHeight
             }
-            if (viewHeight <= 0f) viewHeight = 2400f
 
             val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
             val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
@@ -1600,6 +1602,16 @@ object NotificationSheetHook {
                 hasFullyOpenedForCurrentSession = true
                 hasTriggeredUnlockForCurrentOpen = false
                 isShadeOpen = true
+            }
+
+            // Simultaneous unlock trigger: as soon as shade begins closing from full open towards closed
+            if (hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen &&
+                !isLaunchingNotificationActivity && fraction < 0.88f &&
+                (prevFraction < 0f || fraction < prevFraction)
+            ) {
+                hasTriggeredUnlockForCurrentOpen = true
+                hasFullyOpenedForCurrentSession = false
+                notifyCloseOverHomescreen(container.context)
             }
 
             if (fraction <= 0.015f) {
@@ -1798,18 +1810,22 @@ object NotificationSheetHook {
                 val dy = event.rawY - touchDownY
 
                 if (event.actionMasked == MotionEvent.ACTION_UP && wasTouching) {
-                    var viewHeight = container.height.toFloat()
-                    if (viewHeight <= 0f) viewHeight = container.resources.displayMetrics.heightPixels.toFloat()
-                    if (viewHeight <= 0f) viewHeight = 2400f
-                    val isFromBottom = touchDownY > viewHeight - 100f * density
-                    val isClosingGesture = (isFromBottom && dy < -20f * density) || (lastAppliedFraction < 0.50f && dy < 0f)
+                    val dm = container.resources.displayMetrics
+                    val density = dm.density
+                    val screenH = dm.heightPixels.toFloat()
+                    val clockBottom = LockScreenCoverSheetController.getEffectiveClockBottom(container)
+
+                    val isClockArea = touchDownY <= clockBottom + (30f * density)
+                    val isBottomArea = touchDownY >= screenH - (130f * density)
+                    val isClosingGesture = (dy < -20f * density) && (isClockArea || isBottomArea || lastAppliedFraction < 0.85f)
+
                     if (hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen &&
-                        !isLaunchingNotificationActivity && isClosingGesture && lastAppliedFraction > 0.05f
+                        !isLaunchingNotificationActivity && (isClosingGesture || (dy < -25f * density && lastAppliedFraction > 0.05f))
                     ) {
                         hasTriggeredUnlockForCurrentOpen = true
                         isShadeFullyOpen = false
                         hasFullyOpenedForCurrentSession = false
-                        Log.d(TAG, "ACTION_UP closing release detected (dy=$dy, frac=$lastAppliedFraction) -> triggering simultaneous unlock")
+                        Log.d(TAG, "ACTION_UP closing release detected (dy=$dy, touchY=$touchDownY) -> triggering simultaneous unlock")
                         notifyCloseOverHomescreen(container.context)
                     }
                 }
@@ -1904,9 +1920,12 @@ object NotificationSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val cfg = NotificationSheetConfigHolder.sheet
                             if (cfg.enabled && cfg.lockScreenAsNotifCenterEnabled && isUnlockedShadeActive) {
-                                // When margins handle the physical layout clearance below the clock,
-                                // internal top padding must be 0 so padding is not doubled!
-                                return 0.0f
+                                val container = containerRef?.get()
+                                if (container != null) {
+                                    val density = container.resources.displayMetrics.density
+                                    val clockBottom = LockScreenCoverSheetController.getEffectiveClockBottom(container)
+                                    return (clockBottom + 16f * density).toFloat()
+                                }
                             }
                             return chain.proceed()
                         }

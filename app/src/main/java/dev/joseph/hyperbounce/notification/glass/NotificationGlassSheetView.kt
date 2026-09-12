@@ -69,27 +69,19 @@ class NotificationGlassSheetView @JvmOverloads constructor(
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val parent = parent as? View
-        val w = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY) {
-            MeasureSpec.getSize(widthMeasureSpec)
-        } else {
-            if (parent != null && parent.width > 0) parent.width else resources.displayMetrics.widthPixels
-        }
-        val h = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) {
-            MeasureSpec.getSize(heightMeasureSpec)
-        } else {
-            if (parent != null && parent.height > 0) parent.height else resources.displayMetrics.heightPixels
-        }
-        setMeasuredDimension(w, h)
+        val dm = resources.displayMetrics
+        val screenW = dm.widthPixels
+        val screenH = dm.heightPixels
+        setMeasuredDimension(screenW, screenH)
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (visibility != VISIBLE) return
 
-        val parent = parent as? View
-        val w = if (width > 0) width else (parent?.width ?: resources.displayMetrics.widthPixels)
-        val h = if (height > 0) height else (parent?.height ?: resources.displayMetrics.heightPixels)
+        val dm = resources.displayMetrics
+        val w = dm.widthPixels
+        val h = dm.heightPixels
         if (w <= 0 || h <= 0) return
 
         val density = resources.displayMetrics.density
