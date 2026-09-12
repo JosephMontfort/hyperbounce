@@ -737,6 +737,7 @@ object NotificationSheetHook {
                 nssl.visibility = View.VISIBLE
             }
 
+            val cfg = NotificationSheetConfigHolder.sheet
             val isImageBgActive = cfg.enabled && (
                 cfg.lockScreenAsNotifCenterEnabled ||
                 cfg.lockWallpaperEnabled ||
