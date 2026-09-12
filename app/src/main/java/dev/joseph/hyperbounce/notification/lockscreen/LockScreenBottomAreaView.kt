@@ -4,10 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.graphics.drawable.GradientDrawable
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.os.Handler
@@ -20,14 +20,16 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.core.graphics.PathParser
 import dev.joseph.hyperbounce.notification.NotificationSheetHook
 
 /**
  * Bottom Quick Affordance Widgets for Lock Screen & Notification Center:
- * - Left: Flashlight Torch toggle with real-time hardware state reflection.
- * - Right: Camera quick launcher.
+ * - Left: Flashlight Torch toggle with real-time HyperOS hardware state reflection.
+ * - Right: Camera quick launcher (explicit com.android.camera intent without app chooser).
+ * - Authentic Apple SF Symbol glyphs (flashlight and camera) with EVEN_ODD fills.
+ * - Liquid Glass circular lens styling (optical bevel, specular highlight, active state transition, blur disabled).
  * - Pop-in spring physics driven by shade expansion fraction (0.85 -> 1.0).
- * - Tactile haptic feedback and dynamic frosted-glass circular pills.
  */
 class LockScreenBottomAreaView @JvmOverloads constructor(
     context: Context,
@@ -37,6 +39,21 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
 
     companion object {
         private const val TAG = "HyperBounce_LSBottom"
+
+        // SF Symbol flashlight.off.fill
+        private const val FLASHLIGHT_PATH =
+            "M1.2,0 H11.8 A1.2,1.2 0 0 1 13,1.2 V4.6 H0 V1.2 A1.2,1.2 0 0 1 1.2,0 Z " +
+            "M0,5.6 H13 L9.7,11.5 V31.5 A1.5,1.5 0 0 1 8.2,33 H4.8 A1.5,1.5 0 0 1 3.3,31.5 V11.5 Z " +
+            "M6.5,13.6 A1.4,1.9 0 1 1 6.5,17.4 A1.4,1.9 0 1 1 6.5,13.6 Z " +
+            "M6.5,14.8 A0.7,0.7 0 1 1 6.5,16.2 A0.7,0.7 0 1 1 6.5,14.8 Z"
+
+        // SF Symbol camera.fill
+        private const val CAMERA_PATH =
+            "M4.6,5 H11.6 L13.4,1.6 A2,2 0 0 1 15.2,0.5 H21.8 A2,2 0 0 1 23.6,1.6 L25.4,5 H32.4 A4.6,4.6 0 0 1 37,9.6 " +
+            "V22.4 A4.6,4.6 0 0 1 32.4,27 H4.6 A4.6,4.6 0 0 1 0,22.4 V9.6 A4.6,4.6 0 0 1 4.6,5 Z " +
+            "M18.5,8.6 A7,7 0 1 1 18.5,22.6 A7,7 0 1 1 18.5,8.6 Z " +
+            "M18.5,11 A4.6,4.6 0 1 1 18.5,20.2 A4.6,4.6 0 1 1 18.5,11 Z " +
+            "M30.2,9.2 A1.3,1.3 0 1 1 30.2,11.8 A1.3,1.3 0 1 1 30.2,9.2 Z"
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -51,17 +68,13 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
     private val torchCallback = object : CameraManager.TorchCallback() {
         override fun onTorchModeChanged(camId: String, enabled: Boolean) {
             if (camId == torchCameraId) {
-                isTorchOn = enabled
-                leftTorchButton.isActive = enabled
-                leftTorchButton.invalidate()
+                setTorchActive(enabled)
             }
         }
 
         override fun onTorchModeUnavailable(camId: String) {
             if (camId == torchCameraId) {
-                isTorchOn = false
-                leftTorchButton.isActive = false
-                leftTorchButton.invalidate()
+                setTorchActive(false)
             }
         }
     }
@@ -73,13 +86,13 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
         initCamera()
 
         val density = resources.displayMetrics.density
-        val btnSize = (50f * density).toInt()
+        val btnSize = (52f * density).toInt()
 
         leftTorchButton = AffordanceButton(context, AffordanceType.TORCH).apply {
             layoutParams = LayoutParams(btnSize, btnSize).apply {
                 gravity = android.view.Gravity.BOTTOM or android.view.Gravity.START
-                leftMargin = (32f * density).toInt()
-                bottomMargin = (48f * density).toInt()
+                leftMargin = (36f * density).toInt()
+                bottomMargin = (52f * density).toInt()
             }
             onClickListener = {
                 toggleTorch()
@@ -89,8 +102,8 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
         rightCameraButton = AffordanceButton(context, AffordanceType.CAMERA).apply {
             layoutParams = LayoutParams(btnSize, btnSize).apply {
                 gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
-                rightMargin = (32f * density).toInt()
-                bottomMargin = (48f * density).toInt()
+                rightMargin = (36f * density).toInt()
+                bottomMargin = (52f * density).toInt()
             }
             onClickListener = {
                 launchCamera()
@@ -99,6 +112,8 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
 
         addView(leftTorchButton)
         addView(rightCameraButton)
+
+        syncTorchState()
     }
 
     private val bgExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
@@ -135,6 +150,19 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
         }
     }
 
+    fun syncTorchState() {
+        try {
+            val enabled = NotificationSheetHook.isFlashlightEnabled()
+            setTorchActive(enabled)
+        } catch (_: Throwable) {}
+    }
+
+    fun setTorchActive(active: Boolean) {
+        isTorchOn = active
+        leftTorchButton.isActive = active
+        leftTorchButton.postInvalidate()
+    }
+
     fun setExpansionFraction(fraction: Float) {
         if (fraction < 0.85f) {
             visibility = View.GONE
@@ -145,6 +173,10 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
             rightCameraButton.scaleY = 0f
             hasFiredHapticDetent = false
             return
+        }
+
+        if (visibility != View.VISIBLE) {
+            syncTorchState()
         }
 
         visibility = View.VISIBLE
@@ -167,14 +199,21 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
     }
 
     private fun toggleTorch() {
-        val cm = cameraManager ?: return
-        val camId = torchCameraId ?: return
         try {
+            // First attempt via live HyperOS MiuiFlashlightControllerImpl
             val targetState = !isTorchOn
-            cm.setTorchMode(camId, targetState)
-            isTorchOn = targetState
-            leftTorchButton.isActive = targetState
-            leftTorchButton.invalidate()
+            val handled = NotificationSheetHook.toggleFlashlight(context)
+            setTorchActive(handled)
+
+            // Fallback via CameraManager if controller is absent
+            if (NotificationSheetHook.miuiFlashlightController == null) {
+                val cm = cameraManager
+                val camId = torchCameraId
+                if (cm != null && camId != null) {
+                    cm.setTorchMode(camId, targetState)
+                    setTorchActive(targetState)
+                }
+            }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to toggle torch mode", t)
         }
@@ -184,11 +223,23 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
         try {
             NotificationSheetHook.isLaunchingNotificationActivity = true
             val intent = Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).apply {
+                setPackage("com.android.camera")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
             context.startActivity(intent)
+
+            try {
+                val closeIntent = Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+                context.sendBroadcast(closeIntent)
+            } catch (_: Throwable) {}
         } catch (t: Throwable) {
-            Log.e(TAG, "Failed to launch camera intent", t)
+            Log.e(TAG, "Failed to launch com.android.camera, falling back", t)
+            try {
+                val fallbackIntent = Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(fallbackIntent)
+            } catch (_: Throwable) {}
         }
     }
 
@@ -212,22 +263,40 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
         var isActive: Boolean = false
         var onClickListener: (() -> Unit)? = null
 
-        private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+        }
+        private val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            color = 0x55FFFFFF.toInt()
+        }
+        private val specularPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
         }
         private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL_AND_STROKE
-            strokeCap = Paint.Cap.ROUND
-            strokeJoin = Paint.Join.ROUND
+            style = Paint.Style.FILL
         }
-        private val iconPath = Path()
-        private val tempRect = RectF()
+
+        private var baseIconPath: Path? = null
+        private val transformedIconPath = Path()
+        private val transformMatrix = Matrix()
+        private val arcRect = RectF()
 
         init {
             isClickable = true
             isFocusable = false
+
+            try {
+                val pathString = when (type) {
+                    AffordanceType.TORCH -> FLASHLIGHT_PATH
+                    AffordanceType.CAMERA -> CAMERA_PATH
+                }
+                baseIconPath = PathParser.createPathFromPathData(pathString)?.apply {
+                    fillType = Path.FillType.EVEN_ODD
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to parse SF Symbol path data", t)
+            }
         }
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -263,69 +332,67 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
             val radius = cx.coerceAtMost(cy)
             val density = resources.displayMetrics.density
 
-            // Circular frosted pill background
+            // Circular liquid glass styling (enableBackdropBlur = false)
             if (isActive) {
-                bgPaint.color = Color.WHITE
+                // Illuminated solid white active state with outer glow
+                bgPaint.color = Color.argb(60, 255, 255, 255)
                 canvas.drawCircle(cx, cy, radius, bgPaint)
+
+                bgPaint.color = Color.WHITE
+                canvas.drawCircle(cx, cy, radius - 1.5f * density, bgPaint)
+
                 iconPaint.color = Color.BLACK
             } else {
-                bgPaint.color = 0x55000000.toInt()
+                // Frosted Liquid Glass lens backing
+                bgPaint.color = Color.argb(85, 28, 28, 32)
                 canvas.drawCircle(cx, cy, radius, bgPaint)
-                strokePaint.strokeWidth = 1.0f * density
-                canvas.drawCircle(cx, cy, radius - 0.5f * density, strokePaint)
+
+                // Concentric inner bevel highlight
+                rimPaint.color = Color.argb(45, 255, 255, 255)
+                rimPaint.strokeWidth = 1.2f * density
+                canvas.drawCircle(cx, cy, radius - 0.8f * density, rimPaint)
+
+                // Top optical specular reflection arc (210 deg -> 330 deg)
+                val rimInset = 1.2f * density
+                arcRect.set(cx - radius + rimInset, cy - radius + rimInset, cx + radius - rimInset, cy + radius - rimInset)
+                specularPaint.strokeWidth = 1.5f * density
+                specularPaint.color = Color.argb(125, 255, 255, 255)
+                canvas.drawArc(arcRect, 215f, 110f, false, specularPaint)
+
+                // Bottom inner refraction shadow (35 deg -> 145 deg)
+                specularPaint.strokeWidth = 1.2f * density
+                specularPaint.color = Color.argb(55, 0, 0, 0)
+                canvas.drawArc(arcRect, 35f, 110f, false, specularPaint)
+
                 iconPaint.color = Color.WHITE
             }
 
-            iconPaint.strokeWidth = 2.0f * density
-
-            if (type == AffordanceType.TORCH) {
-                drawTorchIcon(canvas, cx, cy, density)
-            } else {
-                drawCameraIcon(canvas, cx, cy, density)
+            // Draw authentic SF Symbol vector glyph
+            val iconPath = baseIconPath
+            if (iconPath != null) {
+                transformMatrix.reset()
+                when (type) {
+                    AffordanceType.TORCH -> {
+                        // Flashlight viewport: 13 x 33, target height ~ 24dp
+                        val targetH = 24f * density
+                        val scale = targetH / 33f
+                        val scaledW = 13f * scale
+                        transformMatrix.postScale(scale, scale)
+                        transformMatrix.postTranslate(cx - scaledW / 2f, cy - targetH / 2f)
+                    }
+                    AffordanceType.CAMERA -> {
+                        // Camera viewport: 37 x 27, target width ~ 26dp
+                        val targetW = 26f * density
+                        val scale = targetW / 37f
+                        val scaledH = 27f * scale
+                        transformMatrix.postScale(scale, scale)
+                        transformMatrix.postTranslate(cx - targetW / 2f, cy - scaledH / 2f)
+                    }
+                }
+                transformedIconPath.set(iconPath)
+                transformedIconPath.transform(transformMatrix)
+                canvas.drawPath(transformedIconPath, iconPaint)
             }
-        }
-
-        private fun drawTorchIcon(canvas: Canvas, cx: Float, cy: Float, density: Float) {
-            val s = density * 1.1f
-            iconPath.reset()
-            // Torch head
-            iconPath.moveTo(cx - 7f * s, cy - 9f * s)
-            iconPath.lineTo(cx + 7f * s, cy - 9f * s)
-            iconPath.lineTo(cx + 4.5f * s, cy - 3f * s)
-            iconPath.lineTo(cx - 4.5f * s, cy - 3f * s)
-            iconPath.close()
-
-            // Torch handle
-            tempRect.set(cx - 3.5f * s, cy - 3f * s, cx + 3.5f * s, cy + 9f * s)
-            iconPath.addRoundRect(tempRect, 2f * s, 2f * s, Path.Direction.CW)
-
-            canvas.drawPath(iconPath, iconPaint)
-
-            // Switch pip
-            iconPaint.style = Paint.Style.FILL
-            canvas.drawCircle(cx, cy + 1f * s, 1.6f * s, if (isActive) bgPaint else strokePaint)
-            iconPaint.style = Paint.Style.FILL_AND_STROKE
-        }
-
-        private fun drawCameraIcon(canvas: Canvas, cx: Float, cy: Float, density: Float) {
-            val s = density * 1.1f
-            iconPath.reset()
-
-            // Camera body
-            tempRect.set(cx - 9f * s, cy - 5.5f * s, cx + 9f * s, cy + 7f * s)
-            iconPath.addRoundRect(tempRect, 2.5f * s, 2.5f * s, Path.Direction.CW)
-
-            // Camera top notch
-            tempRect.set(cx - 4f * s, cy - 8f * s, cx + 4f * s, cy - 5.5f * s)
-            iconPath.addRoundRect(tempRect, 1.5f * s, 1.5f * s, Path.Direction.CW)
-
-            canvas.drawPath(iconPath, iconPaint)
-
-            // Lens circle
-            val oldStyle = iconPaint.style
-            iconPaint.style = Paint.Style.STROKE
-            canvas.drawCircle(cx, cy + 0.8f * s, 3.8f * s, if (isActive) bgPaint else iconPaint)
-            iconPaint.style = oldStyle
         }
     }
 }

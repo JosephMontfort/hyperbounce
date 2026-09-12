@@ -230,6 +230,146 @@ object LockScreenCoverSheetController {
         }
     }
 
+    private var lastKnownHasNotification: Boolean? = null
+
+    /**
+     * Resolves the authentic lockscreen clock views from the SystemUI view hierarchy.
+     */
+    fun getAuthenticClockContainer(rootView: View?): ViewGroup? {
+        resolveClockViews(rootView)
+        return cachedClockContainerRef?.get()
+    }
+
+    /**
+     * Counts visible notification rows inside notification_stack_scroller using the exact
+     * HyperOS Keyguard / NSSL criteria (excluding gone views and non-notification rows).
+     */
+    fun getVisibleNotificationCount(nssl: ViewGroup?): Int {
+        if (nssl == null) return 0
+        var count = 0
+        try {
+            val childCount = nssl.childCount
+            for (i in 0 until childCount) {
+                val child = nssl.getChildAt(i) ?: continue
+                if (child.visibility != View.GONE) {
+                    val name = child.javaClass.simpleName
+                    if (name.contains("NotificationRow") || name.contains("MediaHeader") || name.contains("ZenMode")) {
+                        count++
+                    }
+                }
+            }
+        } catch (_: Throwable) {}
+        return count
+    }
+
+    /**
+     * Calculates the effective bottom coordinate of the clock container.
+     */
+    fun getEffectiveClockBottom(container: ViewGroup?): Int {
+        if (container == null) return 0
+        try {
+            val clockContainer = getAuthenticClockContainer(container.rootView)
+            if (clockContainer != null) {
+                val getClockBottomMethod = clockContainer.javaClass.getMethod("getClockBottom")
+                val bottom = (getClockBottomMethod.invoke(clockContainer) as? Number)?.toInt() ?: 0
+                if (bottom > 0) return bottom
+
+                if (clockContainer.height > 0) {
+                    return clockContainer.height
+                }
+            }
+        } catch (_: Throwable) {}
+
+        val density = container.resources.displayMetrics.density
+        return if (lastKnownHasNotification == true) (220f * density).toInt() else (420f * density).toInt()
+    }
+
+    /**
+     * Synchronizes the authentic SystemUI keyguard clock with live notifications:
+     * 1. Inspects notification_stack_scroller visible count.
+     * 2. Sets KeyguardClockContainer.mHasNotification = hasNotif.
+     * 3. Calls AnimationHelper.doAnimationToNotification(hasNotif, true) to trigger
+     *    the authentic Xiaomi lockscreen Folme morph animation (shrink when notifications exist,
+     *    expand to full size when empty).
+     * 4. Dynamically adjusts NSSL top padding and clipToPadding so notifications flow
+     *    neatly beneath the clock with zero overlap.
+     */
+    fun syncClockWithNotifications(container: ViewGroup?) {
+        if (container == null) return
+        val cfg = NotificationSheetConfigHolder.sheet
+        if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) return
+
+        try {
+            val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
+            val nssl = if (nsslId != 0) container.findViewById<ViewGroup>(nsslId) else null
+
+            val visibleCount = getVisibleNotificationCount(nssl)
+            val hasNotif = visibleCount > 0
+
+            val clockContainer = getAuthenticClockContainer(container.rootView)
+            if (clockContainer != null) {
+                try {
+                    val hasNotifField = clockContainer.javaClass.getDeclaredField("mHasNotification")
+                    hasNotifField.isAccessible = true
+                    val currentInContainer = hasNotifField.getBoolean(clockContainer)
+
+                    if (lastKnownHasNotification != hasNotif || currentInContainer != hasNotif) {
+                        lastKnownHasNotification = hasNotif
+                        hasNotifField.setBoolean(clockContainer, hasNotif)
+
+                        val animHelperField = clockContainer.javaClass.getDeclaredField("mAnimationHelper")
+                        animHelperField.isAccessible = true
+                        val animHelper = animHelperField.get(clockContainer)
+                        if (animHelper != null) {
+                            val doAnimMethod = animHelper.javaClass.getMethod(
+                                "doAnimationToNotification",
+                                Boolean::class.javaPrimitiveType,
+                                Boolean::class.javaPrimitiveType
+                            )
+                            doAnimMethod.invoke(animHelper, hasNotif, true)
+                            Log.d(TAG, "Triggered authentic doAnimationToNotification(hasNotif=$hasNotif)")
+                        }
+                        clockContainer.requestLayout()
+                    }
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Error animating authentic clock view to notification state", t)
+                }
+            }
+
+            // Adjust NSSL layout & top padding so notification cards do not collide with clock
+            if (nssl != null) {
+                val clockBottom = getEffectiveClockBottom(container)
+                val density = container.resources.displayMetrics.density
+                val targetPaddingTop = if (hasNotif && clockBottom > 0) {
+                    clockBottom + (16f * density).toInt()
+                } else if (hasNotif) {
+                    (220f * density).toInt()
+                } else {
+                    (420f * density).toInt()
+                }
+                val bottomClearance = ((cfg.pillBottomMargin + cfg.pillHeight + 24f) * density).toInt()
+
+                if (nssl.paddingTop != targetPaddingTop || nssl.paddingBottom != bottomClearance) {
+                    nssl.setPadding(nssl.paddingLeft, targetPaddingTop, nssl.paddingRight, bottomClearance)
+                }
+                nssl.clipToPadding = false
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Error in syncClockWithNotifications", t)
+        }
+    }
+
+    /**
+     * Propagates hardware torch changes directly to the bottom affordance button.
+     */
+    fun onTorchStateChanged(enabled: Boolean) {
+        try {
+            val container = dev.joseph.hyperbounce.notification.NotificationSheetHook.getContainer() ?: return
+            val bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
+            bottomArea?.setTorchActive(enabled)
+        } catch (_: Throwable) {}
+    }
+
     /**
      * Called on each frame of shade expansion when lockScreenAsNotifCenterEnabled is true.
      */
@@ -246,7 +386,10 @@ object LockScreenCoverSheetController {
             // 1. Suppress stock shade header when pulling down
             suppressStockShadeHeader(container.rootView, fraction > 0.015f)
 
-            // 2. Ensure bottom affordances injected and tracked
+            // 2. Synchronize authentic lockscreen clock with notifications
+            syncClockWithNotifications(container)
+
+            // 3. Ensure bottom affordances injected and tracked
             ensureBottomAffordancesInjected(container)
             val bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
             if (bottomArea != null) {
@@ -271,6 +414,7 @@ object LockScreenCoverSheetController {
             if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) return
 
             suppressStockShadeHeader(container.rootView, true)
+            syncClockWithNotifications(container)
             ensureBottomAffordancesInjected(container)
             val bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
             if (bottomArea != null && cfg.showBottomWidgets) {
@@ -293,6 +437,8 @@ object LockScreenCoverSheetController {
 
             // Hide bottom affordances
             container.findViewWithTag<View>(TAG_BOTTOM_AFFORDANCES)?.visibility = View.GONE
+
+            lastKnownHasNotification = null
         } catch (t: Throwable) {
             Log.e(TAG, "Error in onShadeReset", t)
         }

@@ -13,6 +13,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewParent
 import android.view.animation.DecelerateInterpolator
+import android.hardware.camera2.CameraManager
 import dev.joseph.hyperbounce.notification.glass.DepthWallpaperHelper
 import dev.joseph.hyperbounce.notification.glass.NotificationGlassSheetView
 import dev.joseph.hyperbounce.notification.glass.RealtimeBackdropHelper
@@ -23,6 +24,7 @@ import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
 import java.lang.reflect.Field
 import java.lang.reflect.Method
+import java.lang.reflect.Proxy
 import kotlin.math.abs
 
 /**
@@ -86,6 +88,86 @@ object NotificationSheetHook {
     private var themeBackgroundViewRef: WeakReference<View>? = null
     private var blurAnimatorRef: WeakReference<Any>? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    @Volatile
+    private var miuiFlashlightController: Any? = null
+    @Volatile
+    private var fallbackTorchEnabled: Boolean = false
+
+    fun getContainer(): ViewGroup? = containerRef?.get()
+
+    private fun getMiuiFlashlightControllerInstance(): Any? {
+        if (miuiFlashlightController != null) return miuiFlashlightController
+        try {
+            val cl = containerRef?.get()?.context?.classLoader ?: NotificationSheetHook::class.java.classLoader
+            if (cl != null) {
+                val stubClass = Class.forName("miui.stub.CommonStub\$registerFlashlightController\$1", false, cl)
+                val mgrClass = Class.forName("com.miui.interfaces.InterfacesImplManager", false, cl)
+                val getImpl = mgrClass.getMethod("getImpl", Class::class.java)
+                val stub = getImpl.invoke(null, stubClass)
+                if (stub != null) {
+                    val sysUiProviderField = stub.javaClass.getDeclaredField("\$sysUIProvider")
+                    sysUiProviderField.isAccessible = true
+                    val provider = sysUiProviderField.get(stub)
+                    if (provider != null) {
+                        val fcField = provider.javaClass.getDeclaredField("mFlashlightController")
+                        fcField.isAccessible = true
+                        val lazy = fcField.get(provider)
+                        if (lazy != null) {
+                            val getMethod = lazy.javaClass.getMethod("get")
+                            val fc = getMethod.invoke(lazy)
+                            if (fc != null) {
+                                miuiFlashlightController = fc
+                                registerFlashlightListener(fc, cl)
+                                return fc
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_: Throwable) {}
+        return null
+    }
+
+    fun isFlashlightEnabled(): Boolean {
+        val ctrl = getMiuiFlashlightControllerInstance()
+        if (ctrl != null) {
+            try {
+                val isEnabledMethod = ctrl.javaClass.getMethod("isEnabled")
+                return isEnabledMethod.invoke(ctrl) as? Boolean ?: false
+            } catch (_: Throwable) {}
+        }
+        return fallbackTorchEnabled
+    }
+
+    fun toggleFlashlight(context: Context) {
+        val ctrl = getMiuiFlashlightControllerInstance()
+        if (ctrl != null) {
+            try {
+                val isEnabledMethod = ctrl.javaClass.getMethod("isEnabled")
+                val isEnabled = isEnabledMethod.invoke(ctrl) as? Boolean ?: false
+                val setFlashlightMethod = ctrl.javaClass.getMethod("setFlashlight", Boolean::class.javaPrimitiveType)
+                setFlashlightMethod.invoke(ctrl, !isEnabled)
+                return
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to toggle flashlight via MiuiFlashlightController", t)
+            }
+        }
+        // Fallback: CameraManager
+        try {
+            val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
+            if (cameraManager != null) {
+                val cameraId = cameraManager.cameraIdList.firstOrNull()
+                if (cameraId != null) {
+                    fallbackTorchEnabled = !fallbackTorchEnabled
+                    cameraManager.setTorchMode(cameraId, fallbackTorchEnabled)
+                    LockScreenCoverSheetController.onTorchStateChanged(fallbackTorchEnabled)
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Fallback CameraManager toggle torch failed", t)
+        }
+    }
 
     @Volatile
     private var lastAppliedFraction = -1.0f
@@ -180,6 +262,18 @@ object NotificationSheetHook {
 
         // 11. Hook NotificationPanelBlurAnimator & BlurUtils for depth wallpaper background blur suppression
         hookBlurSuppression(module, classLoader)
+
+        // 12. Hook MiuiFlashlightController for quick affordances
+        hookFlashlightController(module, classLoader)
+
+        // 13. Hook NotificationTopPaddingControllerImpl for dynamic clock clearance
+        hookTopPaddingController(module, classLoader)
+
+        // 14. Hook KeyguardPanelViewController & NSSL for notification state & clock morphing
+        hookKeyguardNotificationState(module, classLoader)
+
+        // 15. Hook NotificationPanelViewController.setExpandedHeight for 1:1 real-time drag expansion
+        hookPanelExpandedHeight(module, classLoader)
     }
 
     private fun hookWakeUpCoordinator(module: XposedModule, classLoader: ClassLoader) {
@@ -1653,6 +1747,17 @@ object NotificationSheetHook {
             }
             MotionEvent.ACTION_MOVE -> {
                 isUserTouchingShade = true
+                var viewHeight = container.height.toFloat()
+                if (viewHeight <= 0f) {
+                    viewHeight = container.resources.displayMetrics.heightPixels.toFloat()
+                }
+                if (viewHeight <= 0f) viewHeight = 2400f
+
+                // Instantaneous 1:1 finger tracking during shade pulldown
+                if (!isShadeFullyOpen && touchDownY < 250f * density) {
+                    val frac = (event.rawY / viewHeight).coerceIn(0.0f, 1.0f)
+                    applyExpansionFraction(frac)
+                }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val wasTouching = isUserTouchingShade
@@ -1699,6 +1804,166 @@ object NotificationSheetHook {
             }
         } catch (t: Throwable) {
             Log.d(TAG, "NotificationPanelBlurAnimator not found: ${t.message}")
+        }
+    }
+
+    private fun hookFlashlightController(module: XposedModule, classLoader: ClassLoader) {
+        val classes = listOf(
+            "com.android.systemui.controlcenter.policy.MiuiFlashlightControllerImpl",
+            "com.android.systemui.statusbar.policy.FlashlightControllerImpl"
+        )
+        for (clsName in classes) {
+            try {
+                val clazz = Class.forName(clsName, false, classLoader)
+                for (ctor in clazz.declaredConstructors) {
+                    module.hook(ctor).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val result = chain.proceed()
+                            val inst = chain.thisObject
+                            if (inst != null) {
+                                miuiFlashlightController = inst
+                                registerFlashlightListener(inst, classLoader)
+                            }
+                            return result
+                        }
+                    })
+                }
+                Log.d(TAG, "Hooked $clsName constructors successfully")
+            } catch (t: Throwable) {
+                Log.d(TAG, "Failed to hook $clsName constructor: ${t.message}")
+            }
+        }
+    }
+
+    private fun registerFlashlightListener(controller: Any, classLoader: ClassLoader) {
+        try {
+            val listenerClass = Class.forName("com.android.systemui.statusbar.policy.FlashlightController\$FlashlightListener", false, classLoader)
+            val proxy = Proxy.newProxyInstance(
+                classLoader,
+                arrayOf(listenerClass)
+            ) { _, method, args ->
+                if (method.name == "onFlashlightChanged" && args != null && args.isNotEmpty()) {
+                    val enabled = args[0] as? Boolean ?: false
+                    mainHandler.post {
+                        LockScreenCoverSheetController.onTorchStateChanged(enabled)
+                    }
+                }
+                null
+            }
+            val addCallbackMethod = controller.javaClass.getMethod("addCallback", Any::class.java)
+            addCallbackMethod.invoke(controller, proxy)
+            Log.d(TAG, "Registered FlashlightListener proxy on $controller")
+        } catch (t: Throwable) {
+            Log.d(TAG, "Failed to register FlashlightListener proxy: ${t.message}")
+        }
+    }
+
+    private fun hookTopPaddingController(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val clazz = Class.forName("com.android.systemui.shade.NotificationTopPaddingControllerImpl", false, classLoader)
+            for (m in clazz.declaredMethods) {
+                if (m.name == "getTopPadding" && m.parameterTypes.isEmpty()) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val cfg = NotificationSheetConfigHolder.sheet
+                            if (cfg.enabled && cfg.lockScreenAsNotifCenterEnabled && isUnlockedShadeActive) {
+                                val container = containerRef?.get()
+                                if (container != null) {
+                                    val clockContainer = LockScreenCoverSheetController.getAuthenticClockContainer(container)
+                                    if (clockContainer != null) {
+                                        val clockBottom = LockScreenCoverSheetController.getEffectiveClockBottom(clockContainer)
+                                        if (clockBottom > 0) {
+                                            val density = container.resources.displayMetrics.density
+                                            return clockBottom.toFloat() + (16f * density)
+                                        }
+                                    }
+                                }
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked NotificationTopPaddingControllerImpl.getTopPadding successfully")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.d(TAG, "NotificationTopPaddingControllerImpl not found: ${t.message}")
+        }
+    }
+
+    private fun hookKeyguardNotificationState(module: XposedModule, classLoader: ClassLoader) {
+        val classes = listOf(
+            "com.android.keyguard.panel.KeyguardPanelViewController",
+            "com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayoutControllerInjectorImpl"
+        )
+        for (clsName in classes) {
+            try {
+                val clazz = Class.forName(clsName, false, classLoader)
+                for (m in clazz.declaredMethods) {
+                    if (m.name == "onUpdateNotificationState" && m.parameterTypes.isEmpty()) {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val result = chain.proceed()
+                                val cfg = NotificationSheetConfigHolder.sheet
+                                if (cfg.enabled && cfg.lockScreenAsNotifCenterEnabled && isUnlockedShadeActive) {
+                                    val container = containerRef?.get()
+                                    if (container != null) {
+                                        mainHandler.post {
+                                            LockScreenCoverSheetController.syncClockWithNotifications(container)
+                                        }
+                                    }
+                                }
+                                return result
+                            }
+                        })
+                        Log.d(TAG, "Hooked $clsName.onUpdateNotificationState successfully")
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.d(TAG, "Failed to hook $clsName.onUpdateNotificationState: ${t.message}")
+            }
+        }
+    }
+
+    private fun hookPanelExpandedHeight(module: XposedModule, classLoader: ClassLoader) {
+        val classes = listOf(
+            "com.android.systemui.shade.NotificationPanelViewController",
+            "com.android.keyguard.tinyPanel.TinyKeyguardPanelViewControllerImpl"
+        )
+        for (clsName in classes) {
+            try {
+                val clazz = Class.forName(clsName, false, classLoader)
+                for (m in clazz.declaredMethods) {
+                    if (m.name == "setExpandedHeight" && m.parameterTypes.size == 1 &&
+                        m.parameterTypes[0] == Float::class.javaPrimitiveType
+                    ) {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val result = chain.proceed()
+                                if (isUnlockedShadeActive) {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                                    val height = (args[0] as Number).toFloat()
+                                    val container = containerRef?.get()
+                                    val totalDist = if (container != null && container.height > 0) {
+                                        container.height.toFloat()
+                                    } else {
+                                        val dm = container?.resources?.displayMetrics
+                                        dm?.heightPixels?.toFloat() ?: 2400f
+                                    }
+                                    if (totalDist > 0f) {
+                                        val frac = (height / totalDist).coerceIn(0.0f, 1.0f)
+                                        applyExpansionFraction(frac)
+                                    }
+                                }
+                                return result
+                            }
+                        })
+                        Log.d(TAG, "Hooked $clsName.setExpandedHeight successfully")
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.d(TAG, "Failed to hook $clsName.setExpandedHeight: ${t.message}")
+            }
         }
     }
 }
