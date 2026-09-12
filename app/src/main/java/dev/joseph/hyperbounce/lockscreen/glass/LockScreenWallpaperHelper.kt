@@ -316,4 +316,8 @@ object LockScreenWallpaperHelper {
         cachedDrawable = null
         cachedUnblurredDrawable = null
     }
+
+    fun clearCache(context: Context? = null) {
+        invalidateCache()
+    }
 }

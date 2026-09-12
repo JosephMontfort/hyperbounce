@@ -953,7 +953,7 @@ object NotificationSheetHook {
                     if (intent?.action == "dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER" ||
                         intent?.action == android.content.Intent.ACTION_WALLPAPER_CHANGED
                     ) {
-                        dev.joseph.hyperbounce.lockscreen.glass.LockScreenWallpaperHelper.clearCache(targetCtx)
+                        dev.joseph.hyperbounce.lockscreen.glass.LockScreenWallpaperHelper.invalidateCache()
                         DepthWallpaperHelper.clearCache(targetCtx, forceClearAll = true)
                         DepthWallpaperHelper.triggerAsyncSubjectGeneration(targetCtx, forceRefresh = true) {
                             mainHandler.post {
