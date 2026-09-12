@@ -238,7 +238,9 @@ object NotificationSheetHook {
     private val isUnlockedShadeActive: Boolean
         get() {
             val cfg = NotificationSheetConfigHolder.sheet
-            return cfg.enabled && currentStatusBarState == 0 && !isControlCenterActive()
+            val container = containerRef?.get()
+            val isLocked = container?.context?.let { isKeyguard(it) } ?: false
+            return cfg.enabled && currentStatusBarState == 0 && !isLocked && !isControlCenterActive()
         }
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
@@ -409,13 +411,20 @@ object NotificationSheetHook {
                                     isShadeSwitching = false
                                     isShadeSwitchingToControlCenter = false
                                     isShadeSwitchingToNotification = false
+                                    isClosingMode = false
                                     lastAppliedFraction = 0f
                                     currentStretchOffset = 0f
                                     mainHandler.post {
                                         val container = containerRef?.get()
                                         if (container != null) {
-                                            container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
-                                            container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
+                                            val curSheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+                                            curSheet?.isClosingMode = false
+                                            curSheet?.isClosingFromFullOpen = false
+                                            curSheet?.visibility = View.GONE
+                                            curSheet?.translationY = 0.0f
+                                            val curPill = container.findViewWithTag<View>(TAG_HOME_PILL)
+                                            curPill?.visibility = View.GONE
+                                            curPill?.translationY = 0.0f
                                             // Reset container translation so lockscreen/keyguard starts at 0.0f
                                             container.translationY = 0.0f
                                             container.scaleX = 1.0f
@@ -1650,12 +1659,20 @@ object NotificationSheetHook {
             val container = containerRef?.get() ?: return
             val cfg = NotificationSheetConfigHolder.sheet
             if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard(container.context) || isControlCenterActive()) {
-                container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
-                container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
+                val curSheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+                curSheet?.isClosingMode = false
+                curSheet?.isClosingFromFullOpen = false
+                curSheet?.visibility = View.GONE
+                curSheet?.translationY = 0.0f
+                val curPill = container.findViewWithTag<View>(TAG_HOME_PILL)
+                curPill?.visibility = View.GONE
+                curPill?.translationY = 0.0f
+                container.translationY = 0.0f
                 LockScreenCoverSheetController.onShadeReset(container)
                 isShadeFullyOpen = false
                 hasTriggeredUnlockForCurrentOpen = true
                 isLaunchingNotificationActivity = false
+                isClosingMode = false
                 RealtimeBackdropHelper.stopLiveRefresh()
                 return
             }
@@ -1903,7 +1920,8 @@ object NotificationSheetHook {
 
                     val isClockArea = touchDownY <= clockBottom + (30f * density)
                     val isBottomArea = touchDownY >= screenH - (130f * density)
-                    val isClosingGesture = (dy < -15f * density) || (lastAppliedFraction < 0.92f && lastAppliedFraction > 0.05f)
+                    val isClosingGesture = (dy < -20f * density && (isClockArea || isBottomArea)) ||
+                            (lastAppliedFraction < 0.85f && dy < -10f * density)
 
                     if (hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen &&
                         !isLaunchingNotificationActivity && isClosingGesture

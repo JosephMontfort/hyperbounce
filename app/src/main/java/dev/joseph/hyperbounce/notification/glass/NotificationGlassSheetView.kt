@@ -82,6 +82,13 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         super.onDraw(canvas)
         if (visibility != VISIBLE) return
 
+        val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0 &&
+                !dev.joseph.hyperbounce.notification.NotificationSheetHook.isKeyguard(context)
+        if (!isUnlocked) {
+            visibility = GONE
+            return
+        }
+
         val dm = resources.displayMetrics
         val w = dm.widthPixels
         val h = dm.heightPixels
@@ -224,14 +231,16 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         shouldDrawWallpaper: Boolean
     ) {
         val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || w > h
-        if (isLandscape) {
-            // Strict landscape mode: stock Xiaomi handles all content; hyperbounce renders only glass bevels
+        val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0 &&
+                !dev.joseph.hyperbounce.notification.NotificationSheetHook.isKeyguard(context)
+        if (isLandscape || !isUnlocked) {
+            // Strict landscape/lockscreen mode: hyperbounce never renders wallpaper or sheet content
             return
         }
 
         val density = resources.displayMetrics.density
         val cfg = NotificationSheetConfigHolder.sheet
-        val isLockScreenActive = cfg.isLockScreenActive && !isLandscape
+        val isLockScreenActive = cfg.isLockScreenActive && !isLandscape && isUnlocked
 
         val isClosing = isClosingMode || isClosingFromFullOpen
 

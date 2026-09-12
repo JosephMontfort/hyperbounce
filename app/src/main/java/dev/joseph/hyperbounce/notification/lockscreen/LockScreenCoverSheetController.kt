@@ -31,6 +31,17 @@ object LockScreenCoverSheetController {
     private var cachedHeaderViewRef: WeakReference<View>? = null
     private var isHeaderSuppressedByUs = false
 
+    // Cached reflection fields for zero-overhead live clock sync (option 2)
+    private var cachedCanScaleField: Field? = null
+    private var cachedHasNotifField: Field? = null
+    private var cachedAnimHelperField: Field? = null
+    private var cachedDoAnimMethod: Method? = null
+    private var cachedControllerField: Field? = null
+    private var cachedClockViewField: Field? = null
+    private var cachedSetShowFullTimeMethod: Method? = null
+    private var cachedNsslId: Int = 0
+    private var cachedNsslRef: WeakReference<ViewGroup>? = null
+
     @Volatile
     var currentMorphFraction: Float = 0f
         private set
@@ -431,6 +442,82 @@ object LockScreenCoverSheetController {
      *    expand to full size when empty).
      * 4. Applies non-destructive hardware clipBounds and padding to NSSL.
      */
+    private fun getCanScaleField(clazz: Class<*>): Field? {
+        if (cachedCanScaleField == null) {
+            try {
+                cachedCanScaleField = clazz.getDeclaredField("mClockCanScale").apply { isAccessible = true }
+            } catch (_: Throwable) {}
+        }
+        return cachedCanScaleField
+    }
+
+    private fun getHasNotifField(clazz: Class<*>): Field? {
+        if (cachedHasNotifField == null) {
+            try {
+                cachedHasNotifField = clazz.getDeclaredField("mHasNotification").apply { isAccessible = true }
+            } catch (_: Throwable) {}
+        }
+        return cachedHasNotifField
+    }
+
+    private fun getAnimHelperField(clazz: Class<*>): Field? {
+        if (cachedAnimHelperField == null) {
+            try {
+                cachedAnimHelperField = clazz.getDeclaredField("mAnimationHelper").apply { isAccessible = true }
+            } catch (_: Throwable) {}
+        }
+        return cachedAnimHelperField
+    }
+
+    private fun getDoAnimMethod(clazz: Class<*>): Method? {
+        if (cachedDoAnimMethod == null) {
+            try {
+                cachedDoAnimMethod = clazz.getMethod(
+                    "doAnimationToNotification",
+                    Boolean::class.javaPrimitiveType,
+                    Boolean::class.javaPrimitiveType
+                )
+            } catch (_: Throwable) {}
+        }
+        return cachedDoAnimMethod
+    }
+
+    private fun getControllerField(clazz: Class<*>): Field? {
+        if (cachedControllerField == null) {
+            try {
+                cachedControllerField = clazz.getDeclaredField("mMiuiClockController").apply { isAccessible = true }
+            } catch (_: Throwable) {}
+        }
+        return cachedControllerField
+    }
+
+    private fun getClockViewField(clazz: Class<*>): Field? {
+        if (cachedClockViewField == null) {
+            try {
+                cachedClockViewField = clazz.getDeclaredField("mClockView").apply { isAccessible = true }
+            } catch (_: Throwable) {}
+        }
+        return cachedClockViewField
+    }
+
+    private fun getSetShowFullTimeMethod(clazz: Class<*>): Method? {
+        if (cachedSetShowFullTimeMethod == null) {
+            try {
+                cachedSetShowFullTimeMethod = clazz.getMethod("setShowFullTime", Boolean::class.javaPrimitiveType)
+            } catch (_: Throwable) {}
+        }
+        return cachedSetShowFullTimeMethod
+    }
+
+    /**
+     * Synchronizes the authentic SystemUI keyguard clock with live notifications:
+     * 1. Inspects notification_stack_scroller visible count.
+     * 2. Sets KeyguardClockContainer.mHasNotification = hasNotif and enables mClockCanScale.
+     * 3. Calls AnimationHelper.doAnimationToNotification(hasNotif, false) to trigger
+     *    the authentic Xiaomi lockscreen Folme morph animation (shrink when notifications exist,
+     *    expand to full size when empty).
+     * 4. Uses cached reflection fields for zero-overhead performance during swipe pull-down.
+     */
     fun syncClockWithNotifications(container: ViewGroup?) {
         if (container == null) return
         val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
@@ -440,8 +527,18 @@ object LockScreenCoverSheetController {
         if (!cfg.isLockScreenActive) return
 
         try {
-            val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
-            val nssl = if (nsslId != 0) container.findViewById<ViewGroup>(nsslId) else null
+            var nssl = cachedNsslRef?.get()
+            if (nssl == null) {
+                if (cachedNsslId == 0) {
+                    cachedNsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
+                }
+                if (cachedNsslId != 0) {
+                    nssl = container.findViewById<ViewGroup>(cachedNsslId)
+                    if (nssl != null) {
+                        cachedNsslRef = WeakReference(nssl)
+                    }
+                }
+            }
 
             val hasNotif = hasActiveNotifications(nssl)
             val notifChanged = (lastKnownHasNotification != hasNotif)
@@ -455,42 +552,28 @@ object LockScreenCoverSheetController {
             val clockContainer = getAuthenticClockContainer(container.rootView)
             if (clockContainer != null) {
                 try {
-                    val canScaleField = clockContainer.javaClass.getDeclaredField("mClockCanScale")
-                    canScaleField.isAccessible = true
-                    canScaleField.setBoolean(clockContainer, true)
+                    val clockClass = clockContainer.javaClass
+                    getCanScaleField(clockClass)?.setBoolean(clockContainer, true)
 
-                    val hasNotifField = clockContainer.javaClass.getDeclaredField("mHasNotification")
-                    hasNotifField.isAccessible = true
-                    val currentInContainer = hasNotifField.getBoolean(clockContainer)
+                    val hasNotifField = getHasNotifField(clockClass)
+                    val currentInContainer = hasNotifField?.getBoolean(clockContainer) ?: false
 
                     if (notifChanged || currentInContainer != hasNotif) {
-                        hasNotifField.setBoolean(clockContainer, hasNotif)
+                        hasNotifField?.setBoolean(clockContainer, hasNotif)
 
-                        val animHelperField = clockContainer.javaClass.getDeclaredField("mAnimationHelper")
-                        animHelperField.isAccessible = true
-                        val animHelper = animHelperField.get(clockContainer)
+                        val animHelper = getAnimHelperField(clockClass)?.get(clockContainer)
                         if (animHelper != null) {
-                            val doAnimMethod = animHelper.javaClass.getMethod(
-                                "doAnimationToNotification",
-                                Boolean::class.javaPrimitiveType,
-                                Boolean::class.javaPrimitiveType
-                            )
-                            doAnimMethod.invoke(animHelper, hasNotif, false)
+                            getDoAnimMethod(animHelper.javaClass)?.invoke(animHelper, hasNotif, false)
                             Log.d(TAG, "Triggered authentic doAnimationToNotification(hasNotif=$hasNotif)")
                         }
 
                         // Also update clock view full time state directly
                         try {
-                            val controllerField = clockContainer.javaClass.getDeclaredField("mMiuiClockController")
-                            controllerField.isAccessible = true
-                            val controller = controllerField.get(clockContainer)
+                            val controller = getControllerField(clockClass)?.get(clockContainer)
                             if (controller != null) {
-                                val clockViewField = controller.javaClass.getDeclaredField("mClockView")
-                                clockViewField.isAccessible = true
-                                val clockView = clockViewField.get(controller)
+                                val clockView = getClockViewField(controller.javaClass)?.get(controller)
                                 if (clockView != null) {
-                                    val setShowFullTimeMethod = clockView.javaClass.getMethod("setShowFullTime", Boolean::class.javaPrimitiveType)
-                                    setShowFullTimeMethod.invoke(clockView, hasNotif)
+                                    getSetShowFullTimeMethod(clockView.javaClass)?.invoke(clockView, hasNotif)
                                 }
                             }
                         } catch (_: Throwable) {}
@@ -542,7 +625,10 @@ object LockScreenCoverSheetController {
             // 1. Suppress stock shade header when pulling down
             suppressStockShadeHeader(container.rootView, fraction > 0.015f)
 
-            // 2. Ensure bottom affordances injected and tracked
+            // 2. Synchronize authentic lockscreen clock with notifications (cached reflection, zero overhead)
+            syncClockWithNotifications(container)
+
+            // 3. Ensure bottom affordances injected and tracked
             ensureBottomAffordancesInjected(container)
             val bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
             if (bottomArea != null) {
