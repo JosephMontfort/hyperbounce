@@ -17,6 +17,7 @@ import dev.joseph.hyperbounce.notification.glass.DepthWallpaperHelper
 import dev.joseph.hyperbounce.notification.glass.NotificationGlassSheetView
 import dev.joseph.hyperbounce.notification.glass.RealtimeBackdropHelper
 import dev.joseph.hyperbounce.notification.lockscreen.LockScreenBottomAreaView
+import dev.joseph.hyperbounce.notification.lockscreen.LockScreenCoverSheetController
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
@@ -42,6 +43,7 @@ object NotificationSheetHook {
     private const val TAG_BOTTOM_AFFORDANCES = "hyperbounce_notif_bottom_affordances"
     private const val TAG_ORIG_MARGIN_START = 0x7E010001
     private const val TAG_ORIG_MARGIN_END = 0x7E010002
+    private const val TAG_ORIG_PADDING_TOP = 0x7E010003
 
     @Volatile
     var currentStatusBarState: Int = 1 // 0 = SHADE, 1 = KEYGUARD, 2 = SHADE_LOCKED
@@ -219,7 +221,7 @@ object NotificationSheetHook {
             val container = containerRef?.get() ?: return@post
             container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
             container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
-            container.findViewWithTag<View>(TAG_BOTTOM_AFFORDANCES)?.visibility = View.GONE
+            LockScreenCoverSheetController.onShadeReset(container)
             container.translationY = 0.0f
             container.scaleX = 1.0f
             container.scaleY = 1.0f
@@ -237,10 +239,8 @@ object NotificationSheetHook {
             }
             ensureGlassSheetInjected(container)
             ensureHomePillInjected(container)
-            ensureBottomAffordancesInjected(container)
             val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
             val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
-            val bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
             sheet?.visibility = View.VISIBLE
             sheet?.expansionFraction = 1.0f
             sheet?.translationY = 0.0f
@@ -248,12 +248,10 @@ object NotificationSheetHook {
             sheet?.postInvalidateOnAnimation()
             pill?.visibility = View.VISIBLE
             pill?.translationY = 0.0f
-            if (cfg.lockScreenAsNotifCenterEnabled && cfg.showBottomWidgets) {
-                bottomArea?.visibility = View.VISIBLE
-                bottomArea?.translationY = 0.0f
-                bottomArea?.setExpansionFraction(1.0f)
+            if (cfg.lockScreenAsNotifCenterEnabled) {
+                LockScreenCoverSheetController.onShadeFullyOpened(container)
             } else {
-                bottomArea?.visibility = View.GONE
+                LockScreenCoverSheetController.onShadeReset(container)
             }
             if (cfg.depthWallpaperEnabled && sheet != null) {
                 RealtimeBackdropHelper.startLiveRefresh(container.context, sheet)
@@ -795,58 +793,6 @@ object NotificationSheetHook {
         }
     }
 
-    private fun ensureBottomAffordancesInjected(container: ViewGroup) {
-        try {
-            val cfg = NotificationSheetConfigHolder.sheet
-            var bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
-
-            if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled || !cfg.showBottomWidgets ||
-                currentStatusBarState != 0 || isKeyguard(container.context) || isControlCenterActive()) {
-                bottomArea?.visibility = View.GONE
-                return
-            }
-
-            if (bottomArea == null) {
-                bottomArea = LockScreenBottomAreaView(container.context).apply {
-                    tag = TAG_BOTTOM_AFFORDANCES
-                    visibility = View.GONE
-                }
-                val lp = try {
-                    val lpClass = Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams", false, container.context.classLoader)
-                    val constructor = lpClass.getConstructor(Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-                    val inst = constructor.newInstance(0, 0) as ViewGroup.MarginLayoutParams
-                    applyConstraintParentParams(inst, container)
-                    inst
-                } catch (_: Throwable) {
-                    android.widget.FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                }
-                container.addView(bottomArea, lp)
-                Log.d(TAG, "Injected LockScreenBottomAreaView successfully")
-            }
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to inject LockScreenBottomAreaView", t)
-        }
-    }
-
-    private fun hasVisibleNotifications(container: ViewGroup): Boolean {
-        val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
-        val nssl = if (nsslId != 0) container.findViewById<ViewGroup>(nsslId) else null ?: return false
-        val count = nssl.childCount
-        for (i in 0 until count) {
-            val child = nssl.getChildAt(i)
-            if (child != null && child.visibility == View.VISIBLE && child.height > 0) {
-                val name = child.javaClass.simpleName
-                if (name.contains("NotificationRow") || name.contains("ActivatableNotification")) {
-                    return true
-                }
-            }
-        }
-        return false
-    }
-
     private var isSettingsReceiverRegistered = false
 
     private fun registerSettingsReceiver(context: Context) {
@@ -1178,8 +1124,21 @@ object NotificationSheetHook {
                 nssl.requestLayout()
             }
             if (nssl is ViewGroup) {
-                if (nssl.paddingBottom != bottomClearance) {
-                    nssl.setPadding(nssl.paddingLeft, nssl.paddingTop, nssl.paddingRight, bottomClearance)
+                val origPaddingTop = (nssl.getTag(TAG_ORIG_PADDING_TOP) as? Int) ?: run {
+                    val pt = nssl.paddingTop
+                    nssl.setTag(TAG_ORIG_PADDING_TOP, pt)
+                    pt
+                }
+                val targetPaddingTop = if (isActive && cfg.lockScreenAsNotifCenterEnabled) {
+                    kotlin.math.max(origPaddingTop, (260f * density).toInt())
+                } else {
+                    origPaddingTop
+                }
+                if (nssl.paddingTop != targetPaddingTop || nssl.paddingBottom != bottomClearance) {
+                    nssl.setPadding(nssl.paddingLeft, targetPaddingTop, nssl.paddingRight, bottomClearance)
+                }
+                if (isActive && cfg.lockScreenAsNotifCenterEnabled) {
+                    nssl.clipToPadding = false
                 }
             }
         } catch (t: Throwable) {
@@ -1212,8 +1171,11 @@ object NotificationSheetHook {
                 nssl.layoutParams = lp
                 nssl.requestLayout()
             }
-            if (nssl is ViewGroup && nssl.paddingBottom != 0) {
-                nssl.setPadding(nssl.paddingLeft, nssl.paddingTop, nssl.paddingRight, 0)
+            if (nssl is ViewGroup) {
+                val origPaddingTop = (nssl.getTag(TAG_ORIG_PADDING_TOP) as? Int) ?: nssl.paddingTop
+                if (nssl.paddingTop != origPaddingTop || nssl.paddingBottom != 0) {
+                    nssl.setPadding(nssl.paddingLeft, origPaddingTop, nssl.paddingRight, 0)
+                }
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to reset notification margins", t)
@@ -1468,126 +1430,123 @@ object NotificationSheetHook {
     }
 
     private fun applyExpansionFractionInternal(fraction: Float, prevFraction: Float = -1f) {
-        val container = containerRef?.get() ?: return
-        val cfg = NotificationSheetConfigHolder.sheet
-        if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard(container.context) || isControlCenterActive()) {
-            container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
-            container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
-            container.findViewWithTag<View>(TAG_BOTTOM_AFFORDANCES)?.visibility = View.GONE
-            isShadeFullyOpen = false
-            hasTriggeredUnlockForCurrentOpen = true
-            isLaunchingNotificationActivity = false
-            RealtimeBackdropHelper.stopLiveRefresh()
-            return
-        }
-
-        // Prime home screen cache at gesture opening start
-        if (!isShadeOpen && fraction > 0.015f) {
-            isShadeOpen = true
-            updateHomeScreenCache(container.context)
-        }
-
-        var viewHeight = container.height.toFloat()
-        if (viewHeight <= 0f) {
-            viewHeight = container.resources.displayMetrics.heightPixels.toFloat()
-        }
-        if (viewHeight <= 0f) viewHeight = 2400f
-
-        val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
-        val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
-
-        // Arming: Shade has reached full expansion (only when expanding or at rest, never while collapsing)
-        if (fraction >= 0.95f && (prevFraction < 0f || fraction >= prevFraction)) {
-            isShadeFullyOpen = true
-            hasFullyOpenedForCurrentSession = true
-            hasTriggeredUnlockForCurrentOpen = false
-            isShadeOpen = true
-        }
-
-        if (fraction <= 0.015f) {
-            sheet?.visibility = View.GONE
-            sheet?.translationY = -viewHeight
-            sheet?.isClosingFromFullOpen = false
-            pill?.visibility = View.GONE
-            pill?.translationY = -viewHeight
-            container.findViewWithTag<View>(TAG_BOTTOM_AFFORDANCES)?.visibility = View.GONE
-            RealtimeBackdropHelper.stopLiveRefresh()
-            isShadeFullyOpen = false
-            hasFullyOpenedForCurrentSession = false
-            hasTriggeredUnlockForCurrentOpen = true
-            isShadeOpen = false
-            isLaunchingNotificationActivity = false
-            currentStretchOffset = 0f
-            return
-        }
-
-        ensureGlassSheetInjected(container)
-        ensureHomePillInjected(container)
-        ensureBottomAffordancesInjected(container)
-
-        // Keep container translation at 0.0f; translate only the glass card and pill!
-        container.translationY = 0.0f
-
-        val upwardOffset = (fraction - 1.0f) * viewHeight
-        // Cap sheet translation at 0f: during pulldown, slides from -viewHeight to 0f.
-        // Once fully open (or during over-pull / spring rebound), remains pinned at 0f so top is never cut off!
-        val finalSheetY = if (isShadeFullyOpen) {
-            if (fraction >= 0.85f) {
-                0f
-            } else {
-                ((fraction / 0.85f) - 1.0f) * viewHeight
-            }
-        } else {
-            kotlin.math.min(0f, upwardOffset)
-        }
-
-        val curSheet = sheet ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
-        if (curSheet != null) {
-            curSheet.visibility = View.VISIBLE
-            curSheet.isClosingFromFullOpen = hasFullyOpenedForCurrentSession && fraction < 0.95f
-            curSheet.expansionFraction = fraction
-            curSheet.hasNotifications = hasVisibleNotifications(container)
-            val prevY = curSheet.translationY
-            curSheet.translationY = finalSheetY
-            if (abs(prevY - finalSheetY) > 0.5f) {
-                curSheet.postInvalidateOnAnimation()
-            }
-            // Refresh backdrop only if glass effects are actively required
-            val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height
-            val shouldDrawWallpaper = cfg.lockWallpaperEnabled && !isLandscape &&
-                    (!cfg.lockWallpaperHomescreenOnly || isHomeScreenCached)
-            val shouldRenderGlass = cfg.glassEffectsEnabled && (!cfg.glassOnlyWithoutWallpaper || !shouldDrawWallpaper)
-            if (shouldRenderGlass) {
-                RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
-            } else {
+        try {
+            val container = containerRef?.get() ?: return
+            val cfg = NotificationSheetConfigHolder.sheet
+            if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard(container.context) || isControlCenterActive()) {
+                container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
+                container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
+                LockScreenCoverSheetController.onShadeReset(container)
+                isShadeFullyOpen = false
+                hasTriggeredUnlockForCurrentOpen = true
+                isLaunchingNotificationActivity = false
                 RealtimeBackdropHelper.stopLiveRefresh()
+                return
             }
 
-            // Suppress background blur and dimming when iOS 27 Depth Wallpaper is active
-            if (cfg.depthWallpaperEnabled && currentStatusBarState == 0) {
-                val bgAlpha = if (curSheet.isClosingFromFullOpen) 1f else if (fraction >= 0.90f) ((fraction - 0.90f) / 0.10f).coerceIn(0f, 1f) else 0f
-                curSheet.shadeBackgroundView?.alpha = bgAlpha
-                themeBackgroundViewRef?.get()?.alpha = bgAlpha
+            // Prime home screen cache at gesture opening start
+            if (!isShadeOpen && fraction > 0.015f) {
+                isShadeOpen = true
+                updateHomeScreenCache(container.context)
             }
-        }
 
-        val curPill = pill ?: container.findViewWithTag<View>(TAG_HOME_PILL)
-        if (curPill != null) {
-            curPill.visibility = View.VISIBLE
-            // Pill is stably pinned to the sheet's bottom edge with stretch offset when sheet is fully open
-            curPill.translationY = finalSheetY + (if (finalSheetY == 0f) currentStretchOffset else 0f)
-            curPill.alpha = (fraction - 0.2f).coerceIn(0f, 1f)
-        }
+            var viewHeight = container.height.toFloat()
+            if (viewHeight <= 0f) {
+                viewHeight = container.resources.displayMetrics.heightPixels.toFloat()
+            }
+            if (viewHeight <= 0f) viewHeight = 2400f
 
-        val curBottom = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
-        if (curBottom != null) {
-            if (cfg.enabled && cfg.lockScreenAsNotifCenterEnabled && cfg.showBottomWidgets &&
-                currentStatusBarState == 0 && !isControlCenterActive()) {
-                curBottom.translationY = finalSheetY + (if (finalSheetY == 0f) currentStretchOffset else 0f)
-                curBottom.setExpansionFraction(fraction)
+            val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+            val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
+
+            // Arming: Shade has reached full expansion (only when expanding or at rest, never while collapsing)
+            if (fraction >= 0.95f && (prevFraction < 0f || fraction >= prevFraction)) {
+                isShadeFullyOpen = true
+                hasFullyOpenedForCurrentSession = true
+                hasTriggeredUnlockForCurrentOpen = false
+                isShadeOpen = true
+            }
+
+            if (fraction <= 0.015f) {
+                sheet?.visibility = View.GONE
+                sheet?.translationY = -viewHeight
+                sheet?.isClosingFromFullOpen = false
+                pill?.visibility = View.GONE
+                pill?.translationY = -viewHeight
+                LockScreenCoverSheetController.onShadeReset(container)
+                RealtimeBackdropHelper.stopLiveRefresh()
+                isShadeFullyOpen = false
+                hasFullyOpenedForCurrentSession = false
+                hasTriggeredUnlockForCurrentOpen = true
+                isShadeOpen = false
+                isLaunchingNotificationActivity = false
+                currentStretchOffset = 0f
+                return
+            }
+
+            ensureGlassSheetInjected(container)
+            ensureHomePillInjected(container)
+
+            // Keep container translation at 0.0f; translate only the glass card and pill!
+            container.translationY = 0.0f
+
+            val upwardOffset = (fraction - 1.0f) * viewHeight
+            // Cap sheet translation at 0f: during pulldown, slides from -viewHeight to 0f.
+            // Once fully open (or during over-pull / spring rebound), remains pinned at 0f so top is never cut off!
+            val finalSheetY = if (isShadeFullyOpen) {
+                if (fraction >= 0.85f) {
+                    0f
+                } else {
+                    ((fraction / 0.85f) - 1.0f) * viewHeight
+                }
             } else {
-                curBottom.visibility = View.GONE
+                kotlin.math.min(0f, upwardOffset)
             }
+
+            val curSheet = sheet ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+            if (curSheet != null) {
+                curSheet.visibility = View.VISIBLE
+                curSheet.isClosingFromFullOpen = hasFullyOpenedForCurrentSession && fraction < 0.95f
+                curSheet.expansionFraction = fraction
+                val prevY = curSheet.translationY
+                curSheet.translationY = finalSheetY
+                if (abs(prevY - finalSheetY) > 0.5f) {
+                    curSheet.postInvalidateOnAnimation()
+                }
+                // Refresh backdrop only if glass effects are actively required
+                val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height
+                val shouldDrawWallpaper = cfg.lockWallpaperEnabled && !isLandscape &&
+                        (!cfg.lockWallpaperHomescreenOnly || isHomeScreenCached)
+                val shouldRenderGlass = cfg.glassEffectsEnabled && (!cfg.glassOnlyWithoutWallpaper || !shouldDrawWallpaper)
+                if (shouldRenderGlass) {
+                    RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
+                } else {
+                    RealtimeBackdropHelper.stopLiveRefresh()
+                }
+
+                // Suppress background blur and dimming when iOS 27 Depth Wallpaper is active
+                if (cfg.depthWallpaperEnabled && currentStatusBarState == 0) {
+                    val bgAlpha = if (curSheet.isClosingFromFullOpen) 1f else if (fraction >= 0.90f) ((fraction - 0.90f) / 0.10f).coerceIn(0f, 1f) else 0f
+                    curSheet.shadeBackgroundView?.alpha = bgAlpha
+                    themeBackgroundViewRef?.get()?.alpha = bgAlpha
+                }
+            }
+
+            val curPill = pill ?: container.findViewWithTag<View>(TAG_HOME_PILL)
+            if (curPill != null) {
+                curPill.visibility = View.VISIBLE
+                // Pill is stably pinned to the sheet's bottom edge with stretch offset when sheet is fully open
+                curPill.translationY = finalSheetY + (if (finalSheetY == 0f) currentStretchOffset else 0f)
+                curPill.alpha = (fraction - 0.2f).coerceIn(0f, 1f)
+            }
+
+            if (cfg.lockScreenAsNotifCenterEnabled) {
+                LockScreenCoverSheetController.onExpansionFractionChanged(container, fraction, finalSheetY, currentStretchOffset)
+            } else {
+                LockScreenCoverSheetController.onShadeReset(container)
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Error in applyExpansionFractionInternal", t)
         }
     }
 

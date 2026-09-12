@@ -101,23 +101,35 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
         addView(rightCameraButton)
     }
 
+    private val bgExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
     private fun initCamera() {
         try {
             cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
             val cm = cameraManager ?: return
-            for (id in cm.cameraIdList) {
-                val chars = cm.getCameraCharacteristics(id)
-                val hasFlash = chars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
-                val facing = chars.get(CameraCharacteristics.LENS_FACING)
-                if (hasFlash && facing == CameraCharacteristics.LENS_FACING_BACK) {
-                    torchCameraId = id
-                    break
+            bgExecutor.execute {
+                try {
+                    for (id in cm.cameraIdList) {
+                        val chars = cm.getCameraCharacteristics(id)
+                        val hasFlash = chars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                        val facing = chars.get(CameraCharacteristics.LENS_FACING)
+                        if (hasFlash && facing == CameraCharacteristics.LENS_FACING_BACK) {
+                            torchCameraId = id
+                            break
+                        }
+                    }
+                    if (torchCameraId == null && cm.cameraIdList.isNotEmpty()) {
+                        torchCameraId = cm.cameraIdList[0]
+                    }
+                    mainHandler.post {
+                        try {
+                            cm.registerTorchCallback(torchCallback, mainHandler)
+                        } catch (_: Throwable) {}
+                    }
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Error resolving camera for torch", t)
                 }
             }
-            if (torchCameraId == null && cm.cameraIdList.isNotEmpty()) {
-                torchCameraId = cm.cameraIdList[0]
-            }
-            cm.registerTorchCallback(torchCallback, mainHandler)
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to initialize CameraManager for torch", t)
         }
