@@ -425,19 +425,9 @@ object LockScreenCoverSheetController {
                 }
             }
 
-            // Clean bottom clearance above camera/torch & hardware clipping below clock
-            if (nssl != null) {
-                val density = container.resources.displayMetrics.density
-                val targetPaddingBottom = (110f * density).toInt()
-                if (nssl.paddingBottom != targetPaddingBottom) {
-                    nssl.setPadding(nssl.paddingLeft, 0, nssl.paddingRight, targetPaddingBottom)
-                }
-                val clockBottom = getEffectiveClockBottom(container)
-                val clipTop = clockBottom + (8f * density).toInt()
-                val clipBottom = if (nssl.height > 0) nssl.height - (100f * density).toInt() else (container.resources.displayMetrics.heightPixels - (100f * density).toInt())
-                if (clipBottom > clipTop && nssl.width > 0) {
-                    nssl.clipBounds = android.graphics.Rect(0, clipTop, nssl.width, clipBottom)
-                }
+            // Ensure no artificial clip bounds or padding restrictions are placed on NSSL
+            if (nssl != null && nssl.clipBounds != null) {
+                nssl.clipBounds = null
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Error in syncClockWithNotifications", t)

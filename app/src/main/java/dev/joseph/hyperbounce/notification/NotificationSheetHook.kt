@@ -60,6 +60,9 @@ object NotificationSheetHook {
     private var hasFullyOpenedForCurrentSession = false
 
     @Volatile
+    private var isClosingMode = false
+
+    @Volatile
     private var isUserTouchingShade = false
 
     @Volatile
@@ -279,8 +282,8 @@ object NotificationSheetHook {
         // 14. Hook KeyguardPanelViewController & NSSL for notification state & clock morphing
         hookKeyguardNotificationState(module, classLoader)
 
-        // 15. Hook NotificationPanelViewController.setExpandedHeight for 1:1 real-time drag expansion
-        hookPanelExpandedHeight(module, classLoader)
+        // 15. Hook empty space clicks on NSSL & Panel to prevent premature collapse when image background is active
+        hookEmptySpaceClick(module, classLoader)
     }
 
     private fun hookWakeUpCoordinator(module: XposedModule, classLoader: ClassLoader) {
@@ -734,6 +737,15 @@ object NotificationSheetHook {
                 nssl.visibility = View.VISIBLE
             }
 
+            val isImageBgActive = cfg.enabled && (
+                cfg.lockScreenAsNotifCenterEnabled ||
+                cfg.lockWallpaperEnabled ||
+                cfg.depthWallpaperEnabled
+            )
+            if (isImageBgActive) {
+                container.isClickable = false
+            }
+
             if (currentStatusBarState != 0 || isKeyguard(container.context) || isControlCenterActive()) {
                 container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
                 container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
@@ -778,6 +790,20 @@ object NotificationSheetHook {
                 }
                 container.addView(sheet, 0, lp)
                 Log.d(TAG, "Injected NotificationGlassSheetView successfully")
+            }
+
+            val isImageBgActive = cfg.enabled && (
+                cfg.lockScreenAsNotifCenterEnabled ||
+                cfg.lockWallpaperEnabled ||
+                cfg.depthWallpaperEnabled
+            )
+            sheet.isClickable = isImageBgActive
+            if (isImageBgActive) {
+                sheet.setOnClickListener {
+                    // Absorb clicks on empty space when wallpaper/image background is active
+                }
+            } else {
+                sheet.setOnClickListener(null)
             }
 
             // Bind the real-time blurred shade background layer (ShadeBackgroundView)
@@ -1253,15 +1279,9 @@ object NotificationSheetHook {
                     pb
                 }
                 if (isLsCenter) {
-                    val targetPaddingBottom = (110f * density).toInt()
-                    if (nssl.paddingBottom != targetPaddingBottom || nssl.paddingTop != 0) {
-                        nssl.setPadding(nssl.paddingLeft, 0, nssl.paddingRight, targetPaddingBottom)
-                    }
-                    val clockBottom = LockScreenCoverSheetController.getEffectiveClockBottom(container)
-                    val clipTop = clockBottom + (8f * density).toInt()
-                    val clipBottom = if (nssl.height > 0) nssl.height - (100f * density).toInt() else (container.resources.displayMetrics.heightPixels - (100f * density).toInt())
-                    if (clipBottom > clipTop && nssl.width > 0) {
-                        nssl.clipBounds = android.graphics.Rect(0, clipTop, nssl.width, clipBottom)
+                    nssl.clipBounds = null
+                    if (nssl.paddingTop != 0 || nssl.paddingBottom != origPaddingBottom) {
+                        nssl.setPadding(nssl.paddingLeft, 0, nssl.paddingRight, origPaddingBottom)
                     }
                 } else {
                     nssl.clipBounds = null
@@ -1489,6 +1509,10 @@ object NotificationSheetHook {
                                 if (isUnlockedShadeActive) {
                                     val container = containerRef?.get()
                                     if (container != null && hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen && !isLaunchingNotificationActivity) {
+                                        isClosingMode = true
+                                        val curSheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+                                        curSheet?.isClosingMode = true
+                                        curSheet?.isClosingFromFullOpen = true
                                         hasTriggeredUnlockForCurrentOpen = true
                                         hasFullyOpenedForCurrentSession = false
                                         notifyCloseOverHomescreen(container.context)
@@ -1596,8 +1620,16 @@ object NotificationSheetHook {
             val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
             val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
 
+            // Check if closing started from full open
+            if ((isShadeFullyOpen || hasFullyOpenedForCurrentSession) &&
+                prevFraction > 0f && fraction < prevFraction && fraction < 0.98f
+            ) {
+                isClosingMode = true
+            }
+
             // Arming: Shade has reached full expansion (only when expanding or at rest, never while collapsing)
             if (fraction >= 0.95f && (prevFraction < 0f || fraction >= prevFraction)) {
+                isClosingMode = false
                 isShadeFullyOpen = true
                 hasFullyOpenedForCurrentSession = true
                 hasTriggeredUnlockForCurrentOpen = false
@@ -1609,14 +1641,16 @@ object NotificationSheetHook {
                 !isLaunchingNotificationActivity && fraction < 0.88f &&
                 (prevFraction < 0f || fraction < prevFraction)
             ) {
+                isClosingMode = true
                 hasTriggeredUnlockForCurrentOpen = true
-                hasFullyOpenedForCurrentSession = false
                 notifyCloseOverHomescreen(container.context)
             }
 
             if (fraction <= 0.015f) {
+                isClosingMode = false
                 sheet?.visibility = View.GONE
                 sheet?.translationY = -viewHeight
+                sheet?.isClosingMode = false
                 sheet?.isClosingFromFullOpen = false
                 pill?.visibility = View.GONE
                 pill?.translationY = -viewHeight
@@ -1645,7 +1679,8 @@ object NotificationSheetHook {
             val curSheet = sheet ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
             if (curSheet != null) {
                 curSheet.visibility = View.VISIBLE
-                curSheet.isClosingFromFullOpen = hasFullyOpenedForCurrentSession && fraction < 0.95f
+                curSheet.isClosingMode = isClosingMode || (hasFullyOpenedForCurrentSession && fraction < 0.95f)
+                curSheet.isClosingFromFullOpen = curSheet.isClosingMode
                 curSheet.expansionFraction = fraction
                 val prevY = curSheet.translationY
                 curSheet.translationY = finalSheetY
@@ -1822,6 +1857,10 @@ object NotificationSheetHook {
                     if (hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen &&
                         !isLaunchingNotificationActivity && (isClosingGesture || (dy < -25f * density && lastAppliedFraction > 0.05f))
                     ) {
+                        isClosingMode = true
+                        val curSheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+                        curSheet?.isClosingMode = true
+                        curSheet?.isClosingFromFullOpen = true
                         hasTriggeredUnlockForCurrentOpen = true
                         isShadeFullyOpen = false
                         hasFullyOpenedForCurrentSession = false
@@ -1973,45 +2012,73 @@ object NotificationSheetHook {
         }
     }
 
-    private fun hookPanelExpandedHeight(module: XposedModule, classLoader: ClassLoader) {
-        val classes = listOf(
+    private fun hookEmptySpaceClick(module: XposedModule, classLoader: ClassLoader) {
+        val targetClasses = listOf(
             "com.android.systemui.shade.NotificationPanelViewController",
-            "com.android.keyguard.tinyPanel.TinyKeyguardPanelViewControllerImpl"
+            "com.android.systemui.shade.MiuiNotificationPanelViewController",
+            "com.android.systemui.statusbar.phone.NotificationPanelViewController",
+            "com.android.systemui.statusbar.phone.MiuiNotificationPanelViewController",
+            "com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout",
+            "com.android.systemui.statusbar.notification.stack.MiuiNotificationStackScrollLayout"
         )
-        for (clsName in classes) {
+        for (clsName in targetClasses) {
             try {
                 val clazz = Class.forName(clsName, false, classLoader)
-                for (m in clazz.declaredMethods) {
-                    if (m.name == "setExpandedHeight" && m.parameterTypes.size == 1 &&
-                        m.parameterTypes[0] == Float::class.javaPrimitiveType
-                    ) {
+                for (m: Method in clazz.declaredMethods) {
+                    val nameLower = m.name.lowercase()
+                    if (m.name == "setEmptySpaceClickListener" && m.parameterTypes.isNotEmpty()) {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val result = chain.proceed()
-                                if (isUnlockedShadeActive) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
-                                    val height = (args[0] as Number).toFloat()
-                                    val container = containerRef?.get()
-                                    val totalDist = if (container != null && container.height > 0) {
-                                        container.height.toFloat()
-                                    } else {
-                                        val dm = container?.resources?.displayMetrics
-                                        dm?.heightPixels?.toFloat() ?: 2400f
-                                    }
-                                    if (totalDist > 0f) {
-                                        val frac = (height / totalDist).coerceIn(0.0f, 1.0f)
-                                        applyExpansionFraction(frac)
-                                    }
+                                val rawArgs = chain.args
+                                val listener = if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]
+                                if (listener != null) {
+                                    try {
+                                        for (lm in listener.javaClass.declaredMethods) {
+                                            if (lm.name.lowercase().contains("empty")) {
+                                                module.hook(lm).intercept(object : XposedInterface.Hooker {
+                                                    override fun intercept(lChain: XposedInterface.Chain): Any? {
+                                                        val cfg = NotificationSheetConfigHolder.sheet
+                                                        val isImageBgActive = cfg.enabled && (
+                                                            cfg.lockScreenAsNotifCenterEnabled ||
+                                                            cfg.lockWallpaperEnabled ||
+                                                            cfg.depthWallpaperEnabled
+                                                        )
+                                                        if (isImageBgActive && isUnlockedShadeActive) {
+                                                            Log.d(TAG, "Suppressed dynamic empty space click listener ${listener.javaClass.name}.${lm.name}")
+                                                            return if (lm.returnType == Boolean::class.javaPrimitiveType) false else null
+                                                        }
+                                                        return lChain.proceed()
+                                                    }
+                                                })
+                                            }
+                                        }
+                                    } catch (_: Throwable) {}
                                 }
-                                return result
+                                return chain.proceed()
                             }
                         })
-                        Log.d(TAG, "Hooked $clsName.setExpandedHeight successfully")
+                        Log.d(TAG, "Hooked $clsName.setEmptySpaceClickListener for empty space click suppression")
+                    } else if (nameLower.contains("emptyspace") || nameLower.contains("emptyarea")) {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val cfg = NotificationSheetConfigHolder.sheet
+                                val isImageBgActive = cfg.enabled && (
+                                    cfg.lockScreenAsNotifCenterEnabled ||
+                                    cfg.lockWallpaperEnabled ||
+                                    cfg.depthWallpaperEnabled
+                                )
+                                if (isImageBgActive && isUnlockedShadeActive) {
+                                    Log.d(TAG, "Suppressed ${clazz.simpleName}.${m.name} because image background is active")
+                                    return if (m.returnType == Boolean::class.javaPrimitiveType) false else null
+                                }
+                                return chain.proceed()
+                            }
+                        })
+                        Log.d(TAG, "Hooked $clsName.${m.name} for empty space click suppression")
                     }
                 }
             } catch (t: Throwable) {
-                Log.d(TAG, "Failed to hook $clsName.setExpandedHeight: ${t.message}")
+                Log.d(TAG, "Failed to hook $clsName for empty space clicks: ${t.message}")
             }
         }
     }
