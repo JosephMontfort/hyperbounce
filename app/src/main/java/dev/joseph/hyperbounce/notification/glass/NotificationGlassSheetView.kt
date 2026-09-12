@@ -246,7 +246,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 }
             }
 
-            val clockOverSubject = isLockScreenActive && (expansionFraction >= 0.95f || isShadeFullyOpen)
+            val clockOverSubject = isLockScreenActive && (expansionFraction >= 0.95f || dev.joseph.hyperbounce.notification.NotificationSheetHook.hasFullyOpened)
 
             // [Layer 1] Replicated Lock Screen Clock (BEHIND subject cutout during pulldown)
             if (isLockScreenActive && !clockOverSubject) {
