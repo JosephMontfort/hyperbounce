@@ -58,9 +58,12 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
         val rightBevel = cfg.rightBevelWidth * density
         val bottomBevel = cfg.bottomBevelWidth * density
         val maxBevel = max(max(leftBevel, rightBevel), bottomBevel)
-        val refractAmount = cfg.refractionHeight * density
+        val leftRefract = cfg.sideRefraction * density
+        val rightRefract = cfg.sideRefraction * density
+        val bottomRefract = cfg.bottomRefraction * density
+        val maxRefract = max(max(leftRefract, rightRefract), bottomRefract)
         val cornerRadius = cfg.cornerRadius * density
-        val margin = ((maxBevel + refractAmount * 0.4f) + 16f * density).toInt().coerceAtLeast(32)
+        val margin = ((maxBevel + maxRefract * 0.4f) + 16f * density).toInt().coerceAtLeast(32)
 
         val wp = LockScreenWallpaperHelper.getLiveLockWallpaper(context)
         val screenW = resources.displayMetrics.widthPixels
@@ -76,13 +79,19 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
                 leftBevel = leftBevel,
                 rightBevel = rightBevel,
                 bottomBevel = bottomBevel,
-                refract = refractAmount,
+                refract = maxRefract,
+                leftRefract = leftRefract,
+                rightRefract = rightRefract,
+                bottomRefract = bottomRefract,
                 dispersion = cfg.dispersionStrength,
                 lightX = 0f,
                 lightY = 1f,
                 spec = cfg.specularStrength,
+                hairline = cfg.hairlineStrength,
+                innerGlow = cfg.innerGlowStrength,
                 innerShadow = cfg.innerShadow,
                 saturation = cfg.saturationFactor,
+                rimSoftness = cfg.rimSoftness,
                 blurRadius = cfg.blurRadius * density
             )
 

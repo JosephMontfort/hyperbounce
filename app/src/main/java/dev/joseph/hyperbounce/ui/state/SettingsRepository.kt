@@ -387,14 +387,19 @@ class SettingsRepository(context: Context) {
 
         var enabled by prefsBooleanState("lock_sheet_enabled", defaults.enabled); private set
         var refractionHeight by prefsFloatState("lock_card_refraction_height", defaults.refractionHeight); private set
+        var sideRefraction by prefsFloatState("lock_card_side_refraction", defaults.sideRefraction); private set
+        var bottomRefraction by prefsFloatState("lock_card_bottom_refraction", defaults.bottomRefraction); private set
         var bevelWidth by prefsFloatState("lock_card_bevel_width", defaults.bevelWidth); private set
         var leftBevelWidth by prefsFloatState("lock_card_left_bevel", defaults.leftBevelWidth); private set
         var rightBevelWidth by prefsFloatState("lock_card_right_bevel", defaults.rightBevelWidth); private set
         var bottomBevelWidth by prefsFloatState("lock_card_bottom_bevel", defaults.bottomBevelWidth); private set
         var dispersionStrength by prefsFloatState("lock_card_dispersion", defaults.dispersionStrength); private set
         var specularStrength by prefsFloatState("lock_card_specular", defaults.specularStrength); private set
+        var hairlineStrength by prefsFloatState("lock_card_hairline", defaults.hairlineStrength); private set
+        var innerGlowStrength by prefsFloatState("lock_card_inner_glow", defaults.innerGlowStrength); private set
         var innerShadow by prefsFloatState("lock_card_inner_shadow", defaults.innerShadow); private set
         var saturationFactor by prefsFloatState("lock_card_saturation", defaults.saturationFactor); private set
+        var rimSoftness by prefsFloatState("lock_card_rim_softness", defaults.rimSoftness); private set
         var blurRadius by prefsFloatState("lock_card_blur_radius", defaults.blurRadius); private set
         var cornerRadius by prefsFloatState("lock_card_corner_radius", defaults.cornerRadius); private set
         var pillWidth by prefsFloatState("lock_pill_width", defaults.pillWidth); private set
@@ -402,21 +407,26 @@ class SettingsRepository(context: Context) {
         var pillBottomMargin by prefsFloatState("lock_pill_bottom_margin", defaults.pillBottomMargin); private set
 
         fun snapshot(): LockScreenSheetSettings = LockScreenSheetSettings(
-            enabled, refractionHeight, bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
-            dispersionStrength, specularStrength, innerShadow, saturationFactor, blurRadius,
+            enabled, refractionHeight, sideRefraction, bottomRefraction, bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
+            dispersionStrength, specularStrength, hairlineStrength, innerGlowStrength, innerShadow, saturationFactor, rimSoftness, blurRadius,
             cornerRadius, pillWidth, pillHeight, pillBottomMargin
         )
 
         @JvmName("setSheetEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
         @JvmName("setSheetRefractionHeightPref") fun setRefractionHeight(v: Float) { refractionHeight = v }
+        @JvmName("setSheetSideRefractionPref") fun setSideRefraction(v: Float) { sideRefraction = v }
+        @JvmName("setSheetBottomRefractionPref") fun setBottomRefraction(v: Float) { bottomRefraction = v }
         @JvmName("setSheetBevelWidthPref") fun setBevelWidth(v: Float) { bevelWidth = v }
         @JvmName("setSheetLeftBevelWidthPref") fun setLeftBevelWidth(v: Float) { leftBevelWidth = v }
         @JvmName("setSheetRightBevelWidthPref") fun setRightBevelWidth(v: Float) { rightBevelWidth = v }
         @JvmName("setSheetBottomBevelWidthPref") fun setBottomBevelWidth(v: Float) { bottomBevelWidth = v }
         @JvmName("setSheetDispersionStrengthPref") fun setDispersionStrength(v: Float) { dispersionStrength = v }
         @JvmName("setSheetSpecularStrengthPref") fun setSpecularStrength(v: Float) { specularStrength = v }
+        @JvmName("setSheetHairlineStrengthPref") fun setHairlineStrength(v: Float) { hairlineStrength = v }
+        @JvmName("setSheetInnerGlowStrengthPref") fun setInnerGlowStrength(v: Float) { innerGlowStrength = v }
         @JvmName("setSheetInnerShadowPref") fun setInnerShadow(v: Float) { innerShadow = v }
         @JvmName("setSheetSaturationFactorPref") fun setSaturationFactor(v: Float) { saturationFactor = v }
+        @JvmName("setSheetRimSoftnessPref") fun setRimSoftness(v: Float) { rimSoftness = v }
         @JvmName("setSheetBlurRadiusPref") fun setBlurRadius(v: Float) { blurRadius = v }
         @JvmName("setSheetCornerRadiusPref") fun setCornerRadius(v: Float) { cornerRadius = v }
         @JvmName("setSheetPillWidthPref") fun setPillWidth(v: Float) { pillWidth = v }
@@ -426,14 +436,19 @@ class SettingsRepository(context: Context) {
         fun reloadFromDefaults() {
             enabled = defaults.enabled
             refractionHeight = defaults.refractionHeight
+            sideRefraction = defaults.sideRefraction
+            bottomRefraction = defaults.bottomRefraction
             bevelWidth = defaults.bevelWidth
             leftBevelWidth = defaults.leftBevelWidth
             rightBevelWidth = defaults.rightBevelWidth
             bottomBevelWidth = defaults.bottomBevelWidth
             dispersionStrength = defaults.dispersionStrength
             specularStrength = defaults.specularStrength
+            hairlineStrength = defaults.hairlineStrength
+            innerGlowStrength = defaults.innerGlowStrength
             innerShadow = defaults.innerShadow
             saturationFactor = defaults.saturationFactor
+            rimSoftness = defaults.rimSoftness
             blurRadius = defaults.blurRadius
             cornerRadius = defaults.cornerRadius
             pillWidth = defaults.pillWidth

@@ -340,7 +340,16 @@ object ScreenUnlockHook {
         try {
             val filter = android.content.IntentFilter("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
             val receiver = object : android.content.BroadcastReceiver() {
+                private var lastReceivedUnlockTime = 0L
+
                 override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
+                    val now = android.os.SystemClock.uptimeMillis()
+                    if (now - lastReceivedUnlockTime < 600L) {
+                        Log.d(TAG, "ACTION_TRIGGER_UNLOCK_ANIMATION debounced on receiver (within 600ms)")
+                        return
+                    }
+                    lastReceivedUnlockTime = now
+
                     Log.d(TAG, "Received ACTION_TRIGGER_UNLOCK_ANIMATION broadcast")
                     val launcher = getLauncherActivity(c)
                     if (launcher == null) {

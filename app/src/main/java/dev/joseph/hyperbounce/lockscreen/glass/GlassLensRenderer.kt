@@ -135,7 +135,7 @@ class GlassLensRenderer {
                 }
 
                 // === CASE 1: FLAT INTERIOR OF THE GLASS SHEET (ZERO REFRACTION) ===
-                if (slope <= 0.005) {
+                if (slope <= 0.001) {
                     half4 fg = content.eval(coord);
                     // 100% Crystal-Clear Transparency:
                     // If foreground is transparent (depth mode background or transparent glass sheet),
@@ -204,12 +204,20 @@ class GlassLensRenderer {
                     );
                 }
 
-                // Color Vibrancy Curve
+                // Smooth inner blend for non-transparent foregrounds to prevent any sharp rectangle
+                if (fgAlpha > 0.004) {
+                    half4 centerFg = content.eval(coord);
+                    float innerBlend = smoothstep(0.001, 0.30, slope);
+                    col = mix(centerFg.rgb, col, innerBlend);
+                }
+
+                // Color Vibrancy Curve with smooth inner fade
                 float lum = dot(col, float3(0.2126, 0.7152, 0.0722));
                 float satNow = max(col.r, max(col.g, col.b)) - min(col.r, min(col.g, col.b));
                 float room = 1.0 - smoothstep(0.2, 0.85, satNow);
                 float hl = 1.0 - smoothstep(0.75, 0.98, lum);
-                float amount = 1.0 + (satFactor - 1.0) * mix(0.3, 1.0, room * hl);
+                float satFade = (satFactor - 1.0) * smoothstep(0.001, 0.35, slope);
+                float amount = 1.0 + satFade * mix(0.3, 1.0, room * hl);
                 col = clamp(mix(float3(lum), col, amount), float3(0.0), float3(1.0));
 
                 // Backside inner shadow
@@ -246,7 +254,7 @@ class GlassLensRenderer {
                 if (fgAlpha > 0.004) {
                     bevelAlpha = cov;
                 } else if (hasBackdrop > 0.5) {
-                    float interiorBlend = smoothstep(0.005, 0.040, slope);
+                    float interiorBlend = smoothstep(0.001, 0.20, slope);
                     bevelAlpha = clamp(mix(spec, 1.0, interiorBlend) * cov, 0.0, 1.0);
                 } else {
                     bevelAlpha = clamp(spec * cov, 0.0, 1.0);

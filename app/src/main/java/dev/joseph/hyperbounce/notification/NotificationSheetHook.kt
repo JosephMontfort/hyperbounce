@@ -1017,25 +1017,32 @@ object NotificationSheetHook {
             return
         }
 
-        val now = System.currentTimeMillis()
-        if (now - lastUnlockTriggerTime < 500L) {
-            Log.d(TAG, "notifyCloseOverHomescreen: debounced (within 500ms)")
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastUnlockTriggerTime < 600L) {
+            Log.d(TAG, "notifyCloseOverHomescreen: debounced (within 600ms)")
             return
         }
         lastUnlockTriggerTime = now
 
         if (isHomeScreenCached || isHomeScreenTop(context)) {
             try {
-                val pkgs = arrayOf("com.miui.home", "com.mi.android.globallauncher")
-                for (pkg in pkgs) {
-                    val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
-                        setPackage(pkg)
-                    }
-                    context.sendBroadcast(intent)
+                // Send ONLY ONE targeted broadcast to the active launcher package to prevent double-firing
+                val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
+                val pm = context.packageManager
+                val isMiuiHome = try {
+                    pm.getPackageInfo("com.miui.home", 0) != null
+                } catch (_: Throwable) { false }
+                val isGlobalLauncher = !isMiuiHome && try {
+                    pm.getPackageInfo("com.mi.android.globallauncher", 0) != null
+                } catch (_: Throwable) { false }
+
+                if (isMiuiHome) {
+                    intent.setPackage("com.miui.home")
+                } else if (isGlobalLauncher) {
+                    intent.setPackage("com.mi.android.globallauncher")
                 }
-                val generalIntent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
-                context.sendBroadcast(generalIntent)
-                Log.d(TAG, "Dispatched ACTION_TRIGGER_UNLOCK_ANIMATION to launcher successfully")
+                context.sendBroadcast(intent)
+                Log.d(TAG, "Dispatched single ACTION_TRIGGER_UNLOCK_ANIMATION to launcher (pkg=${intent.`package`})")
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to send unlock broadcast", t)
             }
@@ -1417,8 +1424,8 @@ object NotificationSheetHook {
         val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
         val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
 
-        // Arming: Shade has reached full expansion
-        if (fraction >= 0.95f) {
+        // Arming: Shade has reached full expansion (only when expanding or at rest, never while collapsing)
+        if (fraction >= 0.95f && (prevFraction < 0f || fraction >= prevFraction)) {
             isShadeFullyOpen = true
             hasFullyOpenedForCurrentSession = true
             hasTriggeredUnlockForCurrentOpen = false

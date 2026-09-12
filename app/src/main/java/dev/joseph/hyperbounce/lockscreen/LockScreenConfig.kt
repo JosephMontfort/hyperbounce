@@ -6,14 +6,19 @@ data class LockScreenSheetConfig(
     var enabled: Boolean = true,
     // Optics (Liquid Glass 2.0)
     var refractionHeight: Float = 68.0f,
+    var sideRefraction: Float = 32.0f,
+    var bottomRefraction: Float = 18.0f,
     var bevelWidth: Float = 38.0f,
     var leftBevelWidth: Float = 38.0f,
     var rightBevelWidth: Float = 38.0f,
     var bottomBevelWidth: Float = 38.0f,
     var dispersionStrength: Float = 0.09f,
     var specularStrength: Float = 0.95f,
+    var hairlineStrength: Float = 0.75f,
+    var innerGlowStrength: Float = 0.20f,
     var innerShadow: Float = 0.45f,
     var saturationFactor: Float = 125.0f,
+    var rimSoftness: Float = 2.0f,
     var blurRadius: Float = 0.0f,
     var cornerRadius: Float = 38.0f,
     // Home indicator pill
@@ -91,14 +96,19 @@ object LockScreenConfigHolder {
         // Sheet configs (Liquid Glass 2.0)
         sheet.enabled = prefs.getBoolean("lock_sheet_enabled", true)
         sheet.refractionHeight = prefs.getFloat("lock_card_refraction_height", 68.0f)
+        sheet.sideRefraction = prefs.getFloat("lock_card_side_refraction", 32.0f)
+        sheet.bottomRefraction = prefs.getFloat("lock_card_bottom_refraction", 18.0f)
         sheet.bevelWidth = prefs.getFloat("lock_card_bevel_width", 38.0f)
         sheet.leftBevelWidth = prefs.getFloat("lock_card_left_bevel", 38.0f)
         sheet.rightBevelWidth = prefs.getFloat("lock_card_right_bevel", 38.0f)
         sheet.bottomBevelWidth = prefs.getFloat("lock_card_bottom_bevel", 38.0f)
         sheet.dispersionStrength = prefs.getFloat("lock_card_dispersion", 0.09f)
         sheet.specularStrength = prefs.getFloat("lock_card_specular", 0.95f)
+        sheet.hairlineStrength = prefs.getFloat("lock_card_hairline", 0.75f)
+        sheet.innerGlowStrength = prefs.getFloat("lock_card_inner_glow", 0.20f)
         sheet.innerShadow = prefs.getFloat("lock_card_inner_shadow", 0.45f)
         sheet.saturationFactor = prefs.getFloat("lock_card_saturation", 125.0f)
+        sheet.rimSoftness = prefs.getFloat("lock_card_rim_softness", 2.0f)
         sheet.blurRadius = prefs.getFloat("lock_card_blur_radius", 0.0f)
         sheet.cornerRadius = prefs.getFloat("lock_card_corner_radius", 38.0f)
         sheet.pillWidth = prefs.getFloat("lock_pill_width", 156.0f)

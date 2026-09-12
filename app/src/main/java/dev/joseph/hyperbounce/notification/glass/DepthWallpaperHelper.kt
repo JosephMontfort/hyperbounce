@@ -285,32 +285,15 @@ object DepthWallpaperHelper {
                 buffer.rewind()
 
                 val totalPixels = maskW * maskH
+                val confidences = FloatArray(totalPixels)
+                for (i in 0 until totalPixels) {
+                    confidences[i] = buffer.float
+                }
+
                 val pixels = IntArray(totalPixels)
                 scaledBitmap.getPixels(pixels, 0, maskW, 0, 0, maskW, maskH)
 
-                val outBitmap = Bitmap.createBitmap(maskW, maskH, Bitmap.Config.ARGB_8888)
-                var foregroundPixels = 0
-
-                for (i in 0 until totalPixels) {
-                    val confidence = buffer.float
-                    if (confidence <= 0.20f) {
-                        pixels[i] = 0 // Completely transparent background
-                    } else if (confidence >= 0.80f) {
-                        // Fully opaque subject pixel
-                        foregroundPixels++
-                    } else {
-                        // Smooth cubic-interpolated edge feathering for hair, clothes, and skin
-                        foregroundPixels++
-                        val t = (confidence - 0.20f) / 0.60f
-                        val factor = t * t * (3f - 2f * t) // smoothstep
-                        val origColor = pixels[i]
-                        val a = ((origColor ushr 24) * factor).toInt().coerceIn(0, 255)
-                        pixels[i] = (origColor and 0x00FFFFFF) or (a shl 24)
-                    }
-                }
-
-                outBitmap.setPixels(pixels, 0, maskW, 0, 0, maskW, maskH)
-                Log.d(TAG, "Subject segmented successfully: $foregroundPixels/$totalPixels foreground pixels (${(foregroundPixels * 100f / totalPixels).toInt()}%)")
+                val outBitmap = refineSubjectCutout(scaledBitmap, pixels, confidences, maskW, maskH)
 
                 // Save to private cache directory (both segmented and active if custom isn't active)
                 try {
@@ -589,6 +572,231 @@ object DepthWallpaperHelper {
         }
 
         return null
+    }
+
+    /**
+     * Studio-Grade Edge Refinement Pipeline for MediaPipe Subject Isolation:
+     * 1. Fast Guided Filtering using high-res image luminance as guidance image.
+     *    Snaps blurry ML probabilities to actual physical silhouette & hair boundaries.
+     * 2. Morphological hole filling to preserve fine interior details (dark patterns, pupils).
+     * 3. Background noise speckle suppression (isolated island removal).
+     * 4. Subpixel smoothstep alpha feathering for natural hair strands.
+     * 5. Edge Color Decontamination (Anti-Fringe): strips background color bleed
+     *    (blue sky, green foliage, wall paint) by pulling semi-transparent edge RGB towards foreground.
+     */
+    private fun refineSubjectCutout(
+        sourceBmp: Bitmap,
+        pixels: IntArray,
+        confidences: FloatArray,
+        w: Int,
+        h: Int
+    ): Bitmap {
+        val total = w * h
+        val outBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+
+        // 1. Extract normalized luminance guidance image I
+        val lum = FloatArray(total)
+        for (i in 0 until total) {
+            val c = pixels[i]
+            val r = (c ushr 16) and 0xFF
+            val g = (c ushr 8) and 0xFF
+            val b = c and 0xFF
+            lum[i] = (0.299f * r + 0.587f * g + 0.114f * b) / 255.0f
+        }
+
+        // 2. Fast Guided Image Filter (r = 4, eps = 0.015f)
+        val r = 4
+        val eps = 0.015f
+        val q = applyGuidedFilter(lum, confidences, w, h, r, eps)
+
+        // 3. Morphological Hole Filling & Speckle Suppression
+        morphologicalRefine(q, w, h)
+
+        // 4. Compute refined alpha and count foreground pixels
+        val alphas = IntArray(total)
+        var foregroundCount = 0
+        for (i in 0 until total) {
+            val prob = q[i]
+            if (prob <= 0.12f) {
+                alphas[i] = 0
+                pixels[i] = 0
+            } else if (prob >= 0.88f) {
+                alphas[i] = 255
+                pixels[i] = pixels[i] or (0xFF shl 24)
+                foregroundCount++
+            } else {
+                val t = (prob - 0.12f) / 0.76f
+                val factor = t * t * (3f - 2f * t) // smoothstep
+                val a = (factor * 255f).toInt().coerceIn(0, 255)
+                alphas[i] = a
+                val orig = pixels[i]
+                pixels[i] = (orig and 0x00FFFFFF) or (a shl 24)
+                if (a > 0) foregroundCount++
+            }
+        }
+
+        // 5. Studio Edge Color Decontamination (Anti-Fringe)
+        decontaminateColorEdges(pixels, alphas, w, h)
+
+        outBitmap.setPixels(pixels, 0, w, 0, 0, w, h)
+        Log.d(TAG, "Refined studio cutout generated: $foregroundCount/$total pixels (${(foregroundCount * 100f / total).toInt()}%)")
+        return outBitmap
+    }
+
+    private fun applyGuidedFilter(
+        guide: FloatArray,
+        src: FloatArray,
+        w: Int,
+        h: Int,
+        r: Int,
+        eps: Float
+    ): FloatArray {
+        val total = w * h
+        val tmp = FloatArray(total)
+        val meanI = FloatArray(total)
+        val meanP = FloatArray(total)
+        val meanIp = FloatArray(total)
+        val meanII = FloatArray(total)
+        val a = FloatArray(total)
+        val b = FloatArray(total)
+        val meanA = FloatArray(total)
+        val meanB = FloatArray(total)
+
+        boxBlur(guide, meanI, tmp, w, h, r)
+        boxBlur(src, meanP, tmp, w, h, r)
+
+        for (i in 0 until total) {
+            tmp[i] = guide[i] * src[i]
+        }
+        boxBlur(tmp, meanIp, a, w, h, r)
+
+        for (i in 0 until total) {
+            tmp[i] = guide[i] * guide[i]
+        }
+        boxBlur(tmp, meanII, a, w, h, r)
+
+        for (i in 0 until total) {
+            val covIp = meanIp[i] - meanI[i] * meanP[i]
+            val varI = meanII[i] - meanI[i] * meanI[i]
+            val ak = covIp / (varI + eps)
+            a[i] = ak
+            b[i] = meanP[i] - ak * meanI[i]
+        }
+
+        boxBlur(a, meanA, tmp, w, h, r)
+        boxBlur(b, meanB, tmp, w, h, r)
+
+        val q = FloatArray(total)
+        for (i in 0 until total) {
+            val v = meanA[i] * guide[i] + meanB[i]
+            q[i] = v.coerceIn(0f, 1f)
+        }
+        return q
+    }
+
+    private fun boxBlur(src: FloatArray, dst: FloatArray, tmp: FloatArray, w: Int, h: Int, r: Int) {
+        val scaleH = 1.0f / (2 * r + 1)
+        for (y in 0 until h) {
+            val row = y * w
+            var sum = 0f
+            for (x in -r..r) {
+                sum += src[row + x.coerceIn(0, w - 1)]
+            }
+            tmp[row] = sum * scaleH
+            for (x in 1 until w) {
+                val xIn = (x + r).coerceIn(0, w - 1)
+                val xOut = (x - r - 1).coerceIn(0, w - 1)
+                sum += src[row + xIn] - src[row + xOut]
+                tmp[row + x] = sum * scaleH
+            }
+        }
+
+        val scaleV = 1.0f / (2 * r + 1)
+        for (x in 0 until w) {
+            var sum = 0f
+            for (y in -r..r) {
+                sum += tmp[y.coerceIn(0, h - 1) * w + x]
+            }
+            dst[x] = sum * scaleV
+            for (y in 1 until h) {
+                val yIn = (y + r).coerceIn(0, h - 1)
+                val yOut = (y - r - 1).coerceIn(0, h - 1)
+                sum += tmp[yIn * w + x] - tmp[yOut * w + x]
+                dst[y * w + x] = sum * scaleV
+            }
+        }
+    }
+
+    private fun morphologicalRefine(q: FloatArray, w: Int, h: Int) {
+        val step = 3
+        for (y in step until (h - step) step 2) {
+            val row = y * w
+            for (x in step until (w - step) step 2) {
+                val idx = row + x
+                val v = q[idx]
+                if (v < 0.25f) {
+                    val top = q[(y - step) * w + x]
+                    val bot = q[(y + step) * w + x]
+                    val left = q[row + x - step]
+                    val right = q[row + x + step]
+                    if (top > 0.82f && bot > 0.82f && left > 0.82f && right > 0.82f) {
+                        q[idx] = 0.90f
+                    }
+                } else if (v in 0.25f..0.55f) {
+                    val top = q[(y - step) * w + x]
+                    val bot = q[(y + step) * w + x]
+                    val left = q[row + x - step]
+                    val right = q[row + x + step]
+                    if (top < 0.08f && bot < 0.08f && left < 0.08f && right < 0.08f) {
+                        q[idx] = 0.0f
+                    }
+                }
+            }
+        }
+    }
+
+    private fun decontaminateColorEdges(pixels: IntArray, alphas: IntArray, w: Int, h: Int) {
+        val searchR = 3
+        for (y in searchR until (h - searchR)) {
+            val row = y * w
+            for (x in searchR until (w - searchR)) {
+                val idx = row + x
+                val a = alphas[idx]
+                if (a in 8..230) {
+                    var sumR = 0
+                    var sumG = 0
+                    var sumB = 0
+                    var count = 0
+                    for (dy in -searchR..searchR) {
+                        val nRow = (y + dy) * w
+                        for (dx in -searchR..searchR) {
+                            val nIdx = nRow + (x + dx)
+                            if (alphas[nIdx] >= 245) {
+                                val c = pixels[nIdx]
+                                sumR += (c ushr 16) and 0xFF
+                                sumG += (c ushr 8) and 0xFF
+                                sumB += c and 0xFF
+                                count++
+                            }
+                        }
+                    }
+                    if (count > 0) {
+                        val targetR = sumR / count
+                        val targetG = sumG / count
+                        val targetB = sumB / count
+                        val cur = pixels[idx]
+                        val curR = (cur ushr 16) and 0xFF
+                        val curG = (cur ushr 8) and 0xFF
+                        val curB = cur and 0xFF
+                        val blend = (1.0f - a / 255.0f) * 0.75f
+                        val newR = (curR + (targetR - curR) * blend).toInt().coerceIn(0, 255)
+                        val newG = (curG + (targetG - curG) * blend).toInt().coerceIn(0, 255)
+                        val newB = (curB + (targetB - curB) * blend).toInt().coerceIn(0, 255)
+                        pixels[idx] = (a shl 24) or (newR shl 16) or (newG shl 8) or newB
+                    }
+                }
+            }
+        }
     }
 
     fun clearCache(context: Context) {
