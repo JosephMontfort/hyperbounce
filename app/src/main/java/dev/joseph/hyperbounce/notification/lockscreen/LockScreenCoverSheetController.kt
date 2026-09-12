@@ -177,6 +177,16 @@ object LockScreenCoverSheetController {
     fun suppressStockShadeHeader(rootView: View?, isSuppress: Boolean) {
         if (rootView == null) return
         try {
+            val cfg = NotificationSheetConfigHolder.sheet
+            if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) {
+                // If feature is disabled, DO NOT touch stock shade header at all! Let Xiaomi manage it!
+                return
+            }
+            val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
+            if (!isUnlocked) {
+                // On lockscreen, never touch or manipulate normal_notification_header_view!
+                return
+            }
             var headerView = cachedHeaderViewRef?.get()
             if (headerView == null) {
                 val headerId = rootView.resources.getIdentifier("normal_notification_header_view", "id", "com.android.systemui")
@@ -188,20 +198,8 @@ object LockScreenCoverSheetController {
                 }
             }
             if (headerView != null) {
-                val cfg = NotificationSheetConfigHolder.sheet
-                if (cfg.enabled && cfg.lockScreenAsNotifCenterEnabled) {
-                    // When lock screen as notification center is active, never show stock shade header clock!
-                    headerView.alpha = 0.0f
-                    headerView.visibility = View.GONE
-                } else {
-                    if (isSuppress) {
-                        headerView.alpha = 0.0f
-                        headerView.visibility = View.INVISIBLE
-                    } else {
-                        headerView.alpha = 1.0f
-                        headerView.visibility = View.VISIBLE
-                    }
-                }
+                headerView.alpha = 0.0f
+                headerView.visibility = View.GONE
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Error suppressing stock shade header", t)
@@ -222,9 +220,12 @@ object LockScreenCoverSheetController {
             }
 
             if (bottomArea == null) {
+                val density = container.resources.displayMetrics.density
                 bottomArea = LockScreenBottomAreaView(container.context).apply {
                     tag = TAG_BOTTOM_AFFORDANCES
                     visibility = View.GONE
+                    elevation = 64f * density
+                    translationZ = 64f * density
                 }
                 val lp = try {
                     val lpClass = Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams", false, container.context.classLoader)
@@ -245,7 +246,10 @@ object LockScreenCoverSheetController {
                     )
                 }
                 container.addView(bottomArea, lp)
+                bottomArea.bringToFront()
                 Log.d(TAG, "Injected LockScreenBottomAreaView successfully")
+            } else {
+                bottomArea.bringToFront()
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to inject LockScreenBottomAreaView", t)
@@ -469,6 +473,7 @@ object LockScreenCoverSheetController {
             val bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
             if (bottomArea != null) {
                 if (cfg.showBottomWidgets) {
+                    bottomArea.bringToFront()
                     bottomArea.translationY = finalSheetY + (if (finalSheetY == 0f) currentStretchOffset else 0f)
                     bottomArea.setExpansionFraction(fraction)
                 } else {
@@ -493,6 +498,7 @@ object LockScreenCoverSheetController {
             ensureBottomAffordancesInjected(container)
             val bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
             if (bottomArea != null && cfg.showBottomWidgets) {
+                bottomArea.bringToFront()
                 bottomArea.visibility = View.VISIBLE
                 bottomArea.translationY = 0.0f
                 bottomArea.setExpansionFraction(1.0f)
@@ -507,6 +513,9 @@ object LockScreenCoverSheetController {
      */
     fun onShadeReset(container: ViewGroup) {
         try {
+            val cfg = NotificationSheetConfigHolder.sheet
+            if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) return
+
             // Restore stock shade header
             suppressStockShadeHeader(container.rootView, false)
 

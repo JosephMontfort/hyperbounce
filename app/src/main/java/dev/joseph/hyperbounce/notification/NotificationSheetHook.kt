@@ -66,6 +66,9 @@ object NotificationSheetHook {
     private var isUserTouchingShade = false
 
     @Volatile
+    private var touchDownX = 0f
+
+    @Volatile
     private var touchDownY = 0f
 
     @Volatile
@@ -1820,10 +1823,12 @@ object NotificationSheetHook {
         if (!isUnlockedShadeActive) return
         val container = containerRef?.get() ?: return
         val density = container.resources.displayMetrics.density
+        val screenW = container.resources.displayMetrics.widthPixels.toFloat()
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 isUserTouchingShade = true
+                touchDownX = event.rawX
                 touchDownY = event.rawY
             }
             MotionEvent.ACTION_MOVE -> {
@@ -1834,8 +1839,12 @@ object NotificationSheetHook {
                 }
                 if (viewHeight <= 0f) viewHeight = 2400f
 
-                // Instantaneous 1:1 finger tracking during shade pulldown
-                if (!isShadeFullyOpen && touchDownY < 250f * density) {
+                // Instantaneous 1:1 finger tracking during shade pulldown:
+                // Only track when shade is not already open, pulldown originated from top (touchDownY < 200dp),
+                // left/center half of screen (not right side which opens Control Center),
+                // and Control Center is not active!
+                val isRightSidePulldown = touchDownX > screenW * 0.50f
+                if (!isShadeOpen && !isShadeFullyOpen && touchDownY < 200f * density && !isRightSidePulldown && !isControlCenterActive()) {
                     val frac = (event.rawY / viewHeight).coerceIn(0.0f, 1.0f)
                     applyExpansionFraction(frac)
                 }
@@ -1856,7 +1865,7 @@ object NotificationSheetHook {
                     val isClosingGesture = (dy < -20f * density) && (isClockArea || isBottomArea || lastAppliedFraction < 0.85f)
 
                     if (hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen &&
-                        !isLaunchingNotificationActivity && (isClosingGesture || (dy < -25f * density && lastAppliedFraction > 0.05f))
+                        !isLaunchingNotificationActivity && isClosingGesture
                     ) {
                         isClosingMode = true
                         val curSheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)

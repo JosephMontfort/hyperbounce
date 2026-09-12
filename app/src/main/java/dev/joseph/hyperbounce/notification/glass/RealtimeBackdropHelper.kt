@@ -2,11 +2,14 @@ package dev.joseph.hyperbounce.notification.glass
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
+import dev.joseph.hyperbounce.notification.NotificationSheetConfigHolder
 import java.lang.ref.WeakReference
 import java.lang.reflect.Constructor
 import java.lang.reflect.Method
@@ -24,6 +27,7 @@ object RealtimeBackdropHelper {
     private const val TAG = "HyperBounce_Backdrop"
 
     @Volatile private var latestBitmap: Bitmap? = null
+    @Volatile private var latestBlurredBitmap: Bitmap? = null
     @Volatile private var isRefreshing = false
     @Volatile private var refreshSessionId = 0
 
@@ -122,7 +126,37 @@ object RealtimeBackdropHelper {
         return asBitmapMethod?.invoke(buffer) as? Bitmap
     }
 
-    fun getLatestBackdropBitmap(): Bitmap? {
+    private fun updateBitmaps(bmp: Bitmap) {
+        latestBitmap = bmp
+        try {
+            val cfg = NotificationSheetConfigHolder.sheet
+            val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
+            val isDepthActive = cfg.depthWallpaperEnabled && isUnlocked
+            val shouldDrawWallpaper = !isDepthActive && cfg.lockWallpaperEnabled &&
+                    (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
+            if (!isDepthActive && !shouldDrawWallpaper) {
+                latestBlurredBitmap = FastBlur.blur(bmp)
+            } else {
+                latestBlurredBitmap = null
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to blur backdrop bitmap", t)
+        }
+    }
+
+    fun getLatestBackdropBitmap(needBlur: Boolean = false): Bitmap? {
+        if (needBlur) {
+            val blurred = latestBlurredBitmap
+            if (blurred != null && !blurred.isRecycled) return blurred
+            val raw = latestBitmap
+            if (raw != null && !raw.isRecycled) {
+                try {
+                    val b = FastBlur.blur(raw)
+                    latestBlurredBitmap = b
+                    return b
+                } catch (_: Throwable) {}
+            }
+        }
         val bmp = latestBitmap
         return if (bmp != null && !bmp.isRecycled) bmp else null
     }
@@ -133,7 +167,7 @@ object RealtimeBackdropHelper {
             try {
                 val bmp = captureDisplayInternal(appContext)
                 if (bmp != null) {
-                    latestBitmap = bmp
+                    updateBitmaps(bmp)
                     mainHandler.post {
                         onCaptured?.invoke()
                     }
@@ -164,7 +198,7 @@ object RealtimeBackdropHelper {
                     val startTime = System.currentTimeMillis()
                     val bmp = captureDisplayInternal(appContext)
                     if (bmp != null && sessionId == refreshSessionId) {
-                        latestBitmap = bmp
+                        updateBitmaps(bmp)
                         mainHandler.post {
                             if (sessionId == refreshSessionId) {
                                 weakSheet.get()?.postInvalidateOnAnimation()
@@ -196,6 +230,101 @@ object RealtimeBackdropHelper {
         stopLiveRefresh()
         bgExecutor.execute {
             latestBitmap = null
+            latestBlurredBitmap = null
+        }
+    }
+
+    private object FastBlur {
+        fun blur(src: Bitmap, scale: Float = 0.125f, radius: Int = 6): Bitmap {
+            val w = (src.width * scale).toInt().coerceAtLeast(16)
+            val h = (src.height * scale).toInt().coerceAtLeast(16)
+            val small = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(small)
+            val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+            canvas.drawBitmap(src, null, Rect(0, 0, w, h), paint)
+
+            val pixels = IntArray(w * h)
+            small.getPixels(pixels, 0, w, 0, 0, w, h)
+
+            boxBlur(pixels, w, h, radius)
+            boxBlur(pixels, w, h, radius)
+
+            small.setPixels(pixels, 0, w, 0, 0, w, h)
+            return small
+        }
+
+        private fun boxBlur(pixels: IntArray, w: Int, h: Int, r: Int) {
+            val temp = IntArray(w * h)
+            val div = 2 * r + 1
+
+            // Horizontal pass
+            for (y in 0 until h) {
+                val rowOffset = y * w
+                var sumA = 0
+                var sumR = 0
+                var sumG = 0
+                var sumB = 0
+
+                for (i in -r..r) {
+                    val clampedX = i.coerceIn(0, w - 1)
+                    val px = pixels[rowOffset + clampedX]
+                    sumA += (px ushr 24) and 0xff
+                    sumR += (px ushr 16) and 0xff
+                    sumG += (px ushr 8) and 0xff
+                    sumB += px and 0xff
+                }
+
+                for (x in 0 until w) {
+                    temp[rowOffset + x] = ((sumA / div) shl 24) or
+                            ((sumR / div) shl 16) or
+                            ((sumG / div) shl 8) or
+                            (sumB / div)
+
+                    val xRemove = (x - r).coerceIn(0, w - 1)
+                    val xAdd = (x + r + 1).coerceIn(0, w - 1)
+                    val pRem = pixels[rowOffset + xRemove]
+                    val pAdd = pixels[rowOffset + xAdd]
+
+                    sumA += ((pAdd ushr 24) and 0xff) - ((pRem ushr 24) and 0xff)
+                    sumR += ((pAdd ushr 16) and 0xff) - ((pRem ushr 16) and 0xff)
+                    sumG += ((pAdd ushr 8) and 0xff) - ((pRem ushr 8) and 0xff)
+                    sumB += (pAdd and 0xff) - (pRem and 0xff)
+                }
+            }
+
+            // Vertical pass
+            for (x in 0 until w) {
+                var sumA = 0
+                var sumR = 0
+                var sumG = 0
+                var sumB = 0
+
+                for (i in -r..r) {
+                    val clampedY = i.coerceIn(0, h - 1)
+                    val py = temp[clampedY * w + x]
+                    sumA += (py ushr 24) and 0xff
+                    sumR += (py ushr 16) and 0xff
+                    sumG += (py ushr 8) and 0xff
+                    sumB += py and 0xff
+                }
+
+                for (y in 0 until h) {
+                    pixels[y * w + x] = ((sumA / div) shl 24) or
+                            ((sumR / div) shl 16) or
+                            ((sumG / div) shl 8) or
+                            (sumB / div)
+
+                    val yRemove = (y - r).coerceIn(0, h - 1)
+                    val yAdd = (y + r + 1).coerceIn(0, h - 1)
+                    val pRem = temp[yRemove * w + x]
+                    val pAdd = temp[yAdd * w + x]
+
+                    sumA += ((pAdd ushr 24) and 0xff) - ((pRem ushr 24) and 0xff)
+                    sumR += ((pAdd ushr 16) and 0xff) - ((pRem ushr 16) and 0xff)
+                    sumG += ((pAdd ushr 8) and 0xff) - ((pRem ushr 8) and 0xff)
+                    sumB += (pAdd and 0xff) - (pRem and 0xff)
+                }
+            }
         }
     }
 }
