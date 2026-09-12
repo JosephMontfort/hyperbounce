@@ -164,7 +164,7 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
     }
 
     fun setExpansionFraction(fraction: Float) {
-        if (fraction < 0.85f) {
+        if (fraction < 0.78f) {
             visibility = View.GONE
             alpha = 0f
             leftTorchButton.scaleX = 0f
@@ -180,7 +180,21 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
         }
 
         visibility = View.VISIBLE
-        val t = ((fraction - 0.85f) / 0.15f).coerceIn(0f, 1f)
+
+        if (fraction >= 0.92f) {
+            alpha = 1.0f
+            leftTorchButton.scaleX = 1.0f
+            leftTorchButton.scaleY = 1.0f
+            rightCameraButton.scaleX = 1.0f
+            rightCameraButton.scaleY = 1.0f
+            if (!hasFiredHapticDetent) {
+                hasFiredHapticDetent = true
+                performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            }
+            return
+        }
+
+        val t = ((fraction - 0.78f) / 0.14f).coerceIn(0f, 1f)
         alpha = t
 
         // Spring overshoot easing: f(t) = 1 + (t-1)^3 + 0.4*(1-t)*(t-1)
@@ -191,11 +205,6 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
         leftTorchButton.scaleY = springScale
         rightCameraButton.scaleX = springScale
         rightCameraButton.scaleY = springScale
-
-        if (fraction >= 0.98f && !hasFiredHapticDetent) {
-            hasFiredHapticDetent = true
-            performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-        }
     }
 
     private fun toggleTorch() {

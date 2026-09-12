@@ -78,6 +78,9 @@ object LockScreenCoverSheetController {
 
         resolveClockViews(rootView)
 
+        val hasNotif = (lastKnownHasNotification == true)
+        val morphFraction = if (hasNotif) 1.0f else 0.0f
+
         val targetView: ViewGroup? = when (layer) {
             ClockLayer.BACKGROUND -> cachedClockContainerRef?.get()
             ClockLayer.FOREGROUND -> cachedFgClockContainerRef?.get()
@@ -106,13 +109,15 @@ object LockScreenCoverSheetController {
                 try {
                     targetView.visibility = View.VISIBLE
                     targetView.alpha = 1.0f
-                    targetView.translationX = 0.0f
-                    targetView.translationY = 0.0f
-                    targetView.scaleX = 1.0f
-                    targetView.scaleY = 1.0f
+
+                    val clockScale = if (hasNotif) 0.72f else 1.0f
+                    val clockShiftY = if (hasNotif) -24f * density else 0f
 
                     val saveCount = canvas.save()
-                    canvas.translate(0f, translationY)
+                    canvas.translate(0f, translationY + clockShiftY)
+                    if (hasNotif) {
+                        canvas.scale(clockScale, clockScale, viewW / 2f, 40f * density)
+                    }
                     if (alpha < 0.999f) {
                         canvas.saveLayerAlpha(
                             0f, 0f, viewW.toFloat(), viewH.toFloat(),
@@ -146,7 +151,7 @@ object LockScreenCoverSheetController {
                     h = h,
                     density = density,
                     config = clockConfig,
-                    morphFraction = 0.0f,
+                    morphFraction = morphFraction,
                     alpha = alpha,
                     translationY = translationY
                 )
@@ -173,12 +178,19 @@ object LockScreenCoverSheetController {
                 }
             }
             if (headerView != null) {
-                if (isSuppress) {
+                val cfg = NotificationSheetConfigHolder.sheet
+                if (cfg.enabled && cfg.lockScreenAsNotifCenterEnabled) {
+                    // When lock screen as notification center is active, never show stock shade header clock!
                     headerView.alpha = 0.0f
-                    headerView.visibility = View.INVISIBLE
+                    headerView.visibility = View.GONE
                 } else {
-                    headerView.alpha = 1.0f
-                    headerView.visibility = View.VISIBLE
+                    if (isSuppress) {
+                        headerView.alpha = 0.0f
+                        headerView.visibility = View.INVISIBLE
+                    } else {
+                        headerView.alpha = 1.0f
+                        headerView.visibility = View.VISIBLE
+                    }
                 }
             }
         } catch (t: Throwable) {
@@ -253,6 +265,9 @@ object LockScreenCoverSheetController {
                 val child = nssl.getChildAt(i) ?: continue
                 if (child.visibility != View.GONE) {
                     val name = child.javaClass.simpleName
+                    if (name.contains("Empty") || name.contains("Footer") || name.contains("Shelf") || name.contains("SectionHeader")) {
+                        continue
+                    }
                     if (name.contains("NotificationRow") || name.contains("MediaHeader") || name.contains("ZenMode")) {
                         count++
                     }
@@ -267,21 +282,20 @@ object LockScreenCoverSheetController {
      */
     fun getEffectiveClockBottom(container: ViewGroup?): Int {
         if (container == null) return 0
+        val density = container.resources.displayMetrics.density
+        val hasNotif = (lastKnownHasNotification == true)
         try {
             val clockContainer = getAuthenticClockContainer(container.rootView)
             if (clockContainer != null) {
                 val getClockBottomMethod = clockContainer.javaClass.getMethod("getClockBottom")
                 val bottom = (getClockBottomMethod.invoke(clockContainer) as? Number)?.toInt() ?: 0
-                if (bottom > 0) return bottom
-
-                if (clockContainer.height > 0) {
-                    return clockContainer.height
+                if (bottom in (80f * density).toInt()..(450f * density).toInt()) {
+                    return if (hasNotif) kotlin.math.min(bottom, (170f * density).toInt()) else bottom
                 }
             }
         } catch (_: Throwable) {}
 
-        val density = container.resources.displayMetrics.density
-        return if (lastKnownHasNotification == true) (220f * density).toInt() else (420f * density).toInt()
+        return if (hasNotif) (145f * density).toInt() else (320f * density).toInt()
     }
 
     /**
@@ -291,8 +305,8 @@ object LockScreenCoverSheetController {
      * 3. Calls AnimationHelper.doAnimationToNotification(hasNotif, true) to trigger
      *    the authentic Xiaomi lockscreen Folme morph animation (shrink when notifications exist,
      *    expand to full size when empty).
-     * 4. Dynamically adjusts NSSL top padding and clipToPadding so notifications flow
-     *    neatly beneath the clock with zero overlap.
+     * 4. Dynamically adjusts NSSL topMargin and bottomMargin so notifications flow
+     *    strictly beneath the clock and above the bottom affordances with proper clipping.
      */
     fun syncClockWithNotifications(container: ViewGroup?) {
         if (container == null) return
@@ -306,6 +320,9 @@ object LockScreenCoverSheetController {
             val visibleCount = getVisibleNotificationCount(nssl)
             val hasNotif = visibleCount > 0
 
+            val notifChanged = (lastKnownHasNotification != hasNotif)
+            lastKnownHasNotification = hasNotif
+
             val clockContainer = getAuthenticClockContainer(container.rootView)
             if (clockContainer != null) {
                 try {
@@ -313,8 +330,7 @@ object LockScreenCoverSheetController {
                     hasNotifField.isAccessible = true
                     val currentInContainer = hasNotifField.getBoolean(clockContainer)
 
-                    if (lastKnownHasNotification != hasNotif || currentInContainer != hasNotif) {
-                        lastKnownHasNotification = hasNotif
+                    if (notifChanged || currentInContainer != hasNotif) {
                         hasNotifField.setBoolean(clockContainer, hasNotif)
 
                         val animHelperField = clockContainer.javaClass.getDeclaredField("mAnimationHelper")
@@ -329,6 +345,23 @@ object LockScreenCoverSheetController {
                             doAnimMethod.invoke(animHelper, hasNotif, true)
                             Log.d(TAG, "Triggered authentic doAnimationToNotification(hasNotif=$hasNotif)")
                         }
+
+                        // Also update clock view full time state directly
+                        try {
+                            val controllerField = clockContainer.javaClass.getDeclaredField("mMiuiClockController")
+                            controllerField.isAccessible = true
+                            val controller = controllerField.get(clockContainer)
+                            if (controller != null) {
+                                val clockViewField = controller.javaClass.getDeclaredField("mClockView")
+                                clockViewField.isAccessible = true
+                                val clockView = clockViewField.get(controller)
+                                if (clockView != null) {
+                                    val setShowFullTimeMethod = clockView.javaClass.getMethod("setShowFullTime", Boolean::class.javaPrimitiveType)
+                                    setShowFullTimeMethod.invoke(clockView, hasNotif)
+                                }
+                            }
+                        } catch (_: Throwable) {}
+
                         clockContainer.requestLayout()
                     }
                 } catch (t: Throwable) {
@@ -336,23 +369,35 @@ object LockScreenCoverSheetController {
                 }
             }
 
-            // Adjust NSSL layout & top padding so notification cards do not collide with clock
+            // Adjust NSSL layout & margins so notification cards do not collide with clock
             if (nssl != null) {
-                val clockBottom = getEffectiveClockBottom(container)
-                val density = container.resources.displayMetrics.density
-                val targetPaddingTop = if (hasNotif && clockBottom > 0) {
-                    clockBottom + (16f * density).toInt()
-                } else if (hasNotif) {
-                    (220f * density).toInt()
-                } else {
-                    (420f * density).toInt()
-                }
-                val bottomClearance = ((cfg.pillBottomMargin + cfg.pillHeight + 24f) * density).toInt()
+                val lp = nssl.layoutParams as? ViewGroup.MarginLayoutParams
+                if (lp != null) {
+                    val density = container.resources.displayMetrics.density
+                    val clockBottom = getEffectiveClockBottom(container)
+                    val targetTop = clockBottom + (12f * density).toInt()
+                    val targetBottom = (120f * density).toInt()
 
-                if (nssl.paddingTop != targetPaddingTop || nssl.paddingBottom != bottomClearance) {
-                    nssl.setPadding(nssl.paddingLeft, targetPaddingTop, nssl.paddingRight, bottomClearance)
+                    var changed = false
+                    if (lp.topMargin != targetTop) {
+                        lp.topMargin = targetTop
+                        changed = true
+                    }
+                    if (lp.bottomMargin != targetBottom) {
+                        lp.bottomMargin = targetBottom
+                        changed = true
+                    }
+                    if (changed) {
+                        nssl.layoutParams = lp
+                        nssl.requestLayout()
+                    }
+                    nssl.clipToPadding = true
+                    nssl.clipChildren = true
+                    (nssl.parent as? ViewGroup)?.clipChildren = true
+                    if (nssl.paddingTop != 0 || nssl.paddingBottom != 0) {
+                        nssl.setPadding(nssl.paddingLeft, 0, nssl.paddingRight, 0)
+                    }
                 }
-                nssl.clipToPadding = false
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Error in syncClockWithNotifications", t)
