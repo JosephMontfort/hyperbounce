@@ -1,6 +1,7 @@
 package dev.joseph.hyperbounce.ui.screens
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -16,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.joseph.hyperbounce.notification.glass.CustomWallpaperHelper
 import dev.joseph.hyperbounce.notification.glass.DepthWallpaperHelper
 import dev.joseph.hyperbounce.ui.components.AppGridIcon
 import dev.joseph.hyperbounce.ui.components.GlassCard
@@ -30,6 +32,7 @@ import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
 import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.components.TrashIcon
+import dev.joseph.hyperbounce.ui.components.WallpaperCropperDialog
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import java.util.Locale
@@ -43,11 +46,52 @@ fun NotificationCenterSheetScreen(
 ) {
     val sheet = repository.notificationSheet
     val context = androidx.compose.ui.platform.LocalContext.current
-    var isScanning by remember { mutableStateOf(false) }
     var hasCustomSubject by remember { mutableStateOf(DepthWallpaperHelper.hasCustomSubject(context) || sheet.depthCustomSubject) }
+    var hasCustomWallpaper by remember { mutableStateOf(CustomWallpaperHelper.hasCustomWallpaper(context)) }
+    var croppingBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(sheet.depthWallpaperEnabled, sheet.depthCustomSubject) {
         hasCustomSubject = DepthWallpaperHelper.hasCustomSubject(context) || sheet.depthCustomSubject
+    }
+    LaunchedEffect(sheet.customWallpaperEnabled) {
+        hasCustomWallpaper = CustomWallpaperHelper.hasCustomWallpaper(context)
+    }
+
+    val customWallpaperPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val bmp = CustomWallpaperHelper.decodeBitmapFromUri(context, uri)
+            if (bmp != null) {
+                croppingBitmap = bmp
+            } else {
+                Toast.makeText(context, "Failed to load image", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    croppingBitmap?.let { bmp ->
+        WallpaperCropperDialog(
+            sourceBitmap = bmp,
+            colors = colors,
+            backdrop = backdrop,
+            onDismiss = { croppingBitmap = null },
+            onCropConfirmed = { cropped ->
+                croppingBitmap = null
+                val saved = CustomWallpaperHelper.saveCustomWallpaper(context, cropped)
+                if (saved) {
+                    hasCustomWallpaper = true
+                    sheet.setCustomWallpaperEnabled(true)
+                    Toast.makeText(context, "Custom wallpaper set successfully", Toast.LENGTH_SHORT).show()
+                    try {
+                        val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
+                        context.sendBroadcast(intent)
+                    } catch (_: Throwable) {}
+                } else {
+                    Toast.makeText(context, "Failed to save wallpaper", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
     }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -125,20 +169,66 @@ fun NotificationCenterSheetScreen(
                         enabled = sheet.enabled && sheet.lockWallpaperEnabled
                     )
                 }
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "Custom Background Wallpaper",
+                    subtitle = if (sheet.customWallpaperEnabled) "Custom cropped wallpaper displayed behind notification sheet" else "Disabled (Uses lockscreen wallpaper or glass blur)",
+                    colors = colors,
+                    iconTint = colors.accentBlue,
+                    backdrop = backdrop,
+                    checked = sheet.customWallpaperEnabled,
+                    onCheckedChange = sheet::setCustomWallpaperEnabled,
+                    icon = { ImageIcon(color = Color.White, size = 15.dp) },
+                    enabled = sheet.enabled
+                )
+                if (sheet.customWallpaperEnabled) {
+                    RowDivider(colors.separator)
+                    SettingsClickableRow(
+                        title = if (hasCustomWallpaper) "Change & Crop Wallpaper" else "Choose & Crop Wallpaper",
+                        subtitle = if (hasCustomWallpaper) "Custom wallpaper active. Tap to choose a new one and crop" else "Pick an image and crop to match screen aspect ratio",
+                        colors = colors,
+                        iconTint = colors.accentBlue,
+                        onClick = {
+                            customWallpaperPickerLauncher.launch("image/*")
+                        },
+                        icon = { ImageIcon(color = Color.White, size = 15.dp) }
+                    )
+                    if (hasCustomWallpaper) {
+                        RowDivider(colors.separator)
+                        SettingsClickableRow(
+                            title = "Remove Custom Wallpaper",
+                            subtitle = "Revert to lockscreen wallpaper background",
+                            colors = colors,
+                            iconTint = colors.accentRed,
+                            titleColor = colors.accentRed,
+                            onClick = {
+                                CustomWallpaperHelper.clearCustomWallpaper(context)
+                                hasCustomWallpaper = false
+                                sheet.setCustomWallpaperEnabled(false)
+                                Toast.makeText(context, "Custom wallpaper removed", Toast.LENGTH_SHORT).show()
+                                try {
+                                    val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
+                                    context.sendBroadcast(intent)
+                                } catch (_: Throwable) {}
+                            },
+                            icon = { TrashIcon(color = Color.White, size = 15.dp) }
+                        )
+                    }
+                }
             }
             SectionFooter(
-                "Attaches your crisp, unblurred lock screen wallpaper to the notification container sheet. Automatically disabled in landscape orientation to prevent distortion.",
+                "Attaches your lock screen or custom cropped wallpaper to the notification container sheet. Automatically disabled in landscape orientation to prevent distortion.",
                 colors
             )
         }
 
-        if (sheet.lockWallpaperEnabled) {
+        if (sheet.lockWallpaperEnabled || sheet.customWallpaperEnabled) {
             item {
                 SectionHeader("iOS 27 Depth Wallpaper", colors)
                 GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                     SettingsToggleRow(
                         title = "iOS 27 Depth Wallpaper Effect",
-                        subtitle = if (sheet.depthWallpaperEnabled) "Static subject revealed over 100% transparent unblurred background as shade descends" else "Disabled by default",
+                        subtitle = if (sheet.depthWallpaperEnabled) "Static subject revealed over transparent background as shade descends" else "Disabled by default",
                         colors = colors,
                         iconTint = colors.accentPurple,
                         backdrop = backdrop,
@@ -148,7 +238,7 @@ fun NotificationCenterSheetScreen(
                             hasCustomSubject = DepthWallpaperHelper.hasCustomSubject(context) || sheet.depthCustomSubject
                         },
                         icon = { LockIcon(color = Color.White, size = 15.dp) },
-                        enabled = sheet.enabled && sheet.lockWallpaperEnabled
+                        enabled = sheet.enabled && (sheet.lockWallpaperEnabled || sheet.customWallpaperEnabled)
                     )
                     if (sheet.depthWallpaperEnabled) {
                         RowDivider(colors.separator)
@@ -166,7 +256,7 @@ fun NotificationCenterSheetScreen(
                             RowDivider(colors.separator)
                             SettingsClickableRow(
                                 title = "Remove Custom Subject",
-                                subtitle = "Revert to auto-segmentation of lockscreen wallpaper",
+                                subtitle = "Clear custom cutout subject",
                                 colors = colors,
                                 iconTint = colors.accentRed,
                                 titleColor = colors.accentRed,
@@ -174,7 +264,7 @@ fun NotificationCenterSheetScreen(
                                     DepthWallpaperHelper.clearCustomSubject(context) { success ->
                                         hasCustomSubject = false
                                         sheet.setDepthCustomSubject(false)
-                                        Toast.makeText(context, "Reverted to lockscreen wallpaper segmentation", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Custom subject removed", Toast.LENGTH_SHORT).show()
                                         try {
                                             val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
                                             context.sendBroadcast(intent)
@@ -184,37 +274,10 @@ fun NotificationCenterSheetScreen(
                                 icon = { TrashIcon(color = Color.White, size = 15.dp) }
                             )
                         }
-                        RowDivider(colors.separator)
-                        SettingsClickableRow(
-                            title = if (isScanning) "Scanning Depth Subject..." else "Re-scan Wallpaper Subject",
-                            subtitle = if (isScanning) "Extracting subject using on-device ML segmentation..." else "Re-runs MediaPipe segmentation on active lockscreen wallpaper",
-                            colors = colors,
-                            iconTint = colors.accentPurple,
-                            onClick = {
-                                if (isScanning) return@SettingsClickableRow
-                                isScanning = true
-                                Toast.makeText(context, "Scanning lockscreen wallpaper depth...", Toast.LENGTH_SHORT).show()
-                                DepthWallpaperHelper.triggerAsyncSubjectGeneration(context, forceRefresh = true) { bmp ->
-                                    isScanning = false
-                                    if (bmp != null) {
-                                        hasCustomSubject = false
-                                        sheet.setDepthCustomSubject(false)
-                                        Toast.makeText(context, "Depth subject extracted successfully", Toast.LENGTH_SHORT).show()
-                                        try {
-                                            val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
-                                            context.sendBroadcast(intent)
-                                        } catch (_: Throwable) {}
-                                    } else {
-                                        Toast.makeText(context, "Failed to detect subject in wallpaper", Toast.LENGTH_LONG).show()
-                                    }
-                                }
-                            },
-                            icon = { ResetArrowIcon(color = Color.White, size = 15.dp) }
-                        )
                     }
                 }
                 SectionFooter(
-                    "Isolates foreground subject from your lock screen wallpaper using on-device ML segmentation, or uses your custom transparent cutout image. While pulling down the shade, the background is 100% transparent with zero blur, and the subject remains fixed in place, clipped at the descending sheet's edge.",
+                    "Uses your custom transparent PNG cutout image (with background removed). While pulling down the shade, the background is transparent and the subject remains fixed in place, occluding the clock numbers and clipped at the descending sheet's edge.",
                     colors
                 )
             }
@@ -231,7 +294,7 @@ fun NotificationCenterSheetScreen(
                         checked = sheet.lockScreenAsNotifCenterEnabled,
                         onCheckedChange = sheet::setLockScreenAsNotifCenterEnabled,
                         icon = { LockIcon(color = Color.White, size = 15.dp) },
-                        enabled = sheet.enabled && sheet.lockWallpaperEnabled
+                        enabled = sheet.enabled && (sheet.lockWallpaperEnabled || sheet.customWallpaperEnabled)
                     )
                     if (sheet.lockScreenAsNotifCenterEnabled) {
                         RowDivider(colors.separator)
@@ -244,7 +307,7 @@ fun NotificationCenterSheetScreen(
                             checked = sheet.showBottomWidgets,
                             onCheckedChange = sheet::setShowBottomWidgets,
                             icon = { SlidersIcon(color = Color.White, size = 15.dp) },
-                            enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.lockScreenAsNotifCenterEnabled
+                            enabled = sheet.enabled && (sheet.lockWallpaperEnabled || sheet.customWallpaperEnabled) && sheet.lockScreenAsNotifCenterEnabled
                         )
                         RowDivider(colors.separator)
                         SettingsToggleRow(
@@ -256,7 +319,7 @@ fun NotificationCenterSheetScreen(
                             checked = sheet.clockMorphOnNotifications,
                             onCheckedChange = sheet::setClockMorphOnNotifications,
                             icon = { AppGridIcon(color = Color.White, size = 15.dp) },
-                            enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.lockScreenAsNotifCenterEnabled
+                            enabled = sheet.enabled && (sheet.lockWallpaperEnabled || sheet.customWallpaperEnabled) && sheet.lockScreenAsNotifCenterEnabled
                         )
                     }
                 }

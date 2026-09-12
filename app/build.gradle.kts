@@ -94,8 +94,5 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime:2.9.0")
     implementation("androidx.savedstate:savedstate:1.3.0")
-
-    // Google ML Kit Selfie / Depth Segmentation (bundled offline MediaPipe model)
-    implementation("com.google.mlkit:segmentation-selfie:16.0.0-beta6")
-    implementation("com.google.android.gms:play-services-tasks:18.2.0")
 }
+

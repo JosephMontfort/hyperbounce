@@ -64,6 +64,8 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
     private val subjectPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val subjectDstRect = android.graphics.Rect()
+    private val customWpPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val customWpDstRect = RectF()
 
     init {
         setWillNotDraw(false)
@@ -108,7 +110,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         // Draw attached unblurred lock screen wallpaper background if enabled
         val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || w > h
         val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
-        val isDepthActive = cfg.depthWallpaperEnabled && !isLandscape && isUnlocked
+        val isDepthActive = cfg.isDepthActive && !isLandscape && isUnlocked
         val subjectBmp = if (isDepthActive) DepthWallpaperHelper.getSubjectBitmap(context) else null
 
         val isClosing = isClosingMode || isClosingFromFullOpen
@@ -147,7 +149,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
             }
         }
 
-        val shouldDrawWallpaper = !isDepthActive && cfg.lockWallpaperEnabled && !isLandscape &&
+        val shouldDrawWallpaper = !isDepthActive && cfg.isWallpaperActive && !isLandscape &&
                 (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
         val shouldBlurBackdrop = !isDepthActive && !shouldDrawWallpaper
 
@@ -229,7 +231,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
         val density = resources.displayMetrics.density
         val cfg = NotificationSheetConfigHolder.sheet
-        val isLockScreenActive = cfg.enabled && cfg.lockScreenAsNotifCenterEnabled && !isLandscape
+        val isLockScreenActive = cfg.isLockScreenActive && !isLandscape
 
         val isClosing = isClosingMode || isClosingFromFullOpen
 
@@ -248,12 +250,23 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
             val drawWpAlpha = if (isClosing) 1f else fadeAlpha
             if (drawWpAlpha > 0f) {
-                val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
-                if (unblurredWp != null) {
-                    val wpY = if (isClosing) 0 else (-translationY).toInt()
-                    unblurredWp.setBounds(0, wpY, w, wpY + h)
-                    unblurredWp.alpha = (drawWpAlpha * 255).toInt()
-                    unblurredWp.draw(targetCanvas)
+                var drawn = false
+                if (cfg.customWallpaperEnabled) {
+                    val customBmp = CustomWallpaperHelper.getCustomWallpaperBitmap(context)
+                    if (customBmp != null && !customBmp.isRecycled) {
+                        val wpY = if (isClosing) 0 else (-translationY).toInt()
+                        drawCenterCropBitmap(targetCanvas, customBmp, 0, wpY, w, h, (drawWpAlpha * 255).toInt())
+                        drawn = true
+                    }
+                }
+                if (!drawn) {
+                    val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
+                    if (unblurredWp != null) {
+                        val wpY = if (isClosing) 0 else (-translationY).toInt()
+                        unblurredWp.setBounds(0, wpY, w, wpY + h)
+                        unblurredWp.alpha = (drawWpAlpha * 255).toInt()
+                        unblurredWp.draw(targetCanvas)
+                    }
                 }
             }
 
@@ -317,57 +330,82 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
             targetCanvas.restoreToCount(count)
         } else if (shouldDrawWallpaper || isLockScreenActive) {
-            val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
-            if (unblurredWp != null) {
-                val count = targetCanvas.save()
-                sheetClipPath.reset()
-                val radii = floatArrayOf(
-                    0f, 0f,
-                    0f, 0f,
-                    cornerRadius, cornerRadius,
-                    cornerRadius, cornerRadius
-                )
-                boundsRect.set(0f, 0f, w.toFloat(), h.toFloat())
-                sheetClipPath.addRoundRect(boundsRect, radii, android.graphics.Path.Direction.CW)
-                targetCanvas.clipPath(sheetClipPath)
+            val count = targetCanvas.save()
+            sheetClipPath.reset()
+            val radii = floatArrayOf(
+                0f, 0f,
+                0f, 0f,
+                cornerRadius, cornerRadius,
+                cornerRadius, cornerRadius
+            )
+            boundsRect.set(0f, 0f, w.toFloat(), h.toFloat())
+            sheetClipPath.addRoundRect(boundsRect, radii, android.graphics.Path.Direction.CW)
+            targetCanvas.clipPath(sheetClipPath)
 
-                unblurredWp.setBounds(0, 0, w, h)
-                unblurredWp.alpha = 255
-                unblurredWp.draw(targetCanvas)
-
-                // Replicated Lock Screen Clock
-                if (isLockScreenActive) {
-                    val clockAlpha = if (isClosing) 1f else ((expansionFraction - 0.10f) / 0.70f).coerceIn(0f, 1f)
-                    val clockY = 0f
-                    LockScreenCoverSheetController.drawClock(
-                        canvas = targetCanvas,
-                        rootView = this.rootView,
-                        context = context,
-                        w = w,
-                        h = h,
-                        density = density,
-                        layer = LockScreenCoverSheetController.ClockLayer.BACKGROUND,
-                        alpha = clockAlpha,
-                        translationY = clockY
-                    )
-                    LockScreenCoverSheetController.drawClock(
-                        canvas = targetCanvas,
-                        rootView = this.rootView,
-                        context = context,
-                        w = w,
-                        h = h,
-                        density = density,
-                        layer = LockScreenCoverSheetController.ClockLayer.FOREGROUND,
-                        alpha = clockAlpha,
-                        translationY = clockY
-                    )
+            var wallpaperDrawn = false
+            if (cfg.customWallpaperEnabled) {
+                val customBmp = CustomWallpaperHelper.getCustomWallpaperBitmap(context)
+                if (customBmp != null && !customBmp.isRecycled) {
+                    drawCenterCropBitmap(targetCanvas, customBmp, 0, 0, w, h, 255)
+                    wallpaperDrawn = true
                 }
-
-                // Subtle dark scrim (20% black) so notification text & icons remain crystal clear against bright wallpapers
-                targetCanvas.drawColor(0x33000000.toInt())
-                targetCanvas.restoreToCount(count)
             }
+            if (!wallpaperDrawn) {
+                val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
+                if (unblurredWp != null) {
+                    unblurredWp.setBounds(0, 0, w, h)
+                    unblurredWp.alpha = 255
+                    unblurredWp.draw(targetCanvas)
+                    wallpaperDrawn = true
+                }
+            }
+
+            // Replicated Lock Screen Clock
+            if (isLockScreenActive) {
+                val clockAlpha = if (isClosing) 1f else ((expansionFraction - 0.10f) / 0.70f).coerceIn(0f, 1f)
+                val clockY = 0f
+                LockScreenCoverSheetController.drawClock(
+                    canvas = targetCanvas,
+                    rootView = this.rootView,
+                    context = context,
+                    w = w,
+                    h = h,
+                    density = density,
+                    layer = LockScreenCoverSheetController.ClockLayer.BACKGROUND,
+                    alpha = clockAlpha,
+                    translationY = clockY
+                )
+                LockScreenCoverSheetController.drawClock(
+                    canvas = targetCanvas,
+                    rootView = this.rootView,
+                    context = context,
+                    w = w,
+                    h = h,
+                    density = density,
+                    layer = LockScreenCoverSheetController.ClockLayer.FOREGROUND,
+                    alpha = clockAlpha,
+                    translationY = clockY
+                )
+            }
+
+            // Subtle dark scrim (20% black) so notification text & icons remain crystal clear against bright wallpapers
+            targetCanvas.drawColor(0x33000000.toInt())
+            targetCanvas.restoreToCount(count)
         }
+    }
+
+    private fun drawCenterCropBitmap(canvas: Canvas, bmp: Bitmap, x: Int, y: Int, dstW: Int, dstH: Int, alpha: Int) {
+        val bmpW = bmp.width.toFloat()
+        val bmpH = bmp.height.toFloat()
+        if (bmpW <= 0 || bmpH <= 0) return
+        val scale = kotlin.math.max(dstW.toFloat() / bmpW, dstH.toFloat() / bmpH)
+        val scaledW = bmpW * scale
+        val scaledH = bmpH * scale
+        val left = x + (dstW - scaledW) / 2f
+        val top = y + (dstH - scaledH) / 2f
+        customWpPaint.alpha = alpha.coerceIn(0, 255)
+        customWpDstRect.set(left, top, left + scaledW, top + scaledH)
+        canvas.drawBitmap(bmp, null, customWpDstRect, customWpPaint)
     }
 
     private fun drawFallbackBorder(canvas: Canvas, w: Float, h: Float, radius: Float) {
@@ -394,7 +432,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         LockScreenWallpaperHelper.addUnblurredWallpaperListener(wallpaperLoadListener)
         LockScreenWallpaperHelper.triggerAsyncUnblurredWallpaperLoad(context)
         DepthWallpaperHelper.addSubjectListener(depthSubjectListener)
-        if (cfg.depthWallpaperEnabled) {
+        if (cfg.isDepthActive) {
             DepthWallpaperHelper.triggerAsyncSubjectGeneration(context)
         }
         if (cfg.glassEffectsEnabled) {
@@ -406,7 +444,6 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         super.onDetachedFromWindow()
         LockScreenWallpaperHelper.removeUnblurredWallpaperListener(wallpaperLoadListener)
         DepthWallpaperHelper.removeSubjectListener(depthSubjectListener)
-        RealtimeBackdropHelper.stopLiveRefresh()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             renderer?.release()
         }

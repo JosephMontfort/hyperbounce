@@ -120,6 +120,19 @@ class ConfigProvider : ContentProvider() {
                 } catch (_: Throwable) {}
                 return Bundle()
             }
+            "hasCustomWallpaper" -> {
+                val b = Bundle()
+                val f = File(ctx.filesDir, "custom_notification_wallpaper.png")
+                b.putBoolean("hasCustom", f.exists() && f.length() > 0)
+                return b
+            }
+            "clearCustomWallpaper" -> {
+                try {
+                    val customWp = File(ctx.filesDir, "custom_notification_wallpaper.png")
+                    if (customWp.exists()) customWp.delete()
+                } catch (_: Throwable) {}
+                return Bundle()
+            }
         }
         return null
     }
@@ -131,6 +144,7 @@ class ConfigProvider : ContentProvider() {
             "lock_depth_subject.png",
             "custom_depth_subject.png",
             "segmented_depth_subject.png",
+            "custom_notification_wallpaper.png",
             "cc_layout.json"
         )
         if (segment in allowedFiles) {

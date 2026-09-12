@@ -29,6 +29,7 @@ object LockScreenCoverSheetController {
     private var cachedClockContainerRef: WeakReference<ViewGroup>? = null
     private var cachedFgClockContainerRef: WeakReference<ViewGroup>? = null
     private var cachedHeaderViewRef: WeakReference<View>? = null
+    private var isHeaderSuppressedByUs = false
 
     @Volatile
     var currentMorphFraction: Float = 0f
@@ -108,7 +109,7 @@ object LockScreenCoverSheetController {
         if (isLandscape) return
 
         val cfg = NotificationSheetConfigHolder.sheet
-        if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled || alpha <= 0.01f) return
+        if (!cfg.isLockScreenActive || alpha <= 0.01f) return
 
         resolveClockViews(rootView)
 
@@ -235,19 +236,28 @@ object LockScreenCoverSheetController {
                 // On lockscreen, normal_notification_header_view MUST ALWAYS be hidden!
                 headerView?.alpha = 0.0f
                 headerView?.visibility = View.GONE
+                isHeaderSuppressedByUs = false
                 return
             }
 
-            if (isLandscape || !cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) {
-                // In landscape mode or when feature is disabled, let stock Xiaomi manage it when unlocked
-                headerView?.alpha = 1.0f
-                headerView?.visibility = View.VISIBLE
+            if (!cfg.isLockScreenActive || isLandscape) {
+                // When feature is disabled or in landscape, only restore if we previously suppressed it!
+                if (isHeaderSuppressedByUs) {
+                    headerView?.alpha = 1.0f
+                    isHeaderSuppressedByUs = false
+                }
                 return
             }
 
             if (headerView != null) {
-                headerView.alpha = 0.0f
-                headerView.visibility = View.GONE
+                if (isSuppress) {
+                    headerView.alpha = 0.0f
+                    headerView.visibility = View.GONE
+                    isHeaderSuppressedByUs = true
+                } else if (isHeaderSuppressedByUs) {
+                    headerView.alpha = 1.0f
+                    isHeaderSuppressedByUs = false
+                }
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Error suppressing stock shade header", t)
@@ -267,7 +277,7 @@ object LockScreenCoverSheetController {
             }
 
             val cfg = NotificationSheetConfigHolder.sheet
-            if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled || !cfg.showBottomWidgets) {
+            if (!cfg.isLockScreenActive || !cfg.showBottomWidgets) {
                 bottomArea?.visibility = View.GONE
                 return
             }
@@ -427,7 +437,7 @@ object LockScreenCoverSheetController {
         if (isLandscape) return
 
         val cfg = NotificationSheetConfigHolder.sheet
-        if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) return
+        if (!cfg.isLockScreenActive) return
 
         try {
             val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
@@ -527,15 +537,12 @@ object LockScreenCoverSheetController {
                 return
             }
             val cfg = NotificationSheetConfigHolder.sheet
-            if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) return
+            if (!cfg.isLockScreenActive) return
 
             // 1. Suppress stock shade header when pulling down
             suppressStockShadeHeader(container.rootView, fraction > 0.015f)
 
-            // 2. Synchronize authentic lockscreen clock with notifications
-            syncClockWithNotifications(container)
-
-            // 3. Ensure bottom affordances injected and tracked
+            // 2. Ensure bottom affordances injected and tracked
             ensureBottomAffordancesInjected(container)
             val bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
             if (bottomArea != null) {
@@ -563,7 +570,7 @@ object LockScreenCoverSheetController {
                 return
             }
             val cfg = NotificationSheetConfigHolder.sheet
-            if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) return
+            if (!cfg.isLockScreenActive) return
 
             suppressStockShadeHeader(container.rootView, true)
             syncClockWithNotifications(container)
@@ -588,9 +595,6 @@ object LockScreenCoverSheetController {
             currentMorphFraction = 0f
             targetMorphFraction = 0f
             morphAnimator?.cancel()
-
-            val cfg = NotificationSheetConfigHolder.sheet
-            if (!cfg.enabled || !cfg.lockScreenAsNotifCenterEnabled) return
 
             // Restore stock shade header
             suppressStockShadeHeader(container.rootView, false)

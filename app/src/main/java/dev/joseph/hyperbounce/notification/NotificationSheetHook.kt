@@ -356,20 +356,17 @@ object NotificationSheetHook {
             sheet?.postInvalidateOnAnimation()
             pill?.visibility = View.VISIBLE
             pill?.translationY = 0.0f
-            if (cfg.lockScreenAsNotifCenterEnabled) {
+            if (cfg.isLockScreenActive) {
                 LockScreenCoverSheetController.onShadeFullyOpened(container)
             } else {
                 LockScreenCoverSheetController.onShadeReset(container)
-            }
-            if (cfg.depthWallpaperEnabled && sheet != null) {
-                RealtimeBackdropHelper.startLiveRefresh(container.context, sheet)
             }
         }
     }
 
     private fun suppressNotificationBlur() {
         val cfg = NotificationSheetConfigHolder.sheet
-        if (cfg.enabled && cfg.depthWallpaperEnabled && currentStatusBarState == 0 && !isControlCenterActive()) {
+        if (cfg.isDepthActive && currentStatusBarState == 0 && !isControlCenterActive()) {
             val anim = blurAnimatorRef?.get() ?: return
             try {
                 for (m in anim.javaClass.declaredMethods) {
@@ -511,9 +508,24 @@ object NotificationSheetHook {
                             }
                         })
                     }
+                    "getSwitchable" -> {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val cfg = NotificationSheetConfigHolder.sheet
+                                if (cfg.isLockScreenActive && isUnlockedShadeActive) {
+                                    return false
+                                }
+                                return chain.proceed()
+                            }
+                        })
+                    }
                     "switchToControlCenter" -> {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val cfg = NotificationSheetConfigHolder.sheet
+                                if (cfg.isLockScreenActive && isUnlockedShadeActive) {
+                                    return null
+                                }
                                 isControlCenterExpanded = true
                                 isShadeSwitching = true
                                 isShadeSwitchingToControlCenter = true
@@ -551,6 +563,26 @@ object NotificationSheetHook {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook ShadeSwitchControllerImpl", t)
+        }
+
+        // 1b. Hook NotificationShadeWrapper.getSwitchable
+        try {
+            val nswClass = Class.forName("com.miui.systemui.shade.NotificationShadeWrapper", false, classLoader)
+            for (m in nswClass.declaredMethods) {
+                if (m.name == "getSwitchable") {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val cfg = NotificationSheetConfigHolder.sheet
+                            if (cfg.isLockScreenActive && isUnlockedShadeActive) {
+                                return false
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook NotificationShadeWrapper.getSwitchable", t)
         }
 
         // 2. Hook ControlCenterImpl
@@ -763,11 +795,7 @@ object NotificationSheetHook {
             }
 
             val cfg = NotificationSheetConfigHolder.sheet
-            val isImageBgActive = cfg.enabled && (
-                cfg.lockScreenAsNotifCenterEnabled ||
-                cfg.lockWallpaperEnabled ||
-                cfg.depthWallpaperEnabled
-            )
+            val isImageBgActive = cfg.isWallpaperActive
             if (isImageBgActive) {
                 container.isClickable = false
             }
@@ -968,23 +996,25 @@ object NotificationSheetHook {
                     when (key) {
                         "notif_sheet_enabled" -> cfg.enabled = intent.getBooleanExtra("value_boolean", cfg.enabled)
                         "notif_sheet_lock_wallpaper_enabled" -> cfg.lockWallpaperEnabled = intent.getBooleanExtra("value_boolean", cfg.lockWallpaperEnabled)
+                        "notif_sheet_custom_wallpaper_enabled" -> {
+                            cfg.customWallpaperEnabled = intent.getBooleanExtra("value_boolean", cfg.customWallpaperEnabled)
+                            CustomWallpaperHelper.invalidateCache()
+                        }
                         "notif_sheet_lock_wallpaper_homescreen_only" -> cfg.lockWallpaperHomescreenOnly = intent.getBooleanExtra("value_boolean", cfg.lockWallpaperHomescreenOnly)
                         "notif_sheet_depth_wallpaper_enabled" -> {
                             cfg.depthWallpaperEnabled = intent.getBooleanExtra("value_boolean", cfg.depthWallpaperEnabled)
-                            if (cfg.depthWallpaperEnabled) {
-                                if (cfg.depthCustomSubject || DepthWallpaperHelper.hasCustomSubject(targetCtx)) {
-                                    Log.d(TAG, "Preserving existing custom depth subject")
-                                } else {
-                                    DepthWallpaperHelper.triggerAsyncSubjectGeneration(targetCtx)
-                                }
+                            if (cfg.isDepthActive) {
+                                DepthWallpaperHelper.triggerAsyncSubjectGeneration(targetCtx)
                             }
                         }
                         "notif_sheet_depth_custom_subject" -> {
                             cfg.depthCustomSubject = intent.getBooleanExtra("value_boolean", cfg.depthCustomSubject)
                             DepthWallpaperHelper.clearCache(targetCtx, forceClearAll = !cfg.depthCustomSubject)
-                            DepthWallpaperHelper.triggerAsyncSubjectGeneration(targetCtx, forceRefresh = true) {
-                                mainHandler.post {
-                                    containerRef?.get()?.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)?.postInvalidateOnAnimation()
+                            if (cfg.isDepthActive) {
+                                DepthWallpaperHelper.triggerAsyncSubjectGeneration(targetCtx, forceRefresh = true) {
+                                    mainHandler.post {
+                                        containerRef?.get()?.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)?.postInvalidateOnAnimation()
+                                    }
                                 }
                             }
                         }
@@ -1019,9 +1049,6 @@ object NotificationSheetHook {
                         mainHandler.post {
                             val container = containerRef?.get() ?: return@post
                             adjustNotificationMargins(container)
-                            if (!cfg.glassEffectsEnabled) {
-                                RealtimeBackdropHelper.stopLiveRefresh()
-                            }
                             container.findViewWithTag<View>(TAG_GLASS_SHEET)?.invalidate()
                         }
                     }
@@ -1272,7 +1299,7 @@ object NotificationSheetHook {
             val targetStart = origStart + extraMargin
             val targetEnd = origEnd + extraMargin
 
-            val isLsCenter = isActive && cfg.lockScreenAsNotifCenterEnabled
+            val isLsCenter = isActive && cfg.isLockScreenActive
             val targetTop = origTop
             val targetBottom = if (isLsCenter) origBottom else if (isActive) ((cfg.pillBottomMargin + cfg.pillHeight + 24f) * density).toInt() else origBottom
 
@@ -1664,16 +1691,6 @@ object NotificationSheetHook {
                 isShadeOpen = true
             }
 
-            // Simultaneous unlock trigger: as soon as shade begins closing from full open towards closed
-            if (hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen &&
-                !isLaunchingNotificationActivity && fraction < 0.88f &&
-                (prevFraction < 0f || fraction < prevFraction)
-            ) {
-                isClosingMode = true
-                hasTriggeredUnlockForCurrentOpen = true
-                notifyCloseOverHomescreen(container.context)
-            }
-
             if (fraction <= 0.015f) {
                 isClosingMode = false
                 sheet?.visibility = View.GONE
@@ -1683,7 +1700,6 @@ object NotificationSheetHook {
                 pill?.visibility = View.GONE
                 pill?.translationY = -viewHeight
                 LockScreenCoverSheetController.onShadeReset(container)
-                RealtimeBackdropHelper.stopLiveRefresh()
                 isShadeFullyOpen = false
                 hasFullyOpenedForCurrentSession = false
                 hasTriggeredUnlockForCurrentOpen = true
@@ -1715,19 +1731,19 @@ object NotificationSheetHook {
                 if (abs(prevY - finalSheetY) > 0.5f) {
                     curSheet.postInvalidateOnAnimation()
                 }
-                // Refresh backdrop only if glass effects are actively required
+                // Refresh backdrop only on swipe start if glass effects are actively required
                 val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height
-                val shouldDrawWallpaper = cfg.lockWallpaperEnabled && !isLandscape &&
+                val shouldDrawWallpaper = cfg.isWallpaperActive && !isLandscape &&
                         (!cfg.lockWallpaperHomescreenOnly || isHomeScreenCached)
                 val shouldRenderGlass = cfg.glassEffectsEnabled && (!cfg.glassOnlyWithoutWallpaper || !shouldDrawWallpaper)
-                if (shouldRenderGlass) {
-                    RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
-                } else {
-                    RealtimeBackdropHelper.stopLiveRefresh()
+                if (shouldRenderGlass && fraction in 0.02f..0.15f && (prevFraction < 0.02f || prevFraction < 0f)) {
+                    RealtimeBackdropHelper.triggerCapture(container.context) {
+                        curSheet.postInvalidateOnAnimation()
+                    }
                 }
 
                 // Suppress background blur and dimming when iOS 27 Depth Wallpaper is active
-                if (cfg.depthWallpaperEnabled && currentStatusBarState == 0) {
+                if (cfg.isDepthActive && currentStatusBarState == 0) {
                     val bgAlpha = if (curSheet.isClosingFromFullOpen) 1f else if (fraction >= 0.90f) ((fraction - 0.90f) / 0.10f).coerceIn(0f, 1f) else 0f
                     curSheet.shadeBackgroundView?.alpha = bgAlpha
                     themeBackgroundViewRef?.get()?.alpha = bgAlpha
@@ -1742,7 +1758,7 @@ object NotificationSheetHook {
                 curPill.alpha = (fraction - 0.2f).coerceIn(0f, 1f)
             }
 
-            if (cfg.lockScreenAsNotifCenterEnabled) {
+            if (cfg.isLockScreenActive) {
                 LockScreenCoverSheetController.onExpansionFractionChanged(container, fraction, finalSheetY, currentStretchOffset)
             } else {
                 LockScreenCoverSheetController.onShadeReset(container)
@@ -1886,7 +1902,7 @@ object NotificationSheetHook {
 
                     val isClockArea = touchDownY <= clockBottom + (30f * density)
                     val isBottomArea = touchDownY >= screenH - (130f * density)
-                    val isClosingGesture = (dy < -20f * density) && (isClockArea || isBottomArea || lastAppliedFraction < 0.85f)
+                    val isClosingGesture = (dy < -15f * density) || (lastAppliedFraction < 0.92f && lastAppliedFraction > 0.05f)
 
                     if (hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen &&
                         !isLaunchingNotificationActivity && isClosingGesture
@@ -1915,7 +1931,7 @@ object NotificationSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             chain.thisObject?.let { blurAnimatorRef = WeakReference(it) }
                             val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.enabled && cfg.depthWallpaperEnabled && currentStatusBarState == 0 && !isControlCenterActive()) {
+                            if (cfg.isDepthActive && currentStatusBarState == 0 && !isControlCenterActive()) {
                                 val args = chain.args.toTypedArray()
                                 if (args.isNotEmpty()) {
                                     args[0] = 0.0f
@@ -1992,7 +2008,7 @@ object NotificationSheetHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.enabled && cfg.lockScreenAsNotifCenterEnabled && isUnlockedShadeActive) {
+                            if (cfg.isLockScreenActive && isUnlockedShadeActive) {
                                 val container = containerRef?.get()
                                 if (container != null) {
                                     val density = container.resources.displayMetrics.density
@@ -2025,7 +2041,7 @@ object NotificationSheetHook {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 val result = chain.proceed()
                                 val cfg = NotificationSheetConfigHolder.sheet
-                                if (cfg.enabled && cfg.lockScreenAsNotifCenterEnabled && isUnlockedShadeActive) {
+                                if (cfg.isLockScreenActive && isUnlockedShadeActive) {
                                     val container = containerRef?.get()
                                     if (container != null) {
                                         mainHandler.post {
@@ -2072,11 +2088,7 @@ object NotificationSheetHook {
                                                 module.hook(lm).intercept(object : XposedInterface.Hooker {
                                                     override fun intercept(lChain: XposedInterface.Chain): Any? {
                                                         val cfg = NotificationSheetConfigHolder.sheet
-                                                        val isImageBgActive = cfg.enabled && (
-                                                            cfg.lockScreenAsNotifCenterEnabled ||
-                                                            cfg.lockWallpaperEnabled ||
-                                                            cfg.depthWallpaperEnabled
-                                                        )
+                                                        val isImageBgActive = cfg.isWallpaperActive
                                                         if (isImageBgActive && isUnlockedShadeActive) {
                                                             Log.d(TAG, "Suppressed dynamic empty space click listener ${listener.javaClass.name}.${lm.name}")
                                                             return if (lm.returnType == Boolean::class.javaPrimitiveType) false else null
@@ -2092,15 +2104,11 @@ object NotificationSheetHook {
                             }
                         })
                         Log.d(TAG, "Hooked $clsName.setEmptySpaceClickListener for empty space click suppression")
-                    } else if (nameLower.contains("emptyspace") || nameLower.contains("emptyarea")) {
+                    } else if (nameLower.contains("emptyspace")) {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 val cfg = NotificationSheetConfigHolder.sheet
-                                val isImageBgActive = cfg.enabled && (
-                                    cfg.lockScreenAsNotifCenterEnabled ||
-                                    cfg.lockWallpaperEnabled ||
-                                    cfg.depthWallpaperEnabled
-                                )
+                                val isImageBgActive = cfg.isWallpaperActive
                                 if (isImageBgActive && isUnlockedShadeActive) {
                                     Log.d(TAG, "Suppressed ${clazz.simpleName}.${m.name} because image background is active")
                                     return if (m.returnType == Boolean::class.javaPrimitiveType) false else null

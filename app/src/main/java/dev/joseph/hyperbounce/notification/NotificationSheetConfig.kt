@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 data class NotificationSheetConfig(
     var enabled: Boolean = true,
     var lockWallpaperEnabled: Boolean = false,
+    var customWallpaperEnabled: Boolean = false,
     var lockWallpaperHomescreenOnly: Boolean = false,
     var depthWallpaperEnabled: Boolean = false,
     var depthCustomSubject: Boolean = false,
@@ -36,7 +37,27 @@ data class NotificationSheetConfig(
     var pillWidth: Float = 156.0f,
     var pillHeight: Float = 6.0f,
     var pillBottomMargin: Float = 9.0f
-)
+) {
+    /**
+     * True only if sheet is enabled and at least one wallpaper source (lockscreen or custom) is active.
+     */
+    val isWallpaperActive: Boolean
+        get() = enabled && (lockWallpaperEnabled || customWallpaperEnabled)
+
+    /**
+     * Depth wallpaper effect is strictly gated behind an active wallpaper source.
+     * Stored user preferences are preserved even when wallpaper is toggled off.
+     */
+    val isDepthActive: Boolean
+        get() = isWallpaperActive && depthWallpaperEnabled
+
+    /**
+     * Lock screen replication as notification center is strictly gated behind an active wallpaper source.
+     * Stored user preferences are preserved even when wallpaper is toggled off.
+     */
+    val isLockScreenActive: Boolean
+        get() = isWallpaperActive && lockScreenAsNotifCenterEnabled
+}
 
 object NotificationSheetConfigHolder {
     val sheet = NotificationSheetConfig()
@@ -44,6 +65,7 @@ object NotificationSheetConfigHolder {
     fun updateFromPrefs(prefs: SharedPreferences) {
         sheet.enabled = prefs.getBoolean("notif_sheet_enabled", true)
         sheet.lockWallpaperEnabled = prefs.getBoolean("notif_sheet_lock_wallpaper_enabled", false)
+        sheet.customWallpaperEnabled = prefs.getBoolean("notif_sheet_custom_wallpaper_enabled", false)
         sheet.lockWallpaperHomescreenOnly = prefs.getBoolean("notif_sheet_lock_wallpaper_homescreen_only", false)
         sheet.depthWallpaperEnabled = prefs.getBoolean("notif_sheet_depth_wallpaper_enabled", false)
         sheet.depthCustomSubject = prefs.getBoolean("notif_sheet_depth_custom_subject", false)

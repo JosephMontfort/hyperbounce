@@ -136,13 +136,8 @@ object RealtimeBackdropHelper {
         var wasHardwareBlurred = false
         if (needBlur && setCaptureBlurRadiusMethod != null) {
             try {
-                val blurRadius = (150f * captureScale).toInt().coerceAtLeast(30)
+                val blurRadius = (60f * captureScale).toInt().coerceAtLeast(20)
                 setCaptureBlurRadiusMethod?.invoke(builder, blurRadius)
-                if (setCaptureBlendsMethod != null) {
-                    val blendList = ArrayList<Point>()
-                    blendList.add(Point(BlendMode.SRC_ATOP.ordinal, 1297438037))
-                    setCaptureBlendsMethod?.invoke(builder, blendList)
-                }
                 wasHardwareBlurred = true
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to apply hardware blur via setCaptureBlurRadius", t)
@@ -164,8 +159,8 @@ object RealtimeBackdropHelper {
             val cfg = NotificationSheetConfigHolder.sheet
             val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
             val isLandscape = bmp.width > bmp.height
-            val isDepthActive = cfg.depthWallpaperEnabled && !isLandscape && isUnlocked
-            val shouldDrawWallpaper = !isDepthActive && cfg.lockWallpaperEnabled && !isLandscape &&
+            val isDepthActive = cfg.isDepthActive && !isLandscape && isUnlocked
+            val shouldDrawWallpaper = !isDepthActive && cfg.isWallpaperActive && !isLandscape &&
                     (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
             if (!isDepthActive && !shouldDrawWallpaper) {
                 if (wasHardwareBlurred) {
@@ -205,8 +200,8 @@ object RealtimeBackdropHelper {
                 val cfg = NotificationSheetConfigHolder.sheet
                 val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
                 val isLandscape = appContext.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                val isDepthActive = cfg.depthWallpaperEnabled && !isLandscape && isUnlocked
-                val shouldDrawWallpaper = !isDepthActive && cfg.lockWallpaperEnabled && !isLandscape &&
+                val isDepthActive = cfg.isDepthActive && !isLandscape && isUnlocked
+                val shouldDrawWallpaper = !isDepthActive && cfg.isWallpaperActive && !isLandscape &&
                         (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
                 val needBlur = !isDepthActive && !shouldDrawWallpaper
                 val (bmp, hwBlurred) = captureDisplayInternal(appContext, needBlur)
@@ -223,56 +218,17 @@ object RealtimeBackdropHelper {
     }
 
     fun startLiveRefresh(context: Context, sheetView: View) {
-        if (isRefreshing) return
-        isRefreshing = true
-        val sessionId = ++refreshSessionId
-        val weakSheet = WeakReference(sheetView)
-        val appContext = context.applicationContext ?: context
-
-        bgExecutor.execute {
-            while (isRefreshing && sessionId == refreshSessionId) {
-                val sheet = weakSheet.get()
-                if (sheet == null || sheet.visibility != View.VISIBLE) {
-                    if (sessionId == refreshSessionId) {
-                        isRefreshing = false
-                    }
-                    break
-                }
-                try {
-                    val startTime = System.currentTimeMillis()
-                    val cfg = NotificationSheetConfigHolder.sheet
-                    val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
-                    val isLandscape = appContext.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                    val isDepthActive = cfg.depthWallpaperEnabled && !isLandscape && isUnlocked
-                    val shouldDrawWallpaper = !isDepthActive && cfg.lockWallpaperEnabled && !isLandscape &&
-                            (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
-                    val needBlur = !isDepthActive && !shouldDrawWallpaper
-                    val (bmp, hwBlurred) = captureDisplayInternal(appContext, needBlur)
-                    if (bmp != null && sessionId == refreshSessionId) {
-                        updateBitmaps(bmp, hwBlurred)
-                        mainHandler.post {
-                            if (sessionId == refreshSessionId) {
-                                weakSheet.get()?.postInvalidateOnAnimation()
-                            }
-                        }
-                    }
-                    val elapsed = System.currentTimeMillis() - startTime
-                    val sleepTime = (16L - elapsed).coerceIn(1L, 16L)
-                    Thread.sleep(sleepTime)
-                } catch (t: Throwable) {
-                    if (t is InterruptedException) break
-                    Log.e(TAG, "Live capture error", t)
-                    try {
-                        Thread.sleep(16L)
-                    } catch (_: InterruptedException) {
-                        break
-                    }
-                }
-            }
+        // Continuous 60fps capture loop removed to completely eliminate pulldown and close lag.
+        // Event-driven single capture is triggered on swipe start.
+        triggerCapture(context) {
+            sheetView.postInvalidateOnAnimation()
         }
     }
 
     fun stopLiveRefresh() {
+        isRefreshing = false
+        refreshSessionId++
+    }
         isRefreshing = false
         refreshSessionId++
     }

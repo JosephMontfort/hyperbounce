@@ -464,6 +464,7 @@ class SettingsRepository(context: Context) {
 
         var enabled by prefsBooleanState("notif_sheet_enabled", defaults.enabled); private set
         var lockWallpaperEnabled by prefsBooleanState("notif_sheet_lock_wallpaper_enabled", defaults.lockWallpaperEnabled); private set
+        var customWallpaperEnabled by prefsBooleanState("notif_sheet_custom_wallpaper_enabled", defaults.customWallpaperEnabled); private set
         var lockWallpaperHomescreenOnly by prefsBooleanState("notif_sheet_lock_wallpaper_homescreen_only", defaults.lockWallpaperHomescreenOnly); private set
         var depthWallpaperEnabled by prefsBooleanState("notif_sheet_depth_wallpaper_enabled", defaults.depthWallpaperEnabled); private set
         var depthCustomSubject by prefsBooleanState("notif_sheet_depth_custom_subject", defaults.depthCustomSubject); private set
@@ -491,7 +492,7 @@ class SettingsRepository(context: Context) {
         var sideMargin by prefsFloatState("notif_side_margin", defaults.sideMargin); private set
 
         fun snapshot(): NotificationSheetSettings = NotificationSheetSettings(
-            enabled, lockWallpaperEnabled, lockWallpaperHomescreenOnly,
+            enabled, lockWallpaperEnabled, customWallpaperEnabled, lockWallpaperHomescreenOnly,
             depthWallpaperEnabled, depthCustomSubject,
             lockScreenAsNotifCenterEnabled, showBottomWidgets, clockMorphOnNotifications,
             glassEffectsEnabled, glassOnlyWithoutWallpaper,
@@ -504,6 +505,7 @@ class SettingsRepository(context: Context) {
 
         @JvmName("setNotifSheetEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
         @JvmName("setNotifSheetLockWallpaperEnabledPref") fun setLockWallpaperEnabled(v: Boolean) { lockWallpaperEnabled = v }
+        @JvmName("setNotifSheetCustomWallpaperEnabledPref") fun setCustomWallpaperEnabled(v: Boolean) { customWallpaperEnabled = v }
         @JvmName("setNotifSheetLockWallpaperHomescreenOnlyPref") fun setLockWallpaperHomescreenOnly(v: Boolean) { lockWallpaperHomescreenOnly = v }
         @JvmName("setNotifSheetDepthWallpaperEnabledPref") fun setDepthWallpaperEnabled(v: Boolean) { depthWallpaperEnabled = v }
         @JvmName("setNotifSheetDepthCustomSubjectPref") fun setDepthCustomSubject(v: Boolean) { depthCustomSubject = v }
@@ -533,6 +535,7 @@ class SettingsRepository(context: Context) {
         fun reloadFromDefaults() {
             enabled = defaults.enabled
             lockWallpaperEnabled = defaults.lockWallpaperEnabled
+            customWallpaperEnabled = defaults.customWallpaperEnabled
             lockWallpaperHomescreenOnly = defaults.lockWallpaperHomescreenOnly
             depthWallpaperEnabled = defaults.depthWallpaperEnabled
             depthCustomSubject = defaults.depthCustomSubject

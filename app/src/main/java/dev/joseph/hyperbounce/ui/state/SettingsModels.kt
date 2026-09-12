@@ -142,6 +142,7 @@ data class LockScreenSheetSettings(
 data class NotificationSheetSettings(
     val enabled: Boolean = true,
     val lockWallpaperEnabled: Boolean = false,
+    val customWallpaperEnabled: Boolean = false,
     val lockWallpaperHomescreenOnly: Boolean = false,
     val depthWallpaperEnabled: Boolean = false,
     val depthCustomSubject: Boolean = false,
