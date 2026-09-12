@@ -200,20 +200,8 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
 
     private fun toggleTorch() {
         try {
-            // First attempt via live HyperOS MiuiFlashlightControllerImpl
-            val targetState = !isTorchOn
-            val handled = NotificationSheetHook.toggleFlashlight(context)
-            setTorchActive(handled)
-
-            // Fallback via CameraManager if controller is absent
-            if (NotificationSheetHook.miuiFlashlightController == null) {
-                val cm = cameraManager
-                val camId = torchCameraId
-                if (cm != null && camId != null) {
-                    cm.setTorchMode(camId, targetState)
-                    setTorchActive(targetState)
-                }
-            }
+            val newState = NotificationSheetHook.toggleFlashlight(context)
+            setTorchActive(newState)
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to toggle torch mode", t)
         }

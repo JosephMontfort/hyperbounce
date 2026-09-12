@@ -140,15 +140,17 @@ object NotificationSheetHook {
         return fallbackTorchEnabled
     }
 
-    fun toggleFlashlight(context: Context) {
+    fun toggleFlashlight(context: Context): Boolean {
         val ctrl = getMiuiFlashlightControllerInstance()
         if (ctrl != null) {
             try {
                 val isEnabledMethod = ctrl.javaClass.getMethod("isEnabled")
                 val isEnabled = isEnabledMethod.invoke(ctrl) as? Boolean ?: false
+                val targetState = !isEnabled
                 val setFlashlightMethod = ctrl.javaClass.getMethod("setFlashlight", Boolean::class.javaPrimitiveType)
-                setFlashlightMethod.invoke(ctrl, !isEnabled)
-                return
+                setFlashlightMethod.invoke(ctrl, targetState)
+                LockScreenCoverSheetController.onTorchStateChanged(targetState)
+                return targetState
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to toggle flashlight via MiuiFlashlightController", t)
             }
@@ -162,11 +164,13 @@ object NotificationSheetHook {
                     fallbackTorchEnabled = !fallbackTorchEnabled
                     cameraManager.setTorchMode(cameraId, fallbackTorchEnabled)
                     LockScreenCoverSheetController.onTorchStateChanged(fallbackTorchEnabled)
+                    return fallbackTorchEnabled
                 }
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Fallback CameraManager toggle torch failed", t)
         }
+        return false
     }
 
     @Volatile
