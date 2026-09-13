@@ -1643,11 +1643,6 @@ object NotificationSheetHook {
         val f = fraction.coerceIn(0.0f, 1.0f)
         val updateBlock = Runnable {
             val prev = lastAppliedFraction
-            // When pulling down to open, ignore tiny backward fluctuations (< 0.05) to eliminate jitter/fighting
-            val isOpening = !isClosingMode && !isShadeFullyOpen && !hasFullyOpenedForCurrentSession
-            if (isOpening && f < prev && prev > 0.02f && (prev - f) < 0.05f) {
-                return@Runnable
-            }
             if (abs(f - prev) < 0.001f) return@Runnable
             lastAppliedFraction = f
             applyExpansionFractionInternal(f, prev)

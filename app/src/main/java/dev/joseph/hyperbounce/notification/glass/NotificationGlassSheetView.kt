@@ -259,7 +259,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
             val drawWpAlpha = if (isClosing) 1f else fadeAlpha
             if (drawWpAlpha > 0f) {
                 var drawn = false
-                if (cfg.customWallpaperEnabled) {
+                if (cfg.isCustomWallpaperActive) {
                     val customBmp = CustomWallpaperHelper.getCustomWallpaperBitmap(context)
                     if (customBmp != null && !customBmp.isRecycled) {
                         val wpY = if (isClosing) 0 else (-translationY).toInt()
@@ -351,7 +351,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
             targetCanvas.clipPath(sheetClipPath)
 
             var wallpaperDrawn = false
-            if (cfg.customWallpaperEnabled) {
+            if (cfg.isCustomWallpaperActive) {
                 val customBmp = CustomWallpaperHelper.getCustomWallpaperBitmap(context)
                 if (customBmp != null && !customBmp.isRecycled) {
                     drawCenterCropBitmap(targetCanvas, customBmp, 0, 0, w, h, 255)

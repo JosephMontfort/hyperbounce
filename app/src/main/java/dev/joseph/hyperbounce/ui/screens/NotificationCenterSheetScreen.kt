@@ -168,51 +168,51 @@ fun NotificationCenterSheetScreen(
                         icon = { AppGridIcon(color = Color.White, size = 15.dp) },
                         enabled = sheet.enabled && sheet.lockWallpaperEnabled
                     )
-                }
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "Custom Background Wallpaper",
-                    subtitle = if (sheet.customWallpaperEnabled) "Custom cropped wallpaper displayed behind notification sheet" else "Disabled (Uses lockscreen wallpaper or glass blur)",
-                    colors = colors,
-                    iconTint = colors.accentBlue,
-                    backdrop = backdrop,
-                    checked = sheet.customWallpaperEnabled,
-                    onCheckedChange = sheet::setCustomWallpaperEnabled,
-                    icon = { ImageIcon(color = Color.White, size = 15.dp) },
-                    enabled = sheet.enabled
-                )
-                if (sheet.customWallpaperEnabled) {
                     RowDivider(colors.separator)
-                    SettingsClickableRow(
-                        title = if (hasCustomWallpaper) "Change & Crop Wallpaper" else "Choose & Crop Wallpaper",
-                        subtitle = if (hasCustomWallpaper) "Custom wallpaper active. Tap to choose a new one and crop" else "Pick an image and crop to match screen aspect ratio",
+                    SettingsToggleRow(
+                        title = "Custom Background Wallpaper",
+                        subtitle = if (sheet.customWallpaperEnabled) "Custom cropped wallpaper displayed behind notification sheet" else "Disabled (Uses lockscreen wallpaper)",
                         colors = colors,
                         iconTint = colors.accentBlue,
-                        onClick = {
-                            customWallpaperPickerLauncher.launch("image/*")
-                        },
-                        icon = { ImageIcon(color = Color.White, size = 15.dp) }
+                        backdrop = backdrop,
+                        checked = sheet.customWallpaperEnabled,
+                        onCheckedChange = sheet::setCustomWallpaperEnabled,
+                        icon = { ImageIcon(color = Color.White, size = 15.dp) },
+                        enabled = sheet.enabled && sheet.lockWallpaperEnabled
                     )
-                    if (hasCustomWallpaper) {
+                    if (sheet.customWallpaperEnabled) {
                         RowDivider(colors.separator)
                         SettingsClickableRow(
-                            title = "Remove Custom Wallpaper",
-                            subtitle = "Revert to lockscreen wallpaper background",
+                            title = if (hasCustomWallpaper) "Change & Crop Wallpaper" else "Choose & Crop Wallpaper",
+                            subtitle = if (hasCustomWallpaper) "Custom wallpaper active. Tap to choose a new one and crop" else "Pick an image and crop to match screen aspect ratio",
                             colors = colors,
-                            iconTint = colors.accentRed,
-                            titleColor = colors.accentRed,
+                            iconTint = colors.accentBlue,
                             onClick = {
-                                CustomWallpaperHelper.clearCustomWallpaper(context)
-                                hasCustomWallpaper = false
-                                sheet.setCustomWallpaperEnabled(false)
-                                Toast.makeText(context, "Custom wallpaper removed", Toast.LENGTH_SHORT).show()
-                                try {
-                                    val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
-                                    context.sendBroadcast(intent)
-                                } catch (_: Throwable) {}
+                                customWallpaperPickerLauncher.launch("image/*")
                             },
-                            icon = { TrashIcon(color = Color.White, size = 15.dp) }
+                            icon = { ImageIcon(color = Color.White, size = 15.dp) }
                         )
+                        if (hasCustomWallpaper) {
+                            RowDivider(colors.separator)
+                            SettingsClickableRow(
+                                title = "Remove Custom Wallpaper",
+                                subtitle = "Revert to lockscreen wallpaper background",
+                                colors = colors,
+                                iconTint = colors.accentRed,
+                                titleColor = colors.accentRed,
+                                onClick = {
+                                    CustomWallpaperHelper.clearCustomWallpaper(context)
+                                    hasCustomWallpaper = false
+                                    sheet.setCustomWallpaperEnabled(false)
+                                    Toast.makeText(context, "Custom wallpaper removed", Toast.LENGTH_SHORT).show()
+                                    try {
+                                        val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
+                                        context.sendBroadcast(intent)
+                                    } catch (_: Throwable) {}
+                                },
+                                icon = { TrashIcon(color = Color.White, size = 15.dp) }
+                            )
+                        }
                     }
                 }
             }
@@ -222,7 +222,7 @@ fun NotificationCenterSheetScreen(
             )
         }
 
-        if (sheet.lockWallpaperEnabled || sheet.customWallpaperEnabled) {
+        if (sheet.lockWallpaperEnabled) {
             item {
                 SectionHeader("iOS 27 Depth Wallpaper", colors)
                 GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -238,7 +238,7 @@ fun NotificationCenterSheetScreen(
                             hasCustomSubject = DepthWallpaperHelper.hasCustomSubject(context) || sheet.depthCustomSubject
                         },
                         icon = { LockIcon(color = Color.White, size = 15.dp) },
-                        enabled = sheet.enabled && (sheet.lockWallpaperEnabled || sheet.customWallpaperEnabled)
+                        enabled = sheet.enabled && sheet.lockWallpaperEnabled
                     )
                     if (sheet.depthWallpaperEnabled) {
                         RowDivider(colors.separator)
@@ -294,7 +294,7 @@ fun NotificationCenterSheetScreen(
                         checked = sheet.lockScreenAsNotifCenterEnabled,
                         onCheckedChange = sheet::setLockScreenAsNotifCenterEnabled,
                         icon = { LockIcon(color = Color.White, size = 15.dp) },
-                        enabled = sheet.enabled && (sheet.lockWallpaperEnabled || sheet.customWallpaperEnabled)
+                        enabled = sheet.enabled && sheet.lockWallpaperEnabled
                     )
                     if (sheet.lockScreenAsNotifCenterEnabled) {
                         RowDivider(colors.separator)
@@ -307,7 +307,7 @@ fun NotificationCenterSheetScreen(
                             checked = sheet.showBottomWidgets,
                             onCheckedChange = sheet::setShowBottomWidgets,
                             icon = { SlidersIcon(color = Color.White, size = 15.dp) },
-                            enabled = sheet.enabled && (sheet.lockWallpaperEnabled || sheet.customWallpaperEnabled) && sheet.lockScreenAsNotifCenterEnabled
+                            enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.lockScreenAsNotifCenterEnabled
                         )
                         RowDivider(colors.separator)
                         SettingsToggleRow(
@@ -319,7 +319,7 @@ fun NotificationCenterSheetScreen(
                             checked = sheet.clockMorphOnNotifications,
                             onCheckedChange = sheet::setClockMorphOnNotifications,
                             icon = { AppGridIcon(color = Color.White, size = 15.dp) },
-                            enabled = sheet.enabled && (sheet.lockWallpaperEnabled || sheet.customWallpaperEnabled) && sheet.lockScreenAsNotifCenterEnabled
+                            enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.lockScreenAsNotifCenterEnabled
                         )
                     }
                 }

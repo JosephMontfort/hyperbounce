@@ -39,10 +39,16 @@ data class NotificationSheetConfig(
     var pillBottomMargin: Float = 9.0f
 ) {
     /**
-     * True only if sheet is enabled and at least one wallpaper source (lockscreen or custom) is active.
+     * True only if sheet is enabled and lockscreen wallpaper toggle is on.
      */
     val isWallpaperActive: Boolean
-        get() = enabled && (lockWallpaperEnabled || customWallpaperEnabled)
+        get() = enabled && lockWallpaperEnabled
+
+    /**
+     * Custom wallpaper is active only if lockscreen wallpaper feature is on and custom wallpaper toggle is enabled.
+     */
+    val isCustomWallpaperActive: Boolean
+        get() = isWallpaperActive && customWallpaperEnabled
 
     /**
      * Depth wallpaper effect is strictly gated behind an active wallpaper source.
