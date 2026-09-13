@@ -222,7 +222,8 @@ fun SettingsSliderRow(
     valueLabel: (Float) -> String,
     defaultValue: Float = valueRange.start,
     subtitle: String? = null,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    allowCustomInput: Boolean = true
 ) {
     val displayAlpha = if (enabled) 1f else 0.35f
     val customValueHost = dev.joseph.hyperbounce.ui.glass.LocalCustomValueHost.current
@@ -281,21 +282,23 @@ fun SettingsSliderRow(
                     )
                 }
 
-                // Numeric Value Label (Long-press to enter custom value)
+                // Numeric Value Label (Long-press to enter custom value if allowed)
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
                         .combinedClickable(
-                            enabled = enabled,
+                            enabled = enabled && allowCustomInput,
                             onClick = {},
                             onLongClick = {
-                                customValueHost.show(
-                                    title = title,
-                                    currentValue = value,
-                                    defaultValue = defaultValue,
-                                    valueRange = valueRange,
-                                    onApply = onValueChange
-                                )
+                                if (allowCustomInput) {
+                                    customValueHost.show(
+                                        title = title,
+                                        currentValue = value,
+                                        defaultValue = defaultValue,
+                                        valueRange = valueRange,
+                                        onApply = onValueChange
+                                    )
+                                }
                             }
                         )
                         .padding(horizontal = 4.dp, vertical = 2.dp)

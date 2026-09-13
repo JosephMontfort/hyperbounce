@@ -979,6 +979,9 @@ class SettingsRepository(context: Context) {
         var blurDamping by prefsFloatState("cc_blur_damping", defaults.blurDamping); private set
         var frictionMultiplier by prefsFloatState("cc_friction_multiplier", defaults.frictionMultiplier); private set
         var lowEndFlashlightEnabled by prefsBooleanState("cc_low_end_flashlight_enabled", defaults.lowEndFlashlightEnabled); private set
+        var flashlightBonusEnabled by prefsBooleanState("cc_flashlight_bonus_enabled", defaults.flashlightBonusEnabled); private set
+        var flashlightMaxBrightness by prefsIntState("cc_flashlight_max_brightness", defaults.flashlightMaxBrightness); private set
+        var flashlightStockBrightness by prefsIntState("cc_flashlight_stock_brightness", defaults.flashlightStockBrightness); private set
 
         fun snapshot(): ControlCenterSettings = ControlCenterSettings(
             modularEditEnabled, restartOnEditExit, animEnabled, jellyEnabled, lowEndAnim,
@@ -986,7 +989,7 @@ class SettingsRepository(context: Context) {
             spreadRatio, spreadResponse, spreadDamping, spreadReleaseResponse, spreadReleaseDamping,
             tileShowResponse, tileShowDamping, tileHideResponse, tileHideDamping,
             tileShrinkResponse, tileShrinkDamping, tileDelayScale, blurResponse, blurDamping, frictionMultiplier,
-            lowEndFlashlightEnabled
+            lowEndFlashlightEnabled, flashlightBonusEnabled, flashlightMaxBrightness, flashlightStockBrightness
         )
 
         @JvmName("setCcModularEditEnabledPref") fun setModularEditEnabled(v: Boolean) { modularEditEnabled = v }
@@ -995,6 +998,9 @@ class SettingsRepository(context: Context) {
         @JvmName("setCcJellyEnabledPref") fun setJellyEnabled(v: Boolean) { jellyEnabled = v }
         @JvmName("setCcLowEndAnimPref") fun setLowEndAnim(v: Boolean) { lowEndAnim = v }
         @JvmName("setCcLowEndFlashlightEnabledPref") fun setLowEndFlashlightEnabled(v: Boolean) { lowEndFlashlightEnabled = v }
+        @JvmName("setCcFlashlightBonusEnabledPref") fun setFlashlightBonusEnabled(v: Boolean) { flashlightBonusEnabled = v }
+        @JvmName("setCcFlashlightMaxBrightnessPref") fun setFlashlightMaxBrightness(v: Int) { flashlightMaxBrightness = v }
+        @JvmName("setCcFlashlightStockBrightnessPref") fun setFlashlightStockBrightness(v: Int) { flashlightStockBrightness = v }
         @JvmName("setCcEntryInitialScalePref") fun setEntryInitialScale(v: Float) { entryInitialScale = v }
         @JvmName("setCcEntryTranslationYPref") fun setEntryTranslationY(v: Float) { entryTranslationY = v }
         @JvmName("setCcWaterfallEnabledPref") fun setWaterfallEnabled(v: Boolean) { waterfallEnabled = v }
@@ -1022,6 +1028,9 @@ class SettingsRepository(context: Context) {
             jellyEnabled = defaults.jellyEnabled
             lowEndAnim = defaults.lowEndAnim
             lowEndFlashlightEnabled = defaults.lowEndFlashlightEnabled
+            flashlightBonusEnabled = defaults.flashlightBonusEnabled
+            flashlightMaxBrightness = defaults.flashlightMaxBrightness
+            flashlightStockBrightness = defaults.flashlightStockBrightness
             entryInitialScale = defaults.entryInitialScale
             entryTranslationY = defaults.entryTranslationY
             waterfallEnabled = defaults.waterfallEnabled
