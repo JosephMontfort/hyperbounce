@@ -21,7 +21,7 @@ import kotlin.math.roundToInt
 
 /**
  * Flashlight Brightness Control for low-end Xiaomi / HyperOS devices.
- * Replaces unavailable driver-level Camera2 strength APIs with direct Qualcomm PMIC sysfs latching,
+ * Uses Qualcomm PMIC sysfs latch sequence to enable hardware brightness scaling,
  * unlocks the 1-100% brightness slider in the expanded panel, and unifies CC quick-tile toggling.
  */
 object FlashlightBrightnessHook {
@@ -225,7 +225,7 @@ object FlashlightBrightnessHook {
     }
 
     /**
-     * Hardware driver logic replicating Qualcomm PMIC latching with zero flicker and dynamic scaling.
+     * Hardware driver logic executing the proven Qualcomm PMIC latch sequence.
      */
     private fun handleHardwareOperateCamera(context: Context, intent: Intent) {
         try {
@@ -240,13 +240,15 @@ object FlashlightBrightnessHook {
             val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager ?: return
 
             val switchNode = getSwitchBrightnessNode()
+            val switchTriggerNode = getSwitchTriggerNode()
             val torch0Node = getTorch0BrightnessNode()
             val torch1Node = getTorch1BrightnessNode()
+            val torch0Trigger = getTorch0TriggerNode()
+            val torch1Trigger = getTorch1TriggerNode()
 
             if (strength == 0) {
+                writeToFile(switchTriggerNode, "none")
                 writeToFile(switchNode, "0")
-                writeToFile(torch0Node, "0")
-                writeToFile(torch1Node, "0")
                 try {
                     cameraManager.setTorchMode(cameraId, false)
                 } catch (t: Throwable) {
@@ -258,17 +260,15 @@ object FlashlightBrightnessHook {
 
             if (strength in 1..100) {
                 val now = System.currentTimeMillis()
-                if (now - lastWriteTime < 25L) {
+                if (now - lastWriteTime < 35L) {
                     return
                 }
                 lastWriteTime = now
 
-                // Dynamically detect stock brightness on first torch write before overwriting
+                // Dynamically detect stock brightness on initial activation
                 detectStockBrightnessIfNeeded()
 
-                val hwOn = isHardwareOn()
-
-                if (!hwOn && !isTorchOn) {
+                if (!isHardwareOn()) {
                     try {
                         cameraManager.setTorchMode(cameraId, true)
                         isTorchOn = true
@@ -280,14 +280,14 @@ object FlashlightBrightnessHook {
                 val targetBrightness = calculateSysfsBrightness(strength)
                 val strVal = targetBrightness.toString()
 
-                // Zero-flicker write: update torch_0 and torch_1 brightness directly.
-                // When already on, do NOT pulse switch to 0! This eliminates stroboscopic flicker.
+                // Hardware PMIC latch sequence (exact proven sequence required by Qualcomm PMIC driver)
+                writeToFile(switchNode, "0")
+                writeToFile(torch0Trigger, "torch0_trigger")
+                writeToFile(torch1Trigger, "torch1_trigger")
+                writeToFile(switchTriggerNode, "torch")
                 writeToFile(torch0Node, strVal)
                 writeToFile(torch1Node, strVal)
-
-                if (!hwOn) {
-                    writeToFile(switchNode, "1")
-                }
+                writeToFile(switchNode, "1")
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Error in handleHardwareOperateCamera", t)
@@ -301,7 +301,7 @@ object FlashlightBrightnessHook {
         try {
             val controllerClass = Class.forName("miui.systemui.flashlight.MiFlashlightController", false, classLoader)
 
-            // Part 4: Hook setFlashlightStatus(float) to warn on bonus zone, haptic tick, direct start from OFF, and skip persistent storage
+            // Part 4: Hook setFlashlightStatus(float) to warn on bonus zone, haptic tick, handle dragging from OFF, and skip persistent storage
             for (m in controllerClass.declaredMethods) {
                 if (m.name == "setFlashlightStatus" && m.parameterTypes.size == 1 && m.parameterTypes[0] == java.lang.Float.TYPE) {
                     m.isAccessible = true
@@ -349,6 +349,9 @@ object FlashlightBrightnessHook {
                             bonusZoneWarned = false
                         }
 
+                        // Ensure split notch is placed and visible
+                        setupSplitNotchView(controllerClass, controller, true)
+
                         // Get switch status
                         val switchStatus = getControllerSwitchStatus(controllerClass, controller)
 
@@ -366,21 +369,57 @@ object FlashlightBrightnessHook {
                             if (switchStatus == true) {
                                 if (percentage == 0f) {
                                     invokeAsyncOperate(mgrClass, manager, false)
-                                    setControllerSwitchStatus(controllerClass, controller, false)
                                 } else {
                                     invokeAsyncToggle(mgrClass, manager, percentage)
                                 }
-                            } else { // switchStatus == false (OFF)
+                            } else if (switchStatus == false) {
                                 if (percentage > 0f) {
-                                    // Fix initial 75% jump on touch from OFF: directly toggle to the touch percentage!
+                                    // Turn on flashlight and immediately target the dragged percentage
+                                    invokeAsyncOperate(mgrClass, manager, true)
                                     invokeAsyncToggle(mgrClass, manager, percentage)
-                                    setControllerSwitchStatus(controllerClass, controller, true)
                                 }
                             }
                         }
 
                         // Do not proceed: bypasses saveLogicStrength
                         null
+                    }
+                }
+            }
+
+            // Hook setSeekbar to ensure visual split notch is attached and synced with visibility
+            for (m in controllerClass.declaredMethods) {
+                if (m.name == "setSeekbar" && m.parameterTypes.size == 1 && m.parameterTypes[0] == java.lang.Boolean.TYPE) {
+                    m.isAccessible = true
+                    module.hook(m).intercept { chain ->
+                        val res = chain.proceed()
+                        if (ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
+                            val controller = chain.thisObject
+                            if (controller != null) {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                val visible = (args?.getOrNull(0) as? Boolean) ?: true
+                                setupSplitNotchView(controllerClass, controller, visible)
+                            }
+                        }
+                        res
+                    }
+                }
+            }
+
+            // Hook updateSeekBarProcess to keep notch in front during slider dragging
+            for (m in controllerClass.declaredMethods) {
+                if (m.name == "updateSeekBarProcess" && m.parameterTypes.size == 1 && m.parameterTypes[0] == java.lang.Float.TYPE) {
+                    m.isAccessible = true
+                    module.hook(m).intercept { chain ->
+                        val res = chain.proceed()
+                        if (ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
+                            val controller = chain.thisObject
+                            if (controller != null) {
+                                setupSplitNotchView(controllerClass, controller, true)
+                            }
+                        }
+                        res
                     }
                 }
             }
@@ -395,7 +434,7 @@ object FlashlightBrightnessHook {
                             val controller = chain.thisObject
                             if (controller != null) {
                                 resyncSwitchStatus(controllerClass, controller)
-                                setupSplitNotchView(controllerClass, controller)
+                                setupSplitNotchView(controllerClass, controller, true)
                             }
                         }
                         res
@@ -550,6 +589,10 @@ object FlashlightBrightnessHook {
         return "/sys/class/leds/led:switch_0/brightness"
     }
 
+    private fun getSwitchTriggerNode(): String {
+        return getSwitchBrightnessNode().replace("brightness", "trigger")
+    }
+
     private fun getTorch0BrightnessNode(): String {
         cachedTorch0Node?.let { return it }
         val candidates = listOf(
@@ -563,6 +606,10 @@ object FlashlightBrightnessHook {
             }
         }
         return "/sys/class/leds/led:torch_0/brightness"
+    }
+
+    private fun getTorch0TriggerNode(): String {
+        return getTorch0BrightnessNode().replace("brightness", "trigger")
     }
 
     private fun getTorch1BrightnessNode(): String {
@@ -580,10 +627,14 @@ object FlashlightBrightnessHook {
         return "/sys/class/leds/led:torch_1/brightness"
     }
 
+    private fun getTorch1TriggerNode(): String {
+        return getTorch1BrightnessNode().replace("brightness", "trigger")
+    }
+
     /**
      * Adds or updates the visual split notch in mi_seekbar_container at 50% height.
      */
-    private fun setupSplitNotchView(controllerClass: Class<*>, controller: Any) {
+    private fun setupSplitNotchView(controllerClass: Class<*>, controller: Any, visible: Boolean = true) {
         try {
             var seekbar: View? = null
             for (m in controllerClass.declaredMethods) {
@@ -598,39 +649,46 @@ object FlashlightBrightnessHook {
             val existingNotch = container.findViewWithTag<View>(SPLIT_NOTCH_TAG)
             val bonusEnabled = ControlCenterConfigHolder.config.flashlightBonusEnabled
 
-            if (!bonusEnabled) {
+            if (!bonusEnabled || !visible) {
                 existingNotch?.visibility = View.GONE
                 return
             }
 
             if (existingNotch != null) {
                 existingNotch.visibility = View.VISIBLE
+                existingNotch.bringToFront()
+                container.bringChildToFront(existingNotch)
                 return
             }
 
             val context = container.context
             val dp = context.resources.displayMetrics.density
-            val heightPx = (2 * dp).toInt().coerceAtLeast(2)
+            val heightPx = (4 * dp).toInt().coerceAtLeast(4)
             val lp = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 heightPx
             ).apply {
                 gravity = Gravity.CENTER
-                leftMargin = (8 * dp).toInt()
-                rightMargin = (8 * dp).toInt()
+                leftMargin = (6 * dp).toInt()
+                rightMargin = (6 * dp).toInt()
             }
             val shape = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = 1 * dp
-                setColor(0x80FFFFFF.toInt()) // 50% translucent white frosted notch
+                cornerRadius = 2 * dp
+                setColor(0xFF1C1C1E.toInt()) // Deep solid dark notch
+                setStroke((1.5f * dp).toInt().coerceAtLeast(1), 0xB3FFFFFF.toInt()) // 70% white high-contrast border
             }
             val notch = View(context).apply {
                 tag = SPLIT_NOTCH_TAG
                 layoutParams = lp
                 background = shape
-                elevation = 20f
+                elevation = 100f
+                translationZ = 100f
             }
             container.addView(notch)
+            notch.bringToFront()
+            container.bringChildToFront(notch)
+            container.invalidate()
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to setup split notch view", t)
         }
@@ -755,7 +813,7 @@ object FlashlightBrightnessHook {
             if (!file.exists()) return false
             val line = file.bufferedReader().use { it.readLine() }
             line != null && line.trim() != "0"
-        } catch (t: Throwable) {
+        } catch (_: Throwable) {
             false
         }
     }
