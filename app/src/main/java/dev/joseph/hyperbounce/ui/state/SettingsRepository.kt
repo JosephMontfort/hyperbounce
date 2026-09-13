@@ -469,6 +469,7 @@ class SettingsRepository(context: Context) {
         var lockWallpaperHomescreenOnly by prefsBooleanState("notif_sheet_lock_wallpaper_homescreen_only", defaults.lockWallpaperHomescreenOnly); private set
         var depthWallpaperEnabled by prefsBooleanState("notif_sheet_depth_wallpaper_enabled", defaults.depthWallpaperEnabled); private set
         var depthCustomSubject by prefsBooleanState("notif_sheet_depth_custom_subject", defaults.depthCustomSubject); private set
+        var oneToOneTrackingEnabled by prefsBooleanState("notif_sheet_one_to_one_tracking", defaults.oneToOneTrackingEnabled); private set
         var lockScreenAsNotifCenterEnabled by prefsBooleanState("notif_sheet_lockscreen_enabled", defaults.lockScreenAsNotifCenterEnabled); private set
         var showBottomWidgets by prefsBooleanState("notif_sheet_show_bottom_widgets", defaults.showBottomWidgets); private set
         var clockMorphOnNotifications by prefsBooleanState("notif_sheet_clock_morph", defaults.clockMorphOnNotifications); private set
@@ -495,6 +496,7 @@ class SettingsRepository(context: Context) {
         fun snapshot(): NotificationSheetSettings = NotificationSheetSettings(
             enabled, lockWallpaperEnabled, customWallpaperEnabled, lockWallpaperHomescreenOnly,
             depthWallpaperEnabled, depthCustomSubject,
+            oneToOneTrackingEnabled,
             lockScreenAsNotifCenterEnabled, showBottomWidgets, clockMorphOnNotifications,
             glassEffectsEnabled, glassOnlyWithoutWallpaper,
             refractionHeight, sideRefraction, bottomRefraction,
@@ -510,6 +512,7 @@ class SettingsRepository(context: Context) {
         @JvmName("setNotifSheetLockWallpaperHomescreenOnlyPref") fun setLockWallpaperHomescreenOnly(v: Boolean) { lockWallpaperHomescreenOnly = v }
         @JvmName("setNotifSheetDepthWallpaperEnabledPref") fun setDepthWallpaperEnabled(v: Boolean) { depthWallpaperEnabled = v }
         @JvmName("setNotifSheetDepthCustomSubjectPref") fun setDepthCustomSubject(v: Boolean) { depthCustomSubject = v }
+        @JvmName("setNotifSheetOneToOneTrackingEnabledPref") fun setOneToOneTrackingEnabled(v: Boolean) { oneToOneTrackingEnabled = v }
         @JvmName("setNotifSheetLockScreenAsNotifCenterEnabledPref") fun setLockScreenAsNotifCenterEnabled(v: Boolean) { lockScreenAsNotifCenterEnabled = v }
         @JvmName("setNotifSheetShowBottomWidgetsPref") fun setShowBottomWidgets(v: Boolean) { showBottomWidgets = v }
         @JvmName("setNotifSheetClockMorphOnNotificationsPref") fun setClockMorphOnNotifications(v: Boolean) { clockMorphOnNotifications = v }

@@ -158,6 +158,18 @@ fun NotificationCenterSheetScreen(
                 if (sheet.lockWallpaperEnabled) {
                     RowDivider(colors.separator)
                     SettingsToggleRow(
+                        title = "1:1 Finger Tracking",
+                        subtitle = if (sheet.oneToOneTrackingEnabled) "Physical 1:1 finger tracking on shade pulldown with 50% halfway threshold snap on release" else "Disabled (HyperOS native 200px threshold)",
+                        colors = colors,
+                        iconTint = colors.accentBlue,
+                        backdrop = backdrop,
+                        checked = sheet.oneToOneTrackingEnabled,
+                        onCheckedChange = sheet::setOneToOneTrackingEnabled,
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) },
+                        enabled = sheet.enabled && sheet.lockWallpaperEnabled
+                    )
+                    RowDivider(colors.separator)
+                    SettingsToggleRow(
                         title = "Homescreen Only",
                         subtitle = if (sheet.lockWallpaperHomescreenOnly) "Active only when pulling down over homescreen; uses transparent glass over running apps" else "Active everywhere (over homescreen and apps)",
                         colors = colors,

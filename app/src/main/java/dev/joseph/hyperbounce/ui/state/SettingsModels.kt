@@ -146,6 +146,7 @@ data class NotificationSheetSettings(
     val lockWallpaperHomescreenOnly: Boolean = false,
     val depthWallpaperEnabled: Boolean = false,
     val depthCustomSubject: Boolean = false,
+    val oneToOneTrackingEnabled: Boolean = false,
     val lockScreenAsNotifCenterEnabled: Boolean = false,
     val showBottomWidgets: Boolean = true,
     val clockMorphOnNotifications: Boolean = true,

@@ -36,7 +36,9 @@ data class NotificationSheetConfig(
     // Home indicator pill
     var pillWidth: Float = 156.0f,
     var pillHeight: Float = 6.0f,
-    var pillBottomMargin: Float = 9.0f
+    var pillBottomMargin: Float = 9.0f,
+    // 1:1 physical finger tracking on pulldown
+    var oneToOneTrackingEnabled: Boolean = false
 ) {
     /**
      * True only if sheet is enabled and lockscreen wallpaper toggle is on.
@@ -63,6 +65,12 @@ data class NotificationSheetConfig(
      */
     val isLockScreenActive: Boolean
         get() = isWallpaperActive && lockScreenAsNotifCenterEnabled
+
+    /**
+     * 1:1 finger tracking is active whenever wallpaper background is enabled and the toggle is on.
+     */
+    val isOneToOneTrackingActive: Boolean
+        get() = isWallpaperActive && oneToOneTrackingEnabled
 }
 
 object NotificationSheetConfigHolder {
@@ -75,6 +83,7 @@ object NotificationSheetConfigHolder {
         sheet.lockWallpaperHomescreenOnly = prefs.getBoolean("notif_sheet_lock_wallpaper_homescreen_only", false)
         sheet.depthWallpaperEnabled = prefs.getBoolean("notif_sheet_depth_wallpaper_enabled", false)
         sheet.depthCustomSubject = prefs.getBoolean("notif_sheet_depth_custom_subject", false)
+        sheet.oneToOneTrackingEnabled = prefs.getBoolean("notif_sheet_one_to_one_tracking", false)
         sheet.lockScreenAsNotifCenterEnabled = prefs.getBoolean("notif_sheet_lockscreen_enabled", false)
         sheet.showBottomWidgets = prefs.getBoolean("notif_sheet_show_bottom_widgets", true)
         sheet.clockMorphOnNotifications = prefs.getBoolean("notif_sheet_clock_morph", true)

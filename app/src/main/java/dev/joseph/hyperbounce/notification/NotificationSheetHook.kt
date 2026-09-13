@@ -27,6 +27,7 @@ import dev.joseph.hyperbounce.notification.lockscreen.LockScreenCoverSheetContro
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
+import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -107,10 +108,17 @@ object NotificationSheetHook {
     private var containerRef: WeakReference<ViewGroup>? = null
     private var themeBackgroundViewRef: WeakReference<View>? = null
     private var blurAnimatorRef: WeakReference<Any>? = null
+    private var expandControllerRef: WeakReference<Any>? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile
     private var isKeyguardShowing: Boolean = false
+    @Volatile
+    private var lastTouchY: Float = 0f
+    @Volatile
+    private var lastTouchDy: Float = 0f
+    @Volatile
+    private var latestTouchYVelocity: Float = 0f
 
     private var cachedGlassSheetRef: WeakReference<NotificationGlassSheetView>? = null
     private var cachedHomePillRef: WeakReference<View>? = null
@@ -258,6 +266,39 @@ object NotificationSheetHook {
             return cfg.enabled && currentStatusBarState == 0 && !isKeyguardShowing && !isControlCenterActive()
         }
 
+    fun isLandscapeMode(): Boolean {
+        val container = containerRef?.get() ?: return false
+        return container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE ||
+                (container.width > 0 && container.height > 0 && container.width > container.height)
+    }
+
+    fun isOneToOneActive(): Boolean {
+        val cfg = NotificationSheetConfigHolder.sheet
+        return cfg.isOneToOneTrackingActive && !isLandscapeMode() && isUnlockedShadeActive
+    }
+
+    fun getTargetExpandThreshold(): Float {
+        val container = containerRef?.get() ?: return 200.0f
+        val h = container.resources.displayMetrics.heightPixels.toFloat()
+        return if (h > 0f) h else 200.0f
+    }
+
+    fun updateExpandThreshold(targetCtrl: Any? = null) {
+        val ctrl = targetCtrl ?: expandControllerRef?.get() ?: return
+        try {
+            val targetThresh = if (isOneToOneActive()) getTargetExpandThreshold() else 200.0f
+            val threshField = ctrl.javaClass.getDeclaredField("expandThresh")
+            threshField.isAccessible = true
+            val currentThresh = threshField.getFloat(ctrl)
+            if (abs(currentThresh - targetThresh) > 1f) {
+                threshField.setFloat(ctrl, targetThresh)
+                Log.d(TAG, "Updated NotificationPanelExpandController.expandThresh from $currentThresh to $targetThresh")
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to update expandThresh", t)
+        }
+    }
+
     fun init(module: XposedModule, classLoader: ClassLoader) {
         // 0. Crash prevention: Hook NotificationWakeUpCoordinator to prevent early NPE before stackScrollerController is injected
         hookWakeUpCoordinator(module, classLoader)
@@ -307,6 +348,15 @@ object NotificationSheetHook {
 
         // 15. Hook empty space clicks on NSSL & Panel to prevent premature collapse when image background is active
         hookEmptySpaceClick(module, classLoader)
+
+        // 16. Hook NotificationPanelExpansionAnimator to bypass Folme spring during active finger dragging for 1:1 tracking
+        hookNotificationPanelExpansionAnimator(module, classLoader)
+
+        // 17. Hook MiuiPanelAnimValueObjectImpl to scale notification translation 1:1 during 1:1 tracking
+        hookMiuiPanelAnimValueObject(module, classLoader)
+
+        // 18. Hook FakeFocusNotifControllerImpl to scale focus notification translation 1:1 during 1:1 tracking
+        hookFakeFocusNotifController(module, classLoader)
     }
 
     private fun hookWakeUpCoordinator(module: XposedModule, classLoader: ClassLoader) {
@@ -421,6 +471,7 @@ object NotificationSheetHook {
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
                                 val newState = (args[0] as Number).toInt()
                                 currentStatusBarState = newState
+                                updateExpandThreshold()
 
                                 if (newState != 0) {
                                     isKeyguardShowing = true
@@ -813,6 +864,22 @@ object NotificationSheetHook {
                                     if (container != null) {
                                         onContainerAcquired(container)
                                     }
+                                    if (expandControllerRef?.get() == null) {
+                                        try {
+                                            val notifInjField = npvc.javaClass.getDeclaredField("mNotifInjector")
+                                            notifInjField.isAccessible = true
+                                            val inj = notifInjField.get(npvc)
+                                            if (inj != null) {
+                                                val helperField = inj.javaClass.getDeclaredField("expandHelper")
+                                                helperField.isAccessible = true
+                                                val helper = helperField.get(inj)
+                                                if (helper != null) {
+                                                    expandControllerRef = WeakReference(helper)
+                                                    updateExpandThreshold(helper)
+                                                }
+                                            }
+                                        } catch (_: Throwable) {}
+                                    }
                                 }
                             } catch (t: Throwable) {
                                 Log.e(TAG, "Error in NotificationPanelViewController.onFinishInflate hook", t)
@@ -862,6 +929,11 @@ object NotificationSheetHook {
 
     private fun onContainerAcquired(container: ViewGroup) {
         containerRef = WeakReference(container)
+        container.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            if ((right - left) != (oldRight - oldLeft) || (bottom - top) != (oldBottom - oldTop)) {
+                updateExpandThreshold()
+            }
+        }
         mainHandler.post {
             registerSettingsReceiver(container.context)
             // Keep container clip settings stock
@@ -1115,8 +1187,18 @@ object NotificationSheetHook {
                     val cfg = NotificationSheetConfigHolder.sheet
                     var handled = true
                     when (key) {
-                        "notif_sheet_enabled" -> cfg.enabled = intent.getBooleanExtra("value_boolean", cfg.enabled)
-                        "notif_sheet_lock_wallpaper_enabled" -> cfg.lockWallpaperEnabled = intent.getBooleanExtra("value_boolean", cfg.lockWallpaperEnabled)
+                        "notif_sheet_enabled" -> {
+                            cfg.enabled = intent.getBooleanExtra("value_boolean", cfg.enabled)
+                            updateExpandThreshold()
+                        }
+                        "notif_sheet_lock_wallpaper_enabled" -> {
+                            cfg.lockWallpaperEnabled = intent.getBooleanExtra("value_boolean", cfg.lockWallpaperEnabled)
+                            updateExpandThreshold()
+                        }
+                        "notif_sheet_one_to_one_tracking" -> {
+                            cfg.oneToOneTrackingEnabled = intent.getBooleanExtra("value_boolean", cfg.oneToOneTrackingEnabled)
+                            updateExpandThreshold()
+                        }
                         "notif_sheet_custom_wallpaper_enabled" -> {
                             cfg.customWallpaperEnabled = intent.getBooleanExtra("value_boolean", cfg.customWallpaperEnabled)
                             CustomWallpaperHelper.invalidateCache()
@@ -1634,10 +1716,96 @@ object NotificationSheetHook {
     private fun hookExpandController(module: XposedModule, classLoader: ClassLoader) {
         try {
             val expandControllerClass = Class.forName("com.android.systemui.shade.NotificationPanelExpandController", false, classLoader)
+            for (c in expandControllerClass.declaredConstructors) {
+                module.hook(c).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        val result = chain.proceed()
+                        try {
+                            val ctrl = chain.thisObject
+                            if (ctrl != null) {
+                                expandControllerRef = WeakReference(ctrl)
+                                updateExpandThreshold(ctrl)
+                            }
+                        } catch (t: Throwable) {
+                            Log.e(TAG, "Error in expandController constructor hook", t)
+                        }
+                        return result
+                    }
+                })
+            }
             for (m: Method in expandControllerClass.declaredMethods) {
-                if (m.name == "onExpandFinish" && m.parameterTypes.isEmpty()) {
+                if (m.name == "getExpandThresh" && m.parameterTypes.isEmpty()) {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
+                            if (isOneToOneActive()) {
+                                return getTargetExpandThreshold()
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                } else if (m.name == "onExpandFinish" && m.parameterTypes.isEmpty()) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            try {
+                                val ctrl = chain.thisObject
+                                if (ctrl != null) {
+                                    if (expandControllerRef?.get() == null) {
+                                        expandControllerRef = WeakReference(ctrl)
+                                    }
+                                    if (isOneToOneActive()) {
+                                        val hField = ctrl.javaClass.getDeclaredField("expandHeight")
+                                        hField.isAccessible = true
+                                        val expandHeight = hField.getFloat(ctrl)
+                                        val thresh = getTargetExpandThreshold()
+                                        val frac = if (thresh > 0f) (expandHeight / thresh).coerceIn(0f, 1f) else 0f
+
+                                        val isFling = latestFlingVelocity > 800f
+                                        val shouldAppear = if (isFling) {
+                                            latestTouchYVelocity > 0f || lastTouchDy >= 0f // flung down -> open; flung up -> close
+                                        } else {
+                                            frac >= 0.50f // 50% halfway threshold snap!
+                                        }
+
+                                        val appF = ctrl.javaClass.getDeclaredField("appearance")
+                                        appF.isAccessible = true
+                                        val oldApp = appF.getBoolean(ctrl)
+                                        appF.setBoolean(ctrl, shouldAppear)
+
+                                        if (oldApp != shouldAppear) {
+                                            try {
+                                                val panelAnimF = ctrl.javaClass.getDeclaredField("panelAnimator")
+                                                panelAnimF.isAccessible = true
+                                                val panelAnim = panelAnimF.get(ctrl)
+                                                if (panelAnim != null) {
+                                                    val animM = panelAnim.javaClass.getDeclaredMethod("startPanelVisibleAnimation", Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+                                                    animM.isAccessible = true
+                                                    animM.invoke(panelAnim, shouldAppear, true, true)
+                                                }
+                                            } catch (_: Throwable) {}
+
+                                            try {
+                                                val fakeFocusF = ctrl.javaClass.getDeclaredField("fakeFocusNotifController")
+                                                fakeFocusF.isAccessible = true
+                                                val fakeFocus = fakeFocusF.get(ctrl)
+                                                if (fakeFocus != null) {
+                                                    val focusM = fakeFocus.javaClass.getDeclaredMethod("startVisibleAnimation", Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+                                                    focusM.isAccessible = true
+                                                    focusM.invoke(fakeFocus, shouldAppear, true)
+                                                }
+                                            } catch (_: Throwable) {}
+
+                                            try {
+                                                val notifyM = ctrl.javaClass.getDeclaredMethod("notifyAppearanceChanged", Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+                                                notifyM.isAccessible = true
+                                                notifyM.invoke(ctrl, shouldAppear, true)
+                                            } catch (_: Throwable) {}
+                                        }
+                                    }
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "Error in onExpandFinish pre-intercept", t)
+                            }
+
                             val result = chain.proceed()
                             try {
                                 val ctrl = chain.thisObject
@@ -1646,13 +1814,25 @@ object NotificationSheetHook {
                                     appF.isAccessible = true
                                     val appearance = appF.getBoolean(ctrl)
                                     if (appearance) {
-                                        if (isUnlockedShadeActive && lastAppliedFraction >= 0.80f) {
+                                        if (isUnlockedShadeActive && (lastAppliedFraction >= 0.80f || isOneToOneActive())) {
                                             isShadeOpen = true
                                             isShadeFullyOpen = true
                                             hasFullyOpenedForCurrentSession = true
                                             hasTriggeredUnlockForCurrentOpen = false
                                         }
                                     } else {
+                                        if (isUnlockedShadeActive && hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen && !isLaunchingNotificationActivity) {
+                                            val container = containerRef?.get()
+                                            if (container != null) {
+                                                isClosingMode = true
+                                                val curSheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+                                                curSheet?.isClosingMode = true
+                                                curSheet?.isClosingFromFullOpen = true
+                                                hasTriggeredUnlockForCurrentOpen = true
+                                                hasFullyOpenedForCurrentSession = false
+                                                notifyCloseOverHomescreen(container.context)
+                                            }
+                                        }
                                         RealtimeBackdropHelper.stopLiveRefresh()
                                         isShadeOpen = false
                                         isShadeFullyOpen = false
@@ -2018,28 +2198,40 @@ object NotificationSheetHook {
                 isUserTouchingShade = true
                 touchDownX = event.rawX
                 touchDownY = event.rawY
+                lastTouchY = event.rawY
+                lastTouchDy = 0f
+                latestFlingVelocity = 0f
+                latestTouchYVelocity = 0f
+                updateExpandThreshold()
                 shadeVelocityTracker?.recycle()
                 shadeVelocityTracker = VelocityTracker.obtain()
                 shadeVelocityTracker?.addMovement(event)
             }
             MotionEvent.ACTION_MOVE -> {
                 isUserTouchingShade = true
+                lastTouchDy = event.rawY - lastTouchY
+                lastTouchY = event.rawY
                 shadeVelocityTracker?.addMovement(event)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val wasTouching = isUserTouchingShade
                 isUserTouchingShade = false
                 val dy = event.rawY - touchDownY
+                val upDy = event.rawY - lastTouchY
+                if (kotlin.math.abs(upDy) > 0.1f) {
+                    lastTouchDy = upDy
+                }
 
                 var touchVelocity = 0.0f
                 try {
                     shadeVelocityTracker?.addMovement(event)
                     shadeVelocityTracker?.computeCurrentVelocity(1000)
                     val yVel = shadeVelocityTracker?.yVelocity ?: 0.0f
+                    latestTouchYVelocity = yVel
                     touchVelocity = kotlin.math.abs(yVel)
                     if (touchVelocity > 0.0f) {
                         latestFlingVelocity = touchVelocity
-                        Log.d(TAG, "Captured touch fling velocity from VelocityTracker: $latestFlingVelocity")
+                        Log.d(TAG, "Captured touch fling velocity from VelocityTracker: $latestFlingVelocity, yVel=$yVel, dy=$lastTouchDy")
                     }
                 } catch (_: Throwable) {} finally {
                     shadeVelocityTracker?.recycle()
@@ -2279,6 +2471,104 @@ object NotificationSheetHook {
             } catch (t: Throwable) {
                 Log.d(TAG, "Failed to hook $clsName for empty space clicks: ${t.message}")
             }
+        }
+    }
+
+    private fun hookNotificationPanelExpansionAnimator(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val animClass = Class.forName("com.android.systemui.shade.NotificationPanelExpansionAnimator", false, classLoader)
+            for (m: Method in animClass.declaredMethods) {
+                if (m.name.startsWith("updateExpansion") && m.parameterTypes.size == 2 &&
+                    m.parameterTypes[0] == Float::class.javaPrimitiveType &&
+                    m.parameterTypes[1] == Boolean::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            if (isOneToOneActive() && isUserTouchingShade) {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else (rawArgs as Array<Any?>).clone()
+                                args[1] = false // setTo instead of to: zero spring oscillation while tracking finger
+                                return chain.proceed(args)
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked NotificationPanelExpansionAnimator.${m.name}")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook NotificationPanelExpansionAnimator", t)
+        }
+    }
+
+    private fun hookMiuiPanelAnimValueObject(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val animVoClass = Class.forName("com.android.systemui.shade.MiuiPanelAnimValueObjectImpl", false, classLoader)
+            for (m: Method in animVoClass.declaredMethods) {
+                if (m.name == "changeExpand" && m.parameterTypes.size >= 5 &&
+                    m.parameterTypes[4] == Float::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            if (isOneToOneActive()) {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else (rawArgs as Array<Any?>).clone()
+                                val f = (args[4] as? Number)?.toFloat() ?: 0f
+                                val screenH = getTargetExpandThreshold()
+                                if (screenH > 0f) {
+                                    val remapped = if (f <= screenH) {
+                                        (f / screenH) * 200.0f
+                                    } else {
+                                        200.0f + (f - screenH)
+                                    }
+                                    args[4] = remapped
+                                    return chain.proceed(args)
+                                }
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked MiuiPanelAnimValueObjectImpl.changeExpand")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook MiuiPanelAnimValueObjectImpl", t)
+        }
+    }
+
+    private fun hookFakeFocusNotifController(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val fakeFocusClass = Class.forName("com.android.systemui.statusbar.notification.policy.FakeFocusNotifControllerImpl", false, classLoader)
+            for (m: Method in fakeFocusClass.declaredMethods) {
+                if (m.name == "startExpandAnimation" && m.parameterTypes.size == 2 &&
+                    m.parameterTypes[0] == Float::class.javaPrimitiveType &&
+                    m.parameterTypes[1] == Boolean::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            if (isOneToOneActive()) {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else (rawArgs as Array<Any?>).clone()
+                                val f = (args[0] as? Number)?.toFloat() ?: 0f
+                                val screenH = getTargetExpandThreshold()
+                                if (screenH > 0f) {
+                                    val remapped = if (f <= screenH) {
+                                        (f / screenH) * 200.0f
+                                    } else {
+                                        200.0f + (f - screenH)
+                                    }
+                                    args[0] = remapped
+                                    return chain.proceed(args)
+                                }
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked FakeFocusNotifControllerImpl.startExpandAnimation")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook FakeFocusNotifControllerImpl", t)
         }
     }
 }
