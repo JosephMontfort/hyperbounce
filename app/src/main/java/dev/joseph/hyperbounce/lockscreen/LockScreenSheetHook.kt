@@ -9,6 +9,8 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
@@ -35,6 +37,34 @@ object LockScreenSheetHook {
     var lockscreenFlingVelocity: Float = 0.0f
     private var lastExpansionFraction: Float = 1.0f
     private var lastExpansionTime: Long = 0L
+    private var lockscreenVelocityTracker: VelocityTracker? = null
+
+    private fun handleLockscreenTouchEvent(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                lockscreenVelocityTracker?.recycle()
+                lockscreenVelocityTracker = VelocityTracker.obtain()
+                lockscreenVelocityTracker?.addMovement(event)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                lockscreenVelocityTracker?.addMovement(event)
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                try {
+                    lockscreenVelocityTracker?.addMovement(event)
+                    lockscreenVelocityTracker?.computeCurrentVelocity(1000)
+                    val yVel = abs(lockscreenVelocityTracker?.yVelocity ?: 0.0f)
+                    if (yVel > 50.0f) {
+                        lockscreenFlingVelocity = yVel
+                        Log.d(TAG, "Captured lockscreen touch fling velocity: $lockscreenFlingVelocity")
+                    }
+                } catch (_: Throwable) {} finally {
+                    lockscreenVelocityTracker?.recycle()
+                    lockscreenVelocityTracker = null
+                }
+            }
+        }
+    }
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
         // 1. Hook KeyguardPanelViewController (HyperOS Lockscreen Controller)
@@ -287,31 +317,22 @@ object LockScreenSheetHook {
 
                                     try {
                                         val context = rootView.context
-                                        val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
                                         val vel = max(
                                             lockscreenFlingVelocity,
                                             dev.joseph.hyperbounce.notification.NotificationSheetHook.latestFlingVelocity
                                         )
-                                        if (vel > 0.0f) {
-                                            intent.putExtra("EXTRA_VELOCITY", vel)
+                                        listOf("com.miui.home", "com.mi.android.globallauncher").forEach { pkg ->
+                                            try {
+                                                val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
+                                                    if (vel > 0.0f) {
+                                                        putExtra("EXTRA_VELOCITY", vel)
+                                                    }
+                                                    setPackage(pkg)
+                                                    addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+                                                }
+                                                context.sendBroadcast(intent)
+                                            } catch (_: Throwable) {}
                                         }
-                                        intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
-                                        val pm = context.packageManager
-                                        val isMiuiHome = try {
-                                            pm.getPackageInfo("com.miui.home", 0) != null
-                                        } catch (_: Throwable) { false }
-                                        if (isMiuiHome) {
-                                            intent.setPackage("com.miui.home")
-                                        } else {
-                                            intent.setPackage("com.mi.android.globallauncher")
-                                        }
-                                        context.sendBroadcast(intent)
-                                        try {
-                                            io.github.libxposed.service.XposedServiceBridge.remotePreferencesOrNull("hyperbounce_prefs")?.edit()
-                                                ?.putFloat("last_unlock_velocity", vel)
-                                                ?.putLong("last_unlock_time", System.currentTimeMillis())
-                                                ?.apply()
-                                        } catch (_: Throwable) {}
                                         Log.d(TAG, "Dispatched ACTION_TRIGGER_UNLOCK_ANIMATION on keyguard dismiss (vel=$vel)")
                                     } catch (t: Throwable) {
                                         Log.e(TAG, "Failed to broadcast unlock on keyguard dismiss", t)
@@ -327,7 +348,7 @@ object LockScreenSheetHook {
             Log.e(TAG, "KPVC class hook error", t)
         }
 
-        // 2. Hook KeyguardRootView & HyperOSKeyguardRootView onLayout to maintain full bounds
+        // 2. Hook KeyguardRootView & HyperOSKeyguardRootView onLayout & dispatchTouchEvent
         val rootViewClasses = arrayOf(
             "com.android.keyguard.widget.HyperOSKeyguardRootView",
             "com.android.systemui.keyguard.ui.view.KeyguardRootView"
@@ -348,6 +369,19 @@ object LockScreenSheetHook {
                                     }
                                 } catch (_: Throwable) {}
                                 return result
+                            }
+                        })
+                    } else if (m.name == "dispatchTouchEvent" && m.parameterTypes.size == 1 &&
+                        m.parameterTypes[0] == MotionEvent::class.java
+                    ) {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val rawArgs = chain.args
+                                val event = (if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as? MotionEvent
+                                if (event != null) {
+                                    handleLockscreenTouchEvent(event)
+                                }
+                                return chain.proceed()
                             }
                         })
                     }

@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import io.github.libxposed.api.XposedInterface
 import java.lang.ref.WeakReference
 import java.lang.reflect.Constructor
@@ -185,22 +186,6 @@ object ScreenUnlockHook {
                             }
                             currentRow.set(calculatedRow)
 
-                            var vel = latestVelocity
-                            val timeSinceVelocity = System.currentTimeMillis() - lastVelocityTime
-                            if (timeSinceVelocity > 2500L || vel <= 0f) {
-                                try {
-                                    val remotePrefs = io.github.libxposed.service.XposedServiceBridge.remotePreferencesOrNull("hyperbounce_prefs")
-                                    val remoteTime = remotePrefs?.getLong("last_unlock_time", 0L) ?: 0L
-                                    if (System.currentTimeMillis() - remoteTime < 2500L) {
-                                        vel = remotePrefs?.getFloat("last_unlock_velocity", 0f) ?: 0f
-                                        if (vel > 0f) {
-                                            latestVelocity = vel
-                                            lastVelocityTime = remoteTime
-                                        }
-                                    }
-                                } catch (_: Throwable) {}
-                            }
-
                             val timeDelta = System.currentTimeMillis() - lastVelocityTime
                             if (timeDelta < 2500L && latestVelocity > 0f) {
                                 val normV = (latestVelocity / cfg.maxVelocity).coerceIn(0.0f, 1.0f)
@@ -300,7 +285,9 @@ object ScreenUnlockHook {
                             // so the physical plunge depth into the screen is governed strictly by the bounce slider,
                             // not inflated by higher start Z!
                             val baseZ = cfg.getDyn("r${safeRow}_z", ScreenUnlockDefaults.rowZ(safeRow, cfg.gridRows)).coerceAtLeast(100.0f)
-                            val zRatio = (500.0f / baseZ).coerceIn(0.20f, 2.0f)
+                            val zMult = 1.0f + (velocityBoost * 0.35f)
+                            val targetZ = (baseZ * zMult).coerceAtLeast(10.0f)
+                            val zRatio = (500.0f / targetZ).coerceIn(0.20f, 2.0f)
 
                             val finalDamping: Float
                             if (customBounce <= 0.0f) {
@@ -310,15 +297,15 @@ object ScreenUnlockHook {
                                 // Resting Damping sensitivity scaling:
                                 // cfg.cascadeDamping default is 0.86. (1.0 - 0.86) / 0.14 = 1.0.
                                 val dampingSensitivity = ((1.0f - cfg.cascadeDamping) / 0.14f).coerceAtLeast(0.1f)
-                                val effectiveBounce = customBounce * (1.0f + (velocityBoost * 0.75f))
-                                val dampingDrop = effectiveBounce * zRatio * dampingSensitivity * 0.40f
-                                finalDamping = (1.0f - dampingDrop).coerceIn(0.20f, 1.0f)
+                                val effectiveBounce = customBounce * (1.0f + (velocityBoost * 1.5f))
+                                val dampingDrop = effectiveBounce * zRatio * dampingSensitivity * 1.35f
+                                finalDamping = (1.0f - dampingDrop).coerceIn(0.25f, 1.0f)
                             }
 
                             // Settle response:
                             // Scaled by universal duration scale, and quickened by swipe velocity:
                             val scaledResponse = customSettle * cfg.durationScale
-                            val finalResponse = (scaledResponse / (1.0f + (velocityBoost * 0.30f))).coerceIn(0.15f, 1.5f)
+                            val finalResponse = (scaledResponse / (1.0f + (velocityBoost * 0.40f))).coerceIn(0.15f, 1.5f)
 
                             activeResponse.set(finalResponse)
                             activeDamping.set(finalDamping)
@@ -380,11 +367,20 @@ object ScreenUnlockHook {
                             try {
                                 val getMethod = chain.thisObject.javaClass.getMethod("getSpringAnimation")
                                 val springAnim = getMethod.invoke(chain.thisObject)
-                                if (springAnim is androidx.dynamicanimation.animation.DynamicAnimation<*>) {
+                                if (springAnim != null) {
+                                    val listenerClass = Class.forName("androidx.dynamicanimation.animation.DynamicAnimation\$OnAnimationEndListener", false, springAnim.javaClass.classLoader)
+                                    val addEndListenerMethod = springAnim.javaClass.getMethod("addEndListener", listenerClass)
                                     val weakV = WeakReference(v)
-                                    springAnim.addEndListener { _, _, _, _ ->
-                                        weakV.get()?.translationZ = 0.0f
+                                    val proxy = java.lang.reflect.Proxy.newProxyInstance(
+                                        springAnim.javaClass.classLoader,
+                                        arrayOf(listenerClass)
+                                    ) { _, method, _ ->
+                                        if (method.name == "onAnimationEnd") {
+                                            weakV.get()?.translationZ = 0.0f
+                                        }
+                                        null
                                     }
+                                    addEndListenerMethod.invoke(springAnim, proxy)
                                 }
                             } catch (_: Throwable) {}
                         }

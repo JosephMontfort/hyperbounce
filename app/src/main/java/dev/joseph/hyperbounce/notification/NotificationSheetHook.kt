@@ -793,9 +793,16 @@ object NotificationSheetHook {
                                     }
                                 }
                                 val absVel = kotlin.math.abs(velocity)
-                                if (!isExpanding && absVel > 0.0f) {
-                                    latestFlingVelocity = absVel
-                                    Log.d(TAG, "Captured shade/unlock fling velocity (${m.name}): $latestFlingVelocity")
+                                if (!isExpanding) {
+                                    val effectiveVel = if (absVel > 0.0f) absVel else latestFlingVelocity
+                                    if (effectiveVel > 0.0f) {
+                                        latestFlingVelocity = effectiveVel
+                                        Log.d(TAG, "Captured shade/unlock fling velocity (${m.name}): $latestFlingVelocity")
+                                    }
+                                    val ctx = containerRef?.get()?.context
+                                    if (ctx != null && (isHomeScreenCached || isHomeScreenTop(ctx))) {
+                                        notifyCloseOverHomescreen(ctx, effectiveVel)
+                                    }
                                 }
                             } catch (_: Throwable) {}
                             return chain.proceed()
@@ -1261,34 +1268,19 @@ object NotificationSheetHook {
         lastUnlockTriggerTime = now
 
         if (isHomeScreenCached || isHomeScreenTop(context)) {
-            try {
-                // Send ONLY ONE targeted broadcast to the active launcher package to prevent double-firing
-                val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
-                if (velocity > 0.0f) {
-                    intent.putExtra("EXTRA_VELOCITY", velocity)
+                listOf("com.miui.home", "com.mi.android.globallauncher").forEach { pkg ->
+                    try {
+                        val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
+                            if (velocity > 0.0f) {
+                                putExtra("EXTRA_VELOCITY", velocity)
+                            }
+                            setPackage(pkg)
+                            addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+                        }
+                        context.sendBroadcast(intent)
+                    } catch (_: Throwable) {}
                 }
-                val pm = context.packageManager
-                val isMiuiHome = try {
-                    pm.getPackageInfo("com.miui.home", 0) != null
-                } catch (_: Throwable) { false }
-                val isGlobalLauncher = !isMiuiHome && try {
-                    pm.getPackageInfo("com.mi.android.globallauncher", 0) != null
-                } catch (_: Throwable) { false }
-
-                if (isMiuiHome) {
-                    intent.setPackage("com.miui.home")
-                } else if (isGlobalLauncher) {
-                    intent.setPackage("com.mi.android.globallauncher")
-                }
-                intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
-                context.sendBroadcast(intent)
-                try {
-                    io.github.libxposed.service.XposedServiceBridge.remotePreferencesOrNull("hyperbounce_prefs")?.edit()
-                        ?.putFloat("last_unlock_velocity", velocity)
-                        ?.putLong("last_unlock_time", System.currentTimeMillis())
-                        ?.apply()
-                } catch (_: Throwable) {}
-                Log.d(TAG, "Dispatched single ACTION_TRIGGER_UNLOCK_ANIMATION to launcher (pkg=${intent.`package`}, velocity=$velocity)")
+                Log.d(TAG, "Dispatched ACTION_TRIGGER_UNLOCK_ANIMATION to launcher (velocity=$velocity)")
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to send unlock broadcast", t)
             }
