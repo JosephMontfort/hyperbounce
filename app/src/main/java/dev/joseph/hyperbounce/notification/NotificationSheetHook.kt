@@ -119,6 +119,8 @@ object NotificationSheetHook {
     private var lastTouchDy: Float = 0f
     @Volatile
     private var latestTouchYVelocity: Float = 0f
+    @Volatile
+    private var isOpeningGesture: Boolean = false
 
     private var cachedGlassSheetRef: WeakReference<NotificationGlassSheetView>? = null
     private var cachedHomePillRef: WeakReference<View>? = null
@@ -913,10 +915,6 @@ object NotificationSheetHook {
                                     if (effectiveVel > 0.0f) {
                                         latestFlingVelocity = effectiveVel
                                         Log.d(TAG, "Captured shade/unlock fling velocity (${m.name}): $latestFlingVelocity")
-                                    }
-                                    val ctx = containerRef?.get()?.context
-                                    if (ctx != null && (isHomeScreenCached || isHomeScreenTop(ctx))) {
-                                        notifyCloseOverHomescreen(ctx, effectiveVel)
                                     }
                                 }
                             } catch (_: Throwable) {}
@@ -1763,70 +1761,103 @@ object NotificationSheetHook {
 
                                         val container = containerRef?.get()
                                         val density = container?.resources?.displayMetrics?.density ?: 2.75f
-                                        val isFlingDown = (latestTouchYVelocity > 250f * density || (latestFlingVelocity > 250f * density && lastTouchDy >= 0f))
-                                        val isUpwardFling = (latestTouchYVelocity < -200f || (latestFlingVelocity >= 200f && lastTouchDy < 0f))
-                                        val isSettledOpen = (lastAppliedFraction >= 0.65f || hasFullyOpenedForCurrentSession || isShadeFullyOpen)
+                                        val dy = lastTouchY - touchDownY
+                                        val isPulldown = isOpeningGesture || dy > 10f * density
 
-                                        val shouldAppear = if (oldApp) {
-                                            // Was already open: closing gesture or swiping up closes it
-                                            if (isUpwardFling || lastTouchDy < -5f * density || lastAppliedFraction < 0.70f) {
-                                                false
+                                        if (isPulldown) {
+                                            val isFlingDown = (latestTouchYVelocity > 120f * density || (latestFlingVelocity > 120f * density && (lastTouchDy >= 0f || dy > 15f * density)))
+                                            val isSettledOpen = (lastAppliedFraction >= 0.50f || hasFullyOpenedForCurrentSession || isShadeFullyOpen)
+                                            val shouldAppear = isFlingDown || isSettledOpen || (lastAppliedFraction >= 0.35f && lastTouchDy >= 0f)
+
+                                            appF.setBoolean(ctrl, shouldAppear)
+
+                                            if (shouldAppear) {
+                                                try {
+                                                    val setHMethod = ctrl.javaClass.getDeclaredMethod("setExpandHeight", Float::class.javaPrimitiveType)
+                                                    setHMethod.isAccessible = true
+                                                    setHMethod.invoke(ctrl, thresh)
+                                                } catch (_: Throwable) {
+                                                    try {
+                                                        val hField = ctrl.javaClass.getDeclaredField("expandHeight")
+                                                        hField.isAccessible = true
+                                                        hField.setFloat(ctrl, thresh)
+                                                    } catch (_: Throwable) {}
+                                                }
+
+                                                if (!oldApp) {
+                                                    try {
+                                                        val panelAnimF = ctrl.javaClass.getDeclaredField("panelAnimator")
+                                                        panelAnimF.isAccessible = true
+                                                        val panelAnim = panelAnimF.get(ctrl)
+                                                        if (panelAnim != null) {
+                                                            val animM = panelAnim.javaClass.getDeclaredMethod("startPanelVisibleAnimation", Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+                                                            animM.isAccessible = true
+                                                            animM.invoke(panelAnim, true, true, true)
+                                                        }
+                                                    } catch (_: Throwable) {}
+
+                                                    try {
+                                                        val fakeFocusF = ctrl.javaClass.getDeclaredField("fakeFocusNotifController")
+                                                        fakeFocusF.isAccessible = true
+                                                        val fakeFocus = fakeFocusF.get(ctrl)
+                                                        if (fakeFocus != null) {
+                                                            val focusM = fakeFocus.javaClass.getDeclaredMethod("startVisibleAnimation", Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+                                                            focusM.isAccessible = true
+                                                            focusM.invoke(fakeFocus, true, true)
+                                                        }
+                                                    } catch (_: Throwable) {}
+
+                                                    try {
+                                                        val notifyM = ctrl.javaClass.getDeclaredMethod("notifyAppearanceChanged", Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+                                                        notifyM.isAccessible = true
+                                                        notifyM.invoke(ctrl, true, true)
+                                                    } catch (_: Throwable) {}
+                                                }
                                             } else {
-                                                true
+                                                try {
+                                                    val setHMethod = ctrl.javaClass.getDeclaredMethod("setExpandHeight", Float::class.javaPrimitiveType)
+                                                    setHMethod.isAccessible = true
+                                                    setHMethod.invoke(ctrl, 0.0f)
+                                                } catch (_: Throwable) {
+                                                    try {
+                                                        val hField = ctrl.javaClass.getDeclaredField("expandHeight")
+                                                        hField.isAccessible = true
+                                                        hField.setFloat(ctrl, 0.0f)
+                                                    } catch (_: Throwable) {}
+                                                }
+
+                                                if (oldApp) {
+                                                    try {
+                                                        val panelAnimF = ctrl.javaClass.getDeclaredField("panelAnimator")
+                                                        panelAnimF.isAccessible = true
+                                                        val panelAnim = panelAnimF.get(ctrl)
+                                                        if (panelAnim != null) {
+                                                            val animM = panelAnim.javaClass.getDeclaredMethod("startPanelVisibleAnimation", Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+                                                            animM.isAccessible = true
+                                                            animM.invoke(panelAnim, false, true, true)
+                                                        }
+                                                    } catch (_: Throwable) {}
+
+                                                    try {
+                                                        val fakeFocusF = ctrl.javaClass.getDeclaredField("fakeFocusNotifController")
+                                                        fakeFocusF.isAccessible = true
+                                                        val fakeFocus = fakeFocusF.get(ctrl)
+                                                        if (fakeFocus != null) {
+                                                            val focusM = fakeFocus.javaClass.getDeclaredMethod("startVisibleAnimation", Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+                                                            focusM.isAccessible = true
+                                                            focusM.invoke(fakeFocus, false, true)
+                                                        }
+                                                    } catch (_: Throwable) {}
+
+                                                    try {
+                                                        val notifyM = ctrl.javaClass.getDeclaredMethod("notifyAppearanceChanged", Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+                                                        notifyM.isAccessible = true
+                                                        notifyM.invoke(ctrl, false, true)
+                                                    } catch (_: Throwable) {}
+                                                }
                                             }
                                         } else {
-                                            // Was closed: opening gesture
-                                            if (isFlingDown || isSettledOpen) {
-                                                true
-                                            } else {
-                                                lastAppliedFraction >= 0.40f && lastTouchDy >= 0f
-                                            }
-                                        }
-
-                                        appF.setBoolean(ctrl, shouldAppear)
-
-                                        if (shouldAppear) {
-                                            try {
-                                                val setHMethod = ctrl.javaClass.getDeclaredMethod("setExpandHeight", Float::class.javaPrimitiveType)
-                                                setHMethod.isAccessible = true
-                                                setHMethod.invoke(ctrl, thresh)
-                                            } catch (_: Throwable) {
-                                                try {
-                                                    val hField = ctrl.javaClass.getDeclaredField("expandHeight")
-                                                    hField.isAccessible = true
-                                                    hField.setFloat(ctrl, thresh)
-                                                } catch (_: Throwable) {}
-                                            }
-                                        }
-
-                                        if (oldApp != shouldAppear) {
-                                            try {
-                                                val panelAnimF = ctrl.javaClass.getDeclaredField("panelAnimator")
-                                                panelAnimF.isAccessible = true
-                                                val panelAnim = panelAnimF.get(ctrl)
-                                                if (panelAnim != null) {
-                                                    val animM = panelAnim.javaClass.getDeclaredMethod("startPanelVisibleAnimation", Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
-                                                    animM.isAccessible = true
-                                                    animM.invoke(panelAnim, shouldAppear, true, true)
-                                                }
-                                            } catch (_: Throwable) {}
-
-                                            try {
-                                                val fakeFocusF = ctrl.javaClass.getDeclaredField("fakeFocusNotifController")
-                                                fakeFocusF.isAccessible = true
-                                                val fakeFocus = fakeFocusF.get(ctrl)
-                                                if (fakeFocus != null) {
-                                                    val focusM = fakeFocus.javaClass.getDeclaredMethod("startVisibleAnimation", Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
-                                                    focusM.isAccessible = true
-                                                    focusM.invoke(fakeFocus, shouldAppear, true)
-                                                }
-                                            } catch (_: Throwable) {}
-
-                                            try {
-                                                val notifyM = ctrl.javaClass.getDeclaredMethod("notifyAppearanceChanged", Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
-                                                notifyM.isAccessible = true
-                                                notifyM.invoke(ctrl, shouldAppear, true)
-                                            } catch (_: Throwable) {}
+                                            // Closing gesture (swiping up from open shade): Let stock Xiaomi algorithm fully handle closing!
                                         }
                                     }
                                 }
@@ -1842,26 +1873,13 @@ object NotificationSheetHook {
                                     appF.isAccessible = true
                                     val appearance = appF.getBoolean(ctrl)
                                     if (appearance) {
-                                        if (isUnlockedShadeActive && (lastAppliedFraction >= 0.65f || hasFullyOpenedForCurrentSession || isShadeFullyOpen)) {
+                                        if (isUnlockedShadeActive && (lastAppliedFraction >= 0.50f || hasFullyOpenedForCurrentSession || isShadeFullyOpen)) {
                                             isShadeOpen = true
                                             isShadeFullyOpen = true
                                             hasFullyOpenedForCurrentSession = true
                                             hasTriggeredUnlockForCurrentOpen = false
                                         }
                                     } else {
-                                        if (isUnlockedShadeActive && hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen && !isLaunchingNotificationActivity) {
-                                            val container = containerRef?.get()
-                                            if (container != null) {
-                                                isClosingMode = true
-                                                val curSheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
-                                                curSheet?.isClosingMode = true
-                                                curSheet?.isClosingFromFullOpen = true
-                                                hasTriggeredUnlockForCurrentOpen = true
-                                                hasFullyOpenedForCurrentSession = false
-                                                val effectiveVel = if (latestFlingVelocity > 0f) latestFlingVelocity else 0f
-                                                notifyCloseOverHomescreen(container.context, effectiveVel)
-                                            }
-                                        }
                                         RealtimeBackdropHelper.stopLiveRefresh()
                                         isShadeOpen = false
                                         isShadeFullyOpen = false
@@ -1883,16 +1901,6 @@ object NotificationSheetHook {
                             val animated = args[0] as Boolean
                             try {
                                 if (isUnlockedShadeActive) {
-                                    val container = containerRef?.get()
-                                    if (container != null && hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen && !isLaunchingNotificationActivity) {
-                                        isClosingMode = true
-                                        val curSheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
-                                        curSheet?.isClosingMode = true
-                                        curSheet?.isClosingFromFullOpen = true
-                                        hasTriggeredUnlockForCurrentOpen = true
-                                        hasFullyOpenedForCurrentSession = false
-                                        notifyCloseOverHomescreen(container.context)
-                                    }
                                     isShadeFullyOpen = false
                                     if (!animated) {
                                         applyExpansionFraction(0.0f)
@@ -2232,6 +2240,7 @@ object NotificationSheetHook {
                 lastTouchDy = 0f
                 latestFlingVelocity = 0f
                 latestTouchYVelocity = 0f
+                isOpeningGesture = !isShadeFullyOpen || lastAppliedFraction < 0.20f
                 updateExpandThreshold()
 
                 shadeVelocityTracker?.recycle()
@@ -2240,6 +2249,12 @@ object NotificationSheetHook {
             }
             MotionEvent.ACTION_MOVE -> {
                 isUserTouchingShade = true
+                val dyFromDown = event.rawY - touchDownY
+                if (dyFromDown > 20f * density) {
+                    isOpeningGesture = true
+                } else if (dyFromDown < -20f * density && isShadeFullyOpen) {
+                    isOpeningGesture = false
+                }
                 lastTouchDy = event.rawY - lastTouchY
                 lastTouchY = event.rawY
                 shadeVelocityTracker?.addMovement(event)
@@ -2273,31 +2288,19 @@ object NotificationSheetHook {
                     val dm = container.resources.displayMetrics
                     val density = dm.density
                     val screenH = dm.heightPixels.toFloat()
-                    val clockBottom = LockScreenCoverSheetController.getEffectiveClockBottom(container)
 
-                    val isClockArea = touchDownY <= clockBottom + (30f * density)
                     val isBottomArea = touchDownY >= screenH - (130f * density)
-                    val isPanelMovingUp = lastAppliedFraction < 0.98f
-                    val isUpwardFling = (latestTouchYVelocity < -200f || (touchVelocity >= 200f && (lastTouchDy < 0f || dy < -5f * density)))
+                    val isUpwardSwipe = (dy < -20f * density) && (lastTouchDy <= 0f || latestTouchYVelocity < -100f)
 
-                    // Crucial fix: A closing gesture MUST be an UPWARD motion (dy < -15f * density).
-                    // Downward pulldowns (dy > 0) must NEVER trigger closing!
-                    val isClosingGesture = (dy < -15f * density) && (
-                            (isUpwardFling && (isClockArea || isBottomArea || isPanelMovingUp || dy < -15f * density)) ||
-                            (dy < -20f * density && (isClockArea || isBottomArea)) ||
-                            (isPanelMovingUp && dy < -10f * density) ||
-                            (dy < -40f * density && lastTouchDy <= 0f)
-                    )
-
-                    if (lastAppliedFraction >= 0.65f || hasFullyOpenedForCurrentSession) {
+                    if (lastAppliedFraction >= 0.50f || hasFullyOpenedForCurrentSession) {
                         isShadeOpen = true
                         isShadeFullyOpen = true
                         hasFullyOpenedForCurrentSession = true
                         hasTriggeredUnlockForCurrentOpen = false
                     }
 
-                    if (hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen &&
-                        !isLaunchingNotificationActivity && isClosingGesture
+                    if (hasFullyOpenedForCurrentSession && isShadeFullyOpen && !hasTriggeredUnlockForCurrentOpen &&
+                        !isLaunchingNotificationActivity && isBottomArea && isUpwardSwipe
                     ) {
                         isClosingMode = true
                         val curSheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
@@ -2307,7 +2310,7 @@ object NotificationSheetHook {
                         isShadeFullyOpen = false
                         hasFullyOpenedForCurrentSession = false
                         val effectiveVel = if (touchVelocity > 0f) touchVelocity else latestFlingVelocity
-                        Log.d(TAG, "ACTION_UP closing release detected (dy=$dy, touchY=$touchDownY, vel=$effectiveVel) -> triggering simultaneous unlock")
+                        Log.d(TAG, "ACTION_UP closing release detected from bottom area (dy=$dy, touchY=$touchDownY, vel=$effectiveVel) -> triggering simultaneous unlock")
                         notifyCloseOverHomescreen(container.context, effectiveVel)
                     }
                 }
