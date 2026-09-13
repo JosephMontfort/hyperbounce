@@ -49,6 +49,7 @@ class GlassLensRenderer {
             uniform float  innerShadow;
             uniform float  satFactor;
             uniform float  rimSoftness;
+            uniform float  blurRadius;
             uniform float  hasBackdrop;
 
             float sd3SidedSheet(float2 p, float2 size, float r) {
@@ -161,47 +162,93 @@ class GlassLensRenderer {
                 cG = clamp(cG, lo, hi);
                 cB = clamp(cB, lo, hi);
 
-                // Normal-directed smoothing (rimSoft)
+                // Normal-directed smoothing (rimSoft) and 2D frosted blur on bevel edges only
                 float3 col;
                 float fgAlpha = 0.0;
-                if (rimSoftness > 0.001) {
-                    float2 sm = n * (rimSoftness * slope);
-                    float2 cR1 = clamp(cR - sm, lo, hi);
-                    float2 cR2 = clamp(cR + sm, lo, hi);
-                    float2 cG1 = clamp(cG - sm, lo, hi);
-                    float2 cG2 = clamp(cG + sm, lo, hi);
-                    float2 cB1 = clamp(cB - sm, lo, hi);
-                    float2 cB2 = clamp(cB + sm, lo, hi);
+                float2 smN = n * (rimSoftness * slope + blurRadius * 0.5 * slope);
+                float2 smT = float2(-n.y, n.x) * (blurRadius * 0.5 * slope);
 
-                    half4 fgR = content.eval(cR);
-                    half4 fgG = content.eval(cG);
-                    half4 fgB = content.eval(cB);
-                    fgAlpha = (fgG.a + content.eval(cG1).a + content.eval(cG2).a) * 0.33333;
+                half4 fg;
+                half4 bg = half4(0.0);
 
-                    half4 bgR = (hasBackdrop > 0.5) ? (backdrop.eval(cR) + backdrop.eval(cR1) + backdrop.eval(cR2)) * 0.33333 : half4(0.0);
-                    half4 bgG = (hasBackdrop > 0.5) ? (backdrop.eval(cG) + backdrop.eval(cG1) + backdrop.eval(cG2)) * 0.33333 : half4(0.0);
-                    half4 bgB = (hasBackdrop > 0.5) ? (backdrop.eval(cB) + backdrop.eval(cB1) + backdrop.eval(cB2)) * 0.33333 : half4(0.0);
+                if (blurRadius > 0.5) {
+                    // 9-tap 2D frosted blur kernel along normal & tangent
+                    float2 c0 = cG;
+                    float2 cN1 = clamp(cG + smN * 0.5, lo, hi);
+                    float2 cN2 = clamp(cG - smN * 0.5, lo, hi);
+                    float2 cN3 = clamp(cG + smN, lo, hi);
+                    float2 cN4 = clamp(cG - smN, lo, hi);
+                    float2 cT1 = clamp(cG + smT * 0.5, lo, hi);
+                    float2 cT2 = clamp(cG - smT * 0.5, lo, hi);
+                    float2 cT3 = clamp(cG + smT, lo, hi);
+                    float2 cT4 = clamp(cG - smT, lo, hi);
 
-                    col = float3(
-                        mix(bgR.r, fgR.r, fgR.a),
-                        mix(bgG.g, fgG.g, fgG.a),
-                        mix(bgB.b, fgB.b, fgB.a)
-                    );
+                    half4 fg0 = content.eval(c0);
+                    half4 fgN1 = content.eval(cN1);
+                    half4 fgN2 = content.eval(cN2);
+                    half4 fgN3 = content.eval(cN3);
+                    half4 fgN4 = content.eval(cN4);
+                    half4 fgT1 = content.eval(cT1);
+                    half4 fgT2 = content.eval(cT2);
+                    half4 fgT3 = content.eval(cT3);
+                    half4 fgT4 = content.eval(cT4);
+
+                    fg = fg0 * 0.20 + (fgN1 + fgN2 + fgT1 + fgT2) * 0.12 + (fgN3 + fgN4 + fgT3 + fgT4) * 0.08;
+                    fgAlpha = fg.a;
+
+                    if (hasBackdrop > 0.5) {
+                        half4 bg0 = backdrop.eval(c0);
+                        half4 bgN1 = backdrop.eval(cN1);
+                        half4 bgN2 = backdrop.eval(cN2);
+                        half4 bgN3 = backdrop.eval(cN3);
+                        half4 bgN4 = backdrop.eval(cN4);
+                        half4 bgT1 = backdrop.eval(cT1);
+                        half4 bgT2 = backdrop.eval(cT2);
+                        half4 bgT3 = backdrop.eval(cT3);
+                        half4 bgT4 = backdrop.eval(cT4);
+
+                        bg = bg0 * 0.20 + (bgN1 + bgN2 + bgT1 + bgT2) * 0.12 + (bgN3 + bgN4 + bgT3 + bgT4) * 0.08;
+                    }
+                } else if (rimSoftness > 0.001) {
+                    float2 c0 = cG;
+                    float2 c1 = clamp(cG + smN, lo, hi);
+                    float2 c2 = clamp(cG - smN, lo, hi);
+
+                    half4 fg0 = content.eval(c0);
+                    half4 fg1 = content.eval(c1);
+                    half4 fg2 = content.eval(c2);
+                    fg = fg0 * 0.34 + (fg1 + fg2) * 0.33;
+                    fgAlpha = fg.a;
+
+                    if (hasBackdrop > 0.5) {
+                        half4 bg0 = backdrop.eval(c0);
+                        half4 bg1 = backdrop.eval(c1);
+                        half4 bg2 = backdrop.eval(c2);
+                        bg = bg0 * 0.34 + (bg1 + bg2) * 0.33;
+                    }
                 } else {
+                    fg = content.eval(cG);
+                    fgAlpha = fg.a;
+                    if (hasBackdrop > 0.5) {
+                        bg = backdrop.eval(cG);
+                    }
+                }
+
+                col = float3(
+                    mix(bg.r, fg.r, fg.a),
+                    mix(bg.g, fg.g, fg.a),
+                    mix(bg.b, fg.b, fg.a)
+                );
+
+                if (dispersion > 0.005) {
                     half4 fgR = content.eval(cR);
-                    half4 fgG = content.eval(cG);
                     half4 fgB = content.eval(cB);
-                    fgAlpha = fgG.a;
-
                     half4 bgR = (hasBackdrop > 0.5) ? backdrop.eval(cR) : half4(0.0);
-                    half4 bgG = (hasBackdrop > 0.5) ? backdrop.eval(cG) : half4(0.0);
                     half4 bgB = (hasBackdrop > 0.5) ? backdrop.eval(cB) : half4(0.0);
-
-                    col = float3(
-                        mix(bgR.r, fgR.r, fgR.a),
-                        mix(bgG.g, fgG.g, fgG.a),
-                        mix(bgB.b, fgB.b, fgB.a)
-                    );
+                    float r = mix(bgR.r, fgR.r, fgR.a);
+                    float b = mix(bgB.b, fgB.b, fgB.a);
+                    col.r = mix(col.r, r, 0.6);
+                    col.b = mix(col.b, b, 0.6);
                 }
 
                 // Color Vibrancy Curve with smooth inner fade
@@ -392,6 +439,7 @@ class GlassLensRenderer {
         sh.setFloatUniform("innerShadow", p.innerShadow)
         sh.setFloatUniform("satFactor", p.saturation / 100f)
         sh.setFloatUniform("rimSoftness", p.rimSoftness)
+        sh.setFloatUniform("blurRadius", p.blurRadius)
 
         val hasBackdrop = backdropBmp != null && !backdropBmp.isRecycled
         if (hasBackdrop) {
@@ -410,15 +458,7 @@ class GlassLensRenderer {
             sh.setFloatUniform("hasBackdrop", 0.0f)
         }
 
-        val lensEffect = RenderEffect.createRuntimeShaderEffect(sh, "content")
-        return if (p.blurRadius > 0.01f) {
-            RenderEffect.createChainEffect(
-                lensEffect,
-                RenderEffect.createBlurEffect(p.blurRadius, p.blurRadius, Shader.TileMode.CLAMP)
-            )
-        } else {
-            lensEffect
-        }
+        return RenderEffect.createRuntimeShaderEffect(sh, "content")
     }
 
     fun release() {

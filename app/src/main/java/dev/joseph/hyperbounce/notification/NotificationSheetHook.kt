@@ -280,7 +280,10 @@ object NotificationSheetHook {
     fun getTargetExpandThreshold(): Float {
         val container = containerRef?.get() ?: return 200.0f
         val h = container.resources.displayMetrics.heightPixels.toFloat()
-        return if (h > 0f) h else 200.0f
+        // Natural thumb sweep travel threshold: ~76% of screen height (e.g., ~1824px on a 2400px screen)
+        // This ensures the sheet reaches 100% full expansion and locks down comfortably
+        // well before the user's thumb reaches the physical bottom bezel of the phone.
+        return if (h > 0f) (h * 0.76f).coerceAtLeast(200f) else 200.0f
     }
 
     fun updateExpandThreshold(targetCtrl: Any? = null) {
@@ -1758,17 +1761,31 @@ object NotificationSheetHook {
                                         val expandHeight = hField.getFloat(ctrl)
                                         val thresh = getTargetExpandThreshold()
                                         val frac = if (thresh > 0f) (expandHeight / thresh).coerceIn(0f, 1f) else 0f
-
-                                        val isFling = latestFlingVelocity > 800f
-                                        val shouldAppear = if (isFling) {
-                                            latestTouchYVelocity > 0f || lastTouchDy >= 0f // flung down -> open; flung up -> close
-                                        } else {
-                                            frac >= 0.50f // 50% halfway threshold snap!
-                                        }
+                                        val isFling = latestFlingVelocity >= 200f || kotlin.math.abs(latestTouchYVelocity) >= 200f
+                                        val touchVelY = if (kotlin.math.abs(latestTouchYVelocity) > 0.1f) latestTouchYVelocity else (if (lastTouchDy >= 0f) latestFlingVelocity else -latestFlingVelocity)
 
                                         val appF = ctrl.javaClass.getDeclaredField("appearance")
                                         appF.isAccessible = true
                                         val oldApp = appF.getBoolean(ctrl)
+
+                                        val shouldAppear = if (isFling) {
+                                             if (touchVelY > 80f) {
+                                                 true // flung down -> snap open
+                                             } else if (touchVelY < -80f) {
+                                                 false // flung up -> snap close
+                                             } else {
+                                                 lastTouchDy >= 0f
+                                             }
+                                         } else {
+                                             if (oldApp) {
+                                                 // Was open: dragging up past 25% (frac <= 0.75f) snaps closed
+                                                 frac > 0.75f && lastTouchDy >= 0f
+                                             } else {
+                                                 // Was closed: dragging down past 40% (frac >= 0.40f) snaps open
+                                                 frac >= 0.40f
+                                             }
+                                         }
+
                                         appF.setBoolean(ctrl, shouldAppear)
 
                                         if (oldApp != shouldAppear) {
@@ -2188,7 +2205,7 @@ object NotificationSheetHook {
     }
 
     private fun handlePanelTouchEvent(event: MotionEvent) {
-        if (!isUnlockedShadeActive) return
+        if (!isUnlockedShadeActive || isLandscapeMode()) return
         val container = containerRef?.get() ?: return
         val density = container.resources.displayMetrics.density
         val screenW = container.resources.displayMetrics.widthPixels.toFloat()
@@ -2246,9 +2263,12 @@ object NotificationSheetHook {
 
                     val isClockArea = touchDownY <= clockBottom + (30f * density)
                     val isBottomArea = touchDownY >= screenH - (130f * density)
-                    val isClosingGesture = (dy < -20f * density && (isClockArea || isBottomArea)) ||
-                            (lastAppliedFraction < 0.85f && dy < -10f * density) ||
-                            (dy < -5f * density && touchVelocity > 800f)
+                    val isPanelMovingUp = lastAppliedFraction < 0.98f
+                    val isUpwardFling = (latestTouchYVelocity < -200f || (touchVelocity >= 200f && (lastTouchDy < 0f || dy < -5f * density)))
+                    val isClosingGesture = (isUpwardFling && (isClockArea || isBottomArea || isPanelMovingUp || dy < -15f * density)) ||
+                            (dy < -20f * density && (isClockArea || isBottomArea)) ||
+                            (isPanelMovingUp && dy < -10f * density) ||
+                            (dy < -40f * density && lastTouchDy <= 0f)
 
                     if (hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen &&
                         !isLaunchingNotificationActivity && isClosingGesture
