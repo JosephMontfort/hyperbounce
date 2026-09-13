@@ -1268,6 +1268,7 @@ object NotificationSheetHook {
         lastUnlockTriggerTime = now
 
         if (isHomeScreenCached || isHomeScreenTop(context)) {
+            try {
                 listOf("com.miui.home", "com.mi.android.globallauncher").forEach { pkg ->
                     try {
                         val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
