@@ -56,6 +56,9 @@ object NotificationSheetHook {
     var currentStatusBarState: Int = 1 // 0 = SHADE, 1 = KEYGUARD, 2 = SHADE_LOCKED
 
     @Volatile
+    var latestFlingVelocity: Float = 0.0f
+
+    @Volatile
     private var isShadeFullyOpen = false
 
     @Volatile
@@ -769,10 +772,26 @@ object NotificationSheetHook {
                             return result
                         }
                     })
+                if (m.name == "flingToHeight" && m.parameterTypes.size == 5) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            try {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                                val velocity = (args[0] as? Number)?.toFloat() ?: 0.0f
+                                val expand = args[1] as? Boolean ?: false
+                                if (!expand) {
+                                    latestFlingVelocity = kotlin.math.abs(velocity)
+                                    Log.d(TAG, "Captured shade/unlock fling velocity: $latestFlingVelocity")
+                                }
+                            } catch (_: Throwable) {}
+                            return chain.proceed()
+                        }
+                    })
                 }
             }
         } catch (t: Throwable) {
-            Log.e(TAG, "Failed to hook NotificationPanelViewController.onFinishInflate", t)
+            Log.e(TAG, "Failed to hook NotificationPanelViewController", t)
         }
     }
 
@@ -1208,7 +1227,7 @@ object NotificationSheetHook {
         return false
     }
 
-    fun notifyCloseOverHomescreen(context: Context) {
+    fun notifyCloseOverHomescreen(context: Context, velocity: Float = latestFlingVelocity) {
         isShadeOpen = false
 
         if (currentStatusBarState != 0 || isKeyguard(context)) {
@@ -1232,6 +1251,9 @@ object NotificationSheetHook {
             try {
                 // Send ONLY ONE targeted broadcast to the active launcher package to prevent double-firing
                 val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
+                if (velocity > 0.0f) {
+                    intent.putExtra("EXTRA_VELOCITY", velocity)
+                }
                 val pm = context.packageManager
                 val isMiuiHome = try {
                     pm.getPackageInfo("com.miui.home", 0) != null
@@ -1246,7 +1268,7 @@ object NotificationSheetHook {
                     intent.setPackage("com.mi.android.globallauncher")
                 }
                 context.sendBroadcast(intent)
-                Log.d(TAG, "Dispatched single ACTION_TRIGGER_UNLOCK_ANIMATION to launcher (pkg=${intent.`package`})")
+                Log.d(TAG, "Dispatched single ACTION_TRIGGER_UNLOCK_ANIMATION to launcher (pkg=${intent.`package`}, velocity=$velocity)")
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to send unlock broadcast", t)
             }
