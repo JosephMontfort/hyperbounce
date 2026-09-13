@@ -180,14 +180,15 @@ object LockScreenSheetHook {
                                 lastExpansionTime = now
 
                                 if (rootView != null) {
+                                    val fraction = f.coerceIn(0.0f, 1.0f)
                                     val cfg = LockScreenConfigHolder.sheet
-                                    if (!cfg.enabled || !isLockScreenActive(kpvc)) {
+                                    val isActive = cfg.enabled && (isLockScreenActive(kpvc) || (fraction > 0.01f && fraction < 1.0f))
+                                    if (!isActive) {
                                         val existingSheet = cachedLockGlassSheetRef?.get() ?: rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
                                         existingSheet?.visibility = View.GONE
                                         return result
                                     }
 
-                                    val fraction = f.coerceIn(0.0f, 1.0f)
                                     var viewHeight = rootView.height.toFloat()
                                     if (viewHeight == 0f) viewHeight = 2400f
                                     val upwardOffset = (1.0f - fraction) * -viewHeight
@@ -199,6 +200,7 @@ object LockScreenSheetHook {
 
                                     // 2. Ensure real-time AGSL Liquid Glass Sheet Card is at index 0 (behind clock & notifs)
                                     ensureInjected(kpvc, rootView)
+                                    cachedLockGlassSheetRef?.get()?.invalidate()
 
                                     // 3. Move notification container upward in sync
                                     if (finalNotifView != null) {
@@ -282,6 +284,9 @@ object LockScreenSheetHook {
                                             .alpha(0.0f)
                                             .setDuration(220)
                                             .setInterpolator(DecelerateInterpolator(1.5f))
+                                            .setUpdateListener {
+                                                cachedLockGlassSheetRef?.get()?.invalidate()
+                                            }
                                             .start()
                                         finalNotifView?.animate()
                                             ?.translationY(-viewHeight)
@@ -518,6 +523,7 @@ object LockScreenSheetHook {
             if (rootView.width > 0 && rootView.height > 0 && (glassSheet.width != rootView.width || glassSheet.height != rootView.height)) {
                 glassSheet.layout(0, 0, rootView.width, rootView.height)
             }
+            glassSheet.invalidate()
         } catch (_: Throwable) {}
     }
 }

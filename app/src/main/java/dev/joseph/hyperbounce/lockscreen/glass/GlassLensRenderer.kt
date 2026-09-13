@@ -50,6 +50,7 @@ class GlassLensRenderer {
             uniform float  satFactor;
             uniform float  rimSoftness;
             uniform float  hasBackdrop;
+            uniform float  opaqueBevel;
 
             float sd3SidedSheet(float2 p, float2 size, float r) {
                 if (p.x < r && p.y > (size.y - r)) {
@@ -216,7 +217,7 @@ class GlassLensRenderer {
                 // Backside inner shadow
                 float2 lightDirNorm = length(lightDir) > 0.001 ? normalize(lightDir) : float2(0.0, 1.0);
                 float facing = dot(n, -lightDirNorm);
-                if (innerShadow > 0.001) {
+                if (opaqueBevel > 0.5 && innerShadow > 0.001) {
                     float shadowW = clamp(maxBevel, 4.0, 28.0);
                     float shadowBand = pow(clamp(1.0 + d / shadowW, 0.0, 1.0), 1.5);
                     float ish = shadowBand * max(facing, 0.0) * innerShadow;
@@ -233,13 +234,18 @@ class GlassLensRenderer {
                 float lobeB = pow(clamp(1.0 - wrapFacing, 0.0, 1.0), 3.0);
                 float lobeSide = pow(abs(n.x), 2.0) * 0.45; // Side edge catch-light so left & right always gleam!
 
-                // 3. Soft refractive inner glow band
+                // 3. Soft refractive inner glow band (active only when opaqueBevel > 0.5)
                 float bandW = clamp(maxBevel * 0.32, 2.0, 10.0);
                 float glowIn = clamp((-d - 1.0) / 2.0, 0.0, 1.0);
                 float glow = glowIn * pow(clamp(1.0 - (-d - 2.5) / bandW, 0.0, 1.0), 1.5) * cov;
 
-                float spec = (hair * hairlineStrength * (lobeF * 0.55 + lobeB * 0.35 + lobeSide) + glow * innerGlowStrength * (lobeF * 0.70 + lobeSide * 0.50)) * specStrength;
-                col += float3(spec);
+                float spec = (hair * hairlineStrength * (lobeF * 0.55 + lobeB * 0.35 + lobeSide) + (opaqueBevel > 0.5 ? glow * innerGlowStrength * (lobeF * 0.70 + lobeSide * 0.50) : 0.0)) * specStrength;
+                if (opaqueBevel > 0.5) {
+                    col += float3(spec);
+                } else {
+                    // Transparent glass effect without opaque factor: strictly refracts backdrop with subtle edge gleam
+                    col += float3(spec * 0.25);
+                }
                 col = clamp(col, float3(0.0), float3(1.0));
 
                 // Bevel alpha: smooth transition into the transparent center
@@ -276,7 +282,8 @@ class GlassLensRenderer {
         val innerShadow: Float = 0.40f,
         val saturation: Float = 120f,
         val rimSoftness: Float = 2.0f,
-        val blurRadius: Float = 0f
+        val blurRadius: Float = 0f,
+        val opaqueBevel: Boolean = true
     )
 
     private val renderNode = RenderNode("LiquidGlass20Lens")
@@ -392,6 +399,7 @@ class GlassLensRenderer {
         sh.setFloatUniform("innerShadow", p.innerShadow)
         sh.setFloatUniform("satFactor", p.saturation / 100f)
         sh.setFloatUniform("rimSoftness", p.rimSoftness)
+        sh.setFloatUniform("opaqueBevel", if (p.opaqueBevel) 1.0f else 0.0f)
 
         val hasBackdrop = backdropBmp != null && !backdropBmp.isRecycled
         if (hasBackdrop) {

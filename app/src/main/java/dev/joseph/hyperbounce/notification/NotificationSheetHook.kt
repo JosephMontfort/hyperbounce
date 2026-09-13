@@ -1,5 +1,8 @@
 package dev.joseph.hyperbounce.notification
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.app.ActivityManager
 import android.content.ComponentName
 import android.content.Context
@@ -72,6 +75,8 @@ object NotificationSheetHook {
 
     @Volatile
     private var isUserTouchingShade = false
+
+    private var settleAnimator: ValueAnimator? = null
 
     @Volatile
     private var touchDownX = 0f
@@ -383,6 +388,9 @@ object NotificationSheetHook {
 
     private fun suppressNotificationBlur() {
         val cfg = NotificationSheetConfigHolder.sheet
+        val container = containerRef?.get()
+        val isLandscape = container != null && (container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height)
+        if (isLandscape) return
         if (cfg.isDepthActive && currentStatusBarState == 0 && !isControlCenterActive()) {
             val anim = blurAnimatorRef?.get() ?: return
             try {
@@ -1409,9 +1417,8 @@ object NotificationSheetHook {
             val targetStart = origStart + extraMargin
             val targetEnd = origEnd + extraMargin
 
-            val isLsCenter = isActive && cfg.isLockScreenActive
             val targetTop = origTop
-            val targetBottom = if (isLsCenter) origBottom else if (isActive) ((cfg.pillBottomMargin + cfg.pillHeight + 24f) * density).toInt() else origBottom
+            val targetBottom = origBottom
 
             var changed = false
             if (lp.marginStart != targetStart || lp.marginEnd != targetEnd) {
@@ -1421,11 +1428,11 @@ object NotificationSheetHook {
                 lp.rightMargin = targetEnd
                 changed = true
             }
-            if (!isLsCenter && lp.topMargin != targetTop) {
+            if (lp.topMargin != targetTop) {
                 lp.topMargin = targetTop
                 changed = true
             }
-            if (!isLsCenter && lp.bottomMargin != targetBottom) {
+            if (lp.bottomMargin != targetBottom) {
                 lp.bottomMargin = targetBottom
                 changed = true
             }
@@ -1443,18 +1450,16 @@ object NotificationSheetHook {
                     nssl.setTag(TAG_ORIG_PADDING_BOTTOM, pb)
                     pb
                 }
-                if (isLsCenter) {
-                    if (nssl.clipBounds != null) nssl.clipBounds = null
-                    if (nssl.paddingTop != 0 || nssl.paddingBottom != origPaddingBottom) {
-                        nssl.setPadding(nssl.paddingLeft, 0, nssl.paddingRight, origPaddingBottom)
-                    }
-                } else {
-                    if (nssl.clipBounds != null) nssl.clipBounds = null
-                    val targetPaddingTop = if (isActive) kotlin.math.max(origPaddingTop, (260f * density).toInt()) else origPaddingTop
-                    val targetPaddingBottom = if (isActive) targetBottom else origPaddingBottom
-                    if (nssl.paddingTop != targetPaddingTop || nssl.paddingBottom != targetPaddingBottom) {
-                        nssl.setPadding(nssl.paddingLeft, targetPaddingTop, nssl.paddingRight, targetPaddingBottom)
-                    }
+
+                if (nssl.clipBounds != null) nssl.clipBounds = null
+                nssl.clipToPadding = false
+
+                val targetPaddingTop = origPaddingTop
+                val pillClearance = if (isActive) ((cfg.pillBottomMargin + cfg.pillHeight + 12f) * density).toInt() else origPaddingBottom
+                val targetPaddingBottom = kotlin.math.max(origPaddingBottom, pillClearance)
+
+                if (nssl.paddingTop != targetPaddingTop || nssl.paddingBottom != targetPaddingBottom) {
+                    nssl.setPadding(nssl.paddingLeft, targetPaddingTop, nssl.paddingRight, targetPaddingBottom)
                 }
             }
         } catch (t: Throwable) {
@@ -1522,7 +1527,12 @@ object NotificationSheetHook {
 
                                 if (callerName.contains("NotificationPanelExpansionAnimator")) {
                                     if (isUnlockedShadeActive) {
-                                        applyExpansionFraction(fVal)
+                                        val cfg = NotificationSheetConfigHolder.sheet
+                                        if (cfg.isLockScreenActive && (isUserTouchingShade || settleAnimator?.isRunning == true)) {
+                                            // Finger is actively driving 1:1 or settleAnimator is running
+                                        } else {
+                                            applyExpansionFraction(fVal)
+                                        }
                                     }
                                 } else if (callerName.contains("NotificationPanelStretchAnimator")) {
                                     if (isUnlockedShadeActive) {
@@ -1558,10 +1568,15 @@ object NotificationSheetHook {
                             val result = chain.proceed()
                             try {
                                 if (isUnlockedShadeActive) {
-                                    val rawArgs = chain.args
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
-                                    val frac = (args[0] as Number).toFloat()
-                                    applyExpansionFraction(frac)
+                                    val cfg = NotificationSheetConfigHolder.sheet
+                                    if (cfg.isLockScreenActive && (isUserTouchingShade || settleAnimator?.isRunning == true)) {
+                                        // Finger is actively driving 1:1 or settleAnimator is running
+                                    } else {
+                                        val rawArgs = chain.args
+                                        val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                                        val frac = (args[0] as Number).toFloat()
+                                        applyExpansionFraction(frac)
+                                    }
                                 }
                             } catch (t: Throwable) {
                                 Log.e(TAG, "Error in onExpansionChanged hook", t)
@@ -1757,6 +1772,35 @@ object NotificationSheetHook {
     private fun applyExpansionFractionInternal(fraction: Float, prevFraction: Float = -1f) {
         try {
             val container = containerRef?.get() ?: return
+            val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height
+            if (isLandscape) {
+                val curSheet = cachedGlassSheetRef?.get() ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+                val curPill = cachedHomePillRef?.get() ?: container.findViewWithTag<View>(TAG_HOME_PILL)
+                curSheet?.isClosingMode = false
+                curSheet?.isClosingFromFullOpen = false
+                curSheet?.visibility = View.GONE
+                curSheet?.shadeBackgroundView?.alpha = 1.0f
+                themeBackgroundViewRef?.get()?.alpha = 1.0f
+                curPill?.visibility = View.GONE
+                RealtimeBackdropHelper.stopLiveRefresh()
+                LockScreenCoverSheetController.onShadeReset(container)
+                resetNotificationMargins(container)
+
+                val anim = blurAnimatorRef?.get()
+                if (anim != null) {
+                    try {
+                        for (m in anim.javaClass.declaredMethods) {
+                            if (m.name.startsWith("updateBlurRatio")) {
+                                m.isAccessible = true
+                                m.invoke(anim, fraction, false)
+                                break
+                            }
+                        }
+                    } catch (_: Throwable) {}
+                }
+                return
+            }
+
             val cfg = NotificationSheetConfigHolder.sheet
             if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
                 val curSheet = cachedGlassSheetRef?.get() ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
@@ -1989,10 +2033,21 @@ object NotificationSheetHook {
                 shadeVelocityTracker?.recycle()
                 shadeVelocityTracker = VelocityTracker.obtain()
                 shadeVelocityTracker?.addMovement(event)
+                settleAnimator?.cancel()
+                settleAnimator = null
             }
             MotionEvent.ACTION_MOVE -> {
                 isUserTouchingShade = true
                 shadeVelocityTracker?.addMovement(event)
+                val cfg = NotificationSheetConfigHolder.sheet
+                if (cfg.isLockScreenActive && currentStatusBarState == 0 && !isControlCenterActive()) {
+                    val dm = container.resources.displayMetrics
+                    val screenH = dm.heightPixels.toFloat()
+                    if (screenH > 0f) {
+                        val fingerFrac = (event.rawY / screenH).coerceIn(0.0f, 1.0f)
+                        applyExpansionFraction(fingerFrac)
+                    }
+                }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val wasTouching = isUserTouchingShade
@@ -2012,6 +2067,46 @@ object NotificationSheetHook {
                 } catch (_: Throwable) {} finally {
                     shadeVelocityTracker?.recycle()
                     shadeVelocityTracker = null
+                }
+
+                val cfg = NotificationSheetConfigHolder.sheet
+                if (cfg.isLockScreenActive && currentStatusBarState == 0 && !isControlCenterActive() && wasTouching) {
+                    val currentFrac = lastAppliedFraction
+                    val isFlingDown = dy > 30f && touchVelocity > 600f
+                    val isFlingUp = dy < -30f && touchVelocity > 600f
+                    val targetFrac = if (isFlingDown) {
+                        1.0f
+                    } else if (isFlingUp) {
+                        0.0f
+                    } else if (currentFrac >= 0.50f) {
+                        1.0f
+                    } else {
+                        0.0f
+                    }
+
+                    if (abs(currentFrac - targetFrac) > 0.01f) {
+                        settleAnimator?.cancel()
+                        settleAnimator = ValueAnimator.ofFloat(currentFrac, targetFrac).apply {
+                            duration = 240
+                            interpolator = DecelerateInterpolator(1.6f)
+                            addUpdateListener { va ->
+                                applyExpansionFraction(va.animatedValue as Float)
+                            }
+                            addListener(object : AnimatorListenerAdapter() {
+                                override fun onAnimationEnd(animation: Animator) {
+                                    if (targetFrac == 0.0f) {
+                                        try {
+                                            val sbService = container.context.getSystemService("statusbar")
+                                            val collapseMethod = sbService?.javaClass?.getMethod("collapsePanels")
+                                            collapseMethod?.invoke(sbService)
+                                        } catch (_: Throwable) {}
+                                    }
+                                    settleAnimator = null
+                                }
+                            })
+                            start()
+                        }
+                    }
                 }
 
                 if (event.actionMasked == MotionEvent.ACTION_UP && wasTouching) {
@@ -2054,7 +2149,9 @@ object NotificationSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             chain.thisObject?.let { blurAnimatorRef = WeakReference(it) }
                             val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.isDepthActive && currentStatusBarState == 0 && !isControlCenterActive()) {
+                            val container = containerRef?.get()
+                            val isLandscape = container != null && (container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height)
+                            if (cfg.isDepthActive && !isLandscape && currentStatusBarState == 0 && !isControlCenterActive()) {
                                 val args = chain.args.toTypedArray()
                                 if (args.isNotEmpty()) {
                                     args[0] = 0.0f
