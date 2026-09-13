@@ -2,26 +2,6 @@ package dev.joseph.hyperbounce.launcher
 
 import android.content.SharedPreferences
 
-object ScreenUnlockDefaults {
-    fun rowZ(row: Int, totalRows: Int = 7): Float {
-        val norm = if (totalRows <= 1) 0.0f else (row.toFloat() / (totalRows - 1).toFloat()).coerceIn(0.0f, 1.0f)
-        return 2000.0f - (norm * 1350.0f)
-    }
-
-    fun rowBounce(row: Int, totalRows: Int = 7, isOuter: Boolean = false): Float {
-        val norm = if (totalRows <= 1) 0.0f else (row.toFloat() / (totalRows - 1).toFloat()).coerceIn(0.0f, 1.0f)
-        val factor = (1.0f - norm) * (1.0f - norm)
-        val maxBounce = if (isOuter) 0.50f else 0.55f
-        return (maxBounce * factor).coerceIn(0.0f, 1.0f)
-    }
-
-    fun rowSettle(row: Int, totalRows: Int = 7, isOuter: Boolean = false): Float {
-        val norm = if (totalRows <= 1) 0.0f else (row.toFloat() / (totalRows - 1).toFloat()).coerceIn(0.0f, 1.0f)
-        val base = 0.52f - (norm * 0.17f)
-        return if (isOuter) base + 0.02f else base
-    }
-}
-
 data class ScreenUnlockConfig(
     val enabled: Boolean = true,
     val animMode: Int = 1, // 0 = iOS Radial Dispersion, 1 = Kinetic Y-Axis Cascade
@@ -45,10 +25,10 @@ data class ScreenUnlockConfig(
     val durationScale: Float = 1.0f,
     val velocityInfluence: Float = 1.0f,
     val maxVelocity: Float = 16000.0f,
-    val cascadeDamping: Float = 0.98f,
-    val kineticDockDamping: Float = 0.95f,
-    val kineticDockResponse: Float = 0.36f,
-    val kineticDockZDepth: Float = 600.0f,
+    val cascadeDamping: Float = 0.95f,
+    val kineticDockDamping: Float = 0.85f,
+    val kineticDockResponse: Float = 0.38f,
+    val kineticDockZDepth: Float = 800.0f,
 
     // Row-by-row dynamics (r0_z..r6_z, r0_center_bounce..r6_center_bounce, etc.)
     val dyn: Map<String, Float> = emptyMap()
@@ -78,9 +58,6 @@ object LauncherConfigHolder {
         private set
 
     @Volatile
-    private var sPrefs: SharedPreferences? = null
-
-    @Volatile
     var iosAnimConfig: IOSTransitionConfig = IOSTransitionConfig()
         private set
 
@@ -88,28 +65,21 @@ object LauncherConfigHolder {
     val transitionConfig: IOSTransitionConfig
         get() = iosAnimConfig
 
-    fun reload() {
-        sPrefs?.let { update(it) }
-    }
-
     fun update(prefs: SharedPreferences) {
-        sPrefs = prefs
         val rows = prefs.getInt("unlock_grid_rows", 7).coerceIn(1, 32)
         val cols = prefs.getInt("unlock_grid_columns", 4).coerceIn(1, 32)
 
         val dynMap = mutableMapOf<String, Float>()
         for (i in 0 until rows) {
-            val defZ = ScreenUnlockDefaults.rowZ(i, rows)
-            val defCenterBounce = ScreenUnlockDefaults.rowBounce(i, rows, false)
-            val defOuterBounce = ScreenUnlockDefaults.rowBounce(i, rows, true)
-            val defCenterSettle = ScreenUnlockDefaults.rowSettle(i, rows, false)
-            val defOuterSettle = ScreenUnlockDefaults.rowSettle(i, rows, true)
+            val defZ = (2000.0f - (i * 200.0f)).coerceAtLeast(100.0f)
+            val defBounce = (0.45f - (i * 0.05f)).coerceAtLeast(0.0f)
+            val defSettle = 0.55f + (i * 0.04f)
 
             dynMap["r${i}_z"] = prefs.getFloat("unlock_r${i}_z", defZ)
-            dynMap["r${i}_center_bounce"] = prefs.getFloat("unlock_r${i}_center_bounce", defCenterBounce)
-            dynMap["r${i}_outer_bounce"] = prefs.getFloat("unlock_r${i}_outer_bounce", defOuterBounce)
-            dynMap["r${i}_center_settle"] = prefs.getFloat("unlock_r${i}_center_settle", defCenterSettle)
-            dynMap["r${i}_outer_settle"] = prefs.getFloat("unlock_r${i}_outer_settle", defOuterSettle)
+            dynMap["r${i}_center_bounce"] = prefs.getFloat("unlock_r${i}_center_bounce", defBounce)
+            dynMap["r${i}_outer_bounce"] = prefs.getFloat("unlock_r${i}_outer_bounce", defBounce)
+            dynMap["r${i}_center_settle"] = prefs.getFloat("unlock_r${i}_center_settle", defSettle)
+            dynMap["r${i}_outer_settle"] = prefs.getFloat("unlock_r${i}_outer_settle", defSettle)
         }
 
         unlockConfig = ScreenUnlockConfig(
@@ -131,10 +101,10 @@ object LauncherConfigHolder {
             durationScale = prefs.getFloat("unlock_duration_scale", 1.0f),
             velocityInfluence = prefs.getFloat("unlock_velocity_influence", 1.0f),
             maxVelocity = prefs.getFloat("unlock_max_velocity", 16000.0f),
-            cascadeDamping = prefs.getFloat("unlock_cascade_damping", 0.98f),
-            kineticDockDamping = prefs.getFloat("unlock_kinetic_dock_damping", 0.95f),
-            kineticDockResponse = prefs.getFloat("unlock_kinetic_dock_response", 0.36f),
-            kineticDockZDepth = prefs.getFloat("unlock_kinetic_dock_z_depth", 600.0f),
+            cascadeDamping = prefs.getFloat("unlock_cascade_damping", 0.95f),
+            kineticDockDamping = prefs.getFloat("unlock_kinetic_dock_damping", 0.85f),
+            kineticDockResponse = prefs.getFloat("unlock_kinetic_dock_response", 0.38f),
+            kineticDockZDepth = prefs.getFloat("unlock_kinetic_dock_z_depth", 800.0f),
             dyn = dynMap
         )
 

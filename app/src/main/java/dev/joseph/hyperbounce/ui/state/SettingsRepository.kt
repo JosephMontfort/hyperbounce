@@ -31,7 +31,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import dev.joseph.hyperbounce.launcher.ScreenUnlockDefaults
 import kotlin.jvm.JvmName
 import kotlin.reflect.KProperty
 
@@ -732,7 +731,7 @@ class SettingsRepository(context: Context) {
 
         fun getRowZ(row: Int): Float {
             return rowZStates.getOrPut(row) {
-                val defZ = ScreenUnlockDefaults.rowZ(row, gridRows)
+                val defZ = (2000.0f - (row * 200.0f)).coerceAtLeast(100.0f)
                 prefs.getFloat("unlock_r${row}_z", defZ)
             }
         }
@@ -741,12 +740,11 @@ class SettingsRepository(context: Context) {
             val key = "unlock_r${row}_z"
             prefs.edit().putFloat(key, v).apply()
             XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
-            SettingsRepository.sendSettingsChangedBroadcast(key, v)
         }
 
         fun getRowCenterBounce(row: Int): Float {
             return rowCenterBounceStates.getOrPut(row) {
-                val defBounce = ScreenUnlockDefaults.rowBounce(row, gridRows, false)
+                val defBounce = (0.45f - (row * 0.05f)).coerceAtLeast(0.0f)
                 prefs.getFloat("unlock_r${row}_center_bounce", defBounce)
             }
         }
@@ -755,12 +753,11 @@ class SettingsRepository(context: Context) {
             val key = "unlock_r${row}_center_bounce"
             prefs.edit().putFloat(key, v).apply()
             XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
-            SettingsRepository.sendSettingsChangedBroadcast(key, v)
         }
 
         fun getRowOuterBounce(row: Int): Float {
             return rowOuterBounceStates.getOrPut(row) {
-                val defBounce = ScreenUnlockDefaults.rowBounce(row, gridRows, true)
+                val defBounce = (0.45f - (row * 0.05f)).coerceAtLeast(0.0f)
                 prefs.getFloat("unlock_r${row}_outer_bounce", defBounce)
             }
         }
@@ -769,12 +766,11 @@ class SettingsRepository(context: Context) {
             val key = "unlock_r${row}_outer_bounce"
             prefs.edit().putFloat(key, v).apply()
             XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
-            SettingsRepository.sendSettingsChangedBroadcast(key, v)
         }
 
         fun getRowCenterSettle(row: Int): Float {
             return rowCenterSettleStates.getOrPut(row) {
-                val defSettle = ScreenUnlockDefaults.rowSettle(row, gridRows, false)
+                val defSettle = 0.55f + (row * 0.04f)
                 prefs.getFloat("unlock_r${row}_center_settle", defSettle)
             }
         }
@@ -783,12 +779,11 @@ class SettingsRepository(context: Context) {
             val key = "unlock_r${row}_center_settle"
             prefs.edit().putFloat(key, v).apply()
             XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
-            SettingsRepository.sendSettingsChangedBroadcast(key, v)
         }
 
         fun getRowOuterSettle(row: Int): Float {
             return rowOuterSettleStates.getOrPut(row) {
-                val defSettle = ScreenUnlockDefaults.rowSettle(row, gridRows, true)
+                val defSettle = 0.55f + (row * 0.04f)
                 prefs.getFloat("unlock_r${row}_outer_settle", defSettle)
             }
         }
@@ -797,7 +792,6 @@ class SettingsRepository(context: Context) {
             val key = "unlock_r${row}_outer_settle"
             prefs.edit().putFloat(key, v).apply()
             XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
-            SettingsRepository.sendSettingsChangedBroadcast(key, v)
         }
 
         fun snapshot(): ScreenUnlockSettings = ScreenUnlockSettings(
@@ -859,24 +853,6 @@ class SettingsRepository(context: Context) {
             rowOuterBounceStates.clear()
             rowCenterSettleStates.clear()
             rowOuterSettleStates.clear()
-
-            val editor = prefs.edit()
-            val remoteEditor = XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()
-            for (i in 0..32) {
-                editor.remove("unlock_r${i}_z")
-                editor.remove("unlock_r${i}_center_bounce")
-                editor.remove("unlock_r${i}_outer_bounce")
-                editor.remove("unlock_r${i}_center_settle")
-                editor.remove("unlock_r${i}_outer_settle")
-                remoteEditor?.remove("unlock_r${i}_z")
-                remoteEditor?.remove("unlock_r${i}_center_bounce")
-                remoteEditor?.remove("unlock_r${i}_outer_bounce")
-                remoteEditor?.remove("unlock_r${i}_center_settle")
-                remoteEditor?.remove("unlock_r${i}_outer_settle")
-            }
-            editor.apply()
-            remoteEditor?.apply()
-            SettingsRepository.sendSettingsChangedBroadcast("unlock_reload", true)
         }
     }
 

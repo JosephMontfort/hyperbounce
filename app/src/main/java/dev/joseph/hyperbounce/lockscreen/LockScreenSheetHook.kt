@@ -1,7 +1,6 @@
 package dev.joseph.hyperbounce.lockscreen
 
 import android.content.Context
-import android.content.Intent
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
@@ -261,28 +260,6 @@ object LockScreenSheetHook {
                                         animUI.run()
                                     } else {
                                         Handler(Looper.getMainLooper()).post(animUI)
-                                    }
-
-                                    try {
-                                        val context = rootView.context
-                                        val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
-                                        val vel = dev.joseph.hyperbounce.notification.NotificationSheetHook.latestFlingVelocity
-                                        if (vel > 0.0f) {
-                                            intent.putExtra("EXTRA_VELOCITY", vel)
-                                        }
-                                        val pm = context.packageManager
-                                        val isMiuiHome = try {
-                                            pm.getPackageInfo("com.miui.home", 0) != null
-                                        } catch (_: Throwable) { false }
-                                        if (isMiuiHome) {
-                                            intent.setPackage("com.miui.home")
-                                        } else {
-                                            intent.setPackage("com.mi.android.globallauncher")
-                                        }
-                                        context.sendBroadcast(intent)
-                                        Log.d(TAG, "Dispatched ACTION_TRIGGER_UNLOCK_ANIMATION on keyguard dismiss (vel=$vel)")
-                                    } catch (t: Throwable) {
-                                        Log.e(TAG, "Failed to broadcast unlock on keyguard dismiss", t)
                                     }
                                 }
                             } catch (_: Throwable) {}

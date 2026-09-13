@@ -229,10 +229,10 @@ data class ScreenUnlockSettings(
     val durationScale: Float = 1.0f,
     val velocityInfluence: Float = 1.0f,
     val maxVelocity: Float = 16000.0f,
-    val cascadeDamping: Float = 0.98f,
-    val kineticDockDamping: Float = 0.95f,
-    val kineticDockResponse: Float = 0.36f,
-    val kineticDockZDepth: Float = 600.0f
+    val cascadeDamping: Float = 0.95f,
+    val kineticDockDamping: Float = 0.85f,
+    val kineticDockResponse: Float = 0.38f,
+    val kineticDockZDepth: Float = 800.0f
 )
 
 /** Feature 4: iOS App Transition & Physics Settings */
