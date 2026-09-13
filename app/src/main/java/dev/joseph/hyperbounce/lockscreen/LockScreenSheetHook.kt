@@ -426,7 +426,7 @@ object LockScreenSheetHook {
         }
     }
 
-    private fun ensurePillInjected(kpvc: Any, cfg: LockScreenConfig) {
+    private fun ensurePillInjected(kpvc: Any, cfg: LockScreenSheetConfig) {
         if (cachedLockPillRef?.get() != null) return
         try {
             val bottomAreaView = getBottomAreaView(kpvc) ?: return
