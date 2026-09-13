@@ -1,11 +1,19 @@
 package dev.joseph.hyperbounce.launcher
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import io.github.libxposed.api.XposedInterface
+import java.lang.ref.WeakReference
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
+import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
@@ -29,18 +37,48 @@ object ScreenUnlockHook {
     @Volatile
     private var lastVelocityTime = 0L
 
-    private var sCellXField: Field? = null
-    private var sCellYField: Field? = null
-    private var sContainerField: Field? = null
-    private var sTagFieldsCached = false
-
-    private var sLauncherRef: java.lang.ref.WeakReference<android.app.Activity>? = null
+    private var sLauncherRef: WeakReference<android.app.Activity>? = null
     private var sClassLoader: ClassLoader? = null
     private var isReceiverRegistered = false
 
     fun updateVelocity(velocity: Float) {
-        latestVelocity = velocity
+        latestVelocity = abs(velocity)
         lastVelocityTime = System.currentTimeMillis()
+        Log.d(TAG, "updateVelocity: $velocity (abs=$latestVelocity)")
+    }
+
+    private fun extractItemInfo(tag: Any?): Triple<Int, Int, Long>? {
+        if (tag == null) return null
+        var curr: Class<*>? = tag.javaClass
+        var cx: Int? = null
+        var cy: Int? = null
+        var cont: Long? = null
+        while (curr != null && curr != Any::class.java) {
+            if (cx == null) {
+                try {
+                    val f = curr.getDeclaredField("cellX")
+                    f.isAccessible = true
+                    cx = f.getInt(tag)
+                } catch (_: Throwable) {}
+            }
+            if (cy == null) {
+                try {
+                    val f = curr.getDeclaredField("cellY")
+                    f.isAccessible = true
+                    cy = f.getInt(tag)
+                } catch (_: Throwable) {}
+            }
+            if (cont == null) {
+                try {
+                    val f = curr.getDeclaredField("container")
+                    f.isAccessible = true
+                    cont = f.getLong(tag)
+                } catch (_: Throwable) {}
+            }
+            if (cx != null && cy != null && cont != null) break
+            curr = curr.superclass
+        }
+        return Triple(cx ?: -1, cy ?: -1, cont ?: 0L)
     }
 
     fun init(module: XposedInterface, classLoader: ClassLoader?) {
@@ -57,7 +95,7 @@ object ScreenUnlockHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
                             try {
-                                val app = chain.thisObject as? android.content.Context
+                                val app = chain.thisObject as? Context
                                 if (app != null) {
                                     registerUnlockReceiver(app)
                                 }
@@ -68,7 +106,7 @@ object ScreenUnlockHook {
                 }
             }
             val appMethod = appClass.getMethod("getLauncherApplication")
-            val app = appMethod.invoke(null) as? android.content.Context
+            val app = appMethod.invoke(null) as? Context
             if (app != null) {
                 registerUnlockReceiver(app)
             }
@@ -111,39 +149,44 @@ object ScreenUnlockHook {
                             val cols = max(1, cfg.gridColumns)
                             val rows = max(1, cfg.gridRows)
 
-                            var cellX = -1
-                            var cellY = -1
-                            var container = 0L
-                            val tag = view.tag
-                            if (tag != null) {
-                                if (!sTagFieldsCached) {
-                                    try { sCellXField = tag.javaClass.getField("cellX") } catch (_: Throwable) {}
-                                    try { sCellYField = tag.javaClass.getField("cellY") } catch (_: Throwable) {}
-                                    try { sContainerField = tag.javaClass.getField("container") } catch (_: Throwable) {}
-                                    sTagFieldsCached = true
-                                }
-                                sCellXField?.let { try { cellX = it.getInt(tag) } catch (_: Throwable) {} }
-                                sCellYField?.let { try { cellY = it.getInt(tag) } catch (_: Throwable) {} }
-                                sContainerField?.let { try { container = it.getLong(tag) } catch (_: Throwable) {} }
-                            }
+                            val tagInfo = extractItemInfo(view.tag)
+                            val cellX = tagInfo?.first ?: -1
+                            val cellY = tagInfo?.second ?: -1
+                            val container = tagInfo?.third ?: 0L
 
-                            val colIndex: Int = if (cellX != -1) {
-                                max(0, min(cols - 1, cellX))
+                            val parentClassName = view.parent?.javaClass?.name ?: ""
+                            val viewClassName = view.javaClass.name
+
+                            val isHotseat = (container == -101L) ||
+                                (args[2] as? Boolean ?: false) ||
+                                parentClassName.contains("HotSeat", ignoreCase = true) ||
+                                viewClassName.contains("HotSeat", ignoreCase = true)
+
+                            val isInd = viewClassName.contains("Indicator", ignoreCase = true) ||
+                                parentClassName.contains("Indicator", ignoreCase = true)
+
+                            isDockView.set(isHotseat && !isInd)
+                            isIndicator.set(isInd)
+
+                            val colIndex: Int = if (cellX in 0 until cols) {
+                                cellX
                             } else {
                                 val cellWidth = screenW / cols.toFloat()
-                                max(0, min(cols - 1, (vx / cellWidth).toInt()))
+                                (vx / cellWidth).toInt().coerceIn(0, cols - 1)
                             }
                             isOuterColumn.set(colIndex == 0 || colIndex == cols - 1)
 
-                            val calculatedRow = if (cellY != -1) cellY else floor((vy / screenH) * rows).toInt()
-                            val rowIndex = max(0, min(rows - 1, calculatedRow))
+                            val calculatedRow = if (cellY in 0 until rows && !isHotseat) {
+                                cellY
+                            } else {
+                                floor((vy / screenH) * rows).toInt().coerceIn(0, rows - 1)
+                            }
+                            currentRow.set(calculatedRow)
 
-                            isIndicator.set(args[2] as? Boolean ?: false)
-                            isDockView.set(container == -101L)
-                            currentRow.set(rowIndex)
-
-                            if (System.currentTimeMillis() - lastVelocityTime < 2500) {
-                                currentKineticFactor.set(min(1.0f, Math.abs(latestVelocity) / cfg.maxVelocity))
+                            val timeSinceVelocity = System.currentTimeMillis() - lastVelocityTime
+                            if (timeSinceVelocity < 2500L && latestVelocity > 0f) {
+                                val normV = (latestVelocity / cfg.maxVelocity).coerceIn(0.0f, 1.0f)
+                                currentKineticFactor.set(normV)
                             } else {
                                 currentKineticFactor.set(0.0f)
                             }
@@ -176,51 +219,66 @@ object ScreenUnlockHook {
 
                     return if (cfg.animMode == 0) {
                         if (isDockView.get() || isIndicator.get()) {
+                            activeDamping.set(cfg.dockDamping)
+                            activeResponse.set(cfg.dockResponse)
                             floatArrayOf(cfg.dockDamping, cfg.dockResponse)
                         } else {
                             val dist = normalizedDistance.get()
                             val rawResponse = cfg.centerResponse + (dist * cfg.edgeResponseDelay)
                             val rawDamping = cfg.centerDamping - (dist * cfg.edgeDampingDrop)
-                            val minR = min(cfg.minResponse, cfg.maxResponse)
-                            val maxR = max(cfg.minResponse, cfg.maxResponse)
-                            val minD = min(cfg.minDamping, cfg.maxDamping)
-                            val maxD = max(cfg.minDamping, cfg.maxDamping)
-                            val response = rawResponse.coerceIn(minR, maxR)
-                            val damping = rawDamping.coerceIn(minD, maxD)
+                            val response = rawResponse.coerceIn(0.10f, 2.0f)
+                            val damping = rawDamping.coerceIn(0.10f, 1.2f)
+                            activeDamping.set(damping)
+                            activeResponse.set(response)
                             floatArrayOf(damping, response)
                         }
                     } else {
                         if (isDockView.get() || isIndicator.get()) {
-                            activeResponse.set(cfg.kineticDockResponse * cfg.durationScale)
-                            activeDamping.set(cfg.kineticDockDamping)
-                            floatArrayOf(cfg.kineticDockDamping, cfg.kineticDockResponse * cfg.durationScale)
+                            val resp = (cfg.kineticDockResponse * cfg.durationScale).coerceIn(0.15f, 1.5f)
+                            val damp = cfg.kineticDockDamping.coerceIn(0.20f, 1.0f)
+                            activeResponse.set(resp)
+                            activeDamping.set(damp)
+                            floatArrayOf(damp, resp)
                         } else {
                             val kF = currentKineticFactor.get()
                             val vInf = cfg.velocityInfluence
-                            val safeRow = max(0, min(cfg.gridRows - 1, currentRow.get()))
+                            val velocityBoost = kF * vInf
+                            val safeRow = currentRow.get().coerceIn(0, max(0, cfg.gridRows - 1))
                             val outer = isOuterColumn.get()
 
                             val customBounce = if (outer) {
-                                cfg.getDyn("r${safeRow}_outer_bounce", 0.2f)
+                                cfg.getDyn("r${safeRow}_outer_bounce", ScreenUnlockDefaults.rowBounce(safeRow, cfg.gridRows, true))
                             } else {
-                                cfg.getDyn("r${safeRow}_center_bounce", 0.2f)
+                                cfg.getDyn("r${safeRow}_center_bounce", ScreenUnlockDefaults.rowBounce(safeRow, cfg.gridRows, false))
                             }
                             val customSettle = if (outer) {
-                                cfg.getDyn("r${safeRow}_outer_settle", 0.5f)
+                                cfg.getDyn("r${safeRow}_outer_settle", ScreenUnlockDefaults.rowSettle(safeRow, cfg.gridRows, true))
                             } else {
-                                cfg.getDyn("r${safeRow}_center_settle", 0.5f)
+                                cfg.getDyn("r${safeRow}_center_settle", ScreenUnlockDefaults.rowSettle(safeRow, cfg.gridRows, false))
                             }
 
-                            var response = (customSettle * cfg.durationScale) * (1.0f - (0.30f * kF * vInf))
-                            val bounceDrop = customBounce * kF * vInf
-                            var damping = cfg.cascadeDamping * (1.0f - bounceDrop)
+                            // Baseline damping on normal unlock:
+                            // Row with bounce = 0.0 stays at 1.0 (flat landing, no bounce)
+                            // Row with bounce = 0.55 drops to 0.78 (underdamped, deep plunge & rebound)
+                            val baseDamping = 1.0f - (customBounce * 0.40f)
 
-                            response = response.coerceIn(0.15f, 1.5f)
-                            damping = damping.coerceIn(0.15f, 1.0f)
+                            // Universal Resting Damping is the master multiplier
+                            val effectiveDamping = cfg.cascadeDamping * baseDamping
 
-                            activeResponse.set(response)
-                            activeDamping.set(damping)
-                            floatArrayOf(damping, response)
+                            // Dynamic velocity boost:
+                            // Swiping faster further plunges rows that have bounce,
+                            // while rows with bounce = 0 remain flat
+                            val dynamicDampingDrop = customBounce * velocityBoost * 0.35f
+                            val finalDamping = (effectiveDamping * (1.0f - dynamicDampingDrop)).coerceIn(0.20f, 1.0f)
+
+                            // Settle response:
+                            // Scaled by universal duration scale, and quickened by swipe velocity:
+                            val scaledResponse = customSettle * cfg.durationScale
+                            val finalResponse = (scaledResponse / (1.0f + (velocityBoost * 0.35f))).coerceIn(0.15f, 1.5f)
+
+                            activeResponse.set(finalResponse)
+                            activeDamping.set(finalDamping)
+                            floatArrayOf(finalDamping, finalResponse)
                         }
                     }
                 }
@@ -247,30 +305,28 @@ object ScreenUnlockHook {
                         val startVal = (args[2] as? Number)?.toFloat() ?: 0.0f
                         val endVal = (args[3] as? Number)?.toFloat() ?: 0.0f
 
-                        if (cfg.animMode == 0) {
-                            if (endVal == 0.0f && startVal > 5.0f) {
-                                args[2] = startVal * cfg.zDepthMultiplier
-                            }
-                        } else {
-                            val kF = currentKineticFactor.get()
-                            val vInf = cfg.velocityInfluence
-                            val safeRow = max(0, min(cfg.gridRows - 1, currentRow.get()))
+                        if (endVal == 0.0f && abs(startVal) > 5.0f) {
+                            args[0] = activeDamping.get()
+                            args[1] = activeResponse.get()
 
-                            if (startVal == 0.0f && endVal == 1.0f) {
-                                args[0] = 1.0f
-                                args[1] = 0.15f * cfg.durationScale
-                            } else if (startVal > 0.5f && startVal < 1.0f && endVal == 1.0f) {
-                                args[2] = 0.85f - (0.20f * kF * vInf)
-                                args[0] = activeDamping.get()
-                                args[1] = activeResponse.get()
-                            } else if (endVal == 0.0f && startVal > 5.0f) {
-                                if (isDockView.get() || isIndicator.get()) {
-                                    args[2] = max(1.0f, cfg.kineticDockZDepth)
+                            if (cfg.animMode == 0) {
+                                args[2] = startVal * cfg.zDepthMultiplier
+                            } else {
+                                val kF = currentKineticFactor.get()
+                                val vInf = cfg.velocityInfluence
+                                val velocityBoost = kF * vInf
+                                val safeRow = currentRow.get().coerceIn(0, max(0, cfg.gridRows - 1))
+
+                                val targetZ: Float = if (isDockView.get() || isIndicator.get()) {
+                                    cfg.kineticDockZDepth.coerceAtLeast(10.0f)
                                 } else {
-                                    val baseZ = cfg.getDyn("r${safeRow}_z", 1000.0f)
-                                    val zMult = 1.0f + (kF * vInf * 0.4f)
-                                    args[2] = max(1.0f, baseZ * zMult)
+                                    val baseZ = cfg.getDyn("r${safeRow}_z", ScreenUnlockDefaults.rowZ(safeRow, cfg.gridRows))
+                                    val zMult = 1.0f + (velocityBoost * 0.40f)
+                                    (baseZ * zMult).coerceAtLeast(10.0f)
                                 }
+
+                                // In CameraLite projection, startVal MUST be negative to start outside screen
+                                args[2] = -abs(targetZ)
                             }
                         }
                         return chain.proceed(args)
@@ -335,35 +391,52 @@ object ScreenUnlockHook {
         return null
     }
 
-    private fun registerUnlockReceiver(context: android.content.Context) {
+    private fun registerUnlockReceiver(context: Context) {
         if (isReceiverRegistered) return
         try {
-            val filter = android.content.IntentFilter("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
-            val receiver = object : android.content.BroadcastReceiver() {
+            val filter = IntentFilter().apply {
+                addAction("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
+                addAction("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED")
+            }
+            val receiver = object : BroadcastReceiver() {
                 private var lastReceivedUnlockTime = 0L
 
-                override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
-                    val now = android.os.SystemClock.uptimeMillis()
-                    if (now - lastReceivedUnlockTime < 600L) {
-                        Log.d(TAG, "ACTION_TRIGGER_UNLOCK_ANIMATION debounced on receiver (within 600ms)")
-                        return
-                    }
-                    lastReceivedUnlockTime = now
+                override fun onReceive(c: Context?, intent: Intent?) {
+                    when (intent?.action) {
+                        "dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED" -> {
+                            val key = intent.getStringExtra("key")
+                            if (key?.startsWith("unlock_") == true) {
+                                LauncherConfigHolder.reload()
+                            }
+                        }
+                        "dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION" -> {
+                            val velocity = intent.getFloatExtra("EXTRA_VELOCITY", 0.0f)
+                            if (velocity != 0.0f) {
+                                updateVelocity(velocity)
+                            }
+                            val now = SystemClock.uptimeMillis()
+                            if (now - lastReceivedUnlockTime < 400L) {
+                                Log.d(TAG, "ACTION_TRIGGER_UNLOCK_ANIMATION debounced on receiver (within 400ms)")
+                                return
+                            }
+                            lastReceivedUnlockTime = now
 
-                    Log.d(TAG, "Received ACTION_TRIGGER_UNLOCK_ANIMATION broadcast")
-                    val launcher = getLauncherActivity(c)
-                    if (launcher == null) {
-                        Log.w(TAG, "Cannot trigger unlock animation: launcher activity is null")
-                        return
-                    }
-                    launcher.runOnUiThread {
-                        triggerUnlockAnimationOnLauncher(launcher)
+                            Log.d(TAG, "Received ACTION_TRIGGER_UNLOCK_ANIMATION broadcast (velocity=$velocity)")
+                            val launcher = getLauncherActivity(c)
+                            if (launcher == null) {
+                                Log.w(TAG, "Cannot trigger unlock animation: launcher activity is null")
+                                return
+                            }
+                            launcher.runOnUiThread {
+                                triggerUnlockAnimationOnLauncher(launcher)
+                            }
+                        }
                     }
                 }
             }
             val appCtx = context.applicationContext ?: context
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                appCtx.registerReceiver(receiver, filter, android.content.Context.RECEIVER_EXPORTED)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                appCtx.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
             } else {
                 appCtx.registerReceiver(receiver, filter)
             }
@@ -399,21 +472,15 @@ object ScreenUnlockHook {
                 } catch (_: Throwable) {}
             }
 
-            // 2. Play animation
+            // 2. Play animation cleanly
             if (userPresentAnim != null) {
                 try {
                     userPresentAnim.javaClass.getMethod("showAnimation").invoke(userPresentAnim)
-                    Log.d(TAG, "Triggered showAnimation from notification sheet close successfully")
+                    Log.d(TAG, "Triggered showAnimation successfully")
                 } catch (e: Throwable) {
                     Log.e(TAG, "Failed to call showAnimation", e)
                 }
             }
-
-            // 3. Trigger showPresent if available for boosting render thread
-            try {
-                val showPresentMethod = launcher.javaClass.getMethod("showPresent")
-                showPresentMethod.invoke(launcher)
-            } catch (_: Throwable) {}
         } catch (t: Throwable) {
             Log.e(TAG, "Error triggering unlock animation on launcher", t)
         }
