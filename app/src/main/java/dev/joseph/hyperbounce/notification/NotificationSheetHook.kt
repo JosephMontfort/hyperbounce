@@ -772,6 +772,7 @@ object NotificationSheetHook {
                             return result
                         }
                     })
+                }
                 if (m.name == "flingToHeight" && m.parameterTypes.size == 5) {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
