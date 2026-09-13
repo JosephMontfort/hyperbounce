@@ -266,6 +266,12 @@ object NotificationSheetHook {
             return cfg.enabled && currentStatusBarState == 0 && !isKeyguardShowing && !isControlCenterActive()
         }
 
+    @Volatile
+    private var isSlowPulldownActive = false
+
+    @Volatile
+    private var isSlowPulldownCandidate = false
+
     fun isLandscapeMode(): Boolean {
         val container = containerRef?.get() ?: return false
         return container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE ||
@@ -274,7 +280,7 @@ object NotificationSheetHook {
 
     fun isOneToOneActive(): Boolean {
         val cfg = NotificationSheetConfigHolder.sheet
-        return cfg.isOneToOneTrackingActive && !isLandscapeMode() && isUnlockedShadeActive
+        return cfg.isOneToOneTrackingActive && !isLandscapeMode() && isUnlockedShadeActive && isSlowPulldownActive
     }
 
     fun getTargetExpandThreshold(): Float {
@@ -1756,37 +1762,29 @@ object NotificationSheetHook {
                                         expandControllerRef = WeakReference(ctrl)
                                     }
                                     if (isOneToOneActive()) {
-                                        val hField = ctrl.javaClass.getDeclaredField("expandHeight")
-                                        hField.isAccessible = true
-                                        val expandHeight = hField.getFloat(ctrl)
                                         val thresh = getTargetExpandThreshold()
-                                        val frac = if (thresh > 0f) (expandHeight / thresh).coerceIn(0f, 1f) else 0f
-                                        val isFling = latestFlingVelocity >= 200f || kotlin.math.abs(latestTouchYVelocity) >= 200f
-                                        val touchVelY = if (kotlin.math.abs(latestTouchYVelocity) > 0.1f) latestTouchYVelocity else (if (lastTouchDy >= 0f) latestFlingVelocity else -latestFlingVelocity)
+                                        // If the user pulled down slowly and reached settle threshold (fraction >= 0.70f or full open / haptic triggered):
+                                        // PERSIST! The notification center MUST STAY OPEN, never close on release!
+                                        val shouldAppear = (lastAppliedFraction >= 0.70f || hasFullyOpenedForCurrentSession || isShadeFullyOpen)
 
                                         val appF = ctrl.javaClass.getDeclaredField("appearance")
                                         appF.isAccessible = true
                                         val oldApp = appF.getBoolean(ctrl)
-
-                                        val shouldAppear = if (isFling) {
-                                             if (touchVelY > 80f) {
-                                                 true // flung down -> snap open
-                                             } else if (touchVelY < -80f) {
-                                                 false // flung up -> snap close
-                                             } else {
-                                                 lastTouchDy >= 0f
-                                             }
-                                         } else {
-                                             if (oldApp) {
-                                                 // Was open: dragging up past 25% (frac <= 0.75f) snaps closed
-                                                 frac > 0.75f && lastTouchDy >= 0f
-                                             } else {
-                                                 // Was closed: dragging down past 40% (frac >= 0.40f) snaps open
-                                                 frac >= 0.40f
-                                             }
-                                         }
-
                                         appF.setBoolean(ctrl, shouldAppear)
+
+                                        if (shouldAppear) {
+                                            try {
+                                                val setHMethod = ctrl.javaClass.getDeclaredMethod("setExpandHeight", Float::class.javaPrimitiveType)
+                                                setHMethod.isAccessible = true
+                                                setHMethod.invoke(ctrl, thresh)
+                                            } catch (_: Throwable) {
+                                                try {
+                                                    val hField = ctrl.javaClass.getDeclaredField("expandHeight")
+                                                    hField.isAccessible = true
+                                                    hField.setFloat(ctrl, thresh)
+                                                } catch (_: Throwable) {}
+                                            }
+                                        }
 
                                         if (oldApp != shouldAppear) {
                                             try {
@@ -1831,7 +1829,7 @@ object NotificationSheetHook {
                                     appF.isAccessible = true
                                     val appearance = appF.getBoolean(ctrl)
                                     if (appearance) {
-                                        if (isUnlockedShadeActive && (lastAppliedFraction >= 0.80f || isOneToOneActive())) {
+                                        if (isUnlockedShadeActive && (lastAppliedFraction >= 0.70f || hasFullyOpenedForCurrentSession || isShadeFullyOpen)) {
                                             isShadeOpen = true
                                             isShadeFullyOpen = true
                                             hasFullyOpenedForCurrentSession = true
@@ -1847,7 +1845,8 @@ object NotificationSheetHook {
                                                 curSheet?.isClosingFromFullOpen = true
                                                 hasTriggeredUnlockForCurrentOpen = true
                                                 hasFullyOpenedForCurrentSession = false
-                                                notifyCloseOverHomescreen(container.context)
+                                                val effectiveVel = if (latestFlingVelocity > 0f) latestFlingVelocity else 0f
+                                                notifyCloseOverHomescreen(container.context, effectiveVel)
                                             }
                                         }
                                         RealtimeBackdropHelper.stopLiveRefresh()
@@ -1857,7 +1856,11 @@ object NotificationSheetHook {
                                         hasTriggeredUnlockForCurrentOpen = true
                                     }
                                 }
-                            } catch (_: Throwable) {}
+                            } catch (_: Throwable) {} finally {
+                                isSlowPulldownActive = false
+                                isSlowPulldownCandidate = false
+                                updateExpandThreshold()
+                            }
                             return result
                         }
                     })
@@ -2219,7 +2222,20 @@ object NotificationSheetHook {
                 lastTouchDy = 0f
                 latestFlingVelocity = 0f
                 latestTouchYVelocity = 0f
-                updateExpandThreshold()
+
+                val isShadeClosed = !isShadeOpen && !isShadeFullyOpen && lastAppliedFraction < 0.10f
+                val isTopTouch = event.rawY <= (density * 180f)
+                val cfg = NotificationSheetConfigHolder.sheet
+                if (isShadeClosed && isTopTouch && cfg.isOneToOneTrackingActive) {
+                    isSlowPulldownCandidate = true
+                    isSlowPulldownActive = true
+                    updateExpandThreshold()
+                } else {
+                    isSlowPulldownCandidate = false
+                    isSlowPulldownActive = false
+                    updateExpandThreshold()
+                }
+
                 shadeVelocityTracker?.recycle()
                 shadeVelocityTracker = VelocityTracker.obtain()
                 shadeVelocityTracker?.addMovement(event)
@@ -2229,6 +2245,19 @@ object NotificationSheetHook {
                 lastTouchDy = event.rawY - lastTouchY
                 lastTouchY = event.rawY
                 shadeVelocityTracker?.addMovement(event)
+
+                if (isSlowPulldownCandidate && isSlowPulldownActive) {
+                    try {
+                        shadeVelocityTracker?.computeCurrentVelocity(1000)
+                        val yVel = shadeVelocityTracker?.yVelocity ?: 0f
+                        if (yVel > 650f * density && lastAppliedFraction < 0.35f) {
+                            Log.d(TAG, "Quick downward fling detected (yVel=$yVel) -> switching to stock fling algorithm")
+                            isSlowPulldownActive = false
+                            isSlowPulldownCandidate = false
+                            updateExpandThreshold()
+                        }
+                    } catch (_: Throwable) {}
+                }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val wasTouching = isUserTouchingShade
@@ -2265,10 +2294,22 @@ object NotificationSheetHook {
                     val isBottomArea = touchDownY >= screenH - (130f * density)
                     val isPanelMovingUp = lastAppliedFraction < 0.98f
                     val isUpwardFling = (latestTouchYVelocity < -200f || (touchVelocity >= 200f && (lastTouchDy < 0f || dy < -5f * density)))
-                    val isClosingGesture = (isUpwardFling && (isClockArea || isBottomArea || isPanelMovingUp || dy < -15f * density)) ||
+
+                    // Crucial fix: A closing gesture MUST be an UPWARD motion (dy < -15f * density).
+                    // Downward pulldowns (dy > 0) must NEVER trigger closing!
+                    val isClosingGesture = (dy < -15f * density) && (
+                            (isUpwardFling && (isClockArea || isBottomArea || isPanelMovingUp || dy < -15f * density)) ||
                             (dy < -20f * density && (isClockArea || isBottomArea)) ||
                             (isPanelMovingUp && dy < -10f * density) ||
                             (dy < -40f * density && lastTouchDy <= 0f)
+                    )
+
+                    if (isSlowPulldownActive && (lastAppliedFraction >= 0.70f || hasFullyOpenedForCurrentSession)) {
+                        isShadeOpen = true
+                        isShadeFullyOpen = true
+                        hasFullyOpenedForCurrentSession = true
+                        hasTriggeredUnlockForCurrentOpen = false
+                    }
 
                     if (hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen &&
                         !isLaunchingNotificationActivity && isClosingGesture
