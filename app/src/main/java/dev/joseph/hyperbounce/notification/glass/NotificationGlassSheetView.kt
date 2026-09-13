@@ -282,7 +282,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
             // [Layer 1] Replicated Lock Screen Clock (BEHIND subject cutout during pulldown)
             if (isLockScreenActive && !clockOverSubject) {
-                val clockAlpha = if (isClosing) 1f else ((expansionFraction - 0.15f) / 0.70f).coerceIn(0f, 1f)
+                val clockAlpha = if (isClosing) 1f else ((expansionFraction - 0.05f) / 0.55f).coerceIn(0f, 1f)
                 val clockY = 0f
                 LockScreenCoverSheetController.drawClock(
                     canvas = targetCanvas,
@@ -304,7 +304,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
             // [Layer 3] Foreground Clock Layer (and background clock when fully open so subject doesn't occlude)
             if (isLockScreenActive) {
-                val clockAlpha = if (isClosing) 1f else ((expansionFraction - 0.15f) / 0.70f).coerceIn(0f, 1f)
+                val clockAlpha = if (isClosing) 1f else ((expansionFraction - 0.05f) / 0.55f).coerceIn(0f, 1f)
                 val clockY = 0f
                 if (clockOverSubject) {
                     LockScreenCoverSheetController.drawClock(
@@ -370,7 +370,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
             // Replicated Lock Screen Clock
             if (isLockScreenActive) {
-                val clockAlpha = if (isClosing) 1f else ((expansionFraction - 0.10f) / 0.70f).coerceIn(0f, 1f)
+                val clockAlpha = if (isClosing) 1f else ((expansionFraction - 0.05f) / 0.55f).coerceIn(0f, 1f)
                 val clockY = 0f
                 LockScreenCoverSheetController.drawClock(
                     canvas = targetCanvas,

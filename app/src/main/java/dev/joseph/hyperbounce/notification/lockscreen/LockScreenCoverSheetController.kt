@@ -45,34 +45,18 @@ object LockScreenCoverSheetController {
     private var cachedNsslRef: WeakReference<ViewGroup>? = null
 
     @Volatile
-    var currentMorphFraction: Float = 0f
+    var currentMorphFraction: Float = 1f
         private set
 
-    private var targetMorphFraction: Float = 0f
+    private var targetMorphFraction: Float = 1f
     private var morphAnimator: android.animation.ValueAnimator? = null
+    private var isClockSyncedSmall: Boolean = false
 
     fun updateMorphFraction(target: Float) {
-        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
-            android.os.Handler(android.os.Looper.getMainLooper()).post {
-                updateMorphFraction(target)
-            }
-            return
-        }
-        if (kotlin.math.abs(target - targetMorphFraction) < 0.01f && morphAnimator?.isRunning == true) return
-        targetMorphFraction = target
+        currentMorphFraction = 1f
+        targetMorphFraction = 1f
         morphAnimator?.cancel()
-        val anim = android.animation.ValueAnimator.ofFloat(currentMorphFraction, target).apply {
-            duration = 320L
-            interpolator = android.view.animation.PathInterpolator(0.2f, 0f, 0.2f, 1f)
-            addUpdateListener { va ->
-                currentMorphFraction = va.animatedValue as Float
-                val container = dev.joseph.hyperbounce.notification.NotificationSheetHook.getContainer()
-                val sheet = container?.findViewWithTag<View>("hyperbounce_notif_glass_sheet")
-                sheet?.postInvalidateOnAnimation()
-            }
-        }
-        morphAnimator = anim
-        anim.start()
+        morphAnimator = null
     }
 
     /**
@@ -126,17 +110,8 @@ object LockScreenCoverSheetController {
 
         resolveClockViews(rootView)
 
-        val container = dev.joseph.hyperbounce.notification.NotificationSheetHook.getContainer()
-        val nsslId = container?.resources?.getIdentifier("notification_stack_scroller", "id", "com.android.systemui") ?: 0
-        val nssl = if (nsslId != 0) container?.findViewById<ViewGroup>(nsslId) else null
-        val hasNotif = if (nssl != null) hasActiveNotifications(nssl) else (lastKnownHasNotification == true)
-        lastKnownHasNotification = hasNotif
-
-        val targetFraction = if (hasNotif) 1.0f else 0.0f
-        if (kotlin.math.abs(targetFraction - targetMorphFraction) > 0.01f) {
-            updateMorphFraction(targetFraction)
-        }
-        val morph = currentMorphFraction
+        // User requirement: Notification Center clock ALWAYS stays compact/small.
+        val morph = 1.0f
 
         val targetView: ViewGroup? = when (layer) {
             ClockLayer.BACKGROUND -> cachedClockContainerRef?.get()
@@ -413,26 +388,7 @@ object LockScreenCoverSheetController {
     fun getEffectiveClockBottom(container: ViewGroup?): Int {
         if (container == null) return 0
         val density = container.resources.displayMetrics.density
-        val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
-        val nssl = if (nsslId != 0) container.findViewById<ViewGroup>(nsslId) else null
-        val hasNotif = if (nssl != null) hasActiveNotifications(nssl) else (lastKnownHasNotification == true)
-
-        if (hasNotif) {
-            return (135f * density).toInt()
-        }
-
-        try {
-            val clockContainer = getAuthenticClockContainer(container.rootView)
-            if (clockContainer != null) {
-                val getClockBottomMethod = clockContainer.javaClass.getMethod("getClockBottom")
-                val bottom = (getClockBottomMethod.invoke(clockContainer) as? Number)?.toInt() ?: 0
-                if (bottom in (180f * density).toInt()..(450f * density).toInt()) {
-                    return bottom
-                }
-            }
-        } catch (_: Throwable) {}
-
-        return (310f * density).toInt()
+        return (135f * density).toInt()
     }
 
     /**
@@ -528,7 +484,41 @@ object LockScreenCoverSheetController {
         val cfg = NotificationSheetConfigHolder.sheet
         if (!cfg.isLockScreenActive) return
 
+        if (isClockSyncedSmall) return
+
         try {
+            val clockContainer = getAuthenticClockContainer(container.rootView)
+            if (clockContainer != null) {
+                try {
+                    val clockClass = clockContainer.javaClass
+                    getCanScaleField(clockClass)?.setBoolean(clockContainer, true)
+
+                    val hasNotifField = getHasNotifField(clockClass)
+                    hasNotifField?.setBoolean(clockContainer, true)
+
+                    val animHelper = getAnimHelperField(clockClass)?.get(clockContainer)
+                    if (animHelper != null) {
+                        getDoAnimMethod(animHelper.javaClass)?.invoke(animHelper, true, false)
+                        Log.d(TAG, "Configured authentic clock to compact mode via doAnimationToNotification(true, false)")
+                    }
+
+                    // Direct call to clock view: setShowFullTime(false) forces small / compact mode!
+                    try {
+                        val controller = getControllerField(clockClass)?.get(clockContainer)
+                        if (controller != null) {
+                            val clockView = getClockViewField(controller.javaClass)?.get(controller)
+                            if (clockView != null) {
+                                getSetShowFullTimeMethod(clockView.javaClass)?.invoke(clockView, false)
+                            }
+                        }
+                    } catch (_: Throwable) {}
+
+                    isClockSyncedSmall = true
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Error configuring authentic clock to compact state", t)
+                }
+            }
+
             var nssl = cachedNsslRef?.get()
             if (nssl == null) {
                 if (cachedNsslId == 0) {
@@ -541,51 +531,6 @@ object LockScreenCoverSheetController {
                     }
                 }
             }
-
-            val hasNotif = hasActiveNotifications(nssl)
-            val notifChanged = (lastKnownHasNotification != hasNotif)
-            lastKnownHasNotification = hasNotif
-
-            val targetFraction = if (hasNotif) 1.0f else 0.0f
-            if (kotlin.math.abs(targetFraction - targetMorphFraction) > 0.01f) {
-                updateMorphFraction(targetFraction)
-            }
-
-            val clockContainer = getAuthenticClockContainer(container.rootView)
-            if (clockContainer != null) {
-                try {
-                    val clockClass = clockContainer.javaClass
-                    getCanScaleField(clockClass)?.setBoolean(clockContainer, true)
-
-                    val hasNotifField = getHasNotifField(clockClass)
-                    val currentInContainer = hasNotifField?.getBoolean(clockContainer) ?: false
-
-                    if (notifChanged || currentInContainer != hasNotif) {
-                        hasNotifField?.setBoolean(clockContainer, hasNotif)
-
-                        val animHelper = getAnimHelperField(clockClass)?.get(clockContainer)
-                        if (animHelper != null) {
-                            getDoAnimMethod(animHelper.javaClass)?.invoke(animHelper, hasNotif, false)
-                            Log.d(TAG, "Triggered authentic doAnimationToNotification(hasNotif=$hasNotif)")
-                        }
-
-                        // Also update clock view full time state directly
-                        try {
-                            val controller = getControllerField(clockClass)?.get(clockContainer)
-                            if (controller != null) {
-                                val clockView = getClockViewField(controller.javaClass)?.get(controller)
-                                if (clockView != null) {
-                                    getSetShowFullTimeMethod(clockView.javaClass)?.invoke(clockView, hasNotif)
-                                }
-                            }
-                        } catch (_: Throwable) {}
-                    }
-                } catch (t: Throwable) {
-                    Log.e(TAG, "Error animating authentic clock view to notification state", t)
-                }
-            }
-
-            // Ensure no artificial clip bounds or padding restrictions are placed on NSSL
             if (nssl != null && nssl.clipBounds != null) {
                 nssl.clipBounds = null
             }
@@ -680,9 +625,11 @@ object LockScreenCoverSheetController {
      */
     fun onShadeReset(container: ViewGroup) {
         try {
-            currentMorphFraction = 0f
-            targetMorphFraction = 0f
+            isClockSyncedSmall = false
+            currentMorphFraction = 1f
+            targetMorphFraction = 1f
             morphAnimator?.cancel()
+            morphAnimator = null
 
             // Restore stock shade header
             suppressStockShadeHeader(container.rootView, false)

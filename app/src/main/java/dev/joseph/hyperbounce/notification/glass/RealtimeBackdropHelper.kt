@@ -136,8 +136,13 @@ object RealtimeBackdropHelper {
         var wasHardwareBlurred = false
         if (needBlur && setCaptureBlurRadiusMethod != null) {
             try {
-                val blurRadius = (60f * captureScale).toInt().coerceAtLeast(20)
+                val blurRadius = (150f * captureScale).toInt().coerceAtLeast(30)
                 setCaptureBlurRadiusMethod?.invoke(builder, blurRadius)
+                if (setCaptureBlendsMethod != null) {
+                    val blendList = ArrayList<Point>()
+                    blendList.add(Point(BlendMode.SRC_ATOP.ordinal, 1297438037))
+                    setCaptureBlendsMethod?.invoke(builder, blendList)
+                }
                 wasHardwareBlurred = true
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to apply hardware blur via setCaptureBlurRadius", t)

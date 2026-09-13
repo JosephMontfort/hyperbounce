@@ -248,7 +248,7 @@ class GlassLensRenderer {
                     bevelAlpha = cov;
                 } else if (hasBackdrop > 0.5) {
                     float interiorBlend = smoothstep(0.005, 0.050, slope);
-                    bevelAlpha = clamp(mix(spec, 0.45, interiorBlend) * cov, 0.0, 1.0);
+                    bevelAlpha = clamp(mix(spec, 1.0, interiorBlend) * cov, 0.0, 1.0);
                 } else {
                     bevelAlpha = clamp(spec * cov, 0.0, 1.0);
                 }

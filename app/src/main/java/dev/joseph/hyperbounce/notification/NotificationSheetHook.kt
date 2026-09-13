@@ -1640,17 +1640,23 @@ object NotificationSheetHook {
     }
 
     fun applyExpansionFraction(fraction: Float) {
-        val prev = lastAppliedFraction
         val f = fraction.coerceIn(0.0f, 1.0f)
-        if (abs(f - lastAppliedFraction) < 0.001f) return
-        lastAppliedFraction = f
+        val updateBlock = Runnable {
+            val prev = lastAppliedFraction
+            // When pulling down to open, ignore tiny backward fluctuations (< 0.05) to eliminate jitter/fighting
+            val isOpening = !isClosingMode && !isShadeFullyOpen && !hasFullyOpenedForCurrentSession
+            if (isOpening && f < prev && prev > 0.02f && (prev - f) < 0.05f) {
+                return@Runnable
+            }
+            if (abs(f - prev) < 0.001f) return@Runnable
+            lastAppliedFraction = f
+            applyExpansionFractionInternal(f, prev)
+        }
 
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            applyExpansionFractionInternal(f, prev)
+            updateBlock.run()
         } else {
-            mainHandler.post {
-                applyExpansionFractionInternal(f, prev)
-            }
+            mainHandler.post(updateBlock)
         }
     }
 
@@ -1891,21 +1897,6 @@ object NotificationSheetHook {
             }
             MotionEvent.ACTION_MOVE -> {
                 isUserTouchingShade = true
-                var viewHeight = container.height.toFloat()
-                if (viewHeight <= 0f) {
-                    viewHeight = container.resources.displayMetrics.heightPixels.toFloat()
-                }
-                if (viewHeight <= 0f) viewHeight = 2400f
-
-                // Instantaneous 1:1 finger tracking during shade pulldown:
-                // Only track when shade is not already open, pulldown originated from top (touchDownY < 200dp),
-                // left/center half of screen (not right side which opens Control Center),
-                // and Control Center is not active!
-                val isRightSidePulldown = touchDownX > screenW * 0.50f
-                if (!isShadeOpen && !isShadeFullyOpen && touchDownY < 200f * density && !isRightSidePulldown && !isControlCenterActive()) {
-                    val frac = (event.rawY / viewHeight).coerceIn(0.0f, 1.0f)
-                    applyExpansionFraction(frac)
-                }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val wasTouching = isUserTouchingShade
