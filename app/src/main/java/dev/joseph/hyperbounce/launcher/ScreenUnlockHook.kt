@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Color
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
@@ -31,6 +32,7 @@ object ScreenUnlockHook {
     private val normalizedDistance = ThreadLocal.withInitial { 0.0f }
     private val activeResponse = ThreadLocal.withInitial { 0.5f }
     private val activeDamping = ThreadLocal.withInitial { 0.6f }
+    private val currentAnimatingView = ThreadLocal<View?>()
 
     @Volatile
     private var latestVelocity = 0.0f
@@ -183,8 +185,24 @@ object ScreenUnlockHook {
                             }
                             currentRow.set(calculatedRow)
 
+                            var vel = latestVelocity
                             val timeSinceVelocity = System.currentTimeMillis() - lastVelocityTime
-                            if (timeSinceVelocity < 2500L && latestVelocity > 0f) {
+                            if (timeSinceVelocity > 2500L || vel <= 0f) {
+                                try {
+                                    val remotePrefs = io.github.libxposed.service.XposedServiceBridge.remotePreferencesOrNull("hyperbounce_prefs")
+                                    val remoteTime = remotePrefs?.getLong("last_unlock_time", 0L) ?: 0L
+                                    if (System.currentTimeMillis() - remoteTime < 2500L) {
+                                        vel = remotePrefs?.getFloat("last_unlock_velocity", 0f) ?: 0f
+                                        if (vel > 0f) {
+                                            latestVelocity = vel
+                                            lastVelocityTime = remoteTime
+                                        }
+                                    }
+                                } catch (_: Throwable) {}
+                            }
+
+                            val timeDelta = System.currentTimeMillis() - lastVelocityTime
+                            if (timeDelta < 2500L && latestVelocity > 0f) {
                                 val normV = (latestVelocity / cfg.maxVelocity).coerceIn(0.0f, 1.0f)
                                 currentKineticFactor.set(normV)
                             } else {
@@ -197,6 +215,20 @@ object ScreenUnlockHook {
                                 val dx = (vx - centerX) / (screenW / 2.0f)
                                 val dy = (vy - centerY) / (screenH / 2.0f)
                                 normalizedDistance.set(sqrt(dx * dx + dy * dy))
+                            } else {
+                                // Z-ordering: upper rows plunge UNDER lower rows.
+                                // Higher translationZ = rendered in front (on top).
+                                // Row 0 has lowest translationZ, Row 6 higher, Dock highest.
+                                val safeRow = calculatedRow.coerceIn(0, rows - 1)
+                                val zOrder = if (isHotseat || isInd) (rows + 2) * 0.5f else safeRow * 0.5f
+                                view.translationZ = zOrder
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                    view.outlineAmbientShadowColor = Color.TRANSPARENT
+                                    view.outlineSpotShadowColor = Color.TRANSPARENT
+                                }
+                                view.postDelayed({
+                                    view.translationZ = 0.0f
+                                }, 1200L)
                             }
                         } catch (t: Throwable) {
                             Log.w(TAG, "Error calculating icon position", t)
@@ -204,8 +236,13 @@ object ScreenUnlockHook {
                     }
 
                     isAnimating.set(true)
-                    val result = chain.proceed()
-                    isAnimating.set(false)
+                    currentAnimatingView.set(view)
+                    val result = try {
+                        chain.proceed()
+                    } finally {
+                        isAnimating.set(false)
+                        currentAnimatingView.set(null)
+                    }
                     return result
                 }
             })
@@ -233,16 +270,17 @@ object ScreenUnlockHook {
                             floatArrayOf(damping, response)
                         }
                     } else {
+                        val kF = currentKineticFactor.get()
+                        val vInf = cfg.velocityInfluence
+                        val velocityBoost = kF * vInf
+
                         if (isDockView.get() || isIndicator.get()) {
-                            val resp = (cfg.kineticDockResponse * cfg.durationScale).coerceIn(0.15f, 1.5f)
+                            val resp = (cfg.kineticDockResponse * cfg.durationScale / (1.0f + (velocityBoost * 0.25f))).coerceIn(0.15f, 1.5f)
                             val damp = cfg.kineticDockDamping.coerceIn(0.20f, 1.0f)
                             activeResponse.set(resp)
                             activeDamping.set(damp)
                             floatArrayOf(damp, resp)
                         } else {
-                            val kF = currentKineticFactor.get()
-                            val vInf = cfg.velocityInfluence
-                            val velocityBoost = kF * vInf
                             val safeRow = currentRow.get().coerceIn(0, max(0, cfg.gridRows - 1))
                             val outer = isOuterColumn.get()
 
@@ -257,24 +295,30 @@ object ScreenUnlockHook {
                                 cfg.getDyn("r${safeRow}_center_settle", ScreenUnlockDefaults.rowSettle(safeRow, cfg.gridRows, false))
                             }
 
-                            // Baseline damping on normal unlock:
-                            // Row with bounce = 0.0 stays at 1.0 (flat landing, no bounce)
-                            // Row with bounce = 0.55 drops to 0.78 (underdamped, deep plunge & rebound)
-                            val baseDamping = 1.0f - (customBounce * 0.40f)
+                            // Z-depth normalization:
+                            // Nominal Z is 500dp. If row starts farther (e.g. 650dp), we scale down the overshoot fraction
+                            // so the physical plunge depth into the screen is governed strictly by the bounce slider,
+                            // not inflated by higher start Z!
+                            val baseZ = cfg.getDyn("r${safeRow}_z", ScreenUnlockDefaults.rowZ(safeRow, cfg.gridRows)).coerceAtLeast(100.0f)
+                            val zRatio = (500.0f / baseZ).coerceIn(0.20f, 2.0f)
 
-                            // Universal Resting Damping is the master multiplier
-                            val effectiveDamping = cfg.cascadeDamping * baseDamping
-
-                            // Dynamic velocity boost:
-                            // Swiping faster further plunges rows that have bounce,
-                            // while rows with bounce = 0 remain flat
-                            val dynamicDampingDrop = customBounce * velocityBoost * 0.35f
-                            val finalDamping = (effectiveDamping * (1.0f - dynamicDampingDrop)).coerceIn(0.20f, 1.0f)
+                            val finalDamping: Float
+                            if (customBounce <= 0.0f) {
+                                // Zero bounce slider -> Flat landing, critical damping, ZERO plunge/rebound!
+                                finalDamping = 1.0f
+                            } else {
+                                // Resting Damping sensitivity scaling:
+                                // cfg.cascadeDamping default is 0.86. (1.0 - 0.86) / 0.14 = 1.0.
+                                val dampingSensitivity = ((1.0f - cfg.cascadeDamping) / 0.14f).coerceAtLeast(0.1f)
+                                val effectiveBounce = customBounce * (1.0f + (velocityBoost * 0.75f))
+                                val dampingDrop = effectiveBounce * zRatio * dampingSensitivity * 0.40f
+                                finalDamping = (1.0f - dampingDrop).coerceIn(0.20f, 1.0f)
+                            }
 
                             // Settle response:
                             // Scaled by universal duration scale, and quickened by swipe velocity:
                             val scaledResponse = customSettle * cfg.durationScale
-                            val finalResponse = (scaledResponse / (1.0f + (velocityBoost * 0.35f))).coerceIn(0.15f, 1.5f)
+                            val finalResponse = (scaledResponse / (1.0f + (velocityBoost * 0.30f))).coerceIn(0.15f, 1.5f)
 
                             activeResponse.set(finalResponse)
                             activeDamping.set(finalDamping)
@@ -318,10 +362,11 @@ object ScreenUnlockHook {
                                 val safeRow = currentRow.get().coerceIn(0, max(0, cfg.gridRows - 1))
 
                                 val targetZ: Float = if (isDockView.get() || isIndicator.get()) {
-                                    cfg.kineticDockZDepth.coerceAtLeast(10.0f)
+                                    val zMult = 1.0f + (velocityBoost * 0.25f)
+                                    (cfg.kineticDockZDepth * zMult).coerceAtLeast(10.0f)
                                 } else {
                                     val baseZ = cfg.getDyn("r${safeRow}_z", ScreenUnlockDefaults.rowZ(safeRow, cfg.gridRows))
-                                    val zMult = 1.0f + (velocityBoost * 0.40f)
+                                    val zMult = 1.0f + (velocityBoost * 0.35f)
                                     (baseZ * zMult).coerceAtLeast(10.0f)
                                 }
 
@@ -329,11 +374,53 @@ object ScreenUnlockHook {
                                 args[2] = -abs(targetZ)
                             }
                         }
-                        return chain.proceed(args)
+                        val animResult = chain.proceed(args)
+                        val v = currentAnimatingView.get()
+                        if (v != null) {
+                            try {
+                                val getMethod = chain.thisObject.javaClass.getMethod("getSpringAnimation")
+                                val springAnim = getMethod.invoke(chain.thisObject)
+                                if (springAnim is androidx.dynamicanimation.animation.DynamicAnimation<*>) {
+                                    val weakV = WeakReference(v)
+                                    springAnim.addEndListener { _, _, _, _ ->
+                                        weakV.get()?.translationZ = 0.0f
+                                    }
+                                }
+                            } catch (_: Throwable) {}
+                        }
+                        return animResult
                     }
                     return chain.proceed()
                 }
             })
+
+            try {
+                val complexClass = Class.forName("com.miui.home.launcher.compat.UserPresentAnimationCompatComplex", false, classLoader)
+                for (m in complexClass.declaredMethods) {
+                    if (m.name == "resetAnimation" && m.parameterTypes.isEmpty()) {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val res = chain.proceed()
+                                try {
+                                    fun resetZ(v: View?) {
+                                        if (v == null) return
+                                        v.translationZ = 0.0f
+                                        if (v is ViewGroup) {
+                                            for (k in 0 until v.childCount) {
+                                                resetZ(v.getChildAt(k))
+                                            }
+                                        }
+                                    }
+                                    val wsMethod = chain.thisObject.javaClass.getMethod("getWorkspace")
+                                    val ws = wsMethod.invoke(chain.thisObject) as? ViewGroup
+                                    resetZ(ws)
+                                } catch (_: Throwable) {}
+                                return res
+                            }
+                        })
+                    }
+                }
+            } catch (_: Throwable) {}
 
             Log.i(TAG, "Hooked UserPresentAnimationCompatPhone and SpringAnimator successfully")
         } catch (t: Throwable) {

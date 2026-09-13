@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewParent
@@ -57,6 +58,8 @@ object NotificationSheetHook {
 
     @Volatile
     var latestFlingVelocity: Float = 0.0f
+
+    private var shadeVelocityTracker: VelocityTracker? = null
 
     @Volatile
     private var isShadeFullyOpen = false
@@ -773,17 +776,26 @@ object NotificationSheetHook {
                         }
                     })
                 }
-                if (m.name == "flingToHeight" && m.parameterTypes.size == 5) {
+                if (m.name.startsWith("fling") && m.parameterTypes.isNotEmpty() &&
+                    m.parameterTypes[0] == Float::class.javaPrimitiveType
+                ) {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             try {
                                 val rawArgs = chain.args
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
                                 val velocity = (args[0] as? Number)?.toFloat() ?: 0.0f
-                                val expand = args[1] as? Boolean ?: false
-                                if (!expand) {
-                                    latestFlingVelocity = kotlin.math.abs(velocity)
-                                    Log.d(TAG, "Captured shade/unlock fling velocity: $latestFlingVelocity")
+                                var isExpanding = false
+                                for (i in 1 until args.size) {
+                                    if (args[i] is Boolean) {
+                                        isExpanding = args[i] as Boolean
+                                        break
+                                    }
+                                }
+                                val absVel = kotlin.math.abs(velocity)
+                                if (!isExpanding && absVel > 0.0f) {
+                                    latestFlingVelocity = absVel
+                                    Log.d(TAG, "Captured shade/unlock fling velocity (${m.name}): $latestFlingVelocity")
                                 }
                             } catch (_: Throwable) {}
                             return chain.proceed()
@@ -1268,7 +1280,14 @@ object NotificationSheetHook {
                 } else if (isGlobalLauncher) {
                     intent.setPackage("com.mi.android.globallauncher")
                 }
+                intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
                 context.sendBroadcast(intent)
+                try {
+                    io.github.libxposed.service.XposedServiceBridge.remotePreferencesOrNull("hyperbounce_prefs")?.edit()
+                        ?.putFloat("last_unlock_velocity", velocity)
+                        ?.putLong("last_unlock_time", System.currentTimeMillis())
+                        ?.apply()
+                } catch (_: Throwable) {}
                 Log.d(TAG, "Dispatched single ACTION_TRIGGER_UNLOCK_ANIMATION to launcher (pkg=${intent.`package`}, velocity=$velocity)")
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to send unlock broadcast", t)
@@ -1912,14 +1931,33 @@ object NotificationSheetHook {
                 isUserTouchingShade = true
                 touchDownX = event.rawX
                 touchDownY = event.rawY
+                shadeVelocityTracker?.recycle()
+                shadeVelocityTracker = VelocityTracker.obtain()
+                shadeVelocityTracker?.addMovement(event)
             }
             MotionEvent.ACTION_MOVE -> {
                 isUserTouchingShade = true
+                shadeVelocityTracker?.addMovement(event)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val wasTouching = isUserTouchingShade
                 isUserTouchingShade = false
                 val dy = event.rawY - touchDownY
+
+                var touchVelocity = 0.0f
+                try {
+                    shadeVelocityTracker?.addMovement(event)
+                    shadeVelocityTracker?.computeCurrentVelocity(1000)
+                    val yVel = shadeVelocityTracker?.yVelocity ?: 0.0f
+                    touchVelocity = kotlin.math.abs(yVel)
+                    if (touchVelocity > 0.0f) {
+                        latestFlingVelocity = touchVelocity
+                        Log.d(TAG, "Captured touch fling velocity from VelocityTracker: $latestFlingVelocity")
+                    }
+                } catch (_: Throwable) {} finally {
+                    shadeVelocityTracker?.recycle()
+                    shadeVelocityTracker = null
+                }
 
                 if (event.actionMasked == MotionEvent.ACTION_UP && wasTouching) {
                     val dm = container.resources.displayMetrics
@@ -1930,7 +1968,8 @@ object NotificationSheetHook {
                     val isClockArea = touchDownY <= clockBottom + (30f * density)
                     val isBottomArea = touchDownY >= screenH - (130f * density)
                     val isClosingGesture = (dy < -20f * density && (isClockArea || isBottomArea)) ||
-                            (lastAppliedFraction < 0.85f && dy < -10f * density)
+                            (lastAppliedFraction < 0.85f && dy < -10f * density) ||
+                            (dy < -5f * density && touchVelocity > 800f)
 
                     if (hasFullyOpenedForCurrentSession && !hasTriggeredUnlockForCurrentOpen &&
                         !isLaunchingNotificationActivity && isClosingGesture
@@ -1942,8 +1981,9 @@ object NotificationSheetHook {
                         hasTriggeredUnlockForCurrentOpen = true
                         isShadeFullyOpen = false
                         hasFullyOpenedForCurrentSession = false
-                        Log.d(TAG, "ACTION_UP closing release detected (dy=$dy, touchY=$touchDownY) -> triggering simultaneous unlock")
-                        notifyCloseOverHomescreen(container.context)
+                        val effectiveVel = if (touchVelocity > 0f) touchVelocity else latestFlingVelocity
+                        Log.d(TAG, "ACTION_UP closing release detected (dy=$dy, touchY=$touchDownY, vel=$effectiveVel) -> triggering simultaneous unlock")
+                        notifyCloseOverHomescreen(container.context, effectiveVel)
                     }
                 }
             }

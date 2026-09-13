@@ -242,8 +242,8 @@ fun ScreenUnlockScreen(
                         backdrop = backdrop,
                         value = unlock.velocityInfluence,
                         onValueChange = unlock::setVelocityInfluence,
-                        valueRange = 0.0f..2.0f,
-                        defaultValue = 1.0f,
+                        valueRange = 0.0f..5.0f,
+                        defaultValue = 2.00f,
                         valueLabel = { String.format(Locale.US, "%.2f", it) },
                         enabled = unlock.enabled
                     )
@@ -255,8 +255,8 @@ fun ScreenUnlockScreen(
                         backdrop = backdrop,
                         value = unlock.maxVelocity,
                         onValueChange = unlock::setMaxVelocity,
-                        valueRange = 5000f..30000f,
-                        defaultValue = 16000.0f,
+                        valueRange = 1000f..25000f,
+                        defaultValue = 8288.0f,
                         valueLabel = { String.format(Locale.US, "%.0f px/s", it) },
                         enabled = unlock.enabled
                     )
@@ -269,7 +269,7 @@ fun ScreenUnlockScreen(
                         value = unlock.cascadeDamping,
                         onValueChange = unlock::setCascadeDamping,
                         valueRange = 0.5f..1.0f,
-                        defaultValue = 0.98f,
+                        defaultValue = 0.86f,
                         valueLabel = { String.format(Locale.US, "%.2f", it) },
                         enabled = unlock.enabled
                     )
@@ -287,7 +287,7 @@ fun ScreenUnlockScreen(
                         value = unlock.kineticDockDamping,
                         onValueChange = unlock::setKineticDockDamping,
                         valueRange = 0.1f..1.0f,
-                        defaultValue = 0.95f,
+                        defaultValue = 1.00f,
                         valueLabel = { String.format(Locale.US, "%.2f", it) },
                         enabled = unlock.enabled
                     )
@@ -300,7 +300,7 @@ fun ScreenUnlockScreen(
                         value = unlock.kineticDockResponse,
                         onValueChange = unlock::setKineticDockResponse,
                         valueRange = 0.1f..1.5f,
-                        defaultValue = 0.36f,
+                        defaultValue = 0.55f,
                         valueLabel = { String.format(Locale.US, "%.2f", it) },
                         enabled = unlock.enabled
                     )
@@ -313,7 +313,7 @@ fun ScreenUnlockScreen(
                         value = unlock.kineticDockZDepth,
                         onValueChange = unlock::setKineticDockZDepth,
                         valueRange = 0f..4000f,
-                        defaultValue = 600.0f,
+                        defaultValue = 800.0f,
                         valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                         enabled = unlock.enabled
                     )

@@ -6,11 +6,14 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
+import kotlin.math.abs
+import kotlin.math.max
 import android.widget.FrameLayout
 import dev.joseph.hyperbounce.lockscreen.glass.LockScreenGlassSheetView
 import io.github.libxposed.api.XposedInterface
@@ -27,6 +30,11 @@ import java.lang.reflect.Method
 object LockScreenSheetHook {
 
     private const val TAG = "HyperBounce_LockSheet"
+
+    @Volatile
+    var lockscreenFlingVelocity: Float = 0.0f
+    private var lastExpansionFraction: Float = 1.0f
+    private var lastExpansionTime: Long = 0L
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
         // 1. Hook KeyguardPanelViewController (HyperOS Lockscreen Controller)
@@ -50,6 +58,20 @@ object LockScreenSheetHook {
                                 val rootViewField: Field = kpvc.javaClass.getDeclaredField("keyguardRootView")
                                 rootViewField.isAccessible = true
                                 val rootView = rootViewField.get(kpvc) as? View
+
+                                val now = SystemClock.uptimeMillis()
+                                val dt = now - lastExpansionTime
+                                if (lastExpansionTime > 0L && dt in 2..250) {
+                                    val df = abs(f - lastExpansionFraction)
+                                    var viewH = rootView?.height?.toFloat() ?: 2400f
+                                    if (viewH <= 0f) viewH = 2400f
+                                    val instVel = (df * viewH) / (dt / 1000.0f)
+                                    if (instVel > 50.0f) {
+                                        lockscreenFlingVelocity = lockscreenFlingVelocity * 0.3f + instVel * 0.7f
+                                    }
+                                }
+                                lastExpansionFraction = f
+                                lastExpansionTime = now
 
                                 var notifView: View? = null
                                 try {
@@ -266,10 +288,14 @@ object LockScreenSheetHook {
                                     try {
                                         val context = rootView.context
                                         val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
-                                        val vel = dev.joseph.hyperbounce.notification.NotificationSheetHook.latestFlingVelocity
+                                        val vel = max(
+                                            lockscreenFlingVelocity,
+                                            dev.joseph.hyperbounce.notification.NotificationSheetHook.latestFlingVelocity
+                                        )
                                         if (vel > 0.0f) {
                                             intent.putExtra("EXTRA_VELOCITY", vel)
                                         }
+                                        intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
                                         val pm = context.packageManager
                                         val isMiuiHome = try {
                                             pm.getPackageInfo("com.miui.home", 0) != null
@@ -280,6 +306,12 @@ object LockScreenSheetHook {
                                             intent.setPackage("com.mi.android.globallauncher")
                                         }
                                         context.sendBroadcast(intent)
+                                        try {
+                                            io.github.libxposed.service.XposedServiceBridge.remotePreferencesOrNull("hyperbounce_prefs")?.edit()
+                                                ?.putFloat("last_unlock_velocity", vel)
+                                                ?.putLong("last_unlock_time", System.currentTimeMillis())
+                                                ?.apply()
+                                        } catch (_: Throwable) {}
                                         Log.d(TAG, "Dispatched ACTION_TRIGGER_UNLOCK_ANIMATION on keyguard dismiss (vel=$vel)")
                                     } catch (t: Throwable) {
                                         Log.e(TAG, "Failed to broadcast unlock on keyguard dismiss", t)

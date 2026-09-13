@@ -4,21 +4,37 @@ import android.content.SharedPreferences
 
 object ScreenUnlockDefaults {
     fun rowZ(row: Int, totalRows: Int = 7): Float {
-        val norm = if (totalRows <= 1) 0.0f else (row.toFloat() / (totalRows - 1).toFloat()).coerceIn(0.0f, 1.0f)
-        return 2000.0f - (norm * 1350.0f)
+        return when (row) {
+            0 -> 650.0f
+            1 -> 600.0f
+            else -> 500.0f
+        }
     }
 
     fun rowBounce(row: Int, totalRows: Int = 7, isOuter: Boolean = false): Float {
-        val norm = if (totalRows <= 1) 0.0f else (row.toFloat() / (totalRows - 1).toFloat()).coerceIn(0.0f, 1.0f)
-        val factor = (1.0f - norm) * (1.0f - norm)
-        val maxBounce = if (isOuter) 0.50f else 0.55f
-        return (maxBounce * factor).coerceIn(0.0f, 1.0f)
+        return when (row) {
+            0 -> if (isOuter) 0.29f else 0.21f
+            1 -> if (isOuter) 0.24f else 0.24f
+            2 -> if (isOuter) 0.21f else 0.20f
+            3 -> if (isOuter) 0.13f else 0.14f
+            4 -> if (isOuter) 0.18f else 0.11f
+            5 -> 0.00f
+            6 -> 0.00f
+            else -> 0.00f
+        }
     }
 
     fun rowSettle(row: Int, totalRows: Int = 7, isOuter: Boolean = false): Float {
-        val norm = if (totalRows <= 1) 0.0f else (row.toFloat() / (totalRows - 1).toFloat()).coerceIn(0.0f, 1.0f)
-        val base = 0.52f - (norm * 0.17f)
-        return if (isOuter) base + 0.02f else base
+        return when (row) {
+            0 -> if (isOuter) 0.93f else 0.70f
+            1 -> if (isOuter) 0.86f else 0.69f
+            2 -> if (isOuter) 0.80f else 0.64f
+            3 -> if (isOuter) 0.84f else 0.58f
+            4 -> if (isOuter) 0.88f else 0.75f
+            5 -> if (isOuter) 0.71f else 0.65f
+            6 -> if (isOuter) 0.78f else 0.72f
+            else -> if (isOuter) 0.75f else 0.70f
+        }
     }
 }
 
@@ -42,13 +58,13 @@ data class ScreenUnlockConfig(
     val maxDamping: Float = 0.65f,
 
     // Mode 1: Kinetic Y-Axis Cascade
-    val durationScale: Float = 1.0f,
-    val velocityInfluence: Float = 1.0f,
-    val maxVelocity: Float = 16000.0f,
-    val cascadeDamping: Float = 0.98f,
-    val kineticDockDamping: Float = 0.95f,
-    val kineticDockResponse: Float = 0.36f,
-    val kineticDockZDepth: Float = 600.0f,
+    val durationScale: Float = 1.00f,
+    val velocityInfluence: Float = 2.00f,
+    val maxVelocity: Float = 8288.0f,
+    val cascadeDamping: Float = 0.86f,
+    val kineticDockDamping: Float = 1.00f,
+    val kineticDockResponse: Float = 0.55f,
+    val kineticDockZDepth: Float = 800.0f,
 
     // Row-by-row dynamics (r0_z..r6_z, r0_center_bounce..r6_center_bounce, etc.)
     val dyn: Map<String, Float> = emptyMap()
@@ -128,13 +144,13 @@ object LauncherConfigHolder {
             maxResponse = prefs.getFloat("unlock_max_response", 0.75f),
             minDamping = prefs.getFloat("unlock_min_damping", 0.42f),
             maxDamping = prefs.getFloat("unlock_max_damping", 0.65f),
-            durationScale = prefs.getFloat("unlock_duration_scale", 1.0f),
-            velocityInfluence = prefs.getFloat("unlock_velocity_influence", 1.0f),
-            maxVelocity = prefs.getFloat("unlock_max_velocity", 16000.0f),
-            cascadeDamping = prefs.getFloat("unlock_cascade_damping", 0.98f),
-            kineticDockDamping = prefs.getFloat("unlock_kinetic_dock_damping", 0.95f),
-            kineticDockResponse = prefs.getFloat("unlock_kinetic_dock_response", 0.36f),
-            kineticDockZDepth = prefs.getFloat("unlock_kinetic_dock_z_depth", 600.0f),
+            durationScale = prefs.getFloat("unlock_duration_scale", 1.00f),
+            velocityInfluence = prefs.getFloat("unlock_velocity_influence", 2.00f),
+            maxVelocity = prefs.getFloat("unlock_max_velocity", 8288.0f),
+            cascadeDamping = prefs.getFloat("unlock_cascade_damping", 0.86f),
+            kineticDockDamping = prefs.getFloat("unlock_kinetic_dock_damping", 1.00f),
+            kineticDockResponse = prefs.getFloat("unlock_kinetic_dock_response", 0.55f),
+            kineticDockZDepth = prefs.getFloat("unlock_kinetic_dock_z_depth", 800.0f),
             dyn = dynMap
         )
 
