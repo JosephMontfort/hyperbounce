@@ -107,6 +107,32 @@ object NotificationSheetHook {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile
+    private var isKeyguardShowing: Boolean = false
+
+    private var cachedGlassSheetRef: WeakReference<NotificationGlassSheetView>? = null
+    private var cachedHomePillRef: WeakReference<View>? = null
+    private var cachedNsslRef: WeakReference<View>? = null
+    private var cachedNsslId: Int = 0
+    private var cachedShadeBgId: Int = 0
+    private var cachedThemeBgId: Int = 0
+
+    private fun getNsslView(container: ViewGroup): View? {
+        val cached = cachedNsslRef?.get()
+        if (cached != null && cached.parent != null) return cached
+        if (cachedNsslId == 0) {
+            cachedNsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
+        }
+        if (cachedNsslId != 0) {
+            val v = container.findViewById<View>(cachedNsslId)
+            if (v != null) {
+                cachedNsslRef = WeakReference(v)
+                return v
+            }
+        }
+        return null
+    }
+
+    @Volatile
     private var miuiFlashlightController: Any? = null
     @Volatile
     private var fallbackTorchEnabled: Boolean = false
@@ -213,48 +239,29 @@ object NotificationSheetHook {
         } catch (_: Throwable) {}
     }
 
-    fun isKeyguard(context: Context?): Boolean {
-        if (currentStatusBarState != 0) return true
-        if (context != null) {
-            try {
-                val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
-                if (km?.isKeyguardLocked == true) return true
-            } catch (_: Throwable) {}
-        }
-        return false
+    fun isKeyguard(context: Context? = null): Boolean {
+        return currentStatusBarState != 0 || isKeyguardShowing
     }
 
     fun isControlCenterActive(): Boolean {
         if (isShadeSwitchingToNotification) return false
         if (isShadeSwitchingToControlCenter) return true
-        val cc = controlCenterRef?.get()
-        if (cc != null) {
-            try {
-                val method = cc.javaClass.getMethod("getExpanded")
-                val expanded = method.invoke(cc) as? Boolean
-                if (expanded != null) {
-                    isControlCenterExpanded = expanded
-                    return expanded
-                }
-            } catch (_: Throwable) {}
-        }
         return isControlCenterExpanded
     }
 
     private val isUnlockedShadeActive: Boolean
         get() {
             val cfg = NotificationSheetConfigHolder.sheet
-            val container = containerRef?.get()
-            val isLocked = container?.context?.let { isKeyguard(it) } ?: false
-            return cfg.enabled && currentStatusBarState == 0 && !isLocked && !isControlCenterActive()
+            return cfg.enabled && currentStatusBarState == 0 && !isKeyguardShowing && !isControlCenterActive()
         }
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
         // 0. Crash prevention: Hook NotificationWakeUpCoordinator to prevent early NPE before stackScrollerController is injected
         hookWakeUpCoordinator(module, classLoader)
 
-        // 1. Hook StatusBarStateControllerImpl to track active shade / lockscreen state
+        // 1. Hook StatusBarStateControllerImpl and KeyguardStateControllerImpl to track active shade / lockscreen state
         hookStatusBarState(module, classLoader)
+        hookKeyguardState(module, classLoader)
 
         // 2. Hook ShadeSwitchControllerImpl and ControlCenterImpl to prevent unlock bounce on switch
         hookShadeSwitch(module, classLoader)
@@ -336,8 +343,10 @@ object NotificationSheetHook {
     private fun hideSheetForControlCenter() {
         mainHandler.post {
             val container = containerRef?.get() ?: return@post
-            container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
-            container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
+            val sheet = cachedGlassSheetRef?.get() ?: container.findViewWithTag<View>(TAG_GLASS_SHEET)
+            val pill = cachedHomePillRef?.get() ?: container.findViewWithTag<View>(TAG_HOME_PILL)
+            sheet?.visibility = View.GONE
+            pill?.visibility = View.GONE
             LockScreenCoverSheetController.onShadeReset(container)
             container.translationY = 0.0f
             container.scaleX = 1.0f
@@ -351,13 +360,12 @@ object NotificationSheetHook {
         mainHandler.post {
             val container = containerRef?.get() ?: return@post
             val cfg = NotificationSheetConfigHolder.sheet
-            if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard(container.context) || isControlCenterActive()) {
+            if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
                 return@post
             }
-            ensureGlassSheetInjected(container)
-            ensureHomePillInjected(container)
-            val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
-            val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
+            val sheet = cachedGlassSheetRef?.get() ?: ensureGlassSheetInjected(container)
+            val pill = cachedHomePillRef?.get() ?: ensureHomePillInjected(container)
+            adjustNotificationMargins(container)
             sheet?.visibility = View.VISIBLE
             sheet?.expansionFraction = 1.0f
             sheet?.translationY = 0.0f
@@ -409,6 +417,7 @@ object NotificationSheetHook {
                                 currentStatusBarState = newState
 
                                 if (newState != 0) {
+                                    isKeyguardShowing = true
                                     isShadeOpen = false
                                     isShadeFullyOpen = false
                                     hasFullyOpenedForCurrentSession = false
@@ -457,6 +466,36 @@ object NotificationSheetHook {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook StatusBarStateControllerImpl", t)
+        }
+    }
+
+    private fun hookKeyguardState(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val kscClass = Class.forName("com.android.systemui.statusbar.policy.KeyguardStateControllerImpl", false, classLoader)
+            for (m: Method in kscClass.declaredMethods) {
+                if (m.name == "notifyKeyguardState" && m.parameterTypes.size == 2 &&
+                    m.parameterTypes[0] == Boolean::class.javaPrimitiveType &&
+                    m.parameterTypes[1] == Boolean::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val result = chain.proceed()
+                            try {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                                val showing = args[0] as Boolean
+                                val occluded = args[1] as Boolean
+                                isKeyguardShowing = showing && !occluded
+                            } catch (_: Throwable) {}
+                            return result
+                        }
+                    })
+                    Log.d(TAG, "Hooked KeyguardStateControllerImpl.notifyKeyguardState successfully")
+                    break
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook KeyguardStateControllerImpl", t)
         }
     }
 
@@ -823,21 +862,29 @@ object NotificationSheetHook {
             container.clipChildren = false
             container.clipToPadding = false
 
-            val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
-            val nssl = if (nsslId != 0) container.findViewById<ViewGroup>(nsslId) else null
+            val nssl = getNsslView(container) as? ViewGroup
             if (nssl != null) {
                 nssl.visibility = View.VISIBLE
                 if (nssl.getTag(TAG_NSSL_LISTENERS_ATTACHED) == null) {
                     nssl.setTag(TAG_NSSL_LISTENERS_ATTACHED, true)
                     nssl.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                        LockScreenCoverSheetController.syncClockWithNotifications(container)
+                        val cfg = NotificationSheetConfigHolder.sheet
+                        if (cfg.isLockScreenActive) {
+                            LockScreenCoverSheetController.syncClockWithNotifications(container)
+                        }
                     }
                     nssl.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
                         override fun onChildViewAdded(parent: View?, child: View?) {
-                            LockScreenCoverSheetController.syncClockWithNotifications(container)
+                            val cfg = NotificationSheetConfigHolder.sheet
+                            if (cfg.isLockScreenActive) {
+                                LockScreenCoverSheetController.syncClockWithNotifications(container)
+                            }
                         }
                         override fun onChildViewRemoved(parent: View?, child: View?) {
-                            LockScreenCoverSheetController.syncClockWithNotifications(container)
+                            val cfg = NotificationSheetConfigHolder.sheet
+                            if (cfg.isLockScreenActive) {
+                                LockScreenCoverSheetController.syncClockWithNotifications(container)
+                            }
                         }
                     })
                 }
@@ -849,7 +896,7 @@ object NotificationSheetHook {
                 container.isClickable = false
             }
 
-            if (currentStatusBarState != 0 || isKeyguard(container.context) || isControlCenterActive()) {
+            if (currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
                 container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
                 container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
                 container.translationY = 0.0f
@@ -864,14 +911,18 @@ object NotificationSheetHook {
         }
     }
 
-    private fun ensureGlassSheetInjected(container: ViewGroup) {
+    private fun ensureGlassSheetInjected(container: ViewGroup): NotificationGlassSheetView? {
         try {
+            val existing = cachedGlassSheetRef?.get()
+            if (existing != null && existing.parent == container) {
+                return existing
+            }
             val cfg = NotificationSheetConfigHolder.sheet
             var sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
 
-            if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard(container.context) || isControlCenterActive()) {
+            if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
                 sheet?.visibility = View.GONE
-                return
+                return null
             }
 
             if (sheet == null) {
@@ -902,12 +953,14 @@ object NotificationSheetHook {
 
             // Bind the real-time blurred shade background layer (ShadeBackgroundView)
             if (sheet.shadeBackgroundView == null) {
-                val shadeBgId = container.resources.getIdentifier("shade_background", "id", "com.android.systemui")
-                if (shadeBgId != 0) {
+                if (cachedShadeBgId == 0) {
+                    cachedShadeBgId = container.resources.getIdentifier("shade_background", "id", "com.android.systemui")
+                }
+                if (cachedShadeBgId != 0) {
                     var p: ViewParent? = container.parent
                     while (p != null) {
                         if (p is ViewGroup) {
-                            val bg = p.findViewById<View>(shadeBgId)
+                            val bg = p.findViewById<View>(cachedShadeBgId)
                             if (bg != null) {
                                 sheet.shadeBackgroundView = bg
                                 break
@@ -920,12 +973,14 @@ object NotificationSheetHook {
 
             // Bind the Xiaomi theme_background view for depth blur suppression
             if (themeBackgroundViewRef?.get() == null) {
-                val themeBgId = container.resources.getIdentifier("theme_background", "id", "com.android.systemui")
-                if (themeBgId != 0) {
+                if (cachedThemeBgId == 0) {
+                    cachedThemeBgId = container.resources.getIdentifier("theme_background", "id", "com.android.systemui")
+                }
+                if (cachedThemeBgId != 0) {
                     var p: ViewParent? = container.parent
                     while (p != null) {
                         if (p is ViewGroup) {
-                            val bg = p.findViewById<View>(themeBgId)
+                            val bg = p.findViewById<View>(cachedThemeBgId)
                             if (bg != null) {
                                 themeBackgroundViewRef = WeakReference(bg)
                                 break
@@ -935,19 +990,26 @@ object NotificationSheetHook {
                     }
                 }
             }
+            cachedGlassSheetRef = WeakReference(sheet)
+            return sheet
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to inject NotificationGlassSheetView", t)
+            return null
         }
     }
 
-    private fun ensureHomePillInjected(container: ViewGroup) {
+    private fun ensureHomePillInjected(container: ViewGroup): View? {
         try {
+            val existing = cachedHomePillRef?.get()
+            if (existing != null && existing.parent == container) {
+                return existing
+            }
             val cfg = NotificationSheetConfigHolder.sheet
             var pillWrapper = container.findViewWithTag<ViewGroup>(TAG_HOME_PILL)
 
-            if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard(container.context) || isControlCenterActive()) {
+            if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
                 pillWrapper?.visibility = View.GONE
-                return
+                return null
             }
 
             if (pillWrapper == null) {
@@ -1008,10 +1070,14 @@ object NotificationSheetHook {
                 }
 
                 container.addView(wrapper, lp)
+                pillWrapper = wrapper
                 Log.d(TAG, "Injected home indicator pill successfully")
             }
+            cachedHomePillRef = WeakReference(pillWrapper)
+            return pillWrapper
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to inject home pill", t)
+            return null
         }
     }
 
@@ -1250,7 +1316,7 @@ object NotificationSheetHook {
     fun notifyCloseOverHomescreen(context: Context, velocity: Float = latestFlingVelocity) {
         isShadeOpen = false
 
-        if (currentStatusBarState != 0 || isKeyguard(context)) {
+        if (currentStatusBarState != 0 || isKeyguard()) {
             Log.d(TAG, "notifyCloseOverHomescreen: keyguard active, skipping")
             return
         }
@@ -1312,8 +1378,7 @@ object NotificationSheetHook {
             }
 
             val cfg = NotificationSheetConfigHolder.sheet
-            val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
-            val nssl = if (nsslId != 0) container.findViewById<View>(nsslId) else null ?: return
+            val nssl = getNsslView(container) ?: return
 
             val lp = nssl.layoutParams as? ViewGroup.MarginLayoutParams ?: return
             val density = container.resources.displayMetrics.density
@@ -1379,12 +1444,12 @@ object NotificationSheetHook {
                     pb
                 }
                 if (isLsCenter) {
-                    nssl.clipBounds = null
+                    if (nssl.clipBounds != null) nssl.clipBounds = null
                     if (nssl.paddingTop != 0 || nssl.paddingBottom != origPaddingBottom) {
                         nssl.setPadding(nssl.paddingLeft, 0, nssl.paddingRight, origPaddingBottom)
                     }
                 } else {
-                    nssl.clipBounds = null
+                    if (nssl.clipBounds != null) nssl.clipBounds = null
                     val targetPaddingTop = if (isActive) kotlin.math.max(origPaddingTop, (260f * density).toInt()) else origPaddingTop
                     val targetPaddingBottom = if (isActive) targetBottom else origPaddingBottom
                     if (nssl.paddingTop != targetPaddingTop || nssl.paddingBottom != targetPaddingBottom) {
@@ -1399,10 +1464,9 @@ object NotificationSheetHook {
 
     private fun resetNotificationMargins(container: ViewGroup) {
         try {
-            val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
-            val nssl = if (nsslId != 0) container.findViewById<View>(nsslId) else null ?: return
+            val nssl = getNsslView(container) ?: return
 
-            nssl.clipBounds = null
+            if (nssl.clipBounds != null) nssl.clipBounds = null
             val lp = nssl.layoutParams as? ViewGroup.MarginLayoutParams ?: return
             val origStart = (nssl.getTag(TAG_ORIG_MARGIN_START) as? Int) ?: lp.marginStart
             val origEnd = (nssl.getTag(TAG_ORIG_MARGIN_END) as? Int) ?: lp.marginEnd
@@ -1694,13 +1758,13 @@ object NotificationSheetHook {
         try {
             val container = containerRef?.get() ?: return
             val cfg = NotificationSheetConfigHolder.sheet
-            if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard(container.context) || isControlCenterActive()) {
-                val curSheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+            if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
+                val curSheet = cachedGlassSheetRef?.get() ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
                 curSheet?.isClosingMode = false
                 curSheet?.isClosingFromFullOpen = false
                 curSheet?.visibility = View.GONE
                 curSheet?.translationY = 0.0f
-                val curPill = container.findViewWithTag<View>(TAG_HOME_PILL)
+                val curPill = cachedHomePillRef?.get() ?: container.findViewWithTag<View>(TAG_HOME_PILL)
                 curPill?.visibility = View.GONE
                 curPill?.translationY = 0.0f
                 container.translationY = 0.0f
@@ -1713,10 +1777,11 @@ object NotificationSheetHook {
                 return
             }
 
-            // Prime home screen cache at gesture opening start
+            // Prime home screen cache and adjust notification margins at gesture opening start
             if (!isShadeOpen && fraction > 0.015f) {
                 isShadeOpen = true
                 updateHomeScreenCache(container.context)
+                adjustNotificationMargins(container)
             }
 
             val screenHeight = container.resources.displayMetrics.heightPixels.toFloat()
@@ -1726,8 +1791,8 @@ object NotificationSheetHook {
                 screenHeight
             }
 
-            val sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
-            val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
+            val sheet = cachedGlassSheetRef?.get() ?: ensureGlassSheetInjected(container)
+            val pill = cachedHomePillRef?.get() ?: ensureHomePillInjected(container)
 
             // Check if closing started from full open
             if ((isShadeFullyOpen || hasFullyOpenedForCurrentSession) &&
@@ -1760,12 +1825,9 @@ object NotificationSheetHook {
                 isShadeOpen = false
                 isLaunchingNotificationActivity = false
                 currentStretchOffset = 0f
+                resetNotificationMargins(container)
                 return
             }
-
-            ensureGlassSheetInjected(container)
-            ensureHomePillInjected(container)
-            adjustNotificationMargins(container)
 
             // Keep container translation at 0.0f; translate only the glass card and pill!
             container.translationY = 0.0f
@@ -1774,7 +1836,7 @@ object NotificationSheetHook {
             // Smooth 120fps continuous translation: slides from -viewHeight to 0f without artificial snaps
             val finalSheetY = kotlin.math.min(0f, upwardOffset)
 
-            val curSheet = sheet ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+            val curSheet = sheet
             if (curSheet != null) {
                 curSheet.visibility = View.VISIBLE
                 curSheet.isClosingMode = isClosingMode || (hasFullyOpenedForCurrentSession && fraction < 0.95f && (prevFraction < 0f || fraction < prevFraction))
@@ -1804,7 +1866,7 @@ object NotificationSheetHook {
                 }
             }
 
-            val curPill = pill ?: container.findViewWithTag<View>(TAG_HOME_PILL)
+            val curPill = pill
             if (curPill != null) {
                 curPill.visibility = View.VISIBLE
                 // Pill is stably pinned to the sheet's bottom edge with stretch offset when sheet is fully open

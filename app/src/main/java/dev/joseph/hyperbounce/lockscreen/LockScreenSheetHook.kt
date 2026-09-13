@@ -20,6 +20,7 @@ import android.widget.FrameLayout
 import dev.joseph.hyperbounce.lockscreen.glass.LockScreenGlassSheetView
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
+import java.lang.ref.WeakReference
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -32,6 +33,82 @@ import java.lang.reflect.Method
 object LockScreenSheetHook {
 
     private const val TAG = "HyperBounce_LockSheet"
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private var kpvcRootViewField: Field? = null
+    private var kpvcNsslField: Field? = null
+    private var kpvcNcpField: Field? = null
+    private var kpvcBottomAreaField: Field? = null
+    private var bottomAreaViewField: Field? = null
+    private var kpvcStatusBarStateField: Field? = null
+    private var kpvcKeyguardStateControllerField: Field? = null
+    private var kscIsShowingMethod: Method? = null
+
+    private var cachedLockRootViewRef: WeakReference<ViewGroup>? = null
+    private var cachedLockGlassSheetRef: WeakReference<LockScreenGlassSheetView>? = null
+    private var cachedLockNotifViewRef: WeakReference<View>? = null
+    private var cachedLockPillRef: WeakReference<View>? = null
+    private var cachedBottomAreaViewRef: WeakReference<ViewGroup>? = null
+
+    private fun getRootView(kpvc: Any): ViewGroup? {
+        val cached = cachedLockRootViewRef?.get()
+        if (cached != null) return cached
+        return try {
+            if (kpvcRootViewField == null) {
+                kpvcRootViewField = kpvc.javaClass.getDeclaredField("keyguardRootView").apply { isAccessible = true }
+            }
+            val v = kpvcRootViewField?.get(kpvc) as? ViewGroup
+            if (v != null) {
+                cachedLockRootViewRef = WeakReference(v)
+            }
+            v
+        } catch (_: Throwable) { null }
+    }
+
+    private fun getNotifView(kpvc: Any): View? {
+        val cached = cachedLockNotifViewRef?.get()
+        if (cached != null) return cached
+        var notifView: View? = null
+        try {
+            if (kpvcNsslField == null) {
+                kpvcNsslField = kpvc.javaClass.getDeclaredField("notificationStackScrollLayout").apply { isAccessible = true }
+            }
+            notifView = kpvcNsslField?.get(kpvc) as? View
+        } catch (_: Throwable) {}
+
+        if (notifView == null) {
+            try {
+                if (kpvcNcpField == null) {
+                    kpvcNcpField = kpvc.javaClass.getDeclaredField("notificationContainerParent").apply { isAccessible = true }
+                }
+                notifView = kpvcNcpField?.get(kpvc) as? View
+            } catch (_: Throwable) {}
+        }
+        if (notifView != null) {
+            cachedLockNotifViewRef = WeakReference(notifView)
+        }
+        return notifView
+    }
+
+    private fun getBottomAreaView(kpvc: Any): ViewGroup? {
+        val cached = cachedBottomAreaViewRef?.get()
+        if (cached != null) return cached
+        return try {
+            if (kpvcBottomAreaField == null) {
+                kpvcBottomAreaField = kpvc.javaClass.getDeclaredField("keyguardBottomAreaInjector").apply { isAccessible = true }
+            }
+            val injector = kpvcBottomAreaField?.get(kpvc) ?: return null
+            if (bottomAreaViewField == null) {
+                bottomAreaViewField = injector.javaClass.getDeclaredField("mKeyguardBottomAreaView").apply { isAccessible = true }
+            }
+            val bv = bottomAreaViewField?.get(injector) as? ViewGroup
+            if (bv != null) {
+                cachedBottomAreaViewRef = WeakReference(bv)
+            }
+            bv
+        } catch (_: Throwable) { null }
+    }
 
     @Volatile
     var lockscreenFlingVelocity: Float = 0.0f
@@ -83,11 +160,10 @@ object LockScreenSheetHook {
                                 val rawArgs = chain.args
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
                                 val f = (args[0] as Number).toFloat()
-                                val kpvc = chain.thisObject
+                                val kpvc = chain.thisObject ?: return result
 
-                                val rootViewField: Field = kpvc.javaClass.getDeclaredField("keyguardRootView")
-                                rootViewField.isAccessible = true
-                                val rootView = rootViewField.get(kpvc) as? View
+                                val rootView = getRootView(kpvc)
+                                val finalNotifView = getNotifView(kpvc)
 
                                 val now = SystemClock.uptimeMillis()
                                 val dt = now - lastExpansionTime
@@ -103,30 +179,11 @@ object LockScreenSheetHook {
                                 lastExpansionFraction = f
                                 lastExpansionTime = now
 
-                                var notifView: View? = null
-                                try {
-                                    val nsslField: Field = kpvc.javaClass.getDeclaredField("notificationStackScrollLayout")
-                                    nsslField.isAccessible = true
-                                    notifView = nsslField.get(kpvc) as? View
-                                } catch (_: Throwable) {}
-
-                                if (notifView == null) {
-                                    try {
-                                        val ncpField: Field = kpvc.javaClass.getDeclaredField("notificationContainerParent")
-                                        ncpField.isAccessible = true
-                                        notifView = ncpField.get(kpvc) as? View
-                                    } catch (_: Throwable) {}
-                                }
-
-                                val finalNotifView = notifView
-
                                 if (rootView != null) {
                                     val cfg = LockScreenConfigHolder.sheet
                                     if (!cfg.enabled || !isLockScreenActive(kpvc)) {
-                                        if (rootView is ViewGroup) {
-                                            val existingSheet = rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
-                                            existingSheet?.visibility = View.GONE
-                                        }
+                                        val existingSheet = cachedLockGlassSheetRef?.get() ?: rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
+                                        existingSheet?.visibility = View.GONE
                                         return result
                                     }
 
@@ -135,76 +192,23 @@ object LockScreenSheetHook {
                                     if (viewHeight == 0f) viewHeight = 2400f
                                     val upwardOffset = (1.0f - fraction) * -viewHeight
 
-                                    val updateUI = Runnable {
-                                        // 1. Move root lockscreen layer upward smoothly (120Hz native performance)
-                                        rootView.translationY = upwardOffset
-                                        rootView.scaleX = 1.0f
-                                        rootView.scaleY = 1.0f
+                                    // 1. Move root lockscreen layer upward smoothly (120Hz native performance)
+                                    rootView.translationY = upwardOffset
+                                    rootView.scaleX = 1.0f
+                                    rootView.scaleY = 1.0f
 
-                                        // 2. Ensure real-time AGSL Liquid Glass Sheet Card is at index 0 (behind clock & notifs)
-                                        ensureInjected(kpvc)
+                                    // 2. Ensure real-time AGSL Liquid Glass Sheet Card is at index 0 (behind clock & notifs)
+                                    ensureInjected(kpvc, rootView)
 
-                                        // 3. Move notification container upward in sync
-                                        if (finalNotifView != null) {
-                                            finalNotifView.translationY = upwardOffset
-                                            finalNotifView.scaleX = 1.0f
-                                            finalNotifView.scaleY = 1.0f
-                                        }
-
-                                        // 4. Dynamic iOS Home Indicator Bar in KeyguardBottomAreaView
-                                        try {
-                                            val bottomAreaField: Field = kpvc.javaClass.getDeclaredField("keyguardBottomAreaInjector")
-                                            bottomAreaField.isAccessible = true
-                                            val bottomAreaInjector = bottomAreaField.get(kpvc)
-                                            if (bottomAreaInjector != null) {
-                                                val bViewField: Field = bottomAreaInjector.javaClass.getDeclaredField("mKeyguardBottomAreaView")
-                                                bViewField.isAccessible = true
-                                                val bottomAreaView = bViewField.get(bottomAreaInjector) as? ViewGroup
-                                                if (bottomAreaView != null) {
-                                                    val context = bottomAreaView.context
-                                                    val density = context.resources.displayMetrics.density
-
-                                                    var pill = bottomAreaView.findViewWithTag<View>("hyperbounce_home_pill")
-                                                    if (pill == null) {
-                                                        val pillW = (cfg.pillWidth.coerceAtLeast(40f) * density).toInt()
-                                                        val pillH = (cfg.pillHeight.coerceAtLeast(2f) * density).toInt()
-                                                        val radius = pillH / 2
-                                                        val bMargin = (cfg.pillBottomMargin * density).toInt()
-
-                                                        pill = View(context).apply {
-                                                            id = View.generateViewId()
-                                                            tag = "hyperbounce_home_pill"
-
-                                                            val pillDrawable = GradientDrawable().apply {
-                                                                shape = GradientDrawable.RECTANGLE
-                                                                setColor(0xF0FFFFFF.toInt())
-                                                                cornerRadius = radius.toFloat()
-                                                            }
-                                                            background = pillDrawable
-                                                            elevation = 8 * density
-                                                        }
-
-                                                        val flp = FrameLayout.LayoutParams(
-                                                            pillW,
-                                                            pillH,
-                                                            Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                                                        ).apply {
-                                                            bottomMargin = bMargin
-                                                        }
-                                                        bottomAreaView.addView(pill, flp)
-                                                    }
-                                                }
-                                            }
-                                        } catch (t: Throwable) {
-                                            Log.e(TAG, "Pill injection error", t)
-                                        }
+                                    // 3. Move notification container upward in sync
+                                    if (finalNotifView != null) {
+                                        finalNotifView.translationY = upwardOffset
+                                        finalNotifView.scaleX = 1.0f
+                                        finalNotifView.scaleY = 1.0f
                                     }
 
-                                    if (Looper.myLooper() == Looper.getMainLooper()) {
-                                        updateUI.run()
-                                    } else {
-                                        Handler(Looper.getMainLooper()).post(updateUI)
-                                    }
+                                    // 4. Dynamic iOS Home Indicator Bar in KeyguardBottomAreaView
+                                    ensurePillInjected(kpvc, cfg)
                                 }
                             } catch (t: Throwable) {
                                 Log.e(TAG, "KPVC expansion hook error", t)
@@ -224,11 +228,12 @@ object LockScreenSheetHook {
                             val result = chain.proceed()
                             try {
                                 val kpvc = chain.thisObject
-                                val attachUI = Runnable { ensureInjected(kpvc) }
-                                if (Looper.myLooper() == Looper.getMainLooper()) {
-                                    attachUI.run()
-                                } else {
-                                    Handler(Looper.getMainLooper()).post(attachUI)
+                                if (kpvc != null) {
+                                    if (Looper.myLooper() == Looper.getMainLooper()) {
+                                        ensureInjected(kpvc)
+                                    } else {
+                                        mainHandler.post { ensureInjected(kpvc) }
+                                    }
                                 }
                             } catch (_: Throwable) {}
                             return result
@@ -249,15 +254,8 @@ object LockScreenSheetHook {
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
                                 val v = args[1] as? View
                                 if (v != null) {
-                                    val resetScale = Runnable {
-                                        v.scaleX = 1.0f
-                                        v.scaleY = 1.0f
-                                    }
-                                    if (Looper.myLooper() == Looper.getMainLooper()) {
-                                        resetScale.run()
-                                    } else {
-                                        Handler(Looper.getMainLooper()).post(resetScale)
-                                    }
+                                    v.scaleX = 1.0f
+                                    v.scaleY = 1.0f
                                 }
                             } catch (_: Throwable) {}
                             return null
@@ -272,25 +270,8 @@ object LockScreenSheetHook {
                             val result = chain.proceed()
                             try {
                                 val kpvc = chain.thisObject
-                                val rootViewField: Field = kpvc.javaClass.getDeclaredField("keyguardRootView")
-                                rootViewField.isAccessible = true
-                                val rootView = rootViewField.get(kpvc) as? View
-
-                                var notifView: View? = null
-                                try {
-                                    val nsslField: Field = kpvc.javaClass.getDeclaredField("notificationStackScrollLayout")
-                                    nsslField.isAccessible = true
-                                    notifView = nsslField.get(kpvc) as? View
-                                } catch (_: Throwable) {}
-                                if (notifView == null) {
-                                    try {
-                                        val ncpField: Field = kpvc.javaClass.getDeclaredField("notificationContainerParent")
-                                        ncpField.isAccessible = true
-                                        notifView = ncpField.get(kpvc) as? View
-                                    } catch (_: Throwable) {}
-                                }
-
-                                val finalNotifView = notifView
+                                val rootView = if (kpvc != null) getRootView(kpvc) else null
+                                val finalNotifView = if (kpvc != null) getNotifView(kpvc) else null
 
                                 if (rootView != null) {
                                     val animUI = Runnable {
@@ -312,7 +293,7 @@ object LockScreenSheetHook {
                                     if (Looper.myLooper() == Looper.getMainLooper()) {
                                         animUI.run()
                                     } else {
-                                        Handler(Looper.getMainLooper()).post(animUI)
+                                        mainHandler.post(animUI)
                                     }
 
                                     try {
@@ -421,18 +402,22 @@ object LockScreenSheetHook {
 
     private fun isLockScreenActive(kpvc: Any): Boolean {
         return try {
-            val stateField = kpvc.javaClass.getDeclaredField("statusBarState")
-            stateField.isAccessible = true
-            val state = stateField.getInt(kpvc)
+            if (kpvcStatusBarStateField == null) {
+                kpvcStatusBarStateField = kpvc.javaClass.getDeclaredField("statusBarState").apply { isAccessible = true }
+            }
+            val state = kpvcStatusBarStateField?.getInt(kpvc) ?: 1
             // 1 is StatusBarState.KEYGUARD
             if (state != 1) return false
 
-            val kscField = kpvc.javaClass.getDeclaredField("keyguardStateController")
-            kscField.isAccessible = true
-            val ksc = kscField.get(kpvc)
+            if (kpvcKeyguardStateControllerField == null) {
+                kpvcKeyguardStateControllerField = kpvc.javaClass.getDeclaredField("keyguardStateController").apply { isAccessible = true }
+            }
+            val ksc = kpvcKeyguardStateControllerField?.get(kpvc)
             if (ksc != null) {
-                val isShowingMethod = ksc.javaClass.getMethod("isShowing")
-                val isShowing = isShowingMethod.invoke(ksc) as? Boolean ?: true
+                if (kscIsShowingMethod == null) {
+                    kscIsShowingMethod = ksc.javaClass.getMethod("isShowing")
+                }
+                val isShowing = kscIsShowingMethod?.invoke(ksc) as? Boolean ?: true
                 if (!isShowing) return false
             }
             true
@@ -441,15 +426,58 @@ object LockScreenSheetHook {
         }
     }
 
-    private fun ensureInjected(kpvc: Any) {
+    private fun ensurePillInjected(kpvc: Any, cfg: LockScreenConfig) {
+        if (cachedLockPillRef?.get() != null) return
         try {
-            val rootViewField: Field = kpvc.javaClass.getDeclaredField("keyguardRootView")
-            rootViewField.isAccessible = true
-            val rootView = rootViewField.get(kpvc) as? ViewGroup ?: return
+            val bottomAreaView = getBottomAreaView(kpvc) ?: return
+            var pill = bottomAreaView.findViewWithTag<View>("hyperbounce_home_pill")
+            if (pill == null) {
+                val context = bottomAreaView.context
+                val density = context.resources.displayMetrics.density
+                val pillW = (cfg.pillWidth.coerceAtLeast(40f) * density).toInt()
+                val pillH = (cfg.pillHeight.coerceAtLeast(2f) * density).toInt()
+                val radius = pillH / 2
+                val bMargin = (cfg.pillBottomMargin * density).toInt()
+
+                pill = View(context).apply {
+                    id = View.generateViewId()
+                    tag = "hyperbounce_home_pill"
+
+                    val pillDrawable = GradientDrawable().apply {
+                        shape = GradientDrawable.RECTANGLE
+                        setColor(0xF0FFFFFF.toInt())
+                        cornerRadius = radius.toFloat()
+                    }
+                    background = pillDrawable
+                    elevation = 8 * density
+                }
+
+                val flp = FrameLayout.LayoutParams(
+                    pillW,
+                    pillH,
+                    Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                ).apply {
+                    bottomMargin = bMargin
+                }
+                bottomAreaView.addView(pill, flp)
+            }
+            cachedLockPillRef = WeakReference(pill)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Pill injection error", t)
+        }
+    }
+
+    private fun ensureInjected(kpvc: Any, cachedRoot: ViewGroup? = null) {
+        try {
+            val rootView = cachedRoot ?: getRootView(kpvc) ?: return
             val cfg = LockScreenConfigHolder.sheet
             val active = cfg.enabled && isLockScreenActive(kpvc)
 
-            var glassSheet = rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
+            var glassSheet = cachedLockGlassSheetRef?.get()
+            if (glassSheet == null || glassSheet.parent != rootView) {
+                glassSheet = rootView.findViewWithTag<LockScreenGlassSheetView>("hyperbounce_lock_glass_sheet")
+            }
+
             if (!active) {
                 glassSheet?.visibility = View.GONE
                 return
@@ -483,11 +511,13 @@ object LockScreenSheetHook {
                 }
             }
 
-            glassSheet.visibility = View.VISIBLE
-            if (rootView.width > 0 && rootView.height > 0) {
+            cachedLockGlassSheetRef = WeakReference(glassSheet)
+            if (glassSheet.visibility != View.VISIBLE) {
+                glassSheet.visibility = View.VISIBLE
+            }
+            if (rootView.width > 0 && rootView.height > 0 && (glassSheet.width != rootView.width || glassSheet.height != rootView.height)) {
                 glassSheet.layout(0, 0, rootView.width, rootView.height)
             }
-            glassSheet.invalidate()
         } catch (_: Throwable) {}
     }
 }
