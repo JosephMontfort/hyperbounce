@@ -351,6 +351,13 @@ object ControlCenterHook {
         try {
             Log.i(TAG, "Initializing Control Center Plugin hooks on ClassLoader: $classLoader")
 
+            // 0a. Hook Low-End Flashlight Brightness Control
+            try {
+                FlashlightBrightnessHook.init(module, classLoader)
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to initialize FlashlightBrightnessHook", t)
+            }
+
             // 0b. Hook QSTileItemView.getShowLabel to return false in EDIT mode
             try {
                 val qstileItemViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemView", false, classLoader)

@@ -94,6 +94,17 @@ fun ControlCenterScreen(
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
+                    title = "Low-End Flashlight Brightness Control",
+                    subtitle = "Hardware sysfs brightness unlock (1–100% slider, 75% tile default) for low-end devices",
+                    colors = colors,
+                    iconTint = colors.accentOrange,
+                    backdrop = backdrop,
+                    checked = cc.lowEndFlashlightEnabled,
+                    onCheckedChange = cc::setLowEndFlashlightEnabled,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                )
+                RowDivider(colors.separator)
+                SettingsToggleRow(
                     title = "Auto-Restart System UI on Edit Exit",
                     subtitle = "Rebinds 100% clean touch targets after saving new tile groups",
                     colors = colors,

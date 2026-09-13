@@ -978,13 +978,15 @@ class SettingsRepository(context: Context) {
         var blurResponse by prefsFloatState("cc_blur_response", defaults.blurResponse); private set
         var blurDamping by prefsFloatState("cc_blur_damping", defaults.blurDamping); private set
         var frictionMultiplier by prefsFloatState("cc_friction_multiplier", defaults.frictionMultiplier); private set
+        var lowEndFlashlightEnabled by prefsBooleanState("cc_low_end_flashlight_enabled", defaults.lowEndFlashlightEnabled); private set
 
         fun snapshot(): ControlCenterSettings = ControlCenterSettings(
             modularEditEnabled, restartOnEditExit, animEnabled, jellyEnabled, lowEndAnim,
             entryInitialScale, entryTranslationY, waterfallEnabled, waterfallDelayStep,
             spreadRatio, spreadResponse, spreadDamping, spreadReleaseResponse, spreadReleaseDamping,
             tileShowResponse, tileShowDamping, tileHideResponse, tileHideDamping,
-            tileShrinkResponse, tileShrinkDamping, tileDelayScale, blurResponse, blurDamping, frictionMultiplier
+            tileShrinkResponse, tileShrinkDamping, tileDelayScale, blurResponse, blurDamping, frictionMultiplier,
+            lowEndFlashlightEnabled
         )
 
         @JvmName("setCcModularEditEnabledPref") fun setModularEditEnabled(v: Boolean) { modularEditEnabled = v }
@@ -992,6 +994,7 @@ class SettingsRepository(context: Context) {
         @JvmName("setCcAnimEnabledPref") fun setAnimEnabled(v: Boolean) { animEnabled = v }
         @JvmName("setCcJellyEnabledPref") fun setJellyEnabled(v: Boolean) { jellyEnabled = v }
         @JvmName("setCcLowEndAnimPref") fun setLowEndAnim(v: Boolean) { lowEndAnim = v }
+        @JvmName("setCcLowEndFlashlightEnabledPref") fun setLowEndFlashlightEnabled(v: Boolean) { lowEndFlashlightEnabled = v }
         @JvmName("setCcEntryInitialScalePref") fun setEntryInitialScale(v: Float) { entryInitialScale = v }
         @JvmName("setCcEntryTranslationYPref") fun setEntryTranslationY(v: Float) { entryTranslationY = v }
         @JvmName("setCcWaterfallEnabledPref") fun setWaterfallEnabled(v: Boolean) { waterfallEnabled = v }
@@ -1018,6 +1021,7 @@ class SettingsRepository(context: Context) {
             animEnabled = defaults.animEnabled
             jellyEnabled = defaults.jellyEnabled
             lowEndAnim = defaults.lowEndAnim
+            lowEndFlashlightEnabled = defaults.lowEndFlashlightEnabled
             entryInitialScale = defaults.entryInitialScale
             entryTranslationY = defaults.entryTranslationY
             waterfallEnabled = defaults.waterfallEnabled

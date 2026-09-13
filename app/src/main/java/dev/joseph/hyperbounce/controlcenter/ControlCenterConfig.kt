@@ -47,7 +47,8 @@ data class ControlCenterConfig(
     var tileDelayScale: Float = 60.0f,
     var blurResponse: Float = 0.90f,
     var blurDamping: Float = 0.88f,
-    var frictionMultiplier: Float = 0.40f
+    var frictionMultiplier: Float = 0.40f,
+    var lowEndFlashlightEnabled: Boolean = false
 )
 
 /**
@@ -193,7 +194,8 @@ object ControlCenterConfigHolder {
             tileDelayScale = prefs.getFloat("cc_tile_delay_scale", 60.0f),
             blurResponse = prefs.getFloat("cc_blur_response", 0.90f),
             blurDamping = prefs.getFloat("cc_blur_damping", 0.88f),
-            frictionMultiplier = prefs.getFloat("cc_friction_multiplier", 0.40f)
+            frictionMultiplier = prefs.getFloat("cc_friction_multiplier", 0.40f),
+            lowEndFlashlightEnabled = prefs.getBoolean("cc_low_end_flashlight_enabled", false)
         )
     }
 

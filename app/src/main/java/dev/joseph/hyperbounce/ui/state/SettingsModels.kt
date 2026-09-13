@@ -279,7 +279,8 @@ data class ControlCenterSettings(
     val tileDelayScale: Float = 60.0f,
     val blurResponse: Float = 0.90f,
     val blurDamping: Float = 0.88f,
-    val frictionMultiplier: Float = 0.40f
+    val frictionMultiplier: Float = 0.40f,
+    val lowEndFlashlightEnabled: Boolean = false
 )
 
 /** Feature 10: Dropdown Menu to Dialog Fluid Morph Physics */
