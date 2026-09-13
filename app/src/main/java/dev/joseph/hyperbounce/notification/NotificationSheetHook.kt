@@ -76,8 +76,6 @@ object NotificationSheetHook {
     @Volatile
     private var isUserTouchingShade = false
 
-    private var settleAnimator: ValueAnimator? = null
-
     @Volatile
     private var touchDownX = 0f
 
@@ -1527,12 +1525,7 @@ object NotificationSheetHook {
 
                                 if (callerName.contains("NotificationPanelExpansionAnimator")) {
                                     if (isUnlockedShadeActive) {
-                                        val cfg = NotificationSheetConfigHolder.sheet
-                                        if (cfg.isLockScreenActive && (isUserTouchingShade || settleAnimator?.isRunning == true)) {
-                                            // Finger is actively driving 1:1 or settleAnimator is running
-                                        } else {
-                                            applyExpansionFraction(fVal)
-                                        }
+                                        applyExpansionFraction(fVal)
                                     }
                                 } else if (callerName.contains("NotificationPanelStretchAnimator")) {
                                     if (isUnlockedShadeActive) {
@@ -1568,15 +1561,10 @@ object NotificationSheetHook {
                             val result = chain.proceed()
                             try {
                                 if (isUnlockedShadeActive) {
-                                    val cfg = NotificationSheetConfigHolder.sheet
-                                    if (cfg.isLockScreenActive && (isUserTouchingShade || settleAnimator?.isRunning == true)) {
-                                        // Finger is actively driving 1:1 or settleAnimator is running
-                                    } else {
-                                        val rawArgs = chain.args
-                                        val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
-                                        val frac = (args[0] as Number).toFloat()
-                                        applyExpansionFraction(frac)
-                                    }
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                                    val frac = (args[0] as Number).toFloat()
+                                    applyExpansionFraction(frac)
                                 }
                             } catch (t: Throwable) {
                                 Log.e(TAG, "Error in onExpansionChanged hook", t)
@@ -2033,21 +2021,10 @@ object NotificationSheetHook {
                 shadeVelocityTracker?.recycle()
                 shadeVelocityTracker = VelocityTracker.obtain()
                 shadeVelocityTracker?.addMovement(event)
-                settleAnimator?.cancel()
-                settleAnimator = null
             }
             MotionEvent.ACTION_MOVE -> {
                 isUserTouchingShade = true
                 shadeVelocityTracker?.addMovement(event)
-                val cfg = NotificationSheetConfigHolder.sheet
-                if (cfg.isLockScreenActive && currentStatusBarState == 0 && !isControlCenterActive()) {
-                    val dm = container.resources.displayMetrics
-                    val screenH = dm.heightPixels.toFloat()
-                    if (screenH > 0f) {
-                        val fingerFrac = (event.rawY / screenH).coerceIn(0.0f, 1.0f)
-                        applyExpansionFraction(fingerFrac)
-                    }
-                }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val wasTouching = isUserTouchingShade
@@ -2067,46 +2044,6 @@ object NotificationSheetHook {
                 } catch (_: Throwable) {} finally {
                     shadeVelocityTracker?.recycle()
                     shadeVelocityTracker = null
-                }
-
-                val cfg = NotificationSheetConfigHolder.sheet
-                if (cfg.isLockScreenActive && currentStatusBarState == 0 && !isControlCenterActive() && wasTouching) {
-                    val currentFrac = lastAppliedFraction
-                    val isFlingDown = dy > 30f && touchVelocity > 600f
-                    val isFlingUp = dy < -30f && touchVelocity > 600f
-                    val targetFrac = if (isFlingDown) {
-                        1.0f
-                    } else if (isFlingUp) {
-                        0.0f
-                    } else if (currentFrac >= 0.50f) {
-                        1.0f
-                    } else {
-                        0.0f
-                    }
-
-                    if (abs(currentFrac - targetFrac) > 0.01f) {
-                        settleAnimator?.cancel()
-                        settleAnimator = ValueAnimator.ofFloat(currentFrac, targetFrac).apply {
-                            duration = 240
-                            interpolator = DecelerateInterpolator(1.6f)
-                            addUpdateListener { va ->
-                                applyExpansionFraction(va.animatedValue as Float)
-                            }
-                            addListener(object : AnimatorListenerAdapter() {
-                                override fun onAnimationEnd(animation: Animator) {
-                                    if (targetFrac == 0.0f) {
-                                        try {
-                                            val sbService = container.context.getSystemService("statusbar")
-                                            val collapseMethod = sbService?.javaClass?.getMethod("collapsePanels")
-                                            collapseMethod?.invoke(sbService)
-                                        } catch (_: Throwable) {}
-                                    }
-                                    settleAnimator = null
-                                }
-                            })
-                            start()
-                        }
-                    }
                 }
 
                 if (event.actionMasked == MotionEvent.ACTION_UP && wasTouching) {

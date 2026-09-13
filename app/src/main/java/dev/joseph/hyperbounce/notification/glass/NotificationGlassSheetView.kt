@@ -167,7 +167,6 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
         var glassRendered = false
         if (shouldRenderGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderer != null) {
-            val isWallpaperOn = shouldDrawWallpaper || isDepthActive
             val params = GlassLensRenderer.LensParams(
                 cornerRadius = cornerRadius,
                 leftBevel = leftBevel,
@@ -182,12 +181,11 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 lightY = 1f,
                 spec = cfg.specularStrength,
                 hairline = cfg.hairlineStrength,
-                innerGlow = if (isWallpaperOn) cfg.innerGlowStrength else 0f,
-                innerShadow = if (isWallpaperOn) cfg.innerShadow else 0f,
-                saturation = if (isWallpaperOn) cfg.saturationFactor else 100f,
+                innerGlow = cfg.innerGlowStrength,
+                innerShadow = cfg.innerShadow,
+                saturation = cfg.saturationFactor,
                 rimSoftness = cfg.rimSoftness,
-                blurRadius = cfg.blurRadius * density,
-                opaqueBevel = isWallpaperOn
+                blurRadius = cfg.blurRadius * density
             )
 
             val shadeBgBmp = (shadeBackgroundView?.background as? android.graphics.drawable.BitmapDrawable)?.bitmap
