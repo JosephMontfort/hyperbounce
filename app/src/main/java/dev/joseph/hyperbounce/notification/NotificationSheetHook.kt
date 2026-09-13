@@ -266,12 +266,6 @@ object NotificationSheetHook {
             return cfg.enabled && currentStatusBarState == 0 && !isKeyguardShowing && !isControlCenterActive()
         }
 
-    @Volatile
-    private var isSlowPulldownActive = false
-
-    @Volatile
-    private var isSlowPulldownCandidate = false
-
     fun isLandscapeMode(): Boolean {
         val container = containerRef?.get() ?: return false
         return container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE ||
@@ -280,7 +274,7 @@ object NotificationSheetHook {
 
     fun isOneToOneActive(): Boolean {
         val cfg = NotificationSheetConfigHolder.sheet
-        return cfg.isOneToOneTrackingActive && !isLandscapeMode() && isUnlockedShadeActive && isSlowPulldownActive
+        return cfg.isOneToOneTrackingActive && !isLandscapeMode() && isUnlockedShadeActive
     }
 
     fun getTargetExpandThreshold(): Float {
@@ -1763,13 +1757,32 @@ object NotificationSheetHook {
                                     }
                                     if (isOneToOneActive()) {
                                         val thresh = getTargetExpandThreshold()
-                                        // If the user pulled down slowly and reached settle threshold (fraction >= 0.70f or full open / haptic triggered):
-                                        // PERSIST! The notification center MUST STAY OPEN, never close on release!
-                                        val shouldAppear = (lastAppliedFraction >= 0.70f || hasFullyOpenedForCurrentSession || isShadeFullyOpen)
-
                                         val appF = ctrl.javaClass.getDeclaredField("appearance")
                                         appF.isAccessible = true
                                         val oldApp = appF.getBoolean(ctrl)
+
+                                        val container = containerRef?.get()
+                                        val density = container?.resources?.displayMetrics?.density ?: 2.75f
+                                        val isFlingDown = (latestTouchYVelocity > 250f * density || (latestFlingVelocity > 250f * density && lastTouchDy >= 0f))
+                                        val isUpwardFling = (latestTouchYVelocity < -200f || (latestFlingVelocity >= 200f && lastTouchDy < 0f))
+                                        val isSettledOpen = (lastAppliedFraction >= 0.65f || hasFullyOpenedForCurrentSession || isShadeFullyOpen)
+
+                                        val shouldAppear = if (oldApp) {
+                                            // Was already open: closing gesture or swiping up closes it
+                                            if (isUpwardFling || lastTouchDy < -5f * density || lastAppliedFraction < 0.70f) {
+                                                false
+                                            } else {
+                                                true
+                                            }
+                                        } else {
+                                            // Was closed: opening gesture
+                                            if (isFlingDown || isSettledOpen) {
+                                                true
+                                            } else {
+                                                lastAppliedFraction >= 0.40f && lastTouchDy >= 0f
+                                            }
+                                        }
+
                                         appF.setBoolean(ctrl, shouldAppear)
 
                                         if (shouldAppear) {
@@ -1829,7 +1842,7 @@ object NotificationSheetHook {
                                     appF.isAccessible = true
                                     val appearance = appF.getBoolean(ctrl)
                                     if (appearance) {
-                                        if (isUnlockedShadeActive && (lastAppliedFraction >= 0.70f || hasFullyOpenedForCurrentSession || isShadeFullyOpen)) {
+                                        if (isUnlockedShadeActive && (lastAppliedFraction >= 0.65f || hasFullyOpenedForCurrentSession || isShadeFullyOpen)) {
                                             isShadeOpen = true
                                             isShadeFullyOpen = true
                                             hasFullyOpenedForCurrentSession = true
@@ -1856,11 +1869,7 @@ object NotificationSheetHook {
                                         hasTriggeredUnlockForCurrentOpen = true
                                     }
                                 }
-                            } catch (_: Throwable) {} finally {
-                                isSlowPulldownActive = false
-                                isSlowPulldownCandidate = false
-                                updateExpandThreshold()
-                            }
+                            } catch (_: Throwable) {}
                             return result
                         }
                     })
@@ -2178,6 +2187,7 @@ object NotificationSheetHook {
 
     private fun hookNotificationWindowTouch(module: XposedModule, classLoader: ClassLoader) {
         val classNames = arrayOf(
+            "com.android.systemui.statusbar.phone.PhoneStatusBarView",
             "com.android.systemui.shade.NotificationShadeWindowView",
             "com.android.systemui.shade.NotificationPanelView"
         )
@@ -2222,19 +2232,7 @@ object NotificationSheetHook {
                 lastTouchDy = 0f
                 latestFlingVelocity = 0f
                 latestTouchYVelocity = 0f
-
-                val isShadeClosed = !isShadeOpen && !isShadeFullyOpen && lastAppliedFraction < 0.10f
-                val isTopTouch = event.rawY <= (density * 180f)
-                val cfg = NotificationSheetConfigHolder.sheet
-                if (isShadeClosed && isTopTouch && cfg.isOneToOneTrackingActive) {
-                    isSlowPulldownCandidate = true
-                    isSlowPulldownActive = true
-                    updateExpandThreshold()
-                } else {
-                    isSlowPulldownCandidate = false
-                    isSlowPulldownActive = false
-                    updateExpandThreshold()
-                }
+                updateExpandThreshold()
 
                 shadeVelocityTracker?.recycle()
                 shadeVelocityTracker = VelocityTracker.obtain()
@@ -2245,19 +2243,6 @@ object NotificationSheetHook {
                 lastTouchDy = event.rawY - lastTouchY
                 lastTouchY = event.rawY
                 shadeVelocityTracker?.addMovement(event)
-
-                if (isSlowPulldownCandidate && isSlowPulldownActive) {
-                    try {
-                        shadeVelocityTracker?.computeCurrentVelocity(1000)
-                        val yVel = shadeVelocityTracker?.yVelocity ?: 0f
-                        if (yVel > 650f * density && lastAppliedFraction < 0.35f) {
-                            Log.d(TAG, "Quick downward fling detected (yVel=$yVel) -> switching to stock fling algorithm")
-                            isSlowPulldownActive = false
-                            isSlowPulldownCandidate = false
-                            updateExpandThreshold()
-                        }
-                    } catch (_: Throwable) {}
-                }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val wasTouching = isUserTouchingShade
@@ -2304,7 +2289,7 @@ object NotificationSheetHook {
                             (dy < -40f * density && lastTouchDy <= 0f)
                     )
 
-                    if (isSlowPulldownActive && (lastAppliedFraction >= 0.70f || hasFullyOpenedForCurrentSession)) {
+                    if (lastAppliedFraction >= 0.65f || hasFullyOpenedForCurrentSession) {
                         isShadeOpen = true
                         isShadeFullyOpen = true
                         hasFullyOpenedForCurrentSession = true
