@@ -323,14 +323,10 @@ object LockScreenSheetOptimizedHook {
                                         rootView.animate().cancel()
                                         finalNotifView?.animate()?.cancel()
 
-                                        rootView.animate()
+                                         rootView.animate()
                                             .translationY(-viewHeight)
-                                            .alpha(0.0f)
                                             .setDuration(220)
                                             .setInterpolator(DecelerateInterpolator(1.5f))
-                                            .setUpdateListener {
-                                                cachedLockGlassSheetRef?.get()?.invalidate()
-                                            }
                                             .withEndAction {
                                                 isDismissAnimationRunning = false
                                             }
@@ -338,7 +334,6 @@ object LockScreenSheetOptimizedHook {
 
                                         finalNotifView?.animate()
                                             ?.translationY(-viewHeight)
-                                            ?.alpha(0.0f)
                                             ?.setDuration(220)
                                             ?.setInterpolator(DecelerateInterpolator(1.5f))
                                             ?.start()
@@ -349,13 +344,17 @@ object LockScreenSheetOptimizedHook {
                                         mainHandler.post(animUI)
                                     }
 
-                                    // Asynchronous broadcast dispatch: 0ms UI thread stall
+                                    // Calibrated asynchronous broadcast dispatch:
+                                    // Delay by 60ms so launcher icons burst precisely as the desktop is uncovered
                                     val context = rootView.context
                                     val vel = max(
                                         lockscreenFlingVelocity,
                                         dev.joseph.hyperbounce.notification.NotificationSheetHook.latestFlingVelocity
                                     )
                                     bgExecutor.execute {
+                                        try {
+                                            Thread.sleep(60L)
+                                        } catch (_: Throwable) {}
                                         listOf("com.miui.home", "com.mi.android.globallauncher").forEach { pkg ->
                                             try {
                                                 val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {

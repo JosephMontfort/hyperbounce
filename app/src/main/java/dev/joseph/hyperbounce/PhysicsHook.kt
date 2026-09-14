@@ -95,7 +95,12 @@ class PhysicsHook : XposedModule() {
                             Log.e("HyperBounce", "Failed to bind remote preferences in MIUI Home", t)
                         }
                     }
-                    dev.joseph.hyperbounce.launcher.ScreenUnlockHook.init(this, param.classLoader)
+                    val enableOptimization = prefs?.getBoolean("lock_sheet_enable_optimization", false) ?: false
+                    if (enableOptimization) {
+                        dev.joseph.hyperbounce.launcher.ScreenUnlockOptimizedHook.init(this, param.classLoader)
+                    } else {
+                        dev.joseph.hyperbounce.launcher.ScreenUnlockHook.init(this, param.classLoader)
+                    }
                     dev.joseph.hyperbounce.launcher.AppTransitionHook.init(this, param.classLoader)
                 }
             }
