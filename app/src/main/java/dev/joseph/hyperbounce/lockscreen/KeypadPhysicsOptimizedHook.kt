@@ -429,11 +429,11 @@ object KeypadPhysicsOptimizedHook {
                             if (!cfg.enabled) return chain.proceed()
 
                             val rawArgs = chain.args
-                            val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else (rawArgs as Array<*>).clone()
-                            if (args.size >= 2) {
+                            val list = if (rawArgs is List<*>) rawArgs.toMutableList() else (rawArgs as Array<*>).toMutableList()
+                            if (list.size >= 2) {
                                 // Force bouncer fraction to 0.0f to eliminate SurfaceFlinger blur and IPC ratio updates
-                                args[1] = 0.0f
-                                return chain.proceed(args)
+                                list[1] = 0.0f
+                                return chain.proceed(list.toTypedArray())
                             }
                             return chain.proceed()
                         }
@@ -470,9 +470,10 @@ object KeypadPhysicsOptimizedHook {
                                     try {
                                         val behindAlphaField = scrimStateClass.getDeclaredField("mBehindAlpha").apply { isAccessible = true }
                                         val behindTintField = scrimStateClass.getDeclaredField("mBehindTint").apply { isAccessible = true }
+                                        val target = chain.thisObject ?: bouncerObj
                                         // 0.45f dimming (45% pure black scrim)
-                                        behindAlphaField.setFloat(bouncerObj, 0.45f)
-                                        behindTintField.setInt(bouncerObj, 0xFF000000.toInt())
+                                        behindAlphaField.setFloat(target, 0.45f)
+                                        behindTintField.setInt(target, 0xFF000000.toInt())
                                     } catch (t: Throwable) {
                                         Log.e(TAG, "Failed to apply ScrimState.BOUNCER dimming", t)
                                     }
