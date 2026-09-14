@@ -362,6 +362,9 @@ object NotificationSheetHook {
 
         // 18. Hook FakeFocusNotifControllerImpl to scale focus notification translation 1:1 during 1:1 tracking
         hookFakeFocusNotifController(module, classLoader)
+
+        // 19. Hook notification row injectors to prevent transparent cards when HyperOS Advanced Textures (background_blur_enable) is active
+        hookNotificationCardBlurSuppression(module, classLoader)
     }
 
     private fun hookWakeUpCoordinator(module: XposedModule, classLoader: ClassLoader) {
@@ -405,11 +408,13 @@ object NotificationSheetHook {
             val pill = cachedHomePillRef?.get() ?: container.findViewWithTag<View>(TAG_HOME_PILL)
             sheet?.visibility = View.GONE
             pill?.visibility = View.GONE
-            LockScreenCoverSheetController.onShadeReset(container)
-            container.translationY = 0.0f
-            container.scaleX = 1.0f
-            container.scaleY = 1.0f
-            resetNotificationMargins(container)
+            if (currentStatusBarState == 0 && !isKeyguard()) {
+                LockScreenCoverSheetController.onShadeReset(container)
+                container.translationY = 0.0f
+                container.scaleX = 1.0f
+                container.scaleY = 1.0f
+                resetNotificationMargins(container)
+            }
             RealtimeBackdropHelper.stopLiveRefresh()
         }
     }
@@ -502,19 +507,8 @@ object NotificationSheetHook {
                                             val curPill = container.findViewWithTag<View>(TAG_HOME_PILL)
                                             curPill?.visibility = View.GONE
                                             curPill?.translationY = 0.0f
-                                            // Reset container translation so lockscreen/keyguard starts at 0.0f
-                                            container.translationY = 0.0f
-                                            container.scaleX = 1.0f
-                                            container.scaleY = 1.0f
                                             resetNotificationMargins(container)
-                                            LockScreenCoverSheetController.onShadeReset(container)
-                                            val headerId = container.resources.getIdentifier("normal_notification_header_view", "id", "com.android.systemui")
-                                            if (headerId != 0) {
-                                                container.rootView?.findViewById<View>(headerId)?.let { hView ->
-                                                    hView.alpha = 0.0f
-                                                    hView.visibility = View.GONE
-                                                }
-                                            }
+                                            RealtimeBackdropHelper.stopLiveRefresh()
                                         }
                                     }
                                 }
@@ -837,7 +831,7 @@ object NotificationSheetHook {
                             val result = chain.proceed()
                             try {
                                 val container = chain.thisObject as? ViewGroup
-                                if (container != null && (containerRef?.get() != container || container.findViewWithTag<View>(TAG_GLASS_SHEET) == null)) {
+                                if (container != null && containerRef?.get() != container) {
                                     onContainerAcquired(container)
                                 }
                             } catch (t: Throwable) {
@@ -948,20 +942,20 @@ object NotificationSheetHook {
                     nssl.setTag(TAG_NSSL_LISTENERS_ATTACHED, true)
                     nssl.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
                         val cfg = NotificationSheetConfigHolder.sheet
-                        if (cfg.isLockScreenActive) {
+                        if (cfg.isLockScreenActive && isUnlockedShadeActive) {
                             LockScreenCoverSheetController.syncClockWithNotifications(container)
                         }
                     }
                     nssl.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
                         override fun onChildViewAdded(parent: View?, child: View?) {
                             val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.isLockScreenActive) {
+                            if (cfg.isLockScreenActive && isUnlockedShadeActive) {
                                 LockScreenCoverSheetController.syncClockWithNotifications(container)
                             }
                         }
                         override fun onChildViewRemoved(parent: View?, child: View?) {
                             val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.isLockScreenActive) {
+                            if (cfg.isLockScreenActive && isUnlockedShadeActive) {
                                 LockScreenCoverSheetController.syncClockWithNotifications(container)
                             }
                         }
@@ -978,8 +972,6 @@ object NotificationSheetHook {
             if (currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
                 container.findViewWithTag<View>(TAG_GLASS_SHEET)?.visibility = View.GONE
                 container.findViewWithTag<View>(TAG_HOME_PILL)?.visibility = View.GONE
-                container.translationY = 0.0f
-                resetNotificationMargins(container)
             } else {
                 ensureGlassSheetInjected(container)
                 ensureHomePillInjected(container)
@@ -2015,9 +2007,10 @@ object NotificationSheetHook {
                 curSheet?.translationY = 0.0f
                 val curPill = cachedHomePillRef?.get() ?: container.findViewWithTag<View>(TAG_HOME_PILL)
                 curPill?.visibility = View.GONE
-                curPill?.translationY = 0.0f
-                container.translationY = 0.0f
-                LockScreenCoverSheetController.onShadeReset(container)
+                if (currentStatusBarState == 0 && !isKeyguard()) {
+                    container.translationY = 0.0f
+                    LockScreenCoverSheetController.onShadeReset(container)
+                }
                 isShadeFullyOpen = false
                 hasTriggeredUnlockForCurrentOpen = true
                 isLaunchingNotificationActivity = false
@@ -2618,6 +2611,80 @@ object NotificationSheetHook {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook FakeFocusNotifControllerImpl", t)
+        }
+    }
+
+    private fun hookNotificationCardBlurSuppression(module: XposedModule, classLoader: ClassLoader) {
+        // Point 1: ExpandableNotificationRowInjector.updateBlurBg(int r13, int r14, boolean r15)
+        try {
+            val enriClass = Class.forName("com.android.systemui.statusbar.notification.row.ExpandableNotificationRowInjector", false, classLoader)
+            for (m in enriClass.declaredMethods) {
+                if (m.name == "updateBlurBg" && m.parameterTypes.size == 3 &&
+                    m.parameterTypes[0] == Int::class.javaPrimitiveType &&
+                    m.parameterTypes[1] == Int::class.javaPrimitiveType &&
+                    m.parameterTypes[2] == Boolean::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val cfg = NotificationSheetConfigHolder.sheet
+                            val isShadeWallpaperActive = (currentStatusBarState == 0 && !isKeyguardShowing && (cfg.isWallpaperActive || cfg.isDepthActive))
+                            if (isShadeWallpaperActive) {
+                                val args = chain.args.toTypedArray()
+                                if (args.size > 2) {
+                                    // When wallpaper is active in the unlocked shade, force the non-blur path (L282):
+                                    // sets material normal bg (r14), sets blur mode to 0, and clears blend color.
+                                    args[2] = false
+                                    return chain.proceed(args)
+                                }
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked ExpandableNotificationRowInjector.updateBlurBg successfully")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook ExpandableNotificationRowInjector.updateBlurBg: ${t.message}")
+        }
+
+        // Point 2: ActivatableNotificationViewInjector.initBackground()
+        try {
+            val anviClass = Class.forName("com.android.systemui.statusbar.notification.row.ActivatableNotificationViewInjector", false, classLoader)
+            for (m in anviClass.declaredMethods) {
+                if (m.name == "initBackground" && m.parameterTypes.isEmpty()) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val cfg = NotificationSheetConfigHolder.sheet
+                            val isShadeWallpaperActive = (currentStatusBarState == 0 && !isKeyguardShowing && (cfg.isWallpaperActive || cfg.isDepthActive))
+                            if (isShadeWallpaperActive) {
+                                val result = chain.proceed()
+                                try {
+                                    val injector = chain.thisObject ?: return result
+                                    val viewField = injector.javaClass.getField("view")
+                                    val expandableView = viewField.get(injector)
+                                    if (expandableView != null) {
+                                        val bgNormalField = expandableView.javaClass.getField("mBackgroundNormal")
+                                        val bgNormal = bgNormalField.get(expandableView)
+                                        if (bgNormal != null) {
+                                            val ctx = (expandableView as View).context
+                                            val matBgId = ctx.resources.getIdentifier("notification_material_bg", "drawable", "com.android.systemui")
+                                            if (matBgId != 0) {
+                                                val setCustomBgMethod = bgNormal.javaClass.getMethod("setCustomBackground", Int::class.javaPrimitiveType)
+                                                setCustomBgMethod.invoke(bgNormal, matBgId)
+                                            }
+                                        }
+                                    }
+                                } catch (_: Throwable) {}
+                                return result
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked ActivatableNotificationViewInjector.initBackground successfully")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook ActivatableNotificationViewInjector.initBackground: ${t.message}")
         }
     }
 }

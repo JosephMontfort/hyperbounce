@@ -37,6 +37,7 @@ object LockScreenSheetHook {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private var kpvcRootViewField: Field? = null
+    private var kpvcNcField: Field? = null
     private var kpvcNsslField: Field? = null
     private var kpvcNcpField: Field? = null
     private var kpvcBottomAreaField: Field? = null
@@ -44,6 +45,9 @@ object LockScreenSheetHook {
     private var kpvcStatusBarStateField: Field? = null
     private var kpvcKeyguardStateControllerField: Field? = null
     private var kscIsShowingMethod: Method? = null
+
+    private val bgExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    @Volatile var isKeyguardShowing: Boolean = true
 
     private var cachedLockRootViewRef: WeakReference<ViewGroup>? = null
     private var cachedLockGlassSheetRef: WeakReference<LockScreenGlassSheetView>? = null
@@ -71,11 +75,20 @@ object LockScreenSheetHook {
         if (cached != null) return cached
         var notifView: View? = null
         try {
-            if (kpvcNsslField == null) {
-                kpvcNsslField = kpvc.javaClass.getDeclaredField("notificationStackScrollLayout").apply { isAccessible = true }
+            if (kpvcNcField == null) {
+                kpvcNcField = kpvc.javaClass.getDeclaredField("notificationContainer").apply { isAccessible = true }
             }
-            notifView = kpvcNsslField?.get(kpvc) as? View
+            notifView = kpvcNcField?.get(kpvc) as? View
         } catch (_: Throwable) {}
+
+        if (notifView == null) {
+            try {
+                if (kpvcNsslField == null) {
+                    kpvcNsslField = kpvc.javaClass.getDeclaredField("notificationStackScrollLayout").apply { isAccessible = true }
+                }
+                notifView = kpvcNsslField?.get(kpvc) as? View
+            } catch (_: Throwable) {}
+        }
 
         if (notifView == null) {
             try {
@@ -144,6 +157,32 @@ object LockScreenSheetHook {
     }
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
+        // 0. Hook KeyguardStateControllerImpl to track keyguard showing state with 0 reflection overhead
+        try {
+            val kscClass = Class.forName("com.android.systemui.statusbar.policy.KeyguardStateControllerImpl", false, classLoader)
+            for (m: Method in kscClass.declaredMethods) {
+                if (m.name == "notifyKeyguardState" && m.parameterTypes.size == 2 &&
+                    m.parameterTypes[0] == Boolean::class.javaPrimitiveType &&
+                    m.parameterTypes[1] == Boolean::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val result = chain.proceed()
+                            try {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                                val showing = args[0] as Boolean
+                                val occluded = args[1] as Boolean
+                                isKeyguardShowing = showing && !occluded
+                            } catch (_: Throwable) {}
+                            return result
+                        }
+                    })
+                    break
+                }
+            }
+        } catch (_: Throwable) {}
+
         // 1. Hook KeyguardPanelViewController (HyperOS Lockscreen Controller)
         try {
             val kpvcClass = Class.forName("com.android.keyguard.panel.KeyguardPanelViewController", false, classLoader)
@@ -198,19 +237,12 @@ object LockScreenSheetHook {
                                     rootView.scaleX = 1.0f
                                     rootView.scaleY = 1.0f
 
-                                    // 2. Ensure real-time AGSL Liquid Glass Sheet Card is at index 0 (behind clock & notifs)
-                                    ensureInjected(kpvc, rootView)
-                                    cachedLockGlassSheetRef?.get()?.invalidate()
-
-                                    // 3. Move notification container upward in sync
+                                    // 2. Move notification container upward in sync
                                     if (finalNotifView != null) {
                                         finalNotifView.translationY = upwardOffset
                                         finalNotifView.scaleX = 1.0f
                                         finalNotifView.scaleY = 1.0f
                                     }
-
-                                    // 4. Dynamic iOS Home Indicator Bar in KeyguardBottomAreaView
-                                    ensurePillInjected(kpvc, cfg)
                                 }
                             } catch (t: Throwable) {
                                 Log.e(TAG, "KPVC expansion hook error", t)
@@ -231,10 +263,15 @@ object LockScreenSheetHook {
                             try {
                                 val kpvc = chain.thisObject
                                 if (kpvc != null) {
+                                    val cfg = LockScreenConfigHolder.sheet
                                     if (Looper.myLooper() == Looper.getMainLooper()) {
                                         ensureInjected(kpvc)
+                                        ensurePillInjected(kpvc, cfg)
                                     } else {
-                                        mainHandler.post { ensureInjected(kpvc) }
+                                        mainHandler.post {
+                                            ensureInjected(kpvc)
+                                            ensurePillInjected(kpvc, cfg)
+                                        }
                                     }
                                 }
                             } catch (_: Throwable) {}
@@ -284,9 +321,6 @@ object LockScreenSheetHook {
                                             .alpha(0.0f)
                                             .setDuration(220)
                                             .setInterpolator(DecelerateInterpolator(1.5f))
-                                            .setUpdateListener {
-                                                cachedLockGlassSheetRef?.get()?.invalidate()
-                                            }
                                             .start()
                                         finalNotifView?.animate()
                                             ?.translationY(-viewHeight)
@@ -301,27 +335,29 @@ object LockScreenSheetHook {
                                         mainHandler.post(animUI)
                                     }
 
-                                    try {
-                                        val context = rootView.context
-                                        val vel = max(
-                                            lockscreenFlingVelocity,
-                                            dev.joseph.hyperbounce.notification.NotificationSheetHook.latestFlingVelocity
-                                        )
-                                        listOf("com.miui.home", "com.mi.android.globallauncher").forEach { pkg ->
-                                            try {
-                                                val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
-                                                    if (vel > 0.0f) {
-                                                        putExtra("EXTRA_VELOCITY", vel)
+                                    val vel = max(
+                                        lockscreenFlingVelocity,
+                                        dev.joseph.hyperbounce.notification.NotificationSheetHook.latestFlingVelocity
+                                    )
+                                    val context = rootView.context
+                                    bgExecutor.execute {
+                                        try {
+                                            listOf("com.miui.home", "com.mi.android.globallauncher").forEach { pkg ->
+                                                try {
+                                                    val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
+                                                        if (vel > 0.0f) {
+                                                            putExtra("EXTRA_VELOCITY", vel)
+                                                        }
+                                                        setPackage(pkg)
+                                                        addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
                                                     }
-                                                    setPackage(pkg)
-                                                    addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
-                                                }
-                                                context.sendBroadcast(intent)
-                                            } catch (_: Throwable) {}
+                                                    context.sendBroadcast(intent)
+                                                } catch (_: Throwable) {}
+                                            }
+                                            Log.d(TAG, "Dispatched ACTION_TRIGGER_UNLOCK_ANIMATION on keyguard dismiss (vel=$vel)")
+                                        } catch (t: Throwable) {
+                                            Log.e(TAG, "Failed to broadcast unlock on keyguard dismiss", t)
                                         }
-                                        Log.d(TAG, "Dispatched ACTION_TRIGGER_UNLOCK_ANIMATION on keyguard dismiss (vel=$vel)")
-                                    } catch (t: Throwable) {
-                                        Log.e(TAG, "Failed to broadcast unlock on keyguard dismiss", t)
                                     }
                                 }
                             } catch (_: Throwable) {}
@@ -384,10 +420,6 @@ object LockScreenSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
                             try {
-                                val notifCfg = dev.joseph.hyperbounce.notification.NotificationSheetConfigHolder.sheet
-                                if (notifCfg.enabled && notifCfg.lockScreenAsNotifCenterEnabled) {
-                                    return result
-                                }
                                 val lockCfg = LockScreenConfigHolder.sheet
                                 if (!lockCfg.enabled) {
                                     return result
@@ -406,26 +438,14 @@ object LockScreenSheetHook {
     }
 
     private fun isLockScreenActive(kpvc: Any): Boolean {
+        if (!isKeyguardShowing) return false
         return try {
             if (kpvcStatusBarStateField == null) {
                 kpvcStatusBarStateField = kpvc.javaClass.getDeclaredField("statusBarState").apply { isAccessible = true }
             }
             val state = kpvcStatusBarStateField?.getInt(kpvc) ?: 1
             // 1 is StatusBarState.KEYGUARD
-            if (state != 1) return false
-
-            if (kpvcKeyguardStateControllerField == null) {
-                kpvcKeyguardStateControllerField = kpvc.javaClass.getDeclaredField("keyguardStateController").apply { isAccessible = true }
-            }
-            val ksc = kpvcKeyguardStateControllerField?.get(kpvc)
-            if (ksc != null) {
-                if (kscIsShowingMethod == null) {
-                    kscIsShowingMethod = ksc.javaClass.getMethod("isShowing")
-                }
-                val isShowing = kscIsShowingMethod?.invoke(ksc) as? Boolean ?: true
-                if (!isShowing) return false
-            }
-            true
+            state == 1
         } catch (_: Throwable) {
             true
         }
@@ -520,10 +540,6 @@ object LockScreenSheetHook {
             if (glassSheet.visibility != View.VISIBLE) {
                 glassSheet.visibility = View.VISIBLE
             }
-            if (rootView.width > 0 && rootView.height > 0 && (glassSheet.width != rootView.width || glassSheet.height != rootView.height)) {
-                glassSheet.layout(0, 0, rootView.width, rootView.height)
-            }
-            glassSheet.invalidate()
         } catch (_: Throwable) {}
     }
 }

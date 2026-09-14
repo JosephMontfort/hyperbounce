@@ -206,8 +206,14 @@ object LockScreenCoverSheetController {
         if (rootView == null) return
         try {
             val cfg = NotificationSheetConfigHolder.sheet
-            val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
+            val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0 &&
+                    !dev.joseph.hyperbounce.notification.NotificationSheetHook.isKeyguard(rootView.context)
             val isLandscape = rootView.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+            if (!isUnlocked) {
+                // On Keyguard, hyperbounce never interferes with stock shade header or keyguard views!
+                return
+            }
 
             var headerView = cachedHeaderViewRef?.get()
             if (headerView == null) {
@@ -218,14 +224,6 @@ object LockScreenCoverSheetController {
                         cachedHeaderViewRef = WeakReference(headerView)
                     }
                 }
-            }
-
-            if (!isUnlocked) {
-                // On lockscreen, normal_notification_header_view MUST ALWAYS be hidden!
-                headerView?.alpha = 0.0f
-                headerView?.visibility = View.GONE
-                isHeaderSuppressedByUs = false
-                return
             }
 
             if (!cfg.isLockScreenActive || isLandscape) {
@@ -481,6 +479,10 @@ object LockScreenCoverSheetController {
         val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         if (isLandscape) return
 
+        val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0 &&
+                !dev.joseph.hyperbounce.notification.NotificationSheetHook.isKeyguard(container.context)
+        if (!isUnlocked) return
+
         val cfg = NotificationSheetConfigHolder.sheet
         if (!cfg.isLockScreenActive) return
 
@@ -625,6 +627,12 @@ object LockScreenCoverSheetController {
      */
     fun onShadeReset(container: ViewGroup) {
         try {
+            val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0 &&
+                    !dev.joseph.hyperbounce.notification.NotificationSheetHook.isKeyguard(container.context)
+            if (!isUnlocked) {
+                return
+            }
+
             isClockSyncedSmall = false
             currentMorphFraction = 1f
             targetMorphFraction = 1f
