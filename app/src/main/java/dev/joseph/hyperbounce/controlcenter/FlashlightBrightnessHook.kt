@@ -21,6 +21,7 @@ object FlashlightBrightnessHook {
 
     @Volatile private var isTorchOn: Boolean = false
     @Volatile private var lastWriteTime: Long = 0L
+    @Volatile private var lastTurnOnAttemptTime: Long = 0L
 
     @Volatile private var cachedSwitchNode: String? = null
     @Volatile private var cachedTorch0Node: String? = null
@@ -241,12 +242,13 @@ object FlashlightBrightnessHook {
                     Log.w(TAG, "cameraManager.setTorchMode false failed", t)
                 }
                 isTorchOn = false
+                lastTurnOnAttemptTime = 0L
                 return
             }
 
             if (strength in 1..100) {
                 val now = System.currentTimeMillis()
-                if (now - lastWriteTime < 35L) {
+                if (now - lastWriteTime < 40L) {
                     return
                 }
                 lastWriteTime = now
@@ -284,7 +286,7 @@ object FlashlightBrightnessHook {
         try {
             val controllerClass = Class.forName("miui.systemui.flashlight.MiFlashlightController", false, classLoader)
 
-            // Part 4: Hook setFlashlightStatus(float) to handle continuous sliding, turning on from OFF, and skip persistent storage
+            // Part 4: Hook setFlashlightStatus(float) following exact guide logic and skip persistent storage
             for (m in controllerClass.declaredMethods) {
                 if (m.name == "setFlashlightStatus" && m.parameterTypes.size == 1 && m.parameterTypes[0] == java.lang.Float.TYPE) {
                     m.isAccessible = true
@@ -311,15 +313,18 @@ object FlashlightBrightnessHook {
                             val mgrClass = manager.javaClass
                             if (switchStatus == true) {
                                 if (percentage == 0f) {
+                                    lastTurnOnAttemptTime = 0L
                                     invokeAsyncOperate(mgrClass, manager, false)
                                 } else {
                                     invokeAsyncToggle(mgrClass, manager, percentage)
                                 }
                             } else if (switchStatus == false) {
                                 if (percentage > 0f) {
-                                    // Turn on flashlight and immediately target the dragged percentage
-                                    invokeAsyncOperate(mgrClass, manager, true)
-                                    invokeAsyncToggle(mgrClass, manager, percentage)
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastTurnOnAttemptTime > 400L) {
+                                        lastTurnOnAttemptTime = now
+                                        invokeAsyncOperate(mgrClass, manager, true)
+                                    }
                                 }
                             }
                         }
@@ -404,13 +409,12 @@ object FlashlightBrightnessHook {
     /**
      * Calculates sysfs brightness:
      * Maps 1..100% slider linearly across 0 to userMax (e.g. 100..500).
-     * Clamping to at least 15 ensures the physical LED lights up immediately when slider > 0 (no dead zone).
      */
     fun calculateSysfsBrightness(strength: Int): Int {
         if (strength <= 0) return 0
         val userMax = getUserMaxBrightness()
         val fraction = strength / 100.0f
-        return (fraction * userMax).roundToInt().coerceIn(15, userMax)
+        return (fraction * userMax).roundToInt().coerceIn(1, userMax)
     }
 
     /**
