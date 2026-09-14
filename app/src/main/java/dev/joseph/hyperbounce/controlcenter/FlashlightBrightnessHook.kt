@@ -1,9 +1,15 @@
 package dev.joseph.hyperbounce.controlcenter
 
+import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.hardware.camera2.CameraManager
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.view.View
 import io.github.libxposed.api.XposedModule
 import java.io.File
 import java.util.Collections
@@ -18,10 +24,17 @@ import kotlin.math.roundToInt
 object FlashlightBrightnessHook {
     private const val TAG = "HyperBounce_Flashlight"
     const val NORMAL_BRIGHTNESS = 100
+    private const val PREFS_NAME = "hyperbounce_flashlight"
+    private const val PREF_KEY_OVERHEAT_WARNED = "cc_flashlight_overheat_dialog_shown"
 
     @Volatile private var isTorchOn: Boolean = false
     @Volatile private var lastWriteTime: Long = 0L
     @Volatile private var lastTurnOnAttemptTime: Long = 0L
+
+    @Volatile private var hasShownOverheatDialog: Boolean = false
+    @Volatile private var hasCheckedOverheatPref: Boolean = false
+    @Volatile private var isDialogShowing: Boolean = false
+    @Volatile private var lastSafePercentage: Float = 0.50f
 
     @Volatile private var cachedSwitchNode: String? = null
     @Volatile private var cachedTorch0Node: String? = null
@@ -299,6 +312,10 @@ object FlashlightBrightnessHook {
                         val percentage = (args?.getOrNull(0) as? Number)?.toFloat() ?: 0f
                         val controller = chain.thisObject ?: return@intercept chain.proceed()
 
+                        if (isDialogShowing) {
+                            return@intercept null
+                        }
+
                         val switchStatus = getControllerSwitchStatus(controllerClass, controller)
 
                         val manager = try {
@@ -309,14 +326,57 @@ object FlashlightBrightnessHook {
                             null
                         }
 
+                        val controllerContext = try {
+                            val f = controllerClass.getDeclaredField("context")
+                            f.isAccessible = true
+                            f.get(controller) as? Context
+                        } catch (_: Throwable) { null }
+
                         if (manager != null) {
                             val mgrClass = manager.javaClass
+                            val userMax = getUserMaxBrightness()
+                            val rawBrightness = percentage * userMax
+                            val steppedBrightness = ((rawBrightness + 5f) / 10f).toInt() * 10
+                            val targetBrightness = if (percentage <= 0f) 0 else steppedBrightness.coerceIn(10, userMax)
+                            val quantizedPercentage = if (percentage <= 0f) 0f else (targetBrightness.toFloat() / userMax.toFloat()).coerceIn(0.01f, 1.0f)
+
                             if (switchStatus == true) {
                                 if (percentage == 0f) {
                                     lastTurnOnAttemptTime = 0L
                                     invokeAsyncOperate(mgrClass, manager, false)
                                 } else {
-                                    invokeAsyncToggle(mgrClass, manager, percentage)
+                                    if (targetBrightness <= 250) {
+                                        lastSafePercentage = percentage
+                                    } else {
+                                        if (!hasCheckedOverheatPref && controllerContext != null) {
+                                            hasCheckedOverheatPref = true
+                                            hasShownOverheatDialog = controllerContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                                                .getBoolean(PREF_KEY_OVERHEAT_WARNED, false)
+                                        }
+
+                                        if (!hasShownOverheatDialog) {
+                                            isDialogShowing = true
+                                            val pendingPercentage = percentage
+                                            val safeFraction = lastSafePercentage
+
+                                            // Snap slider and clamp hardware to safe fraction
+                                            snapSliderToFraction(controllerClass, controller, safeFraction)
+                                            invokeAsyncToggle(mgrClass, manager, safeFraction)
+
+                                            showOverheatWarningDialog(
+                                                controllerClass = controllerClass,
+                                                controller = controller,
+                                                mgrClass = mgrClass,
+                                                manager = manager,
+                                                context = controllerContext,
+                                                safeFraction = safeFraction,
+                                                pendingFraction = pendingPercentage
+                                            )
+                                            return@intercept null
+                                        }
+                                    }
+
+                                    invokeAsyncToggle(mgrClass, manager, quantizedPercentage)
                                 }
                             } else if (switchStatus == false) {
                                 if (percentage > 0f) {
@@ -414,7 +474,9 @@ object FlashlightBrightnessHook {
         if (strength <= 0) return 0
         val userMax = getUserMaxBrightness()
         val fraction = strength / 100.0f
-        return (fraction * userMax).roundToInt().coerceIn(1, userMax)
+        val rawBrightness = fraction * userMax
+        val stepped = ((rawBrightness + 5) / 10).toInt() * 10
+        return stepped.coerceIn(10, userMax)
     }
 
     /**
@@ -608,5 +670,131 @@ object FlashlightBrightnessHook {
         } catch (_: Throwable) {
             // Quietly ignore IO/permission errors
         }
+    }
+
+    private fun showOverheatWarningDialog(
+        controllerClass: Class<*>,
+        controller: Any,
+        mgrClass: Class<*>,
+        manager: Any,
+        context: Context?,
+        safeFraction: Float,
+        pendingFraction: Float
+    ) {
+        Handler(Looper.getMainLooper()).post {
+            try {
+                val activity = findActivity(context) ?: run {
+                    try {
+                        val layoutF = controllerClass.getDeclaredField("miFlashlightLayout")
+                        layoutF.isAccessible = true
+                        val layout = layoutF.get(controller) as? View
+                        findActivity(layout?.context)
+                    } catch (_: Throwable) { null }
+                }
+
+                val dialogContext = activity ?: context ?: run {
+                    isDialogShowing = false
+                    return@post
+                }
+
+                val builder = if (activity != null && !activity.isFinishing && !activity.isDestroyed) {
+                    AlertDialog.Builder(activity)
+                } else {
+                    AlertDialog.Builder(dialogContext, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                }
+
+                builder.setTitle("High Brightness Warning")
+                builder.setMessage("Operating the flashlight at high brightness for extended periods can cause overheating and potential hardware damage. Do you want to proceed?")
+                builder.setCancelable(false)
+
+                builder.setNegativeButton("Cancel") { dialog, _ ->
+                    dialog.dismiss()
+                    isDialogShowing = false
+                    snapSliderToFraction(controllerClass, controller, safeFraction)
+                    invokeAsyncToggle(mgrClass, manager, safeFraction)
+                }
+
+                builder.setPositiveButton("OK") { dialog, _ ->
+                    dialog.dismiss()
+                    isDialogShowing = false
+                    hasShownOverheatDialog = true
+                    markOverheatDialogShown(dialogContext)
+                    snapSliderToFraction(controllerClass, controller, pendingFraction)
+                    invokeAsyncToggle(mgrClass, manager, pendingFraction)
+                }
+
+                val dialog = builder.create()
+                dialog.setOnDismissListener {
+                    isDialogShowing = false
+                }
+
+                if (activity == null) {
+                    dialog.window?.setType(2020) // WindowManager.LayoutParams.TYPE_KEYGUARD_DIALOG
+                }
+
+                try {
+                    dialog.show()
+                } catch (_: Throwable) {
+                    try {
+                        dialog.window?.setType(2020)
+                        dialog.show()
+                    } catch (t2: Throwable) {
+                        Log.e(TAG, "Failed to display overheat dialog", t2)
+                        isDialogShowing = false
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Error in showOverheatWarningDialog", t)
+                isDialogShowing = false
+            }
+        }
+    }
+
+    private fun markOverheatDialogShown(context: Context) {
+        try {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().putBoolean(PREF_KEY_OVERHEAT_WARNED, true).apply()
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to persist overheat dialog shown state", t)
+        }
+    }
+
+    private fun findActivity(ctx: Context?): Activity? {
+        var current = ctx
+        while (current is ContextWrapper) {
+            if (current is Activity) return current
+            current = current.baseContext
+        }
+        return null
+    }
+
+    private fun snapSliderToFraction(controllerClass: Class<*>, controller: Any, fraction: Float) {
+        try {
+            for (m in controllerClass.declaredMethods) {
+                if (m.name == "setUiLogicProgress" && m.parameterTypes.size == 2) {
+                    m.isAccessible = true
+                    m.invoke(controller, fraction, false)
+                    break
+                }
+            }
+        } catch (_: Throwable) {}
+        try {
+            for (m in controllerClass.declaredMethods) {
+                if (m.name == "updateSeekBarProcess" && m.parameterTypes.size == 1) {
+                    m.isAccessible = true
+                    m.invoke(controller, fraction)
+                    break
+                }
+            }
+        } catch (_: Throwable) {}
+        try {
+            for (m in controllerClass.declaredMethods) {
+                if (m.name == "updateFlashlightUi" && m.parameterTypes.size == 1) {
+                    m.isAccessible = true
+                    m.invoke(controller, fraction)
+                    break
+                }
+            }
+        } catch (_: Throwable) {}
     }
 }
