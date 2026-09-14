@@ -2725,5 +2725,80 @@ object NotificationSheetHook {
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook ActivatableNotificationViewInjector.initBackground: ${t.message}")
         }
+
+        // Point 3: MiuiMediaViewControllerImpl.updateMediaBackground()
+        // Prevents transparent media player card when HyperOS Advanced Textures (background_blur_enable) is active
+        try {
+            val mmvcClass = Class.forName("com.android.systemui.statusbar.notification.mediacontrol.MiuiMediaViewControllerImpl", false, classLoader)
+            for (m in mmvcClass.declaredMethods) {
+                if (m.name == "updateMediaBackground" && m.parameterTypes.isEmpty()) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val result = chain.proceed()
+                            val cfg = NotificationSheetConfigHolder.sheet
+                            if (cfg.enabled) {
+                                try {
+                                    val controller = chain.thisObject ?: return result
+                                    var ctx: Context? = null
+                                    try {
+                                        val fContext = controller.javaClass.getDeclaredField("context").apply { isAccessible = true }
+                                        ctx = fContext.get(controller) as? Context
+                                    } catch (_: Throwable) {}
+                                    if (ctx == null) ctx = containerRef?.get()?.context
+
+                                    if (isAdvancedTexturesOn(ctx) && ctx != null) {
+                                        val fHolder = controller.javaClass.getDeclaredField("holder").apply { isAccessible = true }
+                                        val holder = fHolder.get(controller)
+                                        if (holder != null) {
+                                            val fMediaBg = holder.javaClass.getDeclaredField("mediaBg").apply { isAccessible = true }
+                                            val mediaBg = fMediaBg.get(holder) as? View
+                                            if (mediaBg != null) {
+                                                // Clear blend color compat
+                                                try {
+                                                    val miBlurCompatClass = Class.forName("com.miui.systemui.util.MiBlurCompat", false, classLoader)
+                                                    val clearMethod = miBlurCompatClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
+                                                    clearMethod.invoke(null, mediaBg)
+                                                } catch (_: Throwable) {
+                                                    try {
+                                                        val clearMethod = mediaBg.javaClass.getMethod("clearMiBackgroundBlendColor")
+                                                        clearMethod.invoke(mediaBg)
+                                                    } catch (_: Throwable) {}
+                                                }
+
+                                                // Check if in Full AOD
+                                                var isFullAod = false
+                                                try {
+                                                    val aodClass = Class.forName("com.android.systemui.statusbar.notification.fullaod.NotifiFullAodController", false, classLoader)
+                                                    val enableFullAodField = aodClass.getDeclaredField("mEnableFullAod").apply { isAccessible = true }
+                                                    isFullAod = enableFullAodField.getBoolean(null)
+                                                } catch (_: Throwable) {}
+
+                                                // Set solid media background
+                                                val bgResName = if (isFullAod) "notification_media_fullaod_item_bg" else "notification_media_item_bg"
+                                                val bgResId = ctx.resources.getIdentifier(bgResName, "drawable", "com.android.systemui")
+                                                if (bgResId != 0) {
+                                                    mediaBg.setBackground(ctx.getDrawable(bgResId))
+                                                } else {
+                                                    val fallbackId = ctx.resources.getIdentifier("notification_material_bg", "drawable", "com.android.systemui")
+                                                    if (fallbackId != 0) {
+                                                        mediaBg.setBackground(ctx.getDrawable(fallbackId))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } catch (t: Throwable) {
+                                    Log.e(TAG, "Failed to apply solid background to media player: ${t.message}")
+                                }
+                            }
+                            return result
+                        }
+                    })
+                    Log.d(TAG, "Hooked MiuiMediaViewControllerImpl.updateMediaBackground successfully")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook MiuiMediaViewControllerImpl.updateMediaBackground: ${t.message}")
+        }
     }
 }
