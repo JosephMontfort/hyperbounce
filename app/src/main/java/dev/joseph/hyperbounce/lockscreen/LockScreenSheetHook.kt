@@ -128,6 +128,142 @@ object LockScreenSheetHook {
     private var cachedDeductedImgId: Int = 0
     private var cachedBgLayerId: Int = 0
 
+    private var cachedClockId = 0
+    private var cachedFgClockId = 0
+    private var cachedInfoLayerId = 0
+    private var cachedSignatureLayerId = 0
+
+    private var cachedClockRef: WeakReference<View>? = null
+    private var cachedFgClockRef: WeakReference<View>? = null
+    private var cachedInfoLayerRef: WeakReference<View>? = null
+    private var cachedSignatureLayerRef: WeakReference<View>? = null
+
+    private var kpvcClockInjectorField: Field? = null
+    private var injectorClockViewField: Field? = null
+    private var kpvcInfoLayerField: Field? = null
+    private var kpvcSignatureLayerField: Field? = null
+
+    private fun getClockView(kpvc: Any, rootView: View?): View? {
+        val cached = cachedClockRef?.get()
+        if (cached != null) return cached
+        try {
+            if (kpvcClockInjectorField == null) {
+                kpvcClockInjectorField = kpvc.javaClass.getDeclaredField("keyguardClockInjector").apply { isAccessible = true }
+            }
+            val injector = kpvcClockInjectorField?.get(kpvc)
+            if (injector != null) {
+                if (injectorClockViewField == null) {
+                    injectorClockViewField = injector.javaClass.getDeclaredField("keyguardClockView").apply { isAccessible = true }
+                }
+                val v = injectorClockViewField?.get(injector) as? View
+                if (v != null) {
+                    cachedClockRef = WeakReference(v)
+                    return v
+                }
+            }
+        } catch (_: Throwable) {}
+        if (rootView != null) {
+            if (cachedClockId == 0) {
+                cachedClockId = rootView.resources.getIdentifier("miui_keyguard_clock_container", "id", "com.android.systemui")
+            }
+            if (cachedClockId != 0) {
+                val v = rootView.findViewById<View>(cachedClockId)
+                if (v != null) {
+                    cachedClockRef = WeakReference(v)
+                    return v
+                }
+            }
+        }
+        return null
+    }
+
+    private fun getFgClockView(kpvc: Any, rootView: View?): View? {
+        val cached = cachedFgClockRef?.get()
+        if (cached != null) return cached
+        if (rootView != null) {
+            if (cachedFgClockId == 0) {
+                cachedFgClockId = rootView.resources.getIdentifier("miui_keyguard_foreground_clock_container", "id", "com.android.systemui")
+            }
+            if (cachedFgClockId != 0) {
+                val v = rootView.findViewById<View>(cachedFgClockId)
+                if (v != null) {
+                    cachedFgClockRef = WeakReference(v)
+                    return v
+                }
+            }
+        }
+        return null
+    }
+
+    private fun getInfoLayer(kpvc: Any, rootView: View?): View? {
+        val cached = cachedInfoLayerRef?.get()
+        if (cached != null) return cached
+        try {
+            if (kpvcInfoLayerField == null) {
+                kpvcInfoLayerField = kpvc.javaClass.getDeclaredField("keyguardInfoLayer").apply { isAccessible = true }
+            }
+            val v = kpvcInfoLayerField?.get(kpvc) as? View
+            if (v != null) {
+                cachedInfoLayerRef = WeakReference(v)
+                return v
+            }
+        } catch (_: Throwable) {}
+        if (rootView != null) {
+            if (cachedInfoLayerId == 0) {
+                cachedInfoLayerId = rootView.resources.getIdentifier("keyguard_info_layer", "id", "com.android.systemui")
+            }
+            if (cachedInfoLayerId != 0) {
+                val v = rootView.findViewById<View>(cachedInfoLayerId)
+                if (v != null) {
+                    cachedInfoLayerRef = WeakReference(v)
+                    return v
+                }
+            }
+        }
+        return null
+    }
+
+    private fun getSignatureLayer(kpvc: Any, rootView: View?): View? {
+        val cached = cachedSignatureLayerRef?.get()
+        if (cached != null) return cached
+        try {
+            if (kpvcSignatureLayerField == null) {
+                kpvcSignatureLayerField = kpvc.javaClass.getDeclaredField("keyguardSignatureLayer").apply { isAccessible = true }
+            }
+            val v = kpvcSignatureLayerField?.get(kpvc) as? View
+            if (v != null) {
+                cachedSignatureLayerRef = WeakReference(v)
+                return v
+            }
+        } catch (_: Throwable) {}
+        if (rootView != null) {
+            if (cachedSignatureLayerId == 0) {
+                cachedSignatureLayerId = rootView.resources.getIdentifier("keyguard_signature_layer", "id", "com.android.systemui")
+            }
+            if (cachedSignatureLayerId != 0) {
+                val v = rootView.findViewById<View>(cachedSignatureLayerId)
+                if (v != null) {
+                    cachedSignatureLayerRef = WeakReference(v)
+                    return v
+                }
+            }
+        }
+        return null
+    }
+
+    private fun resetKeyguardElementsTranslation(kpvc: Any, rootView: View?) {
+        rootView?.translationY = 0.0f
+        getClockView(kpvc, rootView)?.translationY = 0.0f
+        getFgClockView(kpvc, rootView)?.translationY = 0.0f
+        getInfoLayer(kpvc, rootView)?.translationY = 0.0f
+        getSignatureLayer(kpvc, rootView)?.translationY = 0.0f
+        getBottomAreaView(kpvc)?.translationY = 0.0f
+        cachedLockGlassSheetRef?.get()?.translationY = 0.0f
+        getNotifView(kpvc)?.translationY = 0.0f
+        getDeductedImageView(kpvc, rootView)?.translationY = 0.0f
+        getKeyguardBgLayer(kpvc, rootView)?.translationY = 0.0f
+    }
+
     private fun getDeductedImageView(kpvc: Any, rootView: View?): View? {
         try {
             if (kpvcDeductedImgField == null) {
@@ -261,11 +397,16 @@ object LockScreenSheetHook {
                                     val fraction = f.coerceIn(0.0f, 1.0f)
                                     val cfg = LockScreenConfigHolder.sheet
                                     val isActive = cfg.enabled && (isLockScreenActive(kpvc) || (fraction > 0.01f && fraction < 1.0f))
+
+                                    // Approach A: Always keep root lockscreen layer strictly stationary at (0, 0)
+                                    rootView.translationY = 0.0f
+                                    rootView.scaleX = 1.0f
+                                    rootView.scaleY = 1.0f
+
                                     if (!isActive) {
                                         val existingSheet = cachedLockGlassSheetRef?.get() ?: rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
                                         existingSheet?.visibility = View.GONE
-                                        getDeductedImageView(kpvc, rootView)?.translationY = 0.0f
-                                        getKeyguardBgLayer(kpvc, rootView)?.translationY = 0.0f
+                                        resetKeyguardElementsTranslation(kpvc, rootView)
                                         return result
                                     }
 
@@ -273,18 +414,21 @@ object LockScreenSheetHook {
                                     if (viewHeight == 0f) viewHeight = 2400f
                                     val upwardOffset = (1.0f - fraction) * -viewHeight
 
-                                    // 1. Move root lockscreen layer upward smoothly (120Hz native performance)
-                                    rootView.translationY = upwardOffset
-                                    rootView.scaleX = 1.0f
-                                    rootView.scaleY = 1.0f
+                                    // Translate only the interactive foreground sheet components:
+                                    val clockView = getClockView(kpvc, rootView)
+                                    val fgClockView = getFgClockView(kpvc, rootView)
+                                    val infoLayer = getInfoLayer(kpvc, rootView)
+                                    val signatureLayer = getSignatureLayer(kpvc, rootView)
+                                    val bottomArea = getBottomAreaView(kpvc)
+                                    val glassSheet = cachedLockGlassSheetRef?.get()
 
-                                    // 2. Anchor lockscreen wallpaper views so they remain stationary at (0, 0)
-                                    val deductedImg = getDeductedImageView(kpvc, rootView)
-                                    val bgLayer = getKeyguardBgLayer(kpvc, rootView)
-                                    deductedImg?.translationY = -upwardOffset
-                                    bgLayer?.translationY = -upwardOffset
+                                    clockView?.translationY = upwardOffset
+                                    fgClockView?.translationY = upwardOffset
+                                    infoLayer?.translationY = upwardOffset
+                                    signatureLayer?.translationY = upwardOffset
+                                    bottomArea?.translationY = upwardOffset
+                                    glassSheet?.translationY = upwardOffset
 
-                                    // 3. Move notification container upward in sync
                                     if (finalNotifView != null) {
                                         finalNotifView.translationY = upwardOffset
                                         finalNotifView.scaleX = 1.0f
@@ -315,8 +459,7 @@ object LockScreenSheetHook {
                                         ensureInjected(kpvc)
                                         ensurePillInjected(kpvc, cfg)
                                         val root = getRootView(kpvc)
-                                        getDeductedImageView(kpvc, root)?.translationY = 0.0f
-                                        getKeyguardBgLayer(kpvc, root)?.translationY = 0.0f
+                                        resetKeyguardElementsTranslation(kpvc, root)
                                     }
                                     if (Looper.myLooper() == Looper.getMainLooper()) {
                                         syncState.run()
@@ -367,31 +510,25 @@ object LockScreenSheetHook {
                                         var viewHeight = rootView.height.toFloat()
                                         if (viewHeight == 0f) viewHeight = 2400f
                                         rootView.animate()
-                                            .translationY(-viewHeight)
                                             .alpha(0.0f)
                                             .setDuration(220)
                                             .setInterpolator(DecelerateInterpolator(1.5f))
                                             .start()
-                                        val deductedImg = getDeductedImageView(kpvc, rootView)
-                                        val bgLayer = getKeyguardBgLayer(kpvc, rootView)
-                                        deductedImg?.animate()
-                                            ?.translationY(viewHeight)
-                                            ?.alpha(0.0f)
-                                            ?.setDuration(220)
-                                            ?.setInterpolator(DecelerateInterpolator(1.5f))
-                                            ?.start()
-                                        bgLayer?.animate()
-                                            ?.translationY(viewHeight)
-                                            ?.alpha(0.0f)
-                                            ?.setDuration(220)
-                                            ?.setInterpolator(DecelerateInterpolator(1.5f))
-                                            ?.start()
-                                        finalNotifView?.animate()
-                                            ?.translationY(-viewHeight)
-                                            ?.alpha(0.0f)
-                                            ?.setDuration(220)
-                                            ?.setInterpolator(DecelerateInterpolator(1.5f))
-                                            ?.start()
+
+                                        val clockView = getClockView(kpvc, rootView)
+                                        val fgClockView = getFgClockView(kpvc, rootView)
+                                        val infoLayer = getInfoLayer(kpvc, rootView)
+                                        val signatureLayer = getSignatureLayer(kpvc, rootView)
+                                        val bottomArea = getBottomAreaView(kpvc)
+                                        val glassSheet = cachedLockGlassSheetRef?.get()
+
+                                        clockView?.animate()?.translationY(-viewHeight)?.alpha(0.0f)?.setDuration(220)?.setInterpolator(DecelerateInterpolator(1.5f))?.start()
+                                        fgClockView?.animate()?.translationY(-viewHeight)?.alpha(0.0f)?.setDuration(220)?.setInterpolator(DecelerateInterpolator(1.5f))?.start()
+                                        infoLayer?.animate()?.translationY(-viewHeight)?.alpha(0.0f)?.setDuration(220)?.setInterpolator(DecelerateInterpolator(1.5f))?.start()
+                                        signatureLayer?.animate()?.translationY(-viewHeight)?.alpha(0.0f)?.setDuration(220)?.setInterpolator(DecelerateInterpolator(1.5f))?.start()
+                                        bottomArea?.animate()?.translationY(-viewHeight)?.alpha(0.0f)?.setDuration(220)?.setInterpolator(DecelerateInterpolator(1.5f))?.start()
+                                        glassSheet?.animate()?.translationY(-viewHeight)?.alpha(0.0f)?.setDuration(220)?.setInterpolator(DecelerateInterpolator(1.5f))?.start()
+                                        finalNotifView?.animate()?.translationY(-viewHeight)?.alpha(0.0f)?.setDuration(220)?.setInterpolator(DecelerateInterpolator(1.5f))?.start()
                                     }
                                     if (Looper.myLooper() == Looper.getMainLooper()) {
                                         animUI.run()

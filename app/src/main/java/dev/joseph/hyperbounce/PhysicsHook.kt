@@ -68,7 +68,6 @@ class PhysicsHook : XposedModule() {
                         dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initSystemUIHooks(this, param.classLoader)
                     }
                     dev.joseph.hyperbounce.notification.NotificationSheetHook.init(this, param.classLoader)
-                    dev.joseph.hyperbounce.compat.AdvancedTextureFallbackHook.initSystemUI(this, param.classLoader)
                 }
 
                 param.packageName == "miui.systemui.plugin" -> {
@@ -87,7 +86,6 @@ class PhysicsHook : XposedModule() {
                     } else {
                         dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initPluginHooks(this, param.classLoader)
                     }
-                    dev.joseph.hyperbounce.compat.AdvancedTextureFallbackHook.initPlugin(this, param.classLoader)
                 }
 
                 param.packageName == "com.miui.home" || param.packageName == "com.mi.android.globallauncher" -> {
@@ -103,7 +101,6 @@ class PhysicsHook : XposedModule() {
                     }
                     dev.joseph.hyperbounce.launcher.ScreenUnlockHook.init(this, param.classLoader)
                     dev.joseph.hyperbounce.launcher.AppTransitionHook.init(this, param.classLoader)
-                    dev.joseph.hyperbounce.compat.AdvancedTextureFallbackHook.initLauncher(this, param.classLoader)
                 }
             }
         } catch (t: Throwable) {

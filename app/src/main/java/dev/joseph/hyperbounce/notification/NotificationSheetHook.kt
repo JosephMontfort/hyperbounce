@@ -18,6 +18,7 @@ import android.view.ViewGroup
 import android.view.ViewParent
 import android.view.animation.DecelerateInterpolator
 import android.hardware.camera2.CameraManager
+import android.provider.Settings
 import dev.joseph.hyperbounce.notification.glass.CustomWallpaperHelper
 import dev.joseph.hyperbounce.notification.glass.DepthWallpaperHelper
 import dev.joseph.hyperbounce.notification.glass.NotificationGlassSheetView
@@ -2614,31 +2615,33 @@ object NotificationSheetHook {
         }
     }
 
-    private fun hookNotificationCardBlurSuppression(module: XposedModule, classLoader: ClassLoader) {
-        // Point 0: MiuiBaseNotifUtil.isBackgroundBlurOpened(Context) - Root check for all notification blur drawables
+    private fun getInjectorContext(injector: Any?): Context? {
+        if (injector == null) return null
         try {
-            val mbnuClass = Class.forName("com.miui.systemui.notification.MiuiBaseNotifUtil", false, classLoader)
-            for (m in mbnuClass.declaredMethods) {
-                if (m.name == "isBackgroundBlurOpened" && m.parameterTypes.size == 1 &&
-                    Context::class.java.isAssignableFrom(m.parameterTypes[0])
-                ) {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
-                            val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.enabled) {
-                                return false
-                            }
-                            return chain.proceed()
-                        }
-                    })
-                    Log.d(TAG, "Hooked MiuiBaseNotifUtil.isBackgroundBlurOpened successfully")
-                }
-            }
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to hook MiuiBaseNotifUtil.isBackgroundBlurOpened: ${t.message}")
-        }
+            val fCtx = injector.javaClass.getField("context")
+            val ctx = fCtx.get(injector) as? Context
+            if (ctx != null) return ctx
+        } catch (_: Throwable) {}
+        try {
+            val fView = injector.javaClass.getField("view")
+            val v = fView.get(injector) as? View
+            if (v != null) return v.context
+        } catch (_: Throwable) {}
+        return null
+    }
 
+    private fun isAdvancedTexturesOn(context: Context?): Boolean {
+        if (context == null) return false
+        return try {
+            Settings.Secure.getInt(context.contentResolver, "background_blur_enable", 0) == 1
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun hookNotificationCardBlurSuppression(module: XposedModule, classLoader: ClassLoader) {
         // Point 1: ExpandableNotificationRowInjector.updateBlurBg(int r13, int r14, boolean r15)
+        // Strictly conditioned on HyperOS Advanced Textures (background_blur_enable == 1)
         try {
             val enriClass = Class.forName("com.android.systemui.statusbar.notification.row.ExpandableNotificationRowInjector", false, classLoader)
             for (m in enriClass.declaredMethods) {
@@ -2651,11 +2654,14 @@ object NotificationSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val cfg = NotificationSheetConfigHolder.sheet
                             if (cfg.enabled) {
-                                val args = chain.args.toTypedArray()
-                                if (args.size > 2) {
-                                    // Always force non-blur path: material normal bg (r14), blur mode 0, clear blend
-                                    args[2] = false
-                                    return chain.proceed(args)
+                                val ctx = getInjectorContext(chain.thisObject)
+                                if (isAdvancedTexturesOn(ctx)) {
+                                    val args = chain.args.toTypedArray()
+                                    if (args.size > 2) {
+                                        // Force non-blur path: material normal bg (r14), blur mode 0, clear blend
+                                        args[2] = false
+                                        return chain.proceed(args)
+                                    }
                                 }
                             }
                             return chain.proceed()
@@ -2669,35 +2675,37 @@ object NotificationSheetHook {
         }
 
         // Point 2: ActivatableNotificationViewInjector.initBackground()
+        // Strictly conditioned on HyperOS Advanced Textures (background_blur_enable == 1)
         try {
             val anviClass = Class.forName("com.android.systemui.statusbar.notification.row.ActivatableNotificationViewInjector", false, classLoader)
             for (m in anviClass.declaredMethods) {
                 if (m.name == "initBackground" && m.parameterTypes.isEmpty()) {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val result = chain.proceed()
                             val cfg = NotificationSheetConfigHolder.sheet
                             if (cfg.enabled) {
-                                val result = chain.proceed()
                                 try {
                                     val injector = chain.thisObject ?: return result
-                                    val viewField = injector.javaClass.getField("view")
-                                    val expandableView = viewField.get(injector)
-                                    if (expandableView != null) {
-                                        val bgNormalField = expandableView.javaClass.getField("mBackgroundNormal")
-                                        val bgNormal = bgNormalField.get(expandableView)
-                                        if (bgNormal != null) {
-                                            val ctx = (expandableView as View).context
-                                            val matBgId = ctx.resources.getIdentifier("notification_material_bg", "drawable", "com.android.systemui")
-                                            if (matBgId != 0) {
-                                                val setCustomBgMethod = bgNormal.javaClass.getMethod("setCustomBackground", Int::class.javaPrimitiveType)
-                                                setCustomBgMethod.invoke(bgNormal, matBgId)
+                                    val ctx = getInjectorContext(injector)
+                                    if (isAdvancedTexturesOn(ctx)) {
+                                        val viewField = injector.javaClass.getField("view")
+                                        val expandableView = viewField.get(injector)
+                                        if (expandableView != null) {
+                                            val bgNormalField = expandableView.javaClass.getField("mBackgroundNormal")
+                                            val bgNormal = bgNormalField.get(expandableView)
+                                            if (bgNormal != null && ctx != null) {
+                                                val matBgId = ctx.resources.getIdentifier("notification_material_bg", "drawable", "com.android.systemui")
+                                                if (matBgId != 0) {
+                                                    val setCustomBgMethod = bgNormal.javaClass.getMethod("setCustomBackground", Int::class.javaPrimitiveType)
+                                                    setCustomBgMethod.invoke(bgNormal, matBgId)
+                                                }
                                             }
                                         }
                                     }
                                 } catch (_: Throwable) {}
-                                return result
                             }
-                            return chain.proceed()
+                            return result
                         }
                     })
                     Log.d(TAG, "Hooked ActivatableNotificationViewInjector.initBackground successfully")
