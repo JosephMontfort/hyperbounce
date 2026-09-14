@@ -96,7 +96,7 @@ fun ControlCenterScreen(
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "Low-End Flashlight Brightness Control",
-                    subtitle = "Hardware sysfs brightness unlock with dynamic stock scaling & bonus overdrive",
+                    subtitle = "Hardware sysfs brightness unlock (0–100% slider) for low-end devices",
                     colors = colors,
                     iconTint = colors.accentOrange,
                     backdrop = backdrop,
@@ -105,32 +105,20 @@ fun ControlCenterScreen(
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
                 if (cc.lowEndFlashlightEnabled) {
+                    val hwMax = dev.joseph.hyperbounce.controlcenter.FlashlightBrightnessHook.getHardwareMaxBrightness()
                     RowDivider(colors.separator)
-                    SettingsToggleRow(
-                        title = "Bonus Overdrive Zone",
-                        subtitle = "Splits slider at 50% (stock brightness) and unlocks 50–100% overdrive zone",
+                    SettingsSliderRow(
+                        title = "Maximum Brightness Limit",
+                        subtitle = "Caps maximum brightness across the slider (Hardware max: $hwMax)",
                         colors = colors,
-                        iconTint = colors.accentOrange,
                         backdrop = backdrop,
-                        checked = cc.flashlightBonusEnabled,
-                        onCheckedChange = cc::setFlashlightBonusEnabled,
-                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                        value = cc.flashlightMaxBrightness.toFloat().coerceIn(100f, hwMax.toFloat()),
+                        onValueChange = { cc.setFlashlightMaxBrightness(it.roundToInt()) },
+                        valueRange = 100f..hwMax.toFloat(),
+                        defaultValue = 100f,
+                        valueLabel = { "${it.roundToInt()}" },
+                        allowCustomInput = false
                     )
-                    if (cc.flashlightBonusEnabled) {
-                        RowDivider(colors.separator)
-                        SettingsSliderRow(
-                            title = "Overdrive Maximum Limit",
-                            subtitle = "Caps maximum current to prevent overheating (Hardware max: 500)",
-                            colors = colors,
-                            backdrop = backdrop,
-                            value = cc.flashlightMaxBrightness.toFloat(),
-                            onValueChange = { cc.setFlashlightMaxBrightness(it.roundToInt()) },
-                            valueRange = 70f..500f,
-                            defaultValue = 250f,
-                            valueLabel = { "${it.roundToInt()}" },
-                            allowCustomInput = false
-                        )
-                    }
                 }
                 RowDivider(colors.separator)
                 SettingsToggleRow(

@@ -2,17 +2,8 @@ package dev.joseph.hyperbounce.controlcenter
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.drawable.GradientDrawable
 import android.hardware.camera2.CameraManager
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
-import android.view.Gravity
-import android.view.HapticFeedbackConstants
-import android.view.View
-import android.view.ViewGroup
-import android.widget.FrameLayout
-import android.widget.Toast
 import io.github.libxposed.api.XposedModule
 import java.io.File
 import java.util.Collections
@@ -22,23 +13,19 @@ import kotlin.math.roundToInt
 /**
  * Flashlight Brightness Control for low-end Xiaomi / HyperOS devices.
  * Uses Qualcomm PMIC sysfs latch sequence to enable hardware brightness scaling,
- * unlocks the 1-100% brightness slider in the expanded panel, and unifies CC quick-tile toggling.
+ * unlocks the single continuous 0-100% brightness slider, and unifies CC quick-tile toggling.
  */
 object FlashlightBrightnessHook {
     private const val TAG = "HyperBounce_Flashlight"
-    private const val SPLIT_NOTCH_TAG = "hyperbounce_split_notch"
+    const val NORMAL_BRIGHTNESS = 100
 
     @Volatile private var isTorchOn: Boolean = false
     @Volatile private var lastWriteTime: Long = 0L
-    @Volatile private var bonusZoneWarned: Boolean = false
-    @Volatile private var lastPercentage: Float = -1f
 
     @Volatile private var cachedSwitchNode: String? = null
     @Volatile private var cachedTorch0Node: String? = null
     @Volatile private var cachedTorch1Node: String? = null
     @Volatile private var cachedHardwareMax: Int = 0
-    @Volatile private var detectedStockBrightness: Int = 70
-    @Volatile private var stockBrightnessDetected: Boolean = false
 
     private val initializedLoaders = Collections.newSetFromMap(ConcurrentHashMap<ClassLoader, Boolean>())
 
@@ -56,8 +43,7 @@ object FlashlightBrightnessHook {
 
     /**
      * Part 1: Unlock the slider in MiFlashlightManager and enforce maxStrength = 100.
-     * getLogicStrength returns 0.50f (when bonus is enabled) or 1.0f (when bonus is disabled),
-     * representing 100% of stock default brightness.
+     * getLogicStrength returns the exact fractional slider position that corresponds to normal brightness (100).
      */
     private fun hookMiFlashlightManager(module: XposedModule, classLoader: ClassLoader) {
         try {
@@ -100,7 +86,7 @@ object FlashlightBrightnessHook {
                 }
             }
 
-            // Hook getLogicStrength to return 0.50f (bonus mode) or 1.0f (normal mode)
+            // Hook getLogicStrength to return the exact position of normal brightness (100) within the user's max limit
             for (m in managerClass.declaredMethods) {
                 if (m.name == "getLogicStrength" && m.returnType == java.lang.Float.TYPE) {
                     m.isAccessible = true
@@ -108,7 +94,7 @@ object FlashlightBrightnessHook {
                         if (!ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
                             return@intercept chain.proceed()
                         }
-                        if (ControlCenterConfigHolder.config.flashlightBonusEnabled) 0.50f else 1.0f
+                        getLogicStrength()
                     }
                 }
             }
@@ -265,9 +251,6 @@ object FlashlightBrightnessHook {
                 }
                 lastWriteTime = now
 
-                // Dynamically detect stock brightness on initial activation
-                detectStockBrightnessIfNeeded()
-
                 if (!isHardwareOn()) {
                     try {
                         cameraManager.setTorchMode(cameraId, true)
@@ -295,13 +278,13 @@ object FlashlightBrightnessHook {
     }
 
     /**
-     * Parts 4 & 5: MiFlashlightController status handling, bonus zone Toast, visual split notch, and panel-open resync.
+     * Parts 4 & 5: MiFlashlightController status handling and panel-open resync.
      */
     private fun hookMiFlashlightController(module: XposedModule, classLoader: ClassLoader) {
         try {
             val controllerClass = Class.forName("miui.systemui.flashlight.MiFlashlightController", false, classLoader)
 
-            // Part 4: Hook setFlashlightStatus(float) to warn on bonus zone, haptic tick, handle dragging from OFF, and skip persistent storage
+            // Part 4: Hook setFlashlightStatus(float) to handle continuous sliding, turning on from OFF, and skip persistent storage
             for (m in controllerClass.declaredMethods) {
                 if (m.name == "setFlashlightStatus" && m.parameterTypes.size == 1 && m.parameterTypes[0] == java.lang.Float.TYPE) {
                     m.isAccessible = true
@@ -314,48 +297,8 @@ object FlashlightBrightnessHook {
                         val percentage = (args?.getOrNull(0) as? Number)?.toFloat() ?: 0f
                         val controller = chain.thisObject ?: return@intercept chain.proceed()
 
-                        val bonusEnabled = ControlCenterConfigHolder.config.flashlightBonusEnabled
-
-                        // Overheat warning toast when entering bonus zone (> 0.50f)
-                        if (bonusEnabled) {
-                            if (percentage > 0.50f) {
-                                if (!bonusZoneWarned) {
-                                    bonusZoneWarned = true
-                                    try {
-                                        val ctxField = controllerClass.getDeclaredField("context")
-                                        ctxField.isAccessible = true
-                                        val ctx = ctxField.get(controller) as? Context
-                                        if (ctx != null) {
-                                            Handler(Looper.getMainLooper()).post {
-                                                Toast.makeText(ctx, "Warning: High brightness. Risk of overheating!", Toast.LENGTH_SHORT).show()
-                                            }
-                                        }
-                                    } catch (_: Throwable) {}
-                                }
-                            } else {
-                                bonusZoneWarned = false
-                            }
-
-                            // Tactile haptic feedback when crossing 50% split mark
-                            if (lastPercentage >= 0f) {
-                                val crossedUp = lastPercentage < 0.50f && percentage >= 0.50f
-                                val crossedDown = lastPercentage >= 0.50f && percentage < 0.50f
-                                if (crossedUp || crossedDown) {
-                                    triggerHapticTick(controller, controllerClass)
-                                }
-                            }
-                            lastPercentage = percentage
-                        } else {
-                            bonusZoneWarned = false
-                        }
-
-                        // Ensure split notch is placed and visible
-                        setupSplitNotchView(controllerClass, controller, true)
-
-                        // Get switch status
                         val switchStatus = getControllerSwitchStatus(controllerClass, controller)
 
-                        // Get miFlashlightManager
                         val manager = try {
                             val mgrField = controllerClass.getDeclaredField("miFlashlightManager")
                             mgrField.isAccessible = true
@@ -387,44 +330,7 @@ object FlashlightBrightnessHook {
                 }
             }
 
-            // Hook setSeekbar to ensure visual split notch is attached and synced with visibility
-            for (m in controllerClass.declaredMethods) {
-                if (m.name == "setSeekbar" && m.parameterTypes.size == 1 && m.parameterTypes[0] == java.lang.Boolean.TYPE) {
-                    m.isAccessible = true
-                    module.hook(m).intercept { chain ->
-                        val res = chain.proceed()
-                        if (ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
-                            val controller = chain.thisObject
-                            if (controller != null) {
-                                val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                                val visible = (args?.getOrNull(0) as? Boolean) ?: true
-                                setupSplitNotchView(controllerClass, controller, visible)
-                            }
-                        }
-                        res
-                    }
-                }
-            }
-
-            // Hook updateSeekBarProcess to keep notch in front during slider dragging
-            for (m in controllerClass.declaredMethods) {
-                if (m.name == "updateSeekBarProcess" && m.parameterTypes.size == 1 && m.parameterTypes[0] == java.lang.Float.TYPE) {
-                    m.isAccessible = true
-                    module.hook(m).intercept { chain ->
-                        val res = chain.proceed()
-                        if (ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
-                            val controller = chain.thisObject
-                            if (controller != null) {
-                                setupSplitNotchView(controllerClass, controller, true)
-                            }
-                        }
-                        res
-                    }
-                }
-            }
-
-            // Part 5: Resync switch status from hardware and setup visual split notch whenever flashlight UI is configured
+            // Part 5: Resync switch status from hardware whenever flashlight UI is configured
             for (m in controllerClass.declaredMethods) {
                 if (m.name == "setSwitchLottieView") {
                     m.isAccessible = true
@@ -434,7 +340,6 @@ object FlashlightBrightnessHook {
                             val controller = chain.thisObject
                             if (controller != null) {
                                 resyncSwitchStatus(controllerClass, controller)
-                                setupSplitNotchView(controllerClass, controller, true)
                             }
                         }
                         res
@@ -447,10 +352,8 @@ object FlashlightBrightnessHook {
     }
 
     /**
-     * Part 6: Hook ToggleChangeReceiver.onToggleChange to dispatch operateCamera at stock brightness on quick-tile tap.
-     * When bonus enabled: 50% maps to stock brightness.
-     * When bonus disabled: 100% maps to stock brightness.
-     * Hardware is already at stock brightness from setTorchMode, eliminating the double-brightness jump completely!
+     * Part 6: Hook ToggleChangeReceiver.onToggleChange to dispatch operateCamera at normal brightness (100) on quick-tile tap.
+     * Maps to exactly normal brightness (100) in sysfs, matching hardware torch state with zero jump or delay.
      */
     private fun hookToggleChangeReceiver(module: XposedModule, classLoader: ClassLoader) {
         try {
@@ -467,9 +370,8 @@ object FlashlightBrightnessHook {
                             val intent = args?.getOrNull(1) as? Intent
                             if (context != null && intent != null) {
                                 val isOpen = intent.getBooleanExtra("flashlight_is_open_or_close", false)
-                                val bonusEnabled = ControlCenterConfigHolder.config.flashlightBonusEnabled
                                 val strength = if (isOpen) {
-                                    if (bonusEnabled) 50 else 100
+                                    (getLogicStrength() * 100).roundToInt().coerceIn(1, 100)
                                 } else {
                                     0
                                 }
@@ -501,54 +403,27 @@ object FlashlightBrightnessHook {
 
     /**
      * Calculates sysfs brightness:
-     * - Bonus mode: 1..50 maps to 1..stockDefaultBrightness (50 is 100% stock).
-     *   51..100 maps to stockDefaultBrightness..flashlightMaxBrightness (bonus overdrive).
-     * - Linear mode: 1..100 maps linearly to 1..stockDefaultBrightness.
+     * Maps 1..100% slider linearly across 0 to userMax (e.g. 100..500).
+     * Clamping to at least 15 ensures the physical LED lights up immediately when slider > 0 (no dead zone).
      */
     fun calculateSysfsBrightness(strength: Int): Int {
         if (strength <= 0) return 0
-        val stock = getStockBrightness()
-        val bonusEnabled = ControlCenterConfigHolder.config.flashlightBonusEnabled
-        val maxLimit = ControlCenterConfigHolder.config.flashlightMaxBrightness.coerceIn(stock, getHardwareMaxBrightness())
-
-        return if (bonusEnabled) {
-            if (strength <= 50) {
-                val fraction = strength / 50.0f
-                (fraction * stock).roundToInt().coerceIn(1, stock)
-            } else {
-                val fraction = (strength - 50) / 50.0f
-                (stock + fraction * (maxLimit - stock)).roundToInt().coerceIn(stock, maxLimit)
-            }
-        } else {
-            val fraction = strength / 100.0f
-            (fraction * stock).roundToInt().coerceIn(1, stock)
-        }
+        val userMax = getUserMaxBrightness()
+        val fraction = strength / 100.0f
+        return (fraction * userMax).roundToInt().coerceIn(15, userMax)
     }
 
     /**
-     * Dynamically detects stock torch brightness from sysfs if set by camera HAL.
+     * Gets the slider position (0.01f..1.0f) that represents normal brightness (100) in the user's selected range.
      */
-    private fun detectStockBrightnessIfNeeded() {
-        if (stockBrightnessDetected) return
-        try {
-            val torchFile = File(getTorch0BrightnessNode())
-            if (torchFile.exists()) {
-                val v = torchFile.bufferedReader().use { it.readLine() }?.trim()?.toIntOrNull()
-                if (v != null && v in 10..200) {
-                    detectedStockBrightness = v
-                    stockBrightnessDetected = true
-                    Log.i(TAG, "Dynamically detected stock default brightness: $v")
-                }
-            }
-        } catch (t: Throwable) {
-            Log.w(TAG, "Failed to detect stock brightness from sysfs", t)
-        }
+    fun getLogicStrength(): Float {
+        val userMax = getUserMaxBrightness()
+        return (NORMAL_BRIGHTNESS.toFloat() / userMax.toFloat()).coerceIn(0.01f, 1.0f)
     }
 
-    fun getStockBrightness(): Int {
-        val cfgVal = ControlCenterConfigHolder.config.flashlightStockBrightness
-        if (cfgVal > 0) return cfgVal
-        return detectedStockBrightness
+    fun getUserMaxBrightness(): Int {
+        val hwMax = getHardwareMaxBrightness()
+        return ControlCenterConfigHolder.config.flashlightMaxBrightness.coerceIn(NORMAL_BRIGHTNESS, hwMax)
     }
 
     fun getHardwareMaxBrightness(): Int {
@@ -629,104 +504,6 @@ object FlashlightBrightnessHook {
 
     private fun getTorch1TriggerNode(): String {
         return getTorch1BrightnessNode().replace("brightness", "trigger")
-    }
-
-    /**
-     * Adds or updates the visual split notch in mi_seekbar_container at 50% height.
-     */
-    private fun setupSplitNotchView(controllerClass: Class<*>, controller: Any, visible: Boolean = true) {
-        try {
-            var seekbar: View? = null
-            for (m in controllerClass.declaredMethods) {
-                if (m.name == "getSeekbar" && m.parameterTypes.isEmpty()) {
-                    m.isAccessible = true
-                    seekbar = m.invoke(controller) as? View
-                    break
-                }
-            }
-            val container = (seekbar?.parent as? ViewGroup) ?: return
-
-            val existingNotch = container.findViewWithTag<View>(SPLIT_NOTCH_TAG)
-            val bonusEnabled = ControlCenterConfigHolder.config.flashlightBonusEnabled
-
-            if (!bonusEnabled || !visible) {
-                existingNotch?.visibility = View.GONE
-                return
-            }
-
-            if (existingNotch != null) {
-                existingNotch.visibility = View.VISIBLE
-                existingNotch.bringToFront()
-                container.bringChildToFront(existingNotch)
-                return
-            }
-
-            val context = container.context
-            val dp = context.resources.displayMetrics.density
-            val heightPx = (4 * dp).toInt().coerceAtLeast(4)
-            val lp = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                heightPx
-            ).apply {
-                gravity = Gravity.CENTER
-                leftMargin = (6 * dp).toInt()
-                rightMargin = (6 * dp).toInt()
-            }
-            val shape = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = 2 * dp
-                setColor(0xFF1C1C1E.toInt()) // Deep solid dark notch
-                setStroke((1.5f * dp).toInt().coerceAtLeast(1), 0xB3FFFFFF.toInt()) // 70% white high-contrast border
-            }
-            val notch = View(context).apply {
-                tag = SPLIT_NOTCH_TAG
-                layoutParams = lp
-                background = shape
-                elevation = 100f
-                translationZ = 100f
-            }
-            container.addView(notch)
-            notch.bringToFront()
-            container.bringChildToFront(notch)
-            container.invalidate()
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to setup split notch view", t)
-        }
-    }
-
-    /**
-     * Triggers tactile haptic feedback when crossing the 50% mark.
-     */
-    private fun triggerHapticTick(controller: Any, controllerClass: Class<*>) {
-        try {
-            for (f in controllerClass.declaredFields) {
-                if (f.name == "hapticFeedback") {
-                    f.isAccessible = true
-                    val hapticObj = f.get(controller) ?: continue
-                    for (m in hapticObj.javaClass.declaredMethods) {
-                        if (m.name == "click" && m.parameterTypes.isEmpty()) {
-                            m.isAccessible = true
-                            m.invoke(hapticObj)
-                            return
-                        }
-                    }
-                }
-            }
-        } catch (_: Throwable) {}
-
-        try {
-            for (m in controllerClass.declaredMethods) {
-                if (m.name == "getSeekbar" && m.parameterTypes.isEmpty()) {
-                    m.isAccessible = true
-                    val view = m.invoke(controller) as? View
-                    view?.performHapticFeedback(
-                        HapticFeedbackConstants.CLOCK_TICK,
-                        HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
-                    )
-                    return
-                }
-            }
-        } catch (_: Throwable) {}
     }
 
     private fun getControllerSwitchStatus(controllerClass: Class<*>, controller: Any): Boolean? {

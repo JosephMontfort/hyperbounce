@@ -49,9 +49,7 @@ data class ControlCenterConfig(
     var blurDamping: Float = 0.88f,
     var frictionMultiplier: Float = 0.40f,
     var lowEndFlashlightEnabled: Boolean = false,
-    var flashlightBonusEnabled: Boolean = true,
-    var flashlightMaxBrightness: Int = 250,
-    var flashlightStockBrightness: Int = 70
+    var flashlightMaxBrightness: Int = 100
 )
 
 /**
@@ -199,9 +197,7 @@ object ControlCenterConfigHolder {
             blurDamping = prefs.getFloat("cc_blur_damping", 0.88f),
             frictionMultiplier = prefs.getFloat("cc_friction_multiplier", 0.40f),
             lowEndFlashlightEnabled = prefs.getBoolean("cc_low_end_flashlight_enabled", false),
-            flashlightBonusEnabled = prefs.getBoolean("cc_flashlight_bonus_enabled", true),
-            flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", 250),
-            flashlightStockBrightness = prefs.getInt("cc_flashlight_stock_brightness", 70)
+            flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", 100)
         )
     }
 
