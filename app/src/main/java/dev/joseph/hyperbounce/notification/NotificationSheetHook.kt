@@ -10,6 +10,7 @@ import android.content.Intent
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
 import android.view.MotionEvent
 import android.view.VelocityTracker
@@ -362,6 +363,9 @@ object NotificationSheetHook {
 
         // 18. Hook FakeFocusNotifControllerImpl to scale focus notification translation 1:1 during 1:1 tracking
         hookFakeFocusNotifController(module, classLoader)
+
+        // 19. Hook notification row injectors to prevent transparent cards when HyperOS Advanced Textures (background_blur_enable) is active
+        hookNotificationCardBlurSuppression(module, classLoader)
     }
 
     private fun hookWakeUpCoordinator(module: XposedModule, classLoader: ClassLoader) {
@@ -2618,6 +2622,108 @@ object NotificationSheetHook {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook FakeFocusNotifControllerImpl", t)
+        }
+    }
+
+    private fun getInjectorContext(injector: Any?): Context? {
+        if (injector == null) return null
+        try {
+            val fCtx = injector.javaClass.getField("context")
+            val ctx = fCtx.get(injector) as? Context
+            if (ctx != null) return ctx
+        } catch (_: Throwable) {}
+        try {
+            val fView = injector.javaClass.getField("view")
+            val v = fView.get(injector) as? View
+            if (v != null) return v.context
+        } catch (_: Throwable) {}
+        return null
+    }
+
+    private fun isAdvancedTexturesOn(context: Context?): Boolean {
+        val ctx = context ?: containerRef?.get()?.context ?: return false
+        return try {
+            Settings.Secure.getInt(ctx.contentResolver, "background_blur_enable", 0) == 1
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun hookNotificationCardBlurSuppression(module: XposedModule, classLoader: ClassLoader) {
+        // Point 1: ExpandableNotificationRowInjector.updateBlurBg(int r13, int r14, boolean r15)
+        // Strictly conditioned on HyperOS Advanced Textures (background_blur_enable == 1)
+        try {
+            val enriClass = Class.forName("com.android.systemui.statusbar.notification.row.ExpandableNotificationRowInjector", false, classLoader)
+            for (m in enriClass.declaredMethods) {
+                if (m.name == "updateBlurBg" && m.parameterTypes.size == 3 &&
+                    m.parameterTypes[0] == Int::class.javaPrimitiveType &&
+                    m.parameterTypes[1] == Int::class.javaPrimitiveType &&
+                    m.parameterTypes[2] == Boolean::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val cfg = NotificationSheetConfigHolder.sheet
+                            if (cfg.enabled) {
+                                val ctx = getInjectorContext(chain.thisObject)
+                                if (isAdvancedTexturesOn(ctx)) {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else (rawArgs as Array<Any?>).clone()
+                                    if (args.size > 2) {
+                                        // Force non-blur path: material normal bg (r14), blur mode 0, clear blend
+                                        args[2] = false
+                                        return chain.proceed(args)
+                                    }
+                                }
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked ExpandableNotificationRowInjector.updateBlurBg successfully")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook ExpandableNotificationRowInjector.updateBlurBg: ${t.message}")
+        }
+
+        // Point 2: ActivatableNotificationViewInjector.initBackground()
+        // Strictly conditioned on HyperOS Advanced Textures (background_blur_enable == 1)
+        try {
+            val anviClass = Class.forName("com.android.systemui.statusbar.notification.row.ActivatableNotificationViewInjector", false, classLoader)
+            for (m in anviClass.declaredMethods) {
+                if (m.name == "initBackground" && m.parameterTypes.isEmpty()) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val result = chain.proceed()
+                            val cfg = NotificationSheetConfigHolder.sheet
+                            if (cfg.enabled) {
+                                try {
+                                    val injector = chain.thisObject ?: return result
+                                    val ctx = getInjectorContext(injector) ?: containerRef?.get()?.context
+                                    if (isAdvancedTexturesOn(ctx)) {
+                                        val viewField = injector.javaClass.getField("view")
+                                        val expandableView = viewField.get(injector)
+                                        if (expandableView != null) {
+                                            val bgNormalField = expandableView.javaClass.getField("mBackgroundNormal")
+                                            val bgNormal = bgNormalField.get(expandableView)
+                                            if (bgNormal != null && ctx != null) {
+                                                val matBgId = ctx.resources.getIdentifier("notification_material_bg", "drawable", "com.android.systemui")
+                                                if (matBgId != 0) {
+                                                    val setCustomBgMethod = bgNormal.javaClass.getMethod("setCustomBackground", Int::class.javaPrimitiveType)
+                                                    setCustomBgMethod.invoke(bgNormal, matBgId)
+                                                }
+                                            }
+                                        }
+                                    }
+                                } catch (_: Throwable) {}
+                            }
+                            return result
+                        }
+                    })
+                    Log.d(TAG, "Hooked ActivatableNotificationViewInjector.initBackground successfully")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook ActivatableNotificationViewInjector.initBackground: ${t.message}")
         }
     }
 }
