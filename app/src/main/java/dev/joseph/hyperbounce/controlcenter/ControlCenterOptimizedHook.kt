@@ -1,7 +1,7 @@
 package dev.joseph.hyperbounce.controlcenter
 
 import android.view.View
-import com.github.kyuubiran.ezxhelper.misc.XposedModule
+import io.github.libxposed.api.XposedModule
 
 /**
  * Universal compatibility alias delegating to ControlCenterHook.
