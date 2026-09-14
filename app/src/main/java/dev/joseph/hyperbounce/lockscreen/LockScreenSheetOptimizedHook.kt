@@ -344,29 +344,23 @@ object LockScreenSheetOptimizedHook {
                                         mainHandler.post(animUI)
                                     }
 
-                                    // Calibrated asynchronous broadcast dispatch:
-                                    // Delay by 60ms so launcher icons burst precisely as the desktop is uncovered
+                                    // Immediate broadcast dispatch with zero delay:
                                     val context = rootView.context
                                     val vel = max(
                                         lockscreenFlingVelocity,
                                         dev.joseph.hyperbounce.notification.NotificationSheetHook.latestFlingVelocity
                                     )
-                                    bgExecutor.execute {
+                                    listOf("com.miui.home", "com.mi.android.globallauncher").forEach { pkg ->
                                         try {
-                                            Thread.sleep(60L)
-                                        } catch (_: Throwable) {}
-                                        listOf("com.miui.home", "com.mi.android.globallauncher").forEach { pkg ->
-                                            try {
-                                                val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
-                                                    if (vel > 0.0f) {
-                                                        putExtra("EXTRA_VELOCITY", vel)
-                                                    }
-                                                    setPackage(pkg)
-                                                    addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+                                            val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
+                                                if (vel > 0.0f) {
+                                                    putExtra("EXTRA_VELOCITY", vel)
                                                 }
-                                                context.sendBroadcast(intent)
-                                            } catch (_: Throwable) {}
-                                        }
+                                                setPackage(pkg)
+                                                addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+                                            }
+                                            context.sendBroadcast(intent)
+                                        } catch (_: Throwable) {}
                                     }
                                 }
                             } catch (_: Throwable) {}
