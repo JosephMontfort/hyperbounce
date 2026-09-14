@@ -38,6 +38,24 @@ object ControlCenterOptimizedHook {
     @Volatile var sLastMediaPlayerMetaData: Any? = null
     private val sInChangeVisible = ThreadLocal<Boolean>()
 
+    // Static reflection field cache for onFrameCallback to eliminate ~7,200 reflection calls/sec at 120Hz
+    private var sHolderItemViewField: Field? = null
+    private var sHolderExpandScaleRatioField: Field? = null
+    private var sHolderExpandTransYField: Field? = null
+    private var sHolderSpreadRowField: Field? = null
+    @Volatile private var sHolderFieldsInitialized = false
+
+    private fun initHolderFields(holderClass: Class<*>) {
+        if (sHolderFieldsInitialized) return
+        try {
+            sHolderItemViewField = holderClass.getField("itemView")
+            sHolderExpandScaleRatioField = holderClass.getDeclaredField("expandScaleRatio").apply { isAccessible = true }
+            sHolderExpandTransYField = holderClass.getDeclaredField("expandTransY").apply { isAccessible = true }
+            sHolderSpreadRowField = holderClass.getDeclaredField("spreadRow").apply { isAccessible = true }
+            sHolderFieldsInitialized = true
+        } catch (t: Throwable) {}
+    }
+
     fun initSystemUIHooks(module: XposedModule, classLoader: ClassLoader?) {
         if (classLoader == null || sysuiHooked) return
 
@@ -566,8 +584,18 @@ object ControlCenterOptimizedHook {
                     if (m.name == "showPanel" || m.name == "onStart") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
-                            chain.proceed()
+                            val result = chain.proceed()
+                            val windowView = chain.thisObject as? View
+                            if (windowView != null) {
+                                windowView.post {
+                                    ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
+                                }
+                            } else {
+                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                    ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
+                                }
+                            }
+                            result
                         }
                     }
                     if (m.name == "hidePanel") {
@@ -639,7 +667,11 @@ object ControlCenterOptimizedHook {
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                                 if (args != null && args.size >= 4 && (args[3] as Boolean)) {
                                     val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(0.88f, 0.38f))
-                                    val rowsField = spreadAnimatorClass.getDeclaredField("rows")
+                                    val rowsField = try {
+                                        spreadAnimatorClass.getDeclaredField("animators")
+                                    } catch (e: NoSuchFieldException) {
+                                        spreadAnimatorClass.getDeclaredField("rows")
+                                    }
                                     rowsField.isAccessible = true
                                     val rows = rowsField.get(chain.thisObject) as? Array<*>
                                     if (rows != null) {
@@ -871,25 +903,17 @@ object ControlCenterOptimizedHook {
 
                     if (m.name == "onFrameCallback") {
                         m.isAccessible = true
+                        initHolderFields(holderClass)
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
                             if (ControlCenterConfigHolder.config.jellyEnabled) {
                                 try {
                                     val holder = chain.thisObject
-                                    val ivField = holderClass.getField("itemView")
-                                    val itemView = ivField.get(holder) as? View ?: return@intercept result
+                                    val itemView = (sHolderItemViewField?.get(holder) ?: holderClass.getField("itemView").get(holder)) as? View ?: return@intercept result
 
-                                    val expandScaleRatioField = holderClass.getDeclaredField("expandScaleRatio")
-                                    expandScaleRatioField.isAccessible = true
-                                    val progress = expandScaleRatioField.getFloat(holder)
-
-                                    val expandTransYField = holderClass.getDeclaredField("expandTransY")
-                                    expandTransYField.isAccessible = true
-                                    val expandTransY = expandTransYField.getFloat(holder)
-
-                                    val spreadRowField = holderClass.getDeclaredField("spreadRow")
-                                    spreadRowField.isAccessible = true
-                                    val row = spreadRowField.getInt(holder)
+                                    val progress = sHolderExpandScaleRatioField?.getFloat(holder) ?: 1.0f
+                                    val expandTransY = sHolderExpandTransYField?.getFloat(holder) ?: 0.0f
+                                    val row = sHolderSpreadRowField?.getInt(holder) ?: 0
 
                                     val viewWidth = itemView.width
                                     val viewHeight = itemView.height
@@ -5158,6 +5182,39 @@ class OptimizedTileResizeDragTouchListener(
                 if (isDragging) {
                     if (candidateTargetState != -1 && candidateTargetState != initialState) {
                         v.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+
+                        // 1. Immediately apply the target dimensions to tileView's layout params so it snaps without waiting
+                        val (targetW, targetH) = when (candidateTargetState) {
+                            STATE_EXPANDED -> Pair(twoColW, row1H)     // 2x1
+                            STATE_VERTICAL -> Pair(oneColW, row2H)     // 1x2
+                            STATE_LARGE -> Pair(twoColW, row2H)        // 2x2
+                            STATE_WIDE_1 -> Pair(fourColW, row1H)      // 4x1
+                            STATE_WIDE_2 -> Pair(fourColW, row2H)      // 4x2
+                            STATE_TALL_4 -> Pair(twoColW, row4H)       // 2x4
+                            STATE_NORMAL -> Pair(unitWidth1x1, unitHeight1x1) // 1x1
+                            else -> Pair(originWidth, originHeight)
+                        }
+
+                        if (targetW > 0f && targetH > 0f) {
+                            tileView.layoutParams?.let { lp ->
+                                lp.width = targetW.toInt()
+                                lp.height = targetH.toInt()
+                                tileView.layoutParams = lp
+                            }
+                        }
+
+                        // 2. Un-suppress layout on tileView and its parent cards
+                        try {
+                            (tileView as? ViewGroup)?.suppressLayout(false)
+                            var p = tileView.parent
+                            while (p != null && p is ViewGroup) {
+                                p.suppressLayout(false)
+                                if (p.javaClass.name.contains("RecyclerView")) break
+                                p = p.parent
+                            }
+                        } catch (t: Throwable) {}
+
+                        // 3. Mutate sizes in config and trigger optimized refresh
                         if (isSliderSpec) {
                             ControlCenterConfigHolder.setSliderWidth(ctx, isBrightnessSpec, candidateTargetState, tileView)
                         } else if (isMediaSpec) {

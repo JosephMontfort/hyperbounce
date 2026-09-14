@@ -34,15 +34,15 @@ data class ControlCenterConfig(
     var waterfallEnabled: Boolean = true,
     var waterfallDelayStep: Float = 0.04f,
     var spreadRatio: Float = 0.02f,
-    var spreadResponse: Float = 0.85f,
+    var spreadResponse: Float = 0.45f,
     var spreadDamping: Float = 0.85f,
     var spreadReleaseResponse: Float = 0.70f,
     var spreadReleaseDamping: Float = 0.90f,
-    var tileShowResponse: Float = 0.85f,
-    var tileShowDamping: Float = 0.85f,
+    var tileShowResponse: Float = 0.48f,
+    var tileShowDamping: Float = 0.84f,
     var tileHideResponse: Float = 0.80f,
     var tileHideDamping: Float = 0.90f,
-    var tileShrinkResponse: Float = 0.85f,
+    var tileShrinkResponse: Float = 0.45f,
     var tileShrinkDamping: Float = 0.85f,
     var tileDelayScale: Float = 60.0f,
     var blurResponse: Float = 0.90f,
@@ -183,15 +183,15 @@ object ControlCenterConfigHolder {
             waterfallEnabled = prefs.getBoolean("cc_waterfall_enabled", true),
             waterfallDelayStep = prefs.getFloat("cc_waterfall_delay_step", 0.04f),
             spreadRatio = prefs.getFloat("cc_spread_ratio", 0.02f),
-            spreadResponse = prefs.getFloat("cc_spread_response", 0.85f),
+            spreadResponse = prefs.getFloat("cc_spread_response", 0.45f),
             spreadDamping = prefs.getFloat("cc_spread_damping", 0.85f),
             spreadReleaseResponse = prefs.getFloat("cc_spread_release_response", 0.70f),
             spreadReleaseDamping = prefs.getFloat("cc_spread_release_damping", 0.90f),
-            tileShowResponse = prefs.getFloat("cc_tile_show_response", 0.85f),
-            tileShowDamping = prefs.getFloat("cc_tile_show_damping", 0.85f),
+            tileShowResponse = prefs.getFloat("cc_tile_show_response", 0.48f),
+            tileShowDamping = prefs.getFloat("cc_tile_show_damping", 0.84f),
             tileHideResponse = prefs.getFloat("cc_tile_hide_response", 0.80f),
             tileHideDamping = prefs.getFloat("cc_tile_hide_damping", 0.90f),
-            tileShrinkResponse = prefs.getFloat("cc_tile_shrink_response", 0.85f),
+            tileShrinkResponse = prefs.getFloat("cc_tile_shrink_response", 0.45f),
             tileShrinkDamping = prefs.getFloat("cc_tile_shrink_damping", 0.85f),
             tileDelayScale = prefs.getFloat("cc_tile_delay_scale", 60.0f),
             blurResponse = prefs.getFloat("cc_blur_response", 0.90f),
@@ -1714,11 +1714,20 @@ object ControlCenterConfigHolder {
                 val adp = getAdapterMethod?.invoke(rv)
                 if (adp != null) {
                     sMainPanelAdapter = adp
-                    try {
-                        val distMethod = adp.javaClass.getDeclaredMethod("distributeContent", Boolean::class.javaPrimitiveType)
-                        distMethod.isAccessible = true
-                        distMethod.invoke(adp, true)
-                    } catch (t: Throwable) {}
+                    if (config.ccOptimizationsEnabled) {
+                        try {
+                            val cl = adp.javaClass.classLoader ?: ControlCenterConfigHolder::class.java.classLoader
+                            if (cl != null) {
+                                ControlCenterFullUnlock.buildAndSetContentMap(adp, cl)
+                            }
+                        } catch (t: Throwable) {}
+                    } else {
+                        try {
+                            val distMethod = adp.javaClass.getDeclaredMethod("distributeContent", Boolean::class.javaPrimitiveType)
+                            distMethod.isAccessible = true
+                            distMethod.invoke(adp, true)
+                        } catch (t: Throwable) {}
+                    }
 
                     if (isStructuralChange) {
                         try {
@@ -1762,13 +1771,24 @@ object ControlCenterConfigHolder {
                         val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
                         val adp = getAdapterMethod.invoke(rv)
                         if (adp != null) {
-                            try {
-                                val distMethod = adp.javaClass.getDeclaredMethod("distributeContent", Boolean::class.javaPrimitiveType)
-                                distMethod.isAccessible = true
-                                distMethod.invoke(adp, true)
-                            } catch (t: Throwable) {}
-                            val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
-                            notifyDataSetChangedMethod.invoke(adp)
+                            if (config.ccOptimizationsEnabled) {
+                                try {
+                                    val cl = adp.javaClass.classLoader ?: ControlCenterConfigHolder::class.java.classLoader
+                                    if (cl != null) {
+                                        ControlCenterFullUnlock.buildAndSetContentMap(adp, cl)
+                                    }
+                                } catch (t: Throwable) {}
+                                val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
+                                notifyDataSetChangedMethod.invoke(adp)
+                            } else {
+                                try {
+                                    val distMethod = adp.javaClass.getDeclaredMethod("distributeContent", Boolean::class.javaPrimitiveType)
+                                    distMethod.isAccessible = true
+                                    distMethod.invoke(adp, true)
+                                } catch (t: Throwable) {}
+                                val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
+                                notifyDataSetChangedMethod.invoke(adp)
+                            }
                         }
                     } catch (t: Throwable) {
                         Log.e(TAG, "refreshRecyclerView notify error", t)
