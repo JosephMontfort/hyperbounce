@@ -62,11 +62,7 @@ class PhysicsHook : XposedModule() {
                     }
                     dev.joseph.hyperbounce.lockscreen.LockScreenSheetHook.init(this, param.classLoader)
                     dev.joseph.hyperbounce.lockscreen.KeypadPhysicsHook.init(this, param.classLoader)
-                    if (dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.config.ccOptimizationsEnabled) {
-                        dev.joseph.hyperbounce.controlcenter.ControlCenterOptimizedHook.initSystemUIHooks(this, param.classLoader)
-                    } else {
-                        dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initSystemUIHooks(this, param.classLoader)
-                    }
+                    dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initSystemUIHooks(this, param.classLoader)
                     dev.joseph.hyperbounce.notification.NotificationSheetHook.init(this, param.classLoader)
                 }
 
@@ -81,11 +77,7 @@ class PhysicsHook : XposedModule() {
                             Log.e("HyperBounce", "Failed to bind remote preferences in Control Center Plugin", t)
                         }
                     }
-                    if (dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.config.ccOptimizationsEnabled) {
-                        dev.joseph.hyperbounce.controlcenter.ControlCenterOptimizedHook.initPluginHooks(this, param.classLoader)
-                    } else {
-                        dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initPluginHooks(this, param.classLoader)
-                    }
+                    dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initPluginHooks(this, param.classLoader)
                 }
 
                 param.packageName == "com.miui.home" || param.packageName == "com.mi.android.globallauncher" -> {

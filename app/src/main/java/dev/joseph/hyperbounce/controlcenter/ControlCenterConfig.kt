@@ -50,7 +50,7 @@ data class ControlCenterConfig(
     var frictionMultiplier: Float = 0.40f,
     var lowEndFlashlightEnabled: Boolean = false,
     var flashlightMaxBrightness: Int = 100,
-    var ccOptimizationsEnabled: Boolean = false
+    var ccOptimizationsEnabled: Boolean = true
 )
 
 /**
@@ -199,7 +199,7 @@ object ControlCenterConfigHolder {
             frictionMultiplier = prefs.getFloat("cc_friction_multiplier", 0.40f),
             lowEndFlashlightEnabled = prefs.getBoolean("cc_low_end_flashlight_enabled", false),
             flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", 100),
-            ccOptimizationsEnabled = prefs.getBoolean("cc_enable_optimizations", false)
+            ccOptimizationsEnabled = prefs.getBoolean("cc_enable_optimizations", true)
         )
     }
 
@@ -217,11 +217,7 @@ object ControlCenterConfigHolder {
     }
 
     fun savePrioritiesAuto(ctx: Context?) {
-        if (config.ccOptimizationsEnabled) {
-            savePrioritiesAsync(ctx)
-        } else {
-            savePriorities(ctx)
-        }
+        savePrioritiesAsync(ctx)
     }
 
     @Synchronized
@@ -833,11 +829,7 @@ object ControlCenterConfigHolder {
     }
 
     fun createTileResizeListener(ctx: Context, spec: String, itemView: View, density: Float): View.OnTouchListener {
-        return if (config.ccOptimizationsEnabled) {
-            OptimizedTileResizeDragTouchListener(ctx, spec, itemView, density)
-        } else {
-            TileResizeDragTouchListener(ctx, spec, itemView, density)
-        }
+        return OptimizedTileResizeDragTouchListener(ctx, spec, itemView, density)
     }
 
     fun getOrResolveTileSpec(itemView: View): String? {
@@ -1620,17 +1612,9 @@ object ControlCenterConfigHolder {
         sSelectedTileSpecs.clear()
         sSelectedDisassembleGroups.clear()
         try {
-            val mediaHolder = if (config.ccOptimizationsEnabled) {
-                ControlCenterOptimizedHook.sMediaPlayerViewHolder?.get()
-            } else {
-                ControlCenterHook.sMediaPlayerViewHolder?.get()
-            }
+            val mediaHolder = ControlCenterHook.sMediaPlayerViewHolder?.get()
             mediaHolder?.let {
-                if (config.ccOptimizationsEnabled) {
-                    ControlCenterOptimizedHook.applyMediaPlayerLayout(it)
-                } else {
-                    ControlCenterHook.applyMediaPlayerLayout(it)
-                }
+                ControlCenterHook.applyMediaPlayerLayout(it)
             }
         } catch (t: Throwable) {}
         try {
@@ -1714,20 +1698,12 @@ object ControlCenterConfigHolder {
                 val adp = getAdapterMethod?.invoke(rv)
                 if (adp != null) {
                     sMainPanelAdapter = adp
-                    if (config.ccOptimizationsEnabled) {
-                        try {
-                            val cl = adp.javaClass.classLoader ?: ControlCenterConfigHolder::class.java.classLoader
-                            if (cl != null) {
-                                ControlCenterFullUnlock.buildAndSetContentMap(adp, cl)
-                            }
-                        } catch (t: Throwable) {}
-                    } else {
-                        try {
-                            val distMethod = adp.javaClass.getDeclaredMethod("distributeContent", Boolean::class.javaPrimitiveType)
-                            distMethod.isAccessible = true
-                            distMethod.invoke(adp, true)
-                        } catch (t: Throwable) {}
-                    }
+                    try {
+                        val cl = adp.javaClass.classLoader ?: ControlCenterConfigHolder::class.java.classLoader
+                        if (cl != null) {
+                            ControlCenterFullUnlock.buildAndSetContentMap(adp, cl)
+                        }
+                    } catch (t: Throwable) {}
 
                     if (isStructuralChange) {
                         try {
@@ -1771,24 +1747,14 @@ object ControlCenterConfigHolder {
                         val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
                         val adp = getAdapterMethod.invoke(rv)
                         if (adp != null) {
-                            if (config.ccOptimizationsEnabled) {
-                                try {
-                                    val cl = adp.javaClass.classLoader ?: ControlCenterConfigHolder::class.java.classLoader
-                                    if (cl != null) {
-                                        ControlCenterFullUnlock.buildAndSetContentMap(adp, cl)
-                                    }
-                                } catch (t: Throwable) {}
-                                val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
-                                notifyDataSetChangedMethod.invoke(adp)
-                            } else {
-                                try {
-                                    val distMethod = adp.javaClass.getDeclaredMethod("distributeContent", Boolean::class.javaPrimitiveType)
-                                    distMethod.isAccessible = true
-                                    distMethod.invoke(adp, true)
-                                } catch (t: Throwable) {}
-                                val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
-                                notifyDataSetChangedMethod.invoke(adp)
-                            }
+                            try {
+                                val cl = adp.javaClass.classLoader ?: ControlCenterConfigHolder::class.java.classLoader
+                                if (cl != null) {
+                                    ControlCenterFullUnlock.buildAndSetContentMap(adp, cl)
+                                }
+                            } catch (t: Throwable) {}
+                            val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
+                            notifyDataSetChangedMethod.invoke(adp)
                         }
                     } catch (t: Throwable) {
                         Log.e(TAG, "refreshRecyclerView notify error", t)
@@ -1799,7 +1765,7 @@ object ControlCenterConfigHolder {
                     m.invoke(rv) as? Boolean ?: false
                 } catch (t: Throwable) { false }
 
-                if (config.ccOptimizationsEnabled && !isComputing && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                if (!isComputing && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
                     doNotify.run()
                 } else {
                     rv.post(doNotify)
@@ -1814,17 +1780,9 @@ object ControlCenterConfigHolder {
         sMediaPlayerSize = size
         savePrioritiesAuto(ctx)
         try {
-            val mediaHolder = if (config.ccOptimizationsEnabled) {
-                ControlCenterOptimizedHook.sMediaPlayerViewHolder?.get()
-            } else {
-                ControlCenterHook.sMediaPlayerViewHolder?.get()
-            }
+            val mediaHolder = ControlCenterHook.sMediaPlayerViewHolder?.get()
             mediaHolder?.let {
-                if (config.ccOptimizationsEnabled) {
-                    ControlCenterOptimizedHook.applyMediaPlayerLayout(it)
-                } else {
-                    ControlCenterHook.applyMediaPlayerLayout(it)
-                }
+                ControlCenterHook.applyMediaPlayerLayout(it)
             }
         } catch (t: Throwable) {}
         refreshRecyclerView(tileView)

@@ -266,11 +266,11 @@ data class ControlCenterSettings(
     val waterfallEnabled: Boolean = true,
     val waterfallDelayStep: Float = 0.04f,
     val spreadRatio: Float = 0.02f,
-    val spreadResponse: Float = 0.85f,
+    val spreadResponse: Float = 0.50f,
     val spreadDamping: Float = 0.85f,
     val spreadReleaseResponse: Float = 0.70f,
     val spreadReleaseDamping: Float = 0.90f,
-    val tileShowResponse: Float = 0.85f,
+    val tileShowResponse: Float = 0.48f,
     val tileShowDamping: Float = 0.85f,
     val tileHideResponse: Float = 0.80f,
     val tileHideDamping: Float = 0.90f,
@@ -282,7 +282,7 @@ data class ControlCenterSettings(
     val frictionMultiplier: Float = 0.40f,
     val lowEndFlashlightEnabled: Boolean = false,
     val flashlightMaxBrightness: Int = 100,
-    val ccOptimizationsEnabled: Boolean = false
+    val ccOptimizationsEnabled: Boolean = true
 )
 
 /** Feature 10: Dropdown Menu to Dialog Fluid Morph Physics */

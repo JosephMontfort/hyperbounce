@@ -92,7 +92,8 @@ class LockScreenGlassSheetView @JvmOverloads constructor(
                 innerShadow = cfg.innerShadow,
                 saturation = cfg.saturationFactor,
                 rimSoftness = cfg.rimSoftness,
-                blurRadius = cfg.blurRadius * density
+                blurRadius = cfg.blurRadius * density,
+                transparentInterior = true
             )
 
             val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->

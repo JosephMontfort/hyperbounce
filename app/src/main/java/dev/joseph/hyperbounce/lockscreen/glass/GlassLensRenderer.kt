@@ -51,6 +51,7 @@ class GlassLensRenderer {
             uniform float  rimSoftness;
             uniform float  blurRadius;
             uniform float  hasBackdrop;
+            uniform float  transparentInterior;
 
             float sd3SidedSheet(float2 p, float2 size, float r) {
                 if (p.x < r && p.y > (size.y - r)) {
@@ -137,6 +138,9 @@ class GlassLensRenderer {
 
                 // === CASE 1: FLAT INTERIOR OF THE GLASS SHEET (ZERO REFRACTION) ===
                 if (slope <= 0.005) {
+                    if (transparentInterior > 0.5) {
+                        return half4(0.0);
+                    }
                     half4 fg = content.eval(coord);
                     // 100% Crystal-Clear Transparency:
                     // If foreground is transparent (depth mode background or transparent glass sheet),
@@ -291,7 +295,10 @@ class GlassLensRenderer {
 
                 // Bevel alpha: smooth transition into the transparent center
                 float bevelAlpha;
-                if (fgAlpha > 0.004) {
+                if (transparentInterior > 0.5) {
+                    float interiorFade = smoothstep(0.005, 0.040, slope);
+                    bevelAlpha = clamp(mix(spec, 1.0, interiorFade) * cov, 0.0, 1.0);
+                } else if (fgAlpha > 0.004) {
                     bevelAlpha = cov;
                 } else if (hasBackdrop > 0.5) {
                     float interiorBlend = smoothstep(0.005, 0.050, slope);
@@ -323,7 +330,8 @@ class GlassLensRenderer {
         val innerShadow: Float = 0.40f,
         val saturation: Float = 120f,
         val rimSoftness: Float = 2.0f,
-        val blurRadius: Float = 0f
+        val blurRadius: Float = 0f,
+        val transparentInterior: Boolean = false
     )
 
     private val renderNode = RenderNode("LiquidGlass20Lens")
@@ -440,6 +448,7 @@ class GlassLensRenderer {
         sh.setFloatUniform("satFactor", p.saturation / 100f)
         sh.setFloatUniform("rimSoftness", p.rimSoftness)
         sh.setFloatUniform("blurRadius", p.blurRadius)
+        sh.setFloatUniform("transparentInterior", if (p.transparentInterior) 1.0f else 0.0f)
 
         val hasBackdrop = backdropBmp != null && !backdropBmp.isRecycled
         if (hasBackdrop) {

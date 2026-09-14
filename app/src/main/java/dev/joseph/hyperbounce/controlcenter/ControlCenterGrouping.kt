@@ -533,16 +533,7 @@ object ControlCenterGrouping {
                 iflp.bottomMargin = 0
                 iconFrame.layoutParams = iflp
             }
-            if (blurEnabled) {
-                val discBg = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(Color.parseColor("#38FFFFFF"))
-                    setStroke(Math.max(1, (1.5f * density).toInt()), Color.parseColor("#80FFFFFF"))
-                }
-                iconFrame.background = discBg
-            } else {
-                iconFrame.background = null
-            }
+            iconFrame.background = null
         }
         return childTile
     }
@@ -970,64 +961,43 @@ object ControlCenterGrouping {
             }
             view.invalidateOutline()
 
-            if (blurEnabled) {
-                view.background = null
+            // Normal mode blur / standard styling for grouping container background:
+            // When Advanced Textures is enabled in HyperOS, tiles inside retain real-time blur,
+            // while the container background alone uses stock normal mode card background.
+            try {
+                val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
+                val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
+                setModeMethod.invoke(null, view, 0)
+
+                val clearBlendMethod = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
+                clearBlendMethod.invoke(null, view)
+            } catch (t: Throwable) {}
+
+            try {
+                val commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
+                val commonUtils = commonUtilsClass.getDeclaredField("INSTANCE").get(null)
+                val clearEffect = commonUtilsClass.getMethod("clearMiBlurBlendEffect", View::class.java)
+                clearEffect.invoke(commonUtils, view)
+            } catch (t: Throwable) {}
+
+            var cardBg: Drawable? = null
+            var bgResId = ctx.resources.getIdentifier("qs_card_background_disabled", "drawable", ctx.packageName)
+            if (bgResId == 0) {
+                bgResId = ctx.resources.getIdentifier("qs_background_disabled", "drawable", ctx.packageName)
+            }
+            if (bgResId != 0) {
                 try {
-                    val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
-                    try {
-                        val setPassWindowBlur = miBlurClass.getMethod("setPassWindowBlurEnabledCompat", View::class.java, Boolean::class.javaPrimitiveType)
-                        setPassWindowBlur.invoke(null, view, true)
-                    } catch (t: Throwable) {}
-
-                    val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
-                    setModeMethod.invoke(null, view, 1)
-
-                    val tokenClass = Class.forName("miui.systemui.util.MiuiColorBlendToken", false, classLoader)
-                    val tokenInst = tokenClass.getDeclaredField("INSTANCE").get(null)
-                    val getBlendMethod = tokenClass.getMethod("getCC_TILE_DEFAULT_BLEND_COLORS")
-                    val blendColors = getBlendMethod.invoke(tokenInst)
-
-                    val setBlendMethod = miBlurClass.getMethod("setMiBackgroundBlendColors", View::class.java, blendColors.javaClass)
-                    setBlendMethod.invoke(null, view, blendColors)
-                } catch (t: Throwable) {
-                    Log.e(TAG, "applyGroupContainerStyle MiBlur error", t)
-                }
+                    cardBg = ctx.theme.getDrawable(bgResId).mutate()
+                } catch (t: Throwable) {}
+            }
+            if (cardBg != null) {
+                view.background = cardBg
             } else {
-                try {
-                    val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
-                    val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
-                    setModeMethod.invoke(null, view, 0)
-
-                    val clearBlendMethod = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
-                    clearBlendMethod.invoke(null, view)
-                } catch (t: Throwable) {}
-
-                try {
-                    val commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
-                    val commonUtils = commonUtilsClass.getDeclaredField("INSTANCE").get(null)
-                    val clearEffect = commonUtilsClass.getMethod("clearMiBlurBlendEffect", View::class.java)
-                    clearEffect.invoke(commonUtils, view)
-                } catch (t: Throwable) {}
-
-                var cardBg: Drawable? = null
-                var bgResId = ctx.resources.getIdentifier("qs_card_background_disabled", "drawable", ctx.packageName)
-                if (bgResId == 0) {
-                    bgResId = ctx.resources.getIdentifier("qs_background_disabled", "drawable", ctx.packageName)
+                val fallbackBg = GradientDrawable().apply {
+                    this.cornerRadius = cornerRadius
+                    setColor(Color.parseColor("#26808080"))
                 }
-                if (bgResId != 0) {
-                    try {
-                        cardBg = ctx.theme.getDrawable(bgResId).mutate()
-                    } catch (t: Throwable) {}
-                }
-                if (cardBg != null) {
-                    view.background = cardBg
-                } else {
-                    val fallbackBg = GradientDrawable().apply {
-                        this.cornerRadius = cornerRadius
-                        setColor(Color.parseColor("#26808080"))
-                    }
-                    view.background = fallbackBg
-                }
+                view.background = fallbackBg
             }
         } catch (t: Throwable) {
             Log.e(TAG, "applyGroupContainerStyle error", t)
@@ -1832,16 +1802,7 @@ object ControlCenterGrouping {
                         iflp.bottomMargin = 0
                         iconFrame.layoutParams = iflp
                     }
-                    if (blurEnabled) {
-                        val discBg = GradientDrawable().apply {
-                            shape = GradientDrawable.OVAL
-                            setColor(Color.parseColor("#38FFFFFF"))
-                            setStroke(Math.max(1, (1.5f * density).toInt()), Color.parseColor("#80FFFFFF"))
-                        }
-                        iconFrame.background = discBg
-                    } else {
-                        iconFrame.background = null
-                    }
+                    iconFrame.background = null
                 }
 
                 if (mainPanelController != null) {
@@ -2119,16 +2080,7 @@ object ControlCenterGrouping {
                         iflp.bottomMargin = 0
                         iconFrame.layoutParams = iflp
                     }
-                    if (blurEnabled) {
-                        val discBg = GradientDrawable().apply {
-                            shape = GradientDrawable.OVAL
-                            setColor(Color.parseColor("#38FFFFFF"))
-                            setStroke(Math.max(1, (1.5f * density).toInt()), Color.parseColor("#80FFFFFF"))
-                        }
-                        iconFrame.background = discBg
-                    } else {
-                        iconFrame.background = null
-                    }
+                    iconFrame.background = null
                 }
 
                 if (mainPanelController != null) {
