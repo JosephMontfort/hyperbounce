@@ -169,6 +169,7 @@ object LockScreenSheetOptimizedHook {
         // 0. Event-driven state tracking to eliminate reflection from 120Hz hot path
         hookStatusBarState(module, classLoader)
         hookKeyguardState(module, classLoader)
+        hookKeyguardGoingAway(module, classLoader)
 
         // 1. Hook KeyguardPanelViewController (HyperOS Lockscreen Controller)
         try {
@@ -315,6 +316,17 @@ object LockScreenSheetOptimizedHook {
 
                                 if (rootView != null) {
                                     isDismissAnimationRunning = true
+
+                                    // 1. Immediately hide the glass sheet to free 100% GPU / RenderThread capacity for unlock transition
+                                    cachedLockGlassSheetRef?.get()?.visibility = View.GONE
+
+                                    // 2. Cancel conflicting wallpaper blur animator
+                                    try {
+                                        val fUnlockBlur = kpvc.javaClass.getDeclaredField("unlockBlurAnimator").apply { isAccessible = true }
+                                        (fUnlockBlur.get(kpvc) as? android.animation.ValueAnimator)?.cancel()
+                                        fUnlockBlur.set(kpvc, null)
+                                    } catch (_: Throwable) {}
+
                                     val animUI = Runnable {
                                         var viewHeight = rootView.height.toFloat()
                                         if (viewHeight == 0f) viewHeight = 2400f
@@ -344,28 +356,27 @@ object LockScreenSheetOptimizedHook {
                                         mainHandler.post(animUI)
                                     }
 
-                                    // Calibrated asynchronous broadcast dispatch:
-                                    // Delay by 60ms so launcher icons burst precisely as the desktop is uncovered
+                                    // 3. Kinetic velocity broadcast dispatch:
+                                    // Only broadcast if the user actually performed a fling gesture (> 50px/s).
+                                    // For biometric unlock (fingerprint) or tap, let Launcher trigger natively at 120Hz.
                                     val context = rootView.context
                                     val vel = max(
                                         lockscreenFlingVelocity,
                                         dev.joseph.hyperbounce.notification.NotificationSheetHook.latestFlingVelocity
                                     )
-                                    bgExecutor.execute {
-                                        try {
-                                            Thread.sleep(60L)
-                                        } catch (_: Throwable) {}
-                                        listOf("com.miui.home", "com.mi.android.globallauncher").forEach { pkg ->
-                                            try {
-                                                val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
-                                                    if (vel > 0.0f) {
+                                    if (vel > 50.0f) {
+                                        bgExecutor.execute {
+                                            listOf("com.miui.home", "com.mi.android.globallauncher").forEach { pkg ->
+                                                try {
+                                                    val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
                                                         putExtra("EXTRA_VELOCITY", vel)
+                                                        putExtra("EXTRA_TRIGGER_ANIMATION", true)
+                                                        setPackage(pkg)
+                                                        addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
                                                     }
-                                                    setPackage(pkg)
-                                                    addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
-                                                }
-                                                context.sendBroadcast(intent)
-                                            } catch (_: Throwable) {}
+                                                    context.sendBroadcast(intent)
+                                                } catch (_: Throwable) {}
+                                            }
                                         }
                                     }
                                 }
@@ -501,6 +512,34 @@ object LockScreenSheetOptimizedHook {
                                 isKeyguardShowing = showing && !occluded
                                 if (!isKeyguardShowing) {
                                     isDismissAnimationRunning = false
+                                }
+                            } catch (_: Throwable) {}
+                            return result
+                        }
+                    })
+                    break
+                }
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun hookKeyguardGoingAway(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val kscClass = Class.forName("com.android.systemui.statusbar.policy.KeyguardStateControllerImpl", false, classLoader)
+            for (m: Method in kscClass.declaredMethods) {
+                if (m.name == "notifyKeyguardGoingAway" && m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == Boolean::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val result = chain.proceed()
+                            try {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
+                                val goingAway = args[0] as Boolean
+                                if (goingAway) {
+                                    isDismissAnimationRunning = true
+                                    cachedLockGlassSheetRef?.get()?.visibility = View.GONE
                                 }
                             } catch (_: Throwable) {}
                             return result

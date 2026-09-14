@@ -51,7 +51,7 @@ object ScreenUnlockOptimizedHook {
     @Volatile
     private var lastVelocityTime = 0L
     @Volatile
-    private var lastTriggeredUnlockAnimTime = 0L
+    private var lastShowPresentTime = 0L
 
     private var sLauncherRef: WeakReference<android.app.Activity>? = null
     private var sClassLoader: ClassLoader? = null
@@ -136,8 +136,8 @@ object ScreenUnlockOptimizedHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val now = SystemClock.uptimeMillis()
-                            val delta = now - lastTriggeredUnlockAnimTime
-                            if (lastTriggeredUnlockAnimTime > 0L && delta < 1000L) {
+                            val delta = now - lastShowPresentTime
+                            if (lastShowPresentTime > 0L && delta < 800L) {
                                 val reason = chain.args?.let { if (it is List<*>) it.firstOrNull() else (it as? Array<*>)?.firstOrNull() } ?: "unknown"
                                 Log.d(TAG, "Suppressed duplicate showAnimation('$reason') from state machine (within ${delta}ms)")
                                 try {
@@ -392,30 +392,7 @@ object ScreenUnlockOptimizedHook {
                                 args[2] = -abs(targetZ)
                             }
                         }
-                        val animResult = chain.proceed(args)
-                        val v = currentAnimatingView.get()
-                        if (v != null) {
-                            try {
-                                val getMethod = chain.thisObject.javaClass.getMethod("getSpringAnimation")
-                                val springAnim = getMethod.invoke(chain.thisObject)
-                                if (springAnim != null) {
-                                    val listenerClass = Class.forName("androidx.dynamicanimation.animation.DynamicAnimation\$OnAnimationEndListener", false, springAnim.javaClass.classLoader)
-                                    val addEndListenerMethod = springAnim.javaClass.getMethod("addEndListener", listenerClass)
-                                    val weakV = WeakReference(v)
-                                    val proxy = java.lang.reflect.Proxy.newProxyInstance(
-                                        springAnim.javaClass.classLoader,
-                                        arrayOf(listenerClass)
-                                    ) { _, method, _ ->
-                                        if (method.name == "onAnimationEnd") {
-                                            weakV.get()?.translationZ = 0.0f
-                                        }
-                                        null
-                                    }
-                                    addEndListenerMethod.invoke(springAnim, proxy)
-                                }
-                            } catch (_: Throwable) {}
-                        }
-                        return animResult
+                        return chain.proceed(args)
                     }
                     return chain.proceed()
                 }
@@ -481,8 +458,20 @@ object ScreenUnlockOptimizedHook {
                             return result
                         }
                     })
+                } else if (m.name == "showPresent" && m.parameterTypes.isEmpty()) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val now = SystemClock.uptimeMillis()
+                            val delta = now - lastShowPresentTime
+                            if (lastShowPresentTime > 0L && delta < 800L) {
+                                Log.d(TAG, "Suppressed duplicate BaseLauncher.showPresent (within ${delta}ms)")
+                                return null
+                            }
+                            lastShowPresentTime = now
+                            return chain.proceed()
+                        }
+                    })
                 }
-            }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook BaseLauncher", t)
         }
@@ -513,8 +502,6 @@ object ScreenUnlockOptimizedHook {
                 addAction("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED")
             }
             val receiver = object : BroadcastReceiver() {
-                private var lastReceivedUnlockTime = 0L
-
                 override fun onReceive(c: Context?, intent: Intent?) {
                     when (intent?.action) {
                         "dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED" -> {
@@ -528,14 +515,19 @@ object ScreenUnlockOptimizedHook {
                             if (velocity != 0.0f) {
                                 updateVelocity(velocity)
                             }
-                            val now = SystemClock.uptimeMillis()
-                            if (now - lastReceivedUnlockTime < 400L) {
-                                Log.d(TAG, "ACTION_TRIGGER_UNLOCK_ANIMATION debounced on receiver (within 400ms)")
+                            val shouldTrigger = intent.getBooleanExtra("EXTRA_TRIGGER_ANIMATION", false)
+                            if (!shouldTrigger) {
+                                Log.d(TAG, "ACTION_TRIGGER_UNLOCK_ANIMATION: velocity updated ($velocity), trigger=false (native pipeline)")
                                 return
                             }
-                            lastReceivedUnlockTime = now
+                            val now = SystemClock.uptimeMillis()
+                            val delta = now - lastShowPresentTime
+                            if (lastShowPresentTime > 0L && delta < 800L) {
+                                Log.d(TAG, "ACTION_TRIGGER_UNLOCK_ANIMATION debounced on receiver (within ${delta}ms)")
+                                return
+                            }
 
-                            Log.d(TAG, "Received ACTION_TRIGGER_UNLOCK_ANIMATION broadcast (velocity=$velocity)")
+                            Log.d(TAG, "Received ACTION_TRIGGER_UNLOCK_ANIMATION broadcast (velocity=$velocity, trigger=true)")
                             val launcher = getLauncherActivity(c)
                             if (launcher == null) {
                                 Log.w(TAG, "Cannot trigger unlock animation: launcher activity is null")
@@ -566,27 +558,19 @@ object ScreenUnlockOptimizedHook {
             if (launcher.isFinishing || launcher.isDestroyed) return
 
             val now = SystemClock.uptimeMillis()
-            lastTriggeredUnlockAnimTime = now
+            val delta = now - lastShowPresentTime
+            if (lastShowPresentTime > 0L && delta < 800L) {
+                Log.d(TAG, "triggerUnlockAnimationOnLauncher: already played ${delta}ms ago, skipping")
+                return
+            }
+            lastShowPresentTime = now
             Log.d(TAG, "triggerUnlockAnimationOnLauncher: executing on $launcher (time=$now)")
 
             // 1. Prepare animation on current screen icons
-            var prepared = false
             try {
                 val prepMethod = launcher.javaClass.getMethod("prepareAnimationForUnlock")
-                prepared = (prepMethod.invoke(launcher) as? Boolean) ?: false
+                prepMethod.invoke(launcher)
             } catch (_: Throwable) {}
-
-            val getUserPresentAnimMethod = try {
-                launcher.javaClass.getMethod("getUserPresentAnimation")
-            } catch (_: Throwable) { null }
-
-            val userPresentAnim = getUserPresentAnimMethod?.invoke(launcher)
-
-            if (!prepared && userPresentAnim != null) {
-                try {
-                    userPresentAnim.javaClass.getMethod("prepareAnimation").invoke(userPresentAnim)
-                } catch (_: Throwable) {}
-            }
 
             // 2. Play animation with native CPU/RenderThread boost
             var played = false
@@ -597,19 +581,28 @@ object ScreenUnlockOptimizedHook {
                 Log.d(TAG, "Triggered launcher.showPresent() with CPU/RT boost successfully")
             } catch (_: Throwable) {}
 
-            if (!played && userPresentAnim != null) {
+            if (!played) {
                 try {
-                    userPresentAnim.javaClass.getMethod("showAnimation").invoke(userPresentAnim)
-                    Log.d(TAG, "Triggered showAnimation successfully (fallback)")
-                } catch (e: Throwable) {
-                    Log.e(TAG, "Failed to call showAnimation", e)
-                }
+                    val getUserPresentAnimMethod = launcher.javaClass.getMethod("getUserPresentAnimation")
+                    val userPresentAnim = getUserPresentAnimMethod.invoke(launcher)
+                    userPresentAnim?.javaClass?.getMethod("showAnimation")?.invoke(userPresentAnim)
+                } catch (_: Throwable) {}
             }
 
             // 3. Mark state machine as IDLE so onResume/onWindowFocus won't re-trigger
             try {
-                val fStateMachine = launcher.javaClass.getDeclaredField("mUnlockAnimationStateMachine").apply { isAccessible = true }
-                val stateMachine = fStateMachine.get(launcher)
+                var currClass: Class<*>? = launcher.javaClass
+                var fStateMachine: Field? = null
+                while (currClass != null && currClass != Any::class.java) {
+                    try {
+                        fStateMachine = currClass.getDeclaredField("mUnlockAnimationStateMachine")
+                        fStateMachine.isAccessible = true
+                        break
+                    } catch (_: Throwable) {
+                        currClass = currClass.superclass
+                    }
+                }
+                val stateMachine = fStateMachine?.get(launcher)
                 if (stateMachine != null) {
                     val fState = stateMachine.javaClass.getDeclaredField("mState").apply { isAccessible = true }
                     val stateEnumClass = fState.type

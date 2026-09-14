@@ -51,6 +51,12 @@ class LockScreenGlassSheetOptimizedView @JvmOverloads constructor(
         if (visibility != VISIBLE) return
 
         val parent = parent as? View
+        val parentTransY = parent?.translationY ?: 0f
+        if (parentTransY < -10f) {
+            // Dismiss animation is in progress; skip heavy AGSL render to give 100% GPU to unlock transition
+            return
+        }
+
         val w = if (width > 0) width else (parent?.width ?: resources.displayMetrics.widthPixels)
         val h = if (height > 0) height else (parent?.height ?: resources.displayMetrics.heightPixels)
         if (w <= 0 || h <= 0) return
