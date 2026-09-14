@@ -62,6 +62,17 @@ fun ControlCenterScreen(
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
+                    title = "Enable Optimizations",
+                    subtitle = "High-performance pipeline: Zero-lag resize, instant edit mode switching, and O(1) cached group layout passes",
+                    colors = colors,
+                    iconTint = colors.accentGreen,
+                    backdrop = backdrop,
+                    checked = cc.ccOptimizationsEnabled,
+                    onCheckedChange = cc::setCcOptimizationsEnabled,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                )
+                RowDivider(colors.separator)
+                SettingsToggleRow(
                     title = "Center Bounce Animation",
                     subtitle = "Emerge outward from screen center with harmonic spring physics",
                     colors = colors,

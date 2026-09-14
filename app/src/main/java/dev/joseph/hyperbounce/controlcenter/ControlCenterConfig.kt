@@ -49,7 +49,8 @@ data class ControlCenterConfig(
     var blurDamping: Float = 0.88f,
     var frictionMultiplier: Float = 0.40f,
     var lowEndFlashlightEnabled: Boolean = false,
-    var flashlightMaxBrightness: Int = 100
+    var flashlightMaxBrightness: Int = 100,
+    var ccOptimizationsEnabled: Boolean = false
 )
 
 /**
@@ -197,8 +198,30 @@ object ControlCenterConfigHolder {
             blurDamping = prefs.getFloat("cc_blur_damping", 0.88f),
             frictionMultiplier = prefs.getFloat("cc_friction_multiplier", 0.40f),
             lowEndFlashlightEnabled = prefs.getBoolean("cc_low_end_flashlight_enabled", false),
-            flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", 100)
+            flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", 100),
+            ccOptimizationsEnabled = prefs.getBoolean("cc_enable_optimizations", false)
         )
+    }
+
+    private val sPersistenceThread = android.os.HandlerThread("HyperBounce-CC-Persist").apply { start() }
+    val sPersistenceHandler = android.os.Handler(sPersistenceThread.looper)
+
+    fun savePrioritiesAsync(ctx: Context?, onComplete: (() -> Unit)? = null) {
+        val targetCtx = ctx ?: sLastKnownContext ?: return
+        sPersistenceHandler.post {
+            savePriorities(targetCtx)
+            if (onComplete != null) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post(onComplete)
+            }
+        }
+    }
+
+    fun savePrioritiesAuto(ctx: Context?) {
+        if (config.ccOptimizationsEnabled) {
+            savePrioritiesAsync(ctx)
+        } else {
+            savePriorities(ctx)
+        }
     }
 
     @Synchronized
@@ -685,11 +708,13 @@ object ControlCenterConfigHolder {
         }
     }
 
+    val sDirectGroupHolderMap = ConcurrentHashMap<String, WeakReference<Any>>()
     private var sLastWakeTimestamp: Long = 0L
 
     fun wakeAndRefreshAllGroupedTiles() {
         val now = android.os.SystemClock.uptimeMillis()
-        if (now - sLastWakeTimestamp < 250L) {
+        val throttleMs = if (config.ccOptimizationsEnabled) 500L else 250L
+        if (now - sLastWakeTimestamp < throttleMs) {
             return
         }
         sLastWakeTimestamp = now
@@ -732,6 +757,10 @@ object ControlCenterConfigHolder {
                                     GroupedTileReflectionCache.getHolderMethod = r.javaClass.getMethod("getHolder")
                                 }
                                 var holder = GroupedTileReflectionCache.getHolderMethod?.invoke(r)
+
+                                if (holder == null && spec != null) {
+                                    holder = sDirectGroupHolderMap[spec]?.get()
+                                }
 
                                 if (holder == null && rv != null && spec != null) {
                                     val group = findGroupForSpec(spec)
@@ -800,6 +829,14 @@ object ControlCenterConfigHolder {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "wakeAndRefreshAllGroupedTiles error", t)
+        }
+    }
+
+    fun createTileResizeListener(ctx: Context, spec: String, itemView: View, density: Float): View.OnTouchListener {
+        return if (config.ccOptimizationsEnabled) {
+            OptimizedTileResizeDragTouchListener(ctx, spec, itemView, density)
+        } else {
+            TileResizeDragTouchListener(ctx, spec, itemView, density)
         }
     }
 
@@ -1124,7 +1161,7 @@ object ControlCenterConfigHolder {
                                     resizeHandle.setOnClickListener {
                                         cycleSliderWidth(itemView.context, isBright, itemView)
                                     }
-                                    resizeHandle.setOnTouchListener(TileResizeDragTouchListener(itemView.context, if (isBright) "brightness" else "volume", itemView, density))
+                                    resizeHandle.setOnTouchListener(createTileResizeListener(itemView.context, if (isBright) "brightness" else "volume", itemView, density))
                                 } else {
                                     resizeHandle.isClickable = false
                                     resizeHandle.setOnClickListener(null)
@@ -1173,7 +1210,7 @@ object ControlCenterConfigHolder {
                                 resizeHandle.setOnClickListener {
                                     cycleMediaPlayerSize(itemView.context, itemView)
                                 }
-                                resizeHandle.setOnTouchListener(TileResizeDragTouchListener(itemView.context, "media", itemView, density))
+                                resizeHandle.setOnTouchListener(createTileResizeListener(itemView.context, "media", itemView, density))
                             } else {
                                 resizeHandle.isClickable = false
                                 resizeHandle.setOnClickListener(null)
@@ -1469,7 +1506,7 @@ object ControlCenterConfigHolder {
                             }
                             resizeHandle.bringToFront()
                             resizeHandle.isClickable = true
-                            resizeHandle.setOnTouchListener(TileResizeDragTouchListener(itemView.context, spec, itemView, density))
+                            resizeHandle.setOnTouchListener(createTileResizeListener(itemView.context, spec, itemView, density))
                         }
                     }
                     } catch (t: Throwable) {
@@ -1583,8 +1620,17 @@ object ControlCenterConfigHolder {
         sSelectedTileSpecs.clear()
         sSelectedDisassembleGroups.clear()
         try {
-            ControlCenterHook.sMediaPlayerViewHolder?.get()?.let {
-                ControlCenterHook.applyMediaPlayerLayout(it)
+            val mediaHolder = if (config.ccOptimizationsEnabled) {
+                ControlCenterOptimizedHook.sMediaPlayerViewHolder?.get()
+            } else {
+                ControlCenterHook.sMediaPlayerViewHolder?.get()
+            }
+            mediaHolder?.let {
+                if (config.ccOptimizationsEnabled) {
+                    ControlCenterOptimizedHook.applyMediaPlayerLayout(it)
+                } else {
+                    ControlCenterHook.applyMediaPlayerLayout(it)
+                }
             }
         } catch (t: Throwable) {}
         try {
@@ -1593,7 +1639,7 @@ object ControlCenterConfigHolder {
 
         val ctx = context ?: rootView?.context ?: sRecyclerView?.get()?.context ?: sLastKnownContext
         if (ctx != null) {
-            savePriorities(ctx)
+            savePrioritiesAuto(ctx)
         }
 
         var rv = (sRecyclerView?.get() as? ViewGroup)
@@ -1628,13 +1674,15 @@ object ControlCenterConfigHolder {
 
         if (now - sLastExitEditTime > 300L) {
             sLastExitEditTime = now
-            if (rv != null) {
-                rv.post {
-                    cleanupAllVisibleViews(rv)
-                    refreshAdapter(rv, ctx, isStructuralChange = true)
+            if (!config.ccOptimizationsEnabled) {
+                if (rv != null) {
+                    rv.post {
+                        cleanupAllVisibleViews(rv)
+                        refreshAdapter(rv, ctx, isStructuralChange = true)
+                    }
+                } else {
+                    refreshAdapter(rootView, ctx, isStructuralChange = true)
                 }
-            } else {
-                refreshAdapter(rootView, ctx, isStructuralChange = true)
             }
         }
     }
@@ -1709,7 +1757,7 @@ object ControlCenterConfigHolder {
                 if (sRecyclerView?.get() != rv) {
                     sRecyclerView = WeakReference(rv)
                 }
-                rv.post {
+                val doNotify = {
                     try {
                         val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
                         val adp = getAdapterMethod.invoke(rv)
@@ -1726,6 +1774,16 @@ object ControlCenterConfigHolder {
                         Log.e(TAG, "refreshRecyclerView notify error", t)
                     }
                 }
+                val isComputing = try {
+                    val m = rv.javaClass.getMethod("isComputingLayout")
+                    m.invoke(rv) as? Boolean ?: false
+                } catch (t: Throwable) { false }
+
+                if (config.ccOptimizationsEnabled && !isComputing && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                    doNotify()
+                } else {
+                    rv.post(doNotify)
+                }
             }
         } catch (t: Throwable) {
             Log.e(TAG, "refreshRecyclerView error", t)
@@ -1734,10 +1792,19 @@ object ControlCenterConfigHolder {
 
     fun setMediaSize(ctx: Context, size: String, tileView: View?) {
         sMediaPlayerSize = size
-        savePriorities(ctx)
+        savePrioritiesAuto(ctx)
         try {
-            ControlCenterHook.sMediaPlayerViewHolder?.get()?.let {
-                ControlCenterHook.applyMediaPlayerLayout(it)
+            val mediaHolder = if (config.ccOptimizationsEnabled) {
+                ControlCenterOptimizedHook.sMediaPlayerViewHolder?.get()
+            } else {
+                ControlCenterHook.sMediaPlayerViewHolder?.get()
+            }
+            mediaHolder?.let {
+                if (config.ccOptimizationsEnabled) {
+                    ControlCenterOptimizedHook.applyMediaPlayerLayout(it)
+                } else {
+                    ControlCenterHook.applyMediaPlayerLayout(it)
+                }
             }
         } catch (t: Throwable) {}
         refreshRecyclerView(tileView)
@@ -1753,7 +1820,7 @@ object ControlCenterConfigHolder {
         sVerticalTileSpecs.remove(spec)
         sLargeTileSpecs.remove(spec)
         sCircularCardSpecs.remove(spec)
-        savePriorities(ctx)
+        savePrioritiesAuto(ctx)
         refreshRecyclerView(tileView)
     }
 
@@ -1767,7 +1834,7 @@ object ControlCenterConfigHolder {
         sExpandedTileSpecs.remove(spec)
         sLargeTileSpecs.remove(spec)
         sCircularCardSpecs.remove(spec)
-        savePriorities(ctx)
+        savePrioritiesAuto(ctx)
         refreshRecyclerView(tileView)
     }
 
@@ -1781,7 +1848,7 @@ object ControlCenterConfigHolder {
         sExpandedTileSpecs.remove(spec)
         sVerticalTileSpecs.remove(spec)
         sCircularCardSpecs.remove(spec)
-        savePriorities(ctx)
+        savePrioritiesAuto(ctx)
         refreshRecyclerView(tileView)
     }
 
@@ -1799,7 +1866,7 @@ object ControlCenterConfigHolder {
         } else {
             sCircularCardSpecs.remove(spec)
         }
-        savePriorities(ctx)
+        savePrioritiesAuto(ctx)
         refreshRecyclerView(tileView)
     }
 
@@ -1860,7 +1927,7 @@ object ControlCenterConfigHolder {
                 }
             }
         }
-        savePriorities(ctx)
+        savePrioritiesAuto(ctx)
         refreshRecyclerView(tileView)
     }
 
@@ -1883,7 +1950,7 @@ object ControlCenterConfigHolder {
         } else {
             sVolumeSliderHorizontal = !sVolumeSliderHorizontal
         }
-        savePriorities(ctx)
+        savePrioritiesAuto(ctx)
         refreshRecyclerView(tileView)
     }
 
@@ -1903,7 +1970,7 @@ object ControlCenterConfigHolder {
                 else -> 2
             }
         }
-        savePriorities(ctx)
+        savePrioritiesAuto(ctx)
         refreshRecyclerView(tileView)
         tileView?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
     }
@@ -1915,7 +1982,7 @@ object ControlCenterConfigHolder {
         } else {
             sVolumeSliderWidth = clamped
         }
-        savePriorities(ctx)
+        savePrioritiesAuto(ctx)
         refreshRecyclerView(tileView)
     }
 

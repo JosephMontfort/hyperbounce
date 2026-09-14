@@ -96,11 +96,13 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
 
             child.layout(childLeft, childTop, childLeft + childW, childTop + childH)
 
-            if (child.visibility != View.VISIBLE) {
-                child.visibility = View.VISIBLE
-            }
-            if (child.alpha < 1.0f && !ControlCenterConfigHolder.sIsEditMode) {
-                child.alpha = 1.0f
+            if (!ControlCenterConfigHolder.config.ccOptimizationsEnabled) {
+                if (child.visibility != View.VISIBLE) {
+                    child.visibility = View.VISIBLE
+                }
+                if (child.alpha < 1.0f && !ControlCenterConfigHolder.sIsEditMode) {
+                    child.alpha = 1.0f
+                }
             }
         }
     }
@@ -1157,6 +1159,9 @@ object ControlCenterGrouping {
                 val childView = getChildTileAt(container, i)
                 val childRecord = recordMap[childSpec]
                 val subHolder = if (subHolders != null && i < subHolders.size) subHolders[i] else null
+                if (subHolder != null) {
+                    ControlCenterConfigHolder.sDirectGroupHolderMap[childSpec] = java.lang.ref.WeakReference(subHolder)
+                }
 
                 if (childView != null) {
                     childView.visibility = View.VISIBLE

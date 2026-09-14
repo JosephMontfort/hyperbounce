@@ -980,6 +980,7 @@ class SettingsRepository(context: Context) {
         var frictionMultiplier by prefsFloatState("cc_friction_multiplier", defaults.frictionMultiplier); private set
         var lowEndFlashlightEnabled by prefsBooleanState("cc_low_end_flashlight_enabled", defaults.lowEndFlashlightEnabled); private set
         var flashlightMaxBrightness by prefsIntState("cc_flashlight_max_brightness", defaults.flashlightMaxBrightness); private set
+        var ccOptimizationsEnabled by prefsBooleanState("cc_enable_optimizations", defaults.ccOptimizationsEnabled); private set
 
         fun snapshot(): ControlCenterSettings = ControlCenterSettings(
             modularEditEnabled, restartOnEditExit, animEnabled, jellyEnabled, lowEndAnim,
@@ -987,10 +988,11 @@ class SettingsRepository(context: Context) {
             spreadRatio, spreadResponse, spreadDamping, spreadReleaseResponse, spreadReleaseDamping,
             tileShowResponse, tileShowDamping, tileHideResponse, tileHideDamping,
             tileShrinkResponse, tileShrinkDamping, tileDelayScale, blurResponse, blurDamping, frictionMultiplier,
-            lowEndFlashlightEnabled, flashlightMaxBrightness
+            lowEndFlashlightEnabled, flashlightMaxBrightness, ccOptimizationsEnabled
         )
 
         @JvmName("setCcModularEditEnabledPref") fun setModularEditEnabled(v: Boolean) { modularEditEnabled = v }
+        @JvmName("setCcEnableOptimizationsPref") fun setCcOptimizationsEnabled(v: Boolean) { ccOptimizationsEnabled = v }
         @JvmName("setCcRestartOnEditExitPref") fun setRestartOnEditExit(v: Boolean) { restartOnEditExit = v }
         @JvmName("setCcAnimEnabledPref") fun setAnimEnabled(v: Boolean) { animEnabled = v }
         @JvmName("setCcJellyEnabledPref") fun setJellyEnabled(v: Boolean) { jellyEnabled = v }
@@ -1019,6 +1021,7 @@ class SettingsRepository(context: Context) {
 
         fun reloadFromDefaults() {
             modularEditEnabled = defaults.modularEditEnabled
+            ccOptimizationsEnabled = defaults.ccOptimizationsEnabled
             restartOnEditExit = defaults.restartOnEditExit
             animEnabled = defaults.animEnabled
             jellyEnabled = defaults.jellyEnabled
