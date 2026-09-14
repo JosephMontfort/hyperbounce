@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 
 data class LockScreenSheetConfig(
     var enabled: Boolean = true,
+    var enableOptimization: Boolean = false,
     // Optics (Liquid Glass 2.0)
     var refractionHeight: Float = 68.0f,
     var sideRefraction: Float = 32.0f,
@@ -95,6 +96,7 @@ object LockScreenConfigHolder {
     fun updateFromPrefs(prefs: SharedPreferences) {
         // Sheet configs (Liquid Glass 2.0)
         sheet.enabled = prefs.getBoolean("lock_sheet_enabled", true)
+        sheet.enableOptimization = prefs.getBoolean("lock_sheet_enable_optimization", false)
         sheet.refractionHeight = prefs.getFloat("lock_card_refraction_height", 68.0f)
         sheet.sideRefraction = prefs.getFloat("lock_card_side_refraction", 32.0f)
         sheet.bottomRefraction = prefs.getFloat("lock_card_bottom_refraction", 18.0f)

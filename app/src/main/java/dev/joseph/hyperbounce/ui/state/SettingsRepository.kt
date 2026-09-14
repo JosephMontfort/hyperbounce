@@ -387,6 +387,7 @@ class SettingsRepository(context: Context) {
         private val defaults = LockScreenSheetSettings()
 
         var enabled by prefsBooleanState("lock_sheet_enabled", defaults.enabled); private set
+        var enableOptimization by prefsBooleanState("lock_sheet_enable_optimization", defaults.enableOptimization); private set
         var refractionHeight by prefsFloatState("lock_card_refraction_height", defaults.refractionHeight); private set
         var sideRefraction by prefsFloatState("lock_card_side_refraction", defaults.sideRefraction); private set
         var bottomRefraction by prefsFloatState("lock_card_bottom_refraction", defaults.bottomRefraction); private set
@@ -408,12 +409,13 @@ class SettingsRepository(context: Context) {
         var pillBottomMargin by prefsFloatState("lock_pill_bottom_margin", defaults.pillBottomMargin); private set
 
         fun snapshot(): LockScreenSheetSettings = LockScreenSheetSettings(
-            enabled, refractionHeight, sideRefraction, bottomRefraction, bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
+            enabled, enableOptimization, refractionHeight, sideRefraction, bottomRefraction, bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
             dispersionStrength, specularStrength, hairlineStrength, innerGlowStrength, innerShadow, saturationFactor, rimSoftness, blurRadius,
             cornerRadius, pillWidth, pillHeight, pillBottomMargin
         )
 
         @JvmName("setSheetEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
+        @JvmName("setSheetEnableOptimizationPref") fun setEnableOptimization(v: Boolean) { enableOptimization = v }
         @JvmName("setSheetRefractionHeightPref") fun setRefractionHeight(v: Float) { refractionHeight = v }
         @JvmName("setSheetSideRefractionPref") fun setSideRefraction(v: Float) { sideRefraction = v }
         @JvmName("setSheetBottomRefractionPref") fun setBottomRefraction(v: Float) { bottomRefraction = v }
@@ -436,6 +438,7 @@ class SettingsRepository(context: Context) {
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
+            enableOptimization = defaults.enableOptimization
             refractionHeight = defaults.refractionHeight
             sideRefraction = defaults.sideRefraction
             bottomRefraction = defaults.bottomRefraction

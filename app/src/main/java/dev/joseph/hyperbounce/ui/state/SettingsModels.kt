@@ -117,6 +117,7 @@ data class GlobalGlassSettings(
 /** Feature 1: Lock Screen Sheet & Liquid Glass 2.0 3-Edge Refraction Settings */
 data class LockScreenSheetSettings(
     val enabled: Boolean = true,
+    val enableOptimization: Boolean = false,
     val refractionHeight: Float = 68.0f,
     val sideRefraction: Float = 32.0f,
     val bottomRefraction: Float = 18.0f,

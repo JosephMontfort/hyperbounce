@@ -51,6 +51,18 @@ fun LockScreenSheetScreen(
                     onCheckedChange = sheet::setEnabled,
                     icon = { LockIcon(color = Color.White, size = 15.dp) }
                 )
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "Enable Optimization",
+                    subtitle = if (sheet.enableOptimization) "120Hz zero-drop quick flick & smooth dismissal active (Requires SystemUI restart)" else "Standard pipeline active (Requires SystemUI restart)",
+                    colors = colors,
+                    iconTint = colors.accentGreen,
+                    backdrop = backdrop,
+                    checked = sheet.enableOptimization,
+                    onCheckedChange = sheet::setEnableOptimization,
+                    enabled = sheet.enabled,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                )
             }
         }
 

@@ -60,7 +60,11 @@ class PhysicsHook : XposedModule() {
                             Log.e("HyperBounce", "Failed to bind remote preferences in SystemUI", t)
                         }
                     }
-                    dev.joseph.hyperbounce.lockscreen.LockScreenSheetHook.init(this, param.classLoader)
+                    if (dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder.sheet.enableOptimization) {
+                        dev.joseph.hyperbounce.lockscreen.LockScreenSheetOptimizedHook.init(this, param.classLoader)
+                    } else {
+                        dev.joseph.hyperbounce.lockscreen.LockScreenSheetHook.init(this, param.classLoader)
+                    }
                     dev.joseph.hyperbounce.lockscreen.KeypadPhysicsHook.init(this, param.classLoader)
                     dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initSystemUIHooks(this, param.classLoader)
                     dev.joseph.hyperbounce.notification.NotificationSheetHook.init(this, param.classLoader)
