@@ -2615,6 +2615,29 @@ object NotificationSheetHook {
     }
 
     private fun hookNotificationCardBlurSuppression(module: XposedModule, classLoader: ClassLoader) {
+        // Point 0: MiuiBaseNotifUtil.isBackgroundBlurOpened(Context) - Root check for all notification blur drawables
+        try {
+            val mbnuClass = Class.forName("com.miui.systemui.notification.MiuiBaseNotifUtil", false, classLoader)
+            for (m in mbnuClass.declaredMethods) {
+                if (m.name == "isBackgroundBlurOpened" && m.parameterTypes.size == 1 &&
+                    Context::class.java.isAssignableFrom(m.parameterTypes[0])
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val cfg = NotificationSheetConfigHolder.sheet
+                            if (cfg.enabled) {
+                                return false
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked MiuiBaseNotifUtil.isBackgroundBlurOpened successfully")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook MiuiBaseNotifUtil.isBackgroundBlurOpened: ${t.message}")
+        }
+
         // Point 1: ExpandableNotificationRowInjector.updateBlurBg(int r13, int r14, boolean r15)
         try {
             val enriClass = Class.forName("com.android.systemui.statusbar.notification.row.ExpandableNotificationRowInjector", false, classLoader)
@@ -2627,12 +2650,10 @@ object NotificationSheetHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val cfg = NotificationSheetConfigHolder.sheet
-                            val isShadeWallpaperActive = (currentStatusBarState == 0 && !isKeyguardShowing && (cfg.isWallpaperActive || cfg.isDepthActive))
-                            if (isShadeWallpaperActive) {
+                            if (cfg.enabled) {
                                 val args = chain.args.toTypedArray()
                                 if (args.size > 2) {
-                                    // When wallpaper is active in the unlocked shade, force the non-blur path (L282):
-                                    // sets material normal bg (r14), sets blur mode to 0, and clears blend color.
+                                    // Always force non-blur path: material normal bg (r14), blur mode 0, clear blend
                                     args[2] = false
                                     return chain.proceed(args)
                                 }
@@ -2655,8 +2676,7 @@ object NotificationSheetHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val cfg = NotificationSheetConfigHolder.sheet
-                            val isShadeWallpaperActive = (currentStatusBarState == 0 && !isKeyguardShowing && (cfg.isWallpaperActive || cfg.isDepthActive))
-                            if (isShadeWallpaperActive) {
+                            if (cfg.enabled) {
                                 val result = chain.proceed()
                                 try {
                                     val injector = chain.thisObject ?: return result

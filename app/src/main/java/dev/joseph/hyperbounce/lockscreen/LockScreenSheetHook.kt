@@ -123,6 +123,45 @@ object LockScreenSheetHook {
         } catch (_: Throwable) { null }
     }
 
+    private var kpvcDeductedImgField: Field? = null
+    private var kpvcBgLayerField: Field? = null
+    private var cachedDeductedImgId: Int = 0
+    private var cachedBgLayerId: Int = 0
+
+    private fun getDeductedImageView(kpvc: Any, rootView: View?): View? {
+        try {
+            if (kpvcDeductedImgField == null) {
+                kpvcDeductedImgField = kpvc.javaClass.getField("deductedImageView").apply { isAccessible = true }
+            }
+            val v = kpvcDeductedImgField?.get(kpvc) as? View
+            if (v != null) return v
+        } catch (_: Throwable) {}
+        if (rootView != null) {
+            if (cachedDeductedImgId == 0) {
+                cachedDeductedImgId = rootView.resources.getIdentifier("deducted_image_view", "id", "com.android.systemui")
+            }
+            if (cachedDeductedImgId != 0) return rootView.findViewById(cachedDeductedImgId)
+        }
+        return null
+    }
+
+    private fun getKeyguardBgLayer(kpvc: Any, rootView: View?): View? {
+        try {
+            if (kpvcBgLayerField == null) {
+                kpvcBgLayerField = kpvc.javaClass.getField("keyguardBackgroundLayer").apply { isAccessible = true }
+            }
+            val v = kpvcBgLayerField?.get(kpvc) as? View
+            if (v != null) return v
+        } catch (_: Throwable) {}
+        if (rootView != null) {
+            if (cachedBgLayerId == 0) {
+                cachedBgLayerId = rootView.resources.getIdentifier("keyguard_background_layer", "id", "com.android.systemui")
+            }
+            if (cachedBgLayerId != 0) return rootView.findViewById(cachedBgLayerId)
+        }
+        return null
+    }
+
     @Volatile
     var lockscreenFlingVelocity: Float = 0.0f
     private var lastExpansionFraction: Float = 1.0f
@@ -225,6 +264,8 @@ object LockScreenSheetHook {
                                     if (!isActive) {
                                         val existingSheet = cachedLockGlassSheetRef?.get() ?: rootView.findViewWithTag<View>("hyperbounce_lock_glass_sheet")
                                         existingSheet?.visibility = View.GONE
+                                        getDeductedImageView(kpvc, rootView)?.translationY = 0.0f
+                                        getKeyguardBgLayer(kpvc, rootView)?.translationY = 0.0f
                                         return result
                                     }
 
@@ -237,7 +278,13 @@ object LockScreenSheetHook {
                                     rootView.scaleX = 1.0f
                                     rootView.scaleY = 1.0f
 
-                                    // 2. Move notification container upward in sync
+                                    // 2. Anchor lockscreen wallpaper views so they remain stationary at (0, 0)
+                                    val deductedImg = getDeductedImageView(kpvc, rootView)
+                                    val bgLayer = getKeyguardBgLayer(kpvc, rootView)
+                                    deductedImg?.translationY = -upwardOffset
+                                    bgLayer?.translationY = -upwardOffset
+
+                                    // 3. Move notification container upward in sync
                                     if (finalNotifView != null) {
                                         finalNotifView.translationY = upwardOffset
                                         finalNotifView.scaleX = 1.0f
@@ -264,14 +311,17 @@ object LockScreenSheetHook {
                                 val kpvc = chain.thisObject
                                 if (kpvc != null) {
                                     val cfg = LockScreenConfigHolder.sheet
-                                    if (Looper.myLooper() == Looper.getMainLooper()) {
+                                    val syncState = Runnable {
                                         ensureInjected(kpvc)
                                         ensurePillInjected(kpvc, cfg)
+                                        val root = getRootView(kpvc)
+                                        getDeductedImageView(kpvc, root)?.translationY = 0.0f
+                                        getKeyguardBgLayer(kpvc, root)?.translationY = 0.0f
+                                    }
+                                    if (Looper.myLooper() == Looper.getMainLooper()) {
+                                        syncState.run()
                                     } else {
-                                        mainHandler.post {
-                                            ensureInjected(kpvc)
-                                            ensurePillInjected(kpvc, cfg)
-                                        }
+                                        mainHandler.post(syncState)
                                     }
                                 }
                             } catch (_: Throwable) {}
@@ -322,6 +372,20 @@ object LockScreenSheetHook {
                                             .setDuration(220)
                                             .setInterpolator(DecelerateInterpolator(1.5f))
                                             .start()
+                                        val deductedImg = getDeductedImageView(kpvc, rootView)
+                                        val bgLayer = getKeyguardBgLayer(kpvc, rootView)
+                                        deductedImg?.animate()
+                                            ?.translationY(viewHeight)
+                                            ?.alpha(0.0f)
+                                            ?.setDuration(220)
+                                            ?.setInterpolator(DecelerateInterpolator(1.5f))
+                                            ?.start()
+                                        bgLayer?.animate()
+                                            ?.translationY(viewHeight)
+                                            ?.alpha(0.0f)
+                                            ?.setDuration(220)
+                                            ?.setInterpolator(DecelerateInterpolator(1.5f))
+                                            ?.start()
                                         finalNotifView?.animate()
                                             ?.translationY(-viewHeight)
                                             ?.alpha(0.0f)
