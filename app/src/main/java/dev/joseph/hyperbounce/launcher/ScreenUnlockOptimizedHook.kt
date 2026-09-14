@@ -472,6 +472,7 @@ object ScreenUnlockOptimizedHook {
                         }
                     })
                 }
+            }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook BaseLauncher", t)
         }
