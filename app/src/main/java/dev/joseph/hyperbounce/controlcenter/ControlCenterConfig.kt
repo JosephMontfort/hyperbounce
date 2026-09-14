@@ -1757,7 +1757,7 @@ object ControlCenterConfigHolder {
                 if (sRecyclerView?.get() != rv) {
                     sRecyclerView = WeakReference(rv)
                 }
-                val doNotify = {
+                val doNotify = Runnable {
                     try {
                         val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
                         val adp = getAdapterMethod.invoke(rv)
@@ -1780,7 +1780,7 @@ object ControlCenterConfigHolder {
                 } catch (t: Throwable) { false }
 
                 if (config.ccOptimizationsEnabled && !isComputing && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
-                    doNotify()
+                    doNotify.run()
                 } else {
                     rv.post(doNotify)
                 }
