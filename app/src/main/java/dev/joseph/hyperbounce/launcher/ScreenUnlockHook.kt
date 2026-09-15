@@ -21,8 +21,19 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
+/**
+ * Feature 3 (Optimized Pipeline): Zero-Drop 120Hz Screen Unlock Animation Hook.
+ *
+ * Optimizations over base hook:
+ * 1. Single-Trigger Synchronization: Intercepts UnlockAnimationStateMachine.showAnimation to prevent
+ *    the 2x animation collision when onResume/onWindowFocus fires 100ms after our broadcast.
+ * 2. Hardware CPU/RenderThread Boost: Calls BaseLauncher.showPresent() to engage CPUBooster and
+ *    BoostRtHelper for 1000ms max performance during icon spring flight.
+ * 3. State Machine Neutralization: Automatically resets UnlockAnimationStateMachine to STATE.IDLE
+ *    upon broadcast trigger so delayed callbacks never interrupt mid-flight springs.
+ */
 object ScreenUnlockHook {
-    private const val TAG = "HyperBounce_Unlock"
+    private const val TAG = "HyperBounce_ScreenUnlock"
 
     private val isAnimating = ThreadLocal.withInitial { false }
     private val isOuterColumn = ThreadLocal.withInitial { false }
@@ -39,6 +50,8 @@ object ScreenUnlockHook {
     private var latestVelocity = 0.0f
     @Volatile
     private var lastVelocityTime = 0L
+    @Volatile
+    private var lastTriggeredUnlockAnimTime = 0L
 
     private var sLauncherRef: WeakReference<android.app.Activity>? = null
     private var sClassLoader: ClassLoader? = null
@@ -114,6 +127,37 @@ object ScreenUnlockHook {
                 registerUnlockReceiver(app)
             }
         } catch (_: Throwable) {}
+
+        // Hook UnlockAnimationStateMachine to prevent duplicate 2x execution on lockscreen unlock
+        try {
+            val stateMachineClass = Class.forName("com.miui.home.launcher.common.UnlockAnimationStateMachine", false, classLoader)
+            for (m in stateMachineClass.declaredMethods) {
+                if (m.name == "showAnimation" && m.parameterTypes.size == 1 && m.parameterTypes[0] == String::class.java) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val now = SystemClock.uptimeMillis()
+                            val delta = now - lastTriggeredUnlockAnimTime
+                            if (lastTriggeredUnlockAnimTime > 0L && delta < 1000L) {
+                                val reason = chain.args?.let { if (it is List<*>) it.firstOrNull() else (it as? Array<*>)?.firstOrNull() } ?: "unknown"
+                                Log.d(TAG, "Suppressed duplicate showAnimation('$reason') from state machine (within ${delta}ms)")
+                                try {
+                                    val fState = chain.thisObject.javaClass.getDeclaredField("mState").apply { isAccessible = true }
+                                    val stateEnumClass = fState.type
+                                    @Suppress("UNCHECKED_CAST")
+                                    val idleEnum = java.lang.Enum.valueOf(stateEnumClass as Class<out Enum<*>>, "IDLE")
+                                    fState.set(chain.thisObject, idleEnum)
+                                } catch (_: Throwable) {}
+                                return null
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked UnlockAnimationStateMachine.showAnimation successfully")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook UnlockAnimationStateMachine.showAnimation", t)
+        }
 
         try {
             val userPresentClass = Class.forName(
@@ -201,9 +245,6 @@ object ScreenUnlockHook {
                                 val dy = (vy - centerY) / (screenH / 2.0f)
                                 normalizedDistance.set(sqrt(dx * dx + dy * dy))
                             } else {
-                                // Z-ordering: upper rows plunge UNDER lower rows.
-                                // Higher translationZ = rendered in front (on top).
-                                // Row 0 has lowest translationZ, Row 6 higher, Dock highest.
                                 val safeRow = calculatedRow.coerceIn(0, rows - 1)
                                 val zOrder = if (isHotseat || isInd) (rows + 2) * 0.5f else safeRow * 0.5f
                                 view.translationZ = zOrder
@@ -280,10 +321,6 @@ object ScreenUnlockHook {
                                 cfg.getDyn("r${safeRow}_center_settle", ScreenUnlockDefaults.rowSettle(safeRow, cfg.gridRows, false))
                             }
 
-                            // Z-depth normalization:
-                            // Nominal Z is 500dp. If row starts farther (e.g. 650dp), we scale down the overshoot fraction
-                            // so the physical plunge depth into the screen is governed strictly by the bounce slider,
-                            // not inflated by higher start Z!
                             val baseZ = cfg.getDyn("r${safeRow}_z", ScreenUnlockDefaults.rowZ(safeRow, cfg.gridRows)).coerceAtLeast(100.0f)
                             val zMult = 1.0f + (velocityBoost * 0.35f)
                             val targetZ = (baseZ * zMult).coerceAtLeast(10.0f)
@@ -291,19 +328,14 @@ object ScreenUnlockHook {
 
                             val finalDamping: Float
                             if (customBounce <= 0.0f) {
-                                // Zero bounce slider -> Flat landing, critical damping, ZERO plunge/rebound!
                                 finalDamping = 1.0f
                             } else {
-                                // Resting Damping sensitivity scaling:
-                                // cfg.cascadeDamping default is 0.86. (1.0 - 0.86) / 0.14 = 1.0.
                                 val dampingSensitivity = ((1.0f - cfg.cascadeDamping) / 0.14f).coerceAtLeast(0.1f)
                                 val effectiveBounce = customBounce * (1.0f + (velocityBoost * 1.5f))
                                 val dampingDrop = effectiveBounce * zRatio * dampingSensitivity * 1.35f
                                 finalDamping = (1.0f - dampingDrop).coerceIn(0.25f, 1.0f)
                             }
 
-                            // Settle response:
-                            // Scaled by universal duration scale, and quickened by swipe velocity:
                             val scaledResponse = customSettle * cfg.durationScale
                             val finalResponse = (scaledResponse / (1.0f + (velocityBoost * 0.40f))).coerceIn(0.15f, 1.5f)
 
@@ -357,7 +389,6 @@ object ScreenUnlockHook {
                                     (baseZ * zMult).coerceAtLeast(10.0f)
                                 }
 
-                                // In CameraLite projection, startVal MUST be negative to start outside screen
                                 args[2] = -abs(targetZ)
                             }
                         }
@@ -534,7 +565,9 @@ object ScreenUnlockHook {
         try {
             if (launcher.isFinishing || launcher.isDestroyed) return
 
-            Log.d(TAG, "triggerUnlockAnimationOnLauncher: executing on $launcher")
+            val now = SystemClock.uptimeMillis()
+            lastTriggeredUnlockAnimTime = now
+            Log.d(TAG, "triggerUnlockAnimationOnLauncher: executing on $launcher (time=$now)")
 
             // 1. Prepare animation on current screen icons
             var prepared = false
@@ -555,15 +588,36 @@ object ScreenUnlockHook {
                 } catch (_: Throwable) {}
             }
 
-            // 2. Play animation cleanly
-            if (userPresentAnim != null) {
+            // 2. Play animation with native CPU/RenderThread boost
+            var played = false
+            try {
+                val showPresentMethod = launcher.javaClass.getMethod("showPresent")
+                showPresentMethod.invoke(launcher)
+                played = true
+                Log.d(TAG, "Triggered launcher.showPresent() with CPU/RT boost successfully")
+            } catch (_: Throwable) {}
+
+            if (!played && userPresentAnim != null) {
                 try {
                     userPresentAnim.javaClass.getMethod("showAnimation").invoke(userPresentAnim)
-                    Log.d(TAG, "Triggered showAnimation successfully")
+                    Log.d(TAG, "Triggered showAnimation successfully (fallback)")
                 } catch (e: Throwable) {
                     Log.e(TAG, "Failed to call showAnimation", e)
                 }
             }
+
+            // 3. Mark state machine as IDLE so onResume/onWindowFocus won't re-trigger
+            try {
+                val fStateMachine = launcher.javaClass.getDeclaredField("mUnlockAnimationStateMachine").apply { isAccessible = true }
+                val stateMachine = fStateMachine.get(launcher)
+                if (stateMachine != null) {
+                    val fState = stateMachine.javaClass.getDeclaredField("mState").apply { isAccessible = true }
+                    val stateEnumClass = fState.type
+                    @Suppress("UNCHECKED_CAST")
+                    val idleEnum = java.lang.Enum.valueOf(stateEnumClass as Class<out Enum<*>>, "IDLE")
+                    fState.set(stateMachine, idleEnum)
+                }
+            } catch (_: Throwable) {}
         } catch (t: Throwable) {
             Log.e(TAG, "Error triggering unlock animation on launcher", t)
         }

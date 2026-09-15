@@ -107,7 +107,12 @@ class LiquidGlassKeyOptimizedDrawable(
 
                 float3 col = float3(sR.r, sG.g, sB.b);
 
-                // Liquid Glass 2.0 Vibrancy Saturation Curve
+                // Apple-grade Adaptive Luminous Glass Tint
+                float lumT = dot(col, float3(0.2126, 0.7152, 0.0722));
+                float e = smoothstep(0.35, 0.75, lumT);
+                col = mix(col, float3(1.0 - e), 0.12 + 0.06 * e);
+
+                // Liquid Glass 2.0 Vibrancy Saturation Curve (Applied on top of tint so saturation remains rich and vibrant even when shrinking on press)
                 float lum = dot(col, float3(0.2126, 0.7152, 0.0722));
                 if (satFactor <= 1.0) {
                     col = mix(float3(lum), col, satFactor);
@@ -118,11 +123,6 @@ class LiquidGlassKeyOptimizedDrawable(
                     float amount = 1.0 + (satFactor - 1.0) * mix(0.30, 1.0, room * hl);
                     col = clamp(mix(float3(lum), col, amount), float3(0.0), float3(1.0));
                 }
-
-                // Apple-grade Adaptive Luminous Glass Tint
-                float lumT = dot(col, float3(0.2126, 0.7152, 0.0722));
-                float e = smoothstep(0.35, 0.75, lumT);
-                col = mix(col, float3(1.0 - e), 0.16 + 0.12 * e + 0.20 * press);
 
                 // Directional Specular Reflection
                 float facing = dot(n, -lightDir);
