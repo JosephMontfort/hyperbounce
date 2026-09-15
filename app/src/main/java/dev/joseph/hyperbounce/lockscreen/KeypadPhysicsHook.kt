@@ -19,18 +19,48 @@ import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Field
 import java.lang.reflect.Method
+import java.util.WeakHashMap
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sin
+import kotlin.math.tanh
 
 /**
  * Feature 2: 100% Real-Time Liquid Glass 2.0 Lockscreen PIN Pad Engine.
  * Features Apple-grade Liquid Glass circular lens optics, custom cascade entry animations,
- * and dynamic layout spacing hacks responsive to companion app sliders.
+ * dynamic layout spacing hacks responsive to companion app sliders,
+ * iOS-calibrated tactile compression, and AndroidLiquidGlass volume-preserved jelly stretch.
  */
 object KeypadPhysicsHook {
 
     private const val TAG = "HyperBounce_Keypad"
 
+    private class KeypadTouchState(
+        val downRawX: Float,
+        val downRawY: Float,
+        var isDragging: Boolean = false
+    )
+
+    private val touchStates = WeakHashMap<View, KeypadTouchState>()
+
+    private fun getBaseTranslationX(view: View, cfg: KeypadPhysicsConfig, density: Float): Float {
+        val entryName = try {
+            view.resources.getResourceEntryName(view.id)
+        } catch (_: Throwable) {
+            ""
+        }
+        return when (entryName) {
+            "key1", "key4", "key7" -> -cfg.col1Offset * density
+            "key3", "key6", "key9" -> cfg.col3Offset * density
+            else -> 0f
+        }
+    }
+
     fun init(module: XposedModule, classLoader: ClassLoader) {
-        // 1. Hook MiuiNumPadKey touch events for Liquid Glass 2.0 Press Optics & Liquid Bulge
+        // 1. Hook MiuiNumPadKey touch events for Liquid Glass 2.0 Press Optics & Jelly Physics
         try {
             val numPadKeyClass = Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)
             for (m: Method in numPadKeyClass.declaredMethods) {
@@ -48,24 +78,88 @@ object KeypadPhysicsHook {
 
                             if (view != null && event != null && cfg.enabled) {
                                 val liquidDrawable = view.background as? LiquidGlassKeyDrawable
+                                val density = view.context.resources.displayMetrics.density
+                                val baseTransX = getBaseTranslationX(view, cfg, density)
+
                                 when (event.actionMasked) {
                                     MotionEvent.ACTION_DOWN -> {
                                         view.animate().cancel()
-                                        view.scaleX = cfg.pressLiquidScale
-                                        view.scaleY = cfg.pressLiquidScale
+                                        touchStates[view] = KeypadTouchState(
+                                            downRawX = event.rawX,
+                                            downRawY = event.rawY,
+                                            isDragging = false
+                                        )
+
+                                        // Zero-lag iOS-calibrated tactile compression (60ms decelerate curve)
+                                        view.animate()
+                                            .scaleX(cfg.pressLiquidScale)
+                                            .scaleY(cfg.pressLiquidScale)
+                                            .setDuration(60L)
+                                            .setInterpolator(DecelerateInterpolator(2.2f))
+                                            .setUpdateListener { view.invalidate() }
+                                            .start()
+
                                         liquidDrawable?.onTouchDown(event.x, event.y)
                                         view.invalidate()
                                     }
+
                                     MotionEvent.ACTION_MOVE -> {
+                                        val state = touchStates[view]
+                                        val downRawX = state?.downRawX ?: event.rawX
+                                        val downRawY = state?.downRawY ?: event.rawY
+                                        val dx = event.rawX - downRawX
+                                        val dy = event.rawY - downRawY
+                                        val distSq = dx * dx + dy * dy
+
+                                        val slop = 2.5f * density
+                                        if (distSq > slop * slop || state?.isDragging == true) {
+                                            state?.isDragging = true
+                                            view.animate().cancel()
+
+                                            val w = view.width.toFloat().coerceAtLeast(1f)
+                                            val h = view.height.toFloat().coerceAtLeast(1f)
+                                            val minDim = min(w, h)
+                                            val maxDim = max(w, h)
+
+                                            // 1. AndroidLiquidGlass rubberband displacement (tanh tension)
+                                            val maxOffset = minDim * 0.40f
+                                            val initialDerivative = 0.08f
+                                            val jellyTx = (maxOffset * tanh(initialDerivative * dx / maxOffset)).toFloat()
+                                            val jellyTy = (maxOffset * tanh(initialDerivative * dy / maxOffset)).toFloat()
+
+                                            // 2. AndroidLiquidGlass volume-preserving anisotropic stretch along drag angle
+                                            val maxDragScale = 8f * density / h
+                                            val offsetAngle = atan2(dy.toDouble(), dx.toDouble()).toFloat()
+
+                                            val stretchX = maxDragScale * abs(cos(offsetAngle) * (dx / maxDim)) * (w / h).coerceAtMost(1f)
+                                            val stretchY = maxDragScale * abs(sin(offsetAngle) * (dy / maxDim)) * (h / w).coerceAtMost(1f)
+
+                                            // 3. Poisson volume preservation: perpendicular compression
+                                            val volumeCompX = -0.35f * stretchY
+                                            val volumeCompY = -0.35f * stretchX
+
+                                            view.translationX = baseTransX + jellyTx
+                                            view.translationY = jellyTy
+                                            view.scaleX = (cfg.pressLiquidScale + stretchX + volumeCompX).coerceIn(0.70f, 1.35f)
+                                            view.scaleY = (cfg.pressLiquidScale + stretchY + volumeCompY).coerceIn(0.70f, 1.35f)
+                                        }
+
                                         liquidDrawable?.onTouchMove(event.x, event.y)
+                                        view.invalidate()
                                     }
+
                                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                                        touchStates.remove(view)
                                         liquidDrawable?.onTouchUp()
+
+                                        view.animate().cancel()
                                         view.animate()
+                                            .translationX(baseTransX)
+                                            .translationY(0f)
                                             .scaleX(1.0f)
                                             .scaleY(1.0f)
-                                            .setDuration(220L)
-                                            .setInterpolator(OvershootInterpolator(1.4f))
+                                            .setDuration(260L)
+                                            .setInterpolator(OvershootInterpolator(1.35f))
                                             .setUpdateListener { view.invalidate() }
                                             .start()
                                     }
