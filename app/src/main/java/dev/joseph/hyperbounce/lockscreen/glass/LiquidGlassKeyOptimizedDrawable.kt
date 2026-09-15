@@ -19,6 +19,7 @@ import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
+import android.view.Choreographer
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewParent
@@ -31,9 +32,12 @@ import kotlin.math.min
 
 /**
  * Optimized Liquid Glass 2.0 Circular Lens for Lock Screen PIN Pad Keys.
- * 100% Real-Time Backdrop Refraction of Pure Unblurred Wallpaper with Zero Muddy Double-Blur:
+ * 100% Real-Time Backdrop Refraction of Pure Unblurred Wallpaper at 60/120 FPS:
  * sdCircle SDF -> Numerical Normal Field -> Real-time Inward Refraction
  * -> Physical Chromatic Dispersion -> Apple-grade Adaptive Luminous Tint -> Vibrancy Curve -> Specular Reflection.
+ *
+ * Features hardware-synchronized Choreographer VSYNC live tracking so buttons continuously refract
+ * the exact underlying wallpaper pixels during swipe gestures, cascade entrance, and button squishes.
  */
 class LiquidGlassKeyOptimizedDrawable(
     private val view: View,
@@ -102,8 +106,9 @@ class LiquidGlassKeyOptimizedDrawable(
                 float2 cG = coord + offset;
                 float2 cB = coord + offset * (1.0 + dispersion * slope);
 
-                float2 lo = float2(margin + 1.0, margin + 1.0);
-                float2 hi = lo + viewSize - float2(2.0, 2.0);
+                // Expanded sampling area to permit genuine refraction of surrounding content within margin
+                float2 lo = float2(1.0, 1.0);
+                float2 hi = float2(viewSize.x + 2.0 * margin - 2.0, viewSize.y + 2.0 * margin - 2.0);
                 cR = clamp(cR, lo, hi);
                 cG = clamp(cG, lo, hi);
                 cB = clamp(cB, lo, hi);
@@ -182,6 +187,21 @@ class LiquidGlassKeyOptimizedDrawable(
 
     private var pressAnimator: ValueAnimator? = null
 
+    @Volatile
+    private var isLiveTracking = false
+
+    private val frameCallback = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            if (!isLiveTracking) return
+            if (view.isAttachedToWindow && view.visibility == View.VISIBLE && view.windowVisibility == View.VISIBLE && view.alpha > 0.005f) {
+                invalidateSelf()
+                Choreographer.getInstance().postFrameCallback(this)
+            } else {
+                isLiveTracking = false
+            }
+        }
+    }
+
     private val unblurredListener: () -> Unit = {
         view.post { invalidateSelf() }
     }
@@ -190,9 +210,22 @@ class LiquidGlassKeyOptimizedDrawable(
         LockScreenWallpaperHelper.addUnblurredWallpaperListener(unblurredListener)
     }
 
+    fun startLiveTracking() {
+        if (isLiveTracking) return
+        isLiveTracking = true
+        Choreographer.getInstance().postFrameCallback(frameCallback)
+    }
+
+    fun stopLiveTracking() {
+        if (!isLiveTracking) return
+        isLiveTracking = false
+        Choreographer.getInstance().removeFrameCallback(frameCallback)
+    }
+
     fun onTouchDown(x: Float, y: Float) {
         touchLocalX = x
         touchLocalY = y
+        startLiveTracking()
         pressAnimator?.cancel()
         pressAnimator = ValueAnimator.ofFloat(pressProgress, 1.0f).apply {
             duration = 120L
@@ -208,10 +241,12 @@ class LiquidGlassKeyOptimizedDrawable(
     fun onTouchMove(x: Float, y: Float) {
         touchLocalX = x
         touchLocalY = y
+        startLiveTracking()
         invalidateSelf()
     }
 
     fun onTouchUp() {
+        startLiveTracking()
         pressAnimator?.cancel()
         pressAnimator = ValueAnimator.ofFloat(pressProgress, 0.0f).apply {
             duration = 240L
@@ -313,6 +348,11 @@ class LiquidGlassKeyOptimizedDrawable(
         val w = bounds.width().toFloat()
         val h = bounds.height().toFloat()
         if (w <= 0f || h <= 0f) return
+
+        // Auto-engage live tracking loop while attached, visible, and window is active
+        if (!isLiveTracking && view.isAttachedToWindow && view.visibility == View.VISIBLE && view.windowVisibility == View.VISIBLE && view.alpha > 0.005f) {
+            startLiveTracking()
+        }
 
         val cfg = LockScreenConfigHolder.keypad
         val customDiameterPx = cfg.circleDiameter * density
@@ -417,6 +457,7 @@ class LiquidGlassKeyOptimizedDrawable(
     }
 
     fun release() {
+        stopLiveTracking()
         pressAnimator?.cancel()
         LockScreenWallpaperHelper.removeUnblurredWallpaperListener(unblurredListener)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

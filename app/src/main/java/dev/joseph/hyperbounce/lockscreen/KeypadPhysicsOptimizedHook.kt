@@ -293,6 +293,9 @@ object KeypadPhysicsOptimizedHook {
                                     val keyView = pinView.findViewById<View>(id) ?: continue
                                     val delay = cfg.getKeyDelay(name, row, col).coerceAtLeast(0L)
 
+                                    val optDrawable = keyView.background as? LiquidGlassKeyOptimizedDrawable
+                                    optDrawable?.startLiveTracking()
+
                                     keyView.animate().cancel()
                                     keyView.alpha = 0f
                                     keyView.translationY = transY
@@ -307,6 +310,9 @@ object KeypadPhysicsOptimizedHook {
                                         .setDuration(animDuration)
                                         .setStartDelay(delay)
                                         .setInterpolator(OvershootInterpolator(overshoot))
+                                        .setUpdateListener {
+                                            keyView.invalidate()
+                                        }
                                         .start()
                                 }
                             }
@@ -353,7 +359,9 @@ object KeypadPhysicsOptimizedHook {
                             for (name in numKeyNames) {
                                 val id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
                                 if (id != 0) {
-                                    pinView.findViewById<View>(id)?.animate()
+                                    val keyView = pinView.findViewById<View>(id)
+                                    (keyView?.background as? LiquidGlassKeyOptimizedDrawable)?.stopLiveTracking()
+                                    keyView?.animate()
                                         ?.alpha(0f)
                                         ?.scaleX(0.70f)
                                         ?.scaleY(0.70f)
