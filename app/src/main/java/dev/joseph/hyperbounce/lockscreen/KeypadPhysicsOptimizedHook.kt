@@ -55,7 +55,7 @@ object KeypadPhysicsOptimizedHook {
 
     private val touchStates = WeakHashMap<View, KeypadTouchState>()
 
-    private fun getBaseTranslationX(view: View, cfg: KeypadPhysicsConfig, density: Float): Float {
+    private fun getBaseTranslationX(view: View, cfg: LockScreenKeypadConfig, density: Float): Float {
         val entryName = try {
             view.resources.getResourceEntryName(view.id)
         } catch (_: Throwable) {
