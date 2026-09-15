@@ -58,6 +58,7 @@ object CrashScope {
         "com.instagram.android" to "instagram",
         "com.whatsapp" to "whatsapp",
         "com.google.android.youtube" to "youtube",
+        "com.android.incallui" to "incallui",
         "android" to "framework"
     )
 
@@ -67,6 +68,7 @@ object CrashScope {
         "instagram" to "com.instagram.android",
         "whatsapp" to "com.whatsapp",
         "youtube" to "com.google.android.youtube",
+        "incallui" to "com.android.incallui",
         "framework" to "android"
     )
 
