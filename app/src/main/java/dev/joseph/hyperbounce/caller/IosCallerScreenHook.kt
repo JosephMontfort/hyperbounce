@@ -14,12 +14,13 @@ import android.widget.TextView
 import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
+import java.lang.reflect.Field
 import java.lang.reflect.Method
 
 /**
  * Xposed hook for com.android.incallui that transforms Xiaomi stock caller screen into
- * an authentic iOS incoming call screen with dual horizontal sliders, morphing attend transition,
- * and quick message reply.
+ * an authentic iOS incoming call screen with enlarged 68dp buttons matching stock end-call dimensions,
+ * fluid unmasking track swipe physics, and a continuous rotation & glide-to-center morph transition.
  */
 object IosCallerScreenHook {
 
@@ -28,6 +29,7 @@ object IosCallerScreenHook {
 
     private var activeIosCallView: WeakReference<IosIncomingCallView>? = null
     private var isMessageRejectAllowed = true
+    var isAttendingTransitionActive = false
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
         val prefs = HyperBouncePrefs(module)
@@ -118,6 +120,59 @@ object IosCallerScreenHook {
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook CallCardFragment", t)
         }
+
+        // 3. Hook CallButtonFragment.startCallButtonAnimator -> Seamless glide handover into center End Call button
+        try {
+            val callButtonFragmentClass = Class.forName("com.android.incallui.callbutton.CallButtonFragment", false, classLoader)
+            for (m: Method in callButtonFragmentClass.declaredMethods) {
+                if (m.name == "startCallButtonAnimator" &&
+                    m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == Boolean::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept { chain ->
+                        val show = chain.args[0] as? Boolean ?: false
+                        if (show && isAttendingTransitionActive) {
+                            isAttendingTransitionActive = false
+                            val fragment = chain.thisObject
+                            try {
+                                // End Call button is already rotated, red, and resting at the center:
+                                // Keep it at full alpha 1.0 and scale 1.0 with zero pop/scale jump!
+                                val endBtnField = fragment.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
+                                val endBtn = endBtnField.get(fragment) as? View
+                                if (endBtn != null) {
+                                    endBtn.visibility = View.VISIBLE
+                                    endBtn.alpha = 1.0f
+                                    endBtn.scaleX = 1.0f
+                                    endBtn.scaleY = 1.0f
+                                }
+
+                                // Audio button and tool button fade in smoothly around it
+                                val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
+                                val audioBtn = audioBtnField.get(fragment) as? View
+                                audioBtn?.visibility = View.VISIBLE
+                                audioBtn?.alpha = 0f
+                                audioBtn?.animate()?.alpha(1f)?.setDuration(250)?.start()
+
+                                val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
+                                val toolBtn = toolBtnField.get(fragment) as? View
+                                toolBtn?.visibility = View.VISIBLE
+                                toolBtn?.alpha = 0f
+                                toolBtn?.animate()?.alpha(1f)?.setDuration(250)?.start()
+
+                                return@intercept null
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "Error in custom startCallButtonAnimator handover", t)
+                            }
+                        }
+                        chain.proceed()
+                    }
+                    Log.d(TAG, "Hooked CallButtonFragment.startCallButtonAnimator successfully.")
+                    break
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook CallButtonFragment", t)
+        }
     }
 
     private fun setupIosAnswerUi(container: ViewGroup, fragment: Any) {
@@ -141,18 +196,19 @@ object IosCallerScreenHook {
             tag = TAG_IOS_VIEW
             setMessageButtonVisible(isMessageRejectAllowed)
 
-            // 1. Answer Action (Slider 2)
+            // 1. Answer Action (Bottom Slider - 68dp button)
             onAnswer = {
                 try {
+                    isAttendingTransitionActive = true
                     val onAnswerMethod = fragment.javaClass.getMethod("onAnswer", Int::class.javaPrimitiveType)
                     onAnswerMethod.invoke(fragment, 0)
-                    Log.i(TAG, "Dispatched onAnswer(0) to AnswerFragment.")
+                    Log.i(TAG, "Dispatched onAnswer(0) to AnswerFragment with center glide active.")
                 } catch (t: Throwable) {
                     Log.e(TAG, "Failed to invoke onAnswer", t)
                 }
             }
 
-            // 2. Reject Action (Slider 1)
+            // 2. Reject Action (Top Slider - 68dp button)
             onReject = {
                 try {
                     val onRejectMethod = fragment.javaClass.getMethod("onReject")
@@ -176,7 +232,7 @@ object IosCallerScreenHook {
             ViewGroup.LayoutParams.MATCH_PARENT
         )
         container.addView(iosView, params)
-        Log.i(TAG, "Attached IosIncomingCallView to AnswerFragment container.")
+        Log.i(TAG, "Attached IosIncomingCallView with enlarged 68dp sliders to AnswerFragment.")
     }
 
     private fun setupIosCallCardUi(view: View) {
@@ -199,7 +255,7 @@ object IosCallerScreenHook {
         if (nameId != 0) {
             val nameView = view.findViewById<TextView>(nameId)
             nameView?.apply {
-                textSize = 32f
+                textSize = 34f
                 setTextColor(Color.WHITE)
                 typeface = Typeface.create("sans-serif", Typeface.BOLD)
                 setShadowLayer(10f, 0f, 2f, Color.argb(90, 0, 0, 0))
@@ -211,7 +267,7 @@ object IosCallerScreenHook {
         if (numberId != 0) {
             val numView = view.findViewById<TextView>(numberId)
             numView?.apply {
-                textSize = 16f
+                textSize = 16.5f
                 setTextColor(Color.argb(200, 255, 255, 255))
                 typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
                 setShadowLayer(6f, 0f, 1f, Color.argb(70, 0, 0, 0))

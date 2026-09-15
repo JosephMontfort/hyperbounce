@@ -20,6 +20,7 @@ import android.util.AttributeSet
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import kotlin.math.max
 import kotlin.math.min
@@ -31,12 +32,10 @@ enum class SliderType {
 
 /**
  * Authentic iOS-style capsule slider view.
- * Features:
- * 1. Frosted pill-shaped slider track with subtle glass border.
- * 2. Animated metallic text shimmer ("slide to answer" / "slide to decline").
- * 3. Fluid drag physics with spring snapback on release.
- * 4. On answer completion: Morphing animation that rotates the phone glyph 135° and
- *    transitions the knob color from iOS Green (#34C759) to iOS Red (#FF3B30).
+ * Refinements:
+ * 1. Enlarged track height (76dp) and knob size (68dp) with 34dp icon, exactly matching Xiaomi's stock end call button.
+ * 2. Fluid track shrink / unmasking as knob is swiped right, maintaining corner radius fluidly.
+ * 3. On answer swipe: Rotating 135° upside-down, color morphing Green -> Red, AND gliding to the horizontal center.
  */
 class IosSliderView @JvmOverloads constructor(
     context: Context,
@@ -58,6 +57,7 @@ class IosSliderView @JvmOverloads constructor(
         }
 
     var onCompleted: (() -> Unit)? = null
+    var onGlideStarted: (() -> Unit)? = null
 
     // Colors
     private val colorGreen = Color.parseColor("#34C759")
@@ -124,7 +124,7 @@ class IosSliderView @JvmOverloads constructor(
     private var snapbackAnimator: ValueAnimator? = null
     private var morphAnimator: ValueAnimator? = null
 
-    // Phone handset vector path (standard 24x24 scale)
+    // Handset vector path in 24x24 scale
     private val phonePath = Path().apply {
         moveTo(6.62f, 10.79f)
         cubicTo(8.06f, 13.62f, 10.38f, 15.94f, 13.21f, 17.38f)
@@ -145,7 +145,7 @@ class IosSliderView @JvmOverloads constructor(
 
     init {
         updateColors()
-        textPaint.textSize = 16f * density
+        textPaint.textSize = 17f * density
         trackStrokePaint.strokeWidth = 1.5f * density
     }
 
@@ -189,7 +189,8 @@ class IosSliderView @JvmOverloads constructor(
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val desiredHeight = (56 * density).toInt()
+        // Enlarge track height to 76dp so knob is exactly 68dp matching stock CallOvalImageButton
+        val desiredHeight = (76 * density).toInt()
         val height = resolveSize(desiredHeight, heightMeasureSpec)
         val width = MeasureSpec.getSize(widthMeasureSpec)
         setMeasuredDimension(width, height)
@@ -197,13 +198,7 @@ class IosSliderView @JvmOverloads constructor(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        trackRect.set(
-            trackStrokePaint.strokeWidth,
-            trackStrokePaint.strokeWidth,
-            w.toFloat() - trackStrokePaint.strokeWidth,
-            h.toFloat() - trackStrokePaint.strokeWidth
-        )
-        knobRadius = (h.toFloat() - (knobPadding * 2f)) / 2f
+        knobRadius = (h.toFloat() - (knobPadding * 2f)) / 2f // Exactly 34dp (68dp diameter)
         maxTravel = w.toFloat() - (knobRadius * 2f) - (knobPadding * 2f)
         if (maxTravel < 0f) maxTravel = 0f
     }
@@ -214,38 +209,52 @@ class IosSliderView @JvmOverloads constructor(
         val h = height.toFloat()
         if (w <= 0 || h <= 0) return
 
-        val cornerRadius = h / 2f
         val alphaMultiplier = 1f - morphProgress
 
-        // 1. Draw Pill Track Background & Border
-        if (alphaMultiplier > 0.01f) {
+        // 1. Calculate fluid shrinking track bounds as knob is swiped
+        // Area behind knob disappears; track starts right behind the knob
+        val trackTop = knobPadding
+        val trackBottom = h - knobPadding
+        val trackRight = w - knobPadding
+        val trackLeft = knobPadding + knobX
+        val minPillWidth = trackBottom - trackTop
+        val actualTrackLeft = if (trackRight - trackLeft >= minPillWidth) trackLeft else trackRight - minPillWidth
+        trackRect.set(actualTrackLeft, trackTop, trackRight, trackBottom)
+
+        val cornerRadius = (trackBottom - trackTop) / 2f
+
+        // Draw Pill Track Background & Border (with fluid corner radiuses)
+        if (alphaMultiplier > 0.01f && trackRect.width() >= minPillWidth * 0.5f) {
             trackFillPaint.alpha = (40 * alphaMultiplier).toInt()
             trackStrokePaint.alpha = (60 * alphaMultiplier).toInt()
             canvas.drawRoundRect(trackRect, cornerRadius, cornerRadius, trackFillPaint)
             canvas.drawRoundRect(trackRect, cornerRadius, cornerRadius, trackStrokePaint)
 
-            // 2. Draw Shimmer Text
+            // 2. Draw Shimmer Text clipped to remaining track
+            canvas.save()
+            canvas.clipRect(trackRect)
             drawShimmerText(canvas, w, h, alphaMultiplier)
+            canvas.restore()
         }
 
-        // 3. Draw Slider Knob
+        // 3. Draw Slider Knob (68dp diameter)
         val knobCenterX = knobPadding + knobRadius + knobX
         val knobCenterY = h / 2f
 
         // Knob Shadow
-        canvas.drawCircle(knobCenterX, knobCenterY + 2f * density, knobRadius, knobShadowPaint)
+        canvas.drawCircle(knobCenterX, knobCenterY + 2.5f * density, knobRadius, knobShadowPaint)
 
         // Knob Background
         knobPaint.color = currentKnobColor
         canvas.drawCircle(knobCenterX, knobCenterY, knobRadius, knobPaint)
 
-        // 4. Draw Phone Handset Icon
+        // 4. Draw Phone Handset Icon (34dp size)
         drawPhoneIcon(canvas, knobCenterX, knobCenterY)
     }
 
     private fun drawShimmerText(canvas: Canvas, w: Float, h: Float, alphaMultiplier: Float) {
         val textY = (h / 2f) - ((textPaint.descent() + textPaint.ascent()) / 2f)
-        val shimmerWidth = 140f * density
+        val shimmerWidth = 160f * density
 
         val shader = LinearGradient(
             shimmerOffset, 0f,
@@ -260,7 +269,6 @@ class IosSliderView @JvmOverloads constructor(
         )
         textPaint.shader = shader
 
-        // Slight text clipping if knob overlaps text
         val textX = w / 2f
         canvas.drawText(sliderLabel, textX, textY, textPaint)
     }
@@ -270,9 +278,9 @@ class IosSliderView @JvmOverloads constructor(
         canvas.translate(cx, cy)
         canvas.rotate(phoneRotation)
 
-        // Handset is drawn in 24x24 bounds; normalize center to (12, 12)
-        val iconSize = knobRadius * 1.05f
-        val scale = iconSize / 24f
+        // Handset is drawn in 24x24 bounds; scale to exactly 34dp matching stock
+        val iconTargetSize = 34f * density
+        val scale = iconTargetSize / 24f
         canvas.scale(scale, scale)
         canvas.translate(-12f, -12f)
 
@@ -348,22 +356,30 @@ class IosSliderView @JvmOverloads constructor(
 
     private fun triggerCompletion() {
         isCompleted = true
-        knobX = maxTravel
         performHaptic(HapticFeedbackConstants.CONFIRM)
 
         if (sliderType == SliderType.ANSWER) {
-            // iOS Morphing animation:
-            // The green call attend knob rotates 135° and turns upside down with red color
-            // to smoothly form the call end button while the track fades out!
+            // Signal parent container to fade out Decline slider and Message button
+            onGlideStarted?.invoke()
+
+            // iOS Morph & Glide animation:
+            // 1. Phone icon rotates 135° upside down.
+            // 2. Knob color blends from Green to Red.
+            // 3. Knob glides smoothly from maxTravel to the HORIZONTAL CENTER of the screen!
+            // 4. Remaining track fades out.
+            val startX = knobX
+            val targetCenterX = (width / 2f) - knobRadius - knobPadding
+
             morphAnimator?.cancel()
             morphAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = 280
+                duration = 360
+                interpolator = DecelerateInterpolator(1.5f)
                 addUpdateListener { anim ->
-                    morphProgress = anim.animatedValue as Float
-                    // Interpolate color from Green to Red
-                    currentKnobColor = argbEvaluator.evaluate(morphProgress, colorGreen, colorRed) as Int
-                    // Rotate phone icon from 0° to 135°
-                    phoneRotation = morphProgress * 135f
+                    val f = anim.animatedFraction
+                    morphProgress = f
+                    knobX = startX + (targetCenterX - startX) * f
+                    currentKnobColor = argbEvaluator.evaluate(f, colorGreen, colorRed) as Int
+                    phoneRotation = f * 135f
                     postInvalidateOnAnimation()
                 }
                 addListener(object : AnimatorListenerAdapter() {
@@ -374,7 +390,9 @@ class IosSliderView @JvmOverloads constructor(
                 start()
             }
         } else {
-            // Decline slider completed
+            // Decline slider completed -> snap and reject
+            knobX = maxTravel
+            postInvalidateOnAnimation()
             onCompleted?.invoke()
         }
     }

@@ -18,10 +18,10 @@ import android.widget.TextView
 
 /**
  * Modern iOS-style full screen incoming call overlay container.
- * Features:
- * 1. Translucent frosted glass "Message" quick reply button.
- * 2. Horizontal "slide to decline" capsule slider (Red knob, slides right).
- * 3. Horizontal "slide to answer" capsule slider (Green knob, slides right, morphs to End Call).
+ * Refinements:
+ * 1. Matching 68dp button dimensions identical to stock ongoing CallOvalImageButton.
+ * 2. 76dp track height with 38dp pill radius.
+ * 3. Smooth fade-out of Decline slider & Message button when Answer knob glides to center.
  */
 class IosIncomingCallView @JvmOverloads constructor(
     context: Context,
@@ -56,8 +56,9 @@ class IosIncomingCallView @JvmOverloads constructor(
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
 
-        val sideMargin = (24 * density).toInt()
-        val bottomPadding = (36 * density).toInt()
+        // 20dp side margin (matches call_margin), 50dp bottom padding (matches call_button_padding_bottom)
+        val sideMargin = (20 * density).toInt()
+        val bottomPadding = (50 * density).toInt()
         setPadding(sideMargin, 0, sideMargin, bottomPadding)
 
         // 1. Message Quick Reply Action
@@ -73,7 +74,7 @@ class IosIncomingCallView @JvmOverloads constructor(
         }
 
         messageCircleButton = MessageGlassButton(context).apply {
-            val size = (52 * density).toInt()
+            val size = (56 * density).toInt()
             layoutParams = LayoutParams(size, size)
             setOnClickListener {
                 animate().scaleX(0.9f).scaleY(0.9f).setDuration(80).withEndAction {
@@ -86,7 +87,7 @@ class IosIncomingCallView @JvmOverloads constructor(
 
         messageLabel = TextView(context).apply {
             text = "Message"
-            textSize = 12f
+            textSize = 12.5f
             setTextColor(Color.WHITE)
             typeface = Typeface.create("sans-serif", Typeface.NORMAL)
             layoutParams = LayoutParams(
@@ -99,27 +100,33 @@ class IosIncomingCallView @JvmOverloads constructor(
         messageButtonLayout.addView(messageLabel)
         addView(messageButtonLayout)
 
-        // 2. Decline Slider (Top Slider)
+        // 2. Decline Slider (Top Slider - 76dp height, 68dp knob)
         declineSlider = IosSliderView(context).apply {
             sliderType = SliderType.DECLINE
             sliderLabel = "slide to decline"
             layoutParams = LayoutParams(
                 LayoutParams.MATCH_PARENT,
-                (56 * density).toInt()
+                (76 * density).toInt()
             ).apply {
-                bottomMargin = (14 * density).toInt()
+                bottomMargin = (16 * density).toInt()
             }
         }
         addView(declineSlider)
 
-        // 3. Answer Slider (Bottom Slider)
+        // 3. Answer Slider (Bottom Slider - 76dp height, 68dp knob)
         answerSlider = IosSliderView(context).apply {
             sliderType = SliderType.ANSWER
             sliderLabel = "slide to answer"
             layoutParams = LayoutParams(
                 LayoutParams.MATCH_PARENT,
-                (56 * density).toInt()
+                (76 * density).toInt()
             )
+            onGlideStarted = {
+                // When answer slider starts its morph and glide to the horizontal center,
+                // smoothly fade out the Decline slider and Message button!
+                declineSlider.animate().alpha(0f).setDuration(220).start()
+                messageButtonLayout.animate().alpha(0f).setDuration(220).start()
+            }
         }
         addView(answerSlider)
     }
@@ -169,7 +176,7 @@ class IosIncomingCallView @JvmOverloads constructor(
             super.onDraw(canvas)
             val cx = width / 2f
             val cy = height / 2f
-            val r = (minOf(width, height) / 2f) - (strokePaint.strokeWidth)
+            val r = (minOf(width, height) / 2f) - strokePaint.strokeWidth
 
             // 1. Draw circular frosted glass background and border
             canvas.drawCircle(cx, cy, r, bgPaint)
