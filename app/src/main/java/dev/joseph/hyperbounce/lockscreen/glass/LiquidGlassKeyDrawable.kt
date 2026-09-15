@@ -203,15 +203,8 @@ class LiquidGlassKeyDrawable(
         touchLocalX = x
         touchLocalY = y
         pressAnimator?.cancel()
-        pressAnimator = ValueAnimator.ofFloat(pressProgress, 1.0f).apply {
-            duration = 120L
-            interpolator = DecelerateInterpolator(1.5f)
-            addUpdateListener {
-                pressProgress = it.animatedValue as Float
-                invalidateSelf()
-            }
-            start()
-        }
+        pressProgress = 1.0f
+        invalidateSelf()
     }
 
     fun onTouchMove(x: Float, y: Float) {

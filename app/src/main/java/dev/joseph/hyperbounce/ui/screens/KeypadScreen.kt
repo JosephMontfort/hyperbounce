@@ -208,8 +208,21 @@ fun KeypadScreen(
         }
 
         item {
-            SectionHeader("Vertical Row Spacing", colors)
+            SectionHeader("PIN Pad Layout & Grid Spacing", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsSliderRow(
+                    title = "PIN Pad Vertical Lift",
+                    subtitle = "Lifts entire keypad upwards to position bottom row (0)",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = keypad.pinpadLift,
+                    onValueChange = keypad::setPinpadLift,
+                    valueRange = 0.0f..200.0f,
+                    defaultValue = 0.0f,
+                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
+                    enabled = keypad.enabled
+                )
+                RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "PIN Dots Y-Offset",
                     subtitle = "Vertical position of password dots indicator",
@@ -224,83 +237,26 @@ fun KeypadScreen(
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
-                    title = "Row 1 (1, 2, 3) Offset",
-                    subtitle = "Vertical position of top numeric row",
+                    title = "Row Spacing",
+                    subtitle = "Uniform vertical distance between number rows",
                     colors = colors,
                     backdrop = backdrop,
-                    value = keypad.row1Offset,
-                    onValueChange = keypad::setRow1Offset,
-                    valueRange = -140.0f..0.0f,
-                    defaultValue = -90.0f,
+                    value = keypad.rowSpacing,
+                    onValueChange = keypad::setRowSpacing,
+                    valueRange = 0.0f..60.0f,
+                    defaultValue = 30.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = keypad.enabled
                 )
                 RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Row 2 (4, 5, 6) Offset",
-                    subtitle = "Vertical position of middle-upper row",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = keypad.row2Offset,
-                    onValueChange = keypad::setRow2Offset,
-                    valueRange = -100.0f..0.0f,
-                    defaultValue = -60.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = keypad.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Row 3 (7, 8, 9) Offset",
-                    subtitle = "Vertical position of middle-lower row",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = keypad.row3Offset,
-                    onValueChange = keypad::setRow3Offset,
-                    valueRange = -60.0f..0.0f,
-                    defaultValue = -30.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = keypad.enabled
-                )
-            }
-        }
-
-        item {
-            SectionHeader("Horizontal Column Spacing", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
                     title = "Column Spacing",
-                    subtitle = "Horizontal distance between columns (widens PIN pad)",
+                    subtitle = "Uniform horizontal distance between number columns",
                     colors = colors,
                     backdrop = backdrop,
                     value = keypad.columnSpacing,
                     onValueChange = keypad::setColumnSpacing,
                     valueRange = -30.0f..60.0f,
-                    defaultValue = 0.0f,
-                    valueLabel = { if (it > 0f) String.format(Locale.US, "+%.0f dp", it) else String.format(Locale.US, "%.0f dp", it) },
-                    enabled = keypad.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Column 1 (1, 4, 7) Offset",
-                    subtitle = "Fine-tune left column position",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = keypad.col1Offset,
-                    onValueChange = keypad::setCol1Offset,
-                    valueRange = -40.0f..40.0f,
-                    defaultValue = 0.0f,
-                    valueLabel = { if (it > 0f) String.format(Locale.US, "+%.0f dp", it) else String.format(Locale.US, "%.0f dp", it) },
-                    enabled = keypad.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Column 3 (3, 6, 9) Offset",
-                    subtitle = "Fine-tune right column position",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = keypad.col3Offset,
-                    onValueChange = keypad::setCol3Offset,
-                    valueRange = -40.0f..40.0f,
                     defaultValue = 0.0f,
                     valueLabel = { if (it > 0f) String.format(Locale.US, "+%.0f dp", it) else String.format(Locale.US, "%.0f dp", it) },
                     enabled = keypad.enabled

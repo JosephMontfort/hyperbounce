@@ -43,13 +43,15 @@ data class LockScreenKeypadConfig(
     var showKlondike: Boolean = false,
     var pressLiquidScale: Float = 0.88f,
     var pressLiquidAmp: Float = 0.60f,
-    // Vertical Row Offsets
+    // PIN Pad Grid Layout & Spacing
+    var pinpadLift: Float = 0.0f,
     var row0Offset: Float = -115.0f,
+    var rowSpacing: Float = 30.0f,
+    var columnSpacing: Float = 0.0f,
+    // Legacy fine-tune offsets
     var row1Offset: Float = -90.0f,
     var row2Offset: Float = -60.0f,
     var row3Offset: Float = -30.0f,
-    // Horizontal Column Spacing & Offsets
-    var columnSpacing: Float = 0.0f,
     var col1Offset: Float = 0.0f,
     var col3Offset: Float = 0.0f,
     // Sequential Glide Entry
@@ -136,11 +138,13 @@ object LockScreenConfigHolder {
         keypad.pressLiquidScale = prefs.getFloat("pin_press_liquid_scale", 0.88f)
         keypad.pressLiquidAmp = prefs.getFloat("pin_press_liquid_amp", 0.60f)
 
+        keypad.pinpadLift = prefs.getFloat("pin_pad_lift", 0.0f)
         keypad.row0Offset = prefs.getFloat("pin_row0_offset", -115.0f)
+        keypad.rowSpacing = prefs.getFloat("pin_row_spacing", 30.0f)
+        keypad.columnSpacing = prefs.getFloat("pin_col_spacing", 0.0f)
         keypad.row1Offset = prefs.getFloat("pin_row1_offset", -90.0f)
         keypad.row2Offset = prefs.getFloat("pin_row2_offset", -60.0f)
         keypad.row3Offset = prefs.getFloat("pin_row3_offset", -30.0f)
-        keypad.columnSpacing = prefs.getFloat("pin_col_spacing", 0.0f)
         keypad.col1Offset = prefs.getFloat("pin_col1_offset", 0.0f)
         keypad.col3Offset = prefs.getFloat("pin_col3_offset", 0.0f)
 

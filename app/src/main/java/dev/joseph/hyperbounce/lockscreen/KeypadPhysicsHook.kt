@@ -50,14 +50,11 @@ object KeypadPhysicsHook {
                                 val liquidDrawable = view.background as? LiquidGlassKeyDrawable
                                 when (event.actionMasked) {
                                     MotionEvent.ACTION_DOWN -> {
+                                        view.animate().cancel()
+                                        view.scaleX = cfg.pressLiquidScale
+                                        view.scaleY = cfg.pressLiquidScale
                                         liquidDrawable?.onTouchDown(event.x, event.y)
-                                        view.animate()
-                                            .scaleX(cfg.pressLiquidScale)
-                                            .scaleY(cfg.pressLiquidScale)
-                                            .setDuration(120L)
-                                            .setInterpolator(DecelerateInterpolator(1.5f))
-                                            .setUpdateListener { view.invalidate() }
-                                            .start()
+                                        view.invalidate()
                                     }
                                     MotionEvent.ACTION_MOVE -> {
                                         liquidDrawable?.onTouchMove(event.x, event.y)
@@ -67,7 +64,7 @@ object KeypadPhysicsHook {
                                         view.animate()
                                             .scaleX(1.0f)
                                             .scaleY(1.0f)
-                                            .setDuration(240L)
+                                            .setDuration(220L)
                                             .setInterpolator(OvershootInterpolator(1.4f))
                                             .setUpdateListener { view.invalidate() }
                                             .start()
@@ -156,10 +153,17 @@ object KeypadPhysicsHook {
                         val density = ctx.resources.displayMetrics.density
                         val cfg = LockScreenConfigHolder.keypad
 
-                        // 1. Container Horizontal Width & Column Spacing Hack
+                        // Ensure parent ViewGroup doesn't clip when lifting or expanding
+                        (pinView as? ViewGroup)?.clipChildren = false
+                        (pinView as? ViewGroup)?.clipToPadding = false
+
+                        // 1. Container Horizontal Width, Column Spacing & Vertical Lift
                         val pinContainerId = ctx.resources.getIdentifier("pin_container", "id", "com.android.systemui")
                         val pinContainer = if (pinContainerId != 0) pinView.findViewById<ViewGroup>(pinContainerId) else null
                         if (pinContainer != null) {
+                            pinContainer.clipChildren = false
+                            pinContainer.clipToPadding = false
+
                             val dimenId = ctx.resources.getIdentifier("miui_keyguard_pin_view_rows_layout_width", "dimen", "com.android.systemui")
                             val defaultWidthPx = if (dimenId != 0) ctx.resources.getDimensionPixelOffset(dimenId) else (310 * density).toInt()
                             val extraWidthPx = (3 * cfg.columnSpacing * density).toInt()
@@ -170,18 +174,22 @@ object KeypadPhysicsHook {
                                 lp.width = targetWidth
                                 pinContainer.layoutParams = lp
                             }
+
+                            // Lift entire keypad upwards to position bottom row (0)
+                            pinContainer.translationY = -cfg.pinpadLift * density
                         }
 
-                        // 2. Vertical Row Offsets (Layout Spacing Hack)
+                        // 2. Uniform Vertical Row Spacing (Layout Spacing Hack)
                         val row1Id = ctx.resources.getIdentifier("row1", "id", "com.android.systemui")
                         val row2Id = ctx.resources.getIdentifier("row2", "id", "com.android.systemui")
                         val row3Id = ctx.resources.getIdentifier("row3", "id", "com.android.systemui")
                         val row4Id = ctx.resources.getIdentifier("row4", "id", "com.android.systemui")
                         val row0Id = ctx.resources.getIdentifier("row0", "id", "com.android.systemui")
 
-                        if (row1Id != 0) pinView.findViewById<View>(row1Id)?.translationY = cfg.row1Offset * density
-                        if (row2Id != 0) pinView.findViewById<View>(row2Id)?.translationY = cfg.row2Offset * density
-                        if (row3Id != 0) pinView.findViewById<View>(row3Id)?.translationY = cfg.row3Offset * density
+                        val rowStep = cfg.rowSpacing * density
+                        if (row1Id != 0) pinView.findViewById<View>(row1Id)?.translationY = -3f * rowStep
+                        if (row2Id != 0) pinView.findViewById<View>(row2Id)?.translationY = -2f * rowStep
+                        if (row3Id != 0) pinView.findViewById<View>(row3Id)?.translationY = -1f * rowStep
                         if (row4Id != 0) pinView.findViewById<View>(row4Id)?.translationY = 0f
                         if (row0Id != 0) pinView.findViewById<View>(row0Id)?.translationY = cfg.row0Offset * density
 
