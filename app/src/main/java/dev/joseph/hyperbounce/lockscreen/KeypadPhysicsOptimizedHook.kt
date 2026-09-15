@@ -143,7 +143,7 @@ object KeypadPhysicsOptimizedHook {
                             digitField.isAccessible = true
                             val digitText = digitField.get(keyView) as? TextView
                             if (digitText != null) {
-                                digitText.setTextColor(Color.WHITE)
+                                digitText.setTextColor(0xFFFFFFFF.toInt())
                                 digitText.setTextSize(TypedValue.COMPLEX_UNIT_SP, cfg.digitTextSize)
                                 digitText.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
                                 digitText.setShadowLayer(0f, 0f, 0f, 0)
