@@ -265,6 +265,50 @@ fun KeypadScreen(
         }
 
         item {
+            SectionHeader("Horizontal Column Spacing", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsSliderRow(
+                    title = "Column Spacing",
+                    subtitle = "Horizontal distance between columns (widens PIN pad)",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = keypad.columnSpacing,
+                    onValueChange = keypad::setColumnSpacing,
+                    valueRange = -30.0f..60.0f,
+                    defaultValue = 0.0f,
+                    valueLabel = { if (it > 0f) String.format(Locale.US, "+%.0f dp", it) else String.format(Locale.US, "%.0f dp", it) },
+                    enabled = keypad.enabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Column 1 (1, 4, 7) Offset",
+                    subtitle = "Fine-tune left column position",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = keypad.col1Offset,
+                    onValueChange = keypad::setCol1Offset,
+                    valueRange = -40.0f..40.0f,
+                    defaultValue = 0.0f,
+                    valueLabel = { if (it > 0f) String.format(Locale.US, "+%.0f dp", it) else String.format(Locale.US, "%.0f dp", it) },
+                    enabled = keypad.enabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Column 3 (3, 6, 9) Offset",
+                    subtitle = "Fine-tune right column position",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = keypad.col3Offset,
+                    onValueChange = keypad::setCol3Offset,
+                    valueRange = -40.0f..40.0f,
+                    defaultValue = 0.0f,
+                    valueLabel = { if (it > 0f) String.format(Locale.US, "+%.0f dp", it) else String.format(Locale.US, "%.0f dp", it) },
+                    enabled = keypad.enabled
+                )
+            }
+        }
+
+        item {
             SectionHeader("Sequential Glide Entrance", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(

@@ -48,6 +48,10 @@ data class LockScreenKeypadConfig(
     var row1Offset: Float = -90.0f,
     var row2Offset: Float = -60.0f,
     var row3Offset: Float = -30.0f,
+    // Horizontal Column Spacing & Offsets
+    var columnSpacing: Float = 0.0f,
+    var col1Offset: Float = 0.0f,
+    var col3Offset: Float = 0.0f,
     // Sequential Glide Entry
     var entryTranslationY: Float = 90.0f,
     var entryInitialScale: Float = 0.50f,
@@ -136,6 +140,9 @@ object LockScreenConfigHolder {
         keypad.row1Offset = prefs.getFloat("pin_row1_offset", -90.0f)
         keypad.row2Offset = prefs.getFloat("pin_row2_offset", -60.0f)
         keypad.row3Offset = prefs.getFloat("pin_row3_offset", -30.0f)
+        keypad.columnSpacing = prefs.getFloat("pin_col_spacing", 0.0f)
+        keypad.col1Offset = prefs.getFloat("pin_col1_offset", 0.0f)
+        keypad.col3Offset = prefs.getFloat("pin_col3_offset", 0.0f)
 
         keypad.entryTranslationY = prefs.getFloat("pin_entry_translation_y", 90.0f)
         keypad.entryInitialScale = prefs.getFloat("pin_entry_initial_scale", 0.50f)

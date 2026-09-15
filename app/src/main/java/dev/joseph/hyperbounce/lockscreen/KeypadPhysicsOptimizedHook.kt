@@ -174,7 +174,23 @@ object KeypadPhysicsOptimizedHook {
                             }
                         }
 
-                        // 1. Vertical Row Offsets (Layout Spacing Hack)
+                        // 1. Container Horizontal Width & Column Spacing Hack
+                        val pinContainerId = ctx.resources.getIdentifier("pin_container", "id", "com.android.systemui")
+                        val pinContainer = if (pinContainerId != 0) pinView.findViewById<ViewGroup>(pinContainerId) else null
+                        if (pinContainer != null) {
+                            val dimenId = ctx.resources.getIdentifier("miui_keyguard_pin_view_rows_layout_width", "dimen", "com.android.systemui")
+                            val defaultWidthPx = if (dimenId != 0) ctx.resources.getDimensionPixelOffset(dimenId) else (310 * density).toInt()
+                            val extraWidthPx = (3 * cfg.columnSpacing * density).toInt()
+                            val maxAllowedWidth = ctx.resources.displayMetrics.widthPixels
+                            val targetWidth = (defaultWidthPx + extraWidthPx).coerceIn((180 * density).toInt(), maxAllowedWidth)
+                            val lp = pinContainer.layoutParams
+                            if (lp != null && lp.width != targetWidth) {
+                                lp.width = targetWidth
+                                pinContainer.layoutParams = lp
+                            }
+                        }
+
+                        // 2. Vertical Row Offsets (Layout Spacing Hack)
                         val row1Id = ctx.resources.getIdentifier("row1", "id", "com.android.systemui")
                         val row2Id = ctx.resources.getIdentifier("row2", "id", "com.android.systemui")
                         val row3Id = ctx.resources.getIdentifier("row3", "id", "com.android.systemui")
@@ -187,7 +203,27 @@ object KeypadPhysicsOptimizedHook {
                         if (row4Id != 0) pinView.findViewById<View>(row4Id)?.translationY = 0f
                         if (row0Id != 0) pinView.findViewById<View>(row0Id)?.translationY = cfg.row0Offset * density
 
-                        // 2. Numeric Digit Keys 1-9 and 0
+                        // 3. Fine-Tune Column Horizontal Offsets (translationX)
+                        val col1TransX = -cfg.col1Offset * density
+                        val col3TransX = cfg.col3Offset * density
+
+                        val col1KeyNames = arrayOf("key1", "key4", "key7", "emergency_call_button")
+                        for (name in col1KeyNames) {
+                            val id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
+                            if (id != 0) {
+                                pinView.findViewById<View>(id)?.translationX = col1TransX
+                            }
+                        }
+
+                        val col3KeyNames = arrayOf("key3", "key6", "key9", "delete_container", "delete_button", "zero_delete_button", "cancel_button", "zero_cancel_button")
+                        for (name in col3KeyNames) {
+                            val id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
+                            if (id != 0) {
+                                pinView.findViewById<View>(id)?.translationX = col3TransX
+                            }
+                        }
+
+                        // 4. Numeric Digit Keys 1-9 and 0
                         val numKeyIds = intArrayOf(
                             ctx.resources.getIdentifier("key1", "id", "com.android.systemui"),
                             ctx.resources.getIdentifier("key2", "id", "com.android.systemui"),
@@ -206,7 +242,7 @@ object KeypadPhysicsOptimizedHook {
                             }
                         }
 
-                        // 3. Cleanly style Action Buttons (delete, cancel, emergency) without breaking LinearLayout weights
+                        // 5. Cleanly style Action Buttons (delete, cancel, emergency) without breaking LinearLayout weights
                         val styleActionButton: (View?) -> Unit = { btn ->
                             if (btn != null) {
                                 try {
@@ -260,6 +296,10 @@ object KeypadPhysicsOptimizedHook {
                             val cfg = LockScreenConfigHolder.keypad
                             if (!cfg.enabled) return chain.proceed()
 
+                            try {
+                                applyPinLayoutAndStyles(pinView)
+                            } catch (_: Throwable) {}
+
                             val ctx = pinView.context
                             val density = ctx.resources.displayMetrics.density
 
@@ -283,6 +323,8 @@ object KeypadPhysicsOptimizedHook {
                             val transY = cfg.entryTranslationY * density
                             val initialScale = cfg.entryInitialScale.coerceIn(0.1f, 1.0f)
                             val overshoot = cfg.entryOvershoot.coerceAtLeast(1.0f)
+                            val col1TransX = -cfg.col1Offset * density
+                            val col3TransX = cfg.col3Offset * density
 
                             for (row in keys.indices) {
                                 for (col in keys[row].indices) {
@@ -296,15 +338,23 @@ object KeypadPhysicsOptimizedHook {
                                     val optDrawable = keyView.background as? LiquidGlassKeyOptimizedDrawable
                                     optDrawable?.startLiveTracking()
 
+                                    val targetTransX = when (col) {
+                                        0 -> col1TransX
+                                        2 -> col3TransX
+                                        else -> 0f
+                                    }
+
                                     keyView.animate().cancel()
                                     keyView.alpha = 0f
                                     keyView.translationY = transY
+                                    keyView.translationX = targetTransX
                                     keyView.scaleX = initialScale
                                     keyView.scaleY = initialScale
 
                                     keyView.animate()
                                         .alpha(1f)
                                         .translationY(0f)
+                                        .translationX(targetTransX)
                                         .scaleX(1f)
                                         .scaleY(1f)
                                         .setDuration(animDuration)

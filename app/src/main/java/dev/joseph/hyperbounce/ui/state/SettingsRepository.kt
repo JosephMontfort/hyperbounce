@@ -594,6 +594,9 @@ class SettingsRepository(context: Context) {
         var row1Offset by prefsFloatState("pin_row1_offset", defaults.row1Offset); private set
         var row2Offset by prefsFloatState("pin_row2_offset", defaults.row2Offset); private set
         var row3Offset by prefsFloatState("pin_row3_offset", defaults.row3Offset); private set
+        var columnSpacing by prefsFloatState("pin_col_spacing", defaults.columnSpacing); private set
+        var col1Offset by prefsFloatState("pin_col1_offset", defaults.col1Offset); private set
+        var col3Offset by prefsFloatState("pin_col3_offset", defaults.col3Offset); private set
 
         var entryTranslationY by prefsFloatState("pin_entry_translation_y", defaults.entryTranslationY); private set
         var entryInitialScale by prefsFloatState("pin_entry_initial_scale", defaults.entryInitialScale); private set
@@ -618,10 +621,10 @@ class SettingsRepository(context: Context) {
         fun snapshot(): LockScreenKeypadSettings = LockScreenKeypadSettings(
             enabled, buttonRefraction, buttonBevel, buttonDispersion, buttonSpecular, buttonInnerShadow,
             buttonBlur, buttonSaturation, circleDiameter, digitTextSize, showKlondike, pressLiquidScale,
-            pressLiquidAmp, row0Offset, row1Offset, row2Offset, row3Offset, entryTranslationY,
-            entryInitialScale, entryDuration, rowDelayStep, colDelayStep, entryOvershoot, delayKey1,
-            delayKey2, delayKey3, delayKey4, delayKey5, delayKey6, delayKey7, delayKey8, delayKey9,
-            delayKey0, delayEmergency, delayCancel
+            pressLiquidAmp, row0Offset, row1Offset, row2Offset, row3Offset, columnSpacing, col1Offset,
+            col3Offset, entryTranslationY, entryInitialScale, entryDuration, rowDelayStep, colDelayStep,
+            entryOvershoot, delayKey1, delayKey2, delayKey3, delayKey4, delayKey5, delayKey6, delayKey7,
+            delayKey8, delayKey9, delayKey0, delayEmergency, delayCancel
         )
 
         @JvmName("setKeypadEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
@@ -641,6 +644,9 @@ class SettingsRepository(context: Context) {
         @JvmName("setRow1OffsetPref") fun setRow1Offset(v: Float) { row1Offset = v }
         @JvmName("setRow2OffsetPref") fun setRow2Offset(v: Float) { row2Offset = v }
         @JvmName("setRow3OffsetPref") fun setRow3Offset(v: Float) { row3Offset = v }
+        @JvmName("setColumnSpacingPref") fun setColumnSpacing(v: Float) { columnSpacing = v }
+        @JvmName("setCol1OffsetPref") fun setCol1Offset(v: Float) { col1Offset = v }
+        @JvmName("setCol3OffsetPref") fun setCol3Offset(v: Float) { col3Offset = v }
         @JvmName("setEntryTranslationYPref") fun setEntryTranslationY(v: Float) { entryTranslationY = v }
         @JvmName("setEntryInitialScalePref") fun setEntryInitialScale(v: Float) { entryInitialScale = v }
         @JvmName("setEntryDurationPref") fun setEntryDuration(v: Float) { entryDuration = v }
@@ -679,6 +685,9 @@ class SettingsRepository(context: Context) {
             row1Offset = defaults.row1Offset
             row2Offset = defaults.row2Offset
             row3Offset = defaults.row3Offset
+            columnSpacing = defaults.columnSpacing
+            col1Offset = defaults.col1Offset
+            col3Offset = defaults.col3Offset
             entryTranslationY = defaults.entryTranslationY
             entryInitialScale = defaults.entryInitialScale
             entryDuration = defaults.entryDuration
