@@ -56,9 +56,10 @@ class IosIncomingCallView @JvmOverloads constructor(
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
 
-        // 20dp side margin (matches call_margin), 50dp bottom padding (matches call_button_padding_bottom)
+        val config = IosCallerConfigHolder.config
         val sideMargin = (20 * density).toInt()
-        val bottomPadding = (50 * density).toInt()
+        val bottomPadding = (config.bottomOffset * density).toInt()
+        val trackHeight = ((config.buttonSize + 8f) * density).toInt()
         setPadding(sideMargin, 0, sideMargin, bottomPadding)
 
         // 1. Message Quick Reply Action
@@ -100,35 +101,66 @@ class IosIncomingCallView @JvmOverloads constructor(
         messageButtonLayout.addView(messageLabel)
         addView(messageButtonLayout)
 
-        // 2. Decline Slider (Top Slider - 76dp height, 68dp knob)
+        // 2. Decline Slider (Top Slider)
         declineSlider = IosSliderView(context).apply {
             sliderType = SliderType.DECLINE
             sliderLabel = "slide to decline"
             layoutParams = LayoutParams(
                 LayoutParams.MATCH_PARENT,
-                (76 * density).toInt()
+                trackHeight
             ).apply {
                 bottomMargin = (16 * density).toInt()
             }
         }
         addView(declineSlider)
 
-        // 3. Answer Slider (Bottom Slider - 76dp height, 68dp knob)
+        // 3. Answer Slider (Bottom Slider)
         answerSlider = IosSliderView(context).apply {
             sliderType = SliderType.ANSWER
             sliderLabel = "slide to answer"
             layoutParams = LayoutParams(
                 LayoutParams.MATCH_PARENT,
-                (76 * density).toInt()
+                trackHeight
             )
             onGlideStarted = {
-                // When answer slider starts its morph and glide to the horizontal center,
-                // smoothly fade out the Decline slider and Message button!
+                // Pre-compute 2D deltaY to seamlessly land into stock end call button center
+                targetDeltaY = calculateTargetDeltaY()
                 declineSlider.animate().alpha(0f).setDuration(220).start()
                 messageButtonLayout.animate().alpha(0f).setDuration(220).start()
             }
         }
         addView(answerSlider)
+    }
+
+    /**
+     * Calculates the exact vertical delta between Answer slider knob and stock End Call button.
+     */
+    fun calculateTargetDeltaY(): Float {
+        try {
+            val activity = IosCallerScreenHook.findActivity(context)
+            if (activity != null) {
+                val res = context.resources
+                val endButtonId = res.getIdentifier("endButton", "id", "com.android.incallui")
+                if (endButtonId != 0) {
+                    val endBtn = activity.findViewById<View>(endButtonId)
+                    if (endBtn != null && endBtn.height > 0) {
+                        val endLoc = IntArray(2)
+                        val sliderLoc = IntArray(2)
+                        endBtn.getLocationInWindow(endLoc)
+                        answerSlider.getLocationInWindow(sliderLoc)
+                        val endCenterY = endLoc[1] + (endBtn.height / 2f)
+                        val sliderCenterY = sliderLoc[1] + (answerSlider.height / 2f)
+                        return endCenterY - sliderCenterY
+                    }
+                }
+            }
+        } catch (_: Throwable) {}
+
+        // Fallback mathematical calculation:
+        val trackHeight = answerSlider.height.toFloat().takeIf { it > 0 } ?: ((IosCallerConfigHolder.config.buttonSize + 8f) * density)
+        val answerCenterFromBottom = trackHeight / 2f
+        val callBtnCenterFromBottom = 36f * density
+        return answerCenterFromBottom - callBtnCenterFromBottom
     }
 
     fun setMessageButtonVisible(visible: Boolean) {

@@ -120,6 +120,7 @@ class SettingsRepository(context: Context) {
     val appTransition = AppTransitionHolder()
     val controlCenter = ControlCenterHolder()
     val morphPhysics = MorphPhysicsHolder()
+    val callerScreen = CallerScreenHolder()
     val safeMode = SafeModeHolder()
 
     @JvmName("setModuleEnabledPref")
@@ -1130,6 +1131,41 @@ class SettingsRepository(context: Context) {
         }
     }
 
+    inner class CallerScreenHolder {
+        var enabled by prefsBooleanState("caller_screen_enabled", true)
+            private set
+        var buttonSize by prefsFloatState("caller_button_size", 76f)
+            private set
+        var bottomOffset by prefsFloatState("caller_bottom_offset", 68f)
+            private set
+        var hapticsEnabled by prefsBooleanState("caller_haptics_enabled", true)
+            private set
+        var shimmerEnabled by prefsBooleanState("caller_shimmer_enabled", true)
+            private set
+
+        @JvmName("setCallerEnabledPref")
+        fun setEnabled(v: Boolean) { enabled = v }
+
+        @JvmName("setCallerButtonSizePref")
+        fun setButtonSize(v: Float) { buttonSize = v }
+
+        @JvmName("setCallerBottomOffsetPref")
+        fun setBottomOffset(v: Float) { bottomOffset = v }
+
+        @JvmName("setCallerHapticsEnabledPref")
+        fun setHapticsEnabled(v: Boolean) { hapticsEnabled = v }
+
+        @JvmName("setCallerShimmerEnabledPref")
+        fun setShimmerEnabled(v: Boolean) { shimmerEnabled = v }
+
+        fun reloadFromDefaults() {
+            enabled = true
+            buttonSize = 76f
+            bottomOffset = 68f
+            hapticsEnabled = true
+            shimmerEnabled = true
+        }
+    }
 
     inner class SafeModeHolder {
         private val defaults = SafeModeSettings()

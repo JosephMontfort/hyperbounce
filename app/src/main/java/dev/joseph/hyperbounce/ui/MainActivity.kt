@@ -254,6 +254,13 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                             onBack = pop
                         )
 
+                        Destination.CallerScreen -> dev.joseph.hyperbounce.ui.screens.CallerScreenSettings(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
                         Destination.SafeMode -> dev.joseph.hyperbounce.ui.screens.SafeModeScreen(
                             repository = repository,
                             colors = colors,

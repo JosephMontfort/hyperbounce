@@ -121,6 +121,15 @@ fun TuningScreen(
                 onClick = { onNavigate(Destination.ControlCenter) },
                 icon = { dev.joseph.hyperbounce.ui.components.SlidersIcon(color = Color.White, size = 15.dp) }
             )
+            RowDivider(colors.separator)
+            SettingsNavRow(
+                title = "iOS Caller Screen",
+                subtitle = if (repository.callerScreen.enabled) "Full-screen dual sliders & fluid morph" else "Off",
+                colors = colors,
+                iconTint = colors.accentGreen,
+                onClick = { onNavigate(Destination.CallerScreen) },
+                icon = { dev.joseph.hyperbounce.ui.components.PhoneIcon(color = Color.White, size = 15.dp) }
+            )
         }
     }
 }

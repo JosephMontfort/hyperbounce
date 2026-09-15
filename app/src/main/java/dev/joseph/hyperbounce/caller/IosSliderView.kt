@@ -58,6 +58,7 @@ class IosSliderView @JvmOverloads constructor(
 
     var onCompleted: (() -> Unit)? = null
     var onGlideStarted: (() -> Unit)? = null
+    var targetDeltaY: Float = 0f
 
     // Colors
     private val colorGreen = Color.parseColor("#34C759")
@@ -104,6 +105,7 @@ class IosSliderView @JvmOverloads constructor(
     private val density = context.resources.displayMetrics.density
     private val knobPadding = 4f * density
     private var knobX = 0f
+    private var knobY = 0f
     private var maxTravel = 0f
     private var knobRadius = 0f
 
@@ -189,8 +191,8 @@ class IosSliderView @JvmOverloads constructor(
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        // Enlarge track height to 76dp so knob is exactly 68dp matching stock CallOvalImageButton
-        val desiredHeight = (76 * density).toInt()
+        val buttonSize = IosCallerConfigHolder.config.buttonSize
+        val desiredHeight = ((buttonSize + 8f) * density).toInt()
         val height = resolveSize(desiredHeight, heightMeasureSpec)
         val width = MeasureSpec.getSize(widthMeasureSpec)
         setMeasuredDimension(width, height)
@@ -198,7 +200,7 @@ class IosSliderView @JvmOverloads constructor(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        knobRadius = (h.toFloat() - (knobPadding * 2f)) / 2f // Exactly 34dp (68dp diameter)
+        knobRadius = (h.toFloat() - (knobPadding * 2f)) / 2f
         maxTravel = w.toFloat() - (knobRadius * 2f) - (knobPadding * 2f)
         if (maxTravel < 0f) maxTravel = 0f
     }
@@ -237,9 +239,9 @@ class IosSliderView @JvmOverloads constructor(
             canvas.restore()
         }
 
-        // 3. Draw Slider Knob (68dp diameter)
+        // 3. Draw Slider Knob (with 2D translation support)
         val knobCenterX = knobPadding + knobRadius + knobX
-        val knobCenterY = h / 2f
+        val knobCenterY = (h / 2f) + knobY
 
         // Knob Shadow
         canvas.drawCircle(knobCenterX, knobCenterY + 2.5f * density, knobRadius, knobShadowPaint)
@@ -248,7 +250,7 @@ class IosSliderView @JvmOverloads constructor(
         knobPaint.color = currentKnobColor
         canvas.drawCircle(knobCenterX, knobCenterY, knobRadius, knobPaint)
 
-        // 4. Draw Phone Handset Icon (34dp size)
+        // 4. Draw Phone Handset Icon
         drawPhoneIcon(canvas, knobCenterX, knobCenterY)
     }
 
@@ -278,8 +280,8 @@ class IosSliderView @JvmOverloads constructor(
         canvas.translate(cx, cy)
         canvas.rotate(phoneRotation)
 
-        // Handset is drawn in 24x24 bounds; scale to exactly 34dp matching stock
-        val iconTargetSize = 34f * density
+        // Handset is drawn in 24x24 bounds; scale to knob radius (50% diameter)
+        val iconTargetSize = knobRadius
         val scale = iconTargetSize / 24f
         canvas.scale(scale, scale)
         canvas.translate(-12f, -12f)
@@ -343,6 +345,7 @@ class IosSliderView @JvmOverloads constructor(
 
     private fun springSnapback() {
         snapbackAnimator?.cancel()
+        knobY = 0f
         snapbackAnimator = ValueAnimator.ofFloat(knobX, 0f).apply {
             duration = 320
             interpolator = OvershootInterpolator(1.05f)
@@ -365,10 +368,11 @@ class IosSliderView @JvmOverloads constructor(
             // iOS Morph & Glide animation:
             // 1. Phone icon rotates 135° upside down.
             // 2. Knob color blends from Green to Red.
-            // 3. Knob glides smoothly from maxTravel to the HORIZONTAL CENTER of the screen!
+            // 3. Knob glides smoothly in 2D (X towards screen horizontal center, Y towards targetDeltaY).
             // 4. Remaining track fades out.
             val startX = knobX
             val targetCenterX = (width / 2f) - knobRadius - knobPadding
+            val deltaY = targetDeltaY
 
             morphAnimator?.cancel()
             morphAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -378,6 +382,7 @@ class IosSliderView @JvmOverloads constructor(
                     val f = anim.animatedFraction
                     morphProgress = f
                     knobX = startX + (targetCenterX - startX) * f
+                    knobY = deltaY * f
                     currentKnobColor = argbEvaluator.evaluate(f, colorGreen, colorRed) as Int
                     phoneRotation = f * 135f
                     postInvalidateOnAnimation()

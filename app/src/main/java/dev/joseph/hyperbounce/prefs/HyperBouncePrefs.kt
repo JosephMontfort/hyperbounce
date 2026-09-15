@@ -40,6 +40,12 @@ class HyperBouncePrefs(module: XposedInterface) {
     val callerScreenEnabled: Boolean
         get() = prefs.getBoolean("caller_screen_enabled", true)
 
+    val callerButtonSize: Float
+        get() = prefs.getFloat("caller_button_size", 76f)
+
+    val callerBottomOffset: Float
+        get() = prefs.getFloat("caller_bottom_offset", 68f)
+
     // --- per-app nav bar (appKey: "instagram" | "whatsapp" | "youtube") --------------------
 
     fun appEnabled(appKey: String): Boolean =

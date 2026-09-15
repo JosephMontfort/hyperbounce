@@ -531,3 +531,35 @@ fun TrashIcon(
         drawPath(handlePath, color = color, style = Stroke(s, cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
+
+@Composable
+fun PhoneIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 16.dp,
+    strokeWidth: Dp = 1.8.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val s = strokeWidth.toPx()
+        val path = Path().apply {
+            moveTo(w * 0.28f, h * 0.45f)
+            cubicTo(w * 0.34f, h * 0.57f, w * 0.43f, h * 0.66f, w * 0.55f, h * 0.72f)
+            lineTo(w * 0.64f, h * 0.63f)
+            cubicTo(w * 0.65f, h * 0.62f, w * 0.67f, h * 0.62f, w * 0.68f, h * 0.62f)
+            cubicTo(w * 0.73f, h * 0.64f, w * 0.78f, h * 0.65f, w * 0.83f, h * 0.65f)
+            cubicTo(w * 0.86f, h * 0.65f, w * 0.88f, h * 0.67f, w * 0.88f, h * 0.69f)
+            lineTo(w * 0.88f, h * 0.83f)
+            cubicTo(w * 0.88f, h * 0.86f, w * 0.86f, h * 0.88f, w * 0.83f, h * 0.88f)
+            cubicTo(w * 0.44f, h * 0.88f, w * 0.12f, h * 0.56f, w * 0.12f, h * 0.17f)
+            cubicTo(w * 0.12f, h * 0.14f, w * 0.14f, h * 0.12f, w * 0.17f, h * 0.12f)
+            lineTo(w * 0.31f, h * 0.12f)
+            cubicTo(w * 0.33f, h * 0.12f, w * 0.35f, h * 0.14f, w * 0.35f, h * 0.17f)
+            cubicTo(w * 0.35f, h * 0.22f, w * 0.36f, h * 0.27f, w * 0.38f, h * 0.32f)
+            cubicTo(w * 0.38f, h * 0.33f, w * 0.38f, h * 0.35f, w * 0.37f, h * 0.36f)
+            close()
+        }
+        drawPath(path, color = color, style = Stroke(s, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    }
+}

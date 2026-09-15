@@ -29,6 +29,7 @@ object IosCallerScreenHook {
 
     private var activeIosCallView: WeakReference<IosIncomingCallView>? = null
     private var isMessageRejectAllowed = true
+    private var isReceiverRegistered = false
     var isAttendingTransitionActive = false
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
@@ -38,7 +39,8 @@ object IosCallerScreenHook {
             return
         }
 
-        Log.i(TAG, "Initializing iOS Caller Screen Hook for com.android.incallui...")
+        IosCallerConfigHolder.updateFromPrefs(prefs.prefs)
+        Log.i(TAG, "Initializing iOS Caller Screen Hook for com.android.incallui with config: ${IosCallerConfigHolder.config}...")
 
         // 1. Hook AnswerFragment.onViewCreated -> Replace Xiaomi vertical slide with iOS dual sliders
         try {
@@ -55,6 +57,7 @@ object IosCallerScreenHook {
                             val view = chain.args[0] as? ViewGroup
                             val fragment = chain.thisObject
                             if (view != null && fragment != null) {
+                                registerSettingsReceiver(view.context, prefs)
                                 setupIosAnswerUi(view, fragment)
                             }
                         } catch (t: Throwable) {
@@ -131,42 +134,110 @@ object IosCallerScreenHook {
                 ) {
                     module.hook(m).intercept { chain ->
                         val show = chain.args[0] as? Boolean ?: false
+                        val fragment = chain.thisObject
+                        val config = IosCallerConfigHolder.config
+                        val scale = config.buttonSize / 68f
+
+                        if (fragment != null && show) {
+                            try {
+                                val rootViewField = fragment.javaClass.getDeclaredField("mRootView").apply { isAccessible = true }
+                                val rootView = rootViewField.get(fragment) as? View
+                                if (rootView != null) {
+                                    val d = rootView.resources.displayMetrics.density
+                                    val bottomPadding = (config.bottomOffset * d).toInt()
+                                    rootView.setPadding(0, 0, 0, bottomPadding)
+                                }
+                            } catch (_: Throwable) {}
+                        }
+
                         if (show && isAttendingTransitionActive) {
                             isAttendingTransitionActive = false
-                            val fragment = chain.thisObject
-                            try {
-                                // End Call button is already rotated, red, and resting at the center:
-                                // Keep it at full alpha 1.0 and scale 1.0 with zero pop/scale jump!
-                                val endBtnField = fragment.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
-                                val endBtn = endBtnField.get(fragment) as? View
-                                if (endBtn != null) {
-                                    endBtn.visibility = View.VISIBLE
-                                    endBtn.alpha = 1.0f
-                                    endBtn.scaleX = 1.0f
-                                    endBtn.scaleY = 1.0f
+                            if (fragment != null) {
+                                try {
+                                    // End Call button is already rotated, red, enlarged, and resting at the center
+                                    val endBtnField = fragment.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
+                                    val endBtn = endBtnField.get(fragment) as? View
+                                    if (endBtn != null) {
+                                        endBtn.visibility = View.VISIBLE
+                                        endBtn.alpha = 1.0f
+                                        endBtn.scaleX = scale
+                                        endBtn.scaleY = scale
+                                    }
+
+                                    // Audio button and tool button fade in smoothly around it with matching enlarged scale
+                                    val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
+                                    val audioBtn = audioBtnField.get(fragment) as? View
+                                    if (audioBtn != null) {
+                                        audioBtn.visibility = View.VISIBLE
+                                        audioBtn.scaleX = scale
+                                        audioBtn.scaleY = scale
+                                        audioBtn.alpha = 0f
+                                        audioBtn.animate().alpha(1f).setDuration(250).start()
+                                    }
+
+                                    val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
+                                    val toolBtn = toolBtnField.get(fragment) as? View
+                                    if (toolBtn != null) {
+                                        toolBtn.visibility = View.VISIBLE
+                                        toolBtn.scaleX = scale
+                                        toolBtn.scaleY = scale
+                                        toolBtn.alpha = 0f
+                                        toolBtn.animate().alpha(1f).setDuration(250).start()
+                                    }
+
+                                    return@intercept null
+                                } catch (t: Throwable) {
+                                    Log.e(TAG, "Error in custom startCallButtonAnimator handover", t)
                                 }
-
-                                // Audio button and tool button fade in smoothly around it
-                                val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
-                                val audioBtn = audioBtnField.get(fragment) as? View
-                                audioBtn?.visibility = View.VISIBLE
-                                audioBtn?.alpha = 0f
-                                audioBtn?.animate()?.alpha(1f)?.setDuration(250)?.start()
-
-                                val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
-                                val toolBtn = toolBtnField.get(fragment) as? View
-                                toolBtn?.visibility = View.VISIBLE
-                                toolBtn?.alpha = 0f
-                                toolBtn?.animate()?.alpha(1f)?.setDuration(250)?.start()
-
-                                return@intercept null
-                            } catch (t: Throwable) {
-                                Log.e(TAG, "Error in custom startCallButtonAnimator handover", t)
                             }
                         }
-                        chain.proceed()
+
+                        val result = chain.proceed()
+                        if (show && fragment != null) {
+                            try {
+                                val endBtnField = fragment.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
+                                (endBtnField.get(fragment) as? View)?.apply {
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                                val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
+                                (audioBtnField.get(fragment) as? View)?.apply {
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                                val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
+                                (toolBtnField.get(fragment) as? View)?.apply {
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                            } catch (_: Throwable) {}
+                        }
+                        result
                     }
                     Log.d(TAG, "Hooked CallButtonFragment.startCallButtonAnimator successfully.")
+                    break
+                }
+            }
+
+            // Hook CallButtonFragment.updatePanelPadding to enforce custom bottom offset
+            for (m: Method in callButtonFragmentClass.declaredMethods) {
+                if (m.name == "updatePanelPadding" && m.parameterTypes.isEmpty()) {
+                    module.hook(m).intercept { chain ->
+                        val result = chain.proceed()
+                        try {
+                            val fragment = chain.thisObject
+                            val config = IosCallerConfigHolder.config
+                            val rootViewField = fragment.javaClass.getDeclaredField("mRootView").apply { isAccessible = true }
+                            val rootView = rootViewField.get(fragment) as? View
+                            if (rootView != null) {
+                                val d = rootView.resources.displayMetrics.density
+                                val bottomPadding = (config.bottomOffset * d).toInt()
+                                rootView.setPadding(0, 0, 0, bottomPadding)
+                            }
+                        } catch (_: Throwable) {}
+                        result
+                    }
+                    Log.d(TAG, "Hooked CallButtonFragment.updatePanelPadding successfully.")
                     break
                 }
             }
@@ -289,12 +360,35 @@ object IosCallerScreenHook {
         }
     }
 
-    private fun findActivity(context: Context): Activity? {
+    internal fun findActivity(context: Context): Activity? {
         var ctx: Context? = context
         while (ctx is ContextWrapper) {
             if (ctx is Activity) return ctx
             ctx = ctx.baseContext
         }
         return null
+    }
+
+    private fun registerSettingsReceiver(context: Context, prefs: HyperBouncePrefs) {
+        if (isReceiverRegistered) return
+        try {
+            val filter = android.content.IntentFilter("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED")
+            val receiver = object : android.content.BroadcastReceiver() {
+                override fun onReceive(ctx: Context?, intent: android.content.Intent?) {
+                    try {
+                        IosCallerConfigHolder.updateFromPrefs(prefs.prefs)
+                        Log.d(TAG, "Updated IosCallerConfig from broadcast: ${IosCallerConfigHolder.config}")
+                    } catch (_: Throwable) {}
+                }
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                context.applicationContext.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                context.applicationContext.registerReceiver(receiver, filter)
+            }
+            isReceiverRegistered = true
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to register settings receiver", t)
+        }
     }
 }

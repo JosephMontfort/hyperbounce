@@ -7,6 +7,8 @@ import android.content.SharedPreferences
  */
 data class IosCallerConfig(
     val enabled: Boolean = true,
+    val buttonSize: Float = 76f,
+    val bottomOffset: Float = 68f,
     val hapticsEnabled: Boolean = true,
     val shimmerEffect: Boolean = true,
     val slideThreshold: Float = 0.75f
@@ -19,6 +21,8 @@ object IosCallerConfigHolder {
         if (prefs == null) return
         config = IosCallerConfig(
             enabled = prefs.getBoolean("caller_screen_enabled", true),
+            buttonSize = prefs.getFloat("caller_button_size", 76f),
+            bottomOffset = prefs.getFloat("caller_bottom_offset", 68f),
             hapticsEnabled = prefs.getBoolean("caller_haptics_enabled", true),
             shimmerEffect = prefs.getBoolean("caller_shimmer_enabled", true),
             slideThreshold = prefs.getFloat("caller_slide_threshold", 0.75f)

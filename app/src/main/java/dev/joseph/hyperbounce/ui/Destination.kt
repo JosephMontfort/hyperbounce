@@ -20,6 +20,7 @@ sealed interface Destination {
     data object AppTransitions : Destination
     data object ControlCenter : Destination
     data object MorphPhysics : Destination
+    data object CallerScreen : Destination
     data object SafeMode : Destination
     data object About : Destination
 }
