@@ -167,8 +167,9 @@ object KeypadPhysicsOptimizedHook {
                                             .translationY(0f)
                                             .scaleX(1.0f)
                                             .scaleY(1.0f)
-                                            .setDuration(260L)
-                                            .setInterpolator(OvershootInterpolator(1.35f))
+                                            .setStartDelay(0L)
+                                            .setDuration(240L)
+                                            .setInterpolator(OvershootInterpolator(2.2f))
                                             .setUpdateListener { view.invalidate() }
                                             .start()
                                     }
@@ -375,6 +376,90 @@ object KeypadPhysicsOptimizedHook {
                                 styleActionButton(pinView.findViewById(id))
                             }
                         }
+
+                        // 6. Unclip All Rows
+                        for (rId in intArrayOf(row0Id, row1Id, row2Id, row3Id, row4Id)) {
+                            if (rId != 0) {
+                                (pinView.findViewById<View>(rId) as? ViewGroup)?.clipChildren = false
+                                (pinView.findViewById<View>(rId) as? ViewGroup)?.clipToPadding = false
+                            }
+                        }
+
+                        // 7. Direct Touch Routing for Elevated / Negative-Translated Rows (e.g. Row 1: Keys 1, 2, 3)
+                        val attachKeyTouchRouter: (View?) -> Unit = { targetView ->
+                            if (targetView != null) {
+                                var activeForwardKey: View? = null
+                                val tempLoc = IntArray(2)
+
+                                targetView.setOnTouchListener { _, ev ->
+                                    when (ev.actionMasked) {
+                                        MotionEvent.ACTION_DOWN -> {
+                                            activeForwardKey = null
+                                            for (id in numKeyIds) {
+                                                if (id != 0) {
+                                                    val key = pinView.findViewById<View>(id)
+                                                    if (key != null && key.visibility == View.VISIBLE) {
+                                                        key.getLocationOnScreen(tempLoc)
+                                                        val l = tempLoc[0].toFloat()
+                                                        val t = tempLoc[1].toFloat()
+                                                        val r = l + key.width
+                                                        val b = t + key.height
+                                                        if (ev.rawX >= l && ev.rawX <= r && ev.rawY >= t && ev.rawY <= b) {
+                                                            activeForwardKey = key
+                                                            break
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            val targetKey = activeForwardKey
+                                            if (targetKey != null) {
+                                                val localEvent = MotionEvent.obtain(ev)
+                                                targetKey.getLocationOnScreen(tempLoc)
+                                                localEvent.setLocation(ev.rawX - tempLoc[0], ev.rawY - tempLoc[1])
+                                                val handled = targetKey.dispatchTouchEvent(localEvent)
+                                                localEvent.recycle()
+                                                handled
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        MotionEvent.ACTION_MOVE -> {
+                                            val targetKey = activeForwardKey
+                                            if (targetKey != null) {
+                                                val localEvent = MotionEvent.obtain(ev)
+                                                targetKey.getLocationOnScreen(tempLoc)
+                                                localEvent.setLocation(ev.rawX - tempLoc[0], ev.rawY - tempLoc[1])
+                                                targetKey.dispatchTouchEvent(localEvent)
+                                                localEvent.recycle()
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                                            val targetKey = activeForwardKey
+                                            activeForwardKey = null
+                                            if (targetKey != null) {
+                                                val localEvent = MotionEvent.obtain(ev)
+                                                targetKey.getLocationOnScreen(tempLoc)
+                                                localEvent.setLocation(ev.rawX - tempLoc[0], ev.rawY - tempLoc[1])
+                                                targetKey.dispatchTouchEvent(localEvent)
+                                                localEvent.recycle()
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        else -> false
+                                    }
+                                }
+                            }
+                        }
+
+                        val spacePattrenId = ctx.resources.getIdentifier("space_pattren", "id", "com.android.systemui")
+                        if (spacePattrenId != 0) attachKeyTouchRouter(pinView.findViewById(spacePattrenId))
+                        if (row0Id != 0) attachKeyTouchRouter(pinView.findViewById(row0Id))
+                        attachKeyTouchRouter(pinView)
                     } catch (_: Throwable) {}
                 }
             }

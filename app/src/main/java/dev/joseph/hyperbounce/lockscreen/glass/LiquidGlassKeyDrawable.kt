@@ -77,8 +77,6 @@ class LiquidGlassKeyDrawable(
             uniform float  innerShadow;
             uniform float  satFactor;
             uniform float  press;
-            uniform float2 touchPos;
-            uniform float  touchAmp;
 
             float sdCircle(float2 p, float r) {
                 return length(p) - r;
@@ -104,16 +102,6 @@ class LiquidGlassKeyDrawable(
 
                 float refr = refractPx * (1.0 + 0.60 * press);
                 float2 offset = -n * (slope * refr);
-
-                if (touchAmp > 0.001) {
-                    float2 tp = relP - touchPos;
-                    float tr = length(tp);
-                    float sigma = max(radius * 0.75, 1.0);
-                    float bump = touchAmp * exp(-(tr * tr) / (sigma * sigma * 0.35));
-                    if (tr > 1.0) {
-                        offset -= (tp / tr) * (bump * refr * 0.50);
-                    }
-                }
 
                 float2 cR = coord + offset * (1.0 - dispersion * slope);
                 float2 cG = coord + offset;
@@ -223,8 +211,8 @@ class LiquidGlassKeyDrawable(
     fun onTouchUp() {
         pressAnimator?.cancel()
         pressAnimator = ValueAnimator.ofFloat(pressProgress, 0.0f).apply {
-            duration = 260L
-            interpolator = OvershootInterpolator(1.35f)
+            duration = 240L
+            interpolator = OvershootInterpolator(2.0f)
             addUpdateListener {
                 pressProgress = it.animatedValue as Float
                 invalidateSelf()
@@ -368,8 +356,6 @@ class LiquidGlassKeyDrawable(
                 sh.setFloatUniform("innerShadow", cfg.buttonInnerShadow)
                 sh.setFloatUniform("satFactor", cfg.buttonSaturation / 100f)
                 sh.setFloatUniform("press", pressProgress)
-                sh.setFloatUniform("touchPos", touchLocalX - cx, touchLocalY - cy)
-                sh.setFloatUniform("touchAmp", if (pressProgress > 0.01f) pressProgress * cfg.pressLiquidAmp else 0f)
 
                 val lensEffect = RenderEffect.createRuntimeShaderEffect(sh, "content")
                 val blurDp = if (cfg.buttonBlur > 0.01f) cfg.buttonBlur else 24f
