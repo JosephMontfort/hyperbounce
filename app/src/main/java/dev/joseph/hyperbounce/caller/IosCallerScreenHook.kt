@@ -317,6 +317,10 @@ object IosCallerScreenHook {
                 }
                 Log.d(TAG, "Hooked Resources dimension methods for call_oval_item_size ($callOvalItemSizeResId)")
             }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook Resources dimensions", t)
+        }
+
         // 6. Hook DialpadFragment & DialpadButton to prevent keypad number buttons clipping at top and bottom
         try {
             val dialpadFragmentClass = Class.forName("com.android.incallui.DialpadFragment", false, classLoader)
