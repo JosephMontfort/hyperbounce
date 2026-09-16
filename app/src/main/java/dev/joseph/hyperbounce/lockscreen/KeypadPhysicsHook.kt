@@ -1,5 +1,8 @@
 package dev.joseph.hyperbounce.lockscreen
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.graphics.Typeface
 import android.os.Handler
 import android.os.Looper
@@ -12,6 +15,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
+import android.view.animation.LinearInterpolator
 import android.view.animation.OvershootInterpolator
 import android.widget.ImageView
 import android.widget.TextView
@@ -24,6 +28,7 @@ import java.util.WeakHashMap
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -54,6 +59,7 @@ object KeypadPhysicsHook {
     )
 
     private val touchStates = WeakHashMap<View, KeypadTouchState>()
+    private val appearAnimators = WeakHashMap<View, ValueAnimator>()
 
     private fun getBaseTranslationX(view: View, cfg: LockScreenKeypadConfig, density: Float): Float {
         val entryName = try {
@@ -65,6 +71,46 @@ object KeypadPhysicsHook {
             "key1", "key4", "key7" -> -cfg.col1Offset * density
             "key3", "key6", "key9" -> cfg.col3Offset * density
             else -> 0f
+        }
+    }
+
+    /**
+     * Computes the normalized inertia-based liquid volume deformation delta_y for cascade entrance.
+     * Continuous C1-smoothstep cubic splines guarantee zero-derivative knot transitions:
+     * - In-flight (u in [0.00, 0.44]): vertical elongation along motion trajectory (delta_y > 0)
+     * - Impact landing (u in [0.44, 0.70]): momentum squishes bubble flat horizontally (delta_y < 0)
+     * - Surface tension rebound (u in [0.70, 0.86]): elastic rebound (delta_y > 0)
+     * - Damped settle (u in [0.86, 1.00]): gentle dying wobble settling to 0
+     */
+    private fun computeLiquidSquishDelta(u: Float): Float {
+        val knots = floatArrayOf(0.00f, 0.22f, 0.44f, 0.58f, 0.74f, 0.88f, 1.00f)
+        val values = floatArrayOf(0.00f, 0.18f, 0.00f, -0.17f, 0.07f, -0.02f, 0.00f)
+
+        if (u <= 0f) return values[0]
+        if (u >= 1f) return values[values.size - 1]
+
+        var i = 0
+        while (i < knots.size - 1 && u > knots[i + 1]) {
+            i++
+        }
+        val t0 = knots[i]
+        val t1 = knots[i + 1]
+        val p = (u - t0) / (t1 - t0)
+        // Smoothstep Hermite curve: s(0)=0, s(1)=1, s'(0)=0, s'(1)=0
+        val s = p * p * (3f - 2f * p)
+        return values[i] + s * (values[i + 1] - values[i])
+    }
+
+    private fun computeEntranceTranslationY(u: Float, transY: Float): Float {
+        return if (u < 0.54f) {
+            val p = u / 0.54f
+            val s = 1f - (1f - p) * (1f - p)
+            transY * (1f - s)
+        } else if (u < 0.78f) {
+            val p = (u - 0.54f) / 0.24f
+            -0.055f * transY * sin((p * Math.PI).toDouble()).toFloat() * (1f - p)
+        } else {
+            0f
         }
     }
 
@@ -92,12 +138,23 @@ object KeypadPhysicsHook {
 
                                 when (event.actionMasked) {
                                     MotionEvent.ACTION_DOWN -> {
+                                        appearAnimators.remove(view)?.cancel()
                                         view.animate().cancel()
                                         touchStates[view] = KeypadTouchState(
                                             downRawX = event.rawX,
                                             downRawY = event.rawY,
                                             isDragging = false
                                         )
+
+                                        // Ensure ancestors do not clip dragged button across row bounds
+                                        (view.parent as? ViewGroup)?.clipChildren = false
+                                        (view.parent as? ViewGroup)?.clipToPadding = false
+                                        (view.parent?.parent as? ViewGroup)?.clipChildren = false
+                                        (view.parent?.parent as? ViewGroup)?.clipToPadding = false
+
+                                        // Elevate touched key and its row so they are at the topmost layer of the keypad
+                                        view.translationZ = 120f * density
+                                        (view.parent as? View)?.translationZ = 120f * density
 
                                         // Zero-lag iOS-calibrated tactile compression (60ms decelerate curve)
                                         view.animate()
@@ -120,37 +177,66 @@ object KeypadPhysicsHook {
                                         val dy = event.rawY - downRawY
                                         val distSq = dx * dx + dy * dy
 
-                                        val slop = 2.5f * density
+                                        val slop = 2.0f * density
                                         if (distSq > slop * slop || state?.isDragging == true) {
                                             state?.isDragging = true
                                             view.animate().cancel()
 
+                                            // Maintain topmost Z-order and unclipping during active dragging
+                                            view.translationZ = 120f * density
+                                            (view.parent as? View)?.translationZ = 120f * density
+                                            (view.parent as? ViewGroup)?.clipChildren = false
+                                            (view.parent as? ViewGroup)?.clipToPadding = false
+
                                             val w = view.width.toFloat().coerceAtLeast(1f)
                                             val h = view.height.toFloat().coerceAtLeast(1f)
                                             val minDim = min(w, h)
-                                            val maxDim = max(w, h)
 
-                                            // 1. AndroidLiquidGlass rubberband displacement (tanh tension)
+                                            // 1. Featherlight liquid bubble displacement (threshold kept as is: maxOffset = minDim * 0.40f)
                                             val maxOffset = minDim * 0.40f
-                                            val initialDerivative = 0.08f
-                                            val jellyTx = (maxOffset * tanh(initialDerivative * dx / maxOffset)).toFloat()
-                                            val jellyTy = (maxOffset * tanh(initialDerivative * dy / maxOffset)).toFloat()
+                                            val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
 
-                                            // 2. AndroidLiquidGlass volume-preserving anisotropic stretch along drag angle
-                                            val maxDragScale = 8f * density / h
-                                            val offsetAngle = atan2(dy.toDouble(), dx.toDouble()).toFloat()
+                                            val jellyTx: Float
+                                            val jellyTy: Float
+                                            val stretchRatio: Float
+                                            val dirX: Float
+                                            val dirY: Float
 
-                                            val stretchX = maxDragScale * abs(cos(offsetAngle) * (dx / maxDim)) * (w / h).coerceAtMost(1f)
-                                            val stretchY = maxDragScale * abs(sin(offsetAngle) * (dy / maxDim)) * (h / w).coerceAtMost(1f)
+                                            if (dist > 0.001f) {
+                                                dirX = dx / dist
+                                                dirY = dy / dist
+                                                // Featherlight, natural fluid response (initialDerivative = 0.72f):
+                                                // Instant tracking with zero sluggishness, smoothly capping at maxOffset
+                                                val disp = (maxOffset * tanh((0.72f * dist / maxOffset).toDouble())).toFloat()
+                                                jellyTx = dirX * disp
+                                                jellyTy = dirY * disp
+                                                stretchRatio = (disp / maxOffset).coerceIn(0f, 1f)
+                                            } else {
+                                                dirX = 0f
+                                                dirY = 0f
+                                                jellyTx = 0f
+                                                jellyTy = 0f
+                                                stretchRatio = 0f
+                                            }
 
-                                            // 3. Poisson volume preservation: perpendicular compression
-                                            val volumeCompX = -0.35f * stretchY
-                                            val volumeCompY = -0.35f * stretchX
+                                            // 2. Physical Volume-Preserved Liquid Bubble Stretch along drag angle
+                                            // As the bubble stretches along (dirX, dirY), it elongates longitudinally by (1 + stretchAmount)
+                                            // and contracts transversely by (1 / (1 + stretchAmount)) to strictly preserve 2D liquid volume.
+                                            val maxStretchFactor = 0.28f
+                                            val stretchAmount = stretchRatio * maxStretchFactor
+                                            val compAmount = 1f - (1f / (1f + stretchAmount))
+
+                                            val baseScale = cfg.pressLiquidScale + (1.0f - cfg.pressLiquidScale) * (stretchRatio * 0.45f)
+
+                                            val dirX2 = dirX * dirX
+                                            val dirY2 = dirY * dirY
+                                            val liquidScaleX = baseScale * (1f + stretchAmount * dirX2 - compAmount * dirY2)
+                                            val liquidScaleY = baseScale * (1f + stretchAmount * dirY2 - compAmount * dirX2)
 
                                             view.translationX = baseTransX + jellyTx
                                             view.translationY = jellyTy
-                                            view.scaleX = (cfg.pressLiquidScale + stretchX + volumeCompX).coerceIn(0.70f, 1.35f)
-                                            view.scaleY = (cfg.pressLiquidScale + stretchY + volumeCompY).coerceIn(0.70f, 1.35f)
+                                            view.scaleX = liquidScaleX.coerceIn(0.65f, 1.45f)
+                                            view.scaleY = liquidScaleY.coerceIn(0.65f, 1.45f)
                                         }
 
                                         liquidDrawable?.onTouchMove(event.x, event.y)
@@ -162,16 +248,28 @@ object KeypadPhysicsHook {
                                         liquidDrawable?.onTouchUp()
 
                                         view.animate().cancel()
+                                        val rowParent = view.parent as? View
+
                                         view.animate()
                                             .translationX(baseTransX)
                                             .translationY(0f)
+                                            .translationZ(0f)
                                             .scaleX(1.0f)
                                             .scaleY(1.0f)
                                             .setStartDelay(0L)
-                                            .setDuration(240L)
+                                            .setDuration(280L)
                                             .setInterpolator(OvershootInterpolator(2.2f))
                                             .setUpdateListener { view.invalidate() }
+                                            .withEndAction {
+                                                view.translationZ = 0f
+                                                rowParent?.translationZ = 0f
+                                            }
                                             .start()
+
+                                        rowParent?.animate()
+                                            ?.translationZ(0f)
+                                            ?.setDuration(280L)
+                                            ?.start()
                                     }
                                 }
                             }
@@ -511,14 +609,24 @@ object KeypadPhysicsHook {
                             val animDuration = cfg.entryDuration.toLong().coerceAtLeast(150L)
                             val transY = cfg.entryTranslationY * density
                             val initialScale = cfg.entryInitialScale.coerceIn(0.1f, 1.0f)
-                            val overshoot = cfg.entryOvershoot.coerceAtLeast(1.0f)
                             val col1TransX = -cfg.col1Offset * density
                             val col3TransX = cfg.col3Offset * density
+                            val entranceDuration = (animDuration + 60L).coerceAtLeast(460L)
 
                             for (row in keys.indices) {
                                 for (col in keys[row].indices) {
                                     val name = keys[row][col]
-                                    val id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
+                                    var id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
+                                    if (id == 0 && name == "delete_button") {
+                                        val fallbackNames = arrayOf("cancel_button", "zero_delete_button", "zero_cancel_button")
+                                        for (fb in fallbackNames) {
+                                            val fbId = ctx.resources.getIdentifier(fb, "id", "com.android.systemui")
+                                            if (fbId != 0) {
+                                                id = fbId
+                                                break
+                                            }
+                                        }
+                                    }
                                     if (id == 0) continue
 
                                     val keyView = pinView.findViewById<View>(id) ?: continue
@@ -533,6 +641,7 @@ object KeypadPhysicsHook {
                                         else -> 0f
                                     }
 
+                                    appearAnimators.remove(keyView)?.cancel()
                                     keyView.animate().cancel()
                                     keyView.alpha = 0f
                                     keyView.translationY = transY
@@ -540,19 +649,54 @@ object KeypadPhysicsHook {
                                     keyView.scaleX = initialScale
                                     keyView.scaleY = initialScale
 
-                                    keyView.animate()
-                                        .alpha(1f)
-                                        .translationY(0f)
-                                        .translationX(targetTransX)
-                                        .scaleX(1f)
-                                        .scaleY(1f)
-                                        .setDuration(animDuration)
-                                        .setStartDelay(delay)
-                                        .setInterpolator(OvershootInterpolator(overshoot))
-                                        .setUpdateListener {
+                                    val animator = ValueAnimator.ofFloat(0f, 1f).apply {
+                                        duration = entranceDuration
+                                        startDelay = delay
+                                        interpolator = LinearInterpolator()
+
+                                        addUpdateListener { va ->
+                                            val u = va.animatedFraction
+
+                                            val alpha = (u / 0.18f).coerceIn(0f, 1f)
+                                            val currY = computeEntranceTranslationY(u, transY)
+
+                                            val deltaY = computeLiquidSquishDelta(u)
+                                            val squishY = (1.0f + deltaY).coerceAtLeast(0.4f)
+                                            val squishX = 1.0f / squishY
+
+                                            val scaleProg = (u / 0.20f).coerceIn(0f, 1f)
+                                            val smoothBaseProg = scaleProg * scaleProg * (3f - 2f * scaleProg)
+                                            val baseScale = initialScale + (1.0f - initialScale) * smoothBaseProg
+
+                                            keyView.alpha = alpha
+                                            keyView.translationY = currY
+                                            keyView.translationX = targetTransX
+                                            keyView.scaleX = baseScale * squishX
+                                            keyView.scaleY = baseScale * squishY
                                             keyView.invalidate()
                                         }
-                                        .start()
+
+                                        addListener(object : AnimatorListenerAdapter() {
+                                            private var isCancelled = false
+                                            override fun onAnimationCancel(animation: Animator) {
+                                                isCancelled = true
+                                                appearAnimators.remove(keyView)
+                                            }
+                                            override fun onAnimationEnd(animation: Animator) {
+                                                if (!isCancelled) {
+                                                    keyView.alpha = 1f
+                                                    keyView.translationY = 0f
+                                                    keyView.translationX = targetTransX
+                                                    keyView.scaleX = 1f
+                                                    keyView.scaleY = 1f
+                                                    keyView.invalidate()
+                                                }
+                                                appearAnimators.remove(keyView)
+                                            }
+                                        })
+                                    }
+                                    appearAnimators[keyView] = animator
+                                    animator.start()
                                 }
                             }
 
@@ -582,6 +726,11 @@ object KeypadPhysicsHook {
                             val pinView = pinViewObj as? View ?: return chain.proceed()
                             val cfg = LockScreenConfigHolder.keypad
                             if (!cfg.enabled) return chain.proceed()
+
+                            for (anim in appearAnimators.values) {
+                                anim.cancel()
+                            }
+                            appearAnimators.clear()
 
                             val ctx = pinView.context
                             val density = ctx.resources.displayMetrics.density
@@ -632,6 +781,10 @@ object KeypadPhysicsHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             try {
+                                for (anim in appearAnimators.values) {
+                                    anim.cancel()
+                                }
+                                appearAnimators.clear()
                                 val pinView = chain.thisObject as? View
                                 if (pinView != null) {
                                     val ctx = pinView.context
