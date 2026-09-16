@@ -3,14 +3,20 @@ package dev.joseph.hyperbounce.caller
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorFilter
+import android.graphics.Paint
+import android.graphics.PixelFormat
 import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.TextView
 import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
 import io.github.libxposed.api.XposedModule
@@ -532,6 +538,7 @@ object IosCallerScreenHook {
                         audioBtn?.translationY = deltaY
                         toolBtn?.translationY = deltaY
 
+                        applyCallButtonSize(endBtn)
                         disableClippingRecursively(endBtn)
                         disableClippingRecursively(audioBtn)
                         disableClippingRecursively(toolBtn)
@@ -640,10 +647,33 @@ object IosCallerScreenHook {
                 }
             }
 
-            // 5. Scale icons inside CallButton
+            // 5. Replace stock Xiaomi end call hangup icon with authentic iOS phone handset icon, perfectly matching slider
             val endIconField = try { view.javaClass.getDeclaredField("mEndCallIconButton").apply { isAccessible = true } } catch (_: Throwable) { null }
             val endIcon = endIconField?.get(view) as? View ?: view.findViewById<View>(view.resources.getIdentifier("endCallIcon", "id", view.context.packageName))
-            if (endIcon != null) {
+            if (endIcon is ImageView) {
+                endIcon.scaleX = 1.0f
+                endIcon.scaleY = 1.0f
+                endIcon.scaleType = ImageView.ScaleType.CENTER
+                endIcon.setPadding(0, 0, 0, 0)
+                endIcon.layoutParams?.let { lp ->
+                    if (lp.width != targetPx || lp.height != targetPx) {
+                        lp.width = targetPx
+                        lp.height = targetPx
+                        endIcon.layoutParams = lp
+                    }
+                }
+                if (endIcon.drawable !is IosEndCallIconDrawable) {
+                    endIcon.setImageDrawable(IosEndCallIconDrawable(d, config.buttonSize))
+                }
+                if (endIcon.tag != "ios_end_icon_hooked") {
+                    endIcon.tag = "ios_end_icon_hooked"
+                    endIcon.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                        if (endIcon.drawable !is IosEndCallIconDrawable) {
+                            endIcon.setImageDrawable(IosEndCallIconDrawable(d, config.buttonSize))
+                        }
+                    }
+                }
+            } else if (endIcon != null) {
                 endIcon.scaleX = iconScale
                 endIcon.scaleY = iconScale
             }
@@ -734,3 +764,49 @@ object IosCallerScreenHook {
         }
     }
 }
+
+/**
+ * Custom Drawable that renders the authentic iOS handset icon rotated 135 degrees in pure white.
+ * Exactly matches the geometry, scaling, and orientation of the knob's morphed phone icon in [IosSliderView].
+ */
+class IosEndCallIconDrawable(density: Float, buttonSizeDp: Float) : Drawable() {
+    private val iconTargetSize = (buttonSizeDp * density) / 2f
+    private val intrinsicSize = (buttonSizeDp * density).toInt()
+    private val phonePath = createIosPhonePath()
+
+    private val phonePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.WHITE
+    }
+
+    override fun draw(canvas: Canvas) {
+        val b = bounds
+        val cx = b.exactCenterX()
+        val cy = b.exactCenterY()
+        canvas.save()
+        canvas.translate(cx, cy)
+        canvas.rotate(135f)
+        val scale = iconTargetSize / 24f
+        canvas.scale(scale, scale)
+        canvas.translate(-12f, -12f)
+        canvas.drawPath(phonePath, phonePaint)
+        canvas.restore()
+    }
+
+    override fun getIntrinsicWidth(): Int = intrinsicSize
+    override fun getIntrinsicHeight(): Int = intrinsicSize
+
+    override fun setAlpha(alpha: Int) {
+        phonePaint.alpha = alpha
+        invalidateSelf()
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        phonePaint.colorFilter = colorFilter
+        invalidateSelf()
+    }
+
+    @Suppress("DEPRECATION")
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
