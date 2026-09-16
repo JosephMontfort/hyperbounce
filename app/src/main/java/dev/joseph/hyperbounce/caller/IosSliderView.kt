@@ -132,7 +132,6 @@ class IosSliderView @JvmOverloads constructor(
     private var danceRotation: Float = 0f
     private var danceScale: Float = 1f
     private var danceJiggleX: Float = 0f
-    private var isDragging: Boolean = false
 
     // Handset vector path in 24x24 scale
     private val phonePath = Path().apply {
