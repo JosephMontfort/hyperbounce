@@ -7,7 +7,6 @@ import android.graphics.Typeface
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.util.Pair
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
@@ -218,7 +217,7 @@ object KeypadPhysicsHook {
                                                 // Power p ramps up resistance with pull distance.
                                                 val k0 = cfg.dragInitialStiffness.coerceIn(0.15f, 0.85f).toDouble()
                                                 val p = cfg.dragResistancePower.coerceIn(1.0f, 3.5f).toDouble()
-                                                val xNorm = (dist / maxOffset).coerceAtLeast(0.0).toDouble()
+                                                val xNorm = (dist / maxOffset).coerceAtLeast(0f).toDouble()
                                                 val kx = k0 * xNorm
                                                 val denom = Math.pow(1.0 + Math.pow(kx, p), 1.0 / p)
                                                 val disp = (maxOffset * (kx / denom)).toFloat().coerceAtMost(maxOffset)
@@ -679,7 +678,7 @@ object KeypadPhysicsHook {
                             val density = ctx.resources.displayMetrics.density
 
                             try {
-                                val pairs = Array(4) { Array(3) { Pair(0, 0) } }
+                                val pairs = Array(4) { Array(3) { android.util.Pair(0, 0) } }
                                 val keysAnimField = try { pinViewObj.javaClass.getField("keysAnimStartState") } catch (_: Throwable) { null }
                                 if (keysAnimField != null) {
                                     keysAnimField.isAccessible = true
