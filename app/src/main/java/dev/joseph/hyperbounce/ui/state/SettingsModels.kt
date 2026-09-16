@@ -235,7 +235,7 @@ data class LockScreenKeypadSettings(
     val iosBloomStiffness: Float = 13.5f,
     val iosBloomRadialSquish: Float = 0.28f,
     val iosBloomVelocityStretch: Float = 0.16f,
-    val iosBloomWaveStagger: Float = 22.0f,
+    val iosBloomWaveStagger: Float = 0.0f,
     val iosBloomDecoupleText: Boolean = true
 )
 

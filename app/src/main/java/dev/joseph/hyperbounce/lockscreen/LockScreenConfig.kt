@@ -95,7 +95,7 @@ data class LockScreenKeypadConfig(
     var iosBloomStiffness: Float = 13.5f,
     var iosBloomRadialSquish: Float = 0.28f,
     var iosBloomVelocityStretch: Float = 0.16f,
-    var iosBloomWaveStagger: Float = 22.0f,
+    var iosBloomWaveStagger: Float = 0.0f,
     var iosBloomDecoupleText: Boolean = true
 ) {
     fun getKeyDelay(keyName: String, row: Int, col: Int): Long {
@@ -213,7 +213,7 @@ object LockScreenConfigHolder {
         keypad.iosBloomStiffness = prefs.getFloat("pin_ios_bloom_stiffness", 13.5f)
         keypad.iosBloomRadialSquish = prefs.getFloat("pin_ios_bloom_radial_squish", 0.28f)
         keypad.iosBloomVelocityStretch = prefs.getFloat("pin_ios_bloom_velocity_stretch", 0.16f)
-        keypad.iosBloomWaveStagger = prefs.getFloat("pin_ios_bloom_wave_stagger", 22.0f)
+        keypad.iosBloomWaveStagger = prefs.getFloat("pin_ios_bloom_wave_stagger", 0.0f)
         keypad.iosBloomDecoupleText = prefs.getBoolean("pin_ios_bloom_decouple_text", true)
     }
 }

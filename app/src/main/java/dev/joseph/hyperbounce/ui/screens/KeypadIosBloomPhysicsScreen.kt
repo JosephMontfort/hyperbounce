@@ -41,7 +41,7 @@ fun KeypadIosBloomPhysicsScreen(
             keypad.setIosBloomStiffness(13.5f)
             keypad.setIosBloomRadialSquish(0.28f)
             keypad.setIosBloomVelocityStretch(0.16f)
-            keypad.setIosBloomWaveStagger(22.0f)
+            keypad.setIosBloomWaveStagger(0.0f)
             keypad.setIosBloomDecoupleText(true)
         },
         restartAppTitle = "Restart System UI",
@@ -146,7 +146,7 @@ fun KeypadIosBloomPhysicsScreen(
                     value = keypad.iosBloomWaveStagger,
                     onValueChange = keypad::setIosBloomWaveStagger,
                     valueRange = 0.0f..50.0f,
-                    defaultValue = 22.0f,
+                    defaultValue = 0.0f,
                     valueLabel = { "${it.toInt()} ms" },
                     enabled = keypad.enabled
                 )
