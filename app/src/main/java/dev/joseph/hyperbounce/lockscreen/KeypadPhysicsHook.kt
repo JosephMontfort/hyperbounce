@@ -118,6 +118,325 @@ object KeypadPhysicsHook {
         return Pair(currentY, deltaY)
     }
 
+    private var cachedDigitField: Field? = null
+    private var cachedKlondikeField: Field? = null
+    private var hasCachedFields = false
+
+    private fun ensureCachedKeyFields(keyClass: Class<*>) {
+        if (hasCachedFields) return
+        hasCachedFields = true
+        try {
+            cachedDigitField = keyClass.getDeclaredField("mDigitText").apply { isAccessible = true }
+        } catch (_: Throwable) {}
+        try {
+            cachedKlondikeField = keyClass.getDeclaredField("mKlondikeText").apply { isAccessible = true }
+        } catch (_: Throwable) {}
+    }
+
+    private fun startCascadeAnimation(
+        pinView: View,
+        cfg: LockScreenKeypadConfig,
+        density: Float
+    ) {
+        val ctx = pinView.context
+        val keys = arrayOf(
+            arrayOf("key1", "key2", "key3"),
+            arrayOf("key4", "key5", "key6"),
+            arrayOf("key7", "key8", "key9"),
+            arrayOf("emergency_call_button", "key0", "delete_button")
+        )
+
+        val animDuration = cfg.entryDuration.toLong().coerceAtLeast(150L)
+        val transY = cfg.entryTranslationY * density
+        val initialScale = cfg.entryInitialScale.coerceIn(0.1f, 1.0f)
+        val col1TransX = -cfg.col1Offset * density
+        val col3TransX = cfg.col3Offset * density
+        val entranceDuration = (animDuration + 60L).coerceAtLeast(460L)
+
+        for (row in keys.indices) {
+            for (col in keys[row].indices) {
+                val name = keys[row][col]
+                var id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
+                if (id == 0 && name == "delete_button") {
+                    val fallbackNames = arrayOf("cancel_button", "zero_delete_button", "zero_cancel_button")
+                    for (fb in fallbackNames) {
+                        val fbId = ctx.resources.getIdentifier(fb, "id", "com.android.systemui")
+                        if (fbId != 0) {
+                            id = fbId
+                            break
+                        }
+                    }
+                }
+                if (id == 0) continue
+
+                val keyView = pinView.findViewById<View>(id) ?: continue
+                val delay = cfg.getKeyDelay(name, row, col).coerceAtLeast(0L)
+
+                val optDrawable = keyView.background as? LiquidGlassKeyOptimizedDrawable
+                optDrawable?.startLiveTracking()
+
+                val targetTransX = when (col) {
+                    0 -> col1TransX
+                    2 -> col3TransX
+                    else -> 0f
+                }
+
+                appearAnimators.remove(keyView)?.cancel()
+                keyView.animate().cancel()
+                keyView.alpha = 0f
+                keyView.translationY = transY
+                keyView.translationX = targetTransX
+                keyView.scaleX = initialScale
+                keyView.scaleY = initialScale
+
+                val animator = ValueAnimator.ofFloat(0f, 1f).apply {
+                    duration = entranceDuration
+                    startDelay = delay
+                    interpolator = LinearInterpolator()
+
+                    addUpdateListener { va ->
+                        val u = va.animatedFraction
+
+                        val (currY, deltaY) = computeCascadePhysics(u, transY, cfg)
+                        val squishY = (1.0f + deltaY).coerceAtLeast(0.4f)
+                        val squishX = 1.0f / squishY
+
+                        val scaleProg = (u / 0.18f).coerceIn(0f, 1f)
+                        val smoothBaseProg = scaleProg * scaleProg * (3f - 2f * scaleProg)
+                        val baseScale = initialScale + (1.0f - initialScale) * smoothBaseProg
+
+                        keyView.alpha = (u / 0.15f).coerceIn(0f, 1f)
+                        keyView.translationY = currY
+                        keyView.translationX = targetTransX
+                        keyView.scaleX = baseScale * squishX
+                        keyView.scaleY = baseScale * squishY
+                        keyView.invalidate()
+                    }
+
+                    addListener(object : AnimatorListenerAdapter() {
+                        private var isCancelled = false
+                        override fun onAnimationCancel(animation: Animator) {
+                            isCancelled = true
+                            appearAnimators.remove(keyView)
+                        }
+                        override fun onAnimationEnd(animation: Animator) {
+                            if (!isCancelled) {
+                                keyView.alpha = 1f
+                                keyView.translationY = 0f
+                                keyView.translationX = targetTransX
+                                keyView.scaleX = 1f
+                                keyView.scaleY = 1f
+                                keyView.invalidate()
+                            }
+                            appearAnimators.remove(keyView)
+                        }
+                    })
+                }
+                appearAnimators[keyView] = animator
+                animator.start()
+            }
+        }
+    }
+
+    private fun startIos26RadialBloomAnimation(
+        pinView: View,
+        cfg: LockScreenKeypadConfig,
+        density: Float
+    ) {
+        val ctx = pinView.context
+        val keys = arrayOf(
+            arrayOf("key1", "key2", "key3"),
+            arrayOf("key4", "key5", "key6"),
+            arrayOf("key7", "key8", "key9"),
+            arrayOf("emergency_call_button", "key0", "delete_button")
+        )
+
+        val pitchX = (cfg.circleDiameter + 24f + cfg.columnSpacing) * density
+        val pitchY = (cfg.circleDiameter + 30f + cfg.rowSpacing) * density
+        val cluster = cfg.iosBloomClusterFactor.coerceIn(0.30f, 0.95f)
+
+        val totalDuration = cfg.iosBloomDuration.toLong().coerceIn(300L, 1000L)
+        val zeta = cfg.iosBloomDamping.toDouble().coerceIn(0.30, 0.85)
+        val omega = cfg.iosBloomStiffness.toDouble().coerceIn(8.0, 22.0)
+        val T = totalDuration / 1000.0
+        val sqrtTerm = Math.sqrt(Math.max(0.01, 1.0 - zeta * zeta))
+        val wd = omega * sqrtTerm
+
+        val kv = cfg.iosBloomVelocityStretch.coerceIn(0.02f, 0.40f)
+        val ka = cfg.iosBloomRadialSquish.coerceIn(0.05f, 0.60f)
+
+        for (row in keys.indices) {
+            for (col in keys[row].indices) {
+                val name = keys[row][col]
+                var id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
+                if (id == 0 && name == "delete_button") {
+                    val fallbackNames = arrayOf("cancel_button", "zero_delete_button", "zero_cancel_button")
+                    for (fb in fallbackNames) {
+                        val fbId = ctx.resources.getIdentifier(fb, "id", "com.android.systemui")
+                        if (fbId != 0) {
+                            id = fbId
+                            break
+                        }
+                    }
+                }
+                if (id == 0) continue
+
+                val keyView = pinView.findViewById<View>(id) ?: continue
+                ensureCachedKeyFields(keyView.javaClass)
+
+                val optDrawable = keyView.background as? LiquidGlassKeyOptimizedDrawable
+                optDrawable?.startLiveTracking()
+
+                val relCol = col - 1
+                val relRow = row - 1
+                val distUnits = Math.hypot(relCol.toDouble(), relRow.toDouble()).toFloat()
+                val vecX = relCol * pitchX
+                val vecY = relRow * pitchY
+
+                val startOffsetX = -vecX * cluster
+                val startOffsetY = -vecY * cluster
+
+                val angleRad = if (distUnits > 0.001f) Math.atan2(relRow.toDouble(), relCol.toDouble()) else 0.0
+                val dirX = if (distUnits > 0.001f) Math.cos(angleRad).toFloat() else 0f
+                val dirY = if (distUnits > 0.001f) Math.sin(angleRad).toFloat() else 0f
+
+                val customDelay = cfg.getKeyDelay(name, row, col)
+                val delay = if (customDelay >= 0L) customDelay else (distUnits * cfg.iosBloomWaveStagger).toLong().coerceAtLeast(0L)
+
+                appearAnimators.remove(keyView)?.cancel()
+                keyView.animate().cancel()
+
+                keyView.alpha = 0f
+                keyView.translationX = startOffsetX
+                keyView.translationY = startOffsetY
+                keyView.scaleX = 0.82f
+                keyView.scaleY = 0.82f
+
+                val digitText = if (cfg.iosBloomDecoupleText) {
+                    try { cachedDigitField?.get(keyView) as? View } catch (_: Throwable) { null }
+                } else null
+                val klondikeText = if (cfg.iosBloomDecoupleText) {
+                    try { cachedKlondikeField?.get(keyView) as? View } catch (_: Throwable) { null }
+                } else null
+
+                if (digitText != null) {
+                    digitText.translationX = -startOffsetX
+                    digitText.translationY = -startOffsetY
+                    digitText.scaleX = 1f / 0.82f
+                    digitText.scaleY = 1f / 0.82f
+                    digitText.alpha = 0f
+                }
+                if (klondikeText != null) {
+                    klondikeText.translationX = -startOffsetX
+                    klondikeText.translationY = -startOffsetY
+                    klondikeText.scaleX = 1f / 0.82f
+                    klondikeText.scaleY = 1f / 0.82f
+                    klondikeText.alpha = 0f
+                }
+
+                val animator = ValueAnimator.ofFloat(0f, 1f).apply {
+                    duration = totalDuration
+                    startDelay = delay
+                    interpolator = LinearInterpolator()
+
+                    addUpdateListener { va ->
+                        val u = va.animatedFraction
+                        val t = u * T
+                        val decay = Math.exp(-zeta * omega * t)
+                        val cosW = Math.cos(wd * t)
+                        val sinW = Math.sin(wd * t)
+
+                        // Harmonic spring progress with overshoot:
+                        val s = 1.0 - decay * (cosW + (zeta / sqrtTerm) * sinW)
+                        val sDot = (omega / sqrtTerm) * decay * sinW
+                        val sDdot = decay * (omega * omega * cosW - (zeta * omega * omega / sqrtTerm) * sinW)
+
+                        val currTransX = (startOffsetX * (1.0 - s)).toFloat()
+                        val currTransY = (startOffsetY * (1.0 - s)).toFloat()
+
+                        val scaleX: Float
+                        val scaleY: Float
+
+                        if (distUnits < 0.001f) {
+                            // Center button 5: isotropic breathing bloom
+                            val s5 = (1.0 - 0.32 * decay * cosW).toFloat().coerceIn(0.70f, 1.20f)
+                            scaleX = s5
+                            scaleY = s5
+                        } else {
+                            val velNorm = (sDot / omega).toFloat()
+                            val accelBrake = (Math.max(0.0, -sDdot) / (omega * omega)).toFloat()
+
+                            val deltaR = kv * velNorm - ka * accelBrake
+                            val deltaT = -deltaR * 0.70f
+
+                            val baseScale = (0.82f + 0.18f * Math.min(1.0, Math.max(0.0, s))).toFloat()
+                            scaleX = ((1.0f + (dirX * dirX * deltaR + dirY * dirY * deltaT)).coerceIn(0.65f, 1.45f) * baseScale).coerceIn(0.50f, 1.50f)
+                            scaleY = ((1.0f + (dirY * dirY * deltaR + dirX * dirX * deltaT)).coerceIn(0.65f, 1.45f) * baseScale).coerceIn(0.50f, 1.50f)
+                        }
+
+                        keyView.alpha = (u / 0.15f).coerceIn(0f, 1f)
+                        keyView.translationX = currTransX
+                        keyView.translationY = currTransY
+                        keyView.scaleX = scaleX
+                        keyView.scaleY = scaleY
+
+                        if (digitText != null) {
+                            digitText.translationX = -currTransX
+                            digitText.translationY = -currTransY
+                            digitText.scaleX = 1f / scaleX.coerceAtLeast(0.1f)
+                            digitText.scaleY = 1f / scaleY.coerceAtLeast(0.1f)
+                            digitText.alpha = (u / 0.12f).coerceIn(0f, 1f)
+                        }
+                        if (klondikeText != null) {
+                            klondikeText.translationX = -currTransX
+                            klondikeText.translationY = -currTransY
+                            klondikeText.scaleX = 1f / scaleX.coerceAtLeast(0.1f)
+                            klondikeText.scaleY = 1f / scaleY.coerceAtLeast(0.1f)
+                            klondikeText.alpha = (u / 0.12f).coerceIn(0f, 1f)
+                        }
+
+                        keyView.invalidate()
+                    }
+
+                    addListener(object : AnimatorListenerAdapter() {
+                        private var isCancelled = false
+                        override fun onAnimationCancel(animation: Animator) {
+                            isCancelled = true
+                            appearAnimators.remove(keyView)
+                        }
+                        override fun onAnimationEnd(animation: Animator) {
+                            if (!isCancelled) {
+                                keyView.translationX = 0f
+                                keyView.translationY = 0f
+                                keyView.scaleX = 1f
+                                keyView.scaleY = 1f
+                                keyView.alpha = 1f
+                                if (digitText != null) {
+                                    digitText.translationX = 0f
+                                    digitText.translationY = 0f
+                                    digitText.scaleX = 1f
+                                    digitText.scaleY = 1f
+                                    digitText.alpha = 1f
+                                }
+                                if (klondikeText != null) {
+                                    klondikeText.translationX = 0f
+                                    klondikeText.translationY = 0f
+                                    klondikeText.scaleX = 1f
+                                    klondikeText.scaleY = 1f
+                                    klondikeText.alpha = 1f
+                                }
+                                appearAnimators.remove(keyView)
+                            }
+                        }
+                    })
+                }
+
+                appearAnimators[keyView] = animator
+                animator.start()
+            }
+        }
+    }
+
     fun init(module: XposedModule, classLoader: ClassLoader) {
         // 1. Hook MiuiNumPadKey touch events for Liquid Glass 2.0 Press Optics & Jelly Physics
         try {
@@ -686,102 +1005,10 @@ object KeypadPhysicsHook {
                                 }
                             } catch (_: Throwable) {}
 
-                            val keys = arrayOf(
-                                arrayOf("key1", "key2", "key3"),
-                                arrayOf("key4", "key5", "key6"),
-                                arrayOf("key7", "key8", "key9"),
-                                arrayOf("emergency_call_button", "key0", "delete_button")
-                            )
-
-                            val animDuration = cfg.entryDuration.toLong().coerceAtLeast(150L)
-                            val transY = cfg.entryTranslationY * density
-                            val initialScale = cfg.entryInitialScale.coerceIn(0.1f, 1.0f)
-                            val col1TransX = -cfg.col1Offset * density
-                            val col3TransX = cfg.col3Offset * density
-                            val entranceDuration = (animDuration + 60L).coerceAtLeast(460L)
-
-                            for (row in keys.indices) {
-                                for (col in keys[row].indices) {
-                                    val name = keys[row][col]
-                                    var id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
-                                    if (id == 0 && name == "delete_button") {
-                                        val fallbackNames = arrayOf("cancel_button", "zero_delete_button", "zero_cancel_button")
-                                        for (fb in fallbackNames) {
-                                            val fbId = ctx.resources.getIdentifier(fb, "id", "com.android.systemui")
-                                            if (fbId != 0) {
-                                                id = fbId
-                                                break
-                                            }
-                                        }
-                                    }
-                                    if (id == 0) continue
-
-                                    val keyView = pinView.findViewById<View>(id) ?: continue
-                                    val delay = cfg.getKeyDelay(name, row, col).coerceAtLeast(0L)
-
-                                    val optDrawable = keyView.background as? LiquidGlassKeyOptimizedDrawable
-                                    optDrawable?.startLiveTracking()
-
-                                    val targetTransX = when (col) {
-                                        0 -> col1TransX
-                                        2 -> col3TransX
-                                        else -> 0f
-                                    }
-
-                                    appearAnimators.remove(keyView)?.cancel()
-                                    keyView.animate().cancel()
-                                    keyView.alpha = 0f
-                                    keyView.translationY = transY
-                                    keyView.translationX = targetTransX
-                                    keyView.scaleX = initialScale
-                                    keyView.scaleY = initialScale
-
-                                    val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-                                        duration = entranceDuration
-                                        startDelay = delay
-                                        interpolator = LinearInterpolator()
-
-                                        addUpdateListener { va ->
-                                            val u = va.animatedFraction
-
-                                            val (currY, deltaY) = computeCascadePhysics(u, transY, cfg)
-                                            val squishY = (1.0f + deltaY).coerceAtLeast(0.4f)
-                                            val squishX = 1.0f / squishY
-
-                                            val scaleProg = (u / 0.18f).coerceIn(0f, 1f)
-                                            val smoothBaseProg = scaleProg * scaleProg * (3f - 2f * scaleProg)
-                                            val baseScale = initialScale + (1.0f - initialScale) * smoothBaseProg
-
-                                            keyView.alpha = (u / 0.15f).coerceIn(0f, 1f)
-                                            keyView.translationY = currY
-                                            keyView.translationX = targetTransX
-                                            keyView.scaleX = baseScale * squishX
-                                            keyView.scaleY = baseScale * squishY
-                                            keyView.invalidate()
-                                        }
-
-                                        addListener(object : AnimatorListenerAdapter() {
-                                            private var isCancelled = false
-                                            override fun onAnimationCancel(animation: Animator) {
-                                                isCancelled = true
-                                                appearAnimators.remove(keyView)
-                                            }
-                                            override fun onAnimationEnd(animation: Animator) {
-                                                if (!isCancelled) {
-                                                    keyView.alpha = 1f
-                                                    keyView.translationY = 0f
-                                                    keyView.translationX = targetTransX
-                                                    keyView.scaleX = 1f
-                                                    keyView.scaleY = 1f
-                                                    keyView.invalidate()
-                                                }
-                                                appearAnimators.remove(keyView)
-                                            }
-                                        })
-                                    }
-                                    appearAnimators[keyView] = animator
-                                    animator.start()
-                                }
+                            if (cfg.entryAnimationType == "ios26") {
+                                startIos26RadialBloomAnimation(pinView, cfg, density)
+                            } else {
+                                startCascadeAnimation(pinView, cfg, density)
                             }
 
                             val row0Id = ctx.resources.getIdentifier("row0", "id", "com.android.systemui")

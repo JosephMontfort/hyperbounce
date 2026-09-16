@@ -53,6 +53,7 @@ import dev.joseph.hyperbounce.ui.screens.ControlCenterScreen
 import dev.joseph.hyperbounce.ui.screens.EngineScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadCascadePhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadDelaysScreen
+import dev.joseph.hyperbounce.ui.screens.KeypadIosBloomPhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadPhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadReleasePhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadScreen
@@ -253,6 +254,13 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                         )
 
                         Destination.KeypadCascadePhysics -> KeypadCascadePhysicsScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.KeypadIosBloomPhysics -> KeypadIosBloomPhysicsScreen(
                             repository = repository,
                             colors = colors,
                             backdrop = backdrop,

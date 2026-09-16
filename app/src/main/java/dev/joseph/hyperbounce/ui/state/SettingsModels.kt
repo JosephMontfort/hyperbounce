@@ -225,7 +225,18 @@ data class LockScreenKeypadSettings(
     val cascadeFlightElongation: Float = 0.22f,
     val cascadeLandingSquish: Float = 0.24f,
     val cascadeInertiaCoupling: Float = 1.0f,
-    val cascadeViscousDamping: Float = 0.75f
+    val cascadeViscousDamping: Float = 0.75f,
+    // iOS 26 Liquid Bloom
+    val entryAnimationType: String = "ios26",
+    val iosBloomDuration: Float = 520.0f,
+    val iosBloomClusterFactor: Float = 0.70f,
+    val iosBloomOvershoot: Float = 0.16f,
+    val iosBloomDamping: Float = 0.54f,
+    val iosBloomStiffness: Float = 13.5f,
+    val iosBloomRadialSquish: Float = 0.28f,
+    val iosBloomVelocityStretch: Float = 0.16f,
+    val iosBloomWaveStagger: Float = 22.0f,
+    val iosBloomDecoupleText: Boolean = true
 )
 
 /** Feature 3: Screen Unlock Velocity Kinetics Settings */

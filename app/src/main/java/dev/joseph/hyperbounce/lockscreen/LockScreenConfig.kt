@@ -85,7 +85,18 @@ data class LockScreenKeypadConfig(
     var cascadeFlightElongation: Float = 0.22f,
     var cascadeLandingSquish: Float = 0.24f,
     var cascadeInertiaCoupling: Float = 1.0f,
-    var cascadeViscousDamping: Float = 0.75f
+    var cascadeViscousDamping: Float = 0.75f,
+    // Entry Animation Mode: "ios26" (Radial Bloom) or "cascade" (Vertical Flight)
+    var entryAnimationType: String = "ios26",
+    var iosBloomDuration: Float = 520.0f,
+    var iosBloomClusterFactor: Float = 0.70f,
+    var iosBloomOvershoot: Float = 0.16f,
+    var iosBloomDamping: Float = 0.54f,
+    var iosBloomStiffness: Float = 13.5f,
+    var iosBloomRadialSquish: Float = 0.28f,
+    var iosBloomVelocityStretch: Float = 0.16f,
+    var iosBloomWaveStagger: Float = 22.0f,
+    var iosBloomDecoupleText: Boolean = true
 ) {
     fun getKeyDelay(keyName: String, row: Int, col: Int): Long {
         val custom = when (keyName) {
@@ -192,5 +203,17 @@ object LockScreenConfigHolder {
         keypad.cascadeLandingSquish = prefs.getFloat("pin_cascade_landing_squish", 0.24f)
         keypad.cascadeInertiaCoupling = prefs.getFloat("pin_cascade_inertia_coupling", 1.0f)
         keypad.cascadeViscousDamping = prefs.getFloat("pin_cascade_viscous_damping", 0.75f)
+
+        // iOS 26 Liquid Bloom
+        keypad.entryAnimationType = prefs.getString("pin_entry_anim_type", "ios26") ?: "ios26"
+        keypad.iosBloomDuration = prefs.getFloat("pin_ios_bloom_duration", 520.0f)
+        keypad.iosBloomClusterFactor = prefs.getFloat("pin_ios_bloom_cluster_factor", 0.70f)
+        keypad.iosBloomOvershoot = prefs.getFloat("pin_ios_bloom_overshoot", 0.16f)
+        keypad.iosBloomDamping = prefs.getFloat("pin_ios_bloom_damping", 0.54f)
+        keypad.iosBloomStiffness = prefs.getFloat("pin_ios_bloom_stiffness", 13.5f)
+        keypad.iosBloomRadialSquish = prefs.getFloat("pin_ios_bloom_radial_squish", 0.28f)
+        keypad.iosBloomVelocityStretch = prefs.getFloat("pin_ios_bloom_velocity_stretch", 0.16f)
+        keypad.iosBloomWaveStagger = prefs.getFloat("pin_ios_bloom_wave_stagger", 22.0f)
+        keypad.iosBloomDecoupleText = prefs.getBoolean("pin_ios_bloom_decouple_text", true)
     }
 }

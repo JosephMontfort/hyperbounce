@@ -634,6 +634,18 @@ class SettingsRepository(context: Context) {
         var cascadeInertiaCoupling by prefsFloatState("pin_cascade_inertia_coupling", defaults.cascadeInertiaCoupling); private set
         var cascadeViscousDamping by prefsFloatState("pin_cascade_viscous_damping", defaults.cascadeViscousDamping); private set
 
+        // iOS 26 Liquid Bloom
+        var entryAnimationType by prefsStringState("pin_entry_anim_type", defaults.entryAnimationType); private set
+        var iosBloomDuration by prefsFloatState("pin_ios_bloom_duration", defaults.iosBloomDuration); private set
+        var iosBloomClusterFactor by prefsFloatState("pin_ios_bloom_cluster_factor", defaults.iosBloomClusterFactor); private set
+        var iosBloomOvershoot by prefsFloatState("pin_ios_bloom_overshoot", defaults.iosBloomOvershoot); private set
+        var iosBloomDamping by prefsFloatState("pin_ios_bloom_damping", defaults.iosBloomDamping); private set
+        var iosBloomStiffness by prefsFloatState("pin_ios_bloom_stiffness", defaults.iosBloomStiffness); private set
+        var iosBloomRadialSquish by prefsFloatState("pin_ios_bloom_radial_squish", defaults.iosBloomRadialSquish); private set
+        var iosBloomVelocityStretch by prefsFloatState("pin_ios_bloom_velocity_stretch", defaults.iosBloomVelocityStretch); private set
+        var iosBloomWaveStagger by prefsFloatState("pin_ios_bloom_wave_stagger", defaults.iosBloomWaveStagger); private set
+        var iosBloomDecoupleText by prefsBooleanState("pin_ios_bloom_decouple_text", defaults.iosBloomDecoupleText); private set
+
         fun snapshot(): LockScreenKeypadSettings = LockScreenKeypadSettings(
             enabled, buttonRefraction, buttonBevel, buttonDispersion, buttonSpecular, buttonInnerShadow,
             buttonBlur, buttonSaturation, circleDiameter, digitTextSize, showKlondike, pressLiquidScale,
@@ -643,7 +655,10 @@ class SettingsRepository(context: Context) {
             delayKey5, delayKey6, delayKey7, delayKey8, delayKey9, delayKey0, delayEmergency, delayCancel,
             dragMaxThreshold, dragInitialStiffness, dragResistancePower, dragVolumeStretch, releaseDuration,
             releaseSquishAmp, releaseOvershoot, cascadeFlightElongation, cascadeLandingSquish,
-            cascadeInertiaCoupling, cascadeViscousDamping
+            cascadeInertiaCoupling, cascadeViscousDamping,
+            entryAnimationType, iosBloomDuration, iosBloomClusterFactor, iosBloomOvershoot,
+            iosBloomDamping, iosBloomStiffness, iosBloomRadialSquish, iosBloomVelocityStretch,
+            iosBloomWaveStagger, iosBloomDecoupleText
         )
 
         @JvmName("setKeypadEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
@@ -700,6 +715,17 @@ class SettingsRepository(context: Context) {
         @JvmName("setCascadeInertiaCouplingPref") fun setCascadeInertiaCoupling(v: Float) { cascadeInertiaCoupling = v }
         @JvmName("setCascadeViscousDampingPref") fun setCascadeViscousDamping(v: Float) { cascadeViscousDamping = v }
 
+        @JvmName("setEntryAnimationTypePref") fun setEntryAnimationType(v: String) { entryAnimationType = v }
+        @JvmName("setIosBloomDurationPref") fun setIosBloomDuration(v: Float) { iosBloomDuration = v }
+        @JvmName("setIosBloomClusterFactorPref") fun setIosBloomClusterFactor(v: Float) { iosBloomClusterFactor = v }
+        @JvmName("setIosBloomOvershootPref") fun setIosBloomOvershoot(v: Float) { iosBloomOvershoot = v }
+        @JvmName("setIosBloomDampingPref") fun setIosBloomDamping(v: Float) { iosBloomDamping = v }
+        @JvmName("setIosBloomStiffnessPref") fun setIosBloomStiffness(v: Float) { iosBloomStiffness = v }
+        @JvmName("setIosBloomRadialSquishPref") fun setIosBloomRadialSquish(v: Float) { iosBloomRadialSquish = v }
+        @JvmName("setIosBloomVelocityStretchPref") fun setIosBloomVelocityStretch(v: Float) { iosBloomVelocityStretch = v }
+        @JvmName("setIosBloomWaveStaggerPref") fun setIosBloomWaveStagger(v: Float) { iosBloomWaveStagger = v }
+        @JvmName("setIosBloomDecoupleTextPref") fun setIosBloomDecoupleText(v: Boolean) { iosBloomDecoupleText = v }
+
         fun reloadFromDefaults() {
             enabled = defaults.enabled
             buttonRefraction = defaults.buttonRefraction
@@ -752,6 +778,16 @@ class SettingsRepository(context: Context) {
             cascadeLandingSquish = defaults.cascadeLandingSquish
             cascadeInertiaCoupling = defaults.cascadeInertiaCoupling
             cascadeViscousDamping = defaults.cascadeViscousDamping
+            entryAnimationType = defaults.entryAnimationType
+            iosBloomDuration = defaults.iosBloomDuration
+            iosBloomClusterFactor = defaults.iosBloomClusterFactor
+            iosBloomOvershoot = defaults.iosBloomOvershoot
+            iosBloomDamping = defaults.iosBloomDamping
+            iosBloomStiffness = defaults.iosBloomStiffness
+            iosBloomRadialSquish = defaults.iosBloomRadialSquish
+            iosBloomVelocityStretch = defaults.iosBloomVelocityStretch
+            iosBloomWaveStagger = defaults.iosBloomWaveStagger
+            iosBloomDecoupleText = defaults.iosBloomDecoupleText
         }
     }
 
