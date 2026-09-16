@@ -226,6 +226,7 @@ object IosCallerScreenHook {
                         val exactSpec = View.MeasureSpec.makeMeasureSpec(targetPx, View.MeasureSpec.EXACTLY)
                         chain.args[0] = exactSpec
                         chain.args[1] = exactSpec
+                        (view?.parent as? View)?.let { disableClippingRecursively(it) }
                         chain.proceed()
                     }
                     Log.d(TAG, "Hooked CallOvalImageButton.onMeasure successfully.")
@@ -316,8 +317,69 @@ object IosCallerScreenHook {
                 }
                 Log.d(TAG, "Hooked Resources dimension methods for call_oval_item_size ($callOvalItemSizeResId)")
             }
+        // 6. Hook DialpadFragment & DialpadButton to prevent keypad number buttons clipping at top and bottom
+        try {
+            val dialpadFragmentClass = Class.forName("com.android.incallui.DialpadFragment", false, classLoader)
+            for (m: Method in dialpadFragmentClass.declaredMethods) {
+                if (m.name == "onInflateView" && m.parameterTypes.size == 3) {
+                    module.hook(m).intercept { chain ->
+                        val result = chain.proceed()
+                        (result as? View)?.let { v ->
+                            applyDialpadLayout(v)
+                            v.post { applyDialpadLayout(v) }
+                        }
+                        result
+                    }
+                    Log.d(TAG, "Hooked DialpadFragment.onInflateView successfully.")
+                } else if (m.name == "showDialer" || m.name == "setDialpadVisible" || m.name == "updateButtonHeight" || m.name == "setupKeypad") {
+                    module.hook(m).intercept { chain ->
+                        val result = chain.proceed()
+                        val fragment = chain.thisObject
+                        try {
+                            val dialpadField = dialpadFragmentClass.getDeclaredField("mDialPad").apply { isAccessible = true }
+                            val dialpadView = dialpadField.get(fragment) as? View
+                            if (dialpadView != null) {
+                                applyDialpadLayout(dialpadView)
+                                dialpadView.post { applyDialpadLayout(dialpadView) }
+                            }
+                        } catch (_: Throwable) {}
+                        result
+                    }
+                    Log.d(TAG, "Hooked DialpadFragment.${m.name} successfully.")
+                }
+            }
         } catch (t: Throwable) {
-            Log.e(TAG, "Failed to hook Resources dimensions", t)
+            Log.e(TAG, "Failed to hook DialpadFragment", t)
+        }
+
+        try {
+            val dialpadButtonClass = Class.forName("com.android.incallui.view.DialpadButton", false, classLoader)
+            for (m: Method in dialpadButtonClass.declaredMethods) {
+                if ((m.name == "updateButton" || m.name == "updateContainer") && m.parameterTypes.size == 1 && m.parameterTypes[0] == Context::class.java) {
+                    module.hook(m).intercept { chain ->
+                        val result = chain.proceed()
+                        (chain.thisObject as? View)?.let { applyDialpadButtonSize(it) }
+                        result
+                    }
+                    Log.d(TAG, "Hooked DialpadButton.${m.name} successfully.")
+                }
+            }
+            for (ctor in dialpadButtonClass.declaredConstructors) {
+                if (ctor.parameterTypes.size == 2) {
+                    module.hook(ctor).intercept { chain ->
+                        val result = chain.proceed()
+                        (chain.thisObject as? View)?.let { v ->
+                            applyDialpadButtonSize(v)
+                            v.post { applyDialpadButtonSize(v) }
+                        }
+                        result
+                    }
+                    Log.d(TAG, "Hooked DialpadButton(Context, AttributeSet) constructor successfully.")
+                    break
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook DialpadButton", t)
         }
     }
 
@@ -729,6 +791,99 @@ object IosCallerScreenHook {
 
             view.requestLayout()
             disableClippingRecursively(view)
+        } catch (_: Throwable) {}
+    }
+
+    internal fun applyDialpadButtonSize(view: View) {
+        val config = IosCallerConfigHolder.config
+        val d = view.resources.displayMetrics.density
+        val targetPx = (config.buttonSize * d).toInt()
+
+        disableClippingRecursively(view)
+
+        try {
+            view.layoutParams?.let { lp ->
+                if (lp.height != targetPx) {
+                    lp.height = targetPx
+                    view.layoutParams = lp
+                }
+            }
+
+            val containerField = try { view.javaClass.getDeclaredField("mContainer").apply { isAccessible = true } } catch (_: Throwable) { null }
+            val container = containerField?.get(view) as? View
+            if (container != null) {
+                disableClippingRecursively(container)
+                container.layoutParams?.let { clp ->
+                    if (clp.height != targetPx) {
+                        clp.height = targetPx
+                        container.layoutParams = clp
+                    }
+                }
+            }
+
+            val ovalField = try { view.javaClass.getDeclaredField("mOvalImageButton").apply { isAccessible = true } } catch (_: Throwable) { null }
+            val oval = ovalField?.get(view) as? View
+            if (oval != null) {
+                disableClippingRecursively(oval)
+                oval.layoutParams?.let { olp ->
+                    if (olp.width != targetPx || olp.height != targetPx) {
+                        olp.width = targetPx
+                        olp.height = targetPx
+                        oval.layoutParams = olp
+                    }
+                }
+            }
+
+            view.requestLayout()
+        } catch (_: Throwable) {}
+    }
+
+    internal fun applyDialpadLayout(rootOrDialpadView: View) {
+        val config = IosCallerConfigHolder.config
+        val d = rootOrDialpadView.resources.displayMetrics.density
+        val targetPx = (config.buttonSize * d).toInt()
+
+        disableClippingRecursively(rootOrDialpadView)
+
+        try {
+            val dialpadResId = rootOrDialpadView.resources.getIdentifier("dialpad", "id", rootOrDialpadView.context.packageName)
+            val dialpadView = if (rootOrDialpadView.id == dialpadResId) {
+                rootOrDialpadView
+            } else {
+                rootOrDialpadView.findViewById<View>(dialpadResId) ?: rootOrDialpadView
+            }
+
+            disableClippingRecursively(dialpadView)
+
+            // Adjust the 4 row LinearLayouts
+            val rowNames = arrayOf("dialpad_button_row_first", "dialpad_button_row_second", "dialpad_button_row_third", "dialpad_button_row_fourth")
+            for (rowName in rowNames) {
+                val rowId = dialpadView.resources.getIdentifier(rowName, "id", dialpadView.context.packageName)
+                if (rowId != 0) {
+                    dialpadView.findViewById<View>(rowId)?.let { row ->
+                        disableClippingRecursively(row)
+                        row.layoutParams?.let { lp ->
+                            if (lp.height != targetPx) {
+                                lp.height = targetPx
+                                row.layoutParams = lp
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Adjust all dialpad buttons
+            val buttonNames = arrayOf("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "star", "zero", "pound")
+            for (btnName in buttonNames) {
+                val btnId = dialpadView.resources.getIdentifier(btnName, "id", dialpadView.context.packageName)
+                if (btnId != 0) {
+                    dialpadView.findViewById<View>(btnId)?.let { btn ->
+                        applyDialpadButtonSize(btn)
+                    }
+                }
+            }
+
+            dialpadView.requestLayout()
         } catch (_: Throwable) {}
     }
 

@@ -130,6 +130,7 @@ class IosSliderView @JvmOverloads constructor(
     // Ringing dance vibration & wobble animation
     private var danceAnimator: ValueAnimator? = null
     private var danceRotation: Float = 0f
+    private var danceScale: Float = 1.0f
 
     // Handset vector path in 24x24 scale
     private val phonePath = createIosPhonePath()
@@ -185,9 +186,12 @@ class IosSliderView @JvmOverloads constructor(
                     val envelope = sin(burstProgress * Math.PI.toFloat())
                     val cycles = 3f
                     danceRotation = sin(burstProgress * Math.PI.toFloat() * 2f * cycles) * 16f * envelope
+                    // Add a slight rhythmic pulse / size increase along with the shake (1.0 -> ~1.15)
+                    danceScale = 1.0f + (0.15f * envelope)
                 } else {
                     // Calm pause between rings (~1430ms)
                     danceRotation = 0f
+                    danceScale = 1.0f
                 }
                 postInvalidateOnAnimation()
             }
@@ -199,6 +203,7 @@ class IosSliderView @JvmOverloads constructor(
         danceAnimator?.cancel()
         danceAnimator = null
         danceRotation = 0f
+        danceScale = 1.0f
         postInvalidateOnAnimation()
     }
 
@@ -309,8 +314,8 @@ class IosSliderView @JvmOverloads constructor(
         canvas.translate(cx, cy)
         canvas.rotate(phoneRotation + danceRotation)
 
-        // Handset is drawn in 24x24 bounds; scale to knob radius (50% diameter)
-        val iconTargetSize = knobRadius
+        // Handset is drawn in 24x24 bounds; scale to knob radius (50% diameter) with ringing dance scale pulse
+        val iconTargetSize = knobRadius * danceScale
         val scale = iconTargetSize / 24f
         canvas.scale(scale, scale)
         canvas.translate(-12f, -12f)
