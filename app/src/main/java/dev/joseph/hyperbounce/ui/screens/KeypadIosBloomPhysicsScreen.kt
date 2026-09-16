@@ -5,12 +5,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import androidx.compose.ui.graphics.Color
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
+import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import java.util.Locale
@@ -162,9 +164,12 @@ fun KeypadIosBloomPhysicsScreen(
                     title = "Decouple Digit Labels",
                     subtitle = "Lock numbers & letters stationary while liquid glass blooms underneath",
                     colors = colors,
-                    value = keypad.iosBloomDecoupleText,
-                    onValueChange = keypad::setIosBloomDecoupleText,
-                    enabled = keypad.enabled
+                    iconTint = colors.accentBlue,
+                    backdrop = backdrop,
+                    checked = keypad.iosBloomDecoupleText,
+                    onCheckedChange = keypad::setIosBloomDecoupleText,
+                    enabled = keypad.enabled,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
             }
             SectionFooter(
