@@ -10,7 +10,7 @@ import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
-import dev.joseph.hyperbounce.ui.components.SettingsSwitchRow
+import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import java.util.Locale
@@ -158,12 +158,12 @@ fun KeypadIosBloomPhysicsScreen(
         item {
             SectionHeader("Layer Architecture", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsSwitchRow(
+                SettingsToggleRow(
                     title = "Decouple Digit Labels",
                     subtitle = "Lock numbers & letters stationary while liquid glass blooms underneath",
                     colors = colors,
-                    checked = keypad.iosBloomDecoupleText,
-                    onCheckedChange = keypad::setIosBloomDecoupleText,
+                    value = keypad.iosBloomDecoupleText,
+                    onValueChange = keypad::setIosBloomDecoupleText,
                     enabled = keypad.enabled
                 )
             }

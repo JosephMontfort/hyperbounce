@@ -70,10 +70,10 @@ fun KeypadPhysicsScreen(
                     title = "iOS 26 Liquid Bloom",
                     subtitle = "Radial bloom from center with decoupled liquid lenses & 2D squish",
                     colors = colors,
-                    iconTint = colors.accentCyan,
+                    iconTint = colors.accentBlue,
                     onClick = { keypad.setEntryAnimationType("ios26") },
                     trailing = if (isIos26) {
-                        { dev.joseph.hyperbounce.ui.components.CheckmarkIcon(color = colors.accentCyan, size = 16.dp) }
+                        { dev.joseph.hyperbounce.ui.components.CheckmarkIcon(color = colors.accentBlue, size = 16.dp) }
                     } else null,
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
@@ -103,7 +103,7 @@ fun KeypadPhysicsScreen(
                     title = "iOS 26 Radial Bloom Physics",
                     subtitle = "Cluster origin, radial spring damping, 2D squish & decoupled lenses",
                     colors = colors,
-                    iconTint = colors.accentCyan,
+                    iconTint = colors.accentBlue,
                     onClick = { onNavigate(Destination.KeypadIosBloomPhysics) },
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )

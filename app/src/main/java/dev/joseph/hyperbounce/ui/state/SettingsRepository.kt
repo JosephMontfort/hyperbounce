@@ -1351,6 +1351,9 @@ class SettingsRepository(context: Context) {
     private fun prefsFloatState(key: String, default: Float) =
         PrefFloatDelegate(prefs, key, default)
 
+    private fun prefsStringState(key: String, default: String) =
+        PrefStringDelegate(prefs, key, default)
+
     private inline fun <reified E : Enum<E>> prefsEnumState(key: String, default: E) =
         PrefEnumDelegate(prefs, key, default, enumValues<E>())
 }
@@ -1411,6 +1414,21 @@ private class PrefFloatDelegate(
         state = value
         prefs.edit().putFloat(key, value).apply()
         XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, value)?.apply()
+        SettingsRepository.sendSettingsChangedBroadcast(key, value)
+    }
+}
+
+private class PrefStringDelegate(
+    private val prefs: SharedPreferences,
+    private val key: String,
+    default: String
+) {
+    private var state by mutableStateOf(prefs.getString(key, default) ?: default)
+    operator fun getValue(thisRef: Any?, property: KProperty<*>): String = state
+    operator fun setValue(thisRef: Any?, property: KProperty<*>, value: String) {
+        state = value
+        prefs.edit().putString(key, value).apply()
+        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putString(key, value)?.apply()
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
 }
