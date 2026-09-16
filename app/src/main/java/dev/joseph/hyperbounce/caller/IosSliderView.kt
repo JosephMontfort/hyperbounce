@@ -130,8 +130,6 @@ class IosSliderView @JvmOverloads constructor(
     // Ringing dance vibration & wobble animation
     private var danceAnimator: ValueAnimator? = null
     private var danceRotation: Float = 0f
-    private var danceScale: Float = 1f
-    private var danceJiggleX: Float = 0f
 
     // Handset vector path in 24x24 scale
     private val phonePath = Path().apply {
@@ -188,7 +186,7 @@ class IosSliderView @JvmOverloads constructor(
         if (danceAnimator?.isRunning == true) return
 
         danceAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 2400
+            duration = 2600
             repeatCount = ValueAnimator.INFINITE
             addUpdateListener { anim ->
                 if (!IosCallerConfigHolder.config.danceEnabled || isCompleted || isDragging) {
@@ -196,20 +194,15 @@ class IosSliderView @JvmOverloads constructor(
                     return@addUpdateListener
                 }
                 val f = anim.animatedFraction
-                if (f <= 0.40f) {
-                    // Ringing burst (~960ms)
-                    val burstProgress = f / 0.40f
-                    val damping = 1f - burstProgress
-                    val cycles = 3.5f
-                    val angle = (burstProgress * PI * 2 * cycles).toFloat()
-                    danceRotation = sin(angle) * 16f * damping
-                    danceJiggleX = sin(angle * 2) * 2f * density * damping
-                    danceScale = 1f + (sin(angle) * 0.06f * damping)
+                if (f <= 0.45f) {
+                    // Smooth ringing rock burst (~1170ms) with a natural sinusoidal envelope
+                    val burstProgress = f / 0.45f
+                    val envelope = sin(burstProgress * Math.PI.toFloat())
+                    val cycles = 3f
+                    danceRotation = sin(burstProgress * Math.PI.toFloat() * 2f * cycles) * 16f * envelope
                 } else {
-                    // Breathing pause (~1440ms)
+                    // Calm pause between rings (~1430ms)
                     danceRotation = 0f
-                    danceJiggleX = 0f
-                    danceScale = 1f
                 }
                 postInvalidateOnAnimation()
             }
@@ -221,8 +214,6 @@ class IosSliderView @JvmOverloads constructor(
         danceAnimator?.cancel()
         danceAnimator = null
         danceRotation = 0f
-        danceScale = 1f
-        danceJiggleX = 0f
         postInvalidateOnAnimation()
     }
 
@@ -293,16 +284,15 @@ class IosSliderView @JvmOverloads constructor(
         }
 
         // 3. Draw Slider Knob (always centered vertically within view - zero clipping)
-        val knobCenterX = knobPadding + knobRadius + knobX + danceJiggleX
+        val knobCenterX = knobPadding + knobRadius + knobX
         val knobCenterY = h / 2f
-        val effectiveRadius = knobRadius * danceScale
 
         // Knob Shadow
-        canvas.drawCircle(knobCenterX, knobCenterY + 2.5f * density, effectiveRadius, knobShadowPaint)
+        canvas.drawCircle(knobCenterX, knobCenterY + 2.5f * density, knobRadius, knobShadowPaint)
 
         // Knob Background
         knobPaint.color = currentKnobColor
-        canvas.drawCircle(knobCenterX, knobCenterY, effectiveRadius, knobPaint)
+        canvas.drawCircle(knobCenterX, knobCenterY, knobRadius, knobPaint)
 
         // 4. Draw Phone Handset Icon
         drawPhoneIcon(canvas, knobCenterX, knobCenterY)
@@ -335,7 +325,7 @@ class IosSliderView @JvmOverloads constructor(
         canvas.rotate(phoneRotation + danceRotation)
 
         // Handset is drawn in 24x24 bounds; scale to knob radius (50% diameter)
-        val iconTargetSize = knobRadius * danceScale
+        val iconTargetSize = knobRadius
         val scale = iconTargetSize / 24f
         canvas.scale(scale, scale)
         canvas.translate(-12f, -12f)
@@ -350,7 +340,7 @@ class IosSliderView @JvmOverloads constructor(
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                val knobCenterX = knobPadding + knobRadius + knobX + danceJiggleX
+                val knobCenterX = knobPadding + knobRadius + knobX
                 val touchRadius = knobRadius * 1.5f
                 if (Math.hypot((event.x - knobCenterX).toDouble(), (event.y - (height / 2f)).toDouble()) <= touchRadius) {
                     snapbackAnimator?.cancel()
