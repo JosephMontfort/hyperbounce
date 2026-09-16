@@ -31,6 +31,7 @@ object IosCallerScreenHook {
     private var isMessageRejectAllowed = true
     private var isReceiverRegistered = false
     var isAttendingTransitionActive = false
+    var lastAnswerKnobScreenY: Float = 0f
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
         val prefs = HyperBouncePrefs(module)
@@ -154,9 +155,33 @@ object IosCallerScreenHook {
                             isAttendingTransitionActive = false
                             if (fragment != null) {
                                 try {
-                                    // End Call button is already rotated, red, enlarged, and resting at the center
                                     val endBtnField = fragment.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
                                     val endBtn = endBtnField.get(fragment) as? View
+                                    val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
+                                    val audioBtn = audioBtnField.get(fragment) as? View
+                                    val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
+                                    val toolBtn = toolBtnField.get(fragment) as? View
+
+                                    // Align call button row vertically to match the exact screen position of the answer knob
+                                    val alignButtons = {
+                                        if (endBtn != null && lastAnswerKnobScreenY > 0f && endBtn.height > 0) {
+                                            val endLoc = IntArray(2)
+                                            endBtn.getLocationOnScreen(endLoc)
+                                            val currentEndCenterY = endLoc[1] + (endBtn.height / 2f) - endBtn.translationY
+                                            val deltaY = lastAnswerKnobScreenY - currentEndCenterY
+                                            endBtn.translationY = deltaY
+                                            audioBtn?.translationY = deltaY
+                                            toolBtn?.translationY = deltaY
+                                            Log.i(TAG, "Aligned call buttons with deltaY=$deltaY (lastKnobCenterY=$lastAnswerKnobScreenY)")
+                                        }
+                                    }
+
+                                    if (endBtn != null && endBtn.height > 0) {
+                                        alignButtons()
+                                    } else {
+                                        endBtn?.post { alignButtons() }
+                                    }
+
                                     if (endBtn != null) {
                                         endBtn.visibility = View.VISIBLE
                                         endBtn.alpha = 1.0f
@@ -165,8 +190,6 @@ object IosCallerScreenHook {
                                     }
 
                                     // Audio button and tool button fade in smoothly around it with matching enlarged scale
-                                    val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
-                                    val audioBtn = audioBtnField.get(fragment) as? View
                                     if (audioBtn != null) {
                                         audioBtn.visibility = View.VISIBLE
                                         audioBtn.scaleX = scale
@@ -175,8 +198,6 @@ object IosCallerScreenHook {
                                         audioBtn.animate().alpha(1f).setDuration(250).start()
                                     }
 
-                                    val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
-                                    val toolBtn = toolBtnField.get(fragment) as? View
                                     if (toolBtn != null) {
                                         toolBtn.visibility = View.VISIBLE
                                         toolBtn.scaleX = scale

@@ -123,44 +123,15 @@ class IosIncomingCallView @JvmOverloads constructor(
                 trackHeight
             )
             onGlideStarted = {
-                // Pre-compute 2D deltaY to seamlessly land into stock end call button center
-                targetDeltaY = calculateTargetDeltaY()
+                // Record exact knob screen center Y for seamless handover to CallButtonFragment
+                val loc = IntArray(2)
+                getLocationOnScreen(loc)
+                IosCallerScreenHook.lastAnswerKnobScreenY = loc[1] + (height / 2f)
                 declineSlider.animate().alpha(0f).setDuration(220).start()
                 messageButtonLayout.animate().alpha(0f).setDuration(220).start()
             }
         }
         addView(answerSlider)
-    }
-
-    /**
-     * Calculates the exact vertical delta between Answer slider knob and stock End Call button.
-     */
-    fun calculateTargetDeltaY(): Float {
-        try {
-            val activity = IosCallerScreenHook.findActivity(context)
-            if (activity != null) {
-                val res = context.resources
-                val endButtonId = res.getIdentifier("endButton", "id", "com.android.incallui")
-                if (endButtonId != 0) {
-                    val endBtn = activity.findViewById<View>(endButtonId)
-                    if (endBtn != null && endBtn.height > 0) {
-                        val endLoc = IntArray(2)
-                        val sliderLoc = IntArray(2)
-                        endBtn.getLocationInWindow(endLoc)
-                        answerSlider.getLocationInWindow(sliderLoc)
-                        val endCenterY = endLoc[1] + (endBtn.height / 2f)
-                        val sliderCenterY = sliderLoc[1] + (answerSlider.height / 2f)
-                        return endCenterY - sliderCenterY
-                    }
-                }
-            }
-        } catch (_: Throwable) {}
-
-        // Fallback mathematical calculation:
-        val trackHeight = answerSlider.height.toFloat().takeIf { it > 0 } ?: ((IosCallerConfigHolder.config.buttonSize + 8f) * density)
-        val answerCenterFromBottom = trackHeight / 2f
-        val callBtnCenterFromBottom = 36f * density
-        return answerCenterFromBottom - callBtnCenterFromBottom
     }
 
     fun setMessageButtonVisible(visible: Boolean) {

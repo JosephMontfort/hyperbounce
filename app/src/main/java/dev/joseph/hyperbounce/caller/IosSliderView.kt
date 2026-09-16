@@ -58,12 +58,13 @@ class IosSliderView @JvmOverloads constructor(
 
     var onCompleted: (() -> Unit)? = null
     var onGlideStarted: (() -> Unit)? = null
-    var targetDeltaY: Float = 0f
 
     // Colors
+    private val colorWhite = Color.WHITE
     private val colorGreen = Color.parseColor("#34C759")
     private val colorRed = Color.parseColor("#FF3B30")
-    private var currentKnobColor: Int = colorGreen
+    private var currentKnobColor: Int = colorWhite
+    private var currentIconColor: Int = colorGreen
 
     // Track Styling
     private val trackFillColor = Color.argb(40, 255, 255, 255)
@@ -97,7 +98,6 @@ class IosSliderView @JvmOverloads constructor(
 
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = Color.WHITE
     }
 
     // Geometry
@@ -105,7 +105,6 @@ class IosSliderView @JvmOverloads constructor(
     private val density = context.resources.displayMetrics.density
     private val knobPadding = 4f * density
     private var knobX = 0f
-    private var knobY = 0f
     private var maxTravel = 0f
     private var knobRadius = 0f
 
@@ -152,11 +151,12 @@ class IosSliderView @JvmOverloads constructor(
     }
 
     private fun updateColors() {
+        currentKnobColor = colorWhite
         if (sliderType == SliderType.ANSWER) {
-            currentKnobColor = colorGreen
+            currentIconColor = colorGreen
             phoneRotation = 0f
         } else {
-            currentKnobColor = colorRed
+            currentIconColor = colorRed
             phoneRotation = 135f // Default decline orientation (handset down)
         }
     }
@@ -239,9 +239,9 @@ class IosSliderView @JvmOverloads constructor(
             canvas.restore()
         }
 
-        // 3. Draw Slider Knob (with 2D translation support)
+        // 3. Draw Slider Knob (always centered vertically within view - zero clipping)
         val knobCenterX = knobPadding + knobRadius + knobX
-        val knobCenterY = (h / 2f) + knobY
+        val knobCenterY = h / 2f
 
         // Knob Shadow
         canvas.drawCircle(knobCenterX, knobCenterY + 2.5f * density, knobRadius, knobShadowPaint)
@@ -286,6 +286,7 @@ class IosSliderView @JvmOverloads constructor(
         canvas.scale(scale, scale)
         canvas.translate(-12f, -12f)
 
+        iconPaint.color = currentIconColor
         canvas.drawPath(phonePath, iconPaint)
         canvas.restore()
     }
@@ -322,6 +323,17 @@ class IosSliderView @JvmOverloads constructor(
                 }
 
                 knobX = min(newKnobX, maxTravel)
+
+                // Smooth color interpolation on drag: White -> Green (Answer) or White -> Red (Decline)
+                val dragProgress = if (maxTravel > 0f) (knobX / maxTravel).coerceIn(0f, 1f) else 0f
+                if (sliderType == SliderType.ANSWER) {
+                    currentKnobColor = argbEvaluator.evaluate(dragProgress, colorWhite, colorGreen) as Int
+                    currentIconColor = argbEvaluator.evaluate(dragProgress, colorGreen, colorWhite) as Int
+                } else {
+                    currentKnobColor = argbEvaluator.evaluate(dragProgress, colorWhite, colorRed) as Int
+                    currentIconColor = argbEvaluator.evaluate(dragProgress, colorRed, colorWhite) as Int
+                }
+
                 postInvalidateOnAnimation()
                 return true
             }
@@ -345,12 +357,19 @@ class IosSliderView @JvmOverloads constructor(
 
     private fun springSnapback() {
         snapbackAnimator?.cancel()
-        knobY = 0f
-        snapbackAnimator = ValueAnimator.ofFloat(knobX, 0f).apply {
+        val startKnobX = knobX
+        val startKnobColor = currentKnobColor
+        val startIconColor = currentIconColor
+        val targetIconColor = if (sliderType == SliderType.ANSWER) colorGreen else colorRed
+
+        snapbackAnimator = ValueAnimator.ofFloat(1f, 0f).apply {
             duration = 320
             interpolator = OvershootInterpolator(1.05f)
             addUpdateListener { anim ->
-                knobX = anim.animatedValue as Float
+                val f = anim.animatedValue as Float
+                knobX = startKnobX * f
+                currentKnobColor = argbEvaluator.evaluate(1f - f, startKnobColor, colorWhite) as Int
+                currentIconColor = argbEvaluator.evaluate(1f - f, startIconColor, targetIconColor) as Int
                 postInvalidateOnAnimation()
             }
             start()
@@ -367,12 +386,12 @@ class IosSliderView @JvmOverloads constructor(
 
             // iOS Morph & Glide animation:
             // 1. Phone icon rotates 135° upside down.
-            // 2. Knob color blends from Green to Red.
-            // 3. Knob glides smoothly in 2D (X towards screen horizontal center, Y towards targetDeltaY).
-            // 4. Remaining track fades out.
+            // 2. Knob color smoothly blends from Green to Red.
+            // 3. Icon stays crisp White.
+            // 4. Knob glides smoothly horizontally to the center of the screen!
+            // 5. Remaining track fades out.
             val startX = knobX
             val targetCenterX = (width / 2f) - knobRadius - knobPadding
-            val deltaY = targetDeltaY
 
             morphAnimator?.cancel()
             morphAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -382,8 +401,8 @@ class IosSliderView @JvmOverloads constructor(
                     val f = anim.animatedFraction
                     morphProgress = f
                     knobX = startX + (targetCenterX - startX) * f
-                    knobY = deltaY * f
                     currentKnobColor = argbEvaluator.evaluate(f, colorGreen, colorRed) as Int
+                    currentIconColor = colorWhite
                     phoneRotation = f * 135f
                     postInvalidateOnAnimation()
                 }
@@ -397,6 +416,8 @@ class IosSliderView @JvmOverloads constructor(
         } else {
             // Decline slider completed -> snap and reject
             knobX = maxTravel
+            currentKnobColor = colorRed
+            currentIconColor = colorWhite
             postInvalidateOnAnimation()
             onCompleted?.invoke()
         }
