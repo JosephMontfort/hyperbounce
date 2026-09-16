@@ -16,6 +16,7 @@ import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
 import android.view.animation.OvershootInterpolator
+import android.view.animation.PathInterpolator
 import android.widget.ImageView
 import android.widget.TextView
 import dev.joseph.hyperbounce.lockscreen.glass.LiquidGlassKeyOptimizedDrawable
