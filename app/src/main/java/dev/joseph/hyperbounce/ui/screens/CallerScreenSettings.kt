@@ -113,6 +113,18 @@ fun CallerScreenSettings(
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) },
                     enabled = caller.enabled
                 )
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "Ringing Dance Animation",
+                    subtitle = "Rhythmic wobble & vibration dance on buttons while ringing",
+                    colors = colors,
+                    iconTint = colors.accentGreen,
+                    backdrop = backdrop,
+                    checked = caller.danceEnabled,
+                    onCheckedChange = caller::setDanceEnabled,
+                    icon = { PhoneIcon(color = Color.White, size = 15.dp) },
+                    enabled = caller.enabled
+                )
             }
         }
     }

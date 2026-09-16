@@ -1142,6 +1142,8 @@ class SettingsRepository(context: Context) {
             private set
         var shimmerEnabled by prefsBooleanState("caller_shimmer_enabled", true)
             private set
+        var danceEnabled by prefsBooleanState("caller_dance_enabled", true)
+            private set
 
         @JvmName("setCallerEnabledPref")
         fun setEnabled(v: Boolean) { enabled = v }
@@ -1158,12 +1160,16 @@ class SettingsRepository(context: Context) {
         @JvmName("setCallerShimmerEnabledPref")
         fun setShimmerEnabled(v: Boolean) { shimmerEnabled = v }
 
+        @JvmName("setCallerDanceEnabledPref")
+        fun setDanceEnabled(v: Boolean) { danceEnabled = v }
+
         fun reloadFromDefaults() {
             enabled = true
             buttonSize = 76f
             bottomOffset = 68f
             hapticsEnabled = true
             shimmerEnabled = true
+            danceEnabled = true
         }
     }
 

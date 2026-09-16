@@ -22,8 +22,10 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
+import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
 
 enum class SliderType {
     ANSWER,
@@ -125,6 +127,13 @@ class IosSliderView @JvmOverloads constructor(
     private var snapbackAnimator: ValueAnimator? = null
     private var morphAnimator: ValueAnimator? = null
 
+    // Ringing dance vibration & wobble animation
+    private var danceAnimator: ValueAnimator? = null
+    private var danceRotation: Float = 0f
+    private var danceScale: Float = 1f
+    private var danceJiggleX: Float = 0f
+    private var isDragging: Boolean = false
+
     // Handset vector path in 24x24 scale
     private val phonePath = Path().apply {
         moveTo(6.62f, 10.79f)
@@ -164,6 +173,7 @@ class IosSliderView @JvmOverloads constructor(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         startShimmer()
+        startDanceAnimation()
     }
 
     override fun onDetachedFromWindow() {
@@ -171,6 +181,50 @@ class IosSliderView @JvmOverloads constructor(
         shimmerAnimator?.cancel()
         snapbackAnimator?.cancel()
         morphAnimator?.cancel()
+        stopDanceAnimation()
+    }
+
+    private fun startDanceAnimation() {
+        if (!IosCallerConfigHolder.config.danceEnabled || isCompleted || isDragging) return
+        if (danceAnimator?.isRunning == true) return
+
+        danceAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 2400
+            repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { anim ->
+                if (!IosCallerConfigHolder.config.danceEnabled || isCompleted || isDragging) {
+                    stopDanceAnimation()
+                    return@addUpdateListener
+                }
+                val f = anim.animatedFraction
+                if (f <= 0.40f) {
+                    // Ringing burst (~960ms)
+                    val burstProgress = f / 0.40f
+                    val damping = 1f - burstProgress
+                    val cycles = 3.5f
+                    val angle = (burstProgress * PI * 2 * cycles).toFloat()
+                    danceRotation = sin(angle) * 16f * damping
+                    danceJiggleX = sin(angle * 2) * 2f * density * damping
+                    danceScale = 1f + (sin(angle) * 0.06f * damping)
+                } else {
+                    // Breathing pause (~1440ms)
+                    danceRotation = 0f
+                    danceJiggleX = 0f
+                    danceScale = 1f
+                }
+                postInvalidateOnAnimation()
+            }
+            start()
+        }
+    }
+
+    private fun stopDanceAnimation() {
+        danceAnimator?.cancel()
+        danceAnimator = null
+        danceRotation = 0f
+        danceScale = 1f
+        danceJiggleX = 0f
+        postInvalidateOnAnimation()
     }
 
     private fun startShimmer() {
@@ -240,15 +294,16 @@ class IosSliderView @JvmOverloads constructor(
         }
 
         // 3. Draw Slider Knob (always centered vertically within view - zero clipping)
-        val knobCenterX = knobPadding + knobRadius + knobX
+        val knobCenterX = knobPadding + knobRadius + knobX + danceJiggleX
         val knobCenterY = h / 2f
+        val effectiveRadius = knobRadius * danceScale
 
         // Knob Shadow
-        canvas.drawCircle(knobCenterX, knobCenterY + 2.5f * density, knobRadius, knobShadowPaint)
+        canvas.drawCircle(knobCenterX, knobCenterY + 2.5f * density, effectiveRadius, knobShadowPaint)
 
         // Knob Background
         knobPaint.color = currentKnobColor
-        canvas.drawCircle(knobCenterX, knobCenterY, knobRadius, knobPaint)
+        canvas.drawCircle(knobCenterX, knobCenterY, effectiveRadius, knobPaint)
 
         // 4. Draw Phone Handset Icon
         drawPhoneIcon(canvas, knobCenterX, knobCenterY)
@@ -278,10 +333,10 @@ class IosSliderView @JvmOverloads constructor(
     private fun drawPhoneIcon(canvas: Canvas, cx: Float, cy: Float) {
         canvas.save()
         canvas.translate(cx, cy)
-        canvas.rotate(phoneRotation)
+        canvas.rotate(phoneRotation + danceRotation)
 
         // Handset is drawn in 24x24 bounds; scale to knob radius (50% diameter)
-        val iconTargetSize = knobRadius
+        val iconTargetSize = knobRadius * danceScale
         val scale = iconTargetSize / 24f
         canvas.scale(scale, scale)
         canvas.translate(-12f, -12f)
@@ -296,11 +351,12 @@ class IosSliderView @JvmOverloads constructor(
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                val knobCenterX = knobPadding + knobRadius + knobX
+                val knobCenterX = knobPadding + knobRadius + knobX + danceJiggleX
                 val touchRadius = knobRadius * 1.5f
                 if (Math.hypot((event.x - knobCenterX).toDouble(), (event.y - (height / 2f)).toDouble()) <= touchRadius) {
                     snapbackAnimator?.cancel()
                     isDragging = true
+                    stopDanceAnimation()
                     initialTouchX = event.rawX
                     initialKnobX = knobX
                     performHaptic(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -372,12 +428,19 @@ class IosSliderView @JvmOverloads constructor(
                 currentIconColor = argbEvaluator.evaluate(1f - f, startIconColor, targetIconColor) as Int
                 postInvalidateOnAnimation()
             }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    isDragging = false
+                    startDanceAnimation()
+                }
+            })
             start()
         }
     }
 
     private fun triggerCompletion() {
         isCompleted = true
+        stopDanceAnimation()
         performHaptic(HapticFeedbackConstants.CONFIRM)
 
         if (sliderType == SliderType.ANSWER) {

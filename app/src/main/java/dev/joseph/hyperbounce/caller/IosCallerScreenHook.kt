@@ -137,7 +137,6 @@ object IosCallerScreenHook {
                         val show = chain.args[0] as? Boolean ?: false
                         val fragment = chain.thisObject
                         val config = IosCallerConfigHolder.config
-                        val scale = config.buttonSize / 68f
 
                         if (fragment != null && show) {
                             try {
@@ -162,6 +161,10 @@ object IosCallerScreenHook {
                                     val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
                                     val toolBtn = toolBtnField.get(fragment) as? View
 
+                                    if (endBtn != null) applyCallButtonSize(endBtn)
+                                    if (audioBtn != null) applyCallButtonSize(audioBtn)
+                                    if (toolBtn != null) applyCallButtonSize(toolBtn)
+
                                     // Align call button row vertically to match the exact screen position of the answer knob
                                     val alignButtons = {
                                         if (endBtn != null && lastAnswerKnobScreenY > 0f && endBtn.height > 0) {
@@ -185,23 +188,23 @@ object IosCallerScreenHook {
                                     if (endBtn != null) {
                                         endBtn.visibility = View.VISIBLE
                                         endBtn.alpha = 1.0f
-                                        endBtn.scaleX = scale
-                                        endBtn.scaleY = scale
+                                        endBtn.scaleX = 1.0f
+                                        endBtn.scaleY = 1.0f
                                     }
 
                                     // Audio button and tool button fade in smoothly around it with matching enlarged scale
                                     if (audioBtn != null) {
                                         audioBtn.visibility = View.VISIBLE
-                                        audioBtn.scaleX = scale
-                                        audioBtn.scaleY = scale
+                                        audioBtn.scaleX = 1.0f
+                                        audioBtn.scaleY = 1.0f
                                         audioBtn.alpha = 0f
                                         audioBtn.animate().alpha(1f).setDuration(250).start()
                                     }
 
                                     if (toolBtn != null) {
                                         toolBtn.visibility = View.VISIBLE
-                                        toolBtn.scaleX = scale
-                                        toolBtn.scaleY = scale
+                                        toolBtn.scaleX = 1.0f
+                                        toolBtn.scaleY = 1.0f
                                         toolBtn.alpha = 0f
                                         toolBtn.animate().alpha(1f).setDuration(250).start()
                                     }
@@ -217,25 +220,37 @@ object IosCallerScreenHook {
                         if (show && fragment != null) {
                             try {
                                 val endBtnField = fragment.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
-                                (endBtnField.get(fragment) as? View)?.apply {
-                                    scaleX = scale
-                                    scaleY = scale
-                                }
+                                (endBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
                                 val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
-                                (audioBtnField.get(fragment) as? View)?.apply {
-                                    scaleX = scale
-                                    scaleY = scale
-                                }
+                                (audioBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
                                 val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
-                                (toolBtnField.get(fragment) as? View)?.apply {
-                                    scaleX = scale
-                                    scaleY = scale
-                                }
+                                (toolBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
                             } catch (_: Throwable) {}
                         }
                         result
                     }
                     Log.d(TAG, "Hooked CallButtonFragment.startCallButtonAnimator successfully.")
+                    break
+                }
+            }
+
+            // Hook CallButtonFragment.updateButtonHeight to enforce custom button sizing on relayout
+            for (m: Method in callButtonFragmentClass.declaredMethods) {
+                if (m.name == "updateButtonHeight" && m.parameterTypes.isEmpty()) {
+                    module.hook(m).intercept { chain ->
+                        val result = chain.proceed()
+                        try {
+                            val fragment = chain.thisObject
+                            val endBtnField = fragment.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
+                            (endBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
+                            val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
+                            (audioBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
+                            val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
+                            (toolBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
+                        } catch (_: Throwable) {}
+                        result
+                    }
+                    Log.d(TAG, "Hooked CallButtonFragment.updateButtonHeight successfully.")
                     break
                 }
             }
@@ -264,6 +279,84 @@ object IosCallerScreenHook {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook CallButtonFragment", t)
+        }
+
+        // 4. Hook CallButton & ToolsButton to uniformly match enlarged iOS button & icon sizes
+        try {
+            val callButtonClass = Class.forName("com.android.incallui.callbutton.CallButton", false, classLoader)
+            for (m: Method in callButtonClass.declaredMethods) {
+                if (m.name == "updateButton" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Context::class.java) {
+                    module.hook(m).intercept { chain ->
+                        val result = chain.proceed()
+                        (chain.thisObject as? View)?.let { applyCallButtonSize(it) }
+                        result
+                    }
+                    Log.d(TAG, "Hooked CallButton.updateButton successfully.")
+                    break
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook CallButton", t)
+        }
+
+        try {
+            val toolsButtonClass = Class.forName("com.android.incallui.calltools.ToolsButton", false, classLoader)
+            for (m: Method in toolsButtonClass.declaredMethods) {
+                if (m.name == "updateButton" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Context::class.java) {
+                    module.hook(m).intercept { chain ->
+                        val result = chain.proceed()
+                        (chain.thisObject as? View)?.let { applyToolsButtonSize(it) }
+                        result
+                    }
+                    Log.d(TAG, "Hooked ToolsButton.updateButton successfully.")
+                    break
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook ToolsButton", t)
+        }
+
+        try {
+            val toolsButtonAdapterClass = Class.forName("com.android.incallui.calltools.ToolsButtonAdapter", false, classLoader)
+            for (m: Method in toolsButtonAdapterClass.declaredMethods) {
+                if (m.name == "getView" && m.parameterTypes.size == 3) {
+                    module.hook(m).intercept { chain ->
+                        val result = chain.proceed()
+                        (result as? View)?.let { applyToolsButtonSize(it) }
+                        result
+                    }
+                    Log.d(TAG, "Hooked ToolsButtonAdapter.getView successfully.")
+                    break
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook ToolsButtonAdapter", t)
+        }
+
+        // 5. Hook Resources dimensions for call_oval_item_size
+        try {
+            val rDimenClass = Class.forName("com.android.incallui.R\$dimen", false, classLoader)
+            val callOvalItemSizeResId = try { rDimenClass.getField("call_oval_item_size").getInt(null) } catch (_: Throwable) { 0 }
+            if (callOvalItemSizeResId != 0) {
+                for (m: Method in android.content.res.Resources::class.java.declaredMethods) {
+                    if (m.parameterTypes.size == 1 && m.parameterTypes[0] == Int::class.javaPrimitiveType) {
+                        if (m.name == "getDimensionPixelSize" || m.name == "getDimensionPixelOffset") {
+                            module.hook(m).intercept { chain ->
+                                val id = chain.args[0] as? Int ?: 0
+                                if (id == callOvalItemSizeResId) {
+                                    val res = chain.thisObject as? android.content.res.Resources
+                                    val d = res?.displayMetrics?.density ?: 3.0f
+                                    return@intercept (IosCallerConfigHolder.config.buttonSize * d).toInt()
+                                }
+                                chain.proceed()
+                            }
+                        }
+                    }
+                }
+                Log.d(TAG, "Hooked Resources dimension methods for call_oval_item_size ($callOvalItemSizeResId)")
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook Resources dimensions", t)
         }
     }
 
@@ -379,6 +472,97 @@ object IosCallerScreenHook {
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to trigger stock message reject", t)
         }
+    }
+
+    internal fun applyCallButtonSize(view: View) {
+        val config = IosCallerConfigHolder.config
+        val d = view.resources.displayMetrics.density
+        val targetPx = (config.buttonSize * d).toInt()
+        val iconScale = config.buttonSize / 68f
+
+        try {
+            val hyperViewField = view.javaClass.getDeclaredField("mHyperView").apply { isAccessible = true }
+            val hyperView = hyperViewField.get(view) as? View
+            hyperView?.layoutParams?.let { lp ->
+                if (lp.width != targetPx || lp.height != targetPx) {
+                    lp.width = targetPx
+                    lp.height = targetPx
+                    hyperView.layoutParams = lp
+                }
+            }
+
+            val ovalBtnField = view.javaClass.getDeclaredField("mOvalImageButton").apply { isAccessible = true }
+            val ovalBtn = ovalBtnField.get(view) as? View
+            ovalBtn?.layoutParams?.let { lp ->
+                if (lp.width != targetPx || lp.height != targetPx) {
+                    lp.width = targetPx
+                    lp.height = targetPx
+                    ovalBtn.layoutParams = lp
+                }
+            }
+
+            val endBtnField = view.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
+            val endBtn = endBtnField.get(view) as? View
+            endBtn?.layoutParams?.let { lp ->
+                if (lp.width != targetPx || lp.height != targetPx) {
+                    lp.width = targetPx
+                    lp.height = targetPx
+                    endBtn.layoutParams = lp
+                }
+            }
+
+            // Scale icons inside CallButton
+            val endIconField = try { view.javaClass.getDeclaredField("mEndCallIconButton").apply { isAccessible = true } } catch (_: Throwable) { null }
+            val endIcon = endIconField?.get(view) as? View
+            if (endIcon != null) {
+                endIcon.scaleX = iconScale
+                endIcon.scaleY = iconScale
+            }
+
+            val ovalIconField = try { view.javaClass.getDeclaredField("mOvalIconView").apply { isAccessible = true } } catch (_: Throwable) { null }
+            val ovalIcon = ovalIconField?.get(view) as? View
+            if (ovalIcon != null) {
+                ovalIcon.scaleX = iconScale
+                ovalIcon.scaleY = iconScale
+            }
+        } catch (_: Throwable) {}
+    }
+
+    internal fun applyToolsButtonSize(view: View) {
+        val config = IosCallerConfigHolder.config
+        val d = view.resources.displayMetrics.density
+        val targetPx = (config.buttonSize * d).toInt()
+        val iconScale = config.buttonSize / 68f
+
+        try {
+            if (view is ViewGroup && view.childCount > 0) {
+                val frameLayout = view.getChildAt(0)
+                frameLayout?.layoutParams?.let { lp ->
+                    if (lp.width != targetPx || lp.height != targetPx) {
+                        lp.width = targetPx
+                        lp.height = targetPx
+                        frameLayout.layoutParams = lp
+                    }
+                }
+            }
+
+            val ovalBtnField = view.javaClass.getDeclaredField("mOvalImageButton").apply { isAccessible = true }
+            val ovalBtn = ovalBtnField.get(view) as? View
+            ovalBtn?.layoutParams?.let { lp ->
+                if (lp.width != targetPx || lp.height != targetPx) {
+                    lp.width = targetPx
+                    lp.height = targetPx
+                    ovalBtn.layoutParams = lp
+                }
+            }
+
+            val ovalIconField = try { view.javaClass.getDeclaredField("mOvalIconView").apply { isAccessible = true } } catch (_: Throwable) { null }
+            val ovalIcon = ovalIconField?.get(view) as? View
+            if (ovalIcon != null) {
+                ovalIcon.scaleX = iconScale
+                ovalIcon.scaleY = iconScale
+            }
+        } catch (_: Throwable) {}
     }
 
     internal fun findActivity(context: Context): Activity? {
