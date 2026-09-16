@@ -53,6 +53,15 @@ fun KeypadScreen(
                     onCheckedChange = repository::setKeypadEnabled,
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
+                RowDivider(colors.separator)
+                SettingsNavRow(
+                    title = "PIN Pad Liquid Dynamics & Physics",
+                    subtitle = "Inertial mass transfer, pull elasticity & release squish",
+                    colors = colors,
+                    iconTint = colors.accentPurple,
+                    onClick = { onNavigate(Destination.KeypadPhysics) },
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                )
             }
         }
 

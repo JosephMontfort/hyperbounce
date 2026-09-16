@@ -73,7 +73,19 @@ data class LockScreenKeypadConfig(
     var delayKey9: Float = -1f,
     var delayKey0: Float = -1f,
     var delayEmergency: Float = -1f,
-    var delayCancel: Float = -1f
+    var delayCancel: Float = -1f,
+    // Liquid Dynamics & Physics Tuning
+    var dragMaxThreshold: Float = 0.28f,
+    var dragInitialStiffness: Float = 0.45f,
+    var dragResistancePower: Float = 1.8f,
+    var dragVolumeStretch: Float = 0.22f,
+    var releaseDuration: Float = 320.0f,
+    var releaseSquishAmp: Float = 0.35f,
+    var releaseOvershoot: Float = 2.0f,
+    var cascadeFlightElongation: Float = 0.22f,
+    var cascadeLandingSquish: Float = 0.24f,
+    var cascadeInertiaCoupling: Float = 1.0f,
+    var cascadeViscousDamping: Float = 0.75f
 ) {
     fun getKeyDelay(keyName: String, row: Int, col: Int): Long {
         val custom = when (keyName) {
@@ -167,5 +179,18 @@ object LockScreenConfigHolder {
         keypad.delayKey0 = prefs.getFloat("pin_delay_key0", -1f)
         keypad.delayEmergency = prefs.getFloat("pin_delay_emergency", -1f)
         keypad.delayCancel = prefs.getFloat("pin_delay_cancel", -1f)
+
+        // Liquid Dynamics & Physics Tuning
+        keypad.dragMaxThreshold = prefs.getFloat("pin_drag_max_threshold", 0.28f)
+        keypad.dragInitialStiffness = prefs.getFloat("pin_drag_initial_stiffness", 0.45f)
+        keypad.dragResistancePower = prefs.getFloat("pin_drag_resistance_power", 1.8f)
+        keypad.dragVolumeStretch = prefs.getFloat("pin_drag_volume_stretch", 0.22f)
+        keypad.releaseDuration = prefs.getFloat("pin_release_duration", 320.0f)
+        keypad.releaseSquishAmp = prefs.getFloat("pin_release_squish_amp", 0.35f)
+        keypad.releaseOvershoot = prefs.getFloat("pin_release_overshoot", 2.0f)
+        keypad.cascadeFlightElongation = prefs.getFloat("pin_cascade_flight_elongation", 0.22f)
+        keypad.cascadeLandingSquish = prefs.getFloat("pin_cascade_landing_squish", 0.24f)
+        keypad.cascadeInertiaCoupling = prefs.getFloat("pin_cascade_inertia_coupling", 1.0f)
+        keypad.cascadeViscousDamping = prefs.getFloat("pin_cascade_viscous_damping", 0.75f)
     }
 }

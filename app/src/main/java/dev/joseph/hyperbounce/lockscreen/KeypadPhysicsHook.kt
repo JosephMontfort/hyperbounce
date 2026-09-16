@@ -60,6 +60,7 @@ object KeypadPhysicsHook {
 
     private val touchStates = WeakHashMap<View, KeypadTouchState>()
     private val appearAnimators = WeakHashMap<View, ValueAnimator>()
+    private val releaseAnimators = WeakHashMap<View, ValueAnimator>()
 
     private fun getBaseTranslationX(view: View, cfg: LockScreenKeypadConfig, density: Float): Float {
         val entryName = try {
@@ -75,43 +76,47 @@ object KeypadPhysicsHook {
     }
 
     /**
-     * Computes the normalized inertia-based liquid volume deformation delta_y for cascade entrance.
-     * Continuous C1-smoothstep cubic splines guarantee zero-derivative knot transitions:
-     * - In-flight (u in [0.00, 0.44]): vertical elongation along motion trajectory (delta_y > 0)
-     * - Impact landing (u in [0.44, 0.70]): momentum squishes bubble flat horizontally (delta_y < 0)
-     * - Surface tension rebound (u in [0.70, 0.86]): elastic rebound (delta_y > 0)
-     * - Damped settle (u in [0.86, 1.00]): gentle dying wobble settling to 0
+     * Physically coupled vertical inertial mass transfer simulation for cascade entrance.
+     * The internal fluid mass response deltaY is directly driven by the button's Y-axis trajectory:
+     * - Phase 1 (Flight u in [0, 0.42]): rapid upward rise from transY towards 0.
+     *   Fluid momentum lags behind, causing dynamic elongation deltaY > 0 along the vertical motion path.
+     * - Phase 2 (Landing Braking u in [0.42, 0.70]): button approaches 0 and undergoes strong deceleration braking.
+     *   Upward fluid inertia slams forward into the top boundary, squishing vertically (deltaY < 0)
+     *   and bulging horizontally (volume preservation) WHILE BRAKING.
+     * - Phase 3 (Rebound & Damped Settle u in [0.70, 1.0]): subtle surface tension rebound dies down to equilibrium.
      */
-    private fun computeLiquidSquishDelta(u: Float): Float {
-        val knots = floatArrayOf(0.00f, 0.22f, 0.44f, 0.58f, 0.74f, 0.88f, 1.00f)
-        val values = floatArrayOf(0.00f, 0.18f, 0.00f, -0.17f, 0.07f, -0.02f, 0.00f)
+    private fun computeCascadePhysics(
+        u: Float,
+        transY: Float,
+        cfg: LockScreenKeypadConfig
+    ): Pair<Float, Float> {
+        val flightElong = cfg.cascadeFlightElongation.coerceIn(0.05f, 0.45f)
+        val landingSquish = cfg.cascadeLandingSquish.coerceIn(0.05f, 0.50f) * cfg.cascadeInertiaCoupling.coerceIn(0f, 1.5f)
+        val damping = cfg.cascadeViscousDamping.coerceIn(0.30f, 1.00f)
 
-        if (u <= 0f) return values[0]
-        if (u >= 1f) return values[values.size - 1]
+        val currentY: Float
+        val deltaY: Float
 
-        var i = 0
-        while (i < knots.size - 1 && u > knots[i + 1]) {
-            i++
-        }
-        val t0 = knots[i]
-        val t1 = knots[i + 1]
-        val p = (u - t0) / (t1 - t0)
-        // Smoothstep Hermite curve: s(0)=0, s(1)=1, s'(0)=0, s'(1)=0
-        val s = p * p * (3f - 2f * p)
-        return values[i] + s * (values[i + 1] - values[i])
-    }
-
-    private fun computeEntranceTranslationY(u: Float, transY: Float): Float {
-        return if (u < 0.54f) {
-            val p = u / 0.54f
-            val s = 1f - (1f - p) * (1f - p)
-            transY * (1f - s)
-        } else if (u < 0.78f) {
-            val p = (u - 0.54f) / 0.24f
-            -0.055f * transY * sin((p * Math.PI).toDouble()).toFloat() * (1f - p)
+        if (u < 0.42f) {
+            val p = u / 0.42f
+            val s = p * p * (3f - 2f * p)
+            currentY = transY * (1f - s * 0.85f)
+            deltaY = flightElong * sin((p * Math.PI).toDouble()).toFloat()
+        } else if (u < 0.70f) {
+            val p = (u - 0.42f) / 0.28f
+            val yOvershoot = -0.05f * transY * sin((p * Math.PI).toDouble()).toFloat()
+            val yProg = 0.15f * (1f - p)
+            currentY = transY * yProg + yOvershoot
+            deltaY = -landingSquish * sin((p * Math.PI).toDouble()).toFloat()
         } else {
-            0f
+            val p = ((u - 0.70f) / 0.30f).coerceIn(0f, 1f)
+            currentY = 0f
+            val reboundAmp = landingSquish * 0.32f * (1f - damping * 0.5f)
+            val decay = (1f - p)
+            deltaY = reboundAmp * sin((p * 2.0 * Math.PI).toDouble()).toFloat() * decay
         }
+
+        return Pair(currentY, deltaY)
     }
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
@@ -139,6 +144,7 @@ object KeypadPhysicsHook {
                                 when (event.actionMasked) {
                                     MotionEvent.ACTION_DOWN -> {
                                         appearAnimators.remove(view)?.cancel()
+                                        releaseAnimators.remove(view)?.cancel()
                                         view.animate().cancel()
                                         touchStates[view] = KeypadTouchState(
                                             downRawX = event.rawX,
@@ -181,6 +187,7 @@ object KeypadPhysicsHook {
                                         if (distSq > slop * slop || state?.isDragging == true) {
                                             state?.isDragging = true
                                             view.animate().cancel()
+                                            releaseAnimators.remove(view)?.cancel()
 
                                             // Maintain topmost Z-order and unclipping during active dragging
                                             view.translationZ = 120f * density
@@ -192,8 +199,8 @@ object KeypadPhysicsHook {
                                             val h = view.height.toFloat().coerceAtLeast(1f)
                                             val minDim = min(w, h)
 
-                                            // 1. Featherlight liquid bubble displacement (threshold kept as is: maxOffset = minDim * 0.40f)
-                                            val maxOffset = minDim * 0.40f
+                                            // Configurable, reduced allowed stretch threshold
+                                            val maxOffset = minDim * cfg.dragMaxThreshold.coerceIn(0.15f, 0.50f)
                                             val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
 
                                             val jellyTx: Float
@@ -205,9 +212,17 @@ object KeypadPhysicsHook {
                                             if (dist > 0.001f) {
                                                 dirX = dx / dist
                                                 dirY = dy / dist
-                                                // Featherlight, natural fluid response (initialDerivative = 0.72f):
-                                                // Instant tracking with zero sluggishness, smoothly capping at maxOffset
-                                                val disp = (maxOffset * tanh((0.72f * dist / maxOffset).toDouble())).toFloat()
+
+                                                // Non-linear increasing resistance model:
+                                                // k0 gives tactile initial firmness (no zero-resistance floatiness).
+                                                // Power p ramps up resistance with pull distance.
+                                                val k0 = cfg.dragInitialStiffness.coerceIn(0.15f, 0.85f).toDouble()
+                                                val p = cfg.dragResistancePower.coerceIn(1.0f, 3.5f).toDouble()
+                                                val xNorm = (dist / maxOffset).coerceAtLeast(0.0).toDouble()
+                                                val kx = k0 * xNorm
+                                                val denom = Math.pow(1.0 + Math.pow(kx, p), 1.0 / p)
+                                                val disp = (maxOffset * (kx / denom)).toFloat().coerceAtMost(maxOffset)
+
                                                 jellyTx = dirX * disp
                                                 jellyTy = dirY * disp
                                                 stretchRatio = (disp / maxOffset).coerceIn(0f, 1f)
@@ -219,14 +234,12 @@ object KeypadPhysicsHook {
                                                 stretchRatio = 0f
                                             }
 
-                                            // 2. Physical Volume-Preserved Liquid Bubble Stretch along drag angle
-                                            // As the bubble stretches along (dirX, dirY), it elongates longitudinally by (1 + stretchAmount)
-                                            // and contracts transversely by (1 / (1 + stretchAmount)) to strictly preserve 2D liquid volume.
-                                            val maxStretchFactor = 0.28f
-                                            val stretchAmount = stretchRatio * maxStretchFactor
+                                            // Physical Volume-Preserved Liquid Bubble Stretch along drag angle
+                                            val stretchFactor = cfg.dragVolumeStretch.coerceIn(0.05f, 0.50f)
+                                            val stretchAmount = stretchRatio * stretchFactor
                                             val compAmount = 1f - (1f / (1f + stretchAmount))
 
-                                            val baseScale = cfg.pressLiquidScale + (1.0f - cfg.pressLiquidScale) * (stretchRatio * 0.45f)
+                                            val baseScale = cfg.pressLiquidScale + (1.0f - cfg.pressLiquidScale) * (stretchRatio * 0.40f)
 
                                             val dirX2 = dirX * dirX
                                             val dirY2 = dirY * dirY
@@ -235,8 +248,8 @@ object KeypadPhysicsHook {
 
                                             view.translationX = baseTransX + jellyTx
                                             view.translationY = jellyTy
-                                            view.scaleX = liquidScaleX.coerceIn(0.65f, 1.45f)
-                                            view.scaleY = liquidScaleY.coerceIn(0.65f, 1.45f)
+                                            view.scaleX = liquidScaleX.coerceIn(0.60f, 1.45f)
+                                            view.scaleY = liquidScaleY.coerceIn(0.60f, 1.45f)
                                         }
 
                                         liquidDrawable?.onTouchMove(event.x, event.y)
@@ -248,28 +261,103 @@ object KeypadPhysicsHook {
                                         liquidDrawable?.onTouchUp()
 
                                         view.animate().cancel()
+                                        releaseAnimators.remove(view)?.cancel()
+
                                         val rowParent = view.parent as? View
+                                        val currTx = view.translationX - baseTransX
+                                        val currTy = view.translationY
+                                        val releaseDist = hypot(currTx.toDouble(), currTy.toDouble()).toFloat()
+                                        val minDim = min(view.width.toFloat().coerceAtLeast(1f), view.height.toFloat().coerceAtLeast(1f))
+                                        val maxOffset = minDim * cfg.dragMaxThreshold.coerceIn(0.15f, 0.50f)
+                                        val releaseNorm = (releaseDist / maxOffset).coerceIn(0f, 1f)
 
-                                        view.animate()
-                                            .translationX(baseTransX)
-                                            .translationY(0f)
-                                            .translationZ(0f)
-                                            .scaleX(1.0f)
-                                            .scaleY(1.0f)
-                                            .setStartDelay(0L)
-                                            .setDuration(280L)
-                                            .setInterpolator(OvershootInterpolator(2.2f))
-                                            .setUpdateListener { view.invalidate() }
-                                            .withEndAction {
-                                                view.translationZ = 0f
-                                                rowParent?.translationZ = 0f
+                                        if (releaseDist < 1.5f * density) {
+                                            view.animate()
+                                                .translationX(baseTransX)
+                                                .translationY(0f)
+                                                .translationZ(0f)
+                                                .scaleX(1.0f)
+                                                .scaleY(1.0f)
+                                                .setDuration(180L)
+                                                .setInterpolator(DecelerateInterpolator(1.8f))
+                                                .withEndAction {
+                                                    view.translationZ = 0f
+                                                    rowParent?.translationZ = 0f
+                                                }
+                                                .start()
+                                            rowParent?.animate()?.translationZ(0f)?.setDuration(180L)?.start()
+                                        } else {
+                                            // Directional Inertia Release Snapback Engine
+                                            val uX = currTx / releaseDist
+                                            val uY = currTy / releaseDist
+                                            val durationMs = cfg.releaseDuration.toLong().coerceIn(150L, 600L)
+                                            val squishAmp = cfg.releaseSquishAmp.coerceIn(0.0f, 0.70f)
+                                            val overshootTension = cfg.releaseOvershoot.coerceIn(1.0f, 3.5f)
+
+                                            val releaseAnim = ValueAnimator.ofFloat(0f, 1f).apply {
+                                                duration = durationMs
+                                                interpolator = LinearInterpolator()
+
+                                                addUpdateListener { va ->
+                                                    val t = va.animatedFraction
+
+                                                    // 1. Directional position snapback along vector (uX, uY)
+                                                    val omega = (Math.PI * overshootTension).toDouble()
+                                                    val dampingCoeff = 3.8
+                                                    val decay = Math.exp(-dampingCoeff * t)
+                                                    val posRatio = (decay * Math.cos(omega * t)).toFloat()
+
+                                                    val currentTx = baseTransX + uX * releaseDist * posRatio
+                                                    val currentTy = uY * releaseDist * posRatio
+
+                                                    // 2. Directional Liquid Inertia Mass Transfer Squish along (uX, uY)
+                                                    val squishFreq = omega * 1.05
+                                                    val squishDecay = Math.exp(-3.5 * t)
+                                                    val deltaParallel = (releaseNorm * squishAmp * squishDecay * Math.cos(squishFreq * t)).toFloat()
+
+                                                    val lambdaParallel = (1.0f + deltaParallel).coerceIn(0.55f, 1.65f)
+                                                    val lambdaPerp = 1.0f / lambdaParallel
+
+                                                    val diffParallel = lambdaParallel - 1.0f
+                                                    val diffPerp = 1.0f - lambdaPerp
+
+                                                    val uX2 = uX * uX
+                                                    val uY2 = uY * uY
+                                                    val scaleX = 1.0f + diffParallel * uX2 - diffPerp * uY2
+                                                    val scaleY = 1.0f + diffParallel * uY2 - diffPerp * uX2
+
+                                                    view.translationX = currentTx
+                                                    view.translationY = currentTy
+                                                    view.scaleX = scaleX.coerceIn(0.60f, 1.50f)
+                                                    view.scaleY = scaleY.coerceIn(0.60f, 1.50f)
+                                                    view.invalidate()
+                                                }
+
+                                                addListener(object : AnimatorListenerAdapter() {
+                                                    private var isCancelled = false
+                                                    override fun onAnimationCancel(animation: Animator) {
+                                                        isCancelled = true
+                                                        releaseAnimators.remove(view)
+                                                    }
+                                                    override fun onAnimationEnd(animation: Animator) {
+                                                        if (!isCancelled) {
+                                                            view.translationX = baseTransX
+                                                            view.translationY = 0f
+                                                            view.translationZ = 0f
+                                                            view.scaleX = 1f
+                                                            view.scaleY = 1f
+                                                            rowParent?.translationZ = 0f
+                                                            view.invalidate()
+                                                        }
+                                                        releaseAnimators.remove(view)
+                                                    }
+                                                })
                                             }
-                                            .start()
+                                            releaseAnimators[view] = releaseAnim
+                                            releaseAnim.start()
 
-                                        rowParent?.animate()
-                                            ?.translationZ(0f)
-                                            ?.setDuration(280L)
-                                            ?.start()
+                                            rowParent?.animate()?.translationZ(0f)?.setDuration(durationMs)?.start()
+                                        }
                                     }
                                 }
                             }
@@ -657,18 +745,15 @@ object KeypadPhysicsHook {
                                         addUpdateListener { va ->
                                             val u = va.animatedFraction
 
-                                            val alpha = (u / 0.18f).coerceIn(0f, 1f)
-                                            val currY = computeEntranceTranslationY(u, transY)
-
-                                            val deltaY = computeLiquidSquishDelta(u)
+                                            val (currY, deltaY) = computeCascadePhysics(u, transY, cfg)
                                             val squishY = (1.0f + deltaY).coerceAtLeast(0.4f)
                                             val squishX = 1.0f / squishY
 
-                                            val scaleProg = (u / 0.20f).coerceIn(0f, 1f)
+                                            val scaleProg = (u / 0.18f).coerceIn(0f, 1f)
                                             val smoothBaseProg = scaleProg * scaleProg * (3f - 2f * scaleProg)
                                             val baseScale = initialScale + (1.0f - initialScale) * smoothBaseProg
 
-                                            keyView.alpha = alpha
+                                            keyView.alpha = (u / 0.15f).coerceIn(0f, 1f)
                                             keyView.translationY = currY
                                             keyView.translationX = targetTransX
                                             keyView.scaleX = baseScale * squishX
@@ -731,6 +816,10 @@ object KeypadPhysicsHook {
                                 anim.cancel()
                             }
                             appearAnimators.clear()
+                            for (anim in releaseAnimators.values) {
+                                anim.cancel()
+                            }
+                            releaseAnimators.clear()
 
                             val ctx = pinView.context
                             val density = ctx.resources.displayMetrics.density
@@ -785,6 +874,10 @@ object KeypadPhysicsHook {
                                     anim.cancel()
                                 }
                                 appearAnimators.clear()
+                                for (anim in releaseAnimators.values) {
+                                    anim.cancel()
+                                }
+                                releaseAnimators.clear()
                                 val pinView = chain.thisObject as? View
                                 if (pinView != null) {
                                     val ctx = pinView.context

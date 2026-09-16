@@ -16,6 +16,10 @@ sealed interface Destination {
     data object NotificationCenterSheet : Destination
     data object Keypad : Destination
     data object KeypadDelays : Destination
+    data object KeypadPhysics : Destination
+    data object KeypadStretchPhysics : Destination
+    data object KeypadReleasePhysics : Destination
+    data object KeypadCascadePhysics : Destination
     data object ScreenUnlock : Destination
     data object AppTransitions : Destination
     data object ControlCenter : Destination

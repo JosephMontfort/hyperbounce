@@ -213,7 +213,19 @@ data class LockScreenKeypadSettings(
     val delayKey9: Float = -1f,
     val delayKey0: Float = -1f,
     val delayEmergency: Float = -1f,
-    val delayCancel: Float = -1f
+    val delayCancel: Float = -1f,
+    // Liquid Dynamics & Physics Tuning
+    val dragMaxThreshold: Float = 0.28f,
+    val dragInitialStiffness: Float = 0.45f,
+    val dragResistancePower: Float = 1.8f,
+    val dragVolumeStretch: Float = 0.22f,
+    val releaseDuration: Float = 320.0f,
+    val releaseSquishAmp: Float = 0.35f,
+    val releaseOvershoot: Float = 2.0f,
+    val cascadeFlightElongation: Float = 0.22f,
+    val cascadeLandingSquish: Float = 0.24f,
+    val cascadeInertiaCoupling: Float = 1.0f,
+    val cascadeViscousDamping: Float = 0.75f
 )
 
 /** Feature 3: Screen Unlock Velocity Kinetics Settings */

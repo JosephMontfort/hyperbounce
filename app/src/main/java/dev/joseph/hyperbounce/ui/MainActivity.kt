@@ -51,8 +51,12 @@ import dev.joseph.hyperbounce.ui.screens.AppDetailScreen
 import dev.joseph.hyperbounce.ui.screens.AppTransitionsScreen
 import dev.joseph.hyperbounce.ui.screens.ControlCenterScreen
 import dev.joseph.hyperbounce.ui.screens.EngineScreen
+import dev.joseph.hyperbounce.ui.screens.KeypadCascadePhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadDelaysScreen
+import dev.joseph.hyperbounce.ui.screens.KeypadPhysicsScreen
+import dev.joseph.hyperbounce.ui.screens.KeypadReleasePhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadScreen
+import dev.joseph.hyperbounce.ui.screens.KeypadStretchPhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.LockScreenSheetScreen
 import dev.joseph.hyperbounce.ui.screens.NotificationCenterSheetScreen
 import dev.joseph.hyperbounce.ui.screens.ScreenUnlockScreen
@@ -220,6 +224,35 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                         )
 
                         Destination.KeypadDelays -> KeypadDelaysScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.KeypadPhysics -> KeypadPhysicsScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop,
+                            onNavigate = push
+                        )
+
+                        Destination.KeypadStretchPhysics -> KeypadStretchPhysicsScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.KeypadReleasePhysics -> KeypadReleasePhysicsScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.KeypadCascadePhysics -> KeypadCascadePhysicsScreen(
                             repository = repository,
                             colors = colors,
                             backdrop = backdrop,

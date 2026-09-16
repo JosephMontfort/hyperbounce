@@ -621,13 +621,29 @@ class SettingsRepository(context: Context) {
         var delayEmergency by prefsFloatState("pin_delay_emergency", defaults.delayEmergency); private set
         var delayCancel by prefsFloatState("pin_delay_cancel", defaults.delayCancel); private set
 
+        // Liquid Dynamics & Physics Tuning
+        var dragMaxThreshold by prefsFloatState("pin_drag_max_threshold", defaults.dragMaxThreshold); private set
+        var dragInitialStiffness by prefsFloatState("pin_drag_initial_stiffness", defaults.dragInitialStiffness); private set
+        var dragResistancePower by prefsFloatState("pin_drag_resistance_power", defaults.dragResistancePower); private set
+        var dragVolumeStretch by prefsFloatState("pin_drag_volume_stretch", defaults.dragVolumeStretch); private set
+        var releaseDuration by prefsFloatState("pin_release_duration", defaults.releaseDuration); private set
+        var releaseSquishAmp by prefsFloatState("pin_release_squish_amp", defaults.releaseSquishAmp); private set
+        var releaseOvershoot by prefsFloatState("pin_release_overshoot", defaults.releaseOvershoot); private set
+        var cascadeFlightElongation by prefsFloatState("pin_cascade_flight_elongation", defaults.cascadeFlightElongation); private set
+        var cascadeLandingSquish by prefsFloatState("pin_cascade_landing_squish", defaults.cascadeLandingSquish); private set
+        var cascadeInertiaCoupling by prefsFloatState("pin_cascade_inertia_coupling", defaults.cascadeInertiaCoupling); private set
+        var cascadeViscousDamping by prefsFloatState("pin_cascade_viscous_damping", defaults.cascadeViscousDamping); private set
+
         fun snapshot(): LockScreenKeypadSettings = LockScreenKeypadSettings(
             enabled, buttonRefraction, buttonBevel, buttonDispersion, buttonSpecular, buttonInnerShadow,
             buttonBlur, buttonSaturation, circleDiameter, digitTextSize, showKlondike, pressLiquidScale,
             pressLiquidAmp, pinpadLift, row0Offset, rowSpacing, columnSpacing, row1Offset, row2Offset,
             row3Offset, col1Offset, col3Offset, entryTranslationY, entryInitialScale, entryDuration,
             rowDelayStep, colDelayStep, entryOvershoot, delayKey1, delayKey2, delayKey3, delayKey4,
-            delayKey5, delayKey6, delayKey7, delayKey8, delayKey9, delayKey0, delayEmergency, delayCancel
+            delayKey5, delayKey6, delayKey7, delayKey8, delayKey9, delayKey0, delayEmergency, delayCancel,
+            dragMaxThreshold, dragInitialStiffness, dragResistancePower, dragVolumeStretch, releaseDuration,
+            releaseSquishAmp, releaseOvershoot, cascadeFlightElongation, cascadeLandingSquish,
+            cascadeInertiaCoupling, cascadeViscousDamping
         )
 
         @JvmName("setKeypadEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
@@ -672,6 +688,18 @@ class SettingsRepository(context: Context) {
         @JvmName("setDelayEmergencyPref") fun setDelayEmergency(v: Float) { delayEmergency = v }
         @JvmName("setDelayCancelPref") fun setDelayCancel(v: Float) { delayCancel = v }
 
+        @JvmName("setDragMaxThresholdPref") fun setDragMaxThreshold(v: Float) { dragMaxThreshold = v }
+        @JvmName("setDragInitialStiffnessPref") fun setDragInitialStiffness(v: Float) { dragInitialStiffness = v }
+        @JvmName("setDragResistancePowerPref") fun setDragResistancePower(v: Float) { dragResistancePower = v }
+        @JvmName("setDragVolumeStretchPref") fun setDragVolumeStretch(v: Float) { dragVolumeStretch = v }
+        @JvmName("setReleaseDurationPref") fun setReleaseDuration(v: Float) { releaseDuration = v }
+        @JvmName("setReleaseSquishAmpPref") fun setReleaseSquishAmp(v: Float) { releaseSquishAmp = v }
+        @JvmName("setReleaseOvershootPref") fun setReleaseOvershoot(v: Float) { releaseOvershoot = v }
+        @JvmName("setCascadeFlightElongationPref") fun setCascadeFlightElongation(v: Float) { cascadeFlightElongation = v }
+        @JvmName("setCascadeLandingSquishPref") fun setCascadeLandingSquish(v: Float) { cascadeLandingSquish = v }
+        @JvmName("setCascadeInertiaCouplingPref") fun setCascadeInertiaCoupling(v: Float) { cascadeInertiaCoupling = v }
+        @JvmName("setCascadeViscousDampingPref") fun setCascadeViscousDamping(v: Float) { cascadeViscousDamping = v }
+
         fun reloadFromDefaults() {
             enabled = defaults.enabled
             buttonRefraction = defaults.buttonRefraction
@@ -713,6 +741,17 @@ class SettingsRepository(context: Context) {
             delayKey0 = defaults.delayKey0
             delayEmergency = defaults.delayEmergency
             delayCancel = defaults.delayCancel
+            dragMaxThreshold = defaults.dragMaxThreshold
+            dragInitialStiffness = defaults.dragInitialStiffness
+            dragResistancePower = defaults.dragResistancePower
+            dragVolumeStretch = defaults.dragVolumeStretch
+            releaseDuration = defaults.releaseDuration
+            releaseSquishAmp = defaults.releaseSquishAmp
+            releaseOvershoot = defaults.releaseOvershoot
+            cascadeFlightElongation = defaults.cascadeFlightElongation
+            cascadeLandingSquish = defaults.cascadeLandingSquish
+            cascadeInertiaCoupling = defaults.cascadeInertiaCoupling
+            cascadeViscousDamping = defaults.cascadeViscousDamping
         }
     }
 
