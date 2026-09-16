@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import android.widget.TextView
 import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
@@ -31,6 +32,7 @@ object IosCallerScreenHook {
     private var isMessageRejectAllowed = true
     private var isReceiverRegistered = false
     var isAttendingTransitionActive = false
+    var lastAnswerKnobScreenX: Float = 0f
     var lastAnswerKnobScreenY: Float = 0f
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
@@ -134,17 +136,7 @@ object IosCallerScreenHook {
                 if (m.name == "onInflateView" && m.parameterTypes.size == 3) {
                     module.hook(m).intercept { chain ->
                         val result = chain.proceed()
-                        val fragment = chain.thisObject
-                        if (fragment != null) {
-                            try {
-                                val endBtnField = fragment.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
-                                (endBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
-                                val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
-                                (audioBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
-                                val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
-                                (toolBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
-                            } catch (_: Throwable) {}
-                        }
+                        (chain.thisObject)?.let { handleCallButtonVisibleHandover(it, false) }
                         result
                     }
                     Log.d(TAG, "Hooked CallButtonFragment.onInflateView successfully.")
@@ -160,97 +152,8 @@ object IosCallerScreenHook {
                 ) {
                     module.hook(m).intercept { chain ->
                         val show = chain.args[0] as? Boolean ?: false
-                        val fragment = chain.thisObject
-                        val config = IosCallerConfigHolder.config
-
-                        if (fragment != null && show) {
-                            try {
-                                val rootViewField = fragment.javaClass.getDeclaredField("mRootView").apply { isAccessible = true }
-                                val rootView = rootViewField.get(fragment) as? View
-                                if (rootView != null) {
-                                    val d = rootView.resources.displayMetrics.density
-                                    val bottomPadding = (config.bottomOffset * d).toInt()
-                                    rootView.setPadding(0, 0, 0, bottomPadding)
-                                }
-                            } catch (_: Throwable) {}
-                        }
-
-                        if (show && isAttendingTransitionActive) {
-                            isAttendingTransitionActive = false
-                            if (fragment != null) {
-                                try {
-                                    val endBtnField = fragment.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
-                                    val endBtn = endBtnField.get(fragment) as? View
-                                    val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
-                                    val audioBtn = audioBtnField.get(fragment) as? View
-                                    val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
-                                    val toolBtn = toolBtnField.get(fragment) as? View
-
-                                    if (endBtn != null) applyCallButtonSize(endBtn)
-                                    if (audioBtn != null) applyCallButtonSize(audioBtn)
-                                    if (toolBtn != null) applyCallButtonSize(toolBtn)
-
-                                    // Align call button row vertically to match the exact screen position of the answer knob
-                                    val alignButtons = {
-                                        if (endBtn != null && lastAnswerKnobScreenY > 0f && endBtn.height > 0) {
-                                            val endLoc = IntArray(2)
-                                            endBtn.getLocationOnScreen(endLoc)
-                                            val currentEndCenterY = endLoc[1] + (endBtn.height / 2f) - endBtn.translationY
-                                            val deltaY = lastAnswerKnobScreenY - currentEndCenterY
-                                            endBtn.translationY = deltaY
-                                            audioBtn?.translationY = deltaY
-                                            toolBtn?.translationY = deltaY
-                                            Log.i(TAG, "Aligned call buttons with deltaY=$deltaY (lastKnobCenterY=$lastAnswerKnobScreenY)")
-                                        }
-                                    }
-
-                                    if (endBtn != null && endBtn.height > 0) {
-                                        alignButtons()
-                                    } else {
-                                        endBtn?.post { alignButtons() }
-                                    }
-
-                                    if (endBtn != null) {
-                                        endBtn.visibility = View.VISIBLE
-                                        endBtn.alpha = 1.0f
-                                        endBtn.scaleX = 1.0f
-                                        endBtn.scaleY = 1.0f
-                                    }
-
-                                    if (audioBtn != null) {
-                                        audioBtn.visibility = View.VISIBLE
-                                        audioBtn.scaleX = 1.0f
-                                        audioBtn.scaleY = 1.0f
-                                        audioBtn.alpha = 0f
-                                        audioBtn.animate().alpha(1f).setDuration(250).start()
-                                    }
-
-                                    if (toolBtn != null) {
-                                        toolBtn.visibility = View.VISIBLE
-                                        toolBtn.scaleX = 1.0f
-                                        toolBtn.scaleY = 1.0f
-                                        toolBtn.alpha = 0f
-                                        toolBtn.animate().alpha(1f).setDuration(250).start()
-                                    }
-
-                                    return@intercept null
-                                } catch (t: Throwable) {
-                                    Log.e(TAG, "Error in custom setCallButtonVisible handover", t)
-                                }
-                            }
-                        }
-
                         val result = chain.proceed()
-                        if (show && fragment != null) {
-                            try {
-                                val endBtnField = fragment.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
-                                (endBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
-                                val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
-                                (audioBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
-                                val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
-                                (toolBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
-                            } catch (_: Throwable) {}
-                        }
+                        (chain.thisObject)?.let { handleCallButtonVisibleHandover(it, show) }
                         result
                     }
                     Log.d(TAG, "Hooked CallButtonFragment.setCallButtonVisible successfully.")
@@ -258,6 +161,7 @@ object IosCallerScreenHook {
                 }
             }
 
+            // Hook startCallButtonAnimator(boolean)
             for (m: Method in callButtonFragmentClass.declaredMethods) {
                 if (m.name == "startCallButtonAnimator" &&
                     m.parameterTypes.size == 1 &&
@@ -265,98 +169,8 @@ object IosCallerScreenHook {
                 ) {
                     module.hook(m).intercept { chain ->
                         val show = chain.args[0] as? Boolean ?: false
-                        val fragment = chain.thisObject
-                        val config = IosCallerConfigHolder.config
-
-                        if (fragment != null && show) {
-                            try {
-                                val rootViewField = fragment.javaClass.getDeclaredField("mRootView").apply { isAccessible = true }
-                                val rootView = rootViewField.get(fragment) as? View
-                                if (rootView != null) {
-                                    val d = rootView.resources.displayMetrics.density
-                                    val bottomPadding = (config.bottomOffset * d).toInt()
-                                    rootView.setPadding(0, 0, 0, bottomPadding)
-                                }
-                            } catch (_: Throwable) {}
-                        }
-
-                        if (show && isAttendingTransitionActive) {
-                            isAttendingTransitionActive = false
-                            if (fragment != null) {
-                                try {
-                                    val endBtnField = fragment.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
-                                    val endBtn = endBtnField.get(fragment) as? View
-                                    val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
-                                    val audioBtn = audioBtnField.get(fragment) as? View
-                                    val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
-                                    val toolBtn = toolBtnField.get(fragment) as? View
-
-                                    if (endBtn != null) applyCallButtonSize(endBtn)
-                                    if (audioBtn != null) applyCallButtonSize(audioBtn)
-                                    if (toolBtn != null) applyCallButtonSize(toolBtn)
-
-                                    // Align call button row vertically to match the exact screen position of the answer knob
-                                    val alignButtons = {
-                                        if (endBtn != null && lastAnswerKnobScreenY > 0f && endBtn.height > 0) {
-                                            val endLoc = IntArray(2)
-                                            endBtn.getLocationOnScreen(endLoc)
-                                            val currentEndCenterY = endLoc[1] + (endBtn.height / 2f) - endBtn.translationY
-                                            val deltaY = lastAnswerKnobScreenY - currentEndCenterY
-                                            endBtn.translationY = deltaY
-                                            audioBtn?.translationY = deltaY
-                                            toolBtn?.translationY = deltaY
-                                            Log.i(TAG, "Aligned call buttons with deltaY=$deltaY (lastKnobCenterY=$lastAnswerKnobScreenY)")
-                                        }
-                                    }
-
-                                    if (endBtn != null && endBtn.height > 0) {
-                                        alignButtons()
-                                    } else {
-                                        endBtn?.post { alignButtons() }
-                                    }
-
-                                    if (endBtn != null) {
-                                        endBtn.visibility = View.VISIBLE
-                                        endBtn.alpha = 1.0f
-                                        endBtn.scaleX = 1.0f
-                                        endBtn.scaleY = 1.0f
-                                    }
-
-                                    // Audio button and tool button fade in smoothly around it with matching enlarged scale
-                                    if (audioBtn != null) {
-                                        audioBtn.visibility = View.VISIBLE
-                                        audioBtn.scaleX = 1.0f
-                                        audioBtn.scaleY = 1.0f
-                                        audioBtn.alpha = 0f
-                                        audioBtn.animate().alpha(1f).setDuration(250).start()
-                                    }
-
-                                    if (toolBtn != null) {
-                                        toolBtn.visibility = View.VISIBLE
-                                        toolBtn.scaleX = 1.0f
-                                        toolBtn.scaleY = 1.0f
-                                        toolBtn.alpha = 0f
-                                        toolBtn.animate().alpha(1f).setDuration(250).start()
-                                    }
-
-                                    return@intercept null
-                                } catch (t: Throwable) {
-                                    Log.e(TAG, "Error in custom startCallButtonAnimator handover", t)
-                                }
-                            }
-                        }
-
                         val result = chain.proceed()
-                        if (show && fragment != null) {
-                            try {
-                                val endBtnField = fragment.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
-                                (endBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
-                                val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
-                                (audioBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
-                                val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
-                                (toolBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
-                            } catch (_: Throwable) {}
-                        }
+                        (chain.thisObject)?.let { handleCallButtonVisibleHandover(it, show) }
                         result
                     }
                     Log.d(TAG, "Hooked CallButtonFragment.startCallButtonAnimator successfully.")
@@ -364,20 +178,12 @@ object IosCallerScreenHook {
                 }
             }
 
-            // Hook CallButtonFragment.updateButtonHeight to enforce custom button sizing on relayout
+            // Hook updateButtonHeight()
             for (m: Method in callButtonFragmentClass.declaredMethods) {
                 if (m.name == "updateButtonHeight" && m.parameterTypes.isEmpty()) {
                     module.hook(m).intercept { chain ->
                         val result = chain.proceed()
-                        try {
-                            val fragment = chain.thisObject
-                            val endBtnField = fragment.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
-                            (endBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
-                            val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
-                            (audioBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
-                            val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
-                            (toolBtnField.get(fragment) as? View)?.let { applyCallButtonSize(it) }
-                        } catch (_: Throwable) {}
+                        (chain.thisObject)?.let { handleCallButtonVisibleHandover(it, false) }
                         result
                     }
                     Log.d(TAG, "Hooked CallButtonFragment.updateButtonHeight successfully.")
@@ -385,22 +191,12 @@ object IosCallerScreenHook {
                 }
             }
 
-            // Hook CallButtonFragment.updatePanelPadding to enforce custom bottom offset
+            // Hook updatePanelPadding()
             for (m: Method in callButtonFragmentClass.declaredMethods) {
                 if (m.name == "updatePanelPadding" && m.parameterTypes.isEmpty()) {
                     module.hook(m).intercept { chain ->
                         val result = chain.proceed()
-                        try {
-                            val fragment = chain.thisObject
-                            val config = IosCallerConfigHolder.config
-                            val rootViewField = fragment.javaClass.getDeclaredField("mRootView").apply { isAccessible = true }
-                            val rootView = rootViewField.get(fragment) as? View
-                            if (rootView != null) {
-                                val d = rootView.resources.displayMetrics.density
-                                val bottomPadding = (config.bottomOffset * d).toInt()
-                                rootView.setPadding(0, 0, 0, bottomPadding)
-                            }
-                        } catch (_: Throwable) {}
+                        (chain.thisObject)?.let { handleCallButtonVisibleHandover(it, false) }
                         result
                     }
                     Log.d(TAG, "Hooked CallButtonFragment.updatePanelPadding successfully.")
@@ -544,6 +340,14 @@ object IosCallerScreenHook {
             onAnswer = {
                 try {
                     isAttendingTransitionActive = true
+                    val slider = activeIosCallView?.get()?.answerSlider
+                    if (slider != null && slider.width > 0) {
+                        val loc = IntArray(2)
+                        slider.getLocationOnScreen(loc)
+                        lastAnswerKnobScreenX = loc[0] + (slider.width / 2f)
+                        lastAnswerKnobScreenY = loc[1] + (slider.height / 2f)
+                        Log.i(TAG, "Recorded final answer knob center: X=$lastAnswerKnobScreenX, Y=$lastAnswerKnobScreenY")
+                    }
                     val onAnswerMethod = fragment.javaClass.getMethod("onAnswer", Int::class.javaPrimitiveType)
                     onAnswerMethod.invoke(fragment, 0)
                     Log.i(TAG, "Dispatched onAnswer(0) to AnswerFragment with center glide active.")
@@ -633,11 +437,140 @@ object IosCallerScreenHook {
         }
     }
 
+    internal fun disableClippingRecursively(view: View?) {
+        if (view == null) return
+        var curr: View? = view
+        while (curr != null) {
+            if (curr is ViewGroup) {
+                curr.clipChildren = false
+                curr.clipToPadding = false
+                for (i in 0 until curr.childCount) {
+                    val child = curr.getChildAt(i)
+                    if (child is ViewGroup) {
+                        child.clipChildren = false
+                        child.clipToPadding = false
+                    }
+                }
+            }
+            curr = curr.parent as? View
+        }
+    }
+
+    private fun handleCallButtonVisibleHandover(fragment: Any, show: Boolean) {
+        val config = IosCallerConfigHolder.config
+        try {
+            val rootViewField = fragment.javaClass.getDeclaredField("mRootView").apply { isAccessible = true }
+            val rootView = rootViewField.get(fragment) as? View
+            if (rootView != null) {
+                val d = rootView.resources.displayMetrics.density
+                val bottomPadding = (config.bottomOffset * d).toInt()
+                rootView.setPadding(0, 0, 0, bottomPadding)
+                disableClippingRecursively(rootView)
+            }
+
+            val endBtnField = fragment.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }
+            val endBtn = endBtnField.get(fragment) as? View
+            val audioBtnField = fragment.javaClass.getDeclaredField("mAudioButton").apply { isAccessible = true }
+            val audioBtn = audioBtnField.get(fragment) as? View
+            val toolBtnField = fragment.javaClass.getDeclaredField("mToolButton").apply { isAccessible = true }
+            val toolBtn = toolBtnField.get(fragment) as? View
+
+            if (endBtn != null) {
+                applyCallButtonSize(endBtn)
+                disableClippingRecursively(endBtn)
+            }
+            if (audioBtn != null) {
+                applyCallButtonSize(audioBtn)
+                disableClippingRecursively(audioBtn)
+            }
+            if (toolBtn != null) {
+                applyCallButtonSize(toolBtn)
+                disableClippingRecursively(toolBtn)
+            }
+
+            if (show && isAttendingTransitionActive && endBtn != null) {
+                isAttendingTransitionActive = false
+
+                endBtn.visibility = View.VISIBLE
+                endBtn.alpha = 1.0f
+                endBtn.scaleX = 1.0f
+                endBtn.scaleY = 1.0f
+
+                if (audioBtn != null) {
+                    audioBtn.visibility = View.VISIBLE
+                    audioBtn.alpha = 0f
+                    audioBtn.scaleX = 1.0f
+                    audioBtn.scaleY = 1.0f
+                    audioBtn.animate().alpha(1f).setDuration(250).start()
+                }
+
+                if (toolBtn != null) {
+                    toolBtn.visibility = View.VISIBLE
+                    toolBtn.alpha = 0f
+                    toolBtn.scaleX = 1.0f
+                    toolBtn.scaleY = 1.0f
+                    toolBtn.animate().alpha(1f).setDuration(250).start()
+                }
+
+                // 1:1 Precise Alignment to exact answer knob center (both X and Y)
+                val alignButtons = {
+                    val ovalView = endBtn.findViewById<View>(endBtn.resources.getIdentifier("endCall", "id", endBtn.context.packageName))
+                        ?: try { endBtn.javaClass.getDeclaredField("mEndCallButton").apply { isAccessible = true }.get(endBtn) as? View } catch (_: Throwable) { null }
+                        ?: endBtn
+
+                    if (lastAnswerKnobScreenY > 0f && ovalView.height > 0) {
+                        val ovalLoc = IntArray(2)
+                        ovalView.getLocationOnScreen(ovalLoc)
+                        // Calculate the UNTRANSLATED center of the circular button on screen
+                        val currentCenterY = ovalLoc[1] + (ovalView.height / 2f) - endBtn.translationY
+                        val currentCenterX = ovalLoc[0] + (ovalView.width / 2f) - endBtn.translationX
+                        val deltaY = lastAnswerKnobScreenY - currentCenterY
+                        val deltaX = if (lastAnswerKnobScreenX > 0f) lastAnswerKnobScreenX - currentCenterX else 0f
+
+                        endBtn.translationY = deltaY
+                        endBtn.translationX = deltaX
+                        audioBtn?.translationY = deltaY
+                        toolBtn?.translationY = deltaY
+
+                        disableClippingRecursively(endBtn)
+                        disableClippingRecursively(audioBtn)
+                        disableClippingRecursively(toolBtn)
+                        if (rootView != null) disableClippingRecursively(rootView)
+                        Log.i(TAG, "1:1 Aligned call buttons: deltaX=$deltaX, deltaY=$deltaY (target: $lastAnswerKnobScreenX, $lastAnswerKnobScreenY, current: $currentCenterX, $currentCenterY)")
+                    }
+                }
+
+                alignButtons()
+                endBtn.post { alignButtons() }
+
+                val vto = endBtn.viewTreeObserver
+                if (vto.isAlive) {
+                    vto.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+                        private var layoutPasses = 0
+                        override fun onGlobalLayout() {
+                            layoutPasses++
+                            alignButtons()
+                            if (layoutPasses >= 6) {
+                                try {
+                                    endBtn.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                                } catch (_: Throwable) {}
+                            }
+                        }
+                    })
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Error in handleCallButtonVisibleHandover", t)
+        }
+    }
+
     internal fun applyCallButtonSize(view: View) {
         val config = IosCallerConfigHolder.config
         val d = view.resources.displayMetrics.density
         val targetPx = (config.buttonSize * d).toInt()
         val iconScale = config.buttonSize / 68f
+
+        disableClippingRecursively(view)
 
         try {
             // Resize any immediate child (e.g. child 0 FrameLayout containing the button)
@@ -723,6 +656,7 @@ object IosCallerScreenHook {
             }
 
             view.requestLayout()
+            disableClippingRecursively(view)
         } catch (_: Throwable) {}
     }
 
@@ -731,6 +665,8 @@ object IosCallerScreenHook {
         val d = view.resources.displayMetrics.density
         val targetPx = (config.buttonSize * d).toInt()
         val iconScale = config.buttonSize / 68f
+
+        disableClippingRecursively(view)
 
         try {
             if (view is ViewGroup && view.childCount > 0) {
@@ -760,6 +696,9 @@ object IosCallerScreenHook {
                 ovalIcon.scaleX = iconScale
                 ovalIcon.scaleY = iconScale
             }
+
+            view.requestLayout()
+            disableClippingRecursively(view)
         } catch (_: Throwable) {}
     }
 

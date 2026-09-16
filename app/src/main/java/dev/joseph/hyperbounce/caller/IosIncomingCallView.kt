@@ -123,9 +123,10 @@ class IosIncomingCallView @JvmOverloads constructor(
                 trackHeight
             )
             onGlideStarted = {
-                // Record exact knob screen center Y for seamless handover to CallButtonFragment
+                // Record exact knob screen center X and Y for seamless handover to CallButtonFragment
                 val loc = IntArray(2)
                 getLocationOnScreen(loc)
+                IosCallerScreenHook.lastAnswerKnobScreenX = loc[0] + (width / 2f)
                 IosCallerScreenHook.lastAnswerKnobScreenY = loc[1] + (height / 2f)
                 declineSlider.animate().alpha(0f).setDuration(220).start()
                 messageButtonLayout.animate().alpha(0f).setDuration(220).start()

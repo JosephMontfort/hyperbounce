@@ -460,6 +460,12 @@ class IosSliderView @JvmOverloads constructor(
                 }
                 addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: Animator) {
+                        morphProgress = 1f
+                        knobX = targetCenterX
+                        currentKnobColor = colorRed
+                        currentIconColor = colorWhite
+                        phoneRotation = 135f
+                        postInvalidate()
                         onCompleted?.invoke()
                     }
                 })
