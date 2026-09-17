@@ -129,7 +129,13 @@ object DialerRecentsHook {
         Log.i(TAG, "Attaching RecentsSwipeController to RecyclerView: $recyclerView")
         val controller = RecentsSwipeController(recyclerView, fragment, classLoader)
         recyclerView.addOnItemTouchListener(controller)
-        recyclerView.addOnScrollListener(controller)
+        recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
+                if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                    controller.closeCurrentOpenRow()
+                }
+            }
+        })
         recyclerView.addItemDecoration(controller)
     }
 
@@ -166,8 +172,7 @@ object DialerRecentsHook {
         private val recyclerView: RecyclerView,
         private val fragment: Any,
         private val classLoader: ClassLoader
-    ) : RecyclerView.SimpleOnItemTouchListener(),
-        RecyclerView.ItemDecoration() {
+    ) : RecyclerView.ItemDecoration(), RecyclerView.OnItemTouchListener {
 
         private val context: Context = recyclerView.context
         private val density: Float = context.resources.displayMetrics.density
@@ -423,11 +428,10 @@ object DialerRecentsHook {
             }
         }
 
-        override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
-            if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
-                // If user scrolls the list, immediately close any open row
-                openChild?.let { closeOpenRow(it) }
-            }
+        override fun onRequestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {}
+
+        fun closeCurrentOpenRow() {
+            openChild?.let { closeOpenRow(it) }
         }
 
         private fun closeOpenRow(view: View) {
