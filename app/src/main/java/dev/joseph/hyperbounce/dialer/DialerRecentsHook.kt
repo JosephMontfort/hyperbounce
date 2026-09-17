@@ -923,18 +923,14 @@ object DialerRecentsHook {
 
     private fun isValidPhoneNumber(s: String?): Boolean {
         if (s.isNullOrBlank()) return false
-        val digits = s.filter { it.isDigit() }
-        return digits.length >= 3
-    }
-
-    private fun collectTextViews(view: View, out: MutableList<TextView>) {
-        if (view is TextView) {
-            out.add(view)
-        } else if (view is ViewGroup) {
-            for (i in 0 until view.childCount) {
-                collectTextViews(view.getChildAt(i), out)
-            }
+        val str = s.trim()
+        // Reject timestamps, dates, and formatted time strings (e.g. "10:45", "12:30:15", "10:45 AM")
+        if (str.contains(":") || str.contains("/") || str.contains("AM", ignoreCase = true) || str.contains("PM", ignoreCase = true)) {
+            return false
         }
+        val digits = str.filter { it.isDigit() }
+        // Genuine phone numbers have at least 6 digits
+        return digits.length >= 6
     }
 
     private fun extractCallInfo(child: View, rv: ViewGroup): CallInfo? {
@@ -966,27 +962,7 @@ object DialerRecentsHook {
             adapter = getAdapterMethod.invoke(rv)
         } catch (_: Throwable) {}
 
-        // 3. Obtain position in adapter
-        var pos = -1
-        if (vh != null) {
-            for (mName in listOf("getBindingAdapterPosition", "getAbsoluteAdapterPosition", "getAdapterPosition", "getLayoutPosition")) {
-                try {
-                    val p = vh.javaClass.getMethod(mName).invoke(vh) as? Int
-                    if (p != null && p >= 0) {
-                        pos = p
-                        break
-                    }
-                } catch (_: Throwable) {}
-            }
-        }
-        if (pos < 0) {
-            try {
-                val m = rv.javaClass.getMethod("getChildAdapterPosition", View::class.java)
-                pos = m.invoke(rv, child) as? Int ?: -1
-            } catch (_: Throwable) {}
-        }
-
-        // 4. Obtain itemVM from ViewHolder field or adapter.K0(pos)
+        // 3. Obtain itemVM directly from ViewHolder field
         if (vh != null) {
             var currClass: Class<*>? = vh.javaClass
             while (currClass != null && currClass != Any::class.java) {
@@ -994,8 +970,11 @@ object DialerRecentsHook {
                     if (f.type.name.contains("DialerItemVM")) {
                         try {
                             f.isAccessible = true
-                            itemVM = f.get(vh)
-                            if (itemVM != null) break
+                            val obj = f.get(vh)
+                            if (obj != null) {
+                                itemVM = obj
+                                break
+                            }
                         } catch (_: Throwable) {}
                     }
                 }
@@ -1004,26 +983,10 @@ object DialerRecentsHook {
             }
         }
 
-        if (itemVM == null && adapter != null && pos >= 0) {
-            for (m in adapter.javaClass.methods) {
-                if (m.parameterTypes.size == 1 && m.parameterTypes[0] == Int::class.javaPrimitiveType) {
-                    if (m.name == "K0" || m.returnType.name.contains("DialerItemVM")) {
-                        try {
-                            val candidate = m.invoke(adapter, pos)
-                            if (candidate != null) {
-                                itemVM = candidate
-                                break
-                            }
-                        } catch (_: Throwable) {}
-                    }
-                }
-            }
-        }
-
-        // 5. Extract number & displayName from itemVM
+        // 4. If itemVM is present, extract number & displayName directly from VM methods
         if (itemVM != null) {
-            // Check w() (phone number) FIRST
-            for (methodName in listOf("w", "v", "x")) {
+            // For contacts in search: m() has formatted matched number, w() has raw number
+            for (methodName in listOf("m", "w", "v")) {
                 try {
                     val res = itemVM.javaClass.getMethod(methodName).invoke(itemVM) as? String
                     if (isValidPhoneNumber(res)) {
@@ -1040,55 +1003,41 @@ object DialerRecentsHook {
             } catch (_: Throwable) {}
         }
 
-        // 6. Collect TextViews in child view
-        val textViews = mutableListOf<TextView>()
-        collectTextViews(child, textViews)
-
+        // 5. Check specific known TextView IDs in child (strictly ignore relative_time)
         if (targetNumber.isNullOrEmpty() || displayName.isNullOrEmpty()) {
-            for (tv in textViews) {
-                val txt = tv.text?.toString()?.trim() ?: continue
-                if (txt.isEmpty()) continue
-
-                val idName = try {
-                    if (tv.id != 0 && tv.id != View.NO_ID) {
-                        child.resources.getResourceEntryName(tv.id).lowercase()
-                    } else ""
-                } catch (_: Throwable) { "" }
-
-                if (idName.contains("number") && isValidPhoneNumber(txt)) {
-                    if (targetNumber.isNullOrEmpty()) targetNumber = txt
-                } else if (idName.contains("name")) {
-                    if (displayName.isNullOrEmpty()) displayName = txt
-                }
-            }
-        }
-
-        // 7. Second pass on TextViews
-        if (targetNumber.isNullOrEmpty()) {
-            for (tv in textViews) {
-                val txt = tv.text?.toString()?.trim() ?: continue
+            val dialerNumId = rv.resources.getIdentifier("dialer_number", "id", rv.context.packageName)
+            if (dialerNumId != 0) {
+                val tv = child.findViewById<TextView>(dialerNumId)
+                val txt = tv?.text?.toString()?.trim()
                 if (isValidPhoneNumber(txt)) {
-                    targetNumber = txt
-                    break
+                    if (targetNumber.isNullOrEmpty()) targetNumber = txt
+                }
+            }
+
+            val nameId = rv.resources.getIdentifier("name", "id", rv.context.packageName)
+            if (nameId != 0) {
+                val tv = child.findViewById<TextView>(nameId)
+                val txt = tv?.text?.toString()?.trim()
+                if (!txt.isNullOrEmpty()) {
+                    if (isValidPhoneNumber(txt)) {
+                        // Unsaved number in recents: the name IS the phone number
+                        if (targetNumber.isNullOrEmpty()) targetNumber = txt
+                    } else {
+                        if (displayName.isNullOrEmpty()) displayName = txt
+                    }
                 }
             }
         }
 
-        if (displayName.isNullOrEmpty()) {
-            for (tv in textViews) {
-                val txt = tv.text?.toString()?.trim() ?: continue
-                if (txt.isNotEmpty() && !isValidPhoneNumber(txt)) {
-                    displayName = txt
-                    break
-                }
-            }
-        }
-
+        // If neither is found, return null (not a call row)
         if (targetNumber.isNullOrEmpty() && displayName.isNullOrEmpty()) {
             return null
         }
 
-        val finalNumber = targetNumber ?: displayName!!
+        val finalNumber = targetNumber ?: (if (isValidPhoneNumber(displayName)) displayName!! else "")
+        if (finalNumber.isEmpty()) {
+            return null
+        }
         val finalName = if (!displayName.isNullOrEmpty()) displayName else finalNumber
         return CallInfo(vh, adapter, itemVM, finalNumber, finalName)
     }
@@ -1132,13 +1081,17 @@ object DialerRecentsHook {
     private fun drawSwipeBackground(c: Canvas, child: View, context: Context) {
         val density = context.resources.displayMetrics.density
         val tx = child.translationX
-        if (tx == 0f) return
+        if (abs(tx) < 1f) return
 
         val top = child.top.toFloat() + 2f * density
         val bottom = child.bottom.toFloat() - 2f * density
         val cornerRadius = 14f * density
         val callThresholdPx = DialerRecentsConfigHolder.config.callThresholdDp * density
         val deleteWidthPx = DialerRecentsConfigHolder.config.deleteWidthDp * density
+
+        val revealWidth = abs(tx)
+        // Fade icon out smoothly as swipe slides back to prevent it bleeding over row content
+        val iconAlpha = ((revealWidth - 12f * density) / (28f * density)).coerceIn(0f, 1f)
 
         if (tx > 0f) {
             // Right swipe -> Vibrant iOS Call Green (#34C759)
@@ -1147,14 +1100,18 @@ object DialerRecentsHook {
 
             c.save()
             bgRect.set(left, top, right, bottom)
+            c.clipRect(bgRect) // STRICTLY CLIP to prevent icon leaking over person row
+
             bgPaint.color = Color.parseColor("#34C759")
             c.drawRoundRect(bgRect, cornerRadius, cornerRadius, bgPaint)
 
             // Centered official Phone icon
-            val iconCenterX = left + min(tx / 2f, callThresholdPx / 2f)
-            val iconCenterY = (top + bottom) / 2f
-            val scaleProgress = min(1.15f, 0.88f + (tx / callThresholdPx) * 0.25f)
-            drawPhoneIcon(c, iconCenterX, iconCenterY, scaleProgress, density, context)
+            if (iconAlpha > 0f) {
+                val iconCenterX = left + min(tx / 2f, callThresholdPx / 2f)
+                val iconCenterY = (top + bottom) / 2f
+                val scaleProgress = min(1.15f, 0.70f + (tx / callThresholdPx) * 0.35f) * iconAlpha
+                drawPhoneIcon(c, iconCenterX, iconCenterY, scaleProgress, iconAlpha, density, context)
+            }
 
             c.restore()
         } else {
@@ -1164,14 +1121,18 @@ object DialerRecentsHook {
 
             c.save()
             bgRect.set(left, top, right, bottom)
+            c.clipRect(bgRect) // STRICTLY CLIP to prevent icon leaking over person row
+
             bgPaint.color = Color.parseColor("#FF3B30")
             c.drawRoundRect(bgRect, cornerRadius, cornerRadius, bgPaint)
 
             // Properly centered Trash icon without text label
-            val revealWidth = abs(tx)
-            val actionCenterX = right - min(revealWidth / 2f, deleteWidthPx / 2f)
-            val actionCenterY = (top + bottom) / 2f
-            drawTrashIcon(c, actionCenterX, actionCenterY, density, context)
+            if (iconAlpha > 0f) {
+                val actionCenterX = right - min(revealWidth / 2f, deleteWidthPx / 2f)
+                val actionCenterY = (top + bottom) / 2f
+                val scaleProgress = min(1.0f, 0.70f + (revealWidth / deleteWidthPx) * 0.30f) * iconAlpha
+                drawTrashIcon(c, actionCenterX, actionCenterY, scaleProgress, iconAlpha, density, context)
+            }
 
             c.restore()
         }
@@ -1182,14 +1143,17 @@ object DialerRecentsHook {
         cx: Float,
         cy: Float,
         scale: Float,
+        alphaProgress: Float,
         density: Float,
         context: Context
     ) {
         val drawable = getCallDrawable(context)
         val iconSize = (28f * density * scale).toInt()
         val half = iconSize / 2
+        val alphaInt = (alphaProgress * 255).toInt().coerceIn(0, 255)
 
         if (drawable != null) {
+            drawable.alpha = alphaInt
             drawable.setBounds((cx - half).toInt(), (cy - half).toInt(), (cx + half).toInt(), (cy + half).toInt())
             drawable.draw(c)
         } else {
@@ -1204,6 +1168,7 @@ object DialerRecentsHook {
             val path = fallbackCallPath
             if (path != null) {
                 c.save()
+                iconPaint.alpha = alphaInt
                 val factor = (iconSize / 34f)
                 c.translate(cx - 17f * factor, cy - 17f * factor)
                 c.scale(factor, factor)
@@ -1217,14 +1182,18 @@ object DialerRecentsHook {
         c: Canvas,
         cx: Float,
         cy: Float,
+        scale: Float,
+        alphaProgress: Float,
         density: Float,
         context: Context
     ) {
         val drawable = getDeleteDrawable(context)
-        val iconSize = (26f * density).toInt()
+        val iconSize = (26f * density * scale).toInt()
         val half = iconSize / 2
+        val alphaInt = (alphaProgress * 255).toInt().coerceIn(0, 255)
 
         if (drawable != null) {
+            drawable.alpha = alphaInt
             drawable.setBounds((cx - half).toInt(), (cy - half).toInt(), (cx + half).toInt(), (cy + half).toInt())
             drawable.draw(c)
         } else {
@@ -1239,6 +1208,7 @@ object DialerRecentsHook {
             val path = fallbackDeletePath
             if (path != null) {
                 c.save()
+                iconPaint.alpha = alphaInt
                 val factor = (iconSize / 74f)
                 c.translate(cx - 37f * factor, cy - 37f * factor)
                 c.scale(factor, factor)
@@ -1263,30 +1233,20 @@ object DialerRecentsHook {
         val isContactVH = vh?.javaClass?.name?.contains("Contact", ignoreCase = true) == true
 
         if (isContactVH) {
-            // For search contact items: use adapter.b or child.performClick()
-            if (adapter != null && vh != null && child != null) {
+            // For search contact items: use DialerVHUtil.d with the exact itemVM
+            if (itemVM != null) {
                 try {
-                    for (m in adapter.javaClass.methods) {
-                        if (m.name == "b" && m.parameterTypes.size == 2 && m.parameterTypes[0] == View::class.java) {
-                            m.invoke(adapter, child, vh)
-                            Log.i(TAG, "Successfully called search contact via adapter.b")
-                            return
-                        }
-                    }
+                    val vhUtilClass = Class.forName("com.android.contacts.dialer.list.DialerVHUtil", false, classLoader)
+                    val dMethod = vhUtilClass.getMethod("d", Context::class.java, itemVM.javaClass, String::class.java)
+                    dMethod.invoke(null, context, itemVM, "")
+                    Log.i(TAG, "Successfully called search contact via DialerVHUtil.d")
+                    return
                 } catch (t: Throwable) {
-                    Log.w(TAG, "Failed adapter.b for contact", t)
+                    Log.w(TAG, "Failed DialerVHUtil.d for contact", t)
                 }
             }
-            if (child != null) {
-                try {
-                    if (child.performClick()) {
-                        Log.i(TAG, "Successfully called search contact via child.performClick()")
-                        return
-                    }
-                } catch (_: Throwable) {}
-            }
         } else {
-            // For Recents call log items: use DialerVHUtil.b
+            // For Recents call log items: use DialerVHUtil.b with the exact itemVM
             if (itemVM != null) {
                 try {
                     val vhUtilClass = Class.forName("com.android.contacts.dialer.list.DialerVHUtil", false, classLoader)
@@ -1295,21 +1255,22 @@ object DialerRecentsHook {
                     Log.i(TAG, "Successfully invoked stock dialer call via DialerVHUtil.b")
                     return
                 } catch (t: Throwable) {
-                    Log.w(TAG, "Failed DialerVHUtil.b call, falling back to Intent", t)
+                    Log.w(TAG, "Failed DialerVHUtil.b call", t)
                 }
             }
         }
 
-        // Fallback: Direct Intent.ACTION_CALL with cleanNumber
-        try {
-            val numToDial = if (cleanNumber.isNotEmpty()) cleanNumber else targetNumber
-            val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:${Uri.encode(numToDial)}")).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        // Direct ACTION_CALL with cleanNumber (strictly requiring valid phone digits >= 6)
+        if (cleanNumber.length >= 6) {
+            try {
+                val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:${Uri.encode(cleanNumber)}")).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(callIntent)
+                Log.i(TAG, "Successfully launched ACTION_CALL Intent for $cleanNumber")
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to launch ACTION_CALL Intent", t)
             }
-            context.startActivity(callIntent)
-            Log.i(TAG, "Successfully launched ACTION_CALL Intent for $numToDial")
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to launch ACTION_CALL Intent", t)
         }
     }
 
