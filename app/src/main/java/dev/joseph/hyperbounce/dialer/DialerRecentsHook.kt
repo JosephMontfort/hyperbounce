@@ -19,6 +19,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.view.ViewParent
 import android.view.animation.PathInterpolator
 import android.widget.TextView
 import androidx.core.graphics.PathParser
@@ -99,7 +100,7 @@ object DialerRecentsHook {
 
         Log.i(TAG, "Initializing Dialer Recents Swipe Hook for com.android.contacts...")
 
-        // 1. Hook TwelveKeyDialerFragment lifecycle methods to capture active fragment instance
+        // 1. Hook TwelveKeyDialerFragment lifecycle methods to capture active fragment instance and enforce s1(false)
         try {
             val fragmentClass = Class.forName("com.android.contacts.list.TwelveKeyDialerFragment", false, classLoader)
             for (m: Method in fragmentClass.declaredMethods) {
@@ -115,6 +116,13 @@ object DialerRecentsHook {
                             if (fragment != null) {
                                 sActiveFragment = WeakReference(fragment)
                                 Log.i(TAG, "Captured active TwelveKeyDialerFragment instance via ${m.name}")
+                                val activity = fragment.javaClass.getMethod("getActivity").invoke(fragment) as? Activity
+                                if (activity != null && DialerRecentsConfigHolder.config.enabled) {
+                                    try {
+                                        activity.javaClass.getMethod("s1", java.lang.Boolean.TYPE).invoke(activity, false)
+                                        Log.i(TAG, "Enforced s1(false) on TwelveKeyDialerFragment.${m.name}")
+                                    } catch (_: Throwable) {}
+                                }
                             }
                         } catch (t: Throwable) {
                             Log.e(TAG, "Error in TwelveKeyDialerFragment.${m.name} hook", t)
@@ -131,7 +139,12 @@ object DialerRecentsHook {
                             val fragment = chain.thisObject
                             if (fragment != null) {
                                 sActiveFragment = WeakReference(fragment)
-                                Log.d(TAG, "Captured active TwelveKeyDialerFragment instance via onResume")
+                                val activity = fragment.javaClass.getMethod("getActivity").invoke(fragment) as? Activity
+                                if (activity != null && DialerRecentsConfigHolder.config.enabled) {
+                                    try {
+                                        activity.javaClass.getMethod("s1", java.lang.Boolean.TYPE).invoke(activity, false)
+                                    } catch (_: Throwable) {}
+                                }
                             }
                         } catch (_: Throwable) {}
                         result
@@ -143,7 +156,84 @@ object DialerRecentsHook {
             Log.e(TAG, "Failed to hook TwelveKeyDialerFragment", t)
         }
 
-        // 2. Hook DirectionViewPager.onInterceptTouchEvent to block tab-switch hijacking when touching/swiping a call row
+        // 2. Hook PeopleActivity to coordinate ViewPager draggable and SpringBackLayout springBackEnable
+        try {
+            val peopleActivityClass = Class.forName("com.android.contacts.activities.PeopleActivity", false, classLoader)
+            for (m: Method in peopleActivityClass.declaredMethods) {
+                if (m.name == "s1" && m.parameterTypes.size == 1 && m.parameterTypes[0] == java.lang.Boolean.TYPE) {
+                    module.hook(m).intercept { chain ->
+                        val activity = chain.thisObject as? Activity
+                        if (activity != null && DialerRecentsConfigHolder.config.enabled) {
+                            val vpId = activity.resources.getIdentifier("view_pager", "id", activity.packageName)
+                            val vp = if (vpId != 0) activity.findViewById<View>(vpId) else null
+                            val currentItem = try {
+                                vp?.javaClass?.getMethod("getCurrentItem")?.invoke(vp) as? Int ?: 0
+                            } catch (_: Throwable) { 0 }
+                            if (currentItem == 0) {
+                                // On Dialer/Recents tab (Tab 0), enforce s1(false) so SpringBackLayout and ViewPager never hijack horizontal row swipe!
+                                chain.args[0] = false
+                            }
+                        }
+                        chain.proceed()
+                    }
+                    Log.i(TAG, "Hooked PeopleActivity.s1 successfully.")
+                }
+
+                if (m.name == "onResume" && m.parameterTypes.isEmpty()) {
+                    module.hook(m).intercept { chain ->
+                        val result = chain.proceed()
+                        try {
+                            val activity = chain.thisObject as? Activity
+                            if (activity != null && DialerRecentsConfigHolder.config.enabled) {
+                                val vpId = activity.resources.getIdentifier("view_pager", "id", activity.packageName)
+                                val vp = if (vpId != 0) activity.findViewById<View>(vpId) else null
+                                val currentItem = try {
+                                    vp?.javaClass?.getMethod("getCurrentItem")?.invoke(vp) as? Int ?: 0
+                                } catch (_: Throwable) { 0 }
+                                if (currentItem == 0) {
+                                    val s1Method = activity.javaClass.getMethod("s1", java.lang.Boolean.TYPE)
+                                    s1Method.invoke(activity, false)
+                                    Log.i(TAG, "Enforced s1(false) in PeopleActivity.onResume for Tab 0")
+                                }
+                            }
+                        } catch (_: Throwable) {}
+                        result
+                    }
+                    Log.i(TAG, "Hooked PeopleActivity.onResume successfully.")
+                }
+
+                if (m.name == "onCreate" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Bundle::class.java) {
+                    module.hook(m).intercept { chain ->
+                        val result = chain.proceed()
+                        try {
+                            val activity = chain.thisObject as? Activity
+                            if (activity != null && DialerRecentsConfigHolder.config.enabled) {
+                                activity.window?.decorView?.post {
+                                    try {
+                                        val vpId = activity.resources.getIdentifier("view_pager", "id", activity.packageName)
+                                        val vp = if (vpId != 0) activity.findViewById<View>(vpId) else null
+                                        val currentItem = try {
+                                            vp?.javaClass?.getMethod("getCurrentItem")?.invoke(vp) as? Int ?: 0
+                                        } catch (_: Throwable) { 0 }
+                                        if (currentItem == 0) {
+                                            val s1Method = activity.javaClass.getMethod("s1", java.lang.Boolean.TYPE)
+                                            s1Method.invoke(activity, false)
+                                            Log.i(TAG, "Enforced s1(false) in PeopleActivity post-create for Tab 0")
+                                        }
+                                    } catch (_: Throwable) {}
+                                }
+                            }
+                        } catch (_: Throwable) {}
+                        result
+                    }
+                    Log.i(TAG, "Hooked PeopleActivity.onCreate successfully.")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook PeopleActivity", t)
+        }
+
+        // 3. Hook DirectionViewPager to block tab-switch hijacking when on Dialer tab or touching/swiping a call row
         try {
             val dvpClass = Class.forName("com.android.contacts.widget.DirectionViewPager", false, classLoader)
             for (m: Method in dvpClass.declaredMethods) {
@@ -152,6 +242,13 @@ object DialerRecentsHook {
                     m.parameterTypes[0] == MotionEvent::class.java
                 ) {
                     module.hook(m).intercept { chain ->
+                        val vp = chain.thisObject as? View
+                        val currentItem = try {
+                            vp?.javaClass?.getMethod("getCurrentItem")?.invoke(vp) as? Int ?: 0
+                        } catch (_: Throwable) { 0 }
+                        if (currentItem == 0 && DialerRecentsConfigHolder.config.enabled) {
+                            return@intercept false
+                        }
                         if (isSwiping || isDeleteButtonPressed || swipingChild != null) {
                             return@intercept false
                         }
@@ -161,11 +258,36 @@ object DialerRecentsHook {
                     break
                 }
             }
+
+            for (m: Method in dvpClass.methods) {
+                if ((m.name == "setCurrentItem" || m.name == "setCurrentItemDirection") &&
+                    m.parameterTypes.isNotEmpty() &&
+                    m.parameterTypes[0] == java.lang.Integer.TYPE
+                ) {
+                    module.hook(m).intercept { chain ->
+                        val result = chain.proceed()
+                        try {
+                            val vp = chain.thisObject as? View
+                            val targetItem = chain.args[0] as? Int ?: 0
+                            val activity = vp?.context as? Activity
+                            if (activity != null && DialerRecentsConfigHolder.config.enabled) {
+                                val s1Method = activity.javaClass.getMethod("s1", java.lang.Boolean.TYPE)
+                                if (targetItem == 0) {
+                                    s1Method.invoke(activity, false)
+                                } else {
+                                    s1Method.invoke(activity, true)
+                                }
+                            }
+                        } catch (_: Throwable) {}
+                        result
+                    }
+                }
+            }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook DirectionViewPager", t)
         }
 
-        // 3. Hook SpringBackLayout.onInterceptTouchEvent and requestDisallowInterceptTouchEvent
+        // 4. Hook SpringBackLayout.onInterceptTouchEvent and requestDisallowInterceptTouchEvent
         try {
             val sblClass = Class.forName("miuix.springback.view.SpringBackLayout", false, classLoader)
             for (m: Method in sblClass.declaredMethods) {
@@ -174,6 +296,19 @@ object DialerRecentsHook {
                     m.parameterTypes[0] == MotionEvent::class.java
                 ) {
                     module.hook(m).intercept { chain ->
+                        val sbl = chain.thisObject as? View
+                        if (sbl != null && DialerRecentsConfigHolder.config.enabled) {
+                            val vppId = sbl.resources.getIdentifier("view_pager_parent", "id", sbl.context.packageName)
+                            if (vppId != 0 && sbl.id == vppId) {
+                                val vp = sbl.findViewById<View>(sbl.resources.getIdentifier("view_pager", "id", sbl.context.packageName))
+                                val currentItem = try {
+                                    vp?.javaClass?.getMethod("getCurrentItem")?.invoke(vp) as? Int ?: 0
+                                } catch (_: Throwable) { 0 }
+                                if (currentItem == 0) {
+                                    return@intercept false
+                                }
+                            }
+                        }
                         if (isSwiping || isDeleteButtonPressed || swipingChild != null) {
                             return@intercept false
                         }
@@ -189,7 +324,18 @@ object DialerRecentsHook {
                     module.hook(m).intercept { chain ->
                         val sbl = chain.thisObject as? ViewGroup
                         val disallow = chain.args[0] as? Boolean ?: false
-                        // Force propagate up past SpringBackLayout so DirectionViewPager receives disallow
+                        try {
+                            val vgClass = ViewGroup::class.java
+                            val flagsField = vgClass.getDeclaredField("mGroupFlags")
+                            flagsField.isAccessible = true
+                            var flags = flagsField.getInt(sbl)
+                            flags = if (disallow) {
+                                flags or 0x80000
+                            } else {
+                                flags and 0x80000.inv()
+                            }
+                            flagsField.setInt(sbl, flags)
+                        } catch (_: Throwable) {}
                         sbl?.parent?.requestDisallowInterceptTouchEvent(disallow)
                         chain.proceed()
                     }
@@ -322,17 +468,13 @@ object DialerRecentsHook {
                 val child = findChildUnder(rv, e.x, e.y)
                 if (child != null && isCallLogChild(child, rv) && !isAdapterInMultiSelectMode(rv)) {
                     val info = extractCallInfo(child, rv)
-                    if (info != null) {
-                        swipingChild = child
-                        swipingItemVM = info.itemVM
-                        swipingTargetNumber = info.targetNumber
-                        swipingDisplayName = info.displayName
-                        // Proactively disallow ALL ancestor ViewGroups from intercepting
-                        disallowAllParents(rv, true)
-                        Log.d(TAG, "ACTION_DOWN on call row: ${info.displayName} (${info.targetNumber})")
-                    } else {
-                        swipingChild = null
-                    }
+                    swipingChild = child
+                    swipingItemVM = info?.itemVM
+                    swipingTargetNumber = info?.targetNumber
+                    swipingDisplayName = info?.displayName
+                    // Proactively disallow ALL ancestor ViewGroups from intercepting
+                    disallowAllParents(rv, true)
+                    Log.d(TAG, "ACTION_DOWN on call row: ${info?.displayName} (${info?.targetNumber})")
                 } else {
                     swipingChild = null
                 }
@@ -407,6 +549,13 @@ object DialerRecentsHook {
                     val currentTx = target.translationX
                     Log.d(TAG, "ACTION_UP during swipe: currentTx=$currentTx")
 
+                    if (swipingTargetNumber == null) {
+                        val reInfo = extractCallInfo(target, rv)
+                        swipingItemVM = reInfo?.itemVM
+                        swipingTargetNumber = reInfo?.targetNumber
+                        swipingDisplayName = reInfo?.displayName
+                    }
+
                     if (currentTx > 0f) {
                         // Swiped right -> Call action
                         if (currentTx >= callThresholdPx) {
@@ -454,7 +603,37 @@ object DialerRecentsHook {
         return null
     }
 
+    private fun enforcePagerDisabled(view: View) {
+        try {
+            (view.context as? Activity)?.let { act ->
+                try {
+                    act.javaClass.getMethod("s1", java.lang.Boolean.TYPE).invoke(act, false)
+                } catch (_: Throwable) {}
+            }
+            var p: ViewParent? = view.parent
+            while (p != null) {
+                if (p is ViewGroup) {
+                    val className = p.javaClass.name
+                    if (className.contains("SpringBackLayout")) {
+                        try {
+                            p.javaClass.getMethod("setSpringBackEnable", java.lang.Boolean.TYPE).invoke(p, false)
+                        } catch (_: Throwable) {}
+                    }
+                    if (className.contains("ViewPager")) {
+                        try {
+                            p.javaClass.getMethod("setDraggable", java.lang.Boolean.TYPE).invoke(p, false)
+                        } catch (_: Throwable) {}
+                    }
+                }
+                p = p.parent
+            }
+        } catch (_: Throwable) {}
+    }
+
     private fun disallowAllParents(view: View, disallow: Boolean) {
+        if (disallow) {
+            enforcePagerDisabled(view)
+        }
         var p = view.parent
         while (p != null) {
             try {
@@ -560,6 +739,12 @@ object DialerRecentsHook {
     }
 
     private fun findChildUnder(parent: ViewGroup, x: Float, y: Float): View? {
+        try {
+            val findMethod = parent.javaClass.getMethod("findChildViewUnder", java.lang.Float.TYPE, java.lang.Float.TYPE)
+            val v = findMethod.invoke(parent, x, y) as? View
+            if (v != null && v.visibility == View.VISIBLE) return v
+        } catch (_: Throwable) {}
+
         for (i in parent.childCount - 1 downTo 0) {
             val child = parent.getChildAt(i)
             if (child.visibility == View.VISIBLE) {
@@ -590,7 +775,11 @@ object DialerRecentsHook {
         try {
             val getChildVHMethod = rv.javaClass.getMethod("getChildViewHolder", View::class.java)
             val vh = getChildVHMethod.invoke(rv, child)
-            if (vh != null && vh.javaClass.name.contains("DialerCallVH")) return true
+            if (vh != null) {
+                val vhName = vh.javaClass.name
+                if (vhName.contains("Header") || vhName.contains("Divider")) return false
+                if (vhName.contains("Dialer") || vhName.contains("Call") || vhName.contains("Contact")) return true
+            }
         } catch (_: Throwable) {}
 
         return false
