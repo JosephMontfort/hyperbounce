@@ -4,12 +4,14 @@ import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.HapticFeedbackConstants
@@ -18,6 +20,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.animation.PathInterpolator
+import android.widget.TextView
 import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
@@ -34,10 +37,10 @@ import kotlin.math.min
  *  - Swipe Left: Reveals iOS Red Delete action, clicking it invokes Xiaomi stock confirmation
  *    dialog and stock call log deletion logic.
  *
- * NOTE: This hook intentionally avoids any direct compile-time or runtime references to
- * `androidx.recyclerview.widget.*` to eliminate NoClassDefFoundError across different ClassLoaders.
- * All RecyclerView interactions hook standard ViewGroup-level methods (onInterceptTouchEvent,
- * onTouchEvent, drawChild) which are never obfuscated.
+ * NOTE: This hook uses dispatchTouchEvent interception and ViewGroup hierarchy coordination to
+ * completely eliminate the stock horizontal ViewPager / SpringBackLayout overscroll conflict.
+ * All RecyclerView interactions avoid compile-time or runtime references to `androidx.recyclerview.widget.*`
+ * to eliminate NoClassDefFoundError across different ClassLoaders.
  */
 object DialerRecentsHook {
 
@@ -62,6 +65,9 @@ object DialerRecentsHook {
     private var isDeleteButtonPressed = false
     private var hasTriggeredCallHaptic = false
     private var hasTriggeredDeleteHaptic = false
+
+    // Recursion guard for dispatchTouchEvent
+    private var isDispatching = false
 
     // iOS fluid spring interpolator
     private val iosSpringInterpolator = PathInterpolator(0.22f, 1.0f, 0.36f, 1.0f)
@@ -97,11 +103,12 @@ object DialerRecentsHook {
 
         Log.i(TAG, "Initializing Dialer Recents Swipe Hook for com.android.contacts...")
 
-        // 1. Hook TwelveKeyDialerFragment.onViewCreated to capture active fragment instance
+        // 1. Hook TwelveKeyDialerFragment lifecycle methods to capture active fragment instance
         try {
             val fragmentClass = Class.forName("com.android.contacts.list.TwelveKeyDialerFragment", false, classLoader)
             for (m: Method in fragmentClass.declaredMethods) {
-                if (m.name == "onViewCreated" &&
+                // In HyperOS Contacts, onViewCreated is obfuscated as Y0(View, Bundle)
+                if ((m.name == "Y0" || m.name == "onViewCreated") &&
                     m.parameterTypes.size == 2 &&
                     m.parameterTypes[0] == View::class.java &&
                     m.parameterTypes[1] == Bundle::class.java
@@ -112,73 +119,80 @@ object DialerRecentsHook {
                             val fragment = chain.thisObject
                             if (fragment != null) {
                                 sActiveFragment = WeakReference(fragment)
-                                Log.d(TAG, "Captured active TwelveKeyDialerFragment instance")
+                                Log.i(TAG, "Captured active TwelveKeyDialerFragment instance via ${m.name}")
                             }
                         } catch (t: Throwable) {
-                            Log.e(TAG, "Error in TwelveKeyDialerFragment.onViewCreated hook", t)
+                            Log.e(TAG, "Error in TwelveKeyDialerFragment.${m.name} hook", t)
                         }
                         result
                     }
-                    Log.d(TAG, "Hooked TwelveKeyDialerFragment.onViewCreated successfully.")
-                    break
+                    Log.i(TAG, "Hooked TwelveKeyDialerFragment.${m.name} successfully.")
+                }
+
+                // Also hook onResume for reliable instance capture
+                if (m.name == "onResume" && m.parameterTypes.isEmpty()) {
+                    module.hook(m).intercept { chain ->
+                        val result = chain.proceed()
+                        try {
+                            val fragment = chain.thisObject
+                            if (fragment != null) {
+                                sActiveFragment = WeakReference(fragment)
+                                Log.d(TAG, "Captured active TwelveKeyDialerFragment instance via onResume")
+                            }
+                        } catch (_: Throwable) {}
+                        result
+                    }
+                    Log.i(TAG, "Hooked TwelveKeyDialerFragment.onResume successfully.")
                 }
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook TwelveKeyDialerFragment", t)
         }
 
-        // 2. Hook RecyclerView methods via host app classloader
+        // 2. Hook RecyclerView.dispatchTouchEvent across all potential hierarchy classes
+        val rvClassNames = listOf(
+            "miuix.recyclerview.widget.RecyclerView",
+            "androidx.recyclerview.widget.SpringRecyclerView",
+            "androidx.recyclerview.widget.RemixRecyclerView",
+            "androidx.recyclerview.widget.RecyclerView"
+        )
+
+        var dispatchHooked = false
+        for (className in rvClassNames) {
+            try {
+                val clazz = Class.forName(className, false, classLoader)
+                for (m: Method in clazz.declaredMethods) {
+                    if (m.name == "dispatchTouchEvent" &&
+                        m.parameterTypes.size == 1 &&
+                        m.parameterTypes[0] == MotionEvent::class.java
+                    ) {
+                        module.hook(m).intercept { chain ->
+                            val rv = chain.thisObject as? ViewGroup
+                            val ev = chain.args[0] as? MotionEvent
+
+                            if (rv != null && ev != null && DialerRecentsConfigHolder.config.enabled) {
+                                val handled = handleDispatchTouchEvent(rv, ev, classLoader)
+                                if (handled == true) {
+                                    return@intercept true
+                                }
+                            }
+                            chain.proceed()
+                        }
+                        dispatchHooked = true
+                        Log.i(TAG, "Hooked $className.dispatchTouchEvent successfully.")
+                        break
+                    }
+                }
+                if (dispatchHooked) {
+                    break
+                }
+            } catch (_: Throwable) {}
+        }
+
+        // 3. Hook drawChild on base RecyclerView to render iOS Call and Delete action backgrounds
         try {
-            val rvClass = Class.forName("androidx.recyclerview.widget.RecyclerView", false, classLoader)
-
-            // A. onInterceptTouchEvent
-            for (m: Method in rvClass.declaredMethods) {
-                if (m.name == "onInterceptTouchEvent" &&
-                    m.parameterTypes.size == 1 &&
-                    m.parameterTypes[0] == MotionEvent::class.java
-                ) {
-                    module.hook(m).intercept { chain ->
-                        val rv = chain.thisObject as? ViewGroup
-                        val ev = chain.args[0] as? MotionEvent
-
-                        if (rv != null && ev != null && DialerRecentsConfigHolder.config.enabled) {
-                            val intercepted = handleInterceptTouchEvent(rv, ev, classLoader)
-                            if (intercepted) {
-                                return@intercept true
-                            }
-                        }
-                        chain.proceed()
-                    }
-                    Log.d(TAG, "Hooked RecyclerView.onInterceptTouchEvent successfully.")
-                    break
-                }
-            }
-
-            // B. onTouchEvent
-            for (m: Method in rvClass.declaredMethods) {
-                if (m.name == "onTouchEvent" &&
-                    m.parameterTypes.size == 1 &&
-                    m.parameterTypes[0] == MotionEvent::class.java
-                ) {
-                    module.hook(m).intercept { chain ->
-                        val rv = chain.thisObject as? ViewGroup
-                        val ev = chain.args[0] as? MotionEvent
-
-                        if (rv != null && ev != null && DialerRecentsConfigHolder.config.enabled) {
-                            val handled = handleTouchEvent(rv, ev, classLoader)
-                            if (handled) {
-                                return@intercept true
-                            }
-                        }
-                        chain.proceed()
-                    }
-                    Log.d(TAG, "Hooked RecyclerView.onTouchEvent successfully.")
-                    break
-                }
-            }
-
-            // C. drawChild
-            for (m: Method in rvClass.declaredMethods) {
+            val baseRvClass = Class.forName("androidx.recyclerview.widget.RecyclerView", false, classLoader)
+            for (m: Method in baseRvClass.declaredMethods) {
                 if (m.name == "drawChild" &&
                     m.parameterTypes.size == 3 &&
                     m.parameterTypes[0] == Canvas::class.java &&
@@ -196,19 +210,29 @@ object DialerRecentsHook {
                         }
                         chain.proceed()
                     }
-                    Log.d(TAG, "Hooked RecyclerView.drawChild successfully.")
+                    Log.i(TAG, "Hooked RecyclerView.drawChild successfully.")
                     break
                 }
             }
-
         } catch (t: Throwable) {
-            Log.e(TAG, "Failed to hook RecyclerView methods", t)
+            Log.e(TAG, "Failed to hook RecyclerView.drawChild", t)
         }
     }
 
-    private fun handleInterceptTouchEvent(rv: ViewGroup, e: MotionEvent, classLoader: ClassLoader): Boolean {
+    private fun handleDispatchTouchEvent(rv: ViewGroup, ev: MotionEvent, classLoader: ClassLoader): Boolean? {
+        if (isDispatching) return null
+        isDispatching = true
+        try {
+            return processDispatchTouchEvent(rv, ev, classLoader)
+        } finally {
+            isDispatching = false
+        }
+    }
+
+    private fun processDispatchTouchEvent(rv: ViewGroup, e: MotionEvent, classLoader: ClassLoader): Boolean? {
         val density = rv.resources.displayMetrics.density
         val touchSlop = ViewConfiguration.get(rv.context).scaledTouchSlop
+        val callThresholdPx = DialerRecentsConfigHolder.config.callThresholdDp * density
         val deleteWidthPx = DialerRecentsConfigHolder.config.deleteWidthDp * density
 
         when (e.actionMasked) {
@@ -220,83 +244,95 @@ object DialerRecentsHook {
                 hasTriggeredCallHaptic = false
                 hasTriggeredDeleteHaptic = false
 
+                // 1. Check if user tapped on the revealed Delete button of an open row
                 val currentOpen = openChild
                 if (currentOpen != null) {
-                    val touchX = e.x
-                    val touchY = e.y
                     val childTop = currentOpen.top.toFloat()
                     val childBottom = currentOpen.bottom.toFloat()
                     val deleteLeft = currentOpen.right - deleteWidthPx
                     val deleteRight = currentOpen.right.toFloat()
 
-                    if (touchY in childTop..childBottom && touchX in deleteLeft..deleteRight) {
-                        // Touched Delete button! Intercept to handle on ACTION_UP.
+                    if (e.y in childTop..childBottom && e.x in deleteLeft..deleteRight) {
                         isDeleteButtonPressed = true
                         swipingChild = currentOpen
+                        rv.parent?.requestDisallowInterceptTouchEvent(true)
+                        Log.d(TAG, "ACTION_DOWN on Delete button")
                         return true
                     } else {
-                        // Touched elsewhere -> smooth spring close
+                        // Tapped elsewhere -> smoothly close open row
+                        Log.d(TAG, "ACTION_DOWN outside Delete button, closing open row")
                         closeOpenRow(currentOpen, rv)
                         swipingChild = null
-                        return false
+                        return null
                     }
                 }
 
-                // Check if touch is on a call log child
+                // 2. Check if touch is on a call log child
                 val child = findChildUnder(rv, e.x, e.y)
-                if (child != null && isCallLogChild(child, rv, classLoader) && !isAdapterInMultiSelectMode(rv)) {
+                if (child != null && isCallLogChild(child, rv) && !isAdapterInMultiSelectMode(rv)) {
                     val info = extractCallInfo(child, rv)
                     if (info != null) {
                         swipingChild = child
                         swipingItemVM = info.itemVM
                         swipingTargetNumber = info.targetNumber
                         swipingDisplayName = info.displayName
+                        // Proactively disallow ancestor ViewPager / SpringBackLayout from intercepting!
+                        rv.parent?.requestDisallowInterceptTouchEvent(true)
+                        Log.d(TAG, "ACTION_DOWN on call row: ${info.displayName} (${info.targetNumber})")
                     } else {
                         swipingChild = null
                     }
                 } else {
                     swipingChild = null
                 }
+                return null
             }
 
             MotionEvent.ACTION_MOVE -> {
-                if (swipingChild != null && !isDeleteButtonPressed) {
+                if (isDeleteButtonPressed) {
+                    rv.parent?.requestDisallowInterceptTouchEvent(true)
+                    return true
+                }
+
+                val child = swipingChild
+                if (child != null) {
                     val dx = e.x - downX
                     val dy = e.y - downY
 
                     if (!isSwiping) {
-                        if (abs(dx) > touchSlop && abs(dx) > abs(dy) * 1.3f) {
+                        if (abs(dy) > touchSlop && abs(dy) > abs(dx)) {
+                            // User is scrolling vertically -> restore normal scrolling to parents & RecyclerView
+                            rv.parent?.requestDisallowInterceptTouchEvent(false)
+                            swipingChild = null
+                            return null
+                        }
+
+                        if (abs(dx) > touchSlop && abs(dx) > abs(dy) * 1.1f) {
+                            // User is swiping horizontally -> engage iOS row swipe!
                             isSwiping = true
-                            rv.requestDisallowInterceptTouchEvent(true)
+                            rv.parent?.requestDisallowInterceptTouchEvent(true)
+
+                            // Cancel touch on child itemView so click / longClick won't trigger
+                            val cancel = MotionEvent.obtain(e)
+                            cancel.action = MotionEvent.ACTION_CANCEL
+                            child.dispatchTouchEvent(cancel)
+                            cancel.recycle()
+
+                            applyDragTranslation(child, dx, callThresholdPx, deleteWidthPx, rv)
+                            Log.d(TAG, "Engaged row swipe: dx=$dx")
                             return true
                         }
                     } else {
+                        rv.parent?.requestDisallowInterceptTouchEvent(true)
+                        applyDragTranslation(child, dx, callThresholdPx, deleteWidthPx, rv)
                         return true
                     }
                 }
-
-                // If a row is open and user moves vertically, close it
-                if (openChild != null && abs(e.y - downY) > touchSlop) {
-                    closeOpenRow(openChild!!, rv)
-                }
+                return null
             }
 
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                isSwiping = false
-            }
-        }
-        return isSwiping || isDeleteButtonPressed
-    }
-
-    private fun handleTouchEvent(rv: ViewGroup, e: MotionEvent, classLoader: ClassLoader): Boolean {
-        val density = rv.resources.displayMetrics.density
-        val touchSlop = ViewConfiguration.get(rv.context).scaledTouchSlop
-        val callThresholdPx = DialerRecentsConfigHolder.config.callThresholdDp * density
-        val deleteWidthPx = DialerRecentsConfigHolder.config.deleteWidthDp * density
-
-        if (isDeleteButtonPressed) {
-            when (e.actionMasked) {
-                MotionEvent.ACTION_UP -> {
+            MotionEvent.ACTION_UP -> {
+                if (isDeleteButtonPressed) {
                     isDeleteButtonPressed = false
                     val target = swipingChild ?: openChild
                     val targetNumber = openTargetNumber ?: swipingTargetNumber
@@ -306,6 +342,7 @@ object DialerRecentsHook {
                         performHaptic(rv, HapticFeedbackConstants.CONFIRM)
                         closeOpenRow(target, rv)
                         if (targetNumber != null) {
+                            Log.i(TAG, "Delete clicked for $displayName ($targetNumber)")
                             val fragment = sActiveFragment?.get()
                             invokeStockDeleteDialogAndLogic(rv.context, fragment, targetNumber, displayName ?: targetNumber, classLoader)
                         }
@@ -313,113 +350,113 @@ object DialerRecentsHook {
                     resetSwipingState()
                     return true
                 }
-                MotionEvent.ACTION_CANCEL -> {
-                    isDeleteButtonPressed = false
-                    resetSwipingState()
-                    return true
-                }
-            }
-            return true
-        }
 
-        val target = swipingChild ?: return false
+                val target = swipingChild
+                if (isSwiping && target != null) {
+                    val currentTx = target.translationX
+                    Log.d(TAG, "ACTION_UP during swipe: currentTx=$currentTx")
 
-        when (e.actionMasked) {
-            MotionEvent.ACTION_MOVE -> {
-                val dx = e.x - downX
-
-                if (openChild != null && openChild == target) {
-                    // Dragging already open row
-                    val baseTx = -deleteWidthPx
-                    val newTx = baseTx + dx
-                    val clampedTx = if (newTx < -deleteWidthPx) {
-                        -deleteWidthPx - (abs(newTx) - deleteWidthPx) * 0.25f
-                    } else {
-                        newTx
-                    }
-                    target.translationX = clampedTx
-                    rv.invalidate()
-                    return true
-                }
-
-                if (dx > 0f) {
-                    // Right swipe -> Call action
-                    val tx = if (dx > callThresholdPx) {
-                        callThresholdPx + (dx - callThresholdPx) * 0.45f
-                    } else {
-                        dx
-                    }
-                    target.translationX = tx
-
-                    if (tx >= callThresholdPx && !hasTriggeredCallHaptic) {
-                        performHaptic(rv, HapticFeedbackConstants.CLOCK_TICK)
-                        hasTriggeredCallHaptic = true
-                    } else if (tx < callThresholdPx) {
-                        hasTriggeredCallHaptic = false
-                    }
-                } else {
-                    // Left swipe -> Delete action
-                    val absDx = abs(dx)
-                    val tx = if (absDx > deleteWidthPx) {
-                        -deleteWidthPx - (absDx - deleteWidthPx) * 0.3f
-                    } else {
-                        dx
-                    }
-                    target.translationX = tx
-
-                    if (abs(tx) >= deleteWidthPx && !hasTriggeredDeleteHaptic) {
-                        performHaptic(rv, HapticFeedbackConstants.CLOCK_TICK)
-                        hasTriggeredDeleteHaptic = true
-                    } else if (abs(tx) < deleteWidthPx) {
-                        hasTriggeredDeleteHaptic = false
-                    }
-                }
-                rv.invalidate()
-                return true
-            }
-
-            MotionEvent.ACTION_UP -> {
-                val currentTx = target.translationX
-
-                if (currentTx > 0f) {
-                    // Right swipe release (Call)
-                    if (currentTx >= callThresholdPx) {
-                        performHaptic(rv, HapticFeedbackConstants.CONFIRM)
-                        val itemVM = swipingItemVM
-                        animateSpring(target, 0f, rv)
-                        if (itemVM != null) {
-                            invokeStockCall(target.context, itemVM, classLoader)
+                    if (currentTx > 0f) {
+                        // Swiped right -> Call action
+                        if (currentTx >= callThresholdPx) {
+                            performHaptic(rv, HapticFeedbackConstants.CONFIRM)
+                            animateSpring(target, 0f, rv)
+                            val itemVM = swipingItemVM
+                            val number = swipingTargetNumber
+                            if (number != null) {
+                                invokeStockCall(target.context, itemVM, number, classLoader)
+                            }
+                        } else {
+                            animateSpring(target, 0f, rv)
+                        }
+                    } else if (currentTx < 0f) {
+                        // Swiped left -> Reveal Delete action
+                        if (abs(currentTx) >= deleteWidthPx * 0.40f) {
+                            animateSpring(target, -deleteWidthPx, rv)
+                            openChild = target
+                            openTargetNumber = swipingTargetNumber
+                            openDisplayName = swipingDisplayName
+                        } else {
+                            animateSpring(target, 0f, rv)
                         }
                     } else {
                         animateSpring(target, 0f, rv)
                     }
-                } else if (currentTx < 0f) {
-                    // Left swipe release (Delete)
-                    if (abs(currentTx) >= deleteWidthPx * 0.45f) {
-                        animateSpring(target, -deleteWidthPx, rv)
-                        openChild = target
-                        openTargetNumber = swipingTargetNumber
-                        openDisplayName = swipingDisplayName
-                    } else {
-                        animateSpring(target, 0f, rv)
-                    }
-                } else {
-                    animateSpring(target, 0f, rv)
+
+                    resetSwipingState()
+                    return true
                 }
 
                 resetSwipingState()
-                return true
+                return null
             }
 
             MotionEvent.ACTION_CANCEL -> {
-                if (openChild != target) {
+                val target = swipingChild
+                if (isSwiping && target != null && target != openChild) {
                     animateSpring(target, 0f, rv)
                 }
                 resetSwipingState()
-                return true
+                return null
             }
         }
-        return false
+        return null
+    }
+
+    private fun applyDragTranslation(
+        target: View,
+        dx: Float,
+        callThresholdPx: Float,
+        deleteWidthPx: Float,
+        rv: ViewGroup
+    ) {
+        if (openChild != null && openChild == target) {
+            // Dragging an already open row
+            val baseTx = -deleteWidthPx
+            val newTx = baseTx + dx
+            val clampedTx = if (newTx < -deleteWidthPx) {
+                -deleteWidthPx - (abs(newTx) - deleteWidthPx) * 0.22f
+            } else {
+                newTx
+            }
+            target.translationX = min(0f, clampedTx)
+            rv.invalidate()
+            return
+        }
+
+        if (dx > 0f) {
+            // Swiping right (Call)
+            val tx = if (dx > callThresholdPx) {
+                callThresholdPx + (dx - callThresholdPx) * 0.40f
+            } else {
+                dx
+            }
+            target.translationX = tx
+
+            if (tx >= callThresholdPx && !hasTriggeredCallHaptic) {
+                performHaptic(rv, HapticFeedbackConstants.CLOCK_TICK)
+                hasTriggeredCallHaptic = true
+            } else if (tx < callThresholdPx) {
+                hasTriggeredCallHaptic = false
+            }
+        } else {
+            // Swiping left (Delete)
+            val absDx = abs(dx)
+            val tx = if (absDx > deleteWidthPx) {
+                -deleteWidthPx - (absDx - deleteWidthPx) * 0.25f
+            } else {
+                dx
+            }
+            target.translationX = tx
+
+            if (abs(tx) >= deleteWidthPx && !hasTriggeredDeleteHaptic) {
+                performHaptic(rv, HapticFeedbackConstants.CLOCK_TICK)
+                hasTriggeredDeleteHaptic = true
+            } else if (abs(tx) < deleteWidthPx) {
+                hasTriggeredDeleteHaptic = false
+            }
+        }
+        rv.invalidate()
     }
 
     private fun resetSwipingState() {
@@ -478,20 +515,22 @@ object DialerRecentsHook {
         return null
     }
 
-    private fun isCallLogChild(child: View, rv: ViewGroup, classLoader: ClassLoader): Boolean {
-        // Method 1: Check child view contents (id name or text_content)
-        val nameView = child.findViewById<View>(android.R.id.text1)
-            ?: child.findViewById<View>(rv.resources.getIdentifier("name", "id", rv.context.packageName))
-        if (nameView != null) return true
+    private fun isCallLogChild(child: View, rv: ViewGroup): Boolean {
+        // Method 1: Check child view content IDs
+        val nameId = rv.resources.getIdentifier("name", "id", rv.context.packageName)
+        if (nameId != 0 && child.findViewById<View>(nameId) != null) return true
 
-        // Method 2: Check ViewHolder class name via reflection
+        val contentId = rv.resources.getIdentifier("content_layout", "id", rv.context.packageName)
+        if (contentId != 0 && child.findViewById<View>(contentId) != null) return true
+
+        val secActionId = rv.resources.getIdentifier("secondary_action_view", "id", rv.context.packageName)
+        if (secActionId != 0 && child.findViewById<View>(secActionId) != null) return true
+
+        // Method 2: Check ViewHolder class name
         try {
             val getChildVHMethod = rv.javaClass.getMethod("getChildViewHolder", View::class.java)
             val vh = getChildVHMethod.invoke(rv, child)
-            if (vh != null) {
-                val className = vh.javaClass.name
-                if (className.contains("DialerCallVH")) return true
-            }
+            if (vh != null && vh.javaClass.name.contains("DialerCallVH")) return true
         } catch (_: Throwable) {}
 
         return false
@@ -508,58 +547,99 @@ object DialerRecentsHook {
         }
     }
 
-    private data class CallInfo(val itemVM: Any, val targetNumber: String, val displayName: String)
+    private data class CallInfo(val itemVM: Any?, val targetNumber: String, val displayName: String)
 
     private fun extractCallInfo(child: View, rv: ViewGroup): CallInfo? {
+        var itemVM: Any? = null
+        var targetNumber: String? = null
+        var displayName: String? = null
+
+        // 1. Try to get ViewHolder and DialerItemVM
         try {
             val getChildVHMethod = rv.javaClass.getMethod("getChildViewHolder", View::class.java)
-            val vh = getChildVHMethod.invoke(rv, child) ?: return null
-
-            // Look up DialerItemVM in field or from adapter.K0(pos)
-            var itemVM: Any? = null
-            for (f: Field in vh.javaClass.declaredFields) {
-                if (f.type.name.contains("DialerItemVM")) {
-                    f.isAccessible = true
-                    itemVM = f.get(vh)
+            val vh = getChildVHMethod.invoke(rv, child)
+            if (vh != null) {
+                var currClass: Class<*>? = vh.javaClass
+                while (currClass != null && currClass != Any::class.java) {
+                    for (f: Field in currClass.declaredFields) {
+                        if (f.type.name.contains("DialerItemVM")) {
+                            f.isAccessible = true
+                            itemVM = f.get(vh)
+                            if (itemVM != null) break
+                        }
+                    }
                     if (itemVM != null) break
+                    currClass = currClass.superclass
                 }
-            }
 
-            if (itemVM == null) {
-                val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
-                val adapter = getAdapterMethod.invoke(rv)
-                val getPosMethod = vh.javaClass.getMethod("getBindingAdapterPosition")
-                val pos = getPosMethod.invoke(vh) as? Int ?: -1
-                if (adapter != null && pos >= 0) {
-                    val k0Method = adapter.javaClass.getMethod("K0", Int::class.javaPrimitiveType)
-                    itemVM = k0Method.invoke(adapter, pos)
+                // If not in field, try adapter.K0(position)
+                if (itemVM == null) {
+                    val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
+                    val adapter = getAdapterMethod.invoke(rv)
+                    val getPosMethod = vh.javaClass.getMethod("getBindingAdapterPosition")
+                    val pos = getPosMethod.invoke(vh) as? Int ?: -1
+                    if (adapter != null && pos >= 0) {
+                        for (m in adapter.javaClass.methods) {
+                            if (m.name == "K0" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Int::class.javaPrimitiveType) {
+                                itemVM = m.invoke(adapter, pos)
+                                break
+                            }
+                        }
+                    }
                 }
-            }
-
-            if (itemVM != null) {
-                val number = try {
-                    itemVM.javaClass.getMethod("w").invoke(itemVM) as? String
-                } catch (_: Throwable) { null }
-
-                val normalizedNumber = try {
-                    itemVM.javaClass.getMethod("v").invoke(itemVM) as? String
-                } catch (_: Throwable) { null }
-
-                val name = try {
-                    itemVM.javaClass.getMethod("t").invoke(itemVM) as? String
-                } catch (_: Throwable) { null }
-
-                val targetNumber = normalizedNumber ?: number ?: return null
-                val displayName = if (!name.isNullOrEmpty()) name else targetNumber
-                return CallInfo(itemVM, targetNumber, displayName)
             }
         } catch (_: Throwable) {}
-        return null
+
+        // Extract numbers and names from itemVM if available
+        if (itemVM != null) {
+            for (methodName in listOf("v", "w", "x")) {
+                try {
+                    val res = itemVM.javaClass.getMethod(methodName).invoke(itemVM) as? String
+                    if (!res.isNullOrEmpty()) {
+                        targetNumber = res
+                        break
+                    }
+                } catch (_: Throwable) {}
+            }
+            try {
+                displayName = itemVM.javaClass.getMethod("t").invoke(itemVM) as? String
+            } catch (_: Throwable) {}
+        }
+
+        // 2. Fallback to child TextViews
+        if (targetNumber.isNullOrEmpty()) {
+            val numId = rv.resources.getIdentifier("dialer_number", "id", rv.context.packageName)
+            if (numId != 0) {
+                val tv = child.findViewById<TextView>(numId)
+                if (tv != null && tv.text.isNotEmpty()) {
+                    targetNumber = tv.text.toString()
+                }
+            }
+        }
+        if (displayName.isNullOrEmpty()) {
+            val nameId = rv.resources.getIdentifier("name", "id", rv.context.packageName)
+            if (nameId != 0) {
+                val tv = child.findViewById<TextView>(nameId)
+                if (tv != null && tv.text.isNotEmpty()) {
+                    displayName = tv.text.toString()
+                }
+            }
+        }
+
+        if (targetNumber.isNullOrEmpty() && displayName.isNullOrEmpty()) {
+            return null
+        }
+
+        val finalNumber = targetNumber ?: displayName!!
+        val finalName = if (!displayName.isNullOrEmpty()) displayName else finalNumber
+        return CallInfo(itemVM, finalNumber, finalName)
     }
 
     private fun drawSwipeBackground(c: Canvas, child: View, context: Context) {
         val density = context.resources.displayMetrics.density
         val tx = child.translationX
+        if (tx == 0f) return
+
         val top = child.top.toFloat() + 2f * density
         val bottom = child.bottom.toFloat() - 2f * density
         val cornerRadius = 14f * density
@@ -668,14 +748,27 @@ object DialerRecentsHook {
         c.restore()
     }
 
-    private fun invokeStockCall(context: Context, itemVM: Any, classLoader: ClassLoader) {
+    private fun invokeStockCall(context: Context, itemVM: Any?, targetNumber: String, classLoader: ClassLoader) {
+        if (itemVM != null) {
+            try {
+                val vhUtilClass = Class.forName("com.android.contacts.dialer.list.DialerVHUtil", false, classLoader)
+                val callMethod = vhUtilClass.getMethod("b", Context::class.java, itemVM.javaClass, String::class.java)
+                callMethod.invoke(null, context, itemVM, "")
+                Log.i(TAG, "Successfully invoked stock dialer call via DialerVHUtil.b")
+                return
+            } catch (t: Throwable) {
+                Log.w(TAG, "Failed DialerVHUtil.b call, falling back to Intent", t)
+            }
+        }
+
         try {
-            val vhUtilClass = Class.forName("com.android.contacts.dialer.list.DialerVHUtil", false, classLoader)
-            val callMethod = vhUtilClass.getMethod("b", Context::class.java, itemVM.javaClass, String::class.java)
-            callMethod.invoke(null, context, itemVM, "")
-            Log.i(TAG, "Successfully invoked stock dialer call via DialerVHUtil.b")
+            val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$targetNumber")).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(callIntent)
+            Log.i(TAG, "Successfully launched ACTION_CALL Intent for $targetNumber")
         } catch (t: Throwable) {
-            Log.e(TAG, "Failed to invoke stock call via DialerVHUtil.b", t)
+            Log.e(TAG, "Failed to launch ACTION_CALL Intent", t)
         }
     }
 
@@ -691,7 +784,7 @@ object DialerRecentsHook {
             return
         }
 
-        // Primary method: TwelveKeyDialerFragment.U4(str, str2)
+        // 1. Primary method: TwelveKeyDialerFragment.U4(str, str2) invokes Xiaomi's exact stock dialog
         if (fragment != null) {
             try {
                 val u4Method = fragment.javaClass.getDeclaredMethod("U4", String::class.java, String::class.java)
@@ -704,19 +797,26 @@ object DialerRecentsHook {
             }
         }
 
-        // Fallback: build stock dialog matching strings and execute ContactsUtils.q
+        // 2. Fallback: native dialog matching stock strings and calling ContactsUtils.q
         try {
-            val activity = context as? Activity ?: return
-            AlertDialog.Builder(activity)
-                .setTitle(resolveStockString(context, "delete_call_log_title", "Delete call log"))
-                .setMessage(resolveStockString(context, "confirm_delete_contact_all_call_logs", "Delete all call history for %s?", displayName))
-                .setNegativeButton(resolveStockString(context, "cancel", "Cancel"), null)
-                .setPositiveButton(resolveStockString(context, "option_delete_contact", "Delete")) { _, _ ->
-                    executeStockDelete(context, targetNumber, classLoader)
-                }
-                .show()
+            val activity = (context as? Activity)
+                ?: (fragment?.javaClass?.getMethod("getActivity")?.invoke(fragment) as? Activity)
+            if (activity != null) {
+                AlertDialog.Builder(activity)
+                    .setTitle(resolveStockString(context, "delete_call_log_title", "Delete call log"))
+                    .setMessage(resolveStockString(context, "confirm_delete_contact_all_call_logs", "Delete all call history for %s?", displayName))
+                    .setNegativeButton(resolveStockString(context, "cancel", "Cancel"), null)
+                    .setPositiveButton(resolveStockString(context, "option_delete_contact", "Delete")) { _, _ ->
+                        executeStockDelete(context, targetNumber, classLoader)
+                    }
+                    .show()
+                Log.i(TAG, "Shown fallback delete dialog successfully")
+            } else {
+                executeStockDelete(context, targetNumber, classLoader)
+            }
         } catch (t: Throwable) {
-            Log.e(TAG, "Failed to show fallback delete dialog", t)
+            Log.e(TAG, "Failed to show fallback delete dialog, executing delete directly", t)
+            executeStockDelete(context, targetNumber, classLoader)
         }
     }
 
