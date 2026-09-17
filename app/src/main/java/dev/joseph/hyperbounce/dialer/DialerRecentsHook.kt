@@ -10,7 +10,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -21,6 +21,7 @@ import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.animation.PathInterpolator
 import android.widget.TextView
+import androidx.core.graphics.PathParser
 import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
@@ -37,10 +38,8 @@ import kotlin.math.min
  *  - Swipe Left: Reveals iOS Red Delete action, clicking it invokes Xiaomi stock confirmation
  *    dialog and stock call log deletion logic.
  *
- * NOTE: This hook uses dispatchTouchEvent interception and ViewGroup hierarchy coordination to
- * completely eliminate the stock horizontal ViewPager / SpringBackLayout overscroll conflict.
- * All RecyclerView interactions avoid compile-time or runtime references to `androidx.recyclerview.widget.*`
- * to eliminate NoClassDefFoundError across different ClassLoaders.
+ * Coordinates seamlessly with DirectionViewPager and SpringBackLayout so gestures work both
+ * on the home Recents landing page and in search results without screen stretching.
  */
 object DialerRecentsHook {
 
@@ -74,20 +73,17 @@ object DialerRecentsHook {
 
     // Drawing resources
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val bgRect = RectF()
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
-        strokeJoin = Paint.Join.ROUND
+        style = Paint.Style.FILL
     }
-    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-        textAlign = Paint.Align.CENTER
-    }
-    private val bgRect = RectF()
-    private val phonePath = Path()
-    private val trashPath = Path()
+
+    // Cached drawables / paths
+    private var cachedCallDrawable: Drawable? = null
+    private var cachedDeleteDrawable: Drawable? = null
+    private var fallbackCallPath: Path? = null
+    private var fallbackDeletePath: Path? = null
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
         val prefs = try {
@@ -107,7 +103,6 @@ object DialerRecentsHook {
         try {
             val fragmentClass = Class.forName("com.android.contacts.list.TwelveKeyDialerFragment", false, classLoader)
             for (m: Method in fragmentClass.declaredMethods) {
-                // In HyperOS Contacts, onViewCreated is obfuscated as Y0(View, Bundle)
                 if ((m.name == "Y0" || m.name == "onViewCreated") &&
                     m.parameterTypes.size == 2 &&
                     m.parameterTypes[0] == View::class.java &&
@@ -129,7 +124,6 @@ object DialerRecentsHook {
                     Log.i(TAG, "Hooked TwelveKeyDialerFragment.${m.name} successfully.")
                 }
 
-                // Also hook onResume for reliable instance capture
                 if (m.name == "onResume" && m.parameterTypes.isEmpty()) {
                     module.hook(m).intercept { chain ->
                         val result = chain.proceed()
@@ -149,7 +143,64 @@ object DialerRecentsHook {
             Log.e(TAG, "Failed to hook TwelveKeyDialerFragment", t)
         }
 
-        // 2. Hook RecyclerView.dispatchTouchEvent across all potential hierarchy classes
+        // 2. Hook DirectionViewPager.onInterceptTouchEvent to block tab-switch hijacking when touching/swiping a call row
+        try {
+            val dvpClass = Class.forName("com.android.contacts.widget.DirectionViewPager", false, classLoader)
+            for (m: Method in dvpClass.declaredMethods) {
+                if (m.name == "onInterceptTouchEvent" &&
+                    m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == MotionEvent::class.java
+                ) {
+                    module.hook(m).intercept { chain ->
+                        if (isSwiping || isDeleteButtonPressed || swipingChild != null) {
+                            return@intercept false
+                        }
+                        chain.proceed()
+                    }
+                    Log.i(TAG, "Hooked DirectionViewPager.onInterceptTouchEvent successfully.")
+                    break
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook DirectionViewPager", t)
+        }
+
+        // 3. Hook SpringBackLayout.onInterceptTouchEvent and requestDisallowInterceptTouchEvent
+        try {
+            val sblClass = Class.forName("miuix.springback.view.SpringBackLayout", false, classLoader)
+            for (m: Method in sblClass.declaredMethods) {
+                if (m.name == "onInterceptTouchEvent" &&
+                    m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == MotionEvent::class.java
+                ) {
+                    module.hook(m).intercept { chain ->
+                        if (isSwiping || isDeleteButtonPressed || swipingChild != null) {
+                            return@intercept false
+                        }
+                        chain.proceed()
+                    }
+                    Log.i(TAG, "Hooked SpringBackLayout.onInterceptTouchEvent successfully.")
+                }
+
+                if (m.name == "requestDisallowInterceptTouchEvent" &&
+                    m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == java.lang.Boolean.TYPE
+                ) {
+                    module.hook(m).intercept { chain ->
+                        val sbl = chain.thisObject as? ViewGroup
+                        val disallow = chain.args[0] as? Boolean ?: false
+                        // Force propagate up past SpringBackLayout so DirectionViewPager receives disallow
+                        sbl?.parent?.requestDisallowInterceptTouchEvent(disallow)
+                        chain.proceed()
+                    }
+                    Log.i(TAG, "Hooked SpringBackLayout.requestDisallowInterceptTouchEvent successfully.")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook SpringBackLayout", t)
+        }
+
+        // 4. Hook RecyclerView.dispatchTouchEvent across all potential hierarchy classes
         val rvClassNames = listOf(
             "miuix.recyclerview.widget.RecyclerView",
             "androidx.recyclerview.widget.SpringRecyclerView",
@@ -189,7 +240,7 @@ object DialerRecentsHook {
             } catch (_: Throwable) {}
         }
 
-        // 3. Hook drawChild on base RecyclerView to render iOS Call and Delete action backgrounds
+        // 5. Hook drawChild on base RecyclerView to render iOS Call and Delete action backgrounds
         try {
             val baseRvClass = Class.forName("androidx.recyclerview.widget.RecyclerView", false, classLoader)
             for (m: Method in baseRvClass.declaredMethods) {
@@ -255,7 +306,7 @@ object DialerRecentsHook {
                     if (e.y in childTop..childBottom && e.x in deleteLeft..deleteRight) {
                         isDeleteButtonPressed = true
                         swipingChild = currentOpen
-                        rv.parent?.requestDisallowInterceptTouchEvent(true)
+                        disallowAllParents(rv, true)
                         Log.d(TAG, "ACTION_DOWN on Delete button")
                         return true
                     } else {
@@ -276,8 +327,8 @@ object DialerRecentsHook {
                         swipingItemVM = info.itemVM
                         swipingTargetNumber = info.targetNumber
                         swipingDisplayName = info.displayName
-                        // Proactively disallow ancestor ViewPager / SpringBackLayout from intercepting!
-                        rv.parent?.requestDisallowInterceptTouchEvent(true)
+                        // Proactively disallow ALL ancestor ViewGroups from intercepting
+                        disallowAllParents(rv, true)
                         Log.d(TAG, "ACTION_DOWN on call row: ${info.displayName} (${info.targetNumber})")
                     } else {
                         swipingChild = null
@@ -290,7 +341,7 @@ object DialerRecentsHook {
 
             MotionEvent.ACTION_MOVE -> {
                 if (isDeleteButtonPressed) {
-                    rv.parent?.requestDisallowInterceptTouchEvent(true)
+                    disallowAllParents(rv, true)
                     return true
                 }
 
@@ -302,7 +353,7 @@ object DialerRecentsHook {
                     if (!isSwiping) {
                         if (abs(dy) > touchSlop && abs(dy) > abs(dx)) {
                             // User is scrolling vertically -> restore normal scrolling to parents & RecyclerView
-                            rv.parent?.requestDisallowInterceptTouchEvent(false)
+                            disallowAllParents(rv, false)
                             swipingChild = null
                             return null
                         }
@@ -310,7 +361,7 @@ object DialerRecentsHook {
                         if (abs(dx) > touchSlop && abs(dx) > abs(dy) * 1.1f) {
                             // User is swiping horizontally -> engage iOS row swipe!
                             isSwiping = true
-                            rv.parent?.requestDisallowInterceptTouchEvent(true)
+                            disallowAllParents(rv, true)
 
                             // Cancel touch on child itemView so click / longClick won't trigger
                             val cancel = MotionEvent.obtain(e)
@@ -323,7 +374,7 @@ object DialerRecentsHook {
                             return true
                         }
                     } else {
-                        rv.parent?.requestDisallowInterceptTouchEvent(true)
+                        disallowAllParents(rv, true)
                         applyDragTranslation(child, dx, callThresholdPx, deleteWidthPx, rv)
                         return true
                     }
@@ -403,6 +454,16 @@ object DialerRecentsHook {
         return null
     }
 
+    private fun disallowAllParents(view: View, disallow: Boolean) {
+        var p = view.parent
+        while (p != null) {
+            try {
+                p.requestDisallowInterceptTouchEvent(disallow)
+            } catch (_: Throwable) {}
+            p = p.parent
+        }
+    }
+
     private fun applyDragTranslation(
         target: View,
         dx: Float,
@@ -411,7 +472,6 @@ object DialerRecentsHook {
         rv: ViewGroup
     ) {
         if (openChild != null && openChild == target) {
-            // Dragging an already open row
             val baseTx = -deleteWidthPx
             val newTx = baseTx + dx
             val clampedTx = if (newTx < -deleteWidthPx) {
@@ -635,6 +695,42 @@ object DialerRecentsHook {
         return CallInfo(itemVM, finalNumber, finalName)
     }
 
+    private fun getCallDrawable(context: Context): Drawable? {
+        if (cachedCallDrawable != null) return cachedCallDrawable
+        val resId = context.resources.getIdentifier("dialer_btn_call_normal", "drawable", context.packageName)
+        if (resId != 0) {
+            try {
+                cachedCallDrawable = context.getDrawable(resId)?.mutate()?.apply {
+                    setTint(Color.WHITE)
+                }
+            } catch (_: Throwable) {}
+        }
+        return cachedCallDrawable
+    }
+
+    private fun getDeleteDrawable(context: Context): Drawable? {
+        if (cachedDeleteDrawable != null) return cachedDeleteDrawable
+        val candidates = listOf(
+            "action_button_delete_normal_light_v2",
+            "ic_history_delete",
+            "miuix_action_icon_delete_light"
+        )
+        for (name in candidates) {
+            val resId = context.resources.getIdentifier(name, "drawable", context.packageName)
+            if (resId != 0) {
+                try {
+                    val d = context.getDrawable(resId)?.mutate()
+                    if (d != null) {
+                        d.setTint(Color.WHITE)
+                        cachedDeleteDrawable = d
+                        break
+                    }
+                } catch (_: Throwable) {}
+            }
+        }
+        return cachedDeleteDrawable
+    }
+
     private fun drawSwipeBackground(c: Canvas, child: View, context: Context) {
         val density = context.resources.displayMetrics.density
         val tx = child.translationX
@@ -656,11 +752,11 @@ object DialerRecentsHook {
             bgPaint.color = Color.parseColor("#34C759")
             c.drawRoundRect(bgRect, cornerRadius, cornerRadius, bgPaint)
 
-            // Phone receiver glyph
-            val iconCenterX = left + min(tx / 2f, 44f * density)
+            // Centered official Phone icon
+            val iconCenterX = left + min(tx / 2f, callThresholdPx / 2f)
             val iconCenterY = (top + bottom) / 2f
-            val scaleProgress = min(1.2f, 0.85f + (tx / callThresholdPx) * 0.3f)
-            drawPhoneGlyph(c, iconCenterX, iconCenterY, scaleProgress, density)
+            val scaleProgress = min(1.15f, 0.88f + (tx / callThresholdPx) * 0.25f)
+            drawPhoneIcon(c, iconCenterX, iconCenterY, scaleProgress, density, context)
 
             c.restore()
         } else {
@@ -673,79 +769,85 @@ object DialerRecentsHook {
             bgPaint.color = Color.parseColor("#FF3B30")
             c.drawRoundRect(bgRect, cornerRadius, cornerRadius, bgPaint)
 
-            // Trash can glyph and "Delete" label
+            // Properly centered Trash icon without text label
             val revealWidth = abs(tx)
             val actionCenterX = right - min(revealWidth / 2f, deleteWidthPx / 2f)
             val actionCenterY = (top + bottom) / 2f
-            drawTrashGlyphAndText(c, actionCenterX, actionCenterY, density)
+            drawTrashIcon(c, actionCenterX, actionCenterY, density, context)
 
             c.restore()
         }
     }
 
-    private fun drawPhoneGlyph(c: Canvas, cx: Float, cy: Float, scale: Float, density: Float) {
-        c.save()
-        c.translate(cx, cy)
-        c.scale(scale, scale)
+    private fun drawPhoneIcon(
+        c: Canvas,
+        cx: Float,
+        cy: Float,
+        scale: Float,
+        density: Float,
+        context: Context
+    ) {
+        val drawable = getCallDrawable(context)
+        val iconSize = (28f * density * scale).toInt()
+        val half = iconSize / 2
 
-        iconPaint.strokeWidth = 2.4f * density
-        iconPaint.style = Paint.Style.FILL_AND_STROKE
-
-        phonePath.reset()
-        phonePath.moveTo(-7f * density, -8f * density)
-        phonePath.quadTo(-4f * density, -11f * density, 0f * density, -9f * density)
-        phonePath.quadTo(3f * density, -7f * density, 6f * density, -4f * density)
-        phonePath.quadTo(9f * density, 0f * density, 8f * density, 4f * density)
-        phonePath.quadTo(5f * density, 9f * density, 0f * density, 8f * density)
-        phonePath.quadTo(-6f * density, 6f * density, -8f * density, 0f * density)
-        phonePath.close()
-
-        c.drawPath(phonePath, iconPaint)
-        c.restore()
+        if (drawable != null) {
+            drawable.setBounds((cx - half).toInt(), (cy - half).toInt(), (cx + half).toInt(), (cy + half).toInt())
+            drawable.draw(c)
+        } else {
+            // Crisp fallback phone path from stock vector
+            if (fallbackCallPath == null) {
+                try {
+                    fallbackCallPath = PathParser.createPathFromPathData(
+                        "M10.643,4.653C10.148,3.796 9.101,3.378 8.156,3.853L8.148,3.857C7.88,3.992 7.432,4.219 6.261,5.012C4.335,6.317 4.628,8.468 5.213,10.212C6.551,14.211 9.13,18.011 12.005,20.885C14.879,23.76 18.679,26.339 22.678,27.678C24.435,28.266 26.533,28.52 27.87,26.64C28.621,25.583 28.841,25.138 29.005,24.8L29.039,24.73C29.467,23.858 29.152,22.782 28.239,22.249L23.688,19.613C23.049,19.243 22.308,19.363 21.809,19.628L20.128,20.532L20.127,20.532C19.311,20.966 18.326,20.933 17.54,20.447C16.562,19.842 15.46,19.021 14.647,18.243C13.869,17.431 13.048,16.327 12.443,15.35C11.957,14.564 11.924,13.579 12.358,12.763L12.358,12.762L13.261,11.083L13.262,11.081C13.529,10.578 13.643,9.849 13.28,9.208L10.643,4.653Z"
+                    )
+                } catch (_: Throwable) {}
+            }
+            val path = fallbackCallPath
+            if (path != null) {
+                c.save()
+                val factor = (iconSize / 34f)
+                c.translate(cx - 17f * factor, cy - 17f * factor)
+                c.scale(factor, factor)
+                c.drawPath(path, iconPaint)
+                c.restore()
+            }
+        }
     }
 
-    private fun drawTrashGlyphAndText(c: Canvas, cx: Float, cy: Float, density: Float) {
-        c.save()
-        c.translate(cx, cy)
+    private fun drawTrashIcon(
+        c: Canvas,
+        cx: Float,
+        cy: Float,
+        density: Float,
+        context: Context
+    ) {
+        val drawable = getDeleteDrawable(context)
+        val iconSize = (26f * density).toInt()
+        val half = iconSize / 2
 
-        iconPaint.strokeWidth = 2.0f * density
-        iconPaint.style = Paint.Style.STROKE
-
-        trashPath.reset()
-        val tw = 7f * density
-        val th = 8f * density
-
-        // Can body
-        trashPath.moveTo(-tw, -th * 0.3f)
-        trashPath.lineTo(-tw * 0.8f, th)
-        trashPath.quadTo(-tw * 0.8f, th + 2f * density, -tw * 0.5f, th + 2f * density)
-        trashPath.lineTo(tw * 0.5f, th + 2f * density)
-        trashPath.quadTo(tw * 0.8f, th + 2f * density, tw * 0.8f, th)
-        trashPath.lineTo(tw, -th * 0.3f)
-
-        // Lid line
-        trashPath.moveTo(-tw * 1.25f, -th * 0.3f)
-        trashPath.lineTo(tw * 1.25f, -th * 0.3f)
-
-        // Lid handle
-        trashPath.moveTo(-tw * 0.45f, -th * 0.3f)
-        trashPath.lineTo(-tw * 0.45f, -th * 0.75f)
-        trashPath.lineTo(tw * 0.45f, -th * 0.75f)
-        trashPath.lineTo(tw * 0.45f, -th * 0.3f)
-
-        // Rib lines
-        trashPath.moveTo(-tw * 0.35f, 0f)
-        trashPath.lineTo(-tw * 0.3f, th * 0.7f)
-        trashPath.moveTo(tw * 0.35f, 0f)
-        trashPath.lineTo(tw * 0.3f, th * 0.7f)
-
-        c.drawPath(trashPath, iconPaint)
-
-        // "Delete" text
-        textPaint.textSize = 13f * density
-        c.drawText("Delete", 0f, th + 13f * density, textPaint)
-
-        c.restore()
+        if (drawable != null) {
+            drawable.setBounds((cx - half).toInt(), (cy - half).toInt(), (cx + half).toInt(), (cy + half).toInt())
+            drawable.draw(c)
+        } else {
+            // Crisp fallback trash path from stock vector
+            if (fallbackDeletePath == null) {
+                try {
+                    fallbackDeletePath = PathParser.createPathFromPathData(
+                        "M30.5,11C27.7386,11 25.5,13.2386 25.5,16V20H21.5H16.5002H13C11.6193,20 10.5,21.1193 10.5,22.5C10.5,23.8807 11.6193,25 13,25H16.5V48.2C16.5,52.6804 16.5,54.9206 17.3719,56.6319C18.1389,58.1372 19.3628,59.3611 20.8681,60.1281C22.5794,61 24.8196,61 29.3,61H45.7C50.1804,61 52.4206,61 54.1319,60.1281C55.6372,59.3611 56.8611,58.1372 57.6281,56.6319C58.5,54.9206 58.5,52.6804 58.5,48.2V25H62C63.3807,25 64.5,23.8807 64.5,22.5C64.5,21.1193 63.3807,20 62,20H58.4998H53.5H49.5V16C49.5,13.2386 47.2614,11 44.5,11H30.5ZM44.5,20V18C44.5,16.8954 43.6046,16 42.5,16H32.5C31.3954,16 30.5,16.8954 30.5,18V20H44.5ZM21.5,49.6V25H53.5V49.6C53.5,51.8402 53.5,52.9603 53.064,53.816C52.6805,54.5686 52.0686,55.1805 51.316,55.564C50.4603,56 49.3402,56 47.1,56H27.9C25.6598,56 24.5397,56 23.684,55.564C22.9314,55.1805 22.3195,54.5686 21.936,53.816C21.5,52.9603 21.5,51.8402 21.5,49.6Z"
+                    )
+                } catch (_: Throwable) {}
+            }
+            val path = fallbackDeletePath
+            if (path != null) {
+                c.save()
+                val factor = (iconSize / 74f)
+                c.translate(cx - 37f * factor, cy - 37f * factor)
+                c.scale(factor, factor)
+                c.drawPath(path, iconPaint)
+                c.restore()
+            }
+        }
     }
 
     private fun invokeStockCall(context: Context, itemVM: Any?, targetNumber: String, classLoader: ClassLoader) {
