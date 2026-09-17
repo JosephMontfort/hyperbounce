@@ -108,6 +108,20 @@ class PhysicsHook : XposedModule() {
                     }
                     dev.joseph.hyperbounce.caller.IosCallerScreenHook.init(this, param.classLoader)
                 }
+
+                param.packageName == "com.android.contacts" -> {
+                    if (prefs != null) {
+                        try {
+                            dev.joseph.hyperbounce.dialer.DialerRecentsConfigHolder.updateFromPrefs(prefs)
+                            prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                                dev.joseph.hyperbounce.dialer.DialerRecentsConfigHolder.updateFromPrefs(prefs)
+                            }
+                        } catch (t: Throwable) {
+                            Log.e("HyperBounce", "Failed to bind remote preferences in Contacts", t)
+                        }
+                    }
+                    dev.joseph.hyperbounce.dialer.DialerRecentsHook.init(this, param.classLoader)
+                }
             }
         } catch (t: Throwable) {
             Log.e("HyperBounce", "PhysicsHook failed for ${param.packageName}, leaving stock UI untouched", t)

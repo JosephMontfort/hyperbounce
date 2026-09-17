@@ -299,6 +299,14 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                             repository = repository,
                             colors = colors,
                             backdrop = backdrop,
+                            onNavigateToDialerRecents = { push(Destination.DialerRecents) },
+                            onBack = pop
+                        )
+
+                        Destination.DialerRecents -> dev.joseph.hyperbounce.ui.screens.DialerRecentsSettings(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
                             onBack = pop
                         )
 

@@ -121,6 +121,7 @@ class SettingsRepository(context: Context) {
     val controlCenter = ControlCenterHolder()
     val morphPhysics = MorphPhysicsHolder()
     val callerScreen = CallerScreenHolder()
+    val dialerRecents = DialerRecentsHolder()
     val safeMode = SafeModeHolder()
 
     @JvmName("setModuleEnabledPref")
@@ -160,6 +161,8 @@ class SettingsRepository(context: Context) {
         appTransition.reloadFromDefaults()
         controlCenter.reloadFromDefaults()
         morphPhysics.reloadFromDefaults()
+        callerScreen.reloadFromDefaults()
+        dialerRecents.reloadFromDefaults()
         moduleEnabled = true
         toggleEngine = RenderEngine.LiquidGlass
         sliderEngine = RenderEngine.LiquidGlass
@@ -1245,6 +1248,42 @@ class SettingsRepository(context: Context) {
             hapticsEnabled = true
             shimmerEnabled = true
             danceEnabled = true
+        }
+    }
+
+    inner class DialerRecentsHolder {
+        var enabled by prefsBooleanState("dialer_recents_swipe_enabled", true)
+            private set
+        var callThreshold by prefsFloatState("dialer_call_threshold", 96f)
+            private set
+        var deleteWidth by prefsFloatState("dialer_delete_width", 84f)
+            private set
+        var confirmDelete by prefsBooleanState("dialer_confirm_delete", true)
+            private set
+        var hapticsEnabled by prefsBooleanState("dialer_haptics_enabled", true)
+            private set
+
+        @JvmName("setDialerRecentsEnabledPref")
+        fun setEnabled(v: Boolean) { enabled = v }
+
+        @JvmName("setDialerCallThresholdPref")
+        fun setCallThreshold(v: Float) { callThreshold = v }
+
+        @JvmName("setDialerDeleteWidthPref")
+        fun setDeleteWidth(v: Float) { deleteWidth = v }
+
+        @JvmName("setDialerConfirmDeletePref")
+        fun setConfirmDelete(v: Boolean) { confirmDelete = v }
+
+        @JvmName("setDialerHapticsEnabledPref")
+        fun setHapticsEnabled(v: Boolean) { hapticsEnabled = v }
+
+        fun reloadFromDefaults() {
+            enabled = true
+            callThreshold = 96f
+            deleteWidth = 84f
+            confirmDelete = true
+            hapticsEnabled = true
         }
     }
 

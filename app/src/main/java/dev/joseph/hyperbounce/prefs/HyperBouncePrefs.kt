@@ -49,6 +49,21 @@ class HyperBouncePrefs(module: XposedInterface) {
     val callerDanceEnabled: Boolean
         get() = prefs.getBoolean("caller_dance_enabled", true)
 
+    val dialerRecentsSwipeEnabled: Boolean
+        get() = prefs.getBoolean("dialer_recents_swipe_enabled", true)
+
+    val dialerCallThreshold: Float
+        get() = prefs.getFloat("dialer_call_threshold", 96f)
+
+    val dialerDeleteWidth: Float
+        get() = prefs.getFloat("dialer_delete_width", 84f)
+
+    val dialerConfirmDelete: Boolean
+        get() = prefs.getBoolean("dialer_confirm_delete", true)
+
+    val dialerHapticsEnabled: Boolean
+        get() = prefs.getBoolean("dialer_haptics_enabled", true)
+
     // --- per-app nav bar (appKey: "instagram" | "whatsapp" | "youtube") --------------------
 
     fun appEnabled(appKey: String): Boolean =
