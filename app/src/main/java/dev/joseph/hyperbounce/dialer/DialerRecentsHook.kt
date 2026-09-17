@@ -28,6 +28,9 @@ import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
 import java.lang.reflect.Field
 import java.lang.reflect.Method
+import java.lang.reflect.Proxy
+import java.util.Collections
+import java.util.WeakHashMap
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -58,6 +61,8 @@ object DialerRecentsHook {
     private var swipingItemVM: Any? = null
     private var swipingTargetNumber: String? = null
     private var swipingDisplayName: String? = null
+    private var swipingVH: WeakReference<Any>? = null
+    private var swipingAdapter: WeakReference<Any>? = null
 
     private var downX = 0f
     private var downY = 0f
@@ -66,8 +71,14 @@ object DialerRecentsHook {
     private var hasTriggeredCallHaptic = false
     private var hasTriggeredDeleteHaptic = false
 
-    // Recursion guard for dispatchTouchEvent
+    // Recursion guard for dispatchTouchEvent & item touch listener
     private var isDispatching = false
+    private var lastEventTime = -1L
+    private var lastEventAction = -1
+    private var lastHandledResult: Boolean? = null
+
+    // Track attached RecyclerViews to avoid duplicate listeners
+    private val attachedRecyclerViews = Collections.newSetFromMap(WeakHashMap<ViewGroup, Boolean>())
 
     // iOS fluid spring interpolator
     private val iosSpringInterpolator = PathInterpolator(0.22f, 1.0f, 0.36f, 1.0f)
@@ -86,6 +97,24 @@ object DialerRecentsHook {
     private var fallbackCallPath: Path? = null
     private var fallbackDeletePath: Path? = null
 
+    private fun enforceFragmentState(fragment: Any, classLoader: ClassLoader) {
+        try {
+            val activity = fragment.javaClass.getMethod("getActivity").invoke(fragment) as? Activity
+            if (activity != null && DialerRecentsConfigHolder.config.enabled) {
+                try {
+                    activity.javaClass.getMethod("s1", java.lang.Boolean.TYPE).invoke(activity, false)
+                    Log.i(TAG, "Enforced s1(false) on TwelveKeyDialerFragment")
+                } catch (_: Throwable) {}
+            }
+            val fragView = fragment.javaClass.getMethod("getView").invoke(fragment) as? View
+            val rvId = fragView?.resources?.getIdentifier("recyclerlist", "id", fragView.context.packageName) ?: 0
+            val rv = if (rvId != 0) fragView?.findViewById<ViewGroup>(rvId) else null
+            if (rv != null) {
+                attachSwipeListenerToRecyclerView(rv, classLoader)
+            }
+        } catch (_: Throwable) {}
+    }
+
     fun init(module: XposedModule, classLoader: ClassLoader) {
         val prefs = try {
             HyperBouncePrefs(module)
@@ -100,7 +129,7 @@ object DialerRecentsHook {
 
         Log.i(TAG, "Initializing Dialer Recents Swipe Hook for com.android.contacts...")
 
-        // 1. Hook TwelveKeyDialerFragment lifecycle methods to capture active fragment instance and enforce s1(false)
+        // 1. Hook TwelveKeyDialerFragment lifecycle methods to capture active fragment instance, enforce s1(false), and attach to RecyclerView
         try {
             val fragmentClass = Class.forName("com.android.contacts.list.TwelveKeyDialerFragment", false, classLoader)
             for (m: Method in fragmentClass.declaredMethods) {
@@ -116,13 +145,7 @@ object DialerRecentsHook {
                             if (fragment != null) {
                                 sActiveFragment = WeakReference(fragment)
                                 Log.i(TAG, "Captured active TwelveKeyDialerFragment instance via ${m.name}")
-                                val activity = fragment.javaClass.getMethod("getActivity").invoke(fragment) as? Activity
-                                if (activity != null && DialerRecentsConfigHolder.config.enabled) {
-                                    try {
-                                        activity.javaClass.getMethod("s1", java.lang.Boolean.TYPE).invoke(activity, false)
-                                        Log.i(TAG, "Enforced s1(false) on TwelveKeyDialerFragment.${m.name}")
-                                    } catch (_: Throwable) {}
-                                }
+                                enforceFragmentState(fragment, classLoader)
                             }
                         } catch (t: Throwable) {
                             Log.e(TAG, "Error in TwelveKeyDialerFragment.${m.name} hook", t)
@@ -139,17 +162,26 @@ object DialerRecentsHook {
                             val fragment = chain.thisObject
                             if (fragment != null) {
                                 sActiveFragment = WeakReference(fragment)
-                                val activity = fragment.javaClass.getMethod("getActivity").invoke(fragment) as? Activity
-                                if (activity != null && DialerRecentsConfigHolder.config.enabled) {
-                                    try {
-                                        activity.javaClass.getMethod("s1", java.lang.Boolean.TYPE).invoke(activity, false)
-                                    } catch (_: Throwable) {}
-                                }
+                                enforceFragmentState(fragment, classLoader)
                             }
                         } catch (_: Throwable) {}
                         result
                     }
                     Log.i(TAG, "Hooked TwelveKeyDialerFragment.onResume successfully.")
+                }
+
+                if (m.name == "B5" && m.parameterTypes.isEmpty()) {
+                    module.hook(m).intercept { chain ->
+                        val result = chain.proceed()
+                        try {
+                            val fragment = chain.thisObject
+                            if (fragment != null) {
+                                enforceFragmentState(fragment, classLoader)
+                            }
+                        } catch (_: Throwable) {}
+                        result
+                    }
+                    Log.i(TAG, "Hooked TwelveKeyDialerFragment.B5 successfully.")
                 }
             }
         } catch (t: Throwable) {
@@ -346,15 +378,57 @@ object DialerRecentsHook {
             Log.e(TAG, "Failed to hook SpringBackLayout", t)
         }
 
-        // 4. Hook RecyclerView.dispatchTouchEvent across all potential hierarchy classes
+        // 4. Hook RecyclerView touch interception & dispatch across all potential hierarchy classes
+        try {
+            val baseRvClass = Class.forName("androidx.recyclerview.widget.RecyclerView", false, classLoader)
+            for (m: Method in baseRvClass.declaredMethods) {
+                if (m.name == "onInterceptTouchEvent" &&
+                    m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == MotionEvent::class.java
+                ) {
+                    module.hook(m).intercept { chain ->
+                        val rv = chain.thisObject as? ViewGroup
+                        val ev = chain.args[0] as? MotionEvent
+                        if (rv != null && ev != null && DialerRecentsConfigHolder.config.enabled) {
+                            val handled = handleDispatchTouchEvent(rv, ev, classLoader)
+                            if (handled == true) {
+                                return@intercept true
+                            }
+                        }
+                        chain.proceed()
+                    }
+                    Log.i(TAG, "Hooked RecyclerView.onInterceptTouchEvent successfully.")
+                }
+
+                if (m.name == "onTouchEvent" &&
+                    m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == MotionEvent::class.java
+                ) {
+                    module.hook(m).intercept { chain ->
+                        val rv = chain.thisObject as? ViewGroup
+                        val ev = chain.args[0] as? MotionEvent
+                        if (rv != null && ev != null && DialerRecentsConfigHolder.config.enabled) {
+                            val handled = handleDispatchTouchEvent(rv, ev, classLoader)
+                            if (handled == true) {
+                                return@intercept true
+                            }
+                        }
+                        chain.proceed()
+                    }
+                    Log.i(TAG, "Hooked RecyclerView.onTouchEvent successfully.")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to hook base RecyclerView onInterceptTouchEvent/onTouchEvent", t)
+        }
+
+        // Also hook dispatchTouchEvent across all potential hierarchy classes without breaking early
         val rvClassNames = listOf(
             "miuix.recyclerview.widget.RecyclerView",
             "androidx.recyclerview.widget.SpringRecyclerView",
             "androidx.recyclerview.widget.RemixRecyclerView",
             "androidx.recyclerview.widget.RecyclerView"
         )
-
-        var dispatchHooked = false
         for (className in rvClassNames) {
             try {
                 val clazz = Class.forName(className, false, classLoader)
@@ -375,13 +449,9 @@ object DialerRecentsHook {
                             }
                             chain.proceed()
                         }
-                        dispatchHooked = true
                         Log.i(TAG, "Hooked $className.dispatchTouchEvent successfully.")
                         break
                     }
-                }
-                if (dispatchHooked) {
-                    break
                 }
             } catch (_: Throwable) {}
         }
@@ -416,11 +486,61 @@ object DialerRecentsHook {
         }
     }
 
+    private fun attachSwipeListenerToRecyclerView(rv: ViewGroup, classLoader: ClassLoader) {
+        if (!attachedRecyclerViews.add(rv)) return
+        try {
+            val listenerInterface = Class.forName("androidx.recyclerview.widget.RecyclerView\$OnItemTouchListener", false, classLoader)
+            val proxy = Proxy.newProxyInstance(classLoader, arrayOf(listenerInterface)) { _, method, args ->
+                when (method.name) {
+                    "onInterceptTouchEvent" -> {
+                        val motionEvent = args?.getOrNull(1) as? MotionEvent
+                        if (motionEvent != null && DialerRecentsConfigHolder.config.enabled) {
+                            val handled = handleDispatchTouchEvent(rv, motionEvent, classLoader)
+                            handled == true
+                        } else {
+                            false
+                        }
+                    }
+                    "onTouchEvent" -> {
+                        val motionEvent = args?.getOrNull(1) as? MotionEvent
+                        if (motionEvent != null && DialerRecentsConfigHolder.config.enabled) {
+                            handleDispatchTouchEvent(rv, motionEvent, classLoader)
+                        }
+                        null
+                    }
+                    "onRequestDisallowInterceptTouchEvent" -> null
+                    else -> null
+                }
+            }
+
+            for (m in rv.javaClass.methods) {
+                if ((m.name == "addOnItemTouchListener" || m.name == "j") &&
+                    m.parameterTypes.size == 1 &&
+                    listenerInterface.isAssignableFrom(m.parameterTypes[0])
+                ) {
+                    m.invoke(rv, proxy)
+                    Log.i(TAG, "Successfully attached OnItemTouchListener to RecyclerView via ${m.name}")
+                    break
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to attach OnItemTouchListener to RecyclerView", t)
+        }
+    }
+
     private fun handleDispatchTouchEvent(rv: ViewGroup, ev: MotionEvent, classLoader: ClassLoader): Boolean? {
         if (isDispatching) return null
+        // Event de-duplication guard
+        if (ev.eventTime == lastEventTime && ev.actionMasked == lastEventAction) {
+            return lastHandledResult
+        }
         isDispatching = true
         try {
-            return processDispatchTouchEvent(rv, ev, classLoader)
+            val res = processDispatchTouchEvent(rv, ev, classLoader)
+            lastEventTime = ev.eventTime
+            lastEventAction = ev.actionMasked
+            lastHandledResult = res
+            return res
         } finally {
             isDispatching = false
         }
@@ -466,17 +586,27 @@ object DialerRecentsHook {
 
                 // 2. Check if touch is on a call log child
                 val child = findChildUnder(rv, e.x, e.y)
-                if (child != null && isCallLogChild(child, rv) && !isAdapterInMultiSelectMode(rv)) {
+                if (child != null && !isAdapterInMultiSelectMode(rv)) {
                     val info = extractCallInfo(child, rv)
-                    swipingChild = child
-                    swipingItemVM = info?.itemVM
-                    swipingTargetNumber = info?.targetNumber
-                    swipingDisplayName = info?.displayName
-                    // Proactively disallow ALL ancestor ViewGroups from intercepting
-                    disallowAllParents(rv, true)
-                    Log.d(TAG, "ACTION_DOWN on call row: ${info?.displayName} (${info?.targetNumber})")
+                    if (info != null) {
+                        swipingChild = child
+                        swipingItemVM = info.itemVM
+                        swipingTargetNumber = info.targetNumber
+                        swipingDisplayName = info.displayName
+                        swipingVH = if (info.vh != null) WeakReference(info.vh) else null
+                        swipingAdapter = if (info.adapter != null) WeakReference(info.adapter) else null
+                        // Proactively disallow ALL ancestor ViewGroups from intercepting
+                        disallowAllParents(rv, true)
+                        Log.d(TAG, "ACTION_DOWN on call row: ${info.displayName} (${info.targetNumber})")
+                    } else {
+                        swipingChild = null
+                        swipingVH = null
+                        swipingAdapter = null
+                    }
                 } else {
                     swipingChild = null
+                    swipingVH = null
+                    swipingAdapter = null
                 }
                 return null
             }
@@ -493,15 +623,17 @@ object DialerRecentsHook {
                     val dy = e.y - downY
 
                     if (!isSwiping) {
-                        if (abs(dy) > touchSlop && abs(dy) > abs(dx)) {
-                            // User is scrolling vertically -> restore normal scrolling to parents & RecyclerView
+                        // User is scrolling vertically -> only cancel if vertical scroll dominates significantly
+                        if (abs(dy) > touchSlop * 2f && abs(dy) > abs(dx) * 2f) {
                             disallowAllParents(rv, false)
                             swipingChild = null
+                            swipingVH = null
+                            swipingAdapter = null
                             return null
                         }
 
-                        if (abs(dx) > touchSlop && abs(dx) > abs(dy) * 1.1f) {
-                            // User is swiping horizontally -> engage iOS row swipe!
+                        // User is swiping horizontally -> engage iOS row swipe!
+                        if (abs(dx) > touchSlop && abs(dx) >= abs(dy)) {
                             isSwiping = true
                             disallowAllParents(rv, true)
 
@@ -554,6 +686,8 @@ object DialerRecentsHook {
                         swipingItemVM = reInfo?.itemVM
                         swipingTargetNumber = reInfo?.targetNumber
                         swipingDisplayName = reInfo?.displayName
+                        if (reInfo?.vh != null) swipingVH = WeakReference(reInfo.vh)
+                        if (reInfo?.adapter != null) swipingAdapter = WeakReference(reInfo.adapter)
                     }
 
                     if (currentTx > 0f) {
@@ -563,8 +697,10 @@ object DialerRecentsHook {
                             animateSpring(target, 0f, rv)
                             val itemVM = swipingItemVM
                             val number = swipingTargetNumber
+                            val vh = swipingVH?.get()
+                            val adapter = swipingAdapter?.get()
                             if (number != null) {
-                                invokeStockCall(target.context, itemVM, number, classLoader)
+                                invokeStockCall(target.context, target, vh, adapter, itemVM, number, classLoader)
                             }
                         } else {
                             animateSpring(target, 0f, rv)
@@ -705,6 +841,8 @@ object DialerRecentsHook {
         swipingItemVM = null
         swipingTargetNumber = null
         swipingDisplayName = null
+        swipingVH = null
+        swipingAdapter = null
         hasTriggeredCallHaptic = false
         hasTriggeredDeleteHaptic = false
     }
@@ -761,28 +899,7 @@ object DialerRecentsHook {
     }
 
     private fun isCallLogChild(child: View, rv: ViewGroup): Boolean {
-        // Method 1: Check child view content IDs
-        val nameId = rv.resources.getIdentifier("name", "id", rv.context.packageName)
-        if (nameId != 0 && child.findViewById<View>(nameId) != null) return true
-
-        val contentId = rv.resources.getIdentifier("content_layout", "id", rv.context.packageName)
-        if (contentId != 0 && child.findViewById<View>(contentId) != null) return true
-
-        val secActionId = rv.resources.getIdentifier("secondary_action_view", "id", rv.context.packageName)
-        if (secActionId != 0 && child.findViewById<View>(secActionId) != null) return true
-
-        // Method 2: Check ViewHolder class name
-        try {
-            val getChildVHMethod = rv.javaClass.getMethod("getChildViewHolder", View::class.java)
-            val vh = getChildVHMethod.invoke(rv, child)
-            if (vh != null) {
-                val vhName = vh.javaClass.name
-                if (vhName.contains("Header") || vhName.contains("Divider")) return false
-                if (vhName.contains("Dialer") || vhName.contains("Call") || vhName.contains("Contact")) return true
-            }
-        } catch (_: Throwable) {}
-
-        return false
+        return extractCallInfo(child, rv) != null
     }
 
     private fun isAdapterInMultiSelectMode(rv: ViewGroup): Boolean {
@@ -796,81 +913,173 @@ object DialerRecentsHook {
         }
     }
 
-    private data class CallInfo(val itemVM: Any?, val targetNumber: String, val displayName: String)
+    private data class CallInfo(
+        val vh: Any?,
+        val adapter: Any?,
+        val itemVM: Any?,
+        val targetNumber: String,
+        val displayName: String
+    )
+
+    private fun isValidPhoneNumber(s: String?): Boolean {
+        if (s.isNullOrBlank()) return false
+        val digits = s.filter { it.isDigit() }
+        return digits.length >= 3
+    }
+
+    private fun collectTextViews(view: View, out: MutableList<TextView>) {
+        if (view is TextView) {
+            out.add(view)
+        } else if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                collectTextViews(view.getChildAt(i), out)
+            }
+        }
+    }
 
     private fun extractCallInfo(child: View, rv: ViewGroup): CallInfo? {
+        if (child.visibility != View.VISIBLE || child.height < 15) return null
+
+        var vh: Any? = null
+        var adapter: Any? = null
         var itemVM: Any? = null
         var targetNumber: String? = null
         var displayName: String? = null
 
-        // 1. Try to get ViewHolder and DialerItemVM
+        // 1. Obtain ViewHolder
         try {
             val getChildVHMethod = rv.javaClass.getMethod("getChildViewHolder", View::class.java)
-            val vh = getChildVHMethod.invoke(rv, child)
-            if (vh != null) {
-                var currClass: Class<*>? = vh.javaClass
-                while (currClass != null && currClass != Any::class.java) {
-                    for (f: Field in currClass.declaredFields) {
-                        if (f.type.name.contains("DialerItemVM")) {
+            vh = getChildVHMethod.invoke(rv, child)
+        } catch (_: Throwable) {}
+
+        // Reject explicit headers/dividers/footers by ViewHolder class name
+        if (vh != null) {
+            val vhName = vh.javaClass.name.lowercase()
+            if (vhName.contains("header") || vhName.contains("divider") || vhName.contains("footer")) {
+                return null
+            }
+        }
+
+        // 2. Obtain Adapter
+        try {
+            val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
+            adapter = getAdapterMethod.invoke(rv)
+        } catch (_: Throwable) {}
+
+        // 3. Obtain position in adapter
+        var pos = -1
+        if (vh != null) {
+            for (mName in listOf("getBindingAdapterPosition", "getAbsoluteAdapterPosition", "getAdapterPosition", "getLayoutPosition")) {
+                try {
+                    val p = vh.javaClass.getMethod(mName).invoke(vh) as? Int
+                    if (p != null && p >= 0) {
+                        pos = p
+                        break
+                    }
+                } catch (_: Throwable) {}
+            }
+        }
+        if (pos < 0) {
+            try {
+                val m = rv.javaClass.getMethod("getChildAdapterPosition", View::class.java)
+                pos = m.invoke(rv, child) as? Int ?: -1
+            } catch (_: Throwable) {}
+        }
+
+        // 4. Obtain itemVM from ViewHolder field or adapter.K0(pos)
+        if (vh != null) {
+            var currClass: Class<*>? = vh.javaClass
+            while (currClass != null && currClass != Any::class.java) {
+                for (f: Field in currClass.declaredFields) {
+                    if (f.type.name.contains("DialerItemVM")) {
+                        try {
                             f.isAccessible = true
                             itemVM = f.get(vh)
                             if (itemVM != null) break
-                        }
+                        } catch (_: Throwable) {}
                     }
-                    if (itemVM != null) break
-                    currClass = currClass.superclass
                 }
+                if (itemVM != null) break
+                currClass = currClass.superclass
+            }
+        }
 
-                // If not in field, try adapter.K0(position)
-                if (itemVM == null) {
-                    val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
-                    val adapter = getAdapterMethod.invoke(rv)
-                    val getPosMethod = vh.javaClass.getMethod("getBindingAdapterPosition")
-                    val pos = getPosMethod.invoke(vh) as? Int ?: -1
-                    if (adapter != null && pos >= 0) {
-                        for (m in adapter.javaClass.methods) {
-                            if (m.name == "K0" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Int::class.javaPrimitiveType) {
-                                itemVM = m.invoke(adapter, pos)
+        if (itemVM == null && adapter != null && pos >= 0) {
+            for (m in adapter.javaClass.methods) {
+                if (m.parameterTypes.size == 1 && m.parameterTypes[0] == Int::class.javaPrimitiveType) {
+                    if (m.name == "K0" || m.returnType.name.contains("DialerItemVM")) {
+                        try {
+                            val candidate = m.invoke(adapter, pos)
+                            if (candidate != null) {
+                                itemVM = candidate
                                 break
                             }
-                        }
+                        } catch (_: Throwable) {}
                     }
                 }
             }
-        } catch (_: Throwable) {}
+        }
 
-        // Extract numbers and names from itemVM if available
+        // 5. Extract number & displayName from itemVM
         if (itemVM != null) {
-            for (methodName in listOf("v", "w", "x")) {
+            // Check w() (phone number) FIRST
+            for (methodName in listOf("w", "v", "x")) {
                 try {
                     val res = itemVM.javaClass.getMethod(methodName).invoke(itemVM) as? String
-                    if (!res.isNullOrEmpty()) {
+                    if (isValidPhoneNumber(res)) {
                         targetNumber = res
                         break
                     }
                 } catch (_: Throwable) {}
             }
             try {
-                displayName = itemVM.javaClass.getMethod("t").invoke(itemVM) as? String
+                val name = itemVM.javaClass.getMethod("t").invoke(itemVM) as? String
+                if (!name.isNullOrBlank()) {
+                    displayName = name
+                }
             } catch (_: Throwable) {}
         }
 
-        // 2. Fallback to child TextViews
-        if (targetNumber.isNullOrEmpty()) {
-            val numId = rv.resources.getIdentifier("dialer_number", "id", rv.context.packageName)
-            if (numId != 0) {
-                val tv = child.findViewById<TextView>(numId)
-                if (tv != null && tv.text.isNotEmpty()) {
-                    targetNumber = tv.text.toString()
+        // 6. Collect TextViews in child view
+        val textViews = mutableListOf<TextView>()
+        collectTextViews(child, textViews)
+
+        if (targetNumber.isNullOrEmpty() || displayName.isNullOrEmpty()) {
+            for (tv in textViews) {
+                val txt = tv.text?.toString()?.trim() ?: continue
+                if (txt.isEmpty()) continue
+
+                val idName = try {
+                    if (tv.id != 0 && tv.id != View.NO_ID) {
+                        child.resources.getResourceEntryName(tv.id).lowercase()
+                    } else ""
+                } catch (_: Throwable) { "" }
+
+                if (idName.contains("number") && isValidPhoneNumber(txt)) {
+                    if (targetNumber.isNullOrEmpty()) targetNumber = txt
+                } else if (idName.contains("name")) {
+                    if (displayName.isNullOrEmpty()) displayName = txt
                 }
             }
         }
+
+        // 7. Second pass on TextViews
+        if (targetNumber.isNullOrEmpty()) {
+            for (tv in textViews) {
+                val txt = tv.text?.toString()?.trim() ?: continue
+                if (isValidPhoneNumber(txt)) {
+                    targetNumber = txt
+                    break
+                }
+            }
+        }
+
         if (displayName.isNullOrEmpty()) {
-            val nameId = rv.resources.getIdentifier("name", "id", rv.context.packageName)
-            if (nameId != 0) {
-                val tv = child.findViewById<TextView>(nameId)
-                if (tv != null && tv.text.isNotEmpty()) {
-                    displayName = tv.text.toString()
+            for (tv in textViews) {
+                val txt = tv.text?.toString()?.trim() ?: continue
+                if (txt.isNotEmpty() && !isValidPhoneNumber(txt)) {
+                    displayName = txt
+                    break
                 }
             }
         }
@@ -881,7 +1090,7 @@ object DialerRecentsHook {
 
         val finalNumber = targetNumber ?: displayName!!
         val finalName = if (!displayName.isNullOrEmpty()) displayName else finalNumber
-        return CallInfo(itemVM, finalNumber, finalName)
+        return CallInfo(vh, adapter, itemVM, finalNumber, finalName)
     }
 
     private fun getCallDrawable(context: Context): Drawable? {
@@ -1039,25 +1248,66 @@ object DialerRecentsHook {
         }
     }
 
-    private fun invokeStockCall(context: Context, itemVM: Any?, targetNumber: String, classLoader: ClassLoader) {
-        if (itemVM != null) {
-            try {
-                val vhUtilClass = Class.forName("com.android.contacts.dialer.list.DialerVHUtil", false, classLoader)
-                val callMethod = vhUtilClass.getMethod("b", Context::class.java, itemVM.javaClass, String::class.java)
-                callMethod.invoke(null, context, itemVM, "")
-                Log.i(TAG, "Successfully invoked stock dialer call via DialerVHUtil.b")
-                return
-            } catch (t: Throwable) {
-                Log.w(TAG, "Failed DialerVHUtil.b call, falling back to Intent", t)
+    private fun invokeStockCall(
+        context: Context,
+        child: View?,
+        vh: Any?,
+        adapter: Any?,
+        itemVM: Any?,
+        targetNumber: String,
+        classLoader: ClassLoader
+    ) {
+        val cleanNumber = targetNumber.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
+        Log.i(TAG, "invokeStockCall targetNumber=$targetNumber, cleanNumber=$cleanNumber")
+
+        val isContactVH = vh?.javaClass?.name?.contains("Contact", ignoreCase = true) == true
+
+        if (isContactVH) {
+            // For search contact items: use adapter.b or child.performClick()
+            if (adapter != null && vh != null && child != null) {
+                try {
+                    for (m in adapter.javaClass.methods) {
+                        if (m.name == "b" && m.parameterTypes.size == 2 && m.parameterTypes[0] == View::class.java) {
+                            m.invoke(adapter, child, vh)
+                            Log.i(TAG, "Successfully called search contact via adapter.b")
+                            return
+                        }
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Failed adapter.b for contact", t)
+                }
+            }
+            if (child != null) {
+                try {
+                    if (child.performClick()) {
+                        Log.i(TAG, "Successfully called search contact via child.performClick()")
+                        return
+                    }
+                } catch (_: Throwable) {}
+            }
+        } else {
+            // For Recents call log items: use DialerVHUtil.b
+            if (itemVM != null) {
+                try {
+                    val vhUtilClass = Class.forName("com.android.contacts.dialer.list.DialerVHUtil", false, classLoader)
+                    val callMethod = vhUtilClass.getMethod("b", Context::class.java, itemVM.javaClass, String::class.java)
+                    callMethod.invoke(null, context, itemVM, "")
+                    Log.i(TAG, "Successfully invoked stock dialer call via DialerVHUtil.b")
+                    return
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Failed DialerVHUtil.b call, falling back to Intent", t)
+                }
             }
         }
 
+        // Fallback: Direct Intent.ACTION_CALL with cleanNumber
         try {
-            val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$targetNumber")).apply {
+            val numToDial = if (cleanNumber.isNotEmpty()) cleanNumber else targetNumber
+            val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:${Uri.encode(numToDial)}")).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             context.startActivity(callIntent)
-            Log.i(TAG, "Successfully launched ACTION_CALL Intent for $targetNumber")
+            Log.i(TAG, "Successfully launched ACTION_CALL Intent for $numToDial")
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to launch ACTION_CALL Intent", t)
         }
