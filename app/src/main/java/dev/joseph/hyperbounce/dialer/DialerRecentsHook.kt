@@ -4,6 +4,7 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.Application
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -15,6 +16,7 @@ import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -22,6 +24,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.ViewParent
+import android.view.ViewTreeObserver
 import android.view.animation.PathInterpolator
 import android.widget.TextView
 import androidx.core.graphics.PathParser
@@ -900,13 +903,18 @@ object DialerRecentsHook {
             }
             val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
-                textSize = 24f * density
+                textSize = 26f * density
                 textAlign = Paint.Align.CENTER
                 isFakeBoldText = true
             }
             val subTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#E0FFFFFF")
-                textSize = 16f * density
+                color = Color.parseColor("#F0FFFFFF")
+                textSize = 17f * density
+                textAlign = Paint.Align.CENTER
+            }
+            val captionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#B0FFFFFF")
+                textSize = 14f * density
                 textAlign = Paint.Align.CENTER
             }
             val currRect = RectF(startRect)
@@ -922,16 +930,20 @@ object DialerRecentsHook {
                 )
                 canvas.drawRoundRect(currRect, cornerRadius, cornerRadius, bgPaint)
 
-                if (progress > 0.20f) {
-                    val alpha = ((progress - 0.20f) / 0.35f).coerceIn(0f, 1f)
+                if (progress > 0.15f) {
+                    val alpha = ((progress - 0.15f) / 0.35f).coerceIn(0f, 1f)
                     textPaint.alpha = (alpha * 255).toInt()
-                    subTextPaint.alpha = (alpha * 255).toInt()
+                    subTextPaint.alpha = (alpha * 240).toInt()
+                    captionPaint.alpha = (alpha * 180).toInt()
                     val centerY = currRect.centerY()
                     val title = if (displayName.isNotBlank()) displayName else targetNumber
                     if (title.isNotBlank()) {
-                        canvas.drawText(title, currRect.centerX(), centerY - 12f * density, textPaint)
+                        canvas.drawText(title, currRect.centerX(), centerY - 24f * density, textPaint)
                         if (targetNumber.isNotBlank() && targetNumber != title) {
-                            canvas.drawText(targetNumber, currRect.centerX(), centerY + 18f * density, subTextPaint)
+                            canvas.drawText(targetNumber, currRect.centerX(), centerY + 10f * density, subTextPaint)
+                            canvas.drawText("Calling...", currRect.centerX(), centerY + 38f * density, captionPaint)
+                        } else {
+                            canvas.drawText("Calling...", currRect.centerX(), centerY + 16f * density, captionPaint)
                         }
                     }
                 }
@@ -940,28 +952,83 @@ object DialerRecentsHook {
 
         decorView.addView(overlay, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         target.translationX = 0f
+        rv.invalidate()
 
-        val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 340L
-            interpolator = PathInterpolator(0.2f, 0.0f, 0.0f, 1.0f) // Folme fluid curve
-            addUpdateListener { va ->
-                overlay.progress = va.animatedValue as Float
-                overlay.invalidate()
-            }
-        }
-        animator.addListener(object : AnimatorListenerAdapter() {
-            override fun onAnimationEnd(animation: android.animation.Animator) {
+        var isDismissed = false
+        var focusListener: ViewTreeObserver.OnWindowFocusChangeListener? = null
+        var lifecycleCb: Application.ActivityLifecycleCallbacks? = null
+
+        fun dismissOverlay(delayMs: Long = 0L) {
+            if (isDismissed) return
+            isDismissed = true
+            overlay.postDelayed({
+                try {
+                    focusListener?.let { decorView.viewTreeObserver.removeOnWindowFocusChangeListener(it) }
+                } catch (_: Throwable) {}
+                try {
+                    lifecycleCb?.let { activity.application.unregisterActivityLifecycleCallbacks(it) }
+                } catch (_: Throwable) {}
+
                 overlay.animate()
                     .alpha(0f)
-                    .setDuration(160L)
+                    .setDuration(240L)
                     .withEndAction {
                         try {
                             decorView.removeView(overlay)
                         } catch (_: Throwable) {}
                     }
                     .start()
+            }, delayMs)
+        }
+
+        focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
+            if (!hasFocus) {
+                // Call screen took window focus -> fade out smoothly after short delay
+                dismissOverlay(120L)
             }
-        })
+        }
+        try {
+            decorView.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
+        } catch (_: Throwable) {}
+
+        lifecycleCb = object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityPaused(act: Activity) {
+                if (act === activity) {
+                    dismissOverlay(80L)
+                }
+            }
+            override fun onActivityResumed(act: Activity) {
+                if (act === activity) {
+                    dismissOverlay(0L)
+                }
+            }
+            override fun onActivityDestroyed(act: Activity) {
+                if (act === activity) {
+                    dismissOverlay(0L)
+                }
+            }
+            override fun onActivityCreated(act: Activity, b: Bundle?) {}
+            override fun onActivityStarted(act: Activity) {}
+            override fun onActivityStopped(act: Activity) {}
+            override fun onActivitySaveInstanceState(act: Activity, out: Bundle) {}
+        }
+        try {
+            activity.application.registerActivityLifecycleCallbacks(lifecycleCb)
+        } catch (_: Throwable) {}
+
+        // Fallback safety timer: dismiss after 3.8s if call screen takes unusually long or fails
+        overlay.postDelayed({
+            dismissOverlay(0L)
+        }, 3800L)
+
+        val animator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 440L
+            interpolator = PathInterpolator(0.18f, 0.0f, 0.10f, 1.0f) // Slower, fluid Folme deceleration curve
+            addUpdateListener { va ->
+                overlay.progress = va.animatedValue as Float
+                overlay.invalidate()
+            }
+        }
         animator.start()
         onCallLaunch()
     }
@@ -1154,6 +1221,121 @@ object DialerRecentsHook {
         return null
     }
 
+    private fun getFirstPhoneNumberForContact(context: Context, contactId: Long): String? {
+        if (contactId <= 0L) return null
+        val projection = arrayOf(
+            ContactsContract.CommonDataKinds.Phone.NUMBER,
+            ContactsContract.CommonDataKinds.Phone.IS_SUPER_PRIMARY,
+            ContactsContract.CommonDataKinds.Phone.IS_PRIMARY,
+            ContactsContract.CommonDataKinds.Phone._ID
+        )
+        val selection = "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?"
+        val selectionArgs = arrayOf(contactId.toString())
+        val sortOrder = "${ContactsContract.CommonDataKinds.Phone.IS_SUPER_PRIMARY} DESC, ${ContactsContract.CommonDataKinds.Phone.IS_PRIMARY} DESC, ${ContactsContract.CommonDataKinds.Phone._ID} ASC"
+
+        try {
+            context.contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                sortOrder
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val numIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                    if (numIdx >= 0) {
+                        val num = cursor.getString(numIdx)?.trim()
+                        if (isValidPhoneNumber(num)) {
+                            Log.i(TAG, "getFirstPhoneNumberForContact found: $num for contactId=$contactId")
+                            return num
+                        }
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Error querying phone number for contactId=$contactId", t)
+        }
+        return null
+    }
+
+    private fun getFirstPhoneNumberByName(context: Context, name: String?): String? {
+        if (name.isNullOrBlank()) return null
+        val projection = arrayOf(
+            ContactsContract.CommonDataKinds.Phone.NUMBER,
+            ContactsContract.CommonDataKinds.Phone.IS_SUPER_PRIMARY,
+            ContactsContract.CommonDataKinds.Phone.IS_PRIMARY,
+            ContactsContract.CommonDataKinds.Phone._ID
+        )
+        val selection = "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} = ? OR ${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY} = ?"
+        val trimmed = name.trim()
+        val selectionArgs = arrayOf(trimmed, trimmed)
+        val sortOrder = "${ContactsContract.CommonDataKinds.Phone.IS_SUPER_PRIMARY} DESC, ${ContactsContract.CommonDataKinds.Phone.IS_PRIMARY} DESC, ${ContactsContract.CommonDataKinds.Phone._ID} ASC"
+
+        try {
+            context.contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                sortOrder
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val numIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                    if (numIdx >= 0) {
+                        val num = cursor.getString(numIdx)?.trim()
+                        if (isValidPhoneNumber(num)) {
+                            Log.i(TAG, "getFirstPhoneNumberByName found: $num for name=$trimmed")
+                            return num
+                        }
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Error querying phone number for name=$name", t)
+        }
+        return null
+    }
+
+    private fun resolveFirstContactNumber(context: Context, itemVM: Any?, displayName: String?): String? {
+        if (itemVM != null) {
+            // 1. Direct number from VM if valid
+            val vmNum = getNumberFromItemVM(itemVM)
+            if (isValidPhoneNumber(vmNum)) return vmNum
+
+            // 2. Field f6313e (exact contact_id in DialerItemVM)
+            try {
+                val f = itemVM.javaClass.getDeclaredField("f6313e")
+                f.isAccessible = true
+                val contactId = f.getLong(itemVM)
+                if (contactId > 0L) {
+                    val num = getFirstPhoneNumberForContact(context, contactId)
+                    if (isValidPhoneNumber(num)) return num
+                }
+            } catch (_: Throwable) {}
+
+            // 3. Any long field on VM that yields a valid phone entry
+            for (field in itemVM.javaClass.declaredFields) {
+                if (field.type == java.lang.Long.TYPE && field.name != "f6313e") {
+                    try {
+                        field.isAccessible = true
+                        val id = field.getLong(itemVM)
+                        if (id > 0L) {
+                            val num = getFirstPhoneNumberForContact(context, id)
+                            if (isValidPhoneNumber(num)) return num
+                        }
+                    } catch (_: Throwable) {}
+                }
+            }
+        }
+
+        // 4. Query by displayName
+        if (!displayName.isNullOrBlank()) {
+            val num = getFirstPhoneNumberByName(context, displayName)
+            if (isValidPhoneNumber(num)) return num
+        }
+        return null
+    }
+
     private fun extractCallInfo(child: View, rv: ViewGroup): CallInfo? {
         if (child.visibility != View.VISIBLE || child.height < 15) return null
 
@@ -1206,6 +1388,15 @@ object DialerRecentsHook {
                         if (displayName.isNullOrEmpty()) displayName = txt
                     }
                 }
+            }
+        }
+
+        // If targetNumber is still missing or not a valid phone number (e.g. contact entity in search results),
+        // resolve the first phone number for this contact as shown on the contact details page
+        if (!isValidPhoneNumber(targetNumber)) {
+            val resolved = resolveFirstContactNumber(rv.context, itemVM, displayName)
+            if (isValidPhoneNumber(resolved)) {
+                targetNumber = resolved
             }
         }
 
@@ -1404,48 +1595,26 @@ object DialerRecentsHook {
     ) {
         val resolvedVM = itemVM ?: (if (vh != null) getItemVMFromVH(vh) else null)
         val vmNumber = if (resolvedVM != null) getNumberFromItemVM(resolvedVM) else null
-        val finalNumber = if (!targetNumber.isNullOrBlank()) targetNumber else (vmNumber ?: "")
-        val cleanNumber = finalNumber.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
+        var finalNumber = if (!targetNumber.isNullOrBlank()) targetNumber else (vmNumber ?: "")
         val activity = findActivity(context) ?: (context as? Activity)
+        val act = activity ?: context
+
+        // If finalNumber is still empty or not valid, resolve from Contact Provider
+        if (!isValidPhoneNumber(finalNumber)) {
+            val name = if (resolvedVM != null) getNameFromItemVM(resolvedVM) else null
+            val resolved = resolveFirstContactNumber(act, resolvedVM, name)
+            if (isValidPhoneNumber(resolved)) {
+                finalNumber = resolved ?: ""
+            }
+        }
+
+        val cleanNumber = finalNumber.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
         Log.i(TAG, "invokeStockCall targetNumber=$finalNumber, cleanNumber=$cleanNumber, vh=${vh?.javaClass?.simpleName}, hasVM=${resolvedVM != null}, hasActivity=${activity != null}")
 
         val isContactVH = vh?.javaClass?.name?.contains("Contact", ignoreCase = true) == true
-        val act = activity ?: context
         var callInitiated = false
 
-        if (isContactVH) {
-            // 1. Try stock click: In DialerContactVH, clicking itemView triggers official stock dialing
-            if (child != null) {
-                try {
-                    if (vh is View.OnClickListener) {
-                        vh.onClick(child)
-                        callInitiated = true
-                        Log.i(TAG, "Successfully invoked vh.onClick(child) for search contact")
-                    } else if (child.hasOnClickListeners()) {
-                        child.performClick()
-                        callInitiated = true
-                        Log.i(TAG, "Successfully invoked child.performClick() for search contact")
-                    }
-                } catch (t: Throwable) {
-                    Log.w(TAG, "Failed vh.onClick/child.performClick for contact", t)
-                }
-            }
-
-            // 2. Try DialerVHUtil.d with the Activity context and itemVM
-            if (!callInitiated && resolvedVM != null) {
-                try {
-                    val vhUtilClass = Class.forName("com.android.contacts.dialer.list.DialerVHUtil", false, classLoader)
-                    val dMethod = vhUtilClass.methods.firstOrNull { it.name == "d" && it.parameterTypes.size == 3 }
-                    if (dMethod != null) {
-                        dMethod.invoke(null, act, resolvedVM, "")
-                        callInitiated = true
-                        Log.i(TAG, "Successfully called search contact via DialerVHUtil.d")
-                    }
-                } catch (t: Throwable) {
-                    Log.w(TAG, "Failed DialerVHUtil.d for contact", t)
-                }
-            }
-        } else {
+        if (!isContactVH) {
             // For Recents call log items: use DialerVHUtil.b with the exact itemVM
             if (resolvedVM != null) {
                 try {
@@ -1462,7 +1631,9 @@ object DialerRecentsHook {
             }
         }
 
-        // Direct ACTION_CALL_PRIVILEGED / ACTION_CALL fallback (guaranteed to dial if cleanNumber >= 3)
+        // For Contact search items (or fallback if DialerVHUtil.b didn't initiate):
+        // Dial directly using cleanNumber via CALL_PRIVILEGED or ACTION_CALL!
+        // DO NOT invoke vh.onClick or child.performClick because that opens the Contact Detail page!
         if (!callInitiated && cleanNumber.length >= 3 && isValidPhoneNumber(cleanNumber)) {
             val launchedPrivileged = try {
                 val privIntent = Intent("android.intent.action.CALL_PRIVILEGED", Uri.parse("tel:${Uri.encode(cleanNumber)}")).apply {
@@ -1472,7 +1643,8 @@ object DialerRecentsHook {
                 act.startActivity(privIntent)
                 Log.i(TAG, "Successfully launched CALL_PRIVILEGED Intent for $cleanNumber")
                 true
-            } catch (_: Throwable) {
+            } catch (t: Throwable) {
+                Log.w(TAG, "Failed CALL_PRIVILEGED Intent, falling back to ACTION_CALL", t)
                 false
             }
             if (!launchedPrivileged) {
