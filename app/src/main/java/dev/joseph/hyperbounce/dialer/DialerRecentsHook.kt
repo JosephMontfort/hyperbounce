@@ -698,26 +698,29 @@ object DialerRecentsHook {
                     val currentTx = target.translationX
                     Log.d(TAG, "ACTION_UP during swipe: currentTx=$currentTx")
 
-                    if (swipingTargetNumber == null || swipingItemVM == null) {
-                        val reInfo = extractCallInfo(target, rv)
-                        if (swipingItemVM == null) swipingItemVM = reInfo?.itemVM
-                        if (swipingTargetNumber == null) swipingTargetNumber = reInfo?.targetNumber?.takeIf { it.isNotEmpty() }
-                        if (swipingDisplayName == null) swipingDisplayName = reInfo?.displayName?.takeIf { it.isNotEmpty() }
-                        if (reInfo?.vh != null) swipingVH = WeakReference(reInfo.vh)
-                        if (reInfo?.adapter != null) swipingAdapter = WeakReference(reInfo.adapter)
-                    }
-
-                    if (swipingTargetNumber == null && swipingItemVM != null) {
-                        swipingTargetNumber = getNumberFromItemVM(swipingItemVM!!)
-                    }
-                    if (swipingDisplayName == null && swipingItemVM != null) {
-                        swipingDisplayName = getNameFromItemVM(swipingItemVM!!)
-                    }
-
                     if (currentTx > 0f) {
                         // Swiped right -> Call action
                         val triggerThreshold = callThresholdPx * 0.78f
                         if (currentTx >= triggerThreshold) {
+                            // Only extract and resolve contact details if actually triggering a call
+                            if (swipingTargetNumber == null || swipingItemVM == null) {
+                                try {
+                                    val reInfo = extractCallInfo(target, rv)
+                                    if (swipingItemVM == null) swipingItemVM = reInfo?.itemVM
+                                    if (swipingTargetNumber == null) swipingTargetNumber = reInfo?.targetNumber?.takeIf { it.isNotEmpty() }
+                                    if (swipingDisplayName == null) swipingDisplayName = reInfo?.displayName?.takeIf { it.isNotEmpty() }
+                                    if (reInfo?.vh != null) swipingVH = WeakReference(reInfo.vh)
+                                    if (reInfo?.adapter != null) swipingAdapter = WeakReference(reInfo.adapter)
+                                } catch (_: Throwable) {}
+                            }
+
+                            if (swipingTargetNumber == null && swipingItemVM != null) {
+                                try { swipingTargetNumber = getNumberFromItemVM(swipingItemVM!!) } catch (_: Throwable) {}
+                            }
+                            if (swipingDisplayName == null && swipingItemVM != null) {
+                                try { swipingDisplayName = getNameFromItemVM(swipingItemVM!!) } catch (_: Throwable) {}
+                            }
+
                             performHaptic(rv, HapticFeedbackConstants.CONFIRM)
                             val itemVM = swipingItemVM
                             val number = swipingTargetNumber ?: ""
@@ -729,6 +732,7 @@ object DialerRecentsHook {
                                 invokeStockCall(target.context, target, vh, adapter, itemVM, number, displayName, classLoader)
                             }
                         } else {
+                            // Released before threshold -> snap back cleanly
                             animateSpring(target, 0f, rv)
                         }
                     } else if (currentTx < 0f) {
@@ -745,8 +749,24 @@ object DialerRecentsHook {
                         animateSpring(target, 0f, rv)
                     }
 
+                    // Safety sweep: ensure any other translated row in RecyclerView returns to 0
+                    for (i in 0 until rv.childCount) {
+                        val c = rv.getChildAt(i)
+                        if (c != null && c !== openChild && c !== target && c.translationX != 0f) {
+                            animateSpring(c, 0f, rv)
+                        }
+                    }
+
                     resetSwipingState()
                     return true
+                }
+
+                // Safety sweep on non-swiping ACTION_UP
+                for (i in 0 until rv.childCount) {
+                    val c = rv.getChildAt(i)
+                    if (c != null && c !== openChild && c.translationX != 0f) {
+                        animateSpring(c, 0f, rv)
+                    }
                 }
 
                 resetSwipingState()
@@ -757,6 +777,12 @@ object DialerRecentsHook {
                 val target = swipingChild
                 if (isSwiping && target != null && target != openChild) {
                     animateSpring(target, 0f, rv)
+                }
+                for (i in 0 until rv.childCount) {
+                    val c = rv.getChildAt(i)
+                    if (c != null && c !== openChild && c.translationX != 0f) {
+                        animateSpring(c, 0f, rv)
+                    }
                 }
                 resetSwipingState()
                 return null
@@ -956,7 +982,7 @@ object DialerRecentsHook {
             override fun onDraw(canvas: Canvas) {
                 super.onDraw(canvas)
                 val motion = folmeMotion.getInterpolation(progress)
-                val cornerRadius = (14f * density) * (1f - progress)
+                val cornerRadius = 14f * density
                 currRect.set(
                     startRect.left + (endRect.left - startRect.left) * progress,
                     startRect.top + (endRect.top - startRect.top) * progress,
@@ -1017,61 +1043,56 @@ object DialerRecentsHook {
         val morphDuration = DialerRecentsConfigHolder.config.morphDurationMs
         val minDisplayDuration = morphDuration + 650L // Ensure animation finishes and holds
         var isDismissing = false
-        var focusListener: ViewTreeObserver.OnWindowFocusChangeListener? = null
         var lifecycleCb: Application.ActivityLifecycleCallbacks? = null
 
-        fun dismissOverlay(delayMs: Long = 0L) {
+        fun dismissOverlay(delayMs: Long = 0L, animated: Boolean = true) {
             if (isDismissing) return
             isDismissing = true
             overlay.postDelayed({
                 try {
-                    focusListener?.let { decorView.viewTreeObserver.removeOnWindowFocusChangeListener(it) }
-                } catch (_: Throwable) {}
-                try {
                     lifecycleCb?.let { activity.application.unregisterActivityLifecycleCallbacks(it) }
                 } catch (_: Throwable) {}
 
-                overlay.animate()
-                    .alpha(0f)
-                    .setDuration(320L)
-                    .withEndAction {
-                        try {
-                            decorView.removeView(overlay)
-                        } catch (_: Throwable) {}
-                    }
-                    .start()
+                if (animated) {
+                    overlay.animate()
+                        .alpha(0f)
+                        .setDuration(240L)
+                        .withEndAction {
+                            try {
+                                decorView.removeView(overlay)
+                            } catch (_: Throwable) {}
+                        }
+                        .start()
+                } else {
+                    try {
+                        decorView.removeView(overlay)
+                    } catch (_: Throwable) {}
+                }
             }, delayMs)
         }
 
-        focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
-            if (!hasFocus) {
-                // Focus lost to the incoming InCallActivity!
-                // InCallActivity immediately mounts its matching green handover overlay.
-                dismissOverlay(60L)
-            }
-        }
-        try {
-            decorView.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
-        } catch (_: Throwable) {}
-
         lifecycleCb = object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityStopped(act: Activity) {
+                if (act === activity) {
+                    // InCallActivity has fully drawn and is covering ContactsActivity!
+                    // Cleanly remove overlay in the background without any visible flash.
+                    dismissOverlay(0L, animated = false)
+                }
+            }
             override fun onActivityResumed(act: Activity) {
                 if (act === activity) {
                     // Returned from call -> dismiss immediately
-                    dismissOverlay(0L)
+                    dismissOverlay(0L, animated = true)
                 }
             }
             override fun onActivityDestroyed(act: Activity) {
                 if (act === activity) {
-                    dismissOverlay(0L)
+                    dismissOverlay(0L, animated = false)
                 }
             }
-            override fun onActivityPaused(act: Activity) {
-                // Do not dismiss on onActivityPaused
-            }
+            override fun onActivityPaused(act: Activity) {}
             override fun onActivityCreated(act: Activity, b: Bundle?) {}
             override fun onActivityStarted(act: Activity) {}
-            override fun onActivityStopped(act: Activity) {}
             override fun onActivitySaveInstanceState(act: Activity, out: Bundle) {}
         }
         try {
