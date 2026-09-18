@@ -466,6 +466,13 @@ object IosCallerScreenHook {
             activity.overridePendingTransition(0, 0)
         } catch (_: Throwable) {}
 
+        val decorView = activity.window?.decorView as? ViewGroup ?: return
+
+        // If handover overlay is already active on this decorView, preserve it uninterrupted
+        if (decorView.findViewWithTag<View>("hyperbounce_call_handover_overlay") != null) {
+            return
+        }
+
         val intent = activity.intent
         val isNewOutgoing = intent?.getBooleanExtra("InCallActivity.new_outgoing_call", false) == true
 
@@ -481,7 +488,6 @@ object IosCallerScreenHook {
                     isRecentMorph = true
                     morphName = android.provider.Settings.System.getString(activity.contentResolver, "hb_call_morph_name")
                     morphNum = android.provider.Settings.System.getString(activity.contentResolver, "hb_call_morph_num")
-                    android.provider.Settings.System.putString(activity.contentResolver, "hb_call_morph_time", "0")
                 }
             }
         } catch (_: Throwable) {}
@@ -510,12 +516,10 @@ object IosCallerScreenHook {
             return
         }
 
-        val decorView = activity.window?.decorView as? ViewGroup ?: return
-
-        val prev = decorView.findViewWithTag<View>("hyperbounce_call_handover_overlay")
-        if (prev != null) {
-            try { decorView.removeView(prev) } catch (_: Throwable) {}
-        }
+        // Consume morph time now that we know an outgoing call transition is actively taking place
+        try {
+            android.provider.Settings.System.putString(activity.contentResolver, "hb_call_morph_time", "0")
+        } catch (_: Throwable) {}
 
         val density = activity.resources.displayMetrics.density
         val displayName = morphName?.takeIf { it.isNotBlank() }
@@ -589,7 +593,7 @@ object IosCallerScreenHook {
         overlay.postDelayed({
             overlay.animate()
                 .alpha(0f)
-                .setDuration(380L)
+                .setDuration(350L)
                 .setInterpolator(PathInterpolator(0.20f, 0.0f, 0.10f, 1.0f))
                 .withEndAction {
                     try {
@@ -597,7 +601,7 @@ object IosCallerScreenHook {
                     } catch (_: Throwable) {}
                 }
                 .start()
-        }, 140L)
+        }, 220L)
 
         overlay.postDelayed({
             try {

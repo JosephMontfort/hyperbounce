@@ -728,9 +728,11 @@ object DialerRecentsHook {
                             val adapter = swipingAdapter?.get()
                             val displayName = swipingDisplayName ?: number
 
-                            animateGreenCallMorph(target, displayName, number, rv) {
-                                invokeStockCall(target.context, target, vh, adapter, itemVM, number, displayName, classLoader)
-                            }
+                            // 1. Immediately launch stock call so dialing starts without waiting for animation to finish
+                            invokeStockCall(target.context, target, vh, adapter, itemVM, number, displayName, classLoader)
+
+                            // 2. Concurrently run the seamless morph animation
+                            animateGreenCallMorph(target, displayName, number, rv)
                         } else {
                             // Released before threshold -> snap back cleanly
                             animateSpring(target, 0f, rv)
@@ -904,14 +906,12 @@ object DialerRecentsHook {
         target: View,
         displayName: String,
         targetNumber: String,
-        rv: ViewGroup,
-        onCallLaunch: () -> Unit
+        rv: ViewGroup
     ) {
         val activity = findActivity(target.context) ?: findActivity(rv.context)
         val decorView = activity?.window?.decorView as? ViewGroup
         if (decorView == null) {
             animateSpring(target, 0f, rv)
-            onCallLaunch()
             return
         }
 
@@ -1080,10 +1080,9 @@ object DialerRecentsHook {
                 }
             }
             override fun onActivityResumed(act: Activity) {
-                if (act === activity) {
-                    // Returned from call -> dismiss immediately
-                    dismissOverlay(0L, animated = true)
-                }
+                // Do NOT dismiss on resume! When initiating a call, ContactsActivity may receive
+                // transient resume/focus bounces during system intent dispatch. The overlay
+                // must hold uninterrupted until onActivityStopped or fallback timeout.
             }
             override fun onActivityDestroyed(act: Activity) {
                 if (act === activity) {
@@ -1101,8 +1100,15 @@ object DialerRecentsHook {
 
         // Fallback safety timer: dismiss after 5.0s if call screen takes unusually long or fails
         overlay.postDelayed({
-            dismissOverlay(0L)
+            dismissOverlay(0L, animated = true)
         }, 5000L)
+
+        // Allow manual dismissal on tap after animation completes in case call fails or is cancelled
+        overlay.setOnClickListener {
+            if (overlay.progress >= 1f) {
+                dismissOverlay(0L, animated = true)
+            }
+        }
 
         val animator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = morphDuration
@@ -1115,7 +1121,6 @@ object DialerRecentsHook {
                 override fun onAnimationEnd(animation: android.animation.Animator) {
                     overlay.progress = 1.0f
                     overlay.invalidate()
-                    onCallLaunch()
                 }
             })
         }
