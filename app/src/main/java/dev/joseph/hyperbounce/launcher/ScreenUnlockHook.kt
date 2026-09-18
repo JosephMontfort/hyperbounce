@@ -97,6 +97,55 @@ object ScreenUnlockHook {
         return Triple(cx ?: -1, cy ?: -1, cont ?: 0L)
     }
 
+    private var sPivotField: Field? = null
+
+    private fun getPivotField(clazz: Class<*>): Field? {
+        if (sPivotField != null) return sPivotField
+        var c: Class<*>? = clazz
+        while (c != null && c != Any::class.java) {
+            try {
+                val f = c.getDeclaredField("mPivot")
+                f.isAccessible = true
+                sPivotField = f
+                return f
+            } catch (_: Throwable) {
+                c = c.superclass
+            }
+        }
+        return null
+    }
+
+    private fun getScreenDimensions(classLoader: ClassLoader?): Pair<Int, Int> {
+        try {
+            if (classLoader != null) {
+                val devConfigsClass = Class.forName("com.miui.home.common.device.DeviceConfigs", false, classLoader)
+                val getW = devConfigsClass.getMethod("getScreenWidth")
+                val getH = devConfigsClass.getMethod("getScreenHeight")
+                val w = (getW.invoke(null) as? Number)?.toInt() ?: 0
+                val h = (getH.invoke(null) as? Number)?.toInt() ?: 0
+                if (w > 0 && h > 0) return Pair(w, h)
+            }
+        } catch (_: Throwable) {}
+        val dm = android.content.res.Resources.getSystem().displayMetrics
+        return Pair(dm.widthPixels, dm.heightPixels)
+    }
+
+    private fun updatePivot(instance: Any?, classLoader: ClassLoader?) {
+        if (instance == null) return
+        val cfg = LauncherConfigHolder.unlockConfig
+        if (!cfg.enabled || cfg.animMode != 1) return
+        try {
+            val f = getPivotField(instance.javaClass) ?: return
+            val (screenW, screenH) = getScreenDimensions(classLoader)
+            val pivotY = (screenH * cfg.pivotYRatio).toInt()
+            val pivotX = screenW / 2
+            f.set(instance, intArrayOf(pivotX, pivotY))
+            Log.d(TAG, "Configured top-center mPivot: [$pivotX, $pivotY] (ratio=${cfg.pivotYRatio})")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to update mPivot", t)
+        }
+    }
+
     fun init(module: XposedInterface, classLoader: ClassLoader?) {
         if (classLoader == null) return
         sClassLoader = classLoader
@@ -183,14 +232,14 @@ object ScreenUnlockHook {
 
                     if (!cfg.enabled) return chain.proceed()
 
+                    updatePivot(chain.thisObject, classLoader)
+
                     if (view != null) {
                         try {
-                            view.translationX = 0.0f
-                            view.translationY = 0.0f
                             val loc = IntArray(2)
                             view.getLocationOnScreen(loc)
-                            val vx = loc[0] + (view.width / 2.0f)
-                            val vy = loc[1] + (view.height / 2.0f)
+                            val vx = loc[0] - view.translationX + (view.width / 2.0f)
+                            val vy = loc[1] - view.translationY + (view.height / 2.0f)
                             val dm = view.context.resources.displayMetrics
                             val screenW = dm.widthPixels.toFloat()
                             val screenH = dm.heightPixels.toFloat()
@@ -460,13 +509,71 @@ object ScreenUnlockHook {
                 }
             } catch (_: Throwable) {}
 
-            // Hook UserPresentAnimationCompatBase.conversionValueFrom3DTo2D to enforce Pure Z-Axis unlock
+            // Hook UserPresentAnimationCompatBase pivot lifecycle and 3D-to-2D projection
             try {
                 val baseAnimClass = Class.forName(
                     "com.miui.home.launcher.compat.UserPresentAnimationCompatBase",
                     false,
                     classLoader
                 )
+
+                // 1. Hook changePivot to anchor pivot at the top of the display
+                try {
+                    for (m in baseAnimClass.declaredMethods) {
+                        if (m.name == "changePivot" && m.parameterTypes.isEmpty()) {
+                            module.hook(m).intercept(object : XposedInterface.Hooker {
+                                override fun intercept(chain: XposedInterface.Chain): Any? {
+                                    val res = chain.proceed()
+                                    updatePivot(chain.thisObject, classLoader)
+                                    return res
+                                }
+                            })
+                            Log.d(TAG, "Hooked UserPresentAnimationCompatBase.changePivot")
+                        }
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Failed to hook UserPresentAnimationCompatBase.changePivot", t)
+                }
+
+                // 2. Hook prepareUserPresentAnimation to ensure pivot is applied before child tags are calculated
+                try {
+                    for (m in baseAnimClass.declaredMethods) {
+                        if (m.name == "prepareUserPresentAnimation" && m.parameterTypes.size == 1 && m.parameterTypes[0] == View::class.java) {
+                            module.hook(m).intercept(object : XposedInterface.Hooker {
+                                override fun intercept(chain: XposedInterface.Chain): Any? {
+                                    updatePivot(chain.thisObject, classLoader)
+                                    return chain.proceed()
+                                }
+                            })
+                            Log.d(TAG, "Hooked UserPresentAnimationCompatBase.prepareUserPresentAnimation")
+                        }
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Failed to hook UserPresentAnimationCompatBase.prepareUserPresentAnimation", t)
+                }
+
+                // 3. Hook UserPresentAnimationCompatFold.updatePivot for foldable device support
+                try {
+                    val foldAnimClass = Class.forName(
+                        "com.miui.home.launcher.compat.UserPresentAnimationCompatFold",
+                        false,
+                        classLoader
+                    )
+                    for (m in foldAnimClass.declaredMethods) {
+                        if (m.name == "updatePivot" && m.parameterTypes.isEmpty()) {
+                            module.hook(m).intercept(object : XposedInterface.Hooker {
+                                override fun intercept(chain: XposedInterface.Chain): Any? {
+                                    val res = chain.proceed()
+                                    updatePivot(chain.thisObject, classLoader)
+                                    return res
+                                }
+                            })
+                            Log.d(TAG, "Hooked UserPresentAnimationCompatFold.updatePivot")
+                        }
+                    }
+                } catch (_: Throwable) {}
+
+                // 4. Hook conversionValueFrom3DTo2D: true perspective flight from top-center pivot
                 val convMethod = baseAnimClass.getDeclaredMethod(
                     "conversionValueFrom3DTo2D",
                     Int::class.javaPrimitiveType,
@@ -478,19 +585,26 @@ object ScreenUnlockHook {
                         val result = chain.proceed() as? FloatArray ?: return chain.proceed()
                         val cfg = LauncherConfigHolder.unlockConfig
                         if (cfg.enabled) {
-                            // 1. Pure Z-Axis: eliminate planar translation offsets on X and Y completely
-                            result[0] = 0.0f
-                            result[1] = 0.0f
-
-                            // 2. Pure Z-Axis scale: organic, smooth zoom from depth into 1.0x with gentle physical bounce
                             val rawArgs = chain.args
-                            val arg2 = if (rawArgs is List<*>) rawArgs.getOrNull(2) else (rawArgs as? Array<*>)?.getOrNull(2)
-                            val f = (arg2 as? Number)?.toFloat() ?: 0.0f
+                            fun getArg(index: Int): Any? {
+                                return if (rawArgs is List<*>) rawArgs.getOrNull(index) else (rawArgs as? Array<*>)?.getOrNull(index)
+                            }
+                            val argI = (getArg(0) as? Number)?.toInt() ?: 0
+                            val argI2 = (getArg(1) as? Number)?.toInt() ?: 0
+                            val f = (getArg(2) as? Number)?.toFloat() ?: 0.0f
+
+                            // Natural iOS scale curve based on spring progress f
                             val zScale = if (f <= 0.0f) {
                                 (1.0f + (f / 2000.0f)).coerceIn(0.65f, 1.0f)
                             } else {
                                 (1.0f + (f / 1500.0f)).coerceIn(1.0f, 1.08f)
                             }
+
+                            // Dynamic 2D projection from top-center pivot:
+                            // Translation = (scale - 1.0) * offset_from_pivot
+                            val xSpreadFactor = if (cfg.animMode == 1) cfg.pivotXSpread else 1.0f
+                            result[0] = (zScale - 1.0f) * argI * xSpreadFactor
+                            result[1] = (zScale - 1.0f) * argI2
                             result[2] = zScale
                         }
                         return result
@@ -498,7 +612,7 @@ object ScreenUnlockHook {
                 })
                 Log.i(TAG, "Hooked UserPresentAnimationCompatBase.conversionValueFrom3DTo2D successfully")
             } catch (t: Throwable) {
-                Log.e(TAG, "Failed to hook UserPresentAnimationCompatBase.conversionValueFrom3DTo2D", t)
+                Log.e(TAG, "Failed to hook UserPresentAnimationCompatBase hooks", t)
             }
 
             Log.i(TAG, "Hooked UserPresentAnimationCompatPhone and SpringAnimator successfully")
