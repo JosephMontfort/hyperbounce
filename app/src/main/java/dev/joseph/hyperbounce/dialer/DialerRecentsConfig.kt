@@ -7,7 +7,8 @@ data class DialerRecentsConfig(
     val callThresholdDp: Float = 96f,
     val deleteWidthDp: Float = 84f,
     val confirmDelete: Boolean = true,
-    val hapticsEnabled: Boolean = true
+    val hapticsEnabled: Boolean = true,
+    val morphDurationMs: Long = 550L
 )
 
 object DialerRecentsConfigHolder {
@@ -21,7 +22,8 @@ object DialerRecentsConfigHolder {
             callThresholdDp = prefs.getFloat("dialer_call_threshold", 96f),
             deleteWidthDp = prefs.getFloat("dialer_delete_width", 84f),
             confirmDelete = prefs.getBoolean("dialer_confirm_delete", true),
-            hapticsEnabled = prefs.getBoolean("dialer_haptics_enabled", true)
+            hapticsEnabled = prefs.getBoolean("dialer_haptics_enabled", true),
+            morphDurationMs = prefs.getFloat("dialer_morph_duration", 550f).toLong().coerceIn(200L, 2000L)
         )
     }
 }

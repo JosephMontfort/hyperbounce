@@ -16,6 +16,7 @@ import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.ContactsContract
 import android.util.Log
 import android.view.HapticFeedbackConstants
@@ -896,31 +897,61 @@ object DialerRecentsHook {
         val decorH = if (decorView.height > 0) decorView.height.toFloat() else target.resources.displayMetrics.heightPixels.toFloat()
         val endRect = RectF(0f, 0f, decorW, decorH)
 
+        val callThresholdPx = DialerRecentsConfigHolder.config.callThresholdDp * density
+        val startIconX = rowLeft + min(callThresholdPx / 2f, target.width / 4f)
+        val startIconY = rowTop + target.height / 2f
+        val startIconScale = 1.0f
+
+        val targetCenterX = decorW / 2f
+        val targetContentY = decorH * 0.38f
+        val endIconX = targetCenterX
+        val endIconY = targetContentY - 60f * density
+        val endIconScale = 2.05f
+
+        val titleTargetY = targetContentY + 22f * density
+        val hasDistinctNumber = targetNumber.isNotBlank() && targetNumber != displayName
+        val numberTargetY = targetContentY + 52f * density
+        val statusTargetY = targetContentY + (if (hasDistinctNumber) 82f else 52f) * density
+
+        val title = if (displayName.isNotBlank()) displayName else targetNumber
+
         val overlay = object : View(decorView.context) {
             var progress = 0f
             val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.parseColor("#34C759")
             }
-            val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
-                textSize = 26f * density
+                style = Paint.Style.FILL
+            }
+            val badgeStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.STROKE
+                strokeWidth = 1.5f * density
+            }
+            val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                textSize = 28f * density
                 textAlign = Paint.Align.CENTER
                 isFakeBoldText = true
             }
-            val subTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#F0FFFFFF")
+            val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#E6FFFFFF")
                 textSize = 17f * density
                 textAlign = Paint.Align.CENTER
             }
-            val captionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#B0FFFFFF")
-                textSize = 14f * density
+            val statusPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#CCFFFFFF")
+                textSize = 15f * density
                 textAlign = Paint.Align.CENTER
+                isFakeBoldText = true
             }
             val currRect = RectF(startRect)
+            val folmeMotion = PathInterpolator(0.20f, 0.0f, 0.10f, 1.0f)
 
             override fun onDraw(canvas: Canvas) {
                 super.onDraw(canvas)
+                val motion = folmeMotion.getInterpolation(progress)
                 val cornerRadius = (14f * density) * (1f - progress)
                 currRect.set(
                     startRect.left + (endRect.left - startRect.left) * progress,
@@ -930,22 +961,46 @@ object DialerRecentsHook {
                 )
                 canvas.drawRoundRect(currRect, cornerRadius, cornerRadius, bgPaint)
 
-                if (progress > 0.15f) {
-                    val alpha = ((progress - 0.15f) / 0.35f).coerceIn(0f, 1f)
-                    textPaint.alpha = (alpha * 255).toInt()
-                    subTextPaint.alpha = (alpha * 240).toInt()
-                    captionPaint.alpha = (alpha * 180).toInt()
-                    val centerY = currRect.centerY()
-                    val title = if (displayName.isNotBlank()) displayName else targetNumber
+                // 1. Motion-controlled Call Icon (dial symbol) scaling and gliding to center
+                val currIconX = startIconX + (endIconX - startIconX) * motion
+                val currIconY = startIconY + (endIconY - startIconY) * motion
+                val currIconScale = startIconScale + (endIconScale - startIconScale) * motion
+                val iconAlpha = ((progress - 0.02f) / 0.28f).coerceIn(0.2f, 1.0f)
+
+                // Frosted glowing badge around phone emblem as it expands
+                if (progress > 0.08f) {
+                    val badgeAlpha = ((progress - 0.08f) / 0.40f).coerceIn(0f, 1f)
+                    val badgeRadius = (44f * density) * (0.6f + 0.4f * motion)
+                    badgePaint.alpha = (badgeAlpha * 42).toInt()
+                    badgeStrokePaint.alpha = (badgeAlpha * 75).toInt()
+                    canvas.drawCircle(currIconX, currIconY, badgeRadius, badgePaint)
+                    canvas.drawCircle(currIconX, currIconY, badgeRadius, badgeStrokePaint)
+                }
+
+                drawPhoneIcon(canvas, currIconX, currIconY, currIconScale, iconAlpha, density, decorView.context)
+
+                // 2. Motion-controlled Calling text, Name, and Number scaling & gliding
+                if (progress > 0.10f) {
+                    val textAlpha = ((progress - 0.10f) / 0.35f).coerceIn(0f, 1f)
+                    val textDrift = (1f - motion) * 32f * density
+                    val textScale = 0.86f + 0.14f * motion
+
+                    canvas.save()
+                    canvas.scale(textScale, textScale, targetCenterX, targetContentY)
+
                     if (title.isNotBlank()) {
-                        canvas.drawText(title, currRect.centerX(), centerY - 24f * density, textPaint)
-                        if (targetNumber.isNotBlank() && targetNumber != title) {
-                            canvas.drawText(targetNumber, currRect.centerX(), centerY + 10f * density, subTextPaint)
-                            canvas.drawText("Calling...", currRect.centerX(), centerY + 38f * density, captionPaint)
-                        } else {
-                            canvas.drawText("Calling...", currRect.centerX(), centerY + 16f * density, captionPaint)
+                        titlePaint.alpha = (textAlpha * 255).toInt()
+                        canvas.drawText(title, targetCenterX, titleTargetY + textDrift, titlePaint)
+
+                        if (hasDistinctNumber) {
+                            numberPaint.alpha = (textAlpha * 230).toInt()
+                            canvas.drawText(targetNumber, targetCenterX, numberTargetY + textDrift, numberPaint)
                         }
+
+                        statusPaint.alpha = (textAlpha * 200).toInt()
+                        canvas.drawText("Calling...", targetCenterX, statusTargetY + textDrift, statusPaint)
                     }
+                    canvas.restore()
                 }
             }
         }
@@ -954,13 +1009,16 @@ object DialerRecentsHook {
         target.translationX = 0f
         rv.invalidate()
 
-        var isDismissed = false
+        val startTime = SystemClock.uptimeMillis()
+        val morphDuration = DialerRecentsConfigHolder.config.morphDurationMs
+        val minDisplayDuration = morphDuration + 650L // Ensure animation finishes and holds
+        var isDismissing = false
         var focusListener: ViewTreeObserver.OnWindowFocusChangeListener? = null
         var lifecycleCb: Application.ActivityLifecycleCallbacks? = null
 
         fun dismissOverlay(delayMs: Long = 0L) {
-            if (isDismissed) return
-            isDismissed = true
+            if (isDismissing) return
+            isDismissing = true
             overlay.postDelayed({
                 try {
                     focusListener?.let { decorView.viewTreeObserver.removeOnWindowFocusChangeListener(it) }
@@ -971,7 +1029,7 @@ object DialerRecentsHook {
 
                 overlay.animate()
                     .alpha(0f)
-                    .setDuration(240L)
+                    .setDuration(320L)
                     .withEndAction {
                         try {
                             decorView.removeView(overlay)
@@ -981,10 +1039,22 @@ object DialerRecentsHook {
             }, delayMs)
         }
 
+        fun tryDismissFromFocusLoss() {
+            val elapsed = SystemClock.uptimeMillis() - startTime
+            if (elapsed >= minDisplayDuration) {
+                dismissOverlay(100L)
+            } else {
+                val remaining = minDisplayDuration - elapsed
+                overlay.postDelayed({
+                    dismissOverlay(0L)
+                }, remaining)
+            }
+        }
+
         focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
             if (!hasFocus) {
-                // Call screen took window focus -> fade out smoothly after short delay
-                dismissOverlay(120L)
+                // Focus lost to the incoming Call screen!
+                tryDismissFromFocusLoss()
             }
         }
         try {
@@ -992,13 +1062,9 @@ object DialerRecentsHook {
         } catch (_: Throwable) {}
 
         lifecycleCb = object : Application.ActivityLifecycleCallbacks {
-            override fun onActivityPaused(act: Activity) {
-                if (act === activity) {
-                    dismissOverlay(80L)
-                }
-            }
             override fun onActivityResumed(act: Activity) {
                 if (act === activity) {
+                    // Returned from call -> dismiss immediately
                     dismissOverlay(0L)
                 }
             }
@@ -1006,6 +1072,9 @@ object DialerRecentsHook {
                 if (act === activity) {
                     dismissOverlay(0L)
                 }
+            }
+            override fun onActivityPaused(act: Activity) {
+                // Do not dismiss on onActivityPaused because it fires immediately on startActivity!
             }
             override fun onActivityCreated(act: Activity, b: Bundle?) {}
             override fun onActivityStarted(act: Activity) {}
@@ -1016,14 +1085,14 @@ object DialerRecentsHook {
             activity.application.registerActivityLifecycleCallbacks(lifecycleCb)
         } catch (_: Throwable) {}
 
-        // Fallback safety timer: dismiss after 3.8s if call screen takes unusually long or fails
+        // Fallback safety timer: dismiss after 4.2s if call screen takes unusually long or fails
         overlay.postDelayed({
             dismissOverlay(0L)
-        }, 3800L)
+        }, 4200L)
 
         val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 440L
-            interpolator = PathInterpolator(0.18f, 0.0f, 0.10f, 1.0f) // Slower, fluid Folme deceleration curve
+            duration = morphDuration
+            interpolator = PathInterpolator(0.20f, 0.0f, 0.10f, 1.0f)
             addUpdateListener { va ->
                 overlay.progress = va.animatedValue as Float
                 overlay.invalidate()

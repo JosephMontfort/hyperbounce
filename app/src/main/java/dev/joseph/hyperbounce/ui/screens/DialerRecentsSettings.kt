@@ -72,6 +72,19 @@ fun DialerRecentsSettings(
                     enabled = dialer.enabled
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsSliderRow(
+                    title = "Call Morph Duration",
+                    subtitle = "Speed of full-screen green card expansion animation",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = dialer.morphDuration,
+                    onValueChange = dialer::setMorphDuration,
+                    valueRange = 250f..1200f,
+                    defaultValue = 550f,
+                    valueLabel = { "${it.roundToInt()}ms" },
+                    enabled = dialer.enabled
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsToggleRow(
                     title = "Haptic Feedback",
                     subtitle = "Tactile tick when crossing call trigger threshold",
