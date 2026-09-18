@@ -874,6 +874,23 @@ object DialerRecentsHook {
         return null
     }
 
+    private fun findContactAvatar(view: View): Drawable? {
+        if (view is ImageView) {
+            val d = view.drawable
+            val dMetrics = view.resources.displayMetrics
+            if (d != null && view.width >= 28 * dMetrics.density && view.height >= 28 * dMetrics.density) {
+                return try { d.constantState?.newDrawable()?.mutate() ?: d } catch (_: Throwable) { d }
+            }
+        }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                val d = findContactAvatar(view.getChildAt(i))
+                if (d != null) return d
+            }
+        }
+        return null
+    }
+
     private fun animateGreenCallMorph(
         target: View,
         displayName: String,
@@ -889,122 +906,152 @@ object DialerRecentsHook {
             return
         }
 
+        val contactAvatar = findContactAvatar(target)
+
         val loc = IntArray(2)
         target.getLocationInWindow(loc)
         val density = target.resources.displayMetrics.density
         val rowLeft = loc[0].toFloat() - target.translationX
         val rowTop = loc[1].toFloat()
-        val rowRight = rowLeft + target.width.toFloat()
         val rowBottom = rowTop + target.height.toFloat()
-        val startRect = RectF(rowLeft, rowTop, rowRight, rowBottom)
+        val rowHeight = target.height.toFloat()
+        val initialTx = target.translationX
+
         val decorW = if (decorView.width > 0) decorView.width.toFloat() else target.resources.displayMetrics.widthPixels.toFloat()
         val decorH = if (decorView.height > 0) decorView.height.toFloat() else target.resources.displayMetrics.heightPixels.toFloat()
-        val endRect = RectF(0f, 0f, decorW, decorH)
 
-        val callThresholdPx = DialerRecentsConfigHolder.config.callThresholdDp * density
-        val startIconX = rowLeft + min(callThresholdPx / 2f, target.width / 4f)
-        val startIconY = rowTop + target.height / 2f
-        val startIconScale = 1.0f
+        val startIconX = rowLeft + 34f * density
+        val startIconY = rowTop + rowHeight / 2f
+        val startRadius = 22f * density
 
-        val targetCenterX = decorW / 2f
-        val targetContentY = decorH * 0.38f
-        val endIconX = targetCenterX
-        val endIconY = targetContentY - 60f * density
-        val endIconScale = 2.05f
-
-        val titleTargetY = targetContentY + 22f * density
-        val hasDistinctNumber = targetNumber.isNotBlank() && targetNumber != displayName
-        val numberTargetY = targetContentY + 52f * density
-        val statusTargetY = targetContentY + (if (hasDistinctNumber) 82f else 52f) * density
+        // Target position matches Xiaomi stock InCall header avatar (top center)
+        val targetAvatarX = decorW / 2f
+        val targetAvatarY = 125f * density
+        val targetRadius = 36f * density // 72dp diameter
 
         val title = if (displayName.isNotBlank()) displayName else targetNumber
+        val hasDistinctNumber = targetNumber.isNotBlank() && targetNumber != title
+
+        val targetNameY = targetAvatarY + 54f * density
+        val targetNumberY = targetNameY + 24f * density
+        val targetStatusY = targetNameY + (if (hasDistinctNumber) 48f else 26f) * density
 
         val overlay = object : View(decorView.context) {
             var progress = 0f
-            val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            val folmeMotion = PathInterpolator(0.20f, 0.0f, 0.10f, 1.0f)
+
+            // Paint for row green track dissolving immediately
+            val rowBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.parseColor("#34C759")
             }
-            val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.WHITE
+            val rowBgRect = RectF()
+
+            // Paint for floating avatar circle & glow
+            val circleBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#34C759")
                 style = Paint.Style.FILL
             }
-            val badgeStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            val circleGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
                 style = Paint.Style.STROKE
-                strokeWidth = 1.5f * density
+                strokeWidth = 2f * density
             }
+
             val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
-                textSize = 28f * density
+                textSize = 24f * density
                 textAlign = Paint.Align.CENTER
                 isFakeBoldText = true
+                setShadowLayer(8f * density, 0f, 2f * density, Color.parseColor("#99000000"))
             }
             val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.parseColor("#E6FFFFFF")
-                textSize = 17f * density
+                textSize = 16f * density
                 textAlign = Paint.Align.CENTER
+                setShadowLayer(6f * density, 0f, 2f * density, Color.parseColor("#80000000"))
             }
             val statusPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#CCFFFFFF")
+                color = Color.parseColor("#34C759")
                 textSize = 15f * density
                 textAlign = Paint.Align.CENTER
                 isFakeBoldText = true
+                setShadowLayer(6f * density, 0f, 2f * density, Color.parseColor("#80000000"))
             }
-            val currRect = RectF(startRect)
-            val folmeMotion = PathInterpolator(0.20f, 0.0f, 0.10f, 1.0f)
+
+            val avatarClipPath = Path()
 
             override fun onDraw(canvas: Canvas) {
                 super.onDraw(canvas)
                 val motion = folmeMotion.getInterpolation(progress)
-                val cornerRadius = (14f * density) * (1f - progress)
-                currRect.set(
-                    startRect.left + (endRect.left - startRect.left) * progress,
-                    startRect.top + (endRect.top - startRect.top) * progress,
-                    startRect.right + (endRect.right - startRect.right) * progress,
-                    startRect.bottom + (endRect.bottom - startRect.bottom) * progress
-                )
-                canvas.drawRoundRect(currRect, cornerRadius, cornerRadius, bgPaint)
 
-                // 1. Motion-controlled Call Icon (dial symbol) scaling and gliding to center
-                val currIconX = startIconX + (endIconX - startIconX) * motion
-                val currIconY = startIconY + (endIconY - startIconY) * motion
-                val currIconScale = startIconScale + (endIconScale - startIconScale) * motion
-                val iconAlpha = ((progress - 0.02f) / 0.28f).coerceIn(0.2f, 1.0f)
-
-                // Frosted glowing badge around phone emblem as it expands
-                if (progress > 0.08f) {
-                    val badgeAlpha = ((progress - 0.08f) / 0.40f).coerceIn(0f, 1f)
-                    val badgeRadius = (44f * density) * (0.6f + 0.4f * motion)
-                    badgePaint.alpha = (badgeAlpha * 42).toInt()
-                    badgeStrokePaint.alpha = (badgeAlpha * 75).toInt()
-                    canvas.drawCircle(currIconX, currIconY, badgeRadius, badgePaint)
-                    canvas.drawCircle(currIconX, currIconY, badgeRadius, badgeStrokePaint)
+                // 1. Green background on the row fades to transparent immediately
+                val greenAlpha = (1f - progress / 0.35f).coerceIn(0f, 1f)
+                if (greenAlpha > 0f) {
+                    val currentTx = initialTx * (1f - progress / 0.28f).coerceAtLeast(0f)
+                    rowBgPaint.alpha = (greenAlpha * 255).toInt()
+                    rowBgRect.set(rowLeft, rowTop + 2f * density, rowLeft + currentTx, rowBottom - 2f * density)
+                    if (rowBgRect.right > rowBgRect.left) {
+                        canvas.drawRoundRect(rowBgRect, 14f * density, 14f * density, rowBgPaint)
+                    }
                 }
 
-                drawPhoneIcon(canvas, currIconX, currIconY, currIconScale, iconAlpha, density, decorView.context)
+                // 2. Floating Avatar / Call Emblem
+                val currAvatarX = startIconX + (targetAvatarX - startIconX) * motion
+                val currAvatarY = startIconY + (targetAvatarY - startIconY) * motion
+                val currRadius = startRadius + (targetRadius - startRadius) * motion
 
-                // 2. Motion-controlled Calling text, Name, and Number scaling & gliding
-                if (progress > 0.10f) {
-                    val textAlpha = ((progress - 0.10f) / 0.35f).coerceIn(0f, 1f)
-                    val textDrift = (1f - motion) * 32f * density
-                    val textScale = 0.86f + 0.14f * motion
+                // Circle background & frosted glow ring
+                circleBgPaint.alpha = (255 * ((progress + 0.1f) / 0.3f).coerceIn(0.6f, 1.0f)).toInt()
+                canvas.drawCircle(currAvatarX, currAvatarY, currRadius, circleBgPaint)
 
-                    canvas.save()
-                    canvas.scale(textScale, textScale, targetCenterX, targetContentY)
+                circleGlowPaint.alpha = (120 * motion).toInt()
+                canvas.drawCircle(currAvatarX, currAvatarY, currRadius + 2f * density, circleGlowPaint)
 
-                    if (title.isNotBlank()) {
-                        titlePaint.alpha = (textAlpha * 255).toInt()
-                        canvas.drawText(title, targetCenterX, titleTargetY + textDrift, titlePaint)
+                // Draw phone icon or morph into contact avatar
+                if (contactAvatar != null && motion > 0.15f) {
+                    val photoAlpha = ((motion - 0.15f) / 0.40f).coerceIn(0f, 1f)
+                    val iconAlpha = (1f - photoAlpha).coerceIn(0f, 1f)
 
-                        if (hasDistinctNumber) {
-                            numberPaint.alpha = (textAlpha * 230).toInt()
-                            canvas.drawText(targetNumber, targetCenterX, numberTargetY + textDrift, numberPaint)
-                        }
-
-                        statusPaint.alpha = (textAlpha * 200).toInt()
-                        canvas.drawText("Calling...", targetCenterX, statusTargetY + textDrift, statusPaint)
+                    if (iconAlpha > 0f) {
+                        drawPhoneIcon(canvas, currAvatarX, currAvatarY, 1.0f + 0.3f * motion, iconAlpha, density, decorView.context)
                     }
-                    canvas.restore()
+
+                    if (photoAlpha > 0f) {
+                        canvas.save()
+                        avatarClipPath.reset()
+                        avatarClipPath.addCircle(currAvatarX, currAvatarY, currRadius, Path.Direction.CW)
+                        canvas.clipPath(avatarClipPath)
+
+                        contactAvatar.alpha = (photoAlpha * 255).toInt()
+                        contactAvatar.setBounds(
+                            (currAvatarX - currRadius).toInt(),
+                            (currAvatarY - currRadius).toInt(),
+                            (currAvatarX + currRadius).toInt(),
+                            (currAvatarY + currRadius).toInt()
+                        )
+                        contactAvatar.draw(canvas)
+                        canvas.restore()
+                    }
+                } else {
+                    // No photo -> phone dial emblem scales inside glowing badge
+                    drawPhoneIcon(canvas, currAvatarX, currAvatarY, 1.0f + 0.4f * motion, 1.0f, density, decorView.context)
+                }
+
+                // 3. Name & "Calling..." text soaring into position
+                if (progress > 0.05f) {
+                    val textAlpha = ((progress - 0.05f) / 0.30f).coerceIn(0f, 1f)
+                    val textDrift = (1f - motion) * 28f * density
+
+                    titlePaint.alpha = (textAlpha * 255).toInt()
+                    canvas.drawText(title, targetAvatarX, targetNameY + textDrift, titlePaint)
+
+                    if (hasDistinctNumber) {
+                        numberPaint.alpha = (textAlpha * 230).toInt()
+                        canvas.drawText(targetNumber, targetAvatarX, targetNumberY + textDrift, numberPaint)
+                    }
+
+                    statusPaint.alpha = (textAlpha * 255).toInt()
+                    canvas.drawText("Calling...", targetAvatarX, targetStatusY + textDrift, statusPaint)
                 }
             }
         }
@@ -1013,9 +1060,6 @@ object DialerRecentsHook {
         target.translationX = 0f
         rv.invalidate()
 
-        val startTime = SystemClock.uptimeMillis()
-        val morphDuration = DialerRecentsConfigHolder.config.morphDurationMs
-        val minDisplayDuration = morphDuration + 650L // Ensure animation finishes and holds
         var isDismissing = false
         var focusListener: ViewTreeObserver.OnWindowFocusChangeListener? = null
         var lifecycleCb: Application.ActivityLifecycleCallbacks? = null
@@ -1033,7 +1077,7 @@ object DialerRecentsHook {
 
                 overlay.animate()
                     .alpha(0f)
-                    .setDuration(320L)
+                    .setDuration(180L)
                     .withEndAction {
                         try {
                             decorView.removeView(overlay)
@@ -1045,8 +1089,7 @@ object DialerRecentsHook {
 
         focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
             if (!hasFocus) {
-                // Focus lost to the incoming InCallActivity!
-                // InCallActivity immediately mounts its matching green handover overlay.
+                // Focus lost to the incoming Call screen! Dismiss cleanly
                 dismissOverlay(60L)
             }
         }
@@ -1057,7 +1100,6 @@ object DialerRecentsHook {
         lifecycleCb = object : Application.ActivityLifecycleCallbacks {
             override fun onActivityResumed(act: Activity) {
                 if (act === activity) {
-                    // Returned from call -> dismiss immediately
                     dismissOverlay(0L)
                 }
             }
@@ -1066,9 +1108,7 @@ object DialerRecentsHook {
                     dismissOverlay(0L)
                 }
             }
-            override fun onActivityPaused(act: Activity) {
-                // Do not dismiss on onActivityPaused
-            }
+            override fun onActivityPaused(act: Activity) {}
             override fun onActivityCreated(act: Activity, b: Bundle?) {}
             override fun onActivityStarted(act: Activity) {}
             override fun onActivityStopped(act: Activity) {}
@@ -1078,11 +1118,12 @@ object DialerRecentsHook {
             activity.application.registerActivityLifecycleCallbacks(lifecycleCb)
         } catch (_: Throwable) {}
 
-        // Fallback safety timer: dismiss after 5.0s if call screen takes unusually long or fails
+        // Fallback safety timer: dismiss after 3.5s if call screen takes unusually long or fails
         overlay.postDelayed({
             dismissOverlay(0L)
-        }, 5000L)
+        }, 3500L)
 
+        val morphDuration = DialerRecentsConfigHolder.config.morphDurationMs
         val animator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = morphDuration
             interpolator = PathInterpolator(0.20f, 0.0f, 0.10f, 1.0f)
@@ -1090,15 +1131,11 @@ object DialerRecentsHook {
                 overlay.progress = va.animatedValue as Float
                 overlay.invalidate()
             }
-            addListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: android.animation.Animator) {
-                    overlay.progress = 1.0f
-                    overlay.invalidate()
-                    onCallLaunch()
-                }
-            })
         }
         animator.start()
+
+        // IMMEDIATE CALL DISPATCH - ZERO ARTIFICIAL DELAY!
+        onCallLaunch()
     }
 
     private fun resetSwipingState() {
