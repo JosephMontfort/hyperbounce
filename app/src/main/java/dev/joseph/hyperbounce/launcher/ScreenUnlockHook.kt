@@ -185,6 +185,8 @@ object ScreenUnlockHook {
 
                     if (view != null) {
                         try {
+                            view.translationX = 0.0f
+                            view.translationY = 0.0f
                             val loc = IntArray(2)
                             view.getLocationOnScreen(loc)
                             val vx = loc[0] + (view.width / 2.0f)
@@ -407,7 +409,12 @@ object ScreenUnlockHook {
                                         arrayOf(listenerClass)
                                     ) { _, method, _ ->
                                         if (method.name == "onAnimationEnd") {
-                                            weakV.get()?.translationZ = 0.0f
+                                            val vRef = weakV.get()
+                                            vRef?.translationZ = 0.0f
+                                            vRef?.translationX = 0.0f
+                                            vRef?.translationY = 0.0f
+                                            vRef?.scaleX = 1.0f
+                                            vRef?.scaleY = 1.0f
                                         }
                                         null
                                     }
@@ -432,6 +439,10 @@ object ScreenUnlockHook {
                                     fun resetZ(v: View?) {
                                         if (v == null) return
                                         v.translationZ = 0.0f
+                                        v.translationX = 0.0f
+                                        v.translationY = 0.0f
+                                        v.scaleX = 1.0f
+                                        v.scaleY = 1.0f
                                         if (v is ViewGroup) {
                                             for (k in 0 until v.childCount) {
                                                 resetZ(v.getChildAt(k))
@@ -448,6 +459,47 @@ object ScreenUnlockHook {
                     }
                 }
             } catch (_: Throwable) {}
+
+            // Hook UserPresentAnimationCompatBase.conversionValueFrom3DTo2D to enforce Pure Z-Axis unlock
+            try {
+                val baseAnimClass = Class.forName(
+                    "com.miui.home.launcher.compat.UserPresentAnimationCompatBase",
+                    false,
+                    classLoader
+                )
+                val convMethod = baseAnimClass.getDeclaredMethod(
+                    "conversionValueFrom3DTo2D",
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    Float::class.javaPrimitiveType
+                )
+                module.hook(convMethod).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        val result = chain.proceed() as? FloatArray ?: return chain.proceed()
+                        val cfg = LauncherConfigHolder.unlockConfig
+                        if (cfg.enabled) {
+                            // 1. Pure Z-Axis: eliminate planar translation offsets on X and Y completely
+                            result[0] = 0.0f
+                            result[1] = 0.0f
+
+                            // 2. Pure Z-Axis scale: organic, smooth zoom from depth into 1.0x with gentle physical bounce
+                            val rawArgs = chain.args
+                            val arg2 = if (rawArgs is List<*>) rawArgs.getOrNull(2) else (rawArgs as? Array<*>)?.getOrNull(2)
+                            val f = (arg2 as? Number)?.toFloat() ?: 0.0f
+                            val zScale = if (f <= 0.0f) {
+                                (1.0f + (f / 2000.0f)).coerceIn(0.65f, 1.0f)
+                            } else {
+                                (1.0f + (f / 1500.0f)).coerceIn(1.0f, 1.08f)
+                            }
+                            result[2] = zScale
+                        }
+                        return result
+                    }
+                })
+                Log.i(TAG, "Hooked UserPresentAnimationCompatBase.conversionValueFrom3DTo2D successfully")
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to hook UserPresentAnimationCompatBase.conversionValueFrom3DTo2D", t)
+            }
 
             Log.i(TAG, "Hooked UserPresentAnimationCompatPhone and SpringAnimator successfully")
         } catch (t: Throwable) {
