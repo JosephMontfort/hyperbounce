@@ -921,9 +921,21 @@ object DialerRecentsHook {
         val decorW = if (decorView.width > 0) decorView.width.toFloat() else target.resources.displayMetrics.widthPixels.toFloat()
         val decorH = if (decorView.height > 0) decorView.height.toFloat() else target.resources.displayMetrics.heightPixels.toFloat()
 
-        val startIconX = rowLeft + 34f * density
+        val callThresholdPx = DialerRecentsConfigHolder.config.callThresholdDp * density
+        val triggerThreshold = callThresholdPx * 0.78f
+        val targetIconX = rowLeft + 34f * density
+        val rawIconX = rowLeft + min(initialTx / 2f, callThresholdPx / 2f)
+        val startIconX = if (initialTx > triggerThreshold) {
+            val blend = ((initialTx - triggerThreshold) / (16f * density)).coerceIn(0f, 1f)
+            rawIconX + (targetIconX - rawIconX) * blend
+        } else {
+            rawIconX
+        }
         val startIconY = rowTop + rowHeight / 2f
         val startRadius = 22f * density
+
+        val startTextX = startIconX + 24f * density
+        val startTextY = startIconY
 
         // Target position matches Xiaomi stock InCall header avatar (top center)
         val targetAvatarX = decorW / 2f
@@ -985,10 +997,10 @@ object DialerRecentsHook {
                 super.onDraw(canvas)
                 val motion = folmeMotion.getInterpolation(progress)
 
-                // 1. Green background on the row fades to transparent immediately
-                val greenAlpha = (1f - progress / 0.35f).coerceIn(0f, 1f)
+                // 1. Green background on the row fades to transparent as row springs back
+                val greenAlpha = (1f - progress / 0.30f).coerceIn(0f, 1f)
                 if (greenAlpha > 0f) {
-                    val currentTx = initialTx * (1f - progress / 0.28f).coerceAtLeast(0f)
+                    val currentTx = initialTx * (1f - progress / 0.25f).coerceAtLeast(0f)
                     rowBgPaint.alpha = (greenAlpha * 255).toInt()
                     rowBgRect.set(rowLeft, rowTop + 2f * density, rowLeft + currentTx, rowBottom - 2f * density)
                     if (rowBgRect.right > rowBgRect.left) {
@@ -1005,16 +1017,17 @@ object DialerRecentsHook {
                 circleBgPaint.alpha = (255 * ((progress + 0.1f) / 0.3f).coerceIn(0.6f, 1.0f)).toInt()
                 canvas.drawCircle(currAvatarX, currAvatarY, currRadius, circleBgPaint)
 
-                circleGlowPaint.alpha = (120 * motion).toInt()
+                circleGlowPaint.alpha = (140 * motion).toInt()
                 canvas.drawCircle(currAvatarX, currAvatarY, currRadius + 2f * density, circleGlowPaint)
 
-                // Draw phone icon or morph into contact avatar
-                if (contactAvatar != null && motion > 0.15f) {
-                    val photoAlpha = ((motion - 0.15f) / 0.40f).coerceIn(0f, 1f)
-                    val iconAlpha = (1f - photoAlpha).coerceIn(0f, 1f)
+                // The dialer icon near "Calling..." morphs into the contact photo once it reaches 90%
+                if (contactAvatar != null && motion >= 0.88f) {
+                    val morphProgress = ((motion - 0.88f) / 0.12f).coerceIn(0f, 1f)
+                    val photoAlpha = morphProgress
+                    val iconAlpha = 1f - morphProgress
 
                     if (iconAlpha > 0f) {
-                        drawPhoneIcon(canvas, currAvatarX, currAvatarY, 1.0f + 0.3f * motion, iconAlpha, density, decorView.context)
+                        drawPhoneIcon(canvas, currAvatarX, currAvatarY, 1.0f + 0.35f * motion, iconAlpha, density, decorView.context)
                     }
 
                     if (photoAlpha > 0f) {
@@ -1034,13 +1047,13 @@ object DialerRecentsHook {
                         canvas.restore()
                     }
                 } else {
-                    // No photo -> phone dial emblem scales inside glowing badge
-                    drawPhoneIcon(canvas, currAvatarX, currAvatarY, 1.0f + 0.4f * motion, 1.0f, density, decorView.context)
+                    // Stays official phone dial emblem during the entire flight until 90%
+                    drawPhoneIcon(canvas, currAvatarX, currAvatarY, 1.0f + 0.35f * motion, 1.0f, density, decorView.context)
                 }
 
-                // 3. Name & "Calling..." text soaring into position
-                if (progress > 0.05f) {
-                    val textAlpha = ((progress - 0.05f) / 0.30f).coerceIn(0f, 1f)
+                // 3. Name & status text ("Calling..." morphing into "Dialing..." at 90%)
+                if (progress > 0.04f) {
+                    val textAlpha = ((progress - 0.04f) / 0.26f).coerceIn(0f, 1f)
                     val textDrift = (1f - motion) * 28f * density
 
                     titlePaint.alpha = (textAlpha * 255).toInt()
@@ -1051,78 +1064,96 @@ object DialerRecentsHook {
                         canvas.drawText(targetNumber, targetAvatarX, targetNumberY + textDrift, numberPaint)
                     }
 
-                    statusPaint.alpha = (textAlpha * 255).toInt()
-                    canvas.drawText("Calling...", targetAvatarX, targetStatusY + textDrift, statusPaint)
+                    // Status text starts next to the icon, soars toward header, and morphs from "Calling..." to "Dialing..." at 90%
+                    val currStatusX = (startTextX + 28f * density) + (targetAvatarX - (startTextX + 28f * density)) * motion
+                    val currStatusY = startTextY + (targetStatusY - startTextY) * motion
+
+                    if (motion < 0.88f) {
+                        statusPaint.alpha = (textAlpha * 255).toInt()
+                        canvas.drawText("Calling...", currStatusX, currStatusY, statusPaint)
+                    } else {
+                        val morphProgress = ((motion - 0.88f) / 0.12f).coerceIn(0f, 1f)
+                        val callingAlpha = (1f - morphProgress) * textAlpha
+                        val dialingAlpha = morphProgress * textAlpha
+
+                        if (callingAlpha > 0f) {
+                            statusPaint.alpha = (callingAlpha * 255).toInt()
+                            canvas.drawText("Calling...", targetAvatarX, targetStatusY, statusPaint)
+                        }
+                        if (dialingAlpha > 0f) {
+                            statusPaint.alpha = (dialingAlpha * 255).toInt()
+                            canvas.drawText("Dialing...", targetAvatarX, targetStatusY, statusPaint)
+                        }
+                    }
                 }
             }
         }
 
         decorView.addView(overlay, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        target.translationX = 0f
-        rv.invalidate()
+        // Smoothly spring row back to rest instead of snapping abruptly
+        animateSpring(target, 0f, rv)
 
         var isDismissing = false
-        var focusListener: ViewTreeObserver.OnWindowFocusChangeListener? = null
         var lifecycleCb: Application.ActivityLifecycleCallbacks? = null
 
-        fun dismissOverlay(delayMs: Long = 0L) {
+        fun dismissOverlay(delayMs: Long = 0L, animated: Boolean = true) {
             if (isDismissing) return
             isDismissing = true
             overlay.postDelayed({
                 try {
-                    focusListener?.let { decorView.viewTreeObserver.removeOnWindowFocusChangeListener(it) }
-                } catch (_: Throwable) {}
-                try {
                     lifecycleCb?.let { activity.application.unregisterActivityLifecycleCallbacks(it) }
                 } catch (_: Throwable) {}
 
-                overlay.animate()
-                    .alpha(0f)
-                    .setDuration(180L)
-                    .withEndAction {
-                        try {
-                            decorView.removeView(overlay)
-                        } catch (_: Throwable) {}
-                    }
-                    .start()
+                if (animated) {
+                    overlay.animate()
+                        .alpha(0f)
+                        .setDuration(200L)
+                        .withEndAction {
+                            try {
+                                decorView.removeView(overlay)
+                            } catch (_: Throwable) {}
+                        }
+                        .start()
+                } else {
+                    try {
+                        decorView.removeView(overlay)
+                    } catch (_: Throwable) {}
+                }
             }, delayMs)
         }
 
-        focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
-            if (!hasFocus) {
-                // Focus lost to the incoming Call screen! Dismiss cleanly
-                dismissOverlay(60L)
-            }
-        }
-        try {
-            decorView.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
-        } catch (_: Throwable) {}
-
         lifecycleCb = object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityStopped(act: Activity) {
+                if (act === activity) {
+                    // InCallActivity is now fully visible and covering ContactsActivity!
+                    // Remove overlay cleanly in the background without user seeing any flash.
+                    dismissOverlay(0L, animated = false)
+                }
+            }
             override fun onActivityResumed(act: Activity) {
                 if (act === activity) {
-                    dismissOverlay(0L)
+                    // User returned to Contacts (call ended or cancelled)
+                    dismissOverlay(0L, animated = true)
                 }
             }
             override fun onActivityDestroyed(act: Activity) {
                 if (act === activity) {
-                    dismissOverlay(0L)
+                    dismissOverlay(0L, animated = false)
                 }
             }
             override fun onActivityPaused(act: Activity) {}
             override fun onActivityCreated(act: Activity, b: Bundle?) {}
             override fun onActivityStarted(act: Activity) {}
-            override fun onActivityStopped(act: Activity) {}
             override fun onActivitySaveInstanceState(act: Activity, out: Bundle) {}
         }
         try {
             activity.application.registerActivityLifecycleCallbacks(lifecycleCb)
         } catch (_: Throwable) {}
 
-        // Fallback safety timer: dismiss after 3.5s if call screen takes unusually long or fails
+        // Fallback safety timer: dismiss after 5.0s if call screen never opened or failed
         overlay.postDelayed({
-            dismissOverlay(0L)
-        }, 3500L)
+            dismissOverlay(0L, animated = true)
+        }, 5000L)
 
         val morphDuration = DialerRecentsConfigHolder.config.morphDurationMs
         val animator = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -1132,6 +1163,14 @@ object DialerRecentsHook {
                 overlay.progress = va.animatedValue as Float
                 overlay.invalidate()
             }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    overlay.progress = 1.0f
+                    overlay.invalidate()
+                    // Overlay HOLDS at final state (with contact avatar and "Dialing...")
+                    // until InCallActivity is drawn and onActivityStopped fires!
+                }
+            })
         }
         animator.start()
 
@@ -1593,7 +1632,7 @@ object DialerRecentsHook {
                 val scaleProgress = min(1.15f, 0.70f + (tx / callThresholdPx) * 0.35f) * iconAlpha
                 drawPhoneIcon(c, iconCenterX, iconCenterY, scaleProgress, iconAlpha, density, context)
 
-                // "Calling..." text appears once threshold is crossed!
+                // "Call" text appears once threshold is crossed!
                 if (isPastThreshold) {
                     val textAlpha = ((tx - triggerThreshold) / (18f * density)).coerceIn(0f, 1f) * iconAlpha
                     if (textAlpha > 0f) {
@@ -1602,7 +1641,7 @@ object DialerRecentsHook {
                         val textX = iconCenterX + 24f * density
                         val fontMetrics = swipeStatusPaint.fontMetrics
                         val textY = iconCenterY - (fontMetrics.ascent + fontMetrics.descent) / 2f
-                        c.drawText("Calling...", textX, textY, swipeStatusPaint)
+                        c.drawText("Call", textX, textY, swipeStatusPaint)
                     }
                 }
             }
@@ -1746,17 +1785,6 @@ object DialerRecentsHook {
 
         val cleanNumber = finalNumber.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
         Log.i(TAG, "invokeStockCall targetNumber=$finalNumber, cleanNumber=$cleanNumber, vh=${vh?.javaClass?.simpleName}, hasVM=${resolvedVM != null}, hasActivity=${activity != null}")
-
-        // Save handover state for InCallActivity cross-process handoff
-        try {
-            android.provider.Settings.System.putString(act.contentResolver, "hb_call_morph_time", System.currentTimeMillis().toString())
-            if (!displayName.isNullOrBlank()) {
-                android.provider.Settings.System.putString(act.contentResolver, "hb_call_morph_name", displayName)
-            }
-            if (!cleanNumber.isNullOrBlank()) {
-                android.provider.Settings.System.putString(act.contentResolver, "hb_call_morph_num", cleanNumber)
-            }
-        } catch (_: Throwable) {}
 
         val isContactVH = vh?.javaClass?.name?.contains("Contact", ignoreCase = true) == true
         var callInitiated = false
