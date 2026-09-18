@@ -5,14 +5,18 @@ import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.Application
+import android.app.WallpaperManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
@@ -606,6 +610,8 @@ object DialerRecentsHook {
                     swipingAdapter = if (info?.adapter != null) WeakReference(info.adapter) else null
                     // Proactively disallow ALL ancestor ViewGroups from intercepting
                     disallowAllParents(rv, true)
+                    // Asynchronously warm wallpaper cache for instant 0ms morph
+                    getBlurredWallpaper(rv.context)
                     Log.d(TAG, "ACTION_DOWN on call row: ${swipingDisplayName ?: "Unknown"} (${swipingTargetNumber ?: "No-Num"})")
                 } else {
                     swipingChild = null
@@ -902,6 +908,42 @@ object DialerRecentsHook {
         return null
     }
 
+    @Volatile private var cachedBlurredWallpaper: Bitmap? = null
+    @Volatile private var isLoadingWallpaper = false
+
+    fun getBlurredWallpaper(context: Context): Bitmap? {
+        val cached = cachedBlurredWallpaper
+        if (cached != null && !cached.isRecycled) return cached
+
+        if (!isLoadingWallpaper) {
+            isLoadingWallpaper = true
+            Thread {
+                try {
+                    val wm = WallpaperManager.getInstance(context)
+                    val drawable = wm.peekDrawable() ?: wm.drawable
+                    if (drawable != null) {
+                        val origBmp = (drawable as? BitmapDrawable)?.bitmap ?: run {
+                            val w = drawable.intrinsicWidth.coerceAtLeast(120)
+                            val h = drawable.intrinsicHeight.coerceAtLeast(240)
+                            val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                            val c = Canvas(b)
+                            drawable.setBounds(0, 0, w, h)
+                            drawable.draw(c)
+                            b
+                        }
+                        val thumb = Bitmap.createScaledBitmap(origBmp, 45, 101, true)
+                        cachedBlurredWallpaper = thumb
+                    }
+                } catch (t: Throwable) {
+                    Log.d(TAG, "Could not load wallpaper for dialer morph", t)
+                } finally {
+                    isLoadingWallpaper = false
+                }
+            }.start()
+        }
+        return cachedBlurredWallpaper
+    }
+
     private fun animateGreenCallMorph(
         target: View,
         displayName: String,
@@ -950,6 +992,14 @@ object DialerRecentsHook {
             val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.parseColor("#34C759")
             }
+            val clipPath = Path()
+            val scrimPaint = Paint().apply {
+                color = Color.argb(135, 0, 0, 0)
+            }
+            val wpPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+            val fallbackBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#1C1C1E")
+            }
             val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
                 style = Paint.Style.FILL
@@ -989,7 +1039,31 @@ object DialerRecentsHook {
                     startRect.right + (endRect.right - startRect.right) * progress,
                     startRect.bottom + (endRect.bottom - startRect.bottom) * progress
                 )
-                canvas.drawRoundRect(currRect, cornerRadius, cornerRadius, bgPaint)
+
+                canvas.save()
+                clipPath.reset()
+                clipPath.addRoundRect(currRect, cornerRadius, cornerRadius, Path.Direction.CW)
+                canvas.clipPath(clipPath)
+
+                // 1. Draw Xiaomi stock caller blurred wallpaper background inside expanding card
+                val wp = getBlurredWallpaper(decorView.context)
+                if (wp != null && !wp.isRecycled) {
+                    val src = Rect(0, 0, wp.width, wp.height)
+                    val dst = Rect(0, 0, decorW.toInt(), decorH.toInt())
+                    canvas.drawBitmap(wp, src, dst, wpPaint)
+                    canvas.drawRect(currRect, scrimPaint)
+                } else {
+                    canvas.drawRect(currRect, fallbackBgPaint)
+                }
+
+                // 2. Seamless morph: Green (#34C759) dissolves smoothly into blurred wallpaper
+                // As progress advances from 0.15 to 0.80, green dissolves from 1.0 to 0.0
+                val greenAlpha = (1f - ((progress - 0.15f) / 0.65f)).coerceIn(0f, 1f)
+                if (greenAlpha > 0f) {
+                    bgPaint.alpha = (greenAlpha * 255).toInt()
+                    canvas.drawRoundRect(currRect, cornerRadius, cornerRadius, bgPaint)
+                }
+                canvas.restore()
 
                 // 1. Motion-controlled Call Icon (dial symbol) scaling and gliding to center
                 val currIconX = startIconX + (endIconX - startIconX) * motion
@@ -1581,7 +1655,7 @@ object DialerRecentsHook {
                 val scaleProgress = min(1.15f, 0.70f + (tx / callThresholdPx) * 0.35f) * iconAlpha
                 drawPhoneIcon(c, iconCenterX, iconCenterY, scaleProgress, iconAlpha, density, context)
 
-                // "Calling..." text appears once threshold is crossed!
+                // "Call" text appears once threshold is crossed!
                 if (isPastThreshold) {
                     val textAlpha = ((tx - triggerThreshold) / (18f * density)).coerceIn(0f, 1f) * iconAlpha
                     if (textAlpha > 0f) {
@@ -1590,7 +1664,7 @@ object DialerRecentsHook {
                         val textX = iconCenterX + 24f * density
                         val fontMetrics = swipeStatusPaint.fontMetrics
                         val textY = iconCenterY - (fontMetrics.ascent + fontMetrics.descent) / 2f
-                        c.drawText("Calling...", textX, textY, swipeStatusPaint)
+                        c.drawText("Call", textX, textY, swipeStatusPaint)
                     }
                 }
             }

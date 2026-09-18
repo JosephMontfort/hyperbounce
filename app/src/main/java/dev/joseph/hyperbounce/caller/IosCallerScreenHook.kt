@@ -1,19 +1,26 @@
 package dev.joseph.hyperbounce.caller
 
 import android.app.Activity
+import android.app.WallpaperManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.util.Log
+import androidx.core.graphics.PathParser
+import java.io.File
 import android.view.animation.PathInterpolator
 import android.view.View
 import android.view.ViewGroup
@@ -393,8 +400,48 @@ object IosCallerScreenHook {
         }
     }
 
-    private val handoverPhonePath by lazy { createIosPhonePath() }
-    private val handoverPhonePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    @Volatile private var cachedInCallWallpaper: Bitmap? = null
+
+    private fun getInCallBlurredWallpaper(activity: Activity): Bitmap? {
+        val cached = cachedInCallWallpaper
+        if (cached != null && !cached.isRecycled) return cached
+
+        try {
+            val file = File(activity.filesDir, "wallpaper_thumbnail.png")
+            if (file.exists() && file.length() > 0) {
+                val bmp = BitmapFactory.decodeFile(file.absolutePath)
+                if (bmp != null) {
+                    cachedInCallWallpaper = bmp
+                    return bmp
+                }
+            }
+        } catch (_: Throwable) {}
+
+        try {
+            val wm = WallpaperManager.getInstance(activity)
+            val drawable = wm.peekDrawable() ?: wm.drawable
+            if (drawable != null) {
+                val origBmp = (drawable as? BitmapDrawable)?.bitmap ?: run {
+                    val w = drawable.intrinsicWidth.coerceAtLeast(120)
+                    val h = drawable.intrinsicHeight.coerceAtLeast(240)
+                    val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    val c = Canvas(b)
+                    drawable.setBounds(0, 0, w, h)
+                    drawable.draw(c)
+                    b
+                }
+                val thumb = Bitmap.createScaledBitmap(origBmp, 45, 101, true)
+                cachedInCallWallpaper = thumb
+                return thumb
+            }
+        } catch (_: Throwable) {}
+
+        return null
+    }
+
+    private var stockCallDrawable: Drawable? = null
+    private var stockCallPath: Path? = null
+    private val stockIconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.WHITE
     }
@@ -404,16 +451,45 @@ object IosCallerScreenHook {
         cx: Float,
         cy: Float,
         scale: Float,
-        density: Float
+        density: Float,
+        context: Context
     ) {
-        val iconTargetSize = 28f * density * scale
-        canvas.save()
-        canvas.translate(cx, cy)
-        val s = iconTargetSize / 24f
-        canvas.scale(s, s)
-        canvas.translate(-12f, -12f)
-        canvas.drawPath(handoverPhonePath, handoverPhonePaint)
-        canvas.restore()
+        if (stockCallDrawable == null) {
+            try {
+                val contactsCtx = context.createPackageContext("com.android.contacts", 0)
+                val resId = contactsCtx.resources.getIdentifier("dialer_btn_call_normal", "drawable", "com.android.contacts")
+                if (resId != 0) {
+                    stockCallDrawable = contactsCtx.getDrawable(resId)?.mutate()?.apply {
+                        setTint(Color.WHITE)
+                    }
+                }
+            } catch (_: Throwable) {}
+        }
+        val drawable = stockCallDrawable
+        val iconSize = (28f * density * scale).toInt()
+        val half = iconSize / 2
+        if (drawable != null) {
+            drawable.alpha = 255
+            drawable.setBounds((cx - half).toInt(), (cy - half).toInt(), (cx + half).toInt(), (cy + half).toInt())
+            drawable.draw(canvas)
+        } else {
+            if (stockCallPath == null) {
+                try {
+                    stockCallPath = PathParser.createPathFromPathData(
+                        "M10.643,4.653C10.148,3.796 9.101,3.378 8.156,3.853L8.148,3.857C7.88,3.992 7.432,4.219 6.261,5.012C4.335,6.317 4.628,8.468 5.213,10.212C6.551,14.211 9.13,18.011 12.005,20.885C14.879,23.76 18.679,26.339 22.678,27.678C24.435,28.266 26.533,28.52 27.87,26.64C28.621,25.583 28.841,25.138 29.005,24.8L29.039,24.73C29.467,23.858 29.152,22.782 28.239,22.249L23.688,19.613C23.049,19.243 22.308,19.363 21.809,19.628L20.128,20.532L20.127,20.532C19.311,20.966 18.326,20.933 17.54,20.447C16.562,19.842 15.46,19.021 14.647,18.243C13.869,17.431 13.048,16.327 12.443,15.35C11.957,14.564 11.924,13.579 12.358,12.763L12.358,12.762L13.261,11.083L13.262,11.081C13.529,10.578 13.643,9.849 13.28,9.208L10.643,4.653Z"
+                    )
+                } catch (_: Throwable) {}
+            }
+            val path = stockCallPath
+            if (path != null) {
+                canvas.save()
+                val factor = (iconSize / 34f)
+                canvas.translate(cx - 17f * factor, cy - 17f * factor)
+                canvas.scale(factor, factor)
+                canvas.drawPath(path, stockIconPaint)
+                canvas.restore()
+            }
+        }
     }
 
     private fun initOutgoingCallTransition(module: XposedModule, classLoader: ClassLoader) {
@@ -528,8 +604,11 @@ object IosCallerScreenHook {
         val hasDistinctNumber = targetNumber.isNotBlank() && targetNumber != title
 
         val overlay = object : View(activity) {
-            val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#34C759")
+            val wp = getInCallBlurredWallpaper(activity)
+            val scrimPaint = Paint().apply { color = Color.argb(135, 0, 0, 0) }
+            val wpPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+            val fallbackBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#1C1C1E")
             }
             val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
@@ -564,7 +643,16 @@ object IosCallerScreenHook {
                 super.onDraw(canvas)
                 val w = width.toFloat()
                 val h = height.toFloat()
-                canvas.drawRect(0f, 0f, w, h, bgPaint)
+
+                // Draw Xiaomi stock caller blurred wallpaper background + scrim
+                if (wp != null && !wp.isRecycled) {
+                    val src = Rect(0, 0, wp.width, wp.height)
+                    val dst = Rect(0, 0, w.toInt(), h.toInt())
+                    canvas.drawBitmap(wp, src, dst, wpPaint)
+                    canvas.drawRect(0f, 0f, w, h, scrimPaint)
+                } else {
+                    canvas.drawRect(0f, 0f, w, h, fallbackBgPaint)
+                }
 
                 val targetCenterX = w / 2f
                 val targetContentY = h * 0.38f
@@ -573,7 +661,7 @@ object IosCallerScreenHook {
 
                 canvas.drawCircle(targetCenterX, iconY, badgeRadius, badgePaint)
                 canvas.drawCircle(targetCenterX, iconY, badgeRadius, badgeStrokePaint)
-                drawHandoverPhoneIcon(canvas, targetCenterX, iconY, 2.05f, density)
+                drawHandoverPhoneIcon(canvas, targetCenterX, iconY, 2.05f, density, activity)
 
                 val titleTargetY = targetContentY + 22f * density
                 val numberTargetY = targetContentY + 52f * density
