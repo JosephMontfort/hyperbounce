@@ -96,6 +96,10 @@ object DialerRecentsHook {
         color = Color.WHITE
         style = Paint.Style.FILL
     }
+    private val swipeStatusPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        isFakeBoldText = true
+    }
 
     // Cached drawables / paths
     private var cachedCallDrawable: Drawable? = null
@@ -722,7 +726,7 @@ object DialerRecentsHook {
                             val displayName = swipingDisplayName ?: number
 
                             animateGreenCallMorph(target, displayName, number, rv) {
-                                invokeStockCall(target.context, target, vh, adapter, itemVM, number, classLoader)
+                                invokeStockCall(target.context, target, vh, adapter, itemVM, number, displayName, classLoader)
                             }
                         } else {
                             animateSpring(target, 0f, rv)
@@ -1039,22 +1043,11 @@ object DialerRecentsHook {
             }, delayMs)
         }
 
-        fun tryDismissFromFocusLoss() {
-            val elapsed = SystemClock.uptimeMillis() - startTime
-            if (elapsed >= minDisplayDuration) {
-                dismissOverlay(100L)
-            } else {
-                val remaining = minDisplayDuration - elapsed
-                overlay.postDelayed({
-                    dismissOverlay(0L)
-                }, remaining)
-            }
-        }
-
         focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
             if (!hasFocus) {
-                // Focus lost to the incoming Call screen!
-                tryDismissFromFocusLoss()
+                // Focus lost to the incoming InCallActivity!
+                // InCallActivity immediately mounts its matching green handover overlay.
+                dismissOverlay(60L)
             }
         }
         try {
@@ -1074,7 +1067,7 @@ object DialerRecentsHook {
                 }
             }
             override fun onActivityPaused(act: Activity) {
-                // Do not dismiss on onActivityPaused because it fires immediately on startActivity!
+                // Do not dismiss on onActivityPaused
             }
             override fun onActivityCreated(act: Activity, b: Bundle?) {}
             override fun onActivityStarted(act: Activity) {}
@@ -1085,10 +1078,10 @@ object DialerRecentsHook {
             activity.application.registerActivityLifecycleCallbacks(lifecycleCb)
         } catch (_: Throwable) {}
 
-        // Fallback safety timer: dismiss after 4.2s if call screen takes unusually long or fails
+        // Fallback safety timer: dismiss after 5.0s if call screen takes unusually long or fails
         overlay.postDelayed({
             dismissOverlay(0L)
-        }, 4200L)
+        }, 5000L)
 
         val animator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = morphDuration
@@ -1097,9 +1090,15 @@ object DialerRecentsHook {
                 overlay.progress = va.animatedValue as Float
                 overlay.invalidate()
             }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    overlay.progress = 1.0f
+                    overlay.invalidate()
+                    onCallLaunch()
+                }
+            })
         }
         animator.start()
-        onCallLaunch()
     }
 
     private fun resetSwipingState() {
@@ -1539,12 +1538,35 @@ object DialerRecentsHook {
             bgPaint.color = Color.parseColor("#34C759")
             c.drawRoundRect(bgRect, cornerRadius, cornerRadius, bgPaint)
 
+            val triggerThreshold = callThresholdPx * 0.78f
+            val isPastThreshold = tx >= triggerThreshold
+
             // Centered official Phone icon
             if (iconAlpha > 0f) {
-                val iconCenterX = left + min(tx / 2f, callThresholdPx / 2f)
+                val targetIconX = left + 34f * density
+                val rawIconX = left + min(tx / 2f, callThresholdPx / 2f)
+                val iconCenterX = if (tx > triggerThreshold) {
+                    val blend = ((tx - triggerThreshold) / (16f * density)).coerceIn(0f, 1f)
+                    rawIconX + (targetIconX - rawIconX) * blend
+                } else {
+                    rawIconX
+                }
                 val iconCenterY = (top + bottom) / 2f
                 val scaleProgress = min(1.15f, 0.70f + (tx / callThresholdPx) * 0.35f) * iconAlpha
                 drawPhoneIcon(c, iconCenterX, iconCenterY, scaleProgress, iconAlpha, density, context)
+
+                // "Calling..." text appears once threshold is crossed!
+                if (isPastThreshold) {
+                    val textAlpha = ((tx - triggerThreshold) / (18f * density)).coerceIn(0f, 1f) * iconAlpha
+                    if (textAlpha > 0f) {
+                        swipeStatusPaint.alpha = (textAlpha * 240).toInt()
+                        swipeStatusPaint.textSize = 15f * density
+                        val textX = iconCenterX + 24f * density
+                        val fontMetrics = swipeStatusPaint.fontMetrics
+                        val textY = iconCenterY - (fontMetrics.ascent + fontMetrics.descent) / 2f
+                        c.drawText("Calling...", textX, textY, swipeStatusPaint)
+                    }
+                }
             }
 
             c.restore()
@@ -1660,6 +1682,7 @@ object DialerRecentsHook {
         adapter: Any?,
         itemVM: Any?,
         targetNumber: String,
+        displayName: String = "",
         classLoader: ClassLoader
     ) {
         val resolvedVM = itemVM ?: (if (vh != null) getItemVMFromVH(vh) else null)
@@ -1668,9 +1691,15 @@ object DialerRecentsHook {
         val activity = findActivity(context) ?: (context as? Activity)
         val act = activity ?: context
 
+        // Kill default window exit animation for seamless transition
+        try {
+            activity?.overridePendingTransition(0, 0)
+            (context as? Activity)?.overridePendingTransition(0, 0)
+        } catch (_: Throwable) {}
+
         // If finalNumber is still empty or not valid, resolve from Contact Provider
         if (!isValidPhoneNumber(finalNumber)) {
-            val name = if (resolvedVM != null) getNameFromItemVM(resolvedVM) else null
+            val name = (if (resolvedVM != null) getNameFromItemVM(resolvedVM) else null) ?: displayName
             val resolved = resolveFirstContactNumber(act, resolvedVM, name)
             if (isValidPhoneNumber(resolved)) {
                 finalNumber = resolved ?: ""
@@ -1679,6 +1708,17 @@ object DialerRecentsHook {
 
         val cleanNumber = finalNumber.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
         Log.i(TAG, "invokeStockCall targetNumber=$finalNumber, cleanNumber=$cleanNumber, vh=${vh?.javaClass?.simpleName}, hasVM=${resolvedVM != null}, hasActivity=${activity != null}")
+
+        // Save handover state for InCallActivity cross-process handoff
+        try {
+            android.provider.Settings.System.putString(act.contentResolver, "hb_call_morph_time", System.currentTimeMillis().toString())
+            if (!displayName.isNullOrBlank()) {
+                android.provider.Settings.System.putString(act.contentResolver, "hb_call_morph_name", displayName)
+            }
+            if (!cleanNumber.isNullOrBlank()) {
+                android.provider.Settings.System.putString(act.contentResolver, "hb_call_morph_num", cleanNumber)
+            }
+        } catch (_: Throwable) {}
 
         val isContactVH = vh?.javaClass?.name?.contains("Contact", ignoreCase = true) == true
         var callInitiated = false

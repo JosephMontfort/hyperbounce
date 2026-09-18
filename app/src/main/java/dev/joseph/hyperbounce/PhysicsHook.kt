@@ -99,8 +99,10 @@ class PhysicsHook : XposedModule() {
                     if (prefs != null) {
                         try {
                             dev.joseph.hyperbounce.caller.IosCallerConfigHolder.updateFromPrefs(prefs)
+                            dev.joseph.hyperbounce.dialer.DialerRecentsConfigHolder.updateFromPrefs(prefs)
                             prefs.registerOnSharedPreferenceChangeListener { _, _ ->
                                 dev.joseph.hyperbounce.caller.IosCallerConfigHolder.updateFromPrefs(prefs)
+                                dev.joseph.hyperbounce.dialer.DialerRecentsConfigHolder.updateFromPrefs(prefs)
                             }
                         } catch (t: Throwable) {
                             Log.e("HyperBounce", "Failed to bind remote preferences in InCallUI", t)
