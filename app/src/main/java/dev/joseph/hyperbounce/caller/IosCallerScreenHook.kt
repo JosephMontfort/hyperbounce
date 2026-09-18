@@ -12,12 +12,19 @@ import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Bundle
+import android.renderscript.Allocation
+import android.renderscript.Element
+import android.renderscript.RenderScript
+import android.renderscript.ScriptIntrinsicBlur
 import android.util.Log
 import androidx.core.graphics.PathParser
 import java.io.File
@@ -406,10 +413,55 @@ object IosCallerScreenHook {
         val cached = cachedInCallWallpaper
         if (cached != null && !cached.isRecycled) return cached
 
+        // 1. Reflect Xiaomi's stock N.e singleton in XiaomiInCallUI
         try {
-            val file = File(activity.filesDir, "wallpaper_thumbnail.png")
-            if (file.exists() && file.length() > 0) {
-                val bmp = BitmapFactory.decodeFile(file.absolutePath)
+            val neClass = Class.forName("N.e", false, activity.classLoader)
+            val dMethod = neClass.getDeclaredMethod("d")
+            val instance = dMethod.invoke(null)
+            if (instance != null) {
+                val fieldA = neClass.getDeclaredField("f267a").apply { isAccessible = true }
+                val ref = fieldA.get(instance) as? java.lang.ref.SoftReference<*>
+                val bmp = ref?.get() as? Bitmap
+                if (bmp != null && !bmp.isRecycled) {
+                    cachedInCallWallpaper = bmp
+                    syncWallpaperToProvider(activity, bmp)
+                    return bmp
+                }
+            }
+        } catch (_: Throwable) {}
+
+        // 2. Window / DecorView background set by stock InCallBackgroundCallback
+        try {
+            val decorBg = activity.window.decorView.background
+            if (decorBg is BitmapDrawable && decorBg.bitmap != null && !decorBg.bitmap.isRecycled) {
+                cachedInCallWallpaper = decorBg.bitmap
+                syncWallpaperToProvider(activity, decorBg.bitmap)
+                return decorBg.bitmap
+            }
+        } catch (_: Throwable) {}
+
+        // 3. Reflect InCallBackgroundManager (com.android.incallui)
+        try {
+            val mgrClass = Class.forName("com.android.incallui.background.InCallBackgroundManager", false, activity.classLoader)
+            val getInst = mgrClass.getDeclaredMethod("getInstance")
+            val instance = getInst.invoke(null)
+            if (instance != null) {
+                val getBmp = mgrClass.getDeclaredMethod("getMultiCallBitmap")
+                val ref = getBmp.invoke(instance) as? java.lang.ref.SoftReference<*>
+                val bmp = ref?.get() as? Bitmap
+                if (bmp != null && !bmp.isRecycled) {
+                    cachedInCallWallpaper = bmp
+                    syncWallpaperToProvider(activity, bmp)
+                    return bmp
+                }
+            }
+        } catch (_: Throwable) {}
+
+        // 4. ConfigProvider content:// (the pre-rendered 914x2034 blurwallpaper)
+        try {
+            val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/incall_stock_background.png")
+            activity.contentResolver.openInputStream(uri)?.use { stream ->
+                val bmp = BitmapFactory.decodeStream(stream)
                 if (bmp != null) {
                     cachedInCallWallpaper = bmp
                     return bmp
@@ -417,6 +469,7 @@ object IosCallerScreenHook {
             }
         } catch (_: Throwable) {}
 
+        // 5. Fallback using Xiaomi's exact algorithm decompiled from N.e / C0214b:
         try {
             val wm = WallpaperManager.getInstance(activity)
             val drawable = wm.peekDrawable() ?: wm.drawable
@@ -430,13 +483,65 @@ object IosCallerScreenHook {
                     drawable.draw(c)
                     b
                 }
-                val thumb = Bitmap.createScaledBitmap(origBmp, 45, 101, true)
-                cachedInCallWallpaper = thumb
-                return thumb
+                val bmp = renderXiaomiBlurredWallpaper(activity, origBmp)
+                if (bmp != null) {
+                    cachedInCallWallpaper = bmp
+                    syncWallpaperToProvider(activity, bmp)
+                    return bmp
+                }
             }
         } catch (_: Throwable) {}
 
         return null
+    }
+
+    private fun renderXiaomiBlurredWallpaper(context: Context, source: Bitmap): Bitmap? {
+        return try {
+            val scale = 0.15f
+            val scaledW = (source.width * scale).toInt().coerceAtLeast(108)
+            val scaledH = (source.height * scale).toInt().coerceAtLeast(240)
+            val scaledBmp = Bitmap.createScaledBitmap(source, scaledW, scaledH, true)
+
+            val rs = RenderScript.create(context)
+            val input = Allocation.createFromBitmap(rs, scaledBmp)
+            val output = Allocation.createTyped(rs, input.type)
+            val blur = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
+            blur.setRadius(25f)
+            blur.setInput(input)
+            blur.forEach(output)
+            output.copyTo(scaledBmp)
+            rs.destroy()
+
+            val result = Bitmap.createBitmap(scaledW, scaledH, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(result)
+
+            val satMatrix = ColorMatrix().apply { setSaturation(1.3f) }
+            val satPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                colorFilter = ColorMatrixColorFilter(satMatrix)
+            }
+            canvas.drawBitmap(scaledBmp, 0f, 0f, satPaint)
+
+            val scrimPaint = Paint().apply {
+                color = Color.argb(76, 0, 0, 0)
+            }
+            canvas.drawRect(0f, 0f, scaledW.toFloat(), scaledH.toFloat(), scrimPaint)
+
+            scaledBmp.recycle()
+            result
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun syncWallpaperToProvider(context: Context, bitmap: Bitmap) {
+        Thread {
+            try {
+                val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/incall_stock_background.png")
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                }
+            } catch (_: Throwable) {}
+        }.start()
     }
 
     private var stockCallDrawable: Drawable? = null
@@ -644,12 +749,11 @@ object IosCallerScreenHook {
                 val w = width.toFloat()
                 val h = height.toFloat()
 
-                // Draw Xiaomi stock caller blurred wallpaper background + scrim
+                // Draw Xiaomi stock caller blurred wallpaper background
                 if (wp != null && !wp.isRecycled) {
                     val src = Rect(0, 0, wp.width, wp.height)
                     val dst = Rect(0, 0, w.toInt(), h.toInt())
                     canvas.drawBitmap(wp, src, dst, wpPaint)
-                    canvas.drawRect(0f, 0f, w, h, scrimPaint)
                 } else {
                     canvas.drawRect(0f, 0f, w, h, fallbackBgPaint)
                 }

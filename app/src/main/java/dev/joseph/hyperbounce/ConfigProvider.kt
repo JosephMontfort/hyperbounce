@@ -145,10 +145,22 @@ class ConfigProvider : ContentProvider() {
             "custom_depth_subject.png",
             "segmented_depth_subject.png",
             "custom_notification_wallpaper.png",
+            "incall_stock_background.png",
             "cc_layout.json"
         )
         if (segment in allowedFiles) {
             var file = File(ctx.filesDir, segment)
+            if (mode.contains("w")) {
+                return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_TRUNCATE)
+            }
+            if (segment == "incall_stock_background.png" && (!file.exists() || file.length() == 0L)) {
+                try {
+                    val sysBlur = File("/data/system/users/0/blurwallpaper")
+                    if (sysBlur.exists() && sysBlur.length() > 0L) {
+                        sysBlur.copyTo(file, overwrite = true)
+                    }
+                } catch (_: Throwable) {}
+            }
             if ((!file.exists() || file.length() == 0L) && segment == "lock_depth_subject.png") {
                 val customFile = File(ctx.filesDir, "custom_depth_subject.png")
                 if (customFile.exists() && customFile.length() > 0L) {

@@ -10,8 +10,11 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
@@ -21,6 +24,12 @@ import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
+import android.renderscript.Allocation
+import android.renderscript.Element
+import android.renderscript.RenderScript
+import android.renderscript.ScriptIntrinsicBlur
+import java.io.File
+import java.io.FileOutputStream
 import android.provider.ContactsContract
 import android.util.Log
 import android.view.HapticFeedbackConstants
@@ -915,6 +924,31 @@ object DialerRecentsHook {
         val cached = cachedBlurredWallpaper
         if (cached != null && !cached.isRecycled) return cached
 
+        // 1. ConfigProvider content:// (pre-rendered 914x2034 Xiaomi system blurwallpaper)
+        try {
+            val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/incall_stock_background.png")
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                val bmp = BitmapFactory.decodeStream(stream)
+                if (bmp != null) {
+                    cachedBlurredWallpaper = bmp
+                    return bmp
+                }
+            }
+        } catch (_: Throwable) {}
+
+        // 2. Direct file check if readable
+        try {
+            val blurFile = File("/data/system/users/0/blurwallpaper")
+            if (blurFile.exists() && blurFile.canRead()) {
+                val bmp = BitmapFactory.decodeFile(blurFile.absolutePath)
+                if (bmp != null) {
+                    cachedBlurredWallpaper = bmp
+                    return bmp
+                }
+            }
+        } catch (_: Throwable) {}
+
+        // 3. Fallback using Xiaomi's exact algorithm decompiled from N.e / C0214b
         if (!isLoadingWallpaper) {
             isLoadingWallpaper = true
             Thread {
@@ -931,8 +965,10 @@ object DialerRecentsHook {
                             drawable.draw(c)
                             b
                         }
-                        val thumb = Bitmap.createScaledBitmap(origBmp, 45, 101, true)
-                        cachedBlurredWallpaper = thumb
+                        val bmp = renderXiaomiBlurredWallpaper(context, origBmp)
+                        if (bmp != null) {
+                            cachedBlurredWallpaper = bmp
+                        }
                     }
                 } catch (t: Throwable) {
                     Log.d(TAG, "Could not load wallpaper for dialer morph", t)
@@ -942,6 +978,44 @@ object DialerRecentsHook {
             }.start()
         }
         return cachedBlurredWallpaper
+    }
+
+    private fun renderXiaomiBlurredWallpaper(context: Context, source: Bitmap): Bitmap? {
+        return try {
+            val scale = 0.15f
+            val scaledW = (source.width * scale).toInt().coerceAtLeast(108)
+            val scaledH = (source.height * scale).toInt().coerceAtLeast(240)
+            val scaledBmp = Bitmap.createScaledBitmap(source, scaledW, scaledH, true)
+
+            val rs = RenderScript.create(context)
+            val input = Allocation.createFromBitmap(rs, scaledBmp)
+            val output = Allocation.createTyped(rs, input.type)
+            val blur = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
+            blur.setRadius(25f)
+            blur.setInput(input)
+            blur.forEach(output)
+            output.copyTo(scaledBmp)
+            rs.destroy()
+
+            val result = Bitmap.createBitmap(scaledW, scaledH, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(result)
+
+            val satMatrix = ColorMatrix().apply { setSaturation(1.3f) }
+            val satPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                colorFilter = ColorMatrixColorFilter(satMatrix)
+            }
+            canvas.drawBitmap(scaledBmp, 0f, 0f, satPaint)
+
+            val scrimPaint = Paint().apply {
+                color = Color.argb(76, 0, 0, 0)
+            }
+            canvas.drawRect(0f, 0f, scaledW.toFloat(), scaledH.toFloat(), scrimPaint)
+
+            scaledBmp.recycle()
+            result
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     private fun animateGreenCallMorph(
@@ -1051,7 +1125,6 @@ object DialerRecentsHook {
                     val src = Rect(0, 0, wp.width, wp.height)
                     val dst = Rect(0, 0, decorW.toInt(), decorH.toInt())
                     canvas.drawBitmap(wp, src, dst, wpPaint)
-                    canvas.drawRect(currRect, scrimPaint)
                 } else {
                     canvas.drawRect(currRect, fallbackBgPaint)
                 }
