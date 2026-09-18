@@ -1,9 +1,11 @@
 package dev.joseph.hyperbounce.dialer
 
+import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Color
@@ -201,9 +203,9 @@ object DialerRecentsHook {
                             val currentItem = try {
                                 vp?.javaClass?.getMethod("getCurrentItem")?.invoke(vp) as? Int ?: 0
                             } catch (_: Throwable) { 0 }
-                            if (currentItem == 0) {
-                                // On Dialer/Recents tab (Tab 0), enforce s1(false) so SpringBackLayout and ViewPager never hijack horizontal row swipe!
-                                chain.args[0] = false
+                            if (currentItem == 0 && (chain.args.getOrNull(0) as? Boolean) == true) {
+                                // On Dialer/Recents tab (Tab 0), suppress s1(true) so SpringBackLayout and ViewPager never hijack horizontal row swipe!
+                                return@intercept null
                             }
                         }
                         chain.proceed()
@@ -706,14 +708,18 @@ object DialerRecentsHook {
 
                     if (currentTx > 0f) {
                         // Swiped right -> Call action
-                        if (currentTx >= callThresholdPx) {
+                        val triggerThreshold = callThresholdPx * 0.78f
+                        if (currentTx >= triggerThreshold) {
                             performHaptic(rv, HapticFeedbackConstants.CONFIRM)
-                            animateSpring(target, 0f, rv)
                             val itemVM = swipingItemVM
                             val number = swipingTargetNumber ?: ""
                             val vh = swipingVH?.get() ?: getViewHolderForChild(target, rv)
                             val adapter = swipingAdapter?.get()
-                            invokeStockCall(target.context, target, vh, adapter, itemVM, number, classLoader)
+                            val displayName = swipingDisplayName ?: number
+
+                            animateGreenCallMorph(target, displayName, number, rv) {
+                                invokeStockCall(target.context, target, vh, adapter, itemVM, number, classLoader)
+                            }
                         } else {
                             animateSpring(target, 0f, rv)
                         }
@@ -813,17 +819,22 @@ object DialerRecentsHook {
 
         if (dx > 0f) {
             // Swiping right (Call)
-            val tx = if (dx > callThresholdPx) {
-                callThresholdPx + (dx - callThresholdPx) * 0.40f
+            // Before threshold: slight resistance so swipe feels physical but smooth
+            // Past threshold: resistance breaks, tick haptic triggers, entry moves out to full green
+            val triggerThreshold = callThresholdPx * 0.78f
+            val tx = if (dx >= callThresholdPx) {
+                val excess = dx - callThresholdPx
+                triggerThreshold + excess * 1.55f
             } else {
-                dx
+                dx * 0.78f
             }
             target.translationX = tx
 
-            if (tx >= callThresholdPx && !hasTriggeredCallHaptic) {
+            if (tx >= triggerThreshold && !hasTriggeredCallHaptic) {
                 performHaptic(rv, HapticFeedbackConstants.CLOCK_TICK)
                 hasTriggeredCallHaptic = true
-            } else if (tx < callThresholdPx) {
+            } else if (tx < triggerThreshold) {
+                // User pushed slightly left to cancel -> reset haptic state
                 hasTriggeredCallHaptic = false
             }
         } else {
@@ -844,6 +855,115 @@ object DialerRecentsHook {
             }
         }
         rv.invalidate()
+    }
+
+    private fun findActivity(context: Context?): Activity? {
+        var ctx: Context? = context
+        while (ctx is ContextWrapper) {
+            if (ctx is Activity) return ctx
+            ctx = ctx.baseContext
+        }
+        return null
+    }
+
+    private fun animateGreenCallMorph(
+        target: View,
+        displayName: String,
+        targetNumber: String,
+        rv: ViewGroup,
+        onCallLaunch: () -> Unit
+    ) {
+        val activity = findActivity(target.context) ?: findActivity(rv.context)
+        val decorView = activity?.window?.decorView as? ViewGroup
+        if (decorView == null) {
+            animateSpring(target, 0f, rv)
+            onCallLaunch()
+            return
+        }
+
+        val loc = IntArray(2)
+        target.getLocationInWindow(loc)
+        val density = target.resources.displayMetrics.density
+        val rowLeft = loc[0].toFloat() - target.translationX
+        val rowTop = loc[1].toFloat()
+        val rowRight = rowLeft + target.width.toFloat()
+        val rowBottom = rowTop + target.height.toFloat()
+        val startRect = RectF(rowLeft, rowTop, rowRight, rowBottom)
+        val decorW = if (decorView.width > 0) decorView.width.toFloat() else target.resources.displayMetrics.widthPixels.toFloat()
+        val decorH = if (decorView.height > 0) decorView.height.toFloat() else target.resources.displayMetrics.heightPixels.toFloat()
+        val endRect = RectF(0f, 0f, decorW, decorH)
+
+        val overlay = object : View(decorView.context) {
+            var progress = 0f
+            val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#34C759")
+            }
+            val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                textSize = 24f * density
+                textAlign = Paint.Align.CENTER
+                isFakeBoldText = true
+            }
+            val subTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#E0FFFFFF")
+                textSize = 16f * density
+                textAlign = Paint.Align.CENTER
+            }
+            val currRect = RectF(startRect)
+
+            override fun onDraw(canvas: Canvas) {
+                super.onDraw(canvas)
+                val cornerRadius = (14f * density) * (1f - progress)
+                currRect.set(
+                    startRect.left + (endRect.left - startRect.left) * progress,
+                    startRect.top + (endRect.top - startRect.top) * progress,
+                    startRect.right + (endRect.right - startRect.right) * progress,
+                    startRect.bottom + (endRect.bottom - startRect.bottom) * progress
+                )
+                canvas.drawRoundRect(currRect, cornerRadius, cornerRadius, bgPaint)
+
+                if (progress > 0.20f) {
+                    val alpha = ((progress - 0.20f) / 0.35f).coerceIn(0f, 1f)
+                    textPaint.alpha = (alpha * 255).toInt()
+                    subTextPaint.alpha = (alpha * 255).toInt()
+                    val centerY = currRect.centerY()
+                    val title = if (displayName.isNotBlank()) displayName else targetNumber
+                    if (title.isNotBlank()) {
+                        canvas.drawText(title, currRect.centerX(), centerY - 12f * density, textPaint)
+                        if (targetNumber.isNotBlank() && targetNumber != title) {
+                            canvas.drawText(targetNumber, currRect.centerX(), centerY + 18f * density, subTextPaint)
+                        }
+                    }
+                }
+            }
+        }
+
+        decorView.addView(overlay, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        target.translationX = 0f
+
+        val animator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 340L
+            interpolator = PathInterpolator(0.2f, 0.0f, 0.0f, 1.0f) // Folme fluid curve
+            addUpdateListener { va ->
+                overlay.progress = va.animatedValue as Float
+                overlay.invalidate()
+            }
+        }
+        animator.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: android.animation.Animator) {
+                overlay.animate()
+                    .alpha(0f)
+                    .setDuration(160L)
+                    .withEndAction {
+                        try {
+                            decorView.removeView(overlay)
+                        } catch (_: Throwable) {}
+                    }
+                    .start()
+            }
+        })
+        animator.start()
+        onCallLaunch()
     }
 
     private fun resetSwipingState() {
@@ -1286,19 +1406,41 @@ object DialerRecentsHook {
         val vmNumber = if (resolvedVM != null) getNumberFromItemVM(resolvedVM) else null
         val finalNumber = if (!targetNumber.isNullOrBlank()) targetNumber else (vmNumber ?: "")
         val cleanNumber = finalNumber.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
-        Log.i(TAG, "invokeStockCall targetNumber=$finalNumber, cleanNumber=$cleanNumber, vh=${vh?.javaClass?.simpleName}, hasVM=${resolvedVM != null}")
+        val activity = findActivity(context) ?: (context as? Activity)
+        Log.i(TAG, "invokeStockCall targetNumber=$finalNumber, cleanNumber=$cleanNumber, vh=${vh?.javaClass?.simpleName}, hasVM=${resolvedVM != null}, hasActivity=${activity != null}")
 
         val isContactVH = vh?.javaClass?.name?.contains("Contact", ignoreCase = true) == true
+        val act = activity ?: context
+        var callInitiated = false
 
         if (isContactVH) {
-            // For search contact items: use DialerVHUtil.d with the exact itemVM
-            if (resolvedVM != null) {
+            // 1. Try stock click: In DialerContactVH, clicking itemView triggers official stock dialing
+            if (child != null) {
+                try {
+                    if (vh is View.OnClickListener) {
+                        vh.onClick(child)
+                        callInitiated = true
+                        Log.i(TAG, "Successfully invoked vh.onClick(child) for search contact")
+                    } else if (child.hasOnClickListeners()) {
+                        child.performClick()
+                        callInitiated = true
+                        Log.i(TAG, "Successfully invoked child.performClick() for search contact")
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Failed vh.onClick/child.performClick for contact", t)
+                }
+            }
+
+            // 2. Try DialerVHUtil.d with the Activity context and itemVM
+            if (!callInitiated && resolvedVM != null) {
                 try {
                     val vhUtilClass = Class.forName("com.android.contacts.dialer.list.DialerVHUtil", false, classLoader)
-                    val dMethod = vhUtilClass.getMethod("d", Context::class.java, resolvedVM.javaClass, String::class.java)
-                    dMethod.invoke(null, context, resolvedVM, "")
-                    Log.i(TAG, "Successfully called search contact via DialerVHUtil.d")
-                    return
+                    val dMethod = vhUtilClass.methods.firstOrNull { it.name == "d" && it.parameterTypes.size == 3 }
+                    if (dMethod != null) {
+                        dMethod.invoke(null, act, resolvedVM, "")
+                        callInitiated = true
+                        Log.i(TAG, "Successfully called search contact via DialerVHUtil.d")
+                    }
                 } catch (t: Throwable) {
                     Log.w(TAG, "Failed DialerVHUtil.d for contact", t)
                 }
@@ -1308,29 +1450,45 @@ object DialerRecentsHook {
             if (resolvedVM != null) {
                 try {
                     val vhUtilClass = Class.forName("com.android.contacts.dialer.list.DialerVHUtil", false, classLoader)
-                    val callMethod = vhUtilClass.getMethod("b", Context::class.java, resolvedVM.javaClass, String::class.java)
-                    callMethod.invoke(null, context, resolvedVM, "")
-                    Log.i(TAG, "Successfully invoked stock dialer call via DialerVHUtil.b")
-                    return
+                    val callMethod = vhUtilClass.methods.firstOrNull { it.name == "b" && it.parameterTypes.size == 3 }
+                    if (callMethod != null) {
+                        callMethod.invoke(null, act, resolvedVM, "")
+                        callInitiated = true
+                        Log.i(TAG, "Successfully invoked stock dialer call via DialerVHUtil.b")
+                    }
                 } catch (t: Throwable) {
                     Log.w(TAG, "Failed DialerVHUtil.b call", t)
                 }
             }
         }
 
-        // Direct ACTION_CALL with cleanNumber (strictly requiring valid phone digits >= 3)
-        if (cleanNumber.length >= 3 && isValidPhoneNumber(cleanNumber)) {
-            try {
-                val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:${Uri.encode(cleanNumber)}")).apply {
+        // Direct ACTION_CALL_PRIVILEGED / ACTION_CALL fallback (guaranteed to dial if cleanNumber >= 3)
+        if (!callInitiated && cleanNumber.length >= 3 && isValidPhoneNumber(cleanNumber)) {
+            val launchedPrivileged = try {
+                val privIntent = Intent("android.intent.action.CALL_PRIVILEGED", Uri.parse("tel:${Uri.encode(cleanNumber)}")).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    putExtra("com.android.phone.CALL_ORIGIN", "com.android.contacts")
                 }
-                context.startActivity(callIntent)
-                Log.i(TAG, "Successfully launched ACTION_CALL Intent for $cleanNumber")
-            } catch (t: Throwable) {
-                Log.e(TAG, "Failed to launch ACTION_CALL Intent", t)
+                act.startActivity(privIntent)
+                Log.i(TAG, "Successfully launched CALL_PRIVILEGED Intent for $cleanNumber")
+                true
+            } catch (_: Throwable) {
+                false
             }
-        } else {
-            Log.w(TAG, "invokeStockCall skipped ACTION_CALL: invalid or empty cleanNumber='$cleanNumber'")
+            if (!launchedPrivileged) {
+                try {
+                    val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:${Uri.encode(cleanNumber)}")).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        putExtra("com.android.phone.CALL_ORIGIN", "com.android.contacts")
+                    }
+                    act.startActivity(callIntent)
+                    Log.i(TAG, "Successfully launched ACTION_CALL Intent for $cleanNumber")
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Failed to launch ACTION_CALL Intent", t)
+                }
+            }
+        } else if (!callInitiated) {
+            Log.w(TAG, "invokeStockCall skipped: callInitiated=false and invalid cleanNumber='$cleanNumber'")
         }
     }
 
