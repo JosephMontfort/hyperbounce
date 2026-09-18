@@ -136,11 +136,11 @@ object ScreenUnlockHook {
         if (!cfg.enabled || cfg.animMode != 1) return
         try {
             val f = getPivotField(instance.javaClass) ?: return
-            val (screenW, screenH) = getScreenDimensions(classLoader)
-            val pivotY = (screenH * cfg.pivotYRatio).toInt()
+            val (screenW, _) = getScreenDimensions(classLoader)
             val pivotX = screenW / 2
+            val pivotY = 0
             f.set(instance, intArrayOf(pivotX, pivotY))
-            Log.d(TAG, "Configured top-center mPivot: [$pivotX, $pivotY] (ratio=${cfg.pivotYRatio})")
+            Log.d(TAG, "Configured top-center mPivot: [$pivotX, $pivotY]")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to update mPivot", t)
         }
@@ -352,8 +352,8 @@ object ScreenUnlockHook {
                         val velocityBoost = kF * vInf
 
                         if (isDockView.get() || isIndicator.get()) {
-                            val resp = (cfg.kineticDockResponse * cfg.durationScale / (1.0f + (velocityBoost * 0.25f))).coerceIn(0.15f, 1.5f)
-                            val damp = cfg.kineticDockDamping.coerceIn(0.20f, 1.0f)
+                            val resp = (0.46f * cfg.durationScale / (1.0f + (velocityBoost * 0.25f))).coerceIn(0.35f, 0.70f)
+                            val damp = 0.88f
                             activeResponse.set(resp)
                             activeDamping.set(damp)
                             floatArrayOf(damp, resp)
@@ -372,23 +372,10 @@ object ScreenUnlockHook {
                                 cfg.getDyn("r${safeRow}_center_settle", ScreenUnlockDefaults.rowSettle(safeRow, cfg.gridRows, false))
                             }
 
-                            val baseZ = cfg.getDyn("r${safeRow}_z", ScreenUnlockDefaults.rowZ(safeRow, cfg.gridRows)).coerceAtLeast(100.0f)
-                            val zMult = 1.0f + (velocityBoost * 0.35f)
-                            val targetZ = (baseZ * zMult).coerceAtLeast(10.0f)
-                            val zRatio = (500.0f / targetZ).coerceIn(0.20f, 2.0f)
-
-                            val finalDamping: Float
-                            if (customBounce <= 0.0f) {
-                                finalDamping = 1.0f
-                            } else {
-                                val dampingSensitivity = ((1.0f - cfg.cascadeDamping) / 0.14f).coerceAtLeast(0.1f)
-                                val effectiveBounce = customBounce * (1.0f + (velocityBoost * 1.5f))
-                                val dampingDrop = effectiveBounce * zRatio * dampingSensitivity * 1.35f
-                                finalDamping = (1.0f - dampingDrop).coerceIn(0.25f, 1.0f)
-                            }
-
-                            val scaledResponse = customSettle * cfg.durationScale
-                            val finalResponse = (scaledResponse / (1.0f + (velocityBoost * 0.40f))).coerceIn(0.15f, 1.5f)
+                            // Stable iOS damping [0.80, 0.95]: single smooth descent and soft cushion, zero oscillation
+                            val finalDamping = (0.88f - (customBounce * 0.10f)).coerceIn(0.80f, 0.95f)
+                            val scaledResponse = customSettle * cfg.durationScale * 0.70f
+                            val finalResponse = (scaledResponse / (1.0f + (velocityBoost * 0.30f))).coerceIn(0.38f, 0.70f)
 
                             activeResponse.set(finalResponse)
                             activeDamping.set(finalDamping)
@@ -426,21 +413,7 @@ object ScreenUnlockHook {
                             if (cfg.animMode == 0) {
                                 args[2] = startVal * cfg.zDepthMultiplier
                             } else {
-                                val kF = currentKineticFactor.get()
-                                val vInf = cfg.velocityInfluence
-                                val velocityBoost = kF * vInf
-                                val safeRow = currentRow.get().coerceIn(0, max(0, cfg.gridRows - 1))
-
-                                val targetZ: Float = if (isDockView.get() || isIndicator.get()) {
-                                    val zMult = 1.0f + (velocityBoost * 0.25f)
-                                    (cfg.kineticDockZDepth * zMult).coerceAtLeast(10.0f)
-                                } else {
-                                    val baseZ = cfg.getDyn("r${safeRow}_z", ScreenUnlockDefaults.rowZ(safeRow, cfg.gridRows))
-                                    val zMult = 1.0f + (velocityBoost * 0.35f)
-                                    (baseZ * zMult).coerceAtLeast(10.0f)
-                                }
-
-                                args[2] = -abs(targetZ)
+                                args[2] = -1000.0f
                             }
                         }
                         val animResult = chain.proceed(args)
@@ -593,19 +566,29 @@ object ScreenUnlockHook {
                             val argI2 = (getArg(1) as? Number)?.toInt() ?: 0
                             val f = (getArg(2) as? Number)?.toFloat() ?: 0.0f
 
-                            // Natural iOS scale curve based on spring progress f
-                            val zScale = if (f <= 0.0f) {
-                                (1.0f + (f / 2000.0f)).coerceIn(0.65f, 1.0f)
-                            } else {
-                                (1.0f + (f / 1500.0f)).coerceIn(1.0f, 1.08f)
-                            }
+                            if (cfg.animMode == 1) {
+                                // Normalized spring displacement fraction:
+                                // Starts at 1.0f (f = -1000f), descends to 0.0f (f = 0f), with gentle settle clamp
+                                val fraction = (-f / 1000.0f).coerceIn(-0.06f, 1.0f)
 
-                            // Dynamic 2D projection from top-center pivot:
-                            // Translation = (scale - 1.0) * offset_from_pivot
-                            val xSpreadFactor = if (cfg.animMode == 1) cfg.pivotXSpread else 1.0f
-                            result[0] = (zScale - 1.0f) * argI * xSpreadFactor
-                            result[1] = (zScale - 1.0f) * argI2
-                            result[2] = zScale
+                                // Authentic iOS drop: every icon drops from the top, lower rows drop slightly further
+                                val posY = argI2.coerceAtLeast(100).toFloat()
+                                val initialDropY = -(180.0f + (posY * 0.12f))
+                                val initialPinchX = -argI * 0.08f
+
+                                result[0] = initialPinchX * fraction * cfg.pivotXSpread
+                                result[1] = initialDropY * fraction
+                                result[2] = 1.0f - (0.18f * fraction)
+                            } else {
+                                val zScale = if (f <= 0.0f) {
+                                    (1.0f + (f / 2000.0f)).coerceIn(0.65f, 1.0f)
+                                } else {
+                                    (1.0f + (f / 1500.0f)).coerceIn(1.0f, 1.08f)
+                                }
+                                result[0] = (zScale - 1.0f) * argI
+                                result[1] = (zScale - 1.0f) * argI2
+                                result[2] = zScale
+                            }
                         }
                         return result
                     }
