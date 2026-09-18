@@ -27,6 +27,7 @@ import android.view.ViewGroup
 import android.view.ViewParent
 import android.view.ViewTreeObserver
 import android.view.animation.PathInterpolator
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.graphics.PathParser
 import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
