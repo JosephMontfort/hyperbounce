@@ -150,10 +150,10 @@ internal class LiquidGlassViewBackdrop(
                 clearHardwareSurfaces()
             }
 
-            // Solid opaque dark background under layer hole ensures backdrop never becomes transparent
+            // Translucent dark background under layer hole ensures backdrop maintains glassy look
             val bgPaint = Paint().apply {
                 xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OVER)
-                color = Color.parseColor("#FF121212")
+                color = Color.parseColor("#40000000")
             }
             canvas.drawRect(0f, 0f, scaledWidth.toFloat(), scaledHeight.toFloat(), bgPaint)
 
@@ -245,18 +245,18 @@ internal class LiquidGlassViewBackdrop(
 
             when (surface) {
                 is SurfaceView -> {
-                    val viewRect = Rect(srcLeft, srcTop, srcRight, srcBottom)
+                    val realSurface = extractSurface(surface)
                     val sFrame = surface.holder?.surfaceFrame
                     val bufW = if (sFrame != null && sFrame.width() > 0) sFrame.width() else sW
                     val bufH = if (sFrame != null && sFrame.height() > 0) sFrame.height() else sH
                     val scaleX = bufW.toFloat() / sW
                     val scaleY = bufH.toFloat() / sH
-                    val surfRect = Rect(
-                        (srcLeft * scaleX).toInt().coerceIn(0, bufW),
-                        (srcTop * scaleY).toInt().coerceIn(0, bufH),
-                        (srcRight * scaleX).toInt().coerceIn(0, bufW),
-                        (srcBottom * scaleY).toInt().coerceIn(0, bufH)
-                    )
+
+                    val sLeft = (srcLeft * scaleX).toInt().coerceIn(0, bufW - 1)
+                    val sTop = (srcTop * scaleY).toInt().coerceIn(0, bufH - 1)
+                    val sRight = (srcRight * scaleX).toInt().coerceIn(sLeft + 1, bufW)
+                    val sBottom = (srcBottom * scaleY).toInt().coerceIn(sTop + 1, bufH)
+                    val surfRect = Rect(sLeft, sTop, sRight, sBottom)
 
                     val listener = PixelCopy.OnPixelCopyFinishedListener { result ->
                         buffer.isCopying = false
@@ -268,30 +268,47 @@ internal class LiquidGlassViewBackdrop(
                     }
 
                     try {
-                        PixelCopy.request(surface, viewRect, back, listener, bgHandler)
-                    } catch (e1: Throwable) {
-                        try {
-                            val realSurface = extractSurface(surface)
-                            if (realSurface != null && realSurface.isValid) {
-                                PixelCopy.request(realSurface, surfRect, back, listener, bgHandler)
-                            } else {
-                                buffer.isCopying = false
-                            }
-                        } catch (e2: Throwable) {
-                            buffer.isCopying = false
-                            Log.w("HyperBounce-Backdrop", "PixelCopy exception: ${e2.message}")
+                        if (realSurface != null && realSurface.isValid) {
+                            PixelCopy.request(realSurface, surfRect, back, listener, bgHandler)
+                        } else {
+                            val viewRect = Rect(
+                                srcLeft.coerceIn(0, sW - 1),
+                                srcTop.coerceIn(0, sH - 1),
+                                srcRight.coerceIn(srcLeft + 1, sW),
+                                srcBottom.coerceIn(srcTop + 1, sH)
+                            )
+                            PixelCopy.request(surface, viewRect, back, listener, bgHandler)
                         }
+                    } catch (e1: Throwable) {
+                        buffer.isCopying = false
+                        Log.w("HyperBounce-Backdrop", "PixelCopy exception: ${e1.message}")
                     }
                 }
 
                 is TextureView -> {
+                    val fullScaledW = (sW * scale).toInt().coerceAtLeast(1)
+                    val fullScaledH = (sH * scale).toInt().coerceAtLeast(1)
+                    val fullBmp = buffer.ensureFullBuffer(fullScaledW, fullScaledH)
+
                     bgHandler.post {
                         try {
-                            val bmp = surface.getBitmap(back)
-                            if (bmp != null) {
+                            val bmp = surface.getBitmap(fullBmp)
+                            if (bmp != null && !back.isRecycled) {
+                                val c = Canvas(back)
+                                val cSrcLeft = (srcLeft * scale).toInt().coerceIn(0, fullScaledW - 1)
+                                val cSrcTop = (srcTop * scale).toInt().coerceIn(0, fullScaledH - 1)
+                                val cSrcRight = (srcRight * scale).toInt().coerceIn(cSrcLeft + 1, fullScaledW)
+                                val cSrcBottom = (srcBottom * scale).toInt().coerceIn(cSrcTop + 1, fullScaledH)
+                                c.drawBitmap(
+                                    bmp,
+                                    Rect(cSrcLeft, cSrcTop, cSrcRight, cSrcBottom),
+                                    Rect(0, 0, destWidth, destHeight),
+                                    null
+                                )
                                 buffer.swap(targetLeft, targetTop, destWidth, destHeight, false)
                             }
-                        } catch (_: Throwable) {
+                        } catch (t: Throwable) {
+                            Log.w("HyperBounce-Backdrop", "TextureView capture error: ${t.message}")
                         } finally {
                             buffer.isCopying = false
                         }
@@ -319,21 +336,16 @@ internal class LiquidGlassViewBackdrop(
         scaledWidth: Int,
         scaledHeight: Int,
     ) {
-        val paintDstOver = Paint().apply {
-            xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OVER)
-        }
-
         for (buffer in surfaceBuffers.values) {
             val bmp = buffer.frontBitmap ?: continue
             if (bmp.isRecycled) continue
-            val paint = if (buffer.isSurfaceView) paintDstOver else null
-            canvas.drawBitmap(bmp, buffer.left.toFloat(), buffer.top.toFloat(), paint)
+            canvas.drawBitmap(bmp, buffer.left.toFloat(), buffer.top.toFloat(), null)
 
             val bottomY = buffer.top + buffer.height
-            if (bottomY < scaledHeight && buffer.isSurfaceView && bmp.height > 1) {
+            if (bottomY < scaledHeight && bmp.height > 1) {
                 val srcStrip = Rect(0, bmp.height - 1, bmp.width, bmp.height)
                 val dstStrip = Rect(buffer.left, bottomY, buffer.left + buffer.width, scaledHeight)
-                canvas.drawBitmap(bmp, srcStrip, dstStrip, paintDstOver)
+                canvas.drawBitmap(bmp, srcStrip, dstStrip, null)
             }
         }
     }
@@ -417,6 +429,8 @@ internal class LiquidGlassViewBackdrop(
         var isSurfaceView: Boolean = false
         @Volatile var isCopying: Boolean = false
 
+        var fullBuffer: Bitmap? = null
+
         fun ensureBuffers(w: Int, h: Int) {
             if (frontBitmap == null || frontBitmap?.isRecycled == true || frontBitmap?.width != w || frontBitmap?.height != h) {
                 frontBitmap?.recycle()
@@ -426,6 +440,16 @@ internal class LiquidGlassViewBackdrop(
                 backBitmap?.recycle()
                 backBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             }
+        }
+
+        fun ensureFullBuffer(w: Int, h: Int): Bitmap {
+            var fb = fullBuffer
+            if (fb == null || fb.isRecycled || fb.width != w || fb.height != h) {
+                fb?.recycle()
+                fb = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                fullBuffer = fb
+            }
+            return fb
         }
 
         fun swap(newLeft: Int, newTop: Int, newWidth: Int, newHeight: Int, surfaceViewType: Boolean) {
@@ -444,6 +468,8 @@ internal class LiquidGlassViewBackdrop(
             frontBitmap = null
             backBitmap?.recycle()
             backBitmap = null
+            fullBuffer?.recycle()
+            fullBuffer = null
             isCopying = false
         }
     }

@@ -28,6 +28,51 @@ class InstagramHook(
         log("==================================================")
 
         try {
+            val svlClass = param.classLoader.loadClass("com.instagram.ui.simplevideolayout.SimpleVideoLayout")
+            module.hook(
+                svlClass.getDeclaredMethod("getEnforceTextureView")
+            ).intercept { true }
+            for (ctor in svlClass.declaredConstructors) {
+                module.hook(ctor).after { chain ->
+                    try {
+                        val m = svlClass.getMethod("setEnforceTextureView", Boolean::class.javaPrimitiveType)
+                        m.invoke(chain.thisObject, true)
+                    } catch (_: Throwable) {}
+                }
+            }
+        } catch (t: Throwable) {}
+
+        try {
+            val rcflClass = param.classLoader.loadClass("com.instagram.ui.widget.roundedcornerlayout.RoundedCornerFrameLayout")
+            module.hook(
+                rcflClass.getDeclaredMethod("getEnforceTextureView")
+            ).intercept { true }
+            for (ctor in rcflClass.declaredConstructors) {
+                module.hook(ctor).after { chain ->
+                    try {
+                        val m = rcflClass.getMethod("setEnforceTextureView", Boolean::class.javaPrimitiveType)
+                        m.invoke(chain.thisObject, true)
+                    } catch (_: Throwable) {}
+                }
+            }
+        } catch (t: Throwable) {}
+
+        try {
+            val mflClass = param.classLoader.loadClass("com.instagram.ui.widget.framelayout.MediaFrameLayout")
+            module.hook(
+                mflClass.getDeclaredMethod("getEnforceTextureView")
+            ).intercept { true }
+            for (ctor in mflClass.declaredConstructors) {
+                module.hook(ctor).after { chain ->
+                    try {
+                        val m = mflClass.getMethod("setEnforceTextureView", Boolean::class.javaPrimitiveType)
+                        m.invoke(chain.thisObject, true)
+                    } catch (_: Throwable) {}
+                }
+            }
+        } catch (t: Throwable) {}
+
+        try {
             module.hook(
                 Resources::class.java.getDeclaredMethod("getDimensionPixelSize", Int::class.javaPrimitiveType)
             ).intercept { chain ->
@@ -48,6 +93,11 @@ class InstagramHook(
             ).intercept { chain ->
                 val result = chain.proceed()
                 val view = chain.thisObject as View
+
+                try {
+                    val setMethod = view.javaClass.getMethod("setEnforceTextureView", Boolean::class.javaPrimitiveType)
+                    setMethod.invoke(view, true)
+                } catch (_: Throwable) {}
                 
                 if (view.id == View.NO_ID || view.resources == null) return@intercept result
 
@@ -76,6 +126,11 @@ class InstagramHook(
                     }
 
                     if (resName == "clips_video_container" || resName == "clips_viewer_video_layout") {
+                        try {
+                            val setMethod = view.javaClass.getMethod("setEnforceTextureView", Boolean::class.javaPrimitiveType)
+                            setMethod.invoke(view, true)
+                        } catch (_: Throwable) {}
+
                         if (hyperBouncePrefs.reelsFullscreenZoom) {
                             val lp = view.layoutParams
                             if (lp != null && lp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
