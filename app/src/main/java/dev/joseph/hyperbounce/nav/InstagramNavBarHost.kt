@@ -258,6 +258,7 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
         badgeCounts = tabs.map { it.badgeCount },
         badgeDots = tabs.map { it.hasBadgeDot },
         enablePixelCopy = isReelsActive,
+        reelsBlurIntensity = live.reelsBlurIntensity,
         onTabSelected = { index ->
             val isProfileTab = (profileIndex >= 0 && index == profileIndex)
             val now = android.os.SystemClock.uptimeMillis()

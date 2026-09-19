@@ -58,6 +58,14 @@ internal class LiquidGlassViewBackdrop(
 
     @Volatile
     var enablePixelCopy: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                capturedFrame = null
+                lastCapturedFrame = -1
+                clearHardwareSurfaces()
+            }
+        }
 
     companion object {
         private val bgThread by lazy {
@@ -136,12 +144,14 @@ internal class LiquidGlassViewBackdrop(
             target.eraseColor(Color.TRANSPARENT)
 
             val canvas = Canvas(target)
-            canvas.save()
-            canvas.scale(scale, scale)
-            canvas.clipRect(0, 0, width, height)
-            canvas.translate(-localLeft, -localTop)
-            sourceView.draw(canvas)
-            canvas.restore()
+            if (!enablePixelCopy) {
+                canvas.save()
+                canvas.scale(scale, scale)
+                canvas.clipRect(0, 0, width, height)
+                canvas.translate(-localLeft, -localTop)
+                sourceView.draw(canvas)
+                canvas.restore()
+            }
 
             if (enablePixelCopy) {
                 requestHardwareSurfaceFrames(currentRegion, location, scale)
@@ -201,7 +211,7 @@ internal class LiquidGlassViewBackdrop(
         val uniqueSurfaces = surfaces.distinctBy { System.identityHashCode(it) }
 
         for (surface in uniqueSurfaces) {
-            if (!surface.isShown || surface.width <= 0 || surface.height <= 0) continue
+            if (!surface.isShown || !surface.isAttachedToWindow || surface.alpha < 0.01f || surface.width <= 0 || surface.height <= 0) continue
 
             val surfaceLocation = IntArray(2)
             surface.getLocationInWindow(surfaceLocation)
@@ -321,7 +331,7 @@ internal class LiquidGlassViewBackdrop(
         val iter = surfaceBuffers.iterator()
         while (iter.hasNext()) {
             val entry = iter.next()
-            if (entry.key !in uniqueSurfaces || !entry.key.isAttachedToWindow) {
+            if (entry.key !in uniqueSurfaces || !entry.key.isAttachedToWindow || !entry.key.isShown || entry.key.alpha < 0.01f) {
                 entry.value.release()
                 iter.remove()
             }
@@ -336,7 +346,8 @@ internal class LiquidGlassViewBackdrop(
         scaledWidth: Int,
         scaledHeight: Int,
     ) {
-        for (buffer in surfaceBuffers.values) {
+        for ((surface, buffer) in surfaceBuffers) {
+            if (!surface.isShown || !surface.isAttachedToWindow || surface.alpha < 0.01f) continue
             val bmp = buffer.frontBitmap ?: continue
             if (bmp.isRecycled) continue
             canvas.drawBitmap(bmp, buffer.left.toFloat(), buffer.top.toFloat(), null)

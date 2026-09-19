@@ -357,6 +357,19 @@ fun AppDetailScreen(
                         enabled = s.enabled,
                         icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
                     )
+                    RowDivider(colors.separator, insetStart = 16.dp)
+                    SettingsSliderRow(
+                        title = "Reels Blur Intensity",
+                        subtitle = "Bottom progressive blur intensity on Reels tab",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = s.reelsBlurIntensity,
+                        onValueChange = holder::setReelsBlurIntensity,
+                        valueRange = 8f..40f,
+                        defaultValue = 20f,
+                        valueLabel = { "${it.roundToInt()}dp" },
+                        enabled = s.enabled
+                    )
                 }
             }
         }

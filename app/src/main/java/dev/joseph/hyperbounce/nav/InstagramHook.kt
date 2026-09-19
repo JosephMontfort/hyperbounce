@@ -110,7 +110,7 @@ class InstagramHook(
                 try {
                     val resName = view.resources.getResourceEntryName(view.id)
 
-                    if (resName == "clips_item_overlay_component") {
+                    if (resName == "clips_item_overlay_component" || resName == "scrubber" || resName == "clips_media_component") {
                         val parent = view.parent
                         if (parent is ViewGroup) {
                             sOverlayParents[parent] = true
@@ -165,17 +165,15 @@ class InstagramHook(
                                     val clipsOverlayCompId = res.getIdentifier("clips_item_overlay_component", "id", pkg)
                                     val clipsPauseMuteId = res.getIdentifier("clips_pause_and_mute_component", "id", pkg)
 
+                                    val clipsViewPagerId = res.getIdentifier("clips_viewer_view_pager", "id", pkg)
+
                                     val layoutListenerKey = 0x7F0B8888
                                     if (decorView.getTag(layoutListenerKey) == null) {
                                         decorView.setTag(layoutListenerKey, true)
-                                        decorView.viewTreeObserver.addOnGlobalLayoutListener {
-                                            val injectedBar = decorView.findViewWithTag<View>("LiquidGlassInjected")
+                                        var lastReelsShiftActive = false
+
+                                        fun updateShifts() {
                                             val isTabBarActive = (stockBar != null && stockBar.visibility == View.VISIBLE)
-
-                                            if (injectedBar != null) {
-                                                injectedBar.visibility = if (isTabBarActive) View.VISIBLE else View.GONE
-                                            }
-
                                             var isReelsTabActive = false
                                             if (isTabBarActive && clipsTabId != 0) {
                                                 val clipsTab = stockBar?.findViewById<View>(clipsTabId)
@@ -184,30 +182,47 @@ class InstagramHook(
                                                 }
                                             }
 
-                                            val shiftY = if (isReelsTabActive) -180.0f else 0.0f
+                                            if (isReelsTabActive || lastReelsShiftActive) {
+                                                lastReelsShiftActive = isReelsTabActive
+                                                val overlayShiftDp = hyperBouncePrefs.appFloat(
+                                                    "app_instagram_reels_overlay_shift",
+                                                    hyperBouncePrefs.appBottomMargin("instagram") + hyperBouncePrefs.appBarHeight("instagram") + 10f
+                                                )
+                                                val progressShiftDp = hyperBouncePrefs.appFloat(
+                                                    "app_instagram_reels_progress_shift",
+                                                    hyperBouncePrefs.appBottomMargin("instagram") + hyperBouncePrefs.appBarHeight("instagram") + 2f
+                                                )
+                                                val density = activity.resources.displayMetrics.density
+                                                val overlayShiftPx = if (isReelsTabActive) -(overlayShiftDp * density) else 0f
+                                                val progressShiftPx = if (isReelsTabActive) -(progressShiftDp * density) else 0f
 
-                                            for (overlayParent in sOverlayParents.keys) {
-                                                if (overlayParent != null && overlayParent.isAttachedToWindow) {
-                                                    for (c in 0 until overlayParent.childCount) {
-                                                        val sibling = overlayParent.getChildAt(c)
-                                                        val sibId = sibling.id
-                                                        if (sibId != View.NO_ID) {
-                                                            if (sibId == clipsGradientId ||
-                                                                sibId == clipsTouchBgId ||
-                                                                sibId == clipsOverlayCompId ||
-                                                                sibId == clipsPauseMuteId
-                                                            ) {
-                                                                continue
-                                                            }
-                                                        }
-
-                                                        // Elevate progress bar / scrubber and overlay elements uniformly above floating bar
-                                                        if (sibling.translationY != shiftY) {
-                                                            sibling.translationY = shiftY
-                                                        }
+                                                if (clipsViewPagerId != 0) {
+                                                    val vp = decorView.findViewById<ViewGroup>(clipsViewPagerId)
+                                                    if (vp != null) {
+                                                        applyReelsShifts(vp, overlayShiftPx, progressShiftPx)
+                                                    }
+                                                }
+                                                for (overlayParent in sOverlayParents.keys) {
+                                                    if (overlayParent != null && overlayParent.isAttachedToWindow) {
+                                                        applyReelsShifts(overlayParent, overlayShiftPx, progressShiftPx)
                                                     }
                                                 }
                                             }
+                                        }
+
+                                        decorView.viewTreeObserver.addOnGlobalLayoutListener {
+                                            val injectedBar = decorView.findViewWithTag<View>("LiquidGlassInjected")
+                                            val isTabBarActive = (stockBar != null && stockBar.visibility == View.VISIBLE)
+
+                                            if (injectedBar != null) {
+                                                injectedBar.visibility = if (isTabBarActive) View.VISIBLE else View.GONE
+                                            }
+                                            updateShifts()
+                                        }
+
+                                        decorView.viewTreeObserver.addOnPreDrawListener {
+                                            updateShifts()
+                                            true
                                         }
                                     }
                                 } catch (e: Exception) {}
@@ -249,6 +264,110 @@ class InstagramHook(
                 chain.proceed()
             }
         } catch (t: Throwable) {}
+    }
+
+    private fun findChildMatching(group: ViewGroup, predicate: (View) -> Boolean): View? {
+        for (i in 0 until group.childCount) {
+            val child = group.getChildAt(i) ?: continue
+            if (predicate(child)) return child
+            if (child is ViewGroup) {
+                val found = findChildMatching(child, predicate)
+                if (found != null) return found
+            }
+        }
+        return null
+    }
+
+    private fun applyReelsShifts(
+        root: View,
+        overlayShiftY: Float,
+        progressShiftY: Float,
+        depth: Int = 0
+    ) {
+        if (depth > 8 || root !is ViewGroup) return
+
+        val childCount = root.childCount
+        for (i in 0 until childCount) {
+            val child = root.getChildAt(i) ?: continue
+            val childId = child.id
+            val resName = if (childId != View.NO_ID && child.resources != null) {
+                try { child.resources.getResourceEntryName(childId) } catch (_: Throwable) { null }
+            } else null
+            val className = child.javaClass.name
+
+            // Skip non-overlay elements
+            if (resName == "clips_bottom_legibility_gradient_component" ||
+                resName == "clips_touchable_background" ||
+                resName == "clips_viewer_video_layout" ||
+                resName == "clips_video_container" ||
+                resName == "clips_single_media_component" ||
+                resName == "clips_pause_and_mute_component"
+            ) {
+                continue
+            }
+
+            // 1. Scrubber / Progress bar
+            val isDirectScrubber = resName == "scrubber" ||
+                                   className.contains("VideoScrubber") ||
+                                   (resName != null && resName.contains("scrub"))
+
+            if (isDirectScrubber) {
+                if (child.translationY != progressShiftY) {
+                    child.translationY = progressShiftY
+                }
+                continue
+            }
+
+            val hasScrubber = if (child is ViewGroup && resName != "clips_item_overlay_component") {
+                findChildMatching(child) { c ->
+                    val cId = c.id
+                    val cName = if (cId != View.NO_ID && c.resources != null) {
+                        try { c.resources.getResourceEntryName(cId) } catch (_: Throwable) { null }
+                    } else null
+                    cName == "scrubber" || c.javaClass.name.contains("VideoScrubber") || (cName != null && cName.contains("scrub"))
+                } != null
+            } else false
+
+            if (hasScrubber) {
+                if (child is ViewGroup) {
+                    child.clipChildren = false
+                    child.clipToPadding = false
+                }
+                if (child.translationY != progressShiftY) {
+                    child.translationY = progressShiftY
+                }
+                continue
+            }
+
+            // 2. Overlay / Buttons / Description
+            val isDirectOverlay = resName == "clips_item_overlay_component" ||
+                                  resName == "clips_ufi_component" ||
+                                  resName == "clips_media_info_component"
+
+            val hasOverlay = if (child is ViewGroup) {
+                findChildMatching(child) { c ->
+                    val cId = c.id
+                    val cName = if (cId != View.NO_ID && c.resources != null) {
+                        try { c.resources.getResourceEntryName(cId) } catch (_: Throwable) { null }
+                    } else null
+                    cName == "clips_item_overlay_component" ||
+                    cName == "clips_ufi_component" ||
+                    cName == "clips_media_info_component"
+                } != null
+            } else false
+
+            if (isDirectOverlay || hasOverlay) {
+                if (child.translationY != overlayShiftY) {
+                    child.translationY = overlayShiftY
+                }
+                continue
+            }
+
+            // 3. Recurse into container
+            if (child is ViewGroup && child.childCount > 0) {
+                applyReelsShifts(child, overlayShiftY, progressShiftY, depth + 1)
+            }
+        }
     }
 
     private fun log(msg: String) {
