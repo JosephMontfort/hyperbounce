@@ -43,6 +43,7 @@ internal object LiquidSliderHost {
 
     @JvmStatic
     fun ensure(target: View) {
+        if (target !is ProgressBar) return
         if (target.width <= 0 || target.height <= 0) return
         if (!target.isAttachedToWindow) return
         if (hosts.containsKey(target)) {
