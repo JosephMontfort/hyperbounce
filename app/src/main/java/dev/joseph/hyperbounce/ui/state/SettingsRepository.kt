@@ -263,13 +263,11 @@ class SettingsRepository(context: Context) {
             private set
         var reelsFullscreenZoom by prefsBooleanState("${prefix}_reels_fullscreen_zoom", defaults.reelsFullscreenZoom)
             private set
-        var reelsBlurIntensity by prefsFloatState("${prefix}_reels_blur_intensity", defaults.reelsBlurIntensity)
-            private set
 
         fun snapshot(): NavBarAppSettings = NavBarAppSettings(
             enabled, liquidGlass, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, bottomMargin,
             themeMode, accent, customAccentColor, pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow,
-            autoShrink, autoShrinkScale, autoShrinkSensitivity, reelsFullscreenZoom, reelsBlurIntensity
+            autoShrink, autoShrinkScale, autoShrinkSensitivity, reelsFullscreenZoom
         )
 
         @JvmName("setEnabledPref")
@@ -283,31 +281,11 @@ class SettingsRepository(context: Context) {
         @JvmName("setCornerRadiusPref")
         fun setCornerRadius(v: Float) { cornerRadius = v }
         @JvmName("setBarHeightPref")
-        fun setBarHeight(v: Float) {
-            barHeight = v
-            if (prefix == "app_instagram") {
-                val shiftOverlay = bottomMargin + v + 10f
-                val shiftProgress = bottomMargin + v + 2f
-                prefs.edit().putFloat("app_instagram_reels_overlay_shift", shiftOverlay)
-                    .putFloat("app_instagram_reels_progress_shift", shiftProgress).apply()
-                SettingsRepository.sendSettingsChangedBroadcast("app_instagram_reels_overlay_shift", shiftOverlay)
-                SettingsRepository.sendSettingsChangedBroadcast("app_instagram_reels_progress_shift", shiftProgress)
-            }
-        }
+        fun setBarHeight(v: Float) { barHeight = v }
         @JvmName("setTabWidthPref")
         fun setTabWidth(v: Float) { tabWidth = v }
         @JvmName("setBottomMarginPref")
-        fun setBottomMargin(v: Float) {
-            bottomMargin = v
-            if (prefix == "app_instagram") {
-                val shiftOverlay = v + barHeight + 10f
-                val shiftProgress = v + barHeight + 2f
-                prefs.edit().putFloat("app_instagram_reels_overlay_shift", shiftOverlay)
-                    .putFloat("app_instagram_reels_progress_shift", shiftProgress).apply()
-                SettingsRepository.sendSettingsChangedBroadcast("app_instagram_reels_overlay_shift", shiftOverlay)
-                SettingsRepository.sendSettingsChangedBroadcast("app_instagram_reels_progress_shift", shiftProgress)
-            }
-        }
+        fun setBottomMargin(v: Float) { bottomMargin = v }
         @JvmName("setThemeModePref")
         fun setThemeMode(v: ThemeMode) { themeMode = v }
         @JvmName("setAccentPref")
@@ -334,8 +312,6 @@ class SettingsRepository(context: Context) {
             SettingsRepository.sendSettingsChangedBroadcast("${prefix}_reels_fullscreen_zoom", v)
             SettingsRepository.sendSettingsChangedBroadcast("reels_fullscreen_zoom", v)
         }
-        @JvmName("setReelsBlurIntensityPref")
-        fun setReelsBlurIntensity(v: Float) { reelsBlurIntensity = v }
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
@@ -357,7 +333,6 @@ class SettingsRepository(context: Context) {
             autoShrinkScale = defaults.autoShrinkScale
             autoShrinkSensitivity = defaults.autoShrinkSensitivity
             reelsFullscreenZoom = defaults.reelsFullscreenZoom
-            reelsBlurIntensity = defaults.reelsBlurIntensity
         }
     }
 

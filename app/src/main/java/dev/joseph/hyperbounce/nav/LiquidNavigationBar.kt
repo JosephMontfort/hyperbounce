@@ -101,7 +101,6 @@ fun LiquidNavigationBar(
     badgeCounts: List<String?> = emptyList(),
     badgeDots: List<Boolean> = emptyList(),
     enablePixelCopy: Boolean = false,
-    reelsBlurIntensity: Float = 20f,
 ) {
     if (tabs.isEmpty()) return
 
@@ -169,7 +168,7 @@ fun LiquidNavigationBar(
         contentAlignment = Alignment.BottomCenter,
     ) {
         if (enablePixelCopy && liveBackdrop != null) {
-            val reelsBottomAreaHeight = bottomPadding + barHeight + 24.dp
+            val reelsBottomAreaHeight = bottomPadding + currentBarHeight + 24.dp
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -189,7 +188,7 @@ fun LiquidNavigationBar(
                         backdrop = liveBackdrop,
                         shape = { RectangleShape },
                         effects = {
-                            blur(reelsBlurIntensity.dp.toPx() * effectMultiplier)
+                            blur(12f.dp.toPx() * effectMultiplier)
                             runtimeShaderEffect(
                                 "ReelsProgressiveBlur",
                                 """
@@ -334,7 +333,7 @@ half4 main(float2 coord) {
                     )
                 }
 
-                if (!liquidGlass || enablePixelCopy) {
+                if (!liquidGlass) {
                     val barShape = RoundedCornerShape(currentCornerRadius)
                     val pillShape = CircleShape
 
