@@ -21,8 +21,8 @@ import kotlin.math.roundToInt
  * SettingsRepository.toggleGlass / .sliderGlass).
  */
 @Composable
-fun GlassFeelSection(
-    sectionTitle: String,
+fun GlassOpticsSection(
+    sectionTitle: String = "Liquid Glass Optics",
     holder: SettingsRepository.GlassFeelHolder,
     colors: HyperBounceColors,
     backdrop: Backdrop,
@@ -97,8 +97,19 @@ fun GlassFeelSection(
             enabled = enabled
         )
     }
+}
 
-    SectionHeader("$sectionTitle · Drag Physics", colors)
+@Composable
+fun DragPhysicsSection(
+    sectionTitle: String = "Drag Physics",
+    holder: SettingsRepository.GlassFeelHolder,
+    colors: HyperBounceColors,
+    backdrop: Backdrop,
+    enabled: Boolean
+) {
+    val feel = holder.snapshot()
+
+    SectionHeader(sectionTitle, colors)
     GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
         SettingsSliderRow(
             title = "Drag Sensitivity",
@@ -139,4 +150,28 @@ fun GlassFeelSection(
             enabled = enabled
         )
     }
+}
+
+@Composable
+fun GlassFeelSection(
+    sectionTitle: String,
+    holder: SettingsRepository.GlassFeelHolder,
+    colors: HyperBounceColors,
+    backdrop: Backdrop,
+    enabled: Boolean
+) {
+    GlassOpticsSection(
+        sectionTitle = sectionTitle,
+        holder = holder,
+        colors = colors,
+        backdrop = backdrop,
+        enabled = enabled
+    )
+    DragPhysicsSection(
+        sectionTitle = "$sectionTitle · Drag Physics",
+        holder = holder,
+        colors = colors,
+        backdrop = backdrop,
+        enabled = enabled
+    )
 }

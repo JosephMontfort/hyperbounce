@@ -14,7 +14,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import dev.joseph.hyperbounce.ui.components.ColorPickerDialog
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.SectionHeader
@@ -48,17 +47,18 @@ fun ToggleAppearanceScreen(
     }
 
     val presets = remember { AccentPreset.entries.filter { it != AccentPreset.Auto } }
+    val isGlassEnabled = repository.toggleEngine == RenderEngine.LiquidGlass
 
     ScreenScaffold(
         title = "Toggles Appearance",
-        subtitle = "Rendering engine & active switch accent color",
+        subtitle = "Active switch accent color & Liquid Glass optics",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            repository.setToggleEngine(RenderEngine.LiquidGlass)
             repository.setToggleAccent(AccentPreset.Green)
             repository.setToggleCustomColor(0xFF30D158L)
+            repository.toggleGlass.reloadFromDefaults()
         },
         restartAppTitle = "Restart All Scoped Apps",
         restartAppSubtitle = "Restart all apps in active scope",
@@ -66,21 +66,7 @@ fun ToggleAppearanceScreen(
             val pkgs = dev.joseph.hyperbounce.ui.state.XposedServiceBridge.getScopedPackages(context)
             dev.joseph.hyperbounce.ui.utils.RootUtils.restartScopedApps(context, pkgs)
         }
-    ) { contentBackdrop ->
-        item {
-            val combinedBackdrop = rememberCombinedBackdrop(backdrop, contentBackdrop)
-            SectionHeader("Rendering Engine", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                EngineRow(
-                    title = "Toggle Switches Engine",
-                    colors = colors,
-                    backdrop = combinedBackdrop,
-                    selected = repository.toggleEngine,
-                    onSelect = repository::setToggleEngine
-                )
-            }
-        }
-
+    ) { _ ->
         item {
             SectionHeader("Accent Color", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
@@ -115,6 +101,16 @@ fun ToggleAppearanceScreen(
                     }
                 }
             }
+        }
+
+        item {
+            GlassOpticsSection(
+                sectionTitle = "Liquid Glass Optics",
+                holder = repository.toggleGlass,
+                colors = colors,
+                backdrop = backdrop,
+                enabled = isGlassEnabled
+            )
         }
     }
 }

@@ -17,7 +17,7 @@ fun SliderPhysicsScreen(
 
     ScreenScaffold(
         title = "Sliders Drag Physics",
-        subtitle = "Liquid Glass lens feel, optics & spring dynamics",
+        subtitle = "Touch tracking & spring bounce dynamics",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
@@ -32,8 +32,8 @@ fun SliderPhysicsScreen(
         }
     ) { _ ->
         item {
-            GlassFeelSection(
-                sectionTitle = "Slider Glass",
+            DragPhysicsSection(
+                sectionTitle = "Slider Drag Physics",
                 holder = repository.sliderGlass,
                 colors = colors,
                 backdrop = backdrop,

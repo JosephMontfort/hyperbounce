@@ -14,7 +14,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import dev.joseph.hyperbounce.ui.components.ColorPickerDialog
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.SectionHeader
@@ -48,17 +47,18 @@ fun SliderAppearanceScreen(
     }
 
     val presets = remember { AccentPreset.entries.filter { it != AccentPreset.Auto } }
+    val isGlassEnabled = repository.sliderEngine == RenderEngine.LiquidGlass
 
     ScreenScaffold(
         title = "Sliders Appearance",
-        subtitle = "Rendering engine & active track accent color",
+        subtitle = "Active track accent color & Liquid Glass optics",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            repository.setSliderEngine(RenderEngine.LiquidGlass)
             repository.setSliderAccent(AccentPreset.Green)
             repository.setSliderCustomColor(0xFF30D158L)
+            repository.sliderGlass.reloadFromDefaults()
         },
         restartAppTitle = "Restart All Scoped Apps",
         restartAppSubtitle = "Restart all apps in active scope",
@@ -66,21 +66,7 @@ fun SliderAppearanceScreen(
             val pkgs = dev.joseph.hyperbounce.ui.state.XposedServiceBridge.getScopedPackages(context)
             dev.joseph.hyperbounce.ui.utils.RootUtils.restartScopedApps(context, pkgs)
         }
-    ) { contentBackdrop ->
-        item {
-            val combinedBackdrop = rememberCombinedBackdrop(backdrop, contentBackdrop)
-            SectionHeader("Rendering Engine", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                EngineRow(
-                    title = "Sliders Engine",
-                    colors = colors,
-                    backdrop = combinedBackdrop,
-                    selected = repository.sliderEngine,
-                    onSelect = repository::setSliderEngine
-                )
-            }
-        }
-
+    ) { _ ->
         item {
             SectionHeader("Accent Color", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
@@ -115,6 +101,16 @@ fun SliderAppearanceScreen(
                     }
                 }
             }
+        }
+
+        item {
+            GlassOpticsSection(
+                sectionTitle = "Liquid Glass Optics",
+                holder = repository.sliderGlass,
+                colors = colors,
+                backdrop = backdrop,
+                enabled = isGlassEnabled
+            )
         }
     }
 }

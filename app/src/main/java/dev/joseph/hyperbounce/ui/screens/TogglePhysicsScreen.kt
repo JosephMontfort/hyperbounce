@@ -17,7 +17,7 @@ fun TogglePhysicsScreen(
 
     ScreenScaffold(
         title = "Toggles Drag Physics",
-        subtitle = "Liquid Glass lens feel, optics & spring dynamics",
+        subtitle = "Touch tracking & spring bounce dynamics",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
@@ -32,8 +32,8 @@ fun TogglePhysicsScreen(
         }
     ) { _ ->
         item {
-            GlassFeelSection(
-                sectionTitle = "Toggle Glass",
+            DragPhysicsSection(
+                sectionTitle = "Toggle Drag Physics",
                 holder = repository.toggleGlass,
                 colors = colors,
                 backdrop = backdrop,

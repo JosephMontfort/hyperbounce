@@ -88,13 +88,35 @@ fun EngineScreen(
             val pkgs = dev.joseph.hyperbounce.ui.state.XposedServiceBridge.getScopedPackages(context)
             dev.joseph.hyperbounce.ui.utils.RootUtils.restartScopedApps(context, pkgs)
         }
-    ) { _ ->
+    ) { contentBackdrop ->
+        item {
+            val combinedBackdrop = rememberCombinedBackdrop(backdrop, contentBackdrop)
+            SectionHeader("Rendering Engine", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                EngineRow(
+                    title = "Toggle Switches",
+                    colors = colors,
+                    backdrop = combinedBackdrop,
+                    selected = repository.toggleEngine,
+                    onSelect = repository::setToggleEngine
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                EngineRow(
+                    title = "Sliders",
+                    colors = colors,
+                    backdrop = combinedBackdrop,
+                    selected = repository.sliderEngine,
+                    onSelect = repository::setSliderEngine
+                )
+            }
+        }
+
         item {
             SectionHeader("Toggle Switches", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 SettingsNavRow(
                     title = "Toggles Appearance",
-                    subtitle = "Rendering engine & active switch accent color",
+                    subtitle = "Accent color & Liquid Glass optics",
                     colors = colors,
                     iconTint = colors.accentGreen,
                     onClick = { onNavigate(Destination.ToggleAppearance) },
@@ -103,7 +125,7 @@ fun EngineScreen(
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsNavRow(
                     title = "Toggles Drag Physics",
-                    subtitle = "Liquid Glass lens depth, highlight & spring dynamics",
+                    subtitle = "Touch tracking & spring bounce dynamics",
                     colors = colors,
                     iconTint = colors.accentPurple,
                     onClick = { onNavigate(Destination.TogglePhysics) },
@@ -117,7 +139,7 @@ fun EngineScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 SettingsNavRow(
                     title = "Sliders Appearance",
-                    subtitle = "Rendering engine & active track accent color",
+                    subtitle = "Track accent & Liquid Glass optics",
                     colors = colors,
                     iconTint = colors.accentBlue,
                     onClick = { onNavigate(Destination.SliderAppearance) },
@@ -126,7 +148,7 @@ fun EngineScreen(
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsNavRow(
                     title = "Sliders Drag Physics",
-                    subtitle = "Liquid Glass lens depth, highlight & spring dynamics",
+                    subtitle = "Touch tracking & spring bounce dynamics",
                     colors = colors,
                     iconTint = colors.accentPurple,
                     onClick = { onNavigate(Destination.SliderPhysics) },
