@@ -151,7 +151,11 @@ public class LiquidTogglesHook extends XposedModule {
         while (parent instanceof View) {
             View pView = (View) parent;
             String className = pView.getClass().getName();
-            if (className.contains("ActionBar") || className.contains("RecyclerView") || className.contains("DecorView")) break;
+            if (className.contains("ActionBar") ||
+                    className.contains("RecyclerView") ||
+                    pView instanceof android.widget.AbsListView ||
+                    pView instanceof android.widget.ScrollView ||
+                    className.contains("DecorView")) break;
             pView.setClipToOutline(false);
             if (pView instanceof ViewGroup) {
                 ViewGroup vg = (ViewGroup) pView;
@@ -407,15 +411,15 @@ public class LiquidTogglesHook extends XposedModule {
             }
         }
 
+        int exp = 100;
         if (s.shaderInitialized) {
-            s.shader.setFloatUniform("thumbL", thumbL);
-            s.shader.setFloatUniform("thumbT", thumbT);
-            s.shader.setFloatUniform("thumbR", thumbR);
-            s.shader.setFloatUniform("thumbB", thumbB);
+            s.shader.setFloatUniform("thumbL", thumbL + exp);
+            s.shader.setFloatUniform("thumbT", thumbT + exp);
+            s.shader.setFloatUniform("thumbR", thumbR + exp);
+            s.shader.setFloatUniform("thumbB", thumbB + exp);
             s.shader.setFloatUniform("refractionHeight", 34.0f);
         }
 
-        int exp = 100;
         s.blurNode.setPosition(0, 0, w + exp * 2, h + exp * 2);
         Canvas rcBlur = s.blurNode.beginRecording(w + exp * 2, h + exp * 2);
         rcBlur.translate(exp, exp);
@@ -923,8 +927,11 @@ public class LiquidTogglesHook extends XposedModule {
                 @Override
                 public void onViewAttachedToWindow(View v) {
                     v.post(() -> {
-                        if (USE_LIQUID_GLASS_SLIDER && clazz.isInstance(v)) {
-                            dev.joseph.hyperbounce.toggles.LiquidSliderHost.ensure(v);
+                        if (clazz.isInstance(v)) {
+                            disableClipping(v);
+                            if (USE_LIQUID_GLASS_SLIDER) {
+                                dev.joseph.hyperbounce.toggles.LiquidSliderHost.ensure(v);
+                            }
                         }
                     });
                 }
@@ -936,8 +943,11 @@ public class LiquidTogglesHook extends XposedModule {
                 }
             });
             view.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
-                if (r - l > 0 && b - t > 0 && USE_LIQUID_GLASS_SLIDER && clazz.isInstance(v)) {
-                    dev.joseph.hyperbounce.toggles.LiquidSliderHost.ensure(v);
+                if (r - l > 0 && b - t > 0 && clazz.isInstance(v)) {
+                    disableClipping(v);
+                    if (USE_LIQUID_GLASS_SLIDER) {
+                        dev.joseph.hyperbounce.toggles.LiquidSliderHost.ensure(v);
+                    }
                 }
             });
             return result;
@@ -1013,6 +1023,8 @@ public class LiquidTogglesHook extends XposedModule {
             // FALLBACK TO THE FULLY CUSTOM SLIDER ENGINE
             Object result = chain.proceed();
             View view = (View) chain.getThisObject();
+            if (!view.isEnabled()) return false;
+            disableClipping(view);
             MotionEvent event = (MotionEvent) chain.getArg(0);
             SliderState s = sliderStateMap.get(view);
             if (s == null) {
@@ -1053,6 +1065,7 @@ public class LiquidTogglesHook extends XposedModule {
             }
 
             // FALLBACK TO THE FULLY CUSTOM SLIDER ENGINE
+            disableClipping(view);
 
             try {
                 Method getThumb = findMethod(view.getClass(), "getThumb");
