@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastCoerceIn
@@ -44,8 +45,10 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.drawPlainBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.runtimeShaderEffect
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.InnerShadow
@@ -164,6 +167,55 @@ fun LiquidNavigationBar(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter,
     ) {
+        if (enablePixelCopy && liveBackdrop != null) {
+            val reelsBottomAreaHeight = bottomPadding + currentBarHeight + 24.dp
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(reelsBottomAreaHeight)
+                    .align(Alignment.BottomCenter)
+                    .onGloballyPositioned { coordinates ->
+                        val position = coordinates.positionInWindow()
+                        liveBackdrop.setTargetBounds(
+                            left = position.x,
+                            top = position.y,
+                            width = coordinates.size.width,
+                            height = coordinates.size.height,
+                            paddingPx = 0,
+                        )
+                    }
+                    .drawPlainBackdrop(
+                        backdrop = liveBackdrop,
+                        shape = { RectangleShape },
+                        effects = {
+                            blur(12f.dp.toPx() * effectMultiplier)
+                            runtimeShaderEffect(
+                                "ReelsProgressiveBlur",
+                                """
+uniform shader content;
+uniform float2 size;
+layout(color) uniform half4 tint;
+uniform float tintIntensity;
+
+half4 main(float2 coord) {
+    float h = max(size.y, 1.0);
+    float normY = clamp(coord.y / h, 0.0, 1.0);
+    float progress = smoothstep(0.0, 0.35, normY);
+    half4 c = content.eval(coord);
+    half4 tinted = mix(c, tint, tintIntensity * progress);
+    return tinted * progress;
+}""",
+                                "content"
+                            ) {
+                                setFloatUniform("size", size.width, size.height)
+                                setColorUniform("tint", if (isLightTheme) Color.White else Color.Black)
+                                setFloatUniform("tintIntensity", if (isLightTheme) 0.35f else 0.45f)
+                            }
+                        }
+                    )
+            )
+        }
+
         Box(
             modifier = Modifier
                 .padding(bottom = bottomPadding)
@@ -447,21 +499,25 @@ fun LiquidNavigationBar(
                                 translationX = panelOffset
                             }
                             .onGloballyPositioned { coordinates ->
-                                val position = coordinates.positionInWindow()
-                                liveBackdrop.setTargetBounds(
-                                    left = position.x,
-                                    top = position.y,
-                                    width = coordinates.size.width,
-                                    height = coordinates.size.height,
-                                    paddingPx = capturePaddingPx,
-                                )
+                                if (!enablePixelCopy) {
+                                    val position = coordinates.positionInWindow()
+                                    liveBackdrop.setTargetBounds(
+                                        left = position.x,
+                                        top = position.y,
+                                        width = coordinates.size.width,
+                                        height = coordinates.size.height,
+                                        paddingPx = capturePaddingPx,
+                                    )
+                                }
                             }
                             .drawBackdrop(
                                 backdrop = liveBackdrop,
                                 shape = { androidx.compose.foundation.shape.RoundedCornerShape(currentCornerRadius) },
                                 effects = {
                                     vibrancy()
-                                    blur(8f.dp.toPx() * effectMultiplier)
+                                    if (!enablePixelCopy) {
+                                        blur(8f.dp.toPx() * effectMultiplier)
+                                    }
                                     lens(18f.dp.toPx() * effectMultiplier, 18f.dp.toPx() * effectMultiplier)
                                 },
                                 layerBlock = {
@@ -526,7 +582,9 @@ fun LiquidNavigationBar(
                                     effects = {
                                         val progress = dampedDragAnimation.pressProgress
                                         vibrancy()
-                                        blur(8f.dp.toPx() * effectMultiplier)
+                                        if (!enablePixelCopy) {
+                                            blur(8f.dp.toPx() * effectMultiplier)
+                                        }
                                         lens(
                                             18f.dp.toPx() * progress * effectMultiplier,
                                             18f.dp.toPx() * progress * effectMultiplier,
