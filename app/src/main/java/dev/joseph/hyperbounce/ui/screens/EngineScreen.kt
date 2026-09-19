@@ -27,12 +27,15 @@ import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import dev.joseph.hyperbounce.ui.Destination
+import dev.joseph.hyperbounce.ui.components.AppsIcon
 import dev.joseph.hyperbounce.ui.components.CheckmarkIcon
 import dev.joseph.hyperbounce.ui.components.ColorPickerDialog
 import dev.joseph.hyperbounce.ui.components.DropdownPicker
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
+import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
+import dev.joseph.hyperbounce.ui.glass.LocalGlassDialogHost
 import dev.joseph.hyperbounce.ui.state.AccentPreset
 import dev.joseph.hyperbounce.ui.state.RenderEngine
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
@@ -48,8 +51,20 @@ fun EngineScreen(
     onNavigate: (Destination) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val dialogHost = LocalGlassDialogHost.current
+    var showMiuixScopeDialog by remember { mutableStateOf(false) }
     var showToggleColorPicker by remember { mutableStateOf(false) }
     var showSliderColorPicker by remember { mutableStateOf(false) }
+
+    if (showMiuixScopeDialog) {
+        dialogHost.showConfirmation(
+            title = "LSPosed Scope Required",
+            message = "To hook third-party MIUIX apps (such as Hypercieler or Hyperlight), make sure they are checked in HyperBounce's module scope in LSPosed Manager and restart the target apps.",
+            confirmLabel = "Got It",
+            onConfirm = { showMiuixScopeDialog = false },
+            onDismiss = { showMiuixScopeDialog = false }
+        )
+    }
 
     if (showToggleColorPicker) {
         ColorPickerDialog(
@@ -119,6 +134,33 @@ fun EngineScreen(
                     selected = repository.sliderEngine,
                     onSelect = repository::setSliderEngine
                 )
+            }
+        }
+
+        item {
+            SectionHeader("Third-Party Apps", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                SettingsToggleRow(
+                    title = "MIUIX App Hooking",
+                    subtitle = "Auto-detect and replace toggles/sliders in third-party apps (e.g. Hypercieler, Hyperlight)",
+                    colors = colors,
+                    iconTint = colors.accentBlue,
+                    backdrop = backdrop,
+                    checked = repository.miuixAppsHookingEnabled,
+                    onCheckedChange = { enabled ->
+                        repository.setMiuixAppsHookingEnabled(enabled)
+                        if (enabled) {
+                            showMiuixScopeDialog = true
+                            android.widget.Toast.makeText(
+                                context,
+                                "Make sure target apps are enabled in HyperBounce's LSPosed scope!",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                ) {
+                    AppsIcon(color = Color.White, size = 18.dp)
+                }
             }
         }
 

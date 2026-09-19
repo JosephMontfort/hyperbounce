@@ -108,6 +108,8 @@ class SettingsRepository(context: Context) {
         private set
     var keypadEnabled by prefsBooleanState("engine_keypad_enabled", true)
         private set
+    var miuixAppsHookingEnabled by prefsBooleanState("miuix_apps_hooking_enabled", false)
+        private set
 
     var toggleAccent by prefsEnumState("toggle_accent", AccentPreset.Green)
         private set
@@ -154,6 +156,11 @@ class SettingsRepository(context: Context) {
         lockScreenKeypad.setEnabled(value)
     }
 
+    @JvmName("setMiuixAppsHookingEnabledPref")
+    fun setMiuixAppsHookingEnabled(value: Boolean) {
+        miuixAppsHookingEnabled = value
+    }
+
     @JvmName("setToggleAccentPref")
     fun setToggleAccent(value: AccentPreset) {
         toggleAccent = value
@@ -196,6 +203,7 @@ class SettingsRepository(context: Context) {
         toggleEngine = RenderEngine.LiquidGlass
         sliderEngine = RenderEngine.LiquidGlass
         keypadEnabled = true
+        miuixAppsHookingEnabled = false
         toggleAccent = AccentPreset.Green
         toggleCustomColor = 0xFF30D158L
         sliderAccent = AccentPreset.Green

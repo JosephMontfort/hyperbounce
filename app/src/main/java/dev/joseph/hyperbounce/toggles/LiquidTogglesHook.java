@@ -72,13 +72,11 @@ public class LiquidTogglesHook extends XposedModule {
             "miui.slidingwidget.widget.SlidingButton",
             "miui.widget.SlidingButton",
             "com.miui.systemui.widget.SlidingButton",
-            "miui.systemui.widget.SlidingButton",
-            "fan.slidingwidget.widget.SlidingButton"
+            "miui.systemui.widget.SlidingButton"
     };
 
     private static final String[] TARGET_SLIDER_CLASSES = {
-            "miuix.androidbasewidget.widget.SeekBar",
-            "fan.androidbase.widget.SeekBar"
+            "miuix.androidbasewidget.widget.SeekBar"
     };
 
     // Not `final`: set once per process from HyperBouncePrefs at the top of
@@ -1243,6 +1241,7 @@ public class LiquidTogglesHook extends XposedModule {
         }
 
         HyperBouncePrefs hyperBouncePrefs = null;
+        boolean miuixAppsHookingEnabled = false;
         try {
             hyperBouncePrefs = new HyperBouncePrefs(this);
             if (!hyperBouncePrefs.getModuleEnabled()) {
@@ -1255,6 +1254,7 @@ public class LiquidTogglesHook extends XposedModule {
             dev.joseph.hyperbounce.toggles.LiquidSliderHost.setHyperBouncePrefs(hyperBouncePrefs);
             toggleAccentColor = (int) hyperBouncePrefs.toggleAccentColor();
             sliderAccentColor = (int) hyperBouncePrefs.sliderAccentColor();
+            miuixAppsHookingEnabled = hyperBouncePrefs.getMiuixAppsHookingEnabled();
         } catch (Throwable t) {
             // This hook runs inside system-critical processes (android, systemui,
             // settings) — an uncaught exception here is a much worse outcome than falling
@@ -1305,6 +1305,48 @@ public class LiquidTogglesHook extends XposedModule {
             applyUnifiedToggleEngine(className, packageClassLoader);
         for (String className : TARGET_SLIDER_CLASSES)
             applyUnifiedSliderEngine(className, packageClassLoader);
+
+        if (miuixAppsHookingEnabled) {
+            applyUnifiedToggleEngine("fan.slidingwidget.widget.SlidingButton", packageClassLoader);
+            applyUnifiedSliderEngine("fan.androidbase.widget.SeekBar", packageClassLoader);
+
+            if (!packageName.equals("com.android.systemui") &&
+                    !packageName.equals("miui.systemui.plugin")) {
+                try {
+                    Method loadClass = ClassLoader.class.getDeclaredMethod(
+                            "loadClass", String.class, boolean.class);
+                    loadClass.setAccessible(true);
+                    installHook(loadClass, chain -> {
+                        String name = (String) chain.getArg(0);
+                        if (name == null ||
+                                (!name.endsWith("SlidingButton") &&
+                                 !name.endsWith("SlidingSwitch") &&
+                                 !name.endsWith("SlidingSwitchCompat") &&
+                                 !name.endsWith("SeekBar"))) {
+                            return chain.proceed();
+                        }
+
+                        if (name.startsWith("android.") || name.startsWith("androidx.") ||
+                                name.startsWith("java.") || name.startsWith("kotlin.")) {
+                            return chain.proceed();
+                        }
+
+                        Object result = chain.proceed();
+                        if (result instanceof Class<?>) {
+                            Class<?> clazz = (Class<?>) result;
+                            if (android.widget.CompoundButton.class.isAssignableFrom(clazz)) {
+                                applyUnifiedToggleEngine(name, clazz.getClassLoader());
+                            } else if (android.widget.ProgressBar.class.isAssignableFrom(clazz)) {
+                                applyUnifiedSliderEngine(name, clazz.getClassLoader());
+                            }
+                        }
+                        return result;
+                    });
+                } catch (Throwable t) {
+                    log(4, "HyperBounce", "Dynamic ClassLoader hook failed for " + packageName, t);
+                }
+            }
+        }
 
         if (packageName.equals("com.android.phone") ||
                 packageName.equals("com.android.contacts") ||

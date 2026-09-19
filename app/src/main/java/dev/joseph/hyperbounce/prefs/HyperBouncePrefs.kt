@@ -135,6 +135,9 @@ class HyperBouncePrefs(module: XposedInterface) {
     val keypadEnabled: Boolean
         get() = prefs.getBoolean("engine_keypad_enabled", true)
 
+    val miuixAppsHookingEnabled: Boolean
+        get() = prefs.getBoolean("miuix_apps_hooking_enabled", false)
+
     fun toggleAccentColor(): Long {
         val presetName = prefs.getString("toggle_accent", "Green") ?: "Green"
         val customColor = prefs.getLong("toggle_custom_color", 0xFF30D158L)

@@ -79,6 +79,7 @@ data class EngineSettings(
     val toggleEngine: RenderEngine = RenderEngine.LiquidGlass,
     val sliderEngine: RenderEngine = RenderEngine.LiquidGlass,
     val keypadEnabled: Boolean = true,
+    val miuixAppsHookingEnabled: Boolean = false,
     val toggleAccent: AccentPreset = AccentPreset.Green,
     val toggleCustomColor: Long = 0xFF30D158L,
     val sliderAccent: AccentPreset = AccentPreset.Green,
