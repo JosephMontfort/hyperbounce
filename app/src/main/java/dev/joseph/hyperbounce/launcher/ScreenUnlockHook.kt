@@ -97,55 +97,6 @@ object ScreenUnlockHook {
         return Triple(cx ?: -1, cy ?: -1, cont ?: 0L)
     }
 
-    private var sPivotField: Field? = null
-
-    private fun getPivotField(clazz: Class<*>): Field? {
-        if (sPivotField != null) return sPivotField
-        var c: Class<*>? = clazz
-        while (c != null && c != Any::class.java) {
-            try {
-                val f = c.getDeclaredField("mPivot")
-                f.isAccessible = true
-                sPivotField = f
-                return f
-            } catch (_: Throwable) {
-                c = c.superclass
-            }
-        }
-        return null
-    }
-
-    private fun getScreenDimensions(classLoader: ClassLoader?): Pair<Int, Int> {
-        try {
-            if (classLoader != null) {
-                val devConfigsClass = Class.forName("com.miui.home.common.device.DeviceConfigs", false, classLoader)
-                val getW = devConfigsClass.getMethod("getScreenWidth")
-                val getH = devConfigsClass.getMethod("getScreenHeight")
-                val w = (getW.invoke(null) as? Number)?.toInt() ?: 0
-                val h = (getH.invoke(null) as? Number)?.toInt() ?: 0
-                if (w > 0 && h > 0) return Pair(w, h)
-            }
-        } catch (_: Throwable) {}
-        val dm = android.content.res.Resources.getSystem().displayMetrics
-        return Pair(dm.widthPixels, dm.heightPixels)
-    }
-
-    private fun updatePivot(instance: Any?, classLoader: ClassLoader?) {
-        if (instance == null) return
-        val cfg = LauncherConfigHolder.unlockConfig
-        if (!cfg.enabled || cfg.animMode != 1) return
-        try {
-            val f = getPivotField(instance.javaClass) ?: return
-            val (screenW, _) = getScreenDimensions(classLoader)
-            val pivotX = screenW / 2
-            val pivotY = 0
-            f.set(instance, intArrayOf(pivotX, pivotY))
-            Log.d(TAG, "Configured top-center mPivot: [$pivotX, $pivotY]")
-        } catch (t: Throwable) {
-            Log.w(TAG, "Failed to update mPivot", t)
-        }
-    }
-
     fun init(module: XposedInterface, classLoader: ClassLoader?) {
         if (classLoader == null) return
         sClassLoader = classLoader
@@ -232,14 +183,12 @@ object ScreenUnlockHook {
 
                     if (!cfg.enabled) return chain.proceed()
 
-                    updatePivot(chain.thisObject, classLoader)
-
                     if (view != null) {
                         try {
                             val loc = IntArray(2)
                             view.getLocationOnScreen(loc)
-                            val vx = loc[0] - view.translationX + (view.width / 2.0f)
-                            val vy = loc[1] - view.translationY + (view.height / 2.0f)
+                            val vx = loc[0] + (view.width / 2.0f)
+                            val vy = loc[1] + (view.height / 2.0f)
                             val dm = view.context.resources.displayMetrics
                             val screenW = dm.widthPixels.toFloat()
                             val screenH = dm.heightPixels.toFloat()
@@ -352,8 +301,8 @@ object ScreenUnlockHook {
                         val velocityBoost = kF * vInf
 
                         if (isDockView.get() || isIndicator.get()) {
-                            val resp = (0.46f * cfg.durationScale / (1.0f + (velocityBoost * 0.25f))).coerceIn(0.35f, 0.70f)
-                            val damp = 0.88f
+                            val resp = (cfg.kineticDockResponse * cfg.durationScale / (1.0f + (velocityBoost * 0.25f))).coerceIn(0.15f, 1.5f)
+                            val damp = cfg.kineticDockDamping.coerceIn(0.20f, 1.0f)
                             activeResponse.set(resp)
                             activeDamping.set(damp)
                             floatArrayOf(damp, resp)
@@ -372,10 +321,23 @@ object ScreenUnlockHook {
                                 cfg.getDyn("r${safeRow}_center_settle", ScreenUnlockDefaults.rowSettle(safeRow, cfg.gridRows, false))
                             }
 
-                            // Stable iOS damping [0.80, 0.95]: single smooth descent and soft cushion, zero oscillation
-                            val finalDamping = (0.88f - (customBounce * 0.10f)).coerceIn(0.80f, 0.95f)
-                            val scaledResponse = customSettle * cfg.durationScale * 0.70f
-                            val finalResponse = (scaledResponse / (1.0f + (velocityBoost * 0.30f))).coerceIn(0.38f, 0.70f)
+                            val baseZ = cfg.getDyn("r${safeRow}_z", ScreenUnlockDefaults.rowZ(safeRow, cfg.gridRows)).coerceAtLeast(100.0f)
+                            val zMult = 1.0f + (velocityBoost * 0.35f)
+                            val targetZ = (baseZ * zMult).coerceAtLeast(10.0f)
+                            val zRatio = (500.0f / targetZ).coerceIn(0.20f, 2.0f)
+
+                            val finalDamping: Float
+                            if (customBounce <= 0.0f) {
+                                finalDamping = 1.0f
+                            } else {
+                                val dampingSensitivity = ((1.0f - cfg.cascadeDamping) / 0.14f).coerceAtLeast(0.1f)
+                                val effectiveBounce = customBounce * (1.0f + (velocityBoost * 1.5f))
+                                val dampingDrop = effectiveBounce * zRatio * dampingSensitivity * 1.35f
+                                finalDamping = (1.0f - dampingDrop).coerceIn(0.25f, 1.0f)
+                            }
+
+                            val scaledResponse = customSettle * cfg.durationScale
+                            val finalResponse = (scaledResponse / (1.0f + (velocityBoost * 0.40f))).coerceIn(0.15f, 1.5f)
 
                             activeResponse.set(finalResponse)
                             activeDamping.set(finalDamping)
@@ -413,7 +375,21 @@ object ScreenUnlockHook {
                             if (cfg.animMode == 0) {
                                 args[2] = startVal * cfg.zDepthMultiplier
                             } else {
-                                args[2] = -1000.0f
+                                val kF = currentKineticFactor.get()
+                                val vInf = cfg.velocityInfluence
+                                val velocityBoost = kF * vInf
+                                val safeRow = currentRow.get().coerceIn(0, max(0, cfg.gridRows - 1))
+
+                                val targetZ: Float = if (isDockView.get() || isIndicator.get()) {
+                                    val zMult = 1.0f + (velocityBoost * 0.25f)
+                                    (cfg.kineticDockZDepth * zMult).coerceAtLeast(10.0f)
+                                } else {
+                                    val baseZ = cfg.getDyn("r${safeRow}_z", ScreenUnlockDefaults.rowZ(safeRow, cfg.gridRows))
+                                    val zMult = 1.0f + (velocityBoost * 0.35f)
+                                    (baseZ * zMult).coerceAtLeast(10.0f)
+                                }
+
+                                args[2] = -abs(targetZ)
                             }
                         }
                         val animResult = chain.proceed(args)
@@ -431,12 +407,7 @@ object ScreenUnlockHook {
                                         arrayOf(listenerClass)
                                     ) { _, method, _ ->
                                         if (method.name == "onAnimationEnd") {
-                                            val vRef = weakV.get()
-                                            vRef?.translationZ = 0.0f
-                                            vRef?.translationX = 0.0f
-                                            vRef?.translationY = 0.0f
-                                            vRef?.scaleX = 1.0f
-                                            vRef?.scaleY = 1.0f
+                                            weakV.get()?.translationZ = 0.0f
                                         }
                                         null
                                     }
@@ -461,10 +432,6 @@ object ScreenUnlockHook {
                                     fun resetZ(v: View?) {
                                         if (v == null) return
                                         v.translationZ = 0.0f
-                                        v.translationX = 0.0f
-                                        v.translationY = 0.0f
-                                        v.scaleX = 1.0f
-                                        v.scaleY = 1.0f
                                         if (v is ViewGroup) {
                                             for (k in 0 until v.childCount) {
                                                 resetZ(v.getChildAt(k))
@@ -481,122 +448,6 @@ object ScreenUnlockHook {
                     }
                 }
             } catch (_: Throwable) {}
-
-            // Hook UserPresentAnimationCompatBase pivot lifecycle and 3D-to-2D projection
-            try {
-                val baseAnimClass = Class.forName(
-                    "com.miui.home.launcher.compat.UserPresentAnimationCompatBase",
-                    false,
-                    classLoader
-                )
-
-                // 1. Hook changePivot to anchor pivot at the top of the display
-                try {
-                    for (m in baseAnimClass.declaredMethods) {
-                        if (m.name == "changePivot" && m.parameterTypes.isEmpty()) {
-                            module.hook(m).intercept(object : XposedInterface.Hooker {
-                                override fun intercept(chain: XposedInterface.Chain): Any? {
-                                    val res = chain.proceed()
-                                    updatePivot(chain.thisObject, classLoader)
-                                    return res
-                                }
-                            })
-                            Log.d(TAG, "Hooked UserPresentAnimationCompatBase.changePivot")
-                        }
-                    }
-                } catch (t: Throwable) {
-                    Log.w(TAG, "Failed to hook UserPresentAnimationCompatBase.changePivot", t)
-                }
-
-                // 2. Hook prepareUserPresentAnimation to ensure pivot is applied before child tags are calculated
-                try {
-                    for (m in baseAnimClass.declaredMethods) {
-                        if (m.name == "prepareUserPresentAnimation" && m.parameterTypes.size == 1 && m.parameterTypes[0] == View::class.java) {
-                            module.hook(m).intercept(object : XposedInterface.Hooker {
-                                override fun intercept(chain: XposedInterface.Chain): Any? {
-                                    updatePivot(chain.thisObject, classLoader)
-                                    return chain.proceed()
-                                }
-                            })
-                            Log.d(TAG, "Hooked UserPresentAnimationCompatBase.prepareUserPresentAnimation")
-                        }
-                    }
-                } catch (t: Throwable) {
-                    Log.w(TAG, "Failed to hook UserPresentAnimationCompatBase.prepareUserPresentAnimation", t)
-                }
-
-                // 3. Hook UserPresentAnimationCompatFold.updatePivot for foldable device support
-                try {
-                    val foldAnimClass = Class.forName(
-                        "com.miui.home.launcher.compat.UserPresentAnimationCompatFold",
-                        false,
-                        classLoader
-                    )
-                    for (m in foldAnimClass.declaredMethods) {
-                        if (m.name == "updatePivot" && m.parameterTypes.isEmpty()) {
-                            module.hook(m).intercept(object : XposedInterface.Hooker {
-                                override fun intercept(chain: XposedInterface.Chain): Any? {
-                                    val res = chain.proceed()
-                                    updatePivot(chain.thisObject, classLoader)
-                                    return res
-                                }
-                            })
-                            Log.d(TAG, "Hooked UserPresentAnimationCompatFold.updatePivot")
-                        }
-                    }
-                } catch (_: Throwable) {}
-
-                // 4. Hook conversionValueFrom3DTo2D: true perspective flight from top-center pivot
-                val convMethod = baseAnimClass.getDeclaredMethod(
-                    "conversionValueFrom3DTo2D",
-                    Int::class.javaPrimitiveType,
-                    Int::class.javaPrimitiveType,
-                    Float::class.javaPrimitiveType
-                )
-                module.hook(convMethod).intercept(object : XposedInterface.Hooker {
-                    override fun intercept(chain: XposedInterface.Chain): Any? {
-                        val result = chain.proceed() as? FloatArray ?: return chain.proceed()
-                        val cfg = LauncherConfigHolder.unlockConfig
-                        if (cfg.enabled) {
-                            val rawArgs = chain.args
-                            fun getArg(index: Int): Any? {
-                                return if (rawArgs is List<*>) rawArgs.getOrNull(index) else (rawArgs as? Array<*>)?.getOrNull(index)
-                            }
-                            val argI = (getArg(0) as? Number)?.toInt() ?: 0
-                            val argI2 = (getArg(1) as? Number)?.toInt() ?: 0
-                            val f = (getArg(2) as? Number)?.toFloat() ?: 0.0f
-
-                            if (cfg.animMode == 1) {
-                                // Normalized spring displacement fraction:
-                                // Starts at 1.0f (f = -1000f), descends to 0.0f (f = 0f), with gentle settle clamp
-                                val fraction = (-f / 1000.0f).coerceIn(-0.06f, 1.0f)
-
-                                // Authentic iOS drop: every icon drops from the top, lower rows drop slightly further
-                                val posY = argI2.coerceAtLeast(100).toFloat()
-                                val initialDropY = -(180.0f + (posY * 0.12f))
-                                val initialPinchX = -argI * 0.08f
-
-                                result[0] = initialPinchX * fraction * cfg.pivotXSpread
-                                result[1] = initialDropY * fraction
-                                result[2] = 1.0f - (0.18f * fraction)
-                            } else {
-                                val zScale = if (f <= 0.0f) {
-                                    (1.0f + (f / 2000.0f)).coerceIn(0.65f, 1.0f)
-                                } else {
-                                    (1.0f + (f / 1500.0f)).coerceIn(1.0f, 1.08f)
-                                }
-                                result[0] = (zScale - 1.0f) * argI
-                                result[1] = (zScale - 1.0f) * argI2
-                                result[2] = zScale
-                            }
-                        }
-                        return result
-                    }
-                })
-                Log.i(TAG, "Hooked UserPresentAnimationCompatBase.conversionValueFrom3DTo2D successfully")
-            } catch (t: Throwable) {
-                Log.e(TAG, "Failed to hook UserPresentAnimationCompatBase hooks", t)
-            }
 
             Log.i(TAG, "Hooked UserPresentAnimationCompatPhone and SpringAnimator successfully")
         } catch (t: Throwable) {

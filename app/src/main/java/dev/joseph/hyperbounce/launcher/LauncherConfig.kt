@@ -65,8 +65,6 @@ data class ScreenUnlockConfig(
     val kineticDockDamping: Float = 1.00f,
     val kineticDockResponse: Float = 0.55f,
     val kineticDockZDepth: Float = 800.0f,
-    val pivotYRatio: Float = -0.15f,
-    val pivotXSpread: Float = 0.70f,
 
     // Row-by-row dynamics (r0_z..r6_z, r0_center_bounce..r6_center_bounce, etc.)
     val dyn: Map<String, Float> = emptyMap()
@@ -153,8 +151,6 @@ object LauncherConfigHolder {
             kineticDockDamping = prefs.getFloat("unlock_kinetic_dock_damping", 1.00f),
             kineticDockResponse = prefs.getFloat("unlock_kinetic_dock_response", 0.55f),
             kineticDockZDepth = prefs.getFloat("unlock_kinetic_dock_z_depth", 800.0f),
-            pivotYRatio = prefs.getFloat("unlock_pivot_y_ratio", -0.15f),
-            pivotXSpread = prefs.getFloat("unlock_pivot_x_spread", 0.70f),
             dyn = dynMap
         )
 
