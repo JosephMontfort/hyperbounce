@@ -33,11 +33,13 @@ class InstagramHook(
                 svlClass.getDeclaredMethod("getEnforceTextureView")
             ).intercept { true }
             for (ctor in svlClass.declaredConstructors) {
-                module.hook(ctor).after { chain ->
+                module.hook(ctor).intercept { chain ->
+                    val result = chain.proceed()
                     try {
                         val m = svlClass.getMethod("setEnforceTextureView", Boolean::class.javaPrimitiveType)
                         m.invoke(chain.thisObject, true)
                     } catch (_: Throwable) {}
+                    result
                 }
             }
         } catch (t: Throwable) {}
@@ -48,11 +50,13 @@ class InstagramHook(
                 rcflClass.getDeclaredMethod("getEnforceTextureView")
             ).intercept { true }
             for (ctor in rcflClass.declaredConstructors) {
-                module.hook(ctor).after { chain ->
+                module.hook(ctor).intercept { chain ->
+                    val result = chain.proceed()
                     try {
                         val m = rcflClass.getMethod("setEnforceTextureView", Boolean::class.javaPrimitiveType)
                         m.invoke(chain.thisObject, true)
                     } catch (_: Throwable) {}
+                    result
                 }
             }
         } catch (t: Throwable) {}
@@ -63,11 +67,13 @@ class InstagramHook(
                 mflClass.getDeclaredMethod("getEnforceTextureView")
             ).intercept { true }
             for (ctor in mflClass.declaredConstructors) {
-                module.hook(ctor).after { chain ->
+                module.hook(ctor).intercept { chain ->
+                    val result = chain.proceed()
                     try {
                         val m = mflClass.getMethod("setEnforceTextureView", Boolean::class.javaPrimitiveType)
                         m.invoke(chain.thisObject, true)
                     } catch (_: Throwable) {}
+                    result
                 }
             }
         } catch (t: Throwable) {}
