@@ -16,6 +16,10 @@ class InstagramHook(
 ) {
     private val sOverlayParents = WeakHashMap<ViewGroup, Boolean>()
 
+    companion object {
+        var reelsPinchZoomActive = false
+    }
+
     fun onPackageReady() {
         val hyperBouncePrefs = HyperBouncePrefs(module)
         if (!hyperBouncePrefs.moduleEnabled || !hyperBouncePrefs.appEnabled("instagram")) {
@@ -77,10 +81,11 @@ class InstagramHook(
 
                     if (resName == "clips_video_container" || resName == "clips_viewer_video_layout") {
                         val lp = view.layoutParams
-                        if (lp != null && lp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+                        if (reelsPinchZoomActive && lp != null && lp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
                             lp.height = ViewGroup.LayoutParams.MATCH_PARENT
                             view.layoutParams = lp
                         }
+                        setupReelsPinchZoom(view)
                     }
 
                     if (resName == "layout_container_main_wrapper") {
@@ -101,45 +106,47 @@ class InstagramHook(
                                     val clipsTouchBgId = res.getIdentifier("clips_touchable_background", "id", pkg)
                                     val clipsOverlayCompId = res.getIdentifier("clips_item_overlay_component", "id", pkg)
                                     val clipsPauseMuteId = res.getIdentifier("clips_pause_and_mute_component", "id", pkg)
-                                    val scrubberId = res.getIdentifier("scrubber", "id", pkg)
 
-                                    decorView.viewTreeObserver.addOnGlobalLayoutListener {
-                                        val injectedBar = decorView.findViewWithTag<View>("LiquidGlassInjected")
-                                        val isTabBarActive = (stockBar != null && stockBar.visibility == View.VISIBLE)
+                                    val layoutListenerKey = 0x7F0B8888
+                                    if (decorView.getTag(layoutListenerKey) == null) {
+                                        decorView.setTag(layoutListenerKey, true)
+                                        decorView.viewTreeObserver.addOnGlobalLayoutListener {
+                                            val injectedBar = decorView.findViewWithTag<View>("LiquidGlassInjected")
+                                            val isTabBarActive = (stockBar != null && stockBar.visibility == View.VISIBLE)
 
-                                        if (injectedBar != null) {
-                                            injectedBar.visibility = if (isTabBarActive) View.VISIBLE else View.GONE
-                                        }
-
-                                        var isReelsTabActive = false
-                                        if (isTabBarActive && clipsTabId != 0) {
-                                            val clipsTab = stockBar?.findViewById<View>(clipsTabId)
-                                            if (clipsTab != null && (clipsTab.isSelected || clipsTab.isActivated)) {
-                                                isReelsTabActive = true
+                                            if (injectedBar != null) {
+                                                injectedBar.visibility = if (isTabBarActive) View.VISIBLE else View.GONE
                                             }
-                                        }
 
-                                        val shiftY = if (isReelsTabActive) -180.0f else 0.0f
+                                            var isReelsTabActive = false
+                                            if (isTabBarActive && clipsTabId != 0) {
+                                                val clipsTab = stockBar?.findViewById<View>(clipsTabId)
+                                                if (clipsTab != null && (clipsTab.isSelected || clipsTab.isActivated)) {
+                                                    isReelsTabActive = true
+                                                }
+                                            }
 
-                                        for (overlayParent in sOverlayParents.keys) {
-                                            if (overlayParent != null && overlayParent.isAttachedToWindow) {
-                                                for (c in 0 until overlayParent.childCount) {
-                                                    val sibling = overlayParent.getChildAt(c)
-                                                    val sibId = sibling.id
-                                                    if (sibId != View.NO_ID) {
-                                                        if (sibId == clipsGradientId ||
-                                                            sibId == clipsTouchBgId ||
-                                                            sibId == clipsOverlayCompId ||
-                                                            sibId == clipsPauseMuteId
-                                                        ) {
-                                                            continue
+                                            val shiftY = if (isReelsTabActive) -180.0f else 0.0f
+
+                                            for (overlayParent in sOverlayParents.keys) {
+                                                if (overlayParent != null && overlayParent.isAttachedToWindow) {
+                                                    for (c in 0 until overlayParent.childCount) {
+                                                        val sibling = overlayParent.getChildAt(c)
+                                                        val sibId = sibling.id
+                                                        if (sibId != View.NO_ID) {
+                                                            if (sibId == clipsGradientId ||
+                                                                sibId == clipsTouchBgId ||
+                                                                sibId == clipsOverlayCompId ||
+                                                                sibId == clipsPauseMuteId
+                                                            ) {
+                                                                continue
+                                                            }
                                                         }
-                                                    }
 
-                                                    if (containsScrubber(sibling, 0, scrubberId)) continue
-
-                                                    if (sibling.translationY != shiftY) {
-                                                        sibling.translationY = shiftY
+                                                        // Elevate progress bar / scrubber and overlay elements uniformly above floating bar
+                                                        if (sibling.translationY != shiftY) {
+                                                            sibling.translationY = shiftY
+                                                        }
                                                     }
                                                 }
                                             }
@@ -186,23 +193,43 @@ class InstagramHook(
         } catch (t: Throwable) {}
     }
 
-    private fun containsScrubber(view: View?, depth: Int, scrubberId: Int): Boolean {
-        if (view == null || depth > 4) return false
-        val id = view.id
-        if (id != View.NO_ID) {
-            if (scrubberId != 0 && id == scrubberId) return true
-            if (view.resources != null) {
-                try {
-                    if (view.resources.getResourceEntryName(id) == "scrubber") return true
-                } catch (e: Exception) {}
+    private fun setupReelsPinchZoom(view: View) {
+        val tagKey = 0x7F0B8889
+        if (view.getTag(tagKey) != null) return
+        view.setTag(tagKey, true)
+
+        val scaleDetector = android.view.ScaleGestureDetector(
+            view.context,
+            object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                override fun onScale(detector: android.view.ScaleGestureDetector): Boolean {
+                    val factor = detector.scaleFactor
+                    if (factor > 1.12f && !reelsPinchZoomActive) {
+                        reelsPinchZoomActive = true
+                        val lp = view.layoutParams
+                        if (lp != null && lp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+                            lp.height = ViewGroup.LayoutParams.MATCH_PARENT
+                            view.layoutParams = lp
+                        }
+                        return true
+                    } else if (factor < 0.88f && reelsPinchZoomActive) {
+                        reelsPinchZoomActive = false
+                        val lp = view.layoutParams
+                        if (lp != null && lp.height == ViewGroup.LayoutParams.MATCH_PARENT) {
+                            lp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                            view.layoutParams = lp
+                        }
+                        return true
+                    }
+                    return false
+                }
             }
-        }
-        if (view is ViewGroup) {
-            for (i in 0 until view.childCount) {
-                if (containsScrubber(view.getChildAt(i), depth + 1, scrubberId)) return true
+        )
+        view.setOnTouchListener { _, event ->
+            if (event.pointerCount >= 2) {
+                scaleDetector.onTouchEvent(event)
             }
+            false
         }
-        return false
     }
 
     private fun log(msg: String) {

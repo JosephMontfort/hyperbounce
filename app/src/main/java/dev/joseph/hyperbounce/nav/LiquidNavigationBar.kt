@@ -95,6 +95,9 @@ fun LiquidNavigationBar(
     isShrunk: Boolean = false,
     shrinkScale: Float = 0.70f,
     scrollShrinkState: ScrollShrinkState? = null,
+    badgeCounts: List<String?> = emptyList(),
+    badgeDots: List<Boolean> = emptyList(),
+    enablePixelCopy: Boolean = false,
 ) {
     if (tabs.isEmpty()) return
 
@@ -126,6 +129,7 @@ fun LiquidNavigationBar(
     }
 
     if (liveBackdrop != null) {
+        liveBackdrop.enablePixelCopy = enablePixelCopy
         DisposableEffect(liveBackdrop) {
             sourceView.post { liveBackdrop.start() }
             onDispose { liveBackdrop.release() }
@@ -359,6 +363,8 @@ fun LiquidNavigationBar(
                                     accentColor = null,
                                     label = labels.getOrNull(index),
                                     scaleFactor = currentScale,
+                                    badgeCount = badgeCounts.getOrNull(index),
+                                    hasBadgeDot = badgeDots.getOrNull(index) ?: false,
                                     onClick = {
                                         onTabSelected(index)
                                         dampedDragAnimation.animateToValue(index.toFloat())
@@ -414,6 +420,8 @@ fun LiquidNavigationBar(
                                     accentColor = accentColor,
                                     label = labels.getOrNull(index),
                                     scaleFactor = currentScale,
+                                    badgeCount = badgeCounts.getOrNull(index),
+                                    hasBadgeDot = badgeDots.getOrNull(index) ?: false,
                                     onClick = null,
                                 )
                             }
@@ -485,6 +493,8 @@ fun LiquidNavigationBar(
                                 accentColor = null,
                                 label = labels.getOrNull(index),
                                 scaleFactor = currentScale,
+                                badgeCount = badgeCounts.getOrNull(index),
+                                hasBadgeDot = badgeDots.getOrNull(index) ?: false,
                                 onClick = {
                                     onTabSelected(index)
                                     dampedDragAnimation.animateToValue(index.toFloat())
@@ -540,6 +550,8 @@ fun LiquidNavigationBar(
                                     accentColor = accentColor,
                                     label = labels.getOrNull(index),
                                     scaleFactor = currentScale,
+                                    badgeCount = badgeCounts.getOrNull(index),
+                                    hasBadgeDot = badgeDots.getOrNull(index) ?: false,
                                     onClick = {
                                         onTabSelected(index)
                                         dampedDragAnimation.animateToValue(index.toFloat())
@@ -685,9 +697,12 @@ private fun RowScope.LiquidBottomTab(
     label: String?,
     accentColor: Color? = null,
     scaleFactor: Float = 1f,
+    badgeCount: String? = null,
+    hasBadgeDot: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
     val scale = LocalLiquidBottomTabScale.current
+    val isDark = isSystemInDarkTheme()
     Column(
         Modifier
             .then(
@@ -711,16 +726,45 @@ private fun RowScope.LiquidBottomTab(
     ) {
         if (bitmap != null) {
             val baseSize = if (label.isNullOrEmpty()) 28.dp else 24.dp
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = null,
-                colorFilter = if (isCircular || accentColor == null) null else ColorFilter.tint(accentColor),
-                modifier = Modifier
-                    .size(baseSize * scaleFactor)
-                    .then(
-                        if (isCircular) Modifier.clip(CircleShape) else Modifier
-                    ),
-            )
+            Box(contentAlignment = Alignment.TopEnd) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = null,
+                    colorFilter = if (isCircular || accentColor == null) null else ColorFilter.tint(accentColor),
+                    modifier = Modifier
+                        .size(baseSize * scaleFactor)
+                        .then(
+                            if (isCircular) Modifier.clip(CircleShape) else Modifier
+                        ),
+                )
+                if (!badgeCount.isNullOrEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .offset(x = (7 * scaleFactor).dp, y = (-4 * scaleFactor).dp)
+                            .background(Color(0xFFFF3B30), shape = RoundedCornerShape(10.dp))
+                            .border((1 * scaleFactor).dp, if (isDark) Color.Black else Color.White, RoundedCornerShape(10.dp))
+                            .padding(horizontal = (4 * scaleFactor).dp, vertical = (0.5f * scaleFactor).dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        androidx.compose.foundation.text.BasicText(
+                            text = badgeCount,
+                            style = androidx.compose.ui.text.TextStyle(
+                                color = Color.White,
+                                fontSize = (10 * scaleFactor).sp,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            ),
+                        )
+                    }
+                } else if (hasBadgeDot) {
+                    Box(
+                        modifier = Modifier
+                            .offset(x = (4 * scaleFactor).dp, y = (-2 * scaleFactor).dp)
+                            .size((8 * scaleFactor).dp)
+                            .background(Color(0xFFFF3B30), shape = CircleShape)
+                            .border((1 * scaleFactor).dp, if (isDark) Color.Black else Color.White, CircleShape)
+                    )
+                }
+            }
             if (!label.isNullOrEmpty()) {
                 Spacer(modifier = Modifier.height((2 * scaleFactor).dp))
                 androidx.compose.foundation.text.BasicText(
@@ -728,7 +772,7 @@ private fun RowScope.LiquidBottomTab(
                     style = androidx.compose.ui.text.TextStyle(
                         fontSize = (13 * scaleFactor).sp,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                        color = accentColor ?: if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White else Color.Black
+                        color = accentColor ?: if (isDark) Color.White else Color.Black
                     ),
                     overflow = androidx.compose.ui.text.style.TextOverflow.Visible,
                     softWrap = false,

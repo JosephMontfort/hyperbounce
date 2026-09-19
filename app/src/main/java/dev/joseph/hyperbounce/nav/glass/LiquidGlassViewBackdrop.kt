@@ -52,9 +52,23 @@ internal class LiquidGlassViewBackdrop(
 
     private var front: Bitmap? = null
     private var back: Bitmap? = null
-    private var surfaceFronts = mutableMapOf<View, SurfaceFrame>()
-    private val pendingSurfaceCopies = mutableSetOf<View>()
+    private var surfaceFronts = java.util.concurrent.ConcurrentHashMap<View, SurfaceFrame>()
+    private val pendingSurfaceCopies = java.util.concurrent.ConcurrentHashMap.newKeySet<View>()
     private val mainHandler = Handler(Looper.getMainLooper())
+    
+    var enablePixelCopy: Boolean = false
+    @Volatile
+    private var isSurfaceCopyInProgress = false
+    private var reusableSurfaceBitmap: Bitmap? = null
+
+    companion object {
+        private val bgThread by lazy {
+            android.os.HandlerThread("HB-PixelCopy").apply { start() }
+        }
+        private val bgHandler by lazy {
+            Handler(bgThread.looper)
+        }
+    }
 
     var capturedFrame: LiquidGlassCapturedFrame? by mutableStateOf(null)
         private set
@@ -176,20 +190,24 @@ internal class LiquidGlassViewBackdrop(
         sourceLocation: IntArray,
         scale: Float,
     ) {
+        if (!enablePixelCopy) {
+            if (surfaceFronts.isNotEmpty()) {
+                for (frame in surfaceFronts.values) {
+                    if (!frame.bitmap.isRecycled) frame.bitmap.recycle()
+                }
+                surfaceFronts.clear()
+                pendingSurfaceCopies.clear()
+            }
+            return
+        }
+
+        if (isSurfaceCopyInProgress) return
+
         val surfaces = ArrayList<View>()
         val root = sourceView.rootView
         collectHardwareSurfaceViews(root, surfaces)
 
-        // Avoid duplicate requests if the hierarchy traversal encounters a view
-        // through an unusual parent/SurfaceControl arrangement.
         val uniqueSurfaces = surfaces.distinctBy { System.identityHashCode(it) }
-        if (uniqueSurfaces.size != lastHardwareSurfaceCount) {
-            lastHardwareSurfaceCount = uniqueSurfaces.size
-            Log.e(
-                "HyperBounce-Backdrop",
-                "root=${root.javaClass.name} hardwareSurfaces=${uniqueSurfaces.size}",
-            )
-        }
 
         for (surface in uniqueSurfaces) {
             if (!surface.isShown || surface.width <= 0 || surface.height <= 0) continue
@@ -219,9 +237,16 @@ internal class LiquidGlassViewBackdrop(
 
             val destWidth = (srcWidth * scale).toInt().coerceAtLeast(1)
             val destHeight = (srcHeight * scale).toInt().coerceAtLeast(1)
-            val dest = Bitmap.createBitmap(destWidth, destHeight, Bitmap.Config.ARGB_8888)
+
+            var dest = reusableSurfaceBitmap
+            if (dest == null || dest.isRecycled || dest.width != destWidth || dest.height != destHeight) {
+                dest?.recycle()
+                dest = Bitmap.createBitmap(destWidth, destHeight, Bitmap.Config.ARGB_8888)
+                reusableSurfaceBitmap = dest
+            }
 
             pendingSurfaceCopies.add(surface)
+            isSurfaceCopyInProgress = true
 
             when (surface) {
                 is SurfaceView -> {
@@ -232,43 +257,46 @@ internal class LiquidGlassViewBackdrop(
                             dest,
                             { result ->
                                 pendingSurfaceCopies.remove(surface)
+                                isSurfaceCopyInProgress = false
                                 if (result == PixelCopy.SUCCESS) {
-                                    val frame = SurfaceFrame(
-                                        bitmap = dest,
-                                        left = ((overlapLeft - currentRegion.left) * scale).toInt(),
-                                        top = ((overlapTop - currentRegion.top) * scale).toInt(),
-                                    )
-                                    replaceSurfaceFrame(surface, frame)
-                                } else {
-                                    Log.d("HyperBounce-Backdrop", "PixelCopy SurfaceView failed=$result")
-                                    dest.recycle()
+                                    val copy = dest.copy(Bitmap.Config.ARGB_8888, false)
+                                    if (copy != null) {
+                                        val frame = SurfaceFrame(
+                                            bitmap = copy,
+                                            left = ((overlapLeft - currentRegion.left) * scale).toInt(),
+                                            top = ((overlapTop - currentRegion.top) * scale).toInt(),
+                                        )
+                                        replaceSurfaceFrame(surface, frame)
+                                    }
                                 }
                             },
-                            mainHandler,
+                            bgHandler,
                         )
                     } catch (_: Throwable) {
                         pendingSurfaceCopies.remove(surface)
-                        dest.recycle()
+                        isSurfaceCopyInProgress = false
                     }
                 }
 
                 is TextureView -> {
                     try {
-                        // TextureView#getBitmap(bitmap) copies the texture content
-                        // without requiring a software View.draw() pass.
                         surface.getBitmap(dest)
                         pendingSurfaceCopies.remove(surface)
-                        replaceSurfaceFrame(
-                            surface,
-                            SurfaceFrame(
-                                bitmap = dest,
-                                left = ((overlapLeft - currentRegion.left) * scale).toInt(),
-                                top = ((overlapTop - currentRegion.top) * scale).toInt(),
+                        isSurfaceCopyInProgress = false
+                        val copy = dest.copy(Bitmap.Config.ARGB_8888, false)
+                        if (copy != null) {
+                            replaceSurfaceFrame(
+                                surface,
+                                SurfaceFrame(
+                                    bitmap = copy,
+                                    left = ((overlapLeft - currentRegion.left) * scale).toInt(),
+                                    top = ((overlapTop - currentRegion.top) * scale).toInt(),
+                                )
                             )
-                        )
+                        }
                     } catch (_: Throwable) {
                         pendingSurfaceCopies.remove(surface)
-                        dest.recycle()
+                        isSurfaceCopyInProgress = false
                     }
                 }
             }

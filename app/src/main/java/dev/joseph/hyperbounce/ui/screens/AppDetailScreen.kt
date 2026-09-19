@@ -29,7 +29,6 @@ import dev.joseph.hyperbounce.ui.components.CheckmarkIcon
 import dev.joseph.hyperbounce.ui.components.ColorPickerDialog
 import dev.joseph.hyperbounce.ui.components.DropdownPicker
 import dev.joseph.hyperbounce.ui.components.GlassCard
-import dev.joseph.hyperbounce.ui.components.NavBarPreview
 import dev.joseph.hyperbounce.ui.components.PowerIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionFooter
@@ -90,24 +89,6 @@ fun AppDetailScreen(
             dev.joseph.hyperbounce.ui.utils.RootUtils.restartApp(context, app.packageName, app.displayName)
         }
     ) { _ ->
-        item {
-            NavBarPreview(
-                backdrop = backdrop,
-                accentColor = accentColor,
-                glassIntensity = s.glassIntensity,
-                containerOpacity = s.containerOpacity,
-                cornerRadiusDp = s.cornerRadius,
-                barHeightDp = s.barHeight,
-                tabWidthDp = s.tabWidth,
-                pillGlassIntensity = s.pillGlassIntensity,
-                pillContainerOpacity = s.pillContainerOpacity,
-                pillChromaticAberration = s.pillChromaticAberration,
-                pillShadow = s.pillShadow,
-                liquidGlass = s.liquidGlass,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-
         item {
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 SettingsToggleRow(

@@ -25,9 +25,37 @@ private data class InstagramTabData(
     val inactiveBitmap: Bitmap?,
     val activeBitmap: Bitmap?,
     val tabView: View? = null,
+    val badgeCount: String? = null,
+    val hasBadgeDot: Boolean = false,
 )
 
 private val instagramOrderedTabNames = listOf("feed_tab", "clips_tab", "direct_tab", "search_tab", "profile_tab")
+
+private fun extractBadgeState(tabView: View): Pair<String?, Boolean> {
+    var count: String? = null
+    var hasDot = false
+
+    fun checkView(v: View) {
+        if (v is android.widget.TextView) {
+            if (v.visibility == View.VISIBLE) {
+                val txt = v.text?.toString()?.trim()
+                val textColorAlpha = android.graphics.Color.alpha(v.currentTextColor)
+                if (!txt.isNullOrEmpty() && textColorAlpha > 15) {
+                    count = txt
+                } else if (v.width > 0 && v.height > 0) {
+                    hasDot = true
+                }
+            }
+        } else if (v is ViewGroup) {
+            for (i in 0 until v.childCount) {
+                checkView(v.getChildAt(i))
+            }
+        }
+    }
+
+    checkView(tabView)
+    return Pair(count, hasDot)
+}
 
 private fun extractInstagramTabs(stockBar: ViewGroup, tabNames: List<String>, isDark: Boolean): List<InstagramTabData> {
     val context = stockBar.context
@@ -81,7 +109,8 @@ private fun extractInstagramTabs(stockBar: ViewGroup, tabNames: List<String>, is
             }
         }
 
-        InstagramTabData(resId, inactiveBmp, activeBmp, tabView)
+        val (badgeCount, hasBadgeDot) = extractBadgeState(tabView)
+        InstagramTabData(resId, inactiveBmp, activeBmp, tabView, badgeCount, hasBadgeDot)
     }
 }
 
@@ -96,6 +125,7 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
 
     var selectedIndex by remember { mutableIntStateOf(0) }
     var tabs by remember { mutableStateOf(emptyList<InstagramTabData>()) }
+    var lastUserSelectionTime by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(stockBar, isDark) {
         if (stockBar == null) return@LaunchedEffect
@@ -109,18 +139,39 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
                 }
             }
 
-            for (i in tabs.indices) {
-                val view = tabs[i].tabView ?: stockBar.findViewById(tabs[i].resId)
-                if (view != null && (view.isSelected || view.isActivated)) {
-                    if (selectedIndex != i) {
-                        selectedIndex = i
+            var badgeChanged = false
+            val updatedTabs = tabs.map { tab ->
+                val v = tab.tabView ?: stockBar.findViewById(tab.resId)
+                if (v != null) {
+                    val (bCount, bDot) = extractBadgeState(v)
+                    if (tab.badgeCount != bCount || tab.hasBadgeDot != bDot) {
+                        badgeChanged = true
+                        tab.copy(badgeCount = bCount, hasBadgeDot = bDot)
+                    } else tab
+                } else tab
+            }
+            if (badgeChanged) {
+                tabs = updatedTabs
+            }
+
+            if (android.os.SystemClock.uptimeMillis() - lastUserSelectionTime > 600L) {
+                for (i in tabs.indices) {
+                    val view = tabs[i].tabView ?: stockBar.findViewById(tabs[i].resId)
+                    if (view != null && (view.isSelected || view.isActivated)) {
+                        if (selectedIndex != i) {
+                            selectedIndex = i
+                        }
+                        break
                     }
-                    break
                 }
             }
             delay(150)
         }
     }
+
+    val clipsTabId = stockBar?.context?.resources?.getIdentifier("clips_tab", "id", stockBar.context?.packageName)
+    val reelsIndex = if (clipsTabId != null && clipsTabId != 0) tabs.indexOfFirst { it.resId == clipsTabId } else -1
+    val isReelsActive = (reelsIndex >= 0 && selectedIndex == reelsIndex)
 
     val profileIndex = tabs.indexOfFirst { it.resId == stockBar?.context?.resources?.getIdentifier("profile_tab", "id", stockBar?.context?.packageName) }
     val accent = accentColorFor(live.accent, live.customAccentColor, isDark)
@@ -152,13 +203,19 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
         shrinkScale = live.autoShrinkScale,
         scrollShrinkState = scrollShrinkState,
         selectedIndex = selectedIndex,
+        badgeCounts = tabs.map { it.badgeCount },
+        badgeDots = tabs.map { it.hasBadgeDot },
+        enablePixelCopy = isReelsActive,
         onTabSelected = { index ->
             selectedIndex = index
+            lastUserSelectionTime = android.os.SystemClock.uptimeMillis()
             if (index == 0) {
                 scrollShrinkState.isShrunk.value = false
             }
             if (tabs.isNotEmpty()) {
-                stockBar?.findViewById<View>(tabs[index].resId)?.performClick()
+                stockBar?.post {
+                    stockBar.findViewById<View>(tabs[index].resId)?.performClick()
+                }
             }
         },
         circularIndices = if (profileIndex >= 0) setOf(profileIndex) else emptySet(),
@@ -177,23 +234,35 @@ private fun accentColorFor(preset: String, customColor: Long, isDark: Boolean): 
 }
 
 fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: ViewGroup?, hyperBouncePrefs: HyperBouncePrefs) {
-    val decorView = activity.window.decorView as ViewGroup
+    if (activity.isFinishing || activity.isDestroyed) return
+    val decorView = (activity.window?.decorView as? ViewGroup) ?: return
     if (decorView.findViewWithTag<ComposeView>("LiquidGlassInjected") != null) return
 
     activity.runOnUiThread {
         try {
-            val owner = FakeLifecycleOwner().apply {
+            if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+            if (decorView.findViewWithTag<ComposeView>("LiquidGlassInjected") != null) return@runOnUiThread
+
+            val lifecycleOwner = (activity as? androidx.lifecycle.LifecycleOwner) ?: FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
-            decorView.setViewTreeLifecycleOwner(owner)
-            decorView.setViewTreeSavedStateRegistryOwner(owner)
-            decorView.setViewTreeViewModelStoreOwner(owner)
+            val savedStateOwner = (activity as? androidx.savedstate.SavedStateRegistryOwner)
+                ?: (lifecycleOwner as? androidx.savedstate.SavedStateRegistryOwner)
+            val viewModelOwner = (activity as? androidx.lifecycle.ViewModelStoreOwner)
+                ?: (lifecycleOwner as? androidx.lifecycle.ViewModelStoreOwner)
 
             val composeView = ComposeView(activity).apply {
                 tag = "LiquidGlassInjected"
-                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+                setViewTreeLifecycleOwner(lifecycleOwner)
+                if (savedStateOwner != null) {
+                    setViewTreeSavedStateRegistryOwner(savedStateOwner)
+                }
+                if (viewModelOwner != null) {
+                    setViewTreeViewModelStoreOwner(viewModelOwner)
+                }
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
                 setContent {
                     InstagramNavBarHost(stockBar, mainWrapper, hyperBouncePrefs)
                 }
