@@ -261,11 +261,13 @@ class SettingsRepository(context: Context) {
             private set
         var autoShrinkSensitivity by prefsFloatState("${prefix}_auto_shrink_sensitivity", defaults.autoShrinkSensitivity)
             private set
+        var reelsFullscreenZoom by prefsBooleanState("${prefix}_reels_fullscreen_zoom", defaults.reelsFullscreenZoom)
+            private set
 
         fun snapshot(): NavBarAppSettings = NavBarAppSettings(
             enabled, liquidGlass, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, bottomMargin,
             themeMode, accent, customAccentColor, pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow,
-            autoShrink, autoShrinkScale, autoShrinkSensitivity
+            autoShrink, autoShrinkScale, autoShrinkSensitivity, reelsFullscreenZoom
         )
 
         @JvmName("setEnabledPref")
@@ -304,6 +306,12 @@ class SettingsRepository(context: Context) {
         fun setAutoShrinkScale(v: Float) { autoShrinkScale = v }
         @JvmName("setAutoShrinkSensitivityPref")
         fun setAutoShrinkSensitivity(v: Float) { autoShrinkSensitivity = v }
+        @JvmName("setReelsFullscreenZoomPref")
+        fun setReelsFullscreenZoom(v: Boolean) {
+            reelsFullscreenZoom = v
+            SettingsRepository.sendSettingsChangedBroadcast("${prefix}_reels_fullscreen_zoom", v)
+            SettingsRepository.sendSettingsChangedBroadcast("reels_fullscreen_zoom", v)
+        }
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
@@ -324,6 +332,7 @@ class SettingsRepository(context: Context) {
             autoShrink = defaults.autoShrink
             autoShrinkScale = defaults.autoShrinkScale
             autoShrinkSensitivity = defaults.autoShrinkSensitivity
+            reelsFullscreenZoom = defaults.reelsFullscreenZoom
         }
     }
 

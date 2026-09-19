@@ -29,15 +29,10 @@ import com.kyant.backdrop.Backdrop
 /**
  * Live app-window backdrop source for Kyant's Backdrop engine.
  *
- * The normal Instagram/WhatsApp/YouTube hierarchy is captured through View.draw().
- * Some apps, however, put hardware video frames in SurfaceView/TextureView layers
- * that are not reproduced by software View.draw(). In that case the hierarchy still
- * appears live on screen, while a Canvas snapshot contains only the non-video UI.
- *
- * We therefore keep the original hierarchy capture and additionally composite the
- * latest visible hardware-surface pixels that overlap the target region. The liquid
- * glass library itself remains unchanged: it still receives one live Backdrop frame
- * and applies its normal blur/lens/vibrancy/refraction pipeline.
+ * Normal tab hierarchy (Feed, Direct, Search, Profile) is captured cleanly through View.draw().
+ * For video tabs (Instagram Reels), video frames reside in hardware SurfaceView/TextureView
+ * layers. When enablePixelCopy is true, we asynchronously composite the hardware video frames
+ * into the backdrop snapshot without blocking UI threads.
  */
 internal data class LiquidGlassCapturedFrame(
     val bitmap: Bitmap,
@@ -52,14 +47,13 @@ internal class LiquidGlassViewBackdrop(
 
     private var front: Bitmap? = null
     private var back: Bitmap? = null
-    private var surfaceFronts = java.util.concurrent.ConcurrentHashMap<View, SurfaceFrame>()
+    private var surfaceCopyBuffer: Bitmap? = null
+    private var textureCopyBuffer: Bitmap? = null
+    private val surfaceFronts = java.util.concurrent.ConcurrentHashMap<View, SurfaceFrame>()
     private val pendingSurfaceCopies = java.util.concurrent.ConcurrentHashMap.newKeySet<View>()
-    private val mainHandler = Handler(Looper.getMainLooper())
-    
-    var enablePixelCopy: Boolean = false
+
     @Volatile
-    private var isSurfaceCopyInProgress = false
-    private var reusableSurfaceBitmap: Bitmap? = null
+    var enablePixelCopy: Boolean = false
 
     companion object {
         private val bgThread by lazy {
@@ -77,7 +71,6 @@ internal class LiquidGlassViewBackdrop(
     private var frameNumber = 0
     private var lastCapturedFrame = -1
     private var lastCaptureNanos = 0L
-    private var lastHardwareSurfaceCount = -1
     private val minCaptureIntervalNanos = 16_666_667L // ~60 Hz
 
     private val preDrawListener = ViewTreeObserver.OnPreDrawListener {
@@ -88,15 +81,7 @@ internal class LiquidGlassViewBackdrop(
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             frameNumber++
-
-            // Do not rely on the target app's View hierarchy being invalidated.
-            // Instagram Reels can be updated by the media compositor without
-            // traversing/drawing mainWrapper at all. In that case an OnPreDraw
-            // listener never fires, so the backdrop would freeze on the first
-            // reel frame (which contains no video pixels in View.draw()).
-            // Capture once directly from the display-frame callback instead.
             captureOncePerFrame()
-
             Choreographer.getInstance().postFrameCallback(this)
         }
     }
@@ -144,7 +129,7 @@ internal class LiquidGlassViewBackdrop(
             ensureBuffers(scaledWidth, scaledHeight)
 
             val target = back ?: return
-            target.eraseColor(android.graphics.Color.parseColor("#40000000"))
+            target.eraseColor(android.graphics.Color.TRANSPARENT)
 
             val canvas = Canvas(target)
             canvas.save()
@@ -154,16 +139,18 @@ internal class LiquidGlassViewBackdrop(
             sourceView.draw(canvas)
             canvas.restore()
 
-            // View.draw() deliberately does not contain the producer buffer of a
-            // SurfaceView. TextureView can be copied separately as well. Composite
-            // those hardware-backed regions over the hierarchy snapshot so the
-            // backdrop has the exact pixels that the user sees while a reel plays.
-            // Instagram can host the Reel renderer outside the specific content
-            // View passed to the nav bar (for example as a sibling under the window
-            // decor/root hierarchy). Search the whole attached window hierarchy,
-            // not only sourceView's descendants.
-            requestHardwareSurfaceFrames(currentRegion, location, scale)
-            drawLatestHardwareSurfaceFrames(canvas, currentRegion, location, scale)
+            if (enablePixelCopy) {
+                requestHardwareSurfaceFrames(currentRegion, location, scale)
+                drawLatestHardwareSurfaceFrames(canvas, currentRegion, location, scale)
+            } else {
+                clearHardwareSurfaces()
+            }
+
+            val bgPaint = android.graphics.Paint().apply {
+                xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OVER)
+                color = android.graphics.Color.parseColor("#40000000")
+            }
+            canvas.drawRect(0f, 0f, scaledWidth.toFloat(), scaledHeight.toFloat(), bgPaint)
 
             val previousFront = front
             front = target
@@ -176,8 +163,6 @@ internal class LiquidGlassViewBackdrop(
             lastCapturedFrame = frameNumber
             lastCaptureNanos = now
         } catch (t: Throwable) {
-            // Keep the previous frame if a target app contains a view that rejects
-            // software recording or a hardware-surface copy temporarily fails.
             Log.e(
                 "HyperBounce-Backdrop",
                 "capture failed: ${t.javaClass.simpleName}: ${t.message}",
@@ -190,22 +175,8 @@ internal class LiquidGlassViewBackdrop(
         sourceLocation: IntArray,
         scale: Float,
     ) {
-        if (!enablePixelCopy) {
-            if (surfaceFronts.isNotEmpty()) {
-                for (frame in surfaceFronts.values) {
-                    if (!frame.bitmap.isRecycled) frame.bitmap.recycle()
-                }
-                surfaceFronts.clear()
-                pendingSurfaceCopies.clear()
-            }
-            return
-        }
-
-        if (isSurfaceCopyInProgress) return
-
         val surfaces = ArrayList<View>()
-        val root = sourceView.rootView
-        collectHardwareSurfaceViews(root, surfaces)
+        collectAllHardwareSurfaceViews(surfaces)
 
         val uniqueSurfaces = surfaces.distinctBy { System.identityHashCode(it) }
 
@@ -238,67 +209,100 @@ internal class LiquidGlassViewBackdrop(
             val destWidth = (srcWidth * scale).toInt().coerceAtLeast(1)
             val destHeight = (srcHeight * scale).toInt().coerceAtLeast(1)
 
-            var dest = reusableSurfaceBitmap
-            if (dest == null || dest.isRecycled || dest.width != destWidth || dest.height != destHeight) {
-                dest?.recycle()
-                dest = Bitmap.createBitmap(destWidth, destHeight, Bitmap.Config.ARGB_8888)
-                reusableSurfaceBitmap = dest
-            }
-
             pendingSurfaceCopies.add(surface)
-            isSurfaceCopyInProgress = true
 
             when (surface) {
                 is SurfaceView -> {
                     try {
-                        PixelCopy.request(
-                            surface,
-                            Rect(srcLeft, srcTop, srcRight, srcBottom),
-                            dest,
-                            { result ->
-                                pendingSurfaceCopies.remove(surface)
-                                isSurfaceCopyInProgress = false
-                                if (result == PixelCopy.SUCCESS) {
-                                    val copy = dest.copy(Bitmap.Config.ARGB_8888, false)
-                                    if (copy != null) {
-                                        val frame = SurfaceFrame(
-                                            bitmap = copy,
-                                            left = ((overlapLeft - currentRegion.left) * scale).toInt(),
-                                            top = ((overlapTop - currentRegion.top) * scale).toInt(),
-                                        )
-                                        replaceSurfaceFrame(surface, frame)
+                        val sWidth = surface.width
+                        val sHeight = surface.height
+                        if (sWidth > 0 && sHeight > 0) {
+                            var sBuf = surfaceCopyBuffer
+                            if (sBuf == null || sBuf.isRecycled || sBuf.width != sWidth || sBuf.height != sHeight) {
+                                sBuf?.recycle()
+                                sBuf = Bitmap.createBitmap(sWidth, sHeight, Bitmap.Config.ARGB_8888)
+                                surfaceCopyBuffer = sBuf
+                            }
+                            val bufferToUse = sBuf
+                            PixelCopy.request(
+                                surface,
+                                null,
+                                bufferToUse,
+                                { result ->
+                                    pendingSurfaceCopies.remove(surface)
+                                    if (result == PixelCopy.SUCCESS && !bufferToUse.isRecycled) {
+                                        try {
+                                            val destBmp = Bitmap.createBitmap(destWidth, destHeight, Bitmap.Config.ARGB_8888)
+                                            val c = Canvas(destBmp)
+                                            c.drawBitmap(
+                                                bufferToUse,
+                                                Rect(srcLeft, srcTop, srcRight, srcBottom),
+                                                Rect(0, 0, destWidth, destHeight),
+                                                null
+                                            )
+                                            val frame = SurfaceFrame(
+                                                bitmap = destBmp,
+                                                left = ((overlapLeft - currentRegion.left) * scale).toInt(),
+                                                top = ((overlapTop - currentRegion.top) * scale).toInt(),
+                                                isSurfaceView = true,
+                                            )
+                                            replaceSurfaceFrame(surface, frame)
+                                        } catch (_: Throwable) {}
                                     }
-                                }
-                            },
-                            bgHandler,
-                        )
+                                },
+                                bgHandler,
+                            )
+                        } else {
+                            pendingSurfaceCopies.remove(surface)
+                        }
                     } catch (_: Throwable) {
                         pendingSurfaceCopies.remove(surface)
-                        isSurfaceCopyInProgress = false
                     }
                 }
 
                 is TextureView -> {
                     try {
-                        surface.getBitmap(dest)
-                        pendingSurfaceCopies.remove(surface)
-                        isSurfaceCopyInProgress = false
-                        val copy = dest.copy(Bitmap.Config.ARGB_8888, false)
-                        if (copy != null) {
-                            replaceSurfaceFrame(
-                                surface,
-                                SurfaceFrame(
-                                    bitmap = copy,
-                                    left = ((overlapLeft - currentRegion.left) * scale).toInt(),
-                                    top = ((overlapTop - currentRegion.top) * scale).toInt(),
-                                )
+                        var tBuf = textureCopyBuffer
+                        if (tBuf == null || tBuf.isRecycled || tBuf.width != surface.width || tBuf.height != surface.height) {
+                            tBuf?.recycle()
+                            tBuf = Bitmap.createBitmap(surface.width, surface.height, Bitmap.Config.ARGB_8888)
+                            textureCopyBuffer = tBuf
+                        }
+                        if (surface.getBitmap(tBuf) != null) {
+                            val destBmp = Bitmap.createBitmap(destWidth, destHeight, Bitmap.Config.ARGB_8888)
+                            val c = Canvas(destBmp)
+                            c.drawBitmap(
+                                tBuf,
+                                Rect(srcLeft, srcTop, srcRight, srcBottom),
+                                Rect(0, 0, destWidth, destHeight),
+                                null
                             )
+                            pendingSurfaceCopies.remove(surface)
+                            val frame = SurfaceFrame(
+                                bitmap = destBmp,
+                                left = ((overlapLeft - currentRegion.left) * scale).toInt(),
+                                top = ((overlapTop - currentRegion.top) * scale).toInt(),
+                                isSurfaceView = false,
+                            )
+                            replaceSurfaceFrame(surface, frame)
+                        } else {
+                            pendingSurfaceCopies.remove(surface)
                         }
                     } catch (_: Throwable) {
                         pendingSurfaceCopies.remove(surface)
-                        isSurfaceCopyInProgress = false
                     }
                 }
+            }
+        }
+
+        val iter = surfaceFronts.iterator()
+        while (iter.hasNext()) {
+            val entry = iter.next()
+            if (entry.key !in uniqueSurfaces) {
+                if (!entry.value.bitmap.isRecycled) {
+                    entry.value.bitmap.recycle()
+                }
+                iter.remove()
             }
         }
     }
@@ -309,9 +313,24 @@ internal class LiquidGlassViewBackdrop(
         sourceLocation: IntArray,
         scale: Float,
     ) {
+        val paintDstOver = android.graphics.Paint().apply {
+            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OVER)
+        }
+
         for (frame in surfaceFronts.values) {
             if (frame.bitmap.isRecycled) continue
-            canvas.drawBitmap(frame.bitmap, frame.left.toFloat(), frame.top.toFloat(), null)
+            val paint = if (frame.isSurfaceView) paintDstOver else null
+            canvas.drawBitmap(frame.bitmap, frame.left.toFloat(), frame.top.toFloat(), paint)
+        }
+    }
+
+    private fun clearHardwareSurfaces() {
+        if (surfaceFronts.isNotEmpty()) {
+            for (frame in surfaceFronts.values) {
+                if (!frame.bitmap.isRecycled) frame.bitmap.recycle()
+            }
+            surfaceFronts.clear()
+            pendingSurfaceCopies.clear()
         }
     }
 
@@ -319,6 +338,34 @@ internal class LiquidGlassViewBackdrop(
         val old = surfaceFronts.put(surface, newFrame)
         if (old != null && old.bitmap !== newFrame.bitmap && !old.bitmap.isRecycled) {
             old.bitmap.recycle()
+        }
+    }
+
+    private fun collectAllHardwareSurfaceViews(result: MutableList<View>) {
+        try {
+            val wmgClass = Class.forName("android.view.WindowManagerGlobal")
+            val getInstanceMethod = wmgClass.getMethod("getInstance")
+            val wmg = getInstanceMethod.invoke(null)
+            val mViewsField = wmgClass.getDeclaredField("mViews")
+            mViewsField.isAccessible = true
+            val views = mViewsField.get(wmg)
+            if (views is Iterable<*>) {
+                for (view in views) {
+                    if (view is View) {
+                        collectHardwareSurfaceViews(view, result)
+                    }
+                }
+            } else if (views is Array<*>) {
+                for (view in views) {
+                    if (view is View) {
+                        collectHardwareSurfaceViews(view, result)
+                    }
+                }
+            } else {
+                collectHardwareSurfaceViews(sourceView.rootView, result)
+            }
+        } catch (_: Throwable) {
+            collectHardwareSurfaceViews(sourceView.rootView, result)
         }
     }
 
@@ -353,17 +400,18 @@ internal class LiquidGlassViewBackdrop(
         val bitmap: Bitmap,
         val left: Int,
         val top: Int,
+        val isSurfaceView: Boolean = false,
     )
 
     fun release() {
         stop()
-        for (frame in surfaceFronts.values) {
-            if (!frame.bitmap.isRecycled) frame.bitmap.recycle()
-        }
-        surfaceFronts.clear()
-        pendingSurfaceCopies.clear()
+        clearHardwareSurfaces()
         front?.recycle()
         back?.recycle()
+        surfaceCopyBuffer?.recycle()
+        surfaceCopyBuffer = null
+        textureCopyBuffer?.recycle()
+        textureCopyBuffer = null
         front = null
         back = null
         capturedFrame = null

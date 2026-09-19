@@ -16,10 +16,6 @@ class InstagramHook(
 ) {
     private val sOverlayParents = WeakHashMap<ViewGroup, Boolean>()
 
-    companion object {
-        var reelsPinchZoomActive = false
-    }
-
     fun onPackageReady() {
         val hyperBouncePrefs = HyperBouncePrefs(module)
         if (!hyperBouncePrefs.moduleEnabled || !hyperBouncePrefs.appEnabled("instagram")) {
@@ -80,12 +76,13 @@ class InstagramHook(
                     }
 
                     if (resName == "clips_video_container" || resName == "clips_viewer_video_layout") {
-                        val lp = view.layoutParams
-                        if (reelsPinchZoomActive && lp != null && lp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
-                            lp.height = ViewGroup.LayoutParams.MATCH_PARENT
-                            view.layoutParams = lp
+                        if (hyperBouncePrefs.reelsFullscreenZoom) {
+                            val lp = view.layoutParams
+                            if (lp != null && lp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+                                lp.height = ViewGroup.LayoutParams.MATCH_PARENT
+                                view.layoutParams = lp
+                            }
                         }
-                        setupReelsPinchZoom(view)
                     }
 
                     if (resName == "layout_container_main_wrapper") {
@@ -191,45 +188,6 @@ class InstagramHook(
                 chain.proceed()
             }
         } catch (t: Throwable) {}
-    }
-
-    private fun setupReelsPinchZoom(view: View) {
-        val tagKey = 0x7F0B8889
-        if (view.getTag(tagKey) != null) return
-        view.setTag(tagKey, true)
-
-        val scaleDetector = android.view.ScaleGestureDetector(
-            view.context,
-            object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                override fun onScale(detector: android.view.ScaleGestureDetector): Boolean {
-                    val factor = detector.scaleFactor
-                    if (factor > 1.12f && !reelsPinchZoomActive) {
-                        reelsPinchZoomActive = true
-                        val lp = view.layoutParams
-                        if (lp != null && lp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
-                            lp.height = ViewGroup.LayoutParams.MATCH_PARENT
-                            view.layoutParams = lp
-                        }
-                        return true
-                    } else if (factor < 0.88f && reelsPinchZoomActive) {
-                        reelsPinchZoomActive = false
-                        val lp = view.layoutParams
-                        if (lp != null && lp.height == ViewGroup.LayoutParams.MATCH_PARENT) {
-                            lp.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                            view.layoutParams = lp
-                        }
-                        return true
-                    }
-                    return false
-                }
-            }
-        )
-        view.setOnTouchListener { _, event ->
-            if (event.pointerCount >= 2) {
-                scaleDetector.onTouchEvent(event)
-            }
-            false
-        }
     }
 
     private fun log(msg: String) {

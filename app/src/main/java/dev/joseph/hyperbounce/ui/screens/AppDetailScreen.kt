@@ -341,6 +341,24 @@ fun AppDetailScreen(
                 }
             }
         }
+
+        if (app == NavApp.Instagram) {
+            item {
+                SectionHeader("Instagram Optimizations", colors)
+                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    SettingsToggleRow(
+                        title = "Reels Fullscreen Zoom (Not Recommended)",
+                        subtitle = "Expands Reels container to match parent. May crop 16:9 videos.",
+                        colors = colors,
+                        iconTint = colors.systemYellow,
+                        backdrop = backdrop,
+                        checked = s.reelsFullscreenZoom,
+                        onCheckedChange = holder::setReelsFullscreenZoom,
+                        enabled = s.enabled
+                    )
+                }
+            }
+        }
     }
 }
 

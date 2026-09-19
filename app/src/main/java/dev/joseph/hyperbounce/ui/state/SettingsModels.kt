@@ -60,7 +60,8 @@ data class NavBarAppSettings(
     val pillShadow: Boolean = true,
     val autoShrink: Boolean = true,
     val autoShrinkScale: Float = 0.70f,
-    val autoShrinkSensitivity: Float = 1.0f
+    val autoShrinkSensitivity: Float = 1.0f,
+    val reelsFullscreenZoom: Boolean = false
 )
 
 /** The blur/lens/highlight/shadow/spring "feel" of one glass control (toggle or slider). */

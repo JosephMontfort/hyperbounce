@@ -40,17 +40,31 @@ private fun extractBadgeState(tabView: View): Pair<String?, Boolean> {
     var hasDot = false
 
     fun checkView(v: View) {
+        if (v.visibility != View.VISIBLE) return
+
         if (v is android.widget.TextView) {
-            if (v.visibility == View.VISIBLE) {
-                val txt = v.text?.toString()?.trim()
-                val textColorAlpha = android.graphics.Color.alpha(v.currentTextColor)
-                if (!txt.isNullOrEmpty() && textColorAlpha > 15) {
-                    count = txt
-                } else if (v.width > 0 && v.height > 0) {
-                    hasDot = true
-                }
+            val txt = v.text?.toString()?.trim()
+            val textColorAlpha = android.graphics.Color.alpha(v.currentTextColor)
+            if (!txt.isNullOrEmpty() && textColorAlpha > 15) {
+                count = txt
+            } else if (v.width > 0 && v.height > 0) {
+                hasDot = true
             }
-        } else if (v is ViewGroup) {
+        } else if (v !is ViewGroup) {
+            val resName = try {
+                if (v.id != View.NO_ID && v.resources != null) {
+                    v.resources.getResourceEntryName(v.id).lowercase()
+                } else ""
+            } catch (_: Exception) { "" }
+
+            if (resName.contains("badge") || resName.contains("dot") || resName.contains("unread") || resName.contains("notification")) {
+                hasDot = true
+            } else if (v.width in 4..45 && v.height in 4..45 && v !is ImageView) {
+                hasDot = true
+            }
+        }
+
+        if (v is ViewGroup) {
             for (i in 0 until v.childCount) {
                 checkView(v.getChildAt(i))
             }
@@ -59,6 +73,39 @@ private fun extractBadgeState(tabView: View): Pair<String?, Boolean> {
 
     checkView(tabView)
     return Pair(count, hasDot)
+}
+
+private fun triggerProfileDoubleTap(stockBar: ViewGroup?, profileResId: Int) {
+    if (stockBar == null || profileResId == 0) return
+    val tabView = stockBar.findViewById<View>(profileResId) ?: return
+    tabView.post {
+        try {
+            val now = android.os.SystemClock.uptimeMillis()
+            val w = tabView.width.coerceAtLeast(10)
+            val h = tabView.height.coerceAtLeast(10)
+            val x = w / 2f
+            val y = h / 2f
+
+            val down1 = android.view.MotionEvent.obtain(now, now, android.view.MotionEvent.ACTION_DOWN, x, y, 0)
+            val up1 = android.view.MotionEvent.obtain(now, now + 20, android.view.MotionEvent.ACTION_UP, x, y, 0)
+            tabView.dispatchTouchEvent(down1)
+            tabView.dispatchTouchEvent(up1)
+            down1.recycle()
+            up1.recycle()
+
+            tabView.postDelayed({
+                try {
+                    val t2 = android.os.SystemClock.uptimeMillis()
+                    val down2 = android.view.MotionEvent.obtain(t2, t2, android.view.MotionEvent.ACTION_DOWN, x, y, 0)
+                    val up2 = android.view.MotionEvent.obtain(t2, t2 + 20, android.view.MotionEvent.ACTION_UP, x, y, 0)
+                    tabView.dispatchTouchEvent(down2)
+                    tabView.dispatchTouchEvent(up2)
+                    down2.recycle()
+                    up2.recycle()
+                } catch (_: Throwable) {}
+            }, 80L)
+        } catch (_: Throwable) {}
+    }
 }
 
 private fun extractInstagramTabs(stockBar: ViewGroup, tabNames: List<String>, isDark: Boolean): List<InstagramTabData> {
@@ -169,7 +216,7 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
                     }
                 }
             }
-            delay(150)
+            delay(250)
         }
     }
 
@@ -185,6 +232,7 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
         enabled = live.autoShrink,
         sensitivity = live.autoShrinkSensitivity
     )
+    var lastProfileTapTime by remember { mutableLongStateOf(0L) }
 
     LiquidNavigationBar(
         bottomPadding = live.bottomMargin.dp,
@@ -211,14 +259,28 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
         badgeDots = tabs.map { it.hasBadgeDot },
         enablePixelCopy = isReelsActive,
         onTabSelected = { index ->
-            selectedIndex = index
-            lastUserSelectionTime = android.os.SystemClock.uptimeMillis()
-            if (index == 0) {
-                scrollShrinkState.isShrunk.value = false
-            }
-            if (tabs.isNotEmpty()) {
-                stockBar?.post {
-                    stockBar.findViewById<View>(tabs[index].resId)?.performClick()
+            val isProfileTab = (profileIndex >= 0 && index == profileIndex)
+            val now = android.os.SystemClock.uptimeMillis()
+
+            if (isProfileTab && now - lastProfileTapTime < 450L) {
+                lastProfileTapTime = 0L
+                triggerProfileDoubleTap(stockBar, tabs[index].resId)
+            } else {
+                if (isProfileTab) {
+                    lastProfileTapTime = now
+                } else {
+                    lastProfileTapTime = 0L
+                }
+
+                selectedIndex = index
+                lastUserSelectionTime = now
+                if (index == 0) {
+                    scrollShrinkState.isShrunk.value = false
+                }
+                if (tabs.isNotEmpty()) {
+                    stockBar?.postDelayed({
+                        stockBar.findViewById<View>(tabs[index].resId)?.performClick()
+                    }, 30L)
                 }
             }
         },
@@ -279,12 +341,12 @@ fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: View
             }
 
             (composeView.parent as? ViewGroup)?.removeView(composeView)
-            if (parentGroup is FrameLayout) {
+            if (parentGroup != null) {
                 val idx = (parentGroup.indexOfChild(mainWrapper) + 1).coerceAtLeast(0)
                 parentGroup.addView(
                     composeView,
                     idx,
-                    FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
@@ -292,7 +354,7 @@ fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: View
             } else {
                 mainWrapper.addView(
                     composeView,
-                    FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )

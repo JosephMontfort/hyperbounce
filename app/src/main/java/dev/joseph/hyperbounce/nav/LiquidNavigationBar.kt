@@ -726,7 +726,7 @@ private fun RowScope.LiquidBottomTab(
     ) {
         if (bitmap != null) {
             val baseSize = if (label.isNullOrEmpty()) 28.dp else 24.dp
-            Box(contentAlignment = Alignment.TopEnd) {
+            Box(contentAlignment = Alignment.BottomEnd) {
                 Image(
                     bitmap = bitmap.asImageBitmap(),
                     contentDescription = null,
@@ -740,17 +740,17 @@ private fun RowScope.LiquidBottomTab(
                 if (!badgeCount.isNullOrEmpty()) {
                     Box(
                         modifier = Modifier
-                            .offset(x = (7 * scaleFactor).dp, y = (-4 * scaleFactor).dp)
+                            .offset(x = (6 * scaleFactor).dp, y = (4 * scaleFactor).dp)
                             .background(Color(0xFFFF3B30), shape = RoundedCornerShape(10.dp))
-                            .border((1 * scaleFactor).dp, if (isDark) Color.Black else Color.White, RoundedCornerShape(10.dp))
-                            .padding(horizontal = (4 * scaleFactor).dp, vertical = (0.5f * scaleFactor).dp),
+                            .border((1.5f * scaleFactor).dp, if (isDark) Color(0xFF121212) else Color.White, RoundedCornerShape(10.dp))
+                            .padding(horizontal = (5 * scaleFactor).dp, vertical = (1 * scaleFactor).dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         androidx.compose.foundation.text.BasicText(
                             text = badgeCount,
                             style = androidx.compose.ui.text.TextStyle(
                                 color = Color.White,
-                                fontSize = (10 * scaleFactor).sp,
+                                fontSize = (11 * scaleFactor).sp,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                             ),
                         )
@@ -758,10 +758,10 @@ private fun RowScope.LiquidBottomTab(
                 } else if (hasBadgeDot) {
                     Box(
                         modifier = Modifier
-                            .offset(x = (4 * scaleFactor).dp, y = (-2 * scaleFactor).dp)
-                            .size((8 * scaleFactor).dp)
+                            .offset(x = (3 * scaleFactor).dp, y = (3 * scaleFactor).dp)
+                            .size((9 * scaleFactor).dp)
                             .background(Color(0xFFFF3B30), shape = CircleShape)
-                            .border((1 * scaleFactor).dp, if (isDark) Color.Black else Color.White, CircleShape)
+                            .border((1.5f * scaleFactor).dp, if (isDark) Color(0xFF121212) else Color.White, CircleShape)
                     )
                 }
             }

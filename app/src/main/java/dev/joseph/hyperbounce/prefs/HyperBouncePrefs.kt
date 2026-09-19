@@ -123,6 +123,9 @@ class HyperBouncePrefs(module: XposedInterface) {
     fun appAutoShrinkSensitivity(appKey: String): Float =
         prefs.getFloat("app_${appKey}_auto_shrink_sensitivity", 1.0f)
 
+    val reelsFullscreenZoom: Boolean
+        get() = prefs.getBoolean("app_instagram_reels_fullscreen_zoom", prefs.getBoolean("reels_fullscreen_zoom", false))
+
     // --- toggle/slider engine --------------------------------------------------------------
 
     /** true = Liquid Glass engine, false = the original native Canvas/AGSL engine. */
