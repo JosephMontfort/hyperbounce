@@ -364,7 +364,7 @@ fun AppDetailScreen(
 }
 
 @Composable
-private fun AccentSwatch(
+internal fun AccentSwatch(
     preset: AccentPreset,
     customColor: Long,
     colors: HyperBounceColors,
@@ -422,7 +422,7 @@ private fun AccentSwatch(
     }
 }
 
-private fun accentColorFor(preset: AccentPreset, customColor: Long, colors: HyperBounceColors): Color =
+internal fun accentColorFor(preset: AccentPreset, customColor: Long, colors: HyperBounceColors): Color =
     when (preset) {
         AccentPreset.Custom -> Color(customColor)
         AccentPreset.Auto -> colors.accentBlue
