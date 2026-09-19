@@ -350,11 +350,12 @@ fun AppDetailScreen(
                         title = "Reels Fullscreen Zoom (Not Recommended)",
                         subtitle = "Expands Reels container to match parent. May crop 16:9 videos.",
                         colors = colors,
-                        iconTint = colors.systemYellow,
+                        iconTint = Color(0xFFFF9500),
                         backdrop = backdrop,
                         checked = s.reelsFullscreenZoom,
                         onCheckedChange = holder::setReelsFullscreenZoom,
-                        enabled = s.enabled
+                        enabled = s.enabled,
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
                     )
                 }
             }
