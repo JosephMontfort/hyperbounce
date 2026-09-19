@@ -60,9 +60,10 @@ fun EngineScreen(
         dialogHost.showConfirmation(
             title = "LSPosed Scope Required",
             message = "To hook third-party MIUIX apps (such as Hypercieler or Hyperlight), make sure they are checked in HyperBounce's module scope in LSPosed Manager and restart the target apps.",
-            confirmLabel = "Got It",
+            confirmText = "Got It",
+            cancelText = "Dismiss",
             onConfirm = { showMiuixScopeDialog = false },
-            onDismiss = { showMiuixScopeDialog = false }
+            onCancel = { showMiuixScopeDialog = false }
         )
     }
 
