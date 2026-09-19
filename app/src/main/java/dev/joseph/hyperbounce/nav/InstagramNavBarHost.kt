@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.*
@@ -12,8 +13,11 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.FakeLifecycleOwner
 import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
@@ -243,42 +247,55 @@ fun injectLiquidGlass(activity: Activity, mainWrapper: ViewGroup, stockBar: View
             if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
             if (decorView.findViewWithTag<ComposeView>("LiquidGlassInjected") != null) return@runOnUiThread
 
-            val lifecycleOwner = (activity as? androidx.lifecycle.LifecycleOwner) ?: FakeLifecycleOwner().apply {
+            val lifecycleOwner = FakeLifecycleOwner().apply {
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
                 registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
-            val savedStateOwner = (activity as? androidx.savedstate.SavedStateRegistryOwner)
-                ?: (lifecycleOwner as? androidx.savedstate.SavedStateRegistryOwner)
-            val viewModelOwner = (activity as? androidx.lifecycle.ViewModelStoreOwner)
-                ?: (lifecycleOwner as? androidx.lifecycle.ViewModelStoreOwner)
+
+            if (decorView.findViewTreeLifecycleOwner() == null) decorView.setViewTreeLifecycleOwner(lifecycleOwner)
+            if (decorView.findViewTreeSavedStateRegistryOwner() == null) decorView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            if (decorView.findViewTreeViewModelStoreOwner() == null) decorView.setViewTreeViewModelStoreOwner(lifecycleOwner)
+
+            if (mainWrapper.findViewTreeLifecycleOwner() == null) mainWrapper.setViewTreeLifecycleOwner(lifecycleOwner)
+            if (mainWrapper.findViewTreeSavedStateRegistryOwner() == null) mainWrapper.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            if (mainWrapper.findViewTreeViewModelStoreOwner() == null) mainWrapper.setViewTreeViewModelStoreOwner(lifecycleOwner)
+
+            val parentGroup = mainWrapper.parent as? ViewGroup
+            if (parentGroup != null) {
+                if (parentGroup.findViewTreeLifecycleOwner() == null) parentGroup.setViewTreeLifecycleOwner(lifecycleOwner)
+                if (parentGroup.findViewTreeSavedStateRegistryOwner() == null) parentGroup.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+                if (parentGroup.findViewTreeViewModelStoreOwner() == null) parentGroup.setViewTreeViewModelStoreOwner(lifecycleOwner)
+            }
 
             val composeView = ComposeView(activity).apply {
                 tag = "LiquidGlassInjected"
                 setViewTreeLifecycleOwner(lifecycleOwner)
-                if (savedStateOwner != null) {
-                    setViewTreeSavedStateRegistryOwner(savedStateOwner)
-                }
-                if (viewModelOwner != null) {
-                    setViewTreeViewModelStoreOwner(viewModelOwner)
-                }
-                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+                setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+                setViewTreeViewModelStoreOwner(lifecycleOwner)
                 setContent {
                     InstagramNavBarHost(stockBar, mainWrapper, hyperBouncePrefs)
                 }
             }
 
-            val parentGroup = mainWrapper.parent as? ViewGroup
-            if (parentGroup != null) {
+            (composeView.parent as? ViewGroup)?.removeView(composeView)
+            if (parentGroup is FrameLayout) {
+                val idx = (parentGroup.indexOfChild(mainWrapper) + 1).coerceAtLeast(0)
                 parentGroup.addView(
                     composeView,
-                    parentGroup.indexOfChild(mainWrapper) + 1,
-                    ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    idx,
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
                 )
             } else {
                 mainWrapper.addView(
                     composeView,
-                    ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
                 )
             }
         } catch (e: Exception) {}
