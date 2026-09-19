@@ -154,18 +154,22 @@ class SettingsRepository(context: Context) {
         lockScreenKeypad.setEnabled(value)
     }
 
+    @JvmName("setToggleAccentPref")
     fun setToggleAccent(value: AccentPreset) {
         toggleAccent = value
     }
 
+    @JvmName("setToggleCustomColorPref")
     fun setToggleCustomColor(value: Long) {
         toggleCustomColor = value
     }
 
+    @JvmName("setSliderAccentPref")
     fun setSliderAccent(value: AccentPreset) {
         sliderAccent = value
     }
 
+    @JvmName("setSliderCustomColorPref")
     fun setSliderCustomColor(value: Long) {
         sliderCustomColor = value
     }
