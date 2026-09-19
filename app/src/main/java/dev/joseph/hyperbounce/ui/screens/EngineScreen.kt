@@ -1,25 +1,39 @@
 package dev.joseph.hyperbounce.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import dev.joseph.hyperbounce.ui.Destination
+import dev.joseph.hyperbounce.ui.components.CheckmarkIcon
+import dev.joseph.hyperbounce.ui.components.ColorPickerDialog
 import dev.joseph.hyperbounce.ui.components.DropdownPicker
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
-import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
-import dev.joseph.hyperbounce.ui.components.SettingsNavRow
-import dev.joseph.hyperbounce.ui.components.SlidersIcon
-import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import dev.joseph.hyperbounce.ui.state.AccentPreset
 import dev.joseph.hyperbounce.ui.state.RenderEngine
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
@@ -34,6 +48,34 @@ fun EngineScreen(
     onNavigate: (Destination) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    var showToggleColorPicker by remember { mutableStateOf(false) }
+    var showSliderColorPicker by remember { mutableStateOf(false) }
+
+    if (showToggleColorPicker) {
+        ColorPickerDialog(
+            initialColor = repository.toggleCustomColor,
+            colors = colors,
+            backdrop = backdrop,
+            onDismiss = { showToggleColorPicker = false },
+            onColorSelected = { newColor ->
+                repository.setToggleCustomColor(newColor)
+                repository.setToggleAccent(AccentPreset.Custom)
+            }
+        )
+    }
+
+    if (showSliderColorPicker) {
+        ColorPickerDialog(
+            initialColor = repository.sliderCustomColor,
+            colors = colors,
+            backdrop = backdrop,
+            onDismiss = { showSliderColorPicker = false },
+            onColorSelected = { newColor ->
+                repository.setSliderCustomColor(newColor)
+                repository.setSliderAccent(AccentPreset.Custom)
+            }
+        )
+    }
 
     ScreenScaffold(
         title = "Toggles & Sliders",
@@ -46,6 +88,10 @@ fun EngineScreen(
             repository.sliderGlass.reloadFromDefaults()
             repository.setToggleEngine(RenderEngine.LiquidGlass)
             repository.setSliderEngine(RenderEngine.LiquidGlass)
+            repository.setToggleAccent(AccentPreset.Green)
+            repository.setToggleCustomColor(0xFF30D158L)
+            repository.setSliderAccent(AccentPreset.Green)
+            repository.setSliderCustomColor(0xFF30D158L)
         },
         restartAppTitle = "Restart All Scoped Apps",
         restartAppSubtitle = "Restart all apps in active scope",
@@ -77,6 +123,73 @@ fun EngineScreen(
         }
 
         item {
+            SectionHeader("Active Colors", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp)) {
+                    BasicText(
+                        "Toggle Switch Accent",
+                        style = HyperBounceType.body.copy(color = colors.label)
+                    )
+                    BasicText(
+                        "Active state color for toggle switches across the system",
+                        style = HyperBounceType.footnote.copy(color = colors.secondaryLabel),
+                        modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+                    )
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        AccentPreset.entries.forEach { preset ->
+                            AccentSwatch(
+                                preset = preset,
+                                customColor = repository.toggleCustomColor,
+                                colors = colors,
+                                selected = preset == repository.toggleAccent,
+                                onClick = {
+                                    repository.setToggleAccent(preset)
+                                    if (preset == AccentPreset.Custom) {
+                                        showToggleColorPicker = true
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+                RowDivider(colors.separator, insetStart = 16.dp)
+                Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp)) {
+                    BasicText(
+                        "Slider Track Accent",
+                        style = HyperBounceType.body.copy(color = colors.label)
+                    )
+                    BasicText(
+                        "Active track fill color for sliders across the system",
+                        style = HyperBounceType.footnote.copy(color = colors.secondaryLabel),
+                        modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+                    )
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        AccentPreset.entries.forEach { preset ->
+                            AccentSwatch(
+                                preset = preset,
+                                customColor = repository.sliderCustomColor,
+                                colors = colors,
+                                selected = preset == repository.sliderAccent,
+                                onClick = {
+                                    repository.setSliderAccent(preset)
+                                    if (preset == AccentPreset.Custom) {
+                                        showSliderColorPicker = true
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
             GlassFeelSection(
                 sectionTitle = "Toggle Glass",
                 holder = repository.toggleGlass,
@@ -97,6 +210,72 @@ fun EngineScreen(
         }
     }
 }
+
+@Composable
+private fun AccentSwatch(
+    preset: AccentPreset,
+    customColor: Long,
+    colors: HyperBounceColors,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val color = accentColorFor(preset, customColor, colors)
+    val isCustom = preset == AccentPreset.Custom
+    val rainbowBrush = Brush.sweepGradient(
+        listOf(
+            Color.Red,
+            Color.Yellow,
+            Color.Green,
+            Color.Cyan,
+            Color.Blue,
+            Color.Magenta,
+            Color.Red
+        )
+    )
+
+    Box(
+        Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .then(
+                if (isCustom) {
+                    Modifier.background(rainbowBrush)
+                } else {
+                    Modifier.background(color)
+                }
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isCustom) {
+            Box(
+                Modifier
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(Color(customColor))
+                    .border(1.dp, Color.White.copy(alpha = 0.5f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                if (selected) {
+                    CheckmarkIcon(color = Color.White, size = 12.dp, strokeWidth = 2.dp)
+                }
+            }
+        } else if (selected) {
+            CheckmarkIcon(color = Color.White, size = 14.dp, strokeWidth = 2.dp)
+        }
+    }
+}
+
+private fun accentColorFor(preset: AccentPreset, customColor: Long, colors: HyperBounceColors): Color =
+    when (preset) {
+        AccentPreset.Custom -> Color(customColor)
+        AccentPreset.Auto -> colors.accentBlue
+        else -> preset.argb?.let { Color(it) } ?: colors.accentBlue
+    }
 
 @Composable
 private fun EngineRow(

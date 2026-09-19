@@ -39,6 +39,8 @@ public class LiquidTogglesHook extends XposedModule {
     private static final int TRACK_OFF_LIGHT = Color.parseColor("#E9E9EA");
     private static final int TRACK_ON_DISABLED = Color.parseColor("#1C4D25");
     private static final int TRACK_OFF_DISABLED = Color.parseColor("#2C2C2E");
+    private static int toggleAccentColor = TRACK_ON;
+    private static int sliderAccentColor = Color.parseColor("#007AFF");
 
     private static final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private static final Paint activePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -619,6 +621,42 @@ public class LiquidTogglesHook extends XposedModule {
         hookMethod(clazz, "jumpDrawablesToCurrentState", new Class<?>[]{},
                 chain -> null);
 
+        hookAllConstructors(clazz, chain -> {
+            Object result = chain.proceed();
+            View view = (View) chain.getThisObject();
+            view.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                @Override
+                public void onViewAttachedToWindow(View v) {
+                    v.post(() -> {
+                        if (USE_LIQUID_GLASS_TOGGLE) {
+                            LiquidToggleHost.ensure(v);
+                        }
+                    });
+                }
+                @Override
+                public void onViewDetachedFromWindow(View v) {
+                    if (USE_LIQUID_GLASS_TOGGLE) {
+                        LiquidToggleHost.remove(v);
+                    }
+                }
+            });
+            view.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+                if (r - l > 0 && b - t > 0 && USE_LIQUID_GLASS_TOGGLE) {
+                    LiquidToggleHost.ensure(v);
+                }
+            });
+            return result;
+        });
+
+        hookMethod(clazz, "onAttachedToWindow", new Class<?>[]{}, chain -> {
+            Object result = chain.proceed();
+            View view = (View) chain.getThisObject();
+            if (USE_LIQUID_GLASS_TOGGLE) {
+                view.post(() -> LiquidToggleHost.ensure(view));
+            }
+            return result;
+        });
+
         hookMethod(clazz, "setChecked", new Class<?>[]{boolean.class}, chain -> {
             Object result = chain.proceed();
             if (USE_LIQUID_GLASS_TOGGLE) {
@@ -834,7 +872,7 @@ public class LiquidTogglesHook extends XposedModule {
             float thumbB = cy + (currentThumbHeight / 2.0f);
 
             int targetOffColor = !isEnabled ? TRACK_OFF_DISABLED : (isDarkMode ? TRACK_OFF_DARK : TRACK_OFF_LIGHT);
-            int targetOnColor = !isEnabled ? TRACK_ON_DISABLED : TRACK_ON;
+            int targetOnColor = !isEnabled ? blendColors(Color.BLACK, toggleAccentColor, 0.4f) : toggleAccentColor;
             bgPaint.setColor(blendColors(targetOffColor, targetOnColor, s.colorProgress));
 
             canvas.drawRoundRect(offsetX, trackTop, offsetX + drawW, trackBottom, trackRadius, trackRadius, bgPaint);
@@ -877,6 +915,62 @@ public class LiquidTogglesHook extends XposedModule {
         synchronized (hookedDynamicClasses) {
             if (!hookedDynamicClasses.add(clazz)) return;
         }
+
+        hookAllConstructors(clazz, chain -> {
+            Object result = chain.proceed();
+            View view = (View) chain.getThisObject();
+            view.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                @Override
+                public void onViewAttachedToWindow(View v) {
+                    v.post(() -> {
+                        if (USE_LIQUID_GLASS_SLIDER) {
+                            dev.joseph.hyperbounce.toggles.LiquidSliderHost.ensure(v);
+                        }
+                    });
+                }
+                @Override
+                public void onViewDetachedFromWindow(View v) {
+                    if (USE_LIQUID_GLASS_SLIDER) {
+                        dev.joseph.hyperbounce.toggles.LiquidSliderHost.remove(v);
+                    }
+                }
+            });
+            view.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+                if (r - l > 0 && b - t > 0 && USE_LIQUID_GLASS_SLIDER) {
+                    dev.joseph.hyperbounce.toggles.LiquidSliderHost.ensure(v);
+                }
+            });
+            return result;
+        });
+
+        hookMethod(clazz, "onAttachedToWindow", new Class<?>[]{}, chain -> {
+            Object result = chain.proceed();
+            View view = (View) chain.getThisObject();
+            if (USE_LIQUID_GLASS_SLIDER) {
+                view.post(() -> dev.joseph.hyperbounce.toggles.LiquidSliderHost.ensure(view));
+            }
+            return result;
+        });
+
+        hookMethod(clazz, "setProgress", new Class<?>[]{int.class}, chain -> {
+            Object result = chain.proceed();
+            if (USE_LIQUID_GLASS_SLIDER) {
+                View view = (View) chain.getThisObject();
+                int progress = (Integer) chain.getArg(0);
+                dev.joseph.hyperbounce.toggles.LiquidSliderHost.syncProgress(view, progress);
+            }
+            return result;
+        });
+
+        hookMethod(clazz, "setProgress", new Class<?>[]{int.class, boolean.class}, chain -> {
+            Object result = chain.proceed();
+            if (USE_LIQUID_GLASS_SLIDER) {
+                View view = (View) chain.getThisObject();
+                int progress = (Integer) chain.getArg(0);
+                dev.joseph.hyperbounce.toggles.LiquidSliderHost.syncProgress(view, progress);
+            }
+            return result;
+        });
 
         hookMethod(clazz, "setVisibility", new Class<?>[]{int.class}, chain -> {
             Object result = chain.proceed();
@@ -1017,19 +1111,29 @@ public class LiquidTogglesHook extends XposedModule {
             s.bubbleSquish += s.bubbleVelocity * dt;
             if (s.isTouching && !s.isDragging) s.bubbleVelocity += s.bloomVelocity * 0.20f;
 
-            float currentThumbH = 46.0f + s.bloom;
-            float currentThumbW = 82.0f + (8.0f * s.bloom);
-            currentThumbW *= (1.0f + s.bubbleSquish * 0.35f);
-            currentThumbH *= (1.0f - s.bubbleSquish * 0.15f);
+            float density = view.getResources().getDisplayMetrics().density;
+            s.density = density;
+            float restThumbW = 40.0f * density;
+            float restThumbH = 24.0f * density;
+            float maxExpandedW = 60.0f * density;
+            float maxExpandedH = 36.0f * density;
+
+            float bubbleAmount = Math.max(0.0f, Math.min(1.0f, s.bubbleSquish / 0.75f));
+            float bubbleScaleX = 1.0f + (0.12f * bubbleAmount);
+            float bubbleScaleY = 1.0f - (0.06f * bubbleAmount);
+
+            float currentThumbH = (restThumbH + (maxExpandedH - restThumbH) * s.bloom) * bubbleScaleY;
+            float currentThumbW = (restThumbW + (maxExpandedW - restThumbW) * s.bloom) * bubbleScaleX;
             float thumbRadius = currentThumbH / 2.0f;
 
-            float baseLeft = 4.0f, shrinkAmount = s.bloom * 16.0f;
-            float trackLeft = baseLeft + shrinkAmount;
-            float trackRight = (w - baseLeft) - shrinkAmount;
+            float inset = 16.0f * density;
+            float shrinkAmount = s.bloom * 2.0f * density;
+            float trackLeft = inset + shrinkAmount;
+            float trackRight = (w - inset) - shrinkAmount;
             float trackW = trackRight - trackLeft;
 
-            float minCx = baseLeft + (currentThumbW / 2.0f);
-            float maxCx = (w - baseLeft) - (currentThumbW / 2.0f);
+            float minCx = inset + (restThumbW / 2.0f);
+            float maxCx = (w - inset) - (restThumbW / 2.0f);
             float travelW = maxCx - minCx;
 
             float targetRatio = discreteRatio;
@@ -1047,7 +1151,7 @@ public class LiquidTogglesHook extends XposedModule {
                 view.postInvalidateOnAnimation();
             }
 
-            float trackHeight = 22.0f;
+            float trackHeight = 6.0f * density;
             float trackTop = (h - trackHeight) / 2.0f;
             float trackBottom = trackTop + trackHeight;
             float trackRadius = trackHeight / 2.0f;
@@ -1058,7 +1162,7 @@ public class LiquidTogglesHook extends XposedModule {
 
             float activeW = trackW * s.visualRatio;
             if (activeW > 0) {
-                activePaint.setColor(TRACK_ON);
+                activePaint.setColor(sliderAccentColor);
                 canvas.drawRoundRect(trackLeft, trackTop, trackLeft + activeW,
                         trackBottom, trackRadius, trackRadius, activePaint);
             }
@@ -1143,6 +1247,8 @@ public class LiquidTogglesHook extends XposedModule {
             USE_LIQUID_GLASS_SLIDER = hyperBouncePrefs.getSliderEngineIsLiquidGlass();
             dev.joseph.hyperbounce.toggles.LiquidToggleHost.setHyperBouncePrefs(hyperBouncePrefs);
             dev.joseph.hyperbounce.toggles.LiquidSliderHost.setHyperBouncePrefs(hyperBouncePrefs);
+            toggleAccentColor = (int) hyperBouncePrefs.toggleAccentColor();
+            sliderAccentColor = (int) hyperBouncePrefs.sliderAccentColor();
         } catch (Throwable t) {
             // This hook runs inside system-critical processes (android, systemui,
             // settings) — an uncaught exception here is a much worse outcome than falling

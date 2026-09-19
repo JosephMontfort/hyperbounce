@@ -95,27 +95,7 @@ internal class LiquidSliderViewBackdrop(private val sourceView: View) : Backdrop
             canvas.clipRect(0, 0, currentRegion.width, currentRegion.height)
             canvas.translate(-localLeft.toFloat(), -localTop.toFloat())
 
-            val hiddenStates = mutableListOf<Pair<View, Int>>()
-            
-            fun hideSliders(v: View) {
-                val name = v.javaClass.simpleName
-                if (v === overlayViewToHide || name.contains("SeekBar") || name.contains("ProgressBar")) {
-                    hiddenStates.add(Pair(v, v.visibility))
-                    v.visibility = View.INVISIBLE
-                } else if (v is ViewGroup) {
-                    for (i in 0 until v.childCount) {
-                        hideSliders(v.getChildAt(i))
-                    }
-                }
-            }
-            
-            hideSliders(sourceView)
             sourceView.draw(canvas)
-
-            for ((child, oldVis) in hiddenStates) {
-                child.visibility = oldVis
-            }
-
             canvas.restore()
 
             val previousFront = front

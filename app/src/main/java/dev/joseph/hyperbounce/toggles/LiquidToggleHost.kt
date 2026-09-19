@@ -17,10 +17,12 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.compose.ui.graphics.Color
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.FakeLifecycleOwner
 import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
 import dev.joseph.hyperbounce.prefs.rememberLiveGlassFeel
+import dev.joseph.hyperbounce.prefs.rememberLiveToggleColor
 import dev.joseph.hyperbounce.toggles.glass.LiquidToggle
 import java.util.WeakHashMap
 
@@ -333,6 +335,7 @@ internal object LiquidToggleHost {
         val alphaValue = if (enabled) 1f else if (isNight) 0.3f else 0.5f
         val prefs = hyperBouncePrefs
         val feel = if (prefs != null) rememberLiveGlassFeel(prefs, "toggle_glass") else null
+        val toggleColor = if (prefs != null) rememberLiveToggleColor(prefs) else 0xFF34C759L
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (visible) {
                 LiquidToggle(
@@ -344,6 +347,7 @@ internal object LiquidToggleHost {
                         scaleY = 0.975f
                         alpha = alphaValue
                     },
+                    activeColor = Color(toggleColor),
                     blurDp = feel?.blurDp ?: 8f,
                     lensSizeDp = feel?.lensSizeDp ?: 5f,
                     lensDepthDp = feel?.lensDepthDp ?: 10f,

@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -24,6 +25,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.joseph.hyperbounce.FakeLifecycleOwner
 import dev.joseph.hyperbounce.prefs.HyperBouncePrefs
 import dev.joseph.hyperbounce.prefs.rememberLiveGlassFeel
+import dev.joseph.hyperbounce.prefs.rememberLiveSliderColor
 import dev.joseph.hyperbounce.toggles.glass.LiquidSlider
 import java.util.WeakHashMap
 
@@ -33,6 +35,11 @@ internal object LiquidSliderHost {
     @JvmStatic
     var hyperBouncePrefs: HyperBouncePrefs? = null
     private val hosts = WeakHashMap<View, Host>()
+
+    @JvmStatic
+    fun syncProgress(target: View, progress: Int) {
+        hosts[target]?.updateProgress(progress.toFloat())
+    }
 
     @JvmStatic
     fun ensure(target: View) {
@@ -120,15 +127,9 @@ internal object LiquidSliderHost {
             true
         }
 
-        // Keep external/hardware slider changes synchronized. This is retained for
-        // behavioral compatibility; the high-impact per-widget Recomposer overhead
-        // is removed separately below.
-        private val syncRunnable = object : java.lang.Runnable {
-            override fun run() {
-                if (!isTrackingTouch) {
-                    syncState()
-                }
-                target.postDelayed(this, 500L)
+        fun updateProgress(progress: Float) {
+            if (!isTrackingTouch) {
+                sliderValue = progress
             }
         }
 
@@ -136,7 +137,6 @@ internal object LiquidSliderHost {
             target.addOnAttachStateChangeListener(attachListener)
             target.addOnLayoutChangeListener(layoutListener)
             target.viewTreeObserver.addOnPreDrawListener(viewportPreDrawListener)
-            target.postDelayed(syncRunnable, 500L)
             disableClipping(target)
 
             val baseCtx = try {
@@ -169,7 +169,7 @@ internal object LiquidSliderHost {
                 setContent {
                     if (isVisibleState) {
                         val targetWidthDp = with(LocalDensity.current) { target.width.toDp() }
-                        val targetHeightDp = with(LocalDensity.current) { target.height.toDp() }
+                        val targetHeightDp = with(LocalDensity.current) { maxOf(target.height.toDp(), 28.dp) }
                         val isNight = androidx.compose.foundation.isSystemInDarkTheme()
                         val alphaValue = if (isEnabledState) 1f else if (isNight) 0.3f else 0.5f
                         
@@ -181,6 +181,7 @@ internal object LiquidSliderHost {
                             ) {
                                 val prefs = hyperBouncePrefs
                                 val feel = if (prefs != null) rememberLiveGlassFeel(prefs, "slider_glass") else null
+                                val sliderColor = if (prefs != null) rememberLiveSliderColor(prefs) else 0xFF007AFFL
                                 LiquidSlider(
                                     value = { sliderValue },
                                     onValueChange = { newValue ->
@@ -191,6 +192,7 @@ internal object LiquidSliderHost {
                                     visibilityThreshold = 0.01f,
                                     backdrop = backdrop,
                                     modifier = Modifier.fillMaxSize(),
+                                    activeColor = Color(sliderColor),
                                     blurDp = feel?.blurDp ?: 8f,
                                     lensSizeDp = feel?.lensSizeDp ?: 10f,
                                     lensDepthDp = feel?.lensDepthDp ?: 14f,
@@ -205,12 +207,6 @@ internal object LiquidSliderHost {
                 }
             }
 
-            try {
-                val seekbar = target as? android.widget.AbsSeekBar
-                seekbar?.thumb = null
-                seekbar?.progressDrawable = null
-            } catch (e: Throwable) {}
-            
             target.background = null
             target.alpha = 0.0f
             
@@ -321,7 +317,6 @@ internal object LiquidSliderHost {
             }
             target.removeOnAttachStateChangeListener(attachListener)
             target.removeOnLayoutChangeListener(layoutListener)
-            target.removeCallbacks(syncRunnable)
             target.alpha = 1f 
 
             val compose = composeView

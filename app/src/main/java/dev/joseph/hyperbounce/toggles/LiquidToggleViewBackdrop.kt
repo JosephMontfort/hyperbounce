@@ -95,27 +95,7 @@ internal class LiquidToggleViewBackdrop(private val sourceView: View) : Backdrop
             canvas.clipRect(0, 0, currentRegion.width, currentRegion.height)
             canvas.translate(-localLeft.toFloat(), -localTop.toFloat())
 
-            val hiddenStates = mutableListOf<Pair<View, Int>>()
-            
-            fun hideToggles(v: View) {
-                val name = v.javaClass.simpleName
-                if (v === overlayViewToHide || name.contains("SlidingButton") || name.contains("SlidingSwitch")) {
-                    hiddenStates.add(Pair(v, v.visibility))
-                    v.visibility = View.INVISIBLE
-                } else if (v is ViewGroup) {
-                    for (i in 0 until v.childCount) {
-                        hideToggles(v.getChildAt(i))
-                    }
-                }
-            }
-            
-            hideToggles(sourceView)
             sourceView.draw(canvas)
-
-            for ((child, oldVis) in hiddenStates) {
-                child.visibility = oldVis
-            }
-
             canvas.restore()
 
             val previousFront = front

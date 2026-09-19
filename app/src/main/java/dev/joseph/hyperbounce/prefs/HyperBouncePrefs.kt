@@ -135,6 +135,34 @@ class HyperBouncePrefs(module: XposedInterface) {
     val keypadEnabled: Boolean
         get() = prefs.getBoolean("engine_keypad_enabled", true)
 
+    fun toggleAccentColor(): Long {
+        val presetName = prefs.getString("toggle_accent", "Green") ?: "Green"
+        val customColor = prefs.getLong("toggle_custom_color", 0xFF30D158L)
+        return when (presetName) {
+            "Blue" -> 0xFF0088FFL
+            "Pink" -> 0xFFFF2D78L
+            "Purple" -> 0xFFAF52DEL
+            "Orange" -> 0xFFFF9500L
+            "Green" -> 0xFF30D158L
+            "Custom" -> customColor
+            else -> 0xFF30D158L
+        }
+    }
+
+    fun sliderAccentColor(): Long {
+        val presetName = prefs.getString("slider_accent", "Green") ?: "Green"
+        val customColor = prefs.getLong("slider_custom_color", 0xFF30D158L)
+        return when (presetName) {
+            "Blue" -> 0xFF0088FFL
+            "Pink" -> 0xFFFF2D78L
+            "Purple" -> 0xFFAF52DEL
+            "Orange" -> 0xFFFF9500L
+            "Green" -> 0xFF30D158L
+            "Custom" -> customColor
+            else -> 0xFF30D158L
+        }
+    }
+
     fun glassFeel(prefix: String): GlassFeelValues = GlassFeelValues(
         blurDp = prefs.getFloat("${prefix}_blur", if (prefix == "toggle_glass") 8f else 8f),
         lensSizeDp = prefs.getFloat("${prefix}_lens_size", if (prefix == "toggle_glass") 5f else 10f),

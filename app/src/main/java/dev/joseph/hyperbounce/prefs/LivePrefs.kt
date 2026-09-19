@@ -93,3 +93,37 @@ fun rememberLiveGlassFeel(hyperBouncePrefs: HyperBouncePrefs, prefix: String): G
     }
     return feel
 }
+
+@Composable
+fun rememberLiveToggleColor(hyperBouncePrefs: HyperBouncePrefs): Long {
+    var color by remember(hyperBouncePrefs) {
+        mutableStateOf(hyperBouncePrefs.toggleAccentColor())
+    }
+    DisposableEffect(hyperBouncePrefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+            if (changedKey == "toggle_accent" || changedKey == "toggle_custom_color") {
+                color = hyperBouncePrefs.toggleAccentColor()
+            }
+        }
+        hyperBouncePrefs.prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { hyperBouncePrefs.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    return color
+}
+
+@Composable
+fun rememberLiveSliderColor(hyperBouncePrefs: HyperBouncePrefs): Long {
+    var color by remember(hyperBouncePrefs) {
+        mutableStateOf(hyperBouncePrefs.sliderAccentColor())
+    }
+    DisposableEffect(hyperBouncePrefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+            if (changedKey == "slider_accent" || changedKey == "slider_custom_color") {
+                color = hyperBouncePrefs.sliderAccentColor()
+            }
+        }
+        hyperBouncePrefs.prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { hyperBouncePrefs.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    return color
+}

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,6 +54,7 @@ fun LiquidSlider(
     visibilityThreshold: Float,
     backdrop: Backdrop,
     modifier: Modifier = Modifier,
+    activeColor: Color = Color(0xFF007AFF),
     blurDp: Float = 8f,
     lensSizeDp: Float = 10f,
     lensDepthDp: Float = 14f,
@@ -62,9 +64,7 @@ fun LiquidSlider(
     springStiffness: Float = 800f
 ) {
     val isLightTheme = !isSystemInDarkTheme()
-    
-    // CUSTOM COLOR: Modified to match the green Liquid Toggle
-    val accentColor = if (isLightTheme) Color(0xFF34C759) else Color(0xFF30D158)
+    val accentColor = activeColor
     val trackColor = if (isLightTheme) Color(0xFF787878).copy(0.2f) else Color(0xFF787880).copy(0.36f)
 
     val trackBackdrop = rememberLayerBackdrop()
@@ -74,11 +74,14 @@ fun LiquidSlider(
         contentAlignment = Alignment.CenterStart
     ) {
         val trackWidth = constraints.maxWidth
+        val horizontalPaddingDp = 16.dp
+        val horizontalPaddingPx = with(androidx.compose.ui.platform.LocalDensity.current) { horizontalPaddingDp.toPx() }
+        val usableTrackWidth = (trackWidth - horizontalPaddingPx * 2).coerceAtLeast(1f)
 
         val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
         val animationScope = rememberCoroutineScope()
         var didDrag by remember { mutableStateOf(false) }
-        val dampedDragAnimation = remember(animationScope) {
+        val dampedDragAnimation = remember(animationScope, valueRange) {
             DampedDragAnimation(
                 animationScope = animationScope,
                 initialValue = value(),
@@ -96,7 +99,7 @@ fun LiquidSlider(
                     if (!didDrag) {
                         didDrag = dragAmount.x != 0f
                     }
-                    val delta = (valueRange.endInclusive - valueRange.start) * (dragAmount.x / trackWidth)
+                    val delta = (valueRange.endInclusive - valueRange.start) * (dragAmount.x / usableTrackWidth)
                     onValueChange(
                         if (isLtr) (targetValue + delta).coerceIn(valueRange)
                         else (targetValue - delta).coerceIn(valueRange)
@@ -118,6 +121,7 @@ fun LiquidSlider(
         // CUSTOM TRACK SHRINK EFFECT: The track mathematically shrinks when the thumb is pressed
         Box(
             Modifier
+                .padding(horizontal = horizontalPaddingDp)
                 .graphicsLayer {
                     val progress = dampedDragAnimation.pressProgress
                     scaleX = androidx.compose.ui.util.lerp(1f, 0.96f, progress)
@@ -131,7 +135,7 @@ fun LiquidSlider(
                         .background(trackColor)
                         .pointerInput(animationScope) {
                             detectTapGestures { position ->
-                                val delta = (valueRange.endInclusive - valueRange.start) * (position.x / trackWidth)
+                                val delta = (valueRange.endInclusive - valueRange.start) * (position.x / usableTrackWidth)
                                 val targetValue =
                                     (if (isLtr) valueRange.start + delta
                                     else valueRange.endInclusive - delta)
@@ -163,9 +167,11 @@ fun LiquidSlider(
         Box(
             Modifier
                 .graphicsLayer {
-                    translationX =
-                        (-size.width / 2f + trackWidth * dampedDragAnimation.progress)
-                            .fastCoerceIn(-size.width / 4f, trackWidth - size.width * 3f / 4f) * if (isLtr) 1f else -1f
+                    val thumbCenter = horizontalPaddingPx + usableTrackWidth * dampedDragAnimation.progress
+                    val minCenter = horizontalPaddingPx
+                    val maxCenter = horizontalPaddingPx + usableTrackWidth
+                    val clampedCenter = thumbCenter.fastCoerceIn(minCenter, maxCenter)
+                    translationX = (clampedCenter - size.width / 2f) * if (isLtr) 1f else -1f
                 }
                 .then(dampedDragAnimation.modifier)
                 .drawBackdrop(

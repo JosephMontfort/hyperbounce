@@ -109,6 +109,15 @@ class SettingsRepository(context: Context) {
     var keypadEnabled by prefsBooleanState("engine_keypad_enabled", true)
         private set
 
+    var toggleAccent by prefsEnumState("toggle_accent", AccentPreset.Green)
+        private set
+    var toggleCustomColor by prefsLongState("toggle_custom_color", 0xFF30D158L)
+        private set
+    var sliderAccent by prefsEnumState("slider_accent", AccentPreset.Green)
+        private set
+    var sliderCustomColor by prefsLongState("slider_custom_color", 0xFF30D158L)
+        private set
+
     val toggleGlass = GlassFeelHolder("toggle_glass", EngineSettings().toggleGlass)
     val sliderGlass = GlassFeelHolder("slider_glass", EngineSettings().sliderGlass)
 
@@ -145,6 +154,22 @@ class SettingsRepository(context: Context) {
         lockScreenKeypad.setEnabled(value)
     }
 
+    fun setToggleAccent(value: AccentPreset) {
+        toggleAccent = value
+    }
+
+    fun setToggleCustomColor(value: Long) {
+        toggleCustomColor = value
+    }
+
+    fun setSliderAccent(value: AccentPreset) {
+        sliderAccent = value
+    }
+
+    fun setSliderCustomColor(value: Long) {
+        sliderCustomColor = value
+    }
+
     /** Clears every stored key, restoring every field to the defaults in SettingsModels.kt. */
     fun resetToDefaults() {
         prefs.edit().clear().apply()
@@ -167,6 +192,10 @@ class SettingsRepository(context: Context) {
         toggleEngine = RenderEngine.LiquidGlass
         sliderEngine = RenderEngine.LiquidGlass
         keypadEnabled = true
+        toggleAccent = AccentPreset.Green
+        toggleCustomColor = 0xFF30D158L
+        sliderAccent = AccentPreset.Green
+        sliderCustomColor = 0xFF30D158L
     }
 
     // --- per-app nav bar settings -------------------------------------------------------

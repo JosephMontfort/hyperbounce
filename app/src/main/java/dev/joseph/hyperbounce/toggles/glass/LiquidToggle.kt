@@ -53,6 +53,7 @@ fun LiquidToggle(
     onSelect: (Boolean) -> Unit,
     backdrop: Backdrop,
     modifier: Modifier = Modifier,
+    activeColor: Color = Color(0xFF34C759),
     blurDp: Float = 8f,
     lensSizeDp: Float = 5f,
     lensDepthDp: Float = 10f,
@@ -63,7 +64,7 @@ fun LiquidToggle(
     springStiffness: Float = 400f
 ) {
     val isLightTheme = !isSystemInDarkTheme()
-    val accentColor = if (isLightTheme) Color(0xFF34C759) else Color(0xFF30D158)
+    val accentColor = activeColor
     val trackColor = if (isLightTheme) Color(0xFF787878).copy(0.2f) else Color(0xFF787880).copy(0.36f)
 
     val density = LocalDensity.current
