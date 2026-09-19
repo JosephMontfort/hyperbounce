@@ -29,12 +29,13 @@ import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import dev.joseph.hyperbounce.ui.Destination
 import dev.joseph.hyperbounce.ui.components.AppsIcon
 import dev.joseph.hyperbounce.ui.components.CheckmarkIcon
-import dev.joseph.hyperbounce.ui.components.ColorPickerDialog
 import dev.joseph.hyperbounce.ui.components.DropdownPicker
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
+import dev.joseph.hyperbounce.ui.components.SettingsNavRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
+import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.glass.LocalGlassDialogHost
 import dev.joseph.hyperbounce.ui.state.AccentPreset
 import dev.joseph.hyperbounce.ui.state.RenderEngine
@@ -53,13 +54,11 @@ fun EngineScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val dialogHost = LocalGlassDialogHost.current
     var showMiuixScopeDialog by remember { mutableStateOf(false) }
-    var showToggleColorPicker by remember { mutableStateOf(false) }
-    var showSliderColorPicker by remember { mutableStateOf(false) }
 
     if (showMiuixScopeDialog) {
         dialogHost.showConfirmation(
             title = "LSPosed Scope Required",
-            message = "To hook third-party MIUIX apps (such as Hypercieler or Hyperlight), make sure they are checked in HyperBounce's module scope in LSPosed Manager and restart the target apps.",
+            message = "To hook third-party MIUIX apps, make sure they are checked in HyperBounce's module scope in LSPosed Manager and restart the target apps.",
             confirmText = "Got It",
             cancelText = "Dismiss",
             onConfirm = { showMiuixScopeDialog = false },
@@ -67,35 +66,9 @@ fun EngineScreen(
         )
     }
 
-    if (showToggleColorPicker) {
-        ColorPickerDialog(
-            initialColor = repository.toggleCustomColor,
-            colors = colors,
-            backdrop = backdrop,
-            onDismiss = { showToggleColorPicker = false },
-            onColorSelected = { newColor ->
-                repository.setToggleCustomColor(newColor)
-                repository.setToggleAccent(AccentPreset.Custom)
-            }
-        )
-    }
-
-    if (showSliderColorPicker) {
-        ColorPickerDialog(
-            initialColor = repository.sliderCustomColor,
-            colors = colors,
-            backdrop = backdrop,
-            onDismiss = { showSliderColorPicker = false },
-            onColorSelected = { newColor ->
-                repository.setSliderCustomColor(newColor)
-                repository.setSliderAccent(AccentPreset.Custom)
-            }
-        )
-    }
-
     ScreenScaffold(
         title = "Toggles & Sliders",
-        subtitle = "HyperOS system toggles, sliders, and keypad",
+        subtitle = "HyperOS system toggles, sliders, and controls",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
@@ -115,25 +88,49 @@ fun EngineScreen(
             val pkgs = dev.joseph.hyperbounce.ui.state.XposedServiceBridge.getScopedPackages(context)
             dev.joseph.hyperbounce.ui.utils.RootUtils.restartScopedApps(context, pkgs)
         }
-    ) { contentBackdrop ->
+    ) { _ ->
         item {
-            val combinedBackdrop = rememberCombinedBackdrop(backdrop, contentBackdrop)
-            SectionHeader("Rendering Engine", colors)
+            SectionHeader("Toggle Switches", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                EngineRow(
-                    title = "Toggle Switches",
+                SettingsNavRow(
+                    title = "Toggles Appearance",
+                    subtitle = "Rendering engine & active switch accent color",
                     colors = colors,
-                    backdrop = combinedBackdrop,
-                    selected = repository.toggleEngine,
-                    onSelect = repository::setToggleEngine
+                    iconTint = colors.accentGreen,
+                    onClick = { onNavigate(Destination.ToggleAppearance) },
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
-                EngineRow(
-                    title = "Sliders",
+                SettingsNavRow(
+                    title = "Toggles Drag Physics",
+                    subtitle = "Liquid Glass lens depth, highlight & spring dynamics",
                     colors = colors,
-                    backdrop = combinedBackdrop,
-                    selected = repository.sliderEngine,
-                    onSelect = repository::setSliderEngine
+                    iconTint = colors.accentPurple,
+                    onClick = { onNavigate(Destination.TogglePhysics) },
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                )
+            }
+        }
+
+        item {
+            SectionHeader("Sliders", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                SettingsNavRow(
+                    title = "Sliders Appearance",
+                    subtitle = "Rendering engine & active track accent color",
+                    colors = colors,
+                    iconTint = colors.accentBlue,
+                    onClick = { onNavigate(Destination.SliderAppearance) },
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                )
+                RowDivider(colors.separator, insetStart = 16.dp)
+                SettingsNavRow(
+                    title = "Sliders Drag Physics",
+                    subtitle = "Liquid Glass lens depth, highlight & spring dynamics",
+                    colors = colors,
+                    iconTint = colors.accentPurple,
+                    onClick = { onNavigate(Destination.SliderPhysics) },
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
             }
         }
@@ -143,7 +140,7 @@ fun EngineScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 SettingsToggleRow(
                     title = "MIUIX App Hooking",
-                    subtitle = "Auto-detect and replace toggles/sliders in third-party apps (e.g. Hypercieler, Hyperlight)",
+                    subtitle = "Auto-detect and replace toggles and sliders in third-party apps",
                     colors = colors,
                     iconTint = colors.accentBlue,
                     backdrop = backdrop,
@@ -164,98 +161,11 @@ fun EngineScreen(
                 }
             }
         }
-
-        item {
-            SectionHeader("Active Colors", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp)) {
-                    BasicText(
-                        "Toggle Switch Accent",
-                        style = HyperBounceType.body.copy(color = colors.label)
-                    )
-                    BasicText(
-                        "Active state color for toggle switches across the system",
-                        style = HyperBounceType.footnote.copy(color = colors.secondaryLabel),
-                        modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
-                    )
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        AccentPreset.entries.forEach { preset ->
-                            AccentSwatch(
-                                preset = preset,
-                                customColor = repository.toggleCustomColor,
-                                colors = colors,
-                                selected = preset == repository.toggleAccent,
-                                onClick = {
-                                    repository.setToggleAccent(preset)
-                                    if (preset == AccentPreset.Custom) {
-                                        showToggleColorPicker = true
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-                RowDivider(colors.separator, insetStart = 16.dp)
-                Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp)) {
-                    BasicText(
-                        "Slider Track Accent",
-                        style = HyperBounceType.body.copy(color = colors.label)
-                    )
-                    BasicText(
-                        "Active track fill color for sliders across the system",
-                        style = HyperBounceType.footnote.copy(color = colors.secondaryLabel),
-                        modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
-                    )
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        AccentPreset.entries.forEach { preset ->
-                            AccentSwatch(
-                                preset = preset,
-                                customColor = repository.sliderCustomColor,
-                                colors = colors,
-                                selected = preset == repository.sliderAccent,
-                                onClick = {
-                                    repository.setSliderAccent(preset)
-                                    if (preset == AccentPreset.Custom) {
-                                        showSliderColorPicker = true
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            GlassFeelSection(
-                sectionTitle = "Toggle Glass",
-                holder = repository.toggleGlass,
-                colors = colors,
-                backdrop = backdrop,
-                enabled = repository.toggleEngine == RenderEngine.LiquidGlass
-            )
-        }
-
-        item {
-            GlassFeelSection(
-                sectionTitle = "Slider Glass",
-                holder = repository.sliderGlass,
-                colors = colors,
-                backdrop = backdrop,
-                enabled = repository.sliderEngine == RenderEngine.LiquidGlass
-            )
-        }
     }
 }
 
 @Composable
-private fun AccentSwatch(
+internal fun AccentSwatch(
     preset: AccentPreset,
     customColor: Long,
     colors: HyperBounceColors,
@@ -313,7 +223,7 @@ private fun AccentSwatch(
     }
 }
 
-private fun accentColorFor(preset: AccentPreset, customColor: Long, colors: HyperBounceColors): Color =
+internal fun accentColorFor(preset: AccentPreset, customColor: Long, colors: HyperBounceColors): Color =
     when (preset) {
         AccentPreset.Custom -> Color(customColor)
         AccentPreset.Auto -> colors.accentBlue
@@ -321,7 +231,7 @@ private fun accentColorFor(preset: AccentPreset, customColor: Long, colors: Hype
     }
 
 @Composable
-private fun EngineRow(
+internal fun EngineRow(
     title: String,
     colors: HyperBounceColors,
     backdrop: Backdrop,

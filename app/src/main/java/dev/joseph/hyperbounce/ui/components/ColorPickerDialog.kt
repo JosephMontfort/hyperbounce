@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,8 +21,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -62,6 +68,15 @@ fun ColorPickerDialog(
         derivedStateOf {
             Color(currentColorInt)
         }
+    }
+
+    var hexInput by remember {
+        mutableStateOf(String.format("%06X", 0xFFFFFF and initialColor.toInt()))
+    }
+
+    fun syncHexFromHsv(h: Float, s: Float, v: Float) {
+        val colorInt = AndroidColor.HSVToColor(floatArrayOf(h, s, v))
+        hexInput = String.format("%06X", 0xFFFFFF and colorInt)
     }
 
     Dialog(
@@ -125,6 +140,7 @@ fun ColorPickerDialog(
                                         val angle = (Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat() + 360f) % 360f
                                         hue = angle
                                         saturation = dist.coerceIn(0.01f, 1f)
+                                        syncHexFromHsv(hue, saturation, value)
                                     }
 
                                     detectTapGestures { pos ->
@@ -132,16 +148,21 @@ fun ColorPickerDialog(
                                     }
                                 }
                                 .pointerInput(Unit) {
-                                    detectDragGestures { change, _ ->
-                                        change.consume()
+                                    fun updateFromOffset(pos: Offset, size: androidx.compose.ui.unit.IntSize) {
                                         val center = Offset(size.width / 2f, size.height / 2f)
-                                        val dx = change.position.x - center.x
-                                        val dy = change.position.y - center.y
+                                        val dx = pos.x - center.x
+                                        val dy = pos.y - center.y
                                         val radius = minOf(size.width, size.height) / 2f
                                         val dist = (sqrt(dx * dx + dy * dy) / radius).coerceIn(0f, 1f)
                                         val angle = (Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat() + 360f) % 360f
                                         hue = angle
                                         saturation = dist.coerceIn(0.01f, 1f)
+                                        syncHexFromHsv(hue, saturation, value)
+                                    }
+
+                                    detectDragGestures { change, _ ->
+                                        change.consume()
+                                        updateFromOffset(change.position, size)
                                     }
                                 }
                         ) {
@@ -218,7 +239,10 @@ fun ColorPickerDialog(
                         }
                         LiquidSlider(
                             value = { value },
-                            onValueChange = { value = it },
+                            onValueChange = {
+                                value = it
+                                syncHexFromHsv(hue, saturation, value)
+                            },
                             valueRange = 0.1f..1f,
                             visibilityThreshold = 0.01f,
                             backdrop = backdrop
@@ -231,7 +255,7 @@ fun ColorPickerDialog(
                             .fillMaxWidth()
                             .background(colors.elevatedSurfaceTint.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
                             .border(0.5.dp, colors.separator, RoundedCornerShape(12.dp))
-                            .padding(12.dp),
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -246,15 +270,64 @@ fun ColorPickerDialog(
                                     .background(currentColor)
                                     .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape)
                             )
-                            val hexString = String.format("#%06X", 0xFFFFFF and currentColorInt)
-                            BasicText(
-                                hexString,
-                                style = HyperBounceType.body.copy(
-                                    color = colors.label,
-                                    fontWeight = FontWeight.Medium
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.White.copy(alpha = 0.08f))
+                                    .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                BasicText(
+                                    "#",
+                                    style = HyperBounceType.body.copy(
+                                        color = colors.secondaryLabel,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
                                 )
-                            )
+                                Spacer(Modifier.width(2.dp))
+                                BasicTextField(
+                                    value = hexInput,
+                                    onValueChange = { rawInput ->
+                                        val stripped = rawInput.replace("#", "").trim()
+                                        val filtered = stripped.filter { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }.take(6).uppercase()
+                                        hexInput = filtered
+                                        if (filtered.length == 6) {
+                                            try {
+                                                val parsed = AndroidColor.parseColor("#$filtered")
+                                                val hsvArr = FloatArray(3)
+                                                AndroidColor.colorToHSV(parsed, hsvArr)
+                                                hue = hsvArr[0]
+                                                saturation = hsvArr[1].coerceIn(0.01f, 1f)
+                                                value = hsvArr[2].coerceIn(0.1f, 1f)
+                                            } catch (_: Exception) {
+                                            }
+                                        }
+                                    },
+                                    singleLine = true,
+                                    textStyle = HyperBounceType.body.copy(
+                                        color = colors.label,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontFamily = FontFamily.Monospace
+                                    ),
+                                    cursorBrush = SolidColor(colors.accentBlue),
+                                    keyboardOptions = KeyboardOptions(
+                                        capitalization = KeyboardCapitalization.Characters,
+                                        autoCorrectEnabled = false,
+                                        keyboardType = KeyboardType.Ascii
+                                    ),
+                                    modifier = Modifier.width(72.dp)
+                                )
+                            }
                         }
+                        BasicText(
+                            "HEX",
+                            style = HyperBounceType.caption1.copy(
+                                color = colors.secondaryLabel,
+                                fontWeight = FontWeight.Medium
+                            )
+                        )
                     }
 
                     // Action buttons

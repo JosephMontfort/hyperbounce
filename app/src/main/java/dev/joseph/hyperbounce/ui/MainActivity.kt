@@ -62,6 +62,10 @@ import dev.joseph.hyperbounce.ui.screens.LockScreenSheetScreen
 import dev.joseph.hyperbounce.ui.screens.NotificationCenterSheetScreen
 import dev.joseph.hyperbounce.ui.screens.ScreenUnlockScreen
 import dev.joseph.hyperbounce.ui.screens.SettingsScreen
+import dev.joseph.hyperbounce.ui.screens.SliderAppearanceScreen
+import dev.joseph.hyperbounce.ui.screens.SliderPhysicsScreen
+import dev.joseph.hyperbounce.ui.screens.ToggleAppearanceScreen
+import dev.joseph.hyperbounce.ui.screens.TogglePhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.TuningScreen
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceBackground
@@ -200,6 +204,34 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                             backdrop = backdrop,
                             onBack = pop,
                             onNavigate = push
+                        )
+
+                        Destination.ToggleAppearance -> ToggleAppearanceScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.TogglePhysics -> TogglePhysicsScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.SliderAppearance -> SliderAppearanceScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.SliderPhysics -> SliderPhysicsScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
                         )
 
                         Destination.LockScreenSheet -> LockScreenSheetScreen(
