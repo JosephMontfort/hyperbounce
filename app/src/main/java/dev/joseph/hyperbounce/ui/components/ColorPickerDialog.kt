@@ -323,7 +323,7 @@ fun ColorPickerDialog(
                         }
                         BasicText(
                             "HEX",
-                            style = HyperBounceType.caption1.copy(
+                            style = HyperBounceType.caption.copy(
                                 color = colors.secondaryLabel,
                                 fontWeight = FontWeight.Medium
                             )
