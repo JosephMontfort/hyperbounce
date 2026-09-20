@@ -41,6 +41,7 @@ class GlassLensRenderer {
             uniform float  cornerRadius;
             uniform float3 edgeBevels;     // x = left, y = right, z = bottom
             uniform float3 edgeRefracts;   // x = left, y = right, z = bottom
+            uniform float  edgeStretch;
             uniform float  dispersion;
             uniform float2 lightDir;
             uniform float  specStrength;
@@ -84,6 +85,7 @@ class GlassLensRenderer {
                 float slope = 0.0;
                 float2 n = float2(0.0, 1.0);
                 float refr = 0.0;
+                float hStretch = 0.0;
 
                 bool inLeft = (p.x < wL) && (edgeBevels.x > 0.5);
                 bool inRight = (p.x > (viewSize.x - wR)) && (edgeBevels.y > 0.5);
@@ -101,6 +103,7 @@ class GlassLensRenderer {
                     float lenN = length(cornerN);
                     n = lenN > 0.0001 ? cornerN / lenN : float2(-0.7071, 0.7071);
                     refr = mix(edgeRefracts.z, edgeRefracts.x, clamp(u / (u + v + 0.0001), 0.0, 1.0));
+                    hStretch = slope * abs(n.x);
                 } else if (inRight && inBottom) {
                     // Bottom-Right Corner: Elliptical Continuous Blend
                     float u = 1.0 - (viewSize.x - p.x) / wR;
@@ -112,6 +115,7 @@ class GlassLensRenderer {
                     float lenN = length(cornerN);
                     n = lenN > 0.0001 ? cornerN / lenN : float2(0.7071, 0.7071);
                     refr = mix(edgeRefracts.z, edgeRefracts.y, clamp(u / (u + v + 0.0001), 0.0, 1.0));
+                    hStretch = slope * abs(n.x);
                 } else if (inLeft) {
                     // Straight Left Edge
                     float u = 1.0 - p.x / wL;
@@ -119,6 +123,7 @@ class GlassLensRenderer {
                     slope = edgeDist * edgeDist * (3.0 - 2.0 * edgeDist);
                     n = float2(-1.0, 0.0);
                     refr = edgeRefracts.x;
+                    hStretch = slope;
                 } else if (inRight) {
                     // Straight Right Edge
                     float u = 1.0 - (viewSize.x - p.x) / wR;
@@ -126,6 +131,7 @@ class GlassLensRenderer {
                     slope = edgeDist * edgeDist * (3.0 - 2.0 * edgeDist);
                     n = float2(1.0, 0.0);
                     refr = edgeRefracts.y;
+                    hStretch = slope;
                 } else if (inBottom) {
                     // Straight Bottom Edge
                     float v = 1.0 - (viewSize.y - p.y) / wB;
@@ -133,6 +139,7 @@ class GlassLensRenderer {
                     slope = edgeDist * edgeDist * (3.0 - 2.0 * edgeDist);
                     n = float2(0.0, 1.0);
                     refr = edgeRefracts.z;
+                    hStretch = 0.0;
                 }
 
                 // === CASE 1: FLAT INTERIOR OF THE GLASS SHEET (ZERO REFRACTION) ===
@@ -150,6 +157,8 @@ class GlassLensRenderer {
                 // === CASE 2: CURVED LIQUID GLASS BEVEL EDGES (OPTICAL REFRACTION) ===
                 // Inward optical refraction along the edges (offset points inward: -n)
                 float2 offset = -n * (slope * refr);
+                // Horizontal stretch of region underlying the edges alone
+                offset.x += (-n.x) * (hStretch * edgeStretch);
 
                 // Physical chromatic dispersion
                 float2 cR = coord + offset * (1.0 - dispersion * slope);
@@ -314,6 +323,7 @@ class GlassLensRenderer {
         val leftRefract: Float = refract,
         val rightRefract: Float = refract,
         val bottomRefract: Float = refract,
+        val edgeStretch: Float = 0f,
         val dispersion: Float = 0.030f,
         val lightX: Float = 0f,
         val lightY: Float = 1f,
@@ -430,6 +440,7 @@ class GlassLensRenderer {
         val safeRightRefr = p.rightRefract.coerceIn(0f, p.rightBevel.coerceAtLeast(1f) * 0.45f)
         val safeBottomRefr = p.bottomRefract.coerceIn(0f, p.bottomBevel.coerceAtLeast(1f) * 0.35f)
         sh.setFloatUniform("edgeRefracts", safeLeftRefr, safeRightRefr, safeBottomRefr)
+        sh.setFloatUniform("edgeStretch", p.edgeStretch)
 
         sh.setFloatUniform("dispersion", p.dispersion)
         sh.setFloatUniform("lightDir", p.lightX, p.lightY)

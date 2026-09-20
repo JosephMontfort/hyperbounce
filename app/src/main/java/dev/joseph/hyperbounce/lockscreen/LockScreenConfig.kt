@@ -22,6 +22,7 @@ data class LockScreenSheetConfig(
     var rimSoftness: Float = 2.0f,
     var blurRadius: Float = 0.0f,
     var cornerRadius: Float = 38.0f,
+    var edgeStretch: Float = 28.0f,
     // Home indicator pill
     var pillWidth: Float = 156.0f,
     var pillHeight: Float = 6.0f,
@@ -142,6 +143,7 @@ object LockScreenConfigHolder {
         sheet.rimSoftness = prefs.getFloat("lock_card_rim_softness", 2.0f)
         sheet.blurRadius = prefs.getFloat("lock_card_blur_radius", 0.0f)
         sheet.cornerRadius = prefs.getFloat("lock_card_corner_radius", 38.0f)
+        sheet.edgeStretch = prefs.getFloat("lock_card_edge_stretch", 28.0f)
         sheet.pillWidth = prefs.getFloat("lock_pill_width", 156.0f)
         sheet.pillHeight = prefs.getFloat("lock_pill_height", 6.0f)
         sheet.pillBottomMargin = prefs.getFloat("lock_pill_bottom_margin", 9.0f)

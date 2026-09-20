@@ -33,6 +33,16 @@ class LockScreenGlassSheetOptimizedView @JvmOverloads constructor(
             GlassLensRenderer()
         } else null
 
+    @Volatile
+    var swipeProgress: Float = 0.0f
+        set(value) {
+            val clamped = value.coerceIn(0.0f, 1.0f)
+            if (field != clamped) {
+                field = clamped
+                postInvalidateOnAnimation()
+            }
+        }
+
     private val fallbackBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0x80FFFFFF.toInt()
         style = Paint.Style.STROKE
@@ -49,6 +59,8 @@ class LockScreenGlassSheetOptimizedView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (visibility != VISIBLE) return
+        // When stationary (resting position), zero glass effects and zero overdraw
+        if (swipeProgress <= 0.001f) return
 
         val parent = parent as? View
         val w = if (width > 0) width else (parent?.width ?: resources.displayMetrics.widthPixels)
@@ -58,15 +70,20 @@ class LockScreenGlassSheetOptimizedView @JvmOverloads constructor(
         val density = resources.displayMetrics.density
         val cfg = LockScreenConfigHolder.sheet
 
-        val leftBevel = cfg.leftBevelWidth * density
-        val rightBevel = cfg.rightBevelWidth * density
-        val bottomBevel = cfg.bottomBevelWidth * density
+        // Smooth cubic Hermite curve for gradual, non-sudden incoming glass effects exactly like iOS
+        val t = (swipeProgress / 0.18f).coerceIn(0.0f, 1.0f)
+        val smoothIncoming = t * t * (3.0f - 2.0f * t)
+
+        val leftBevel = cfg.leftBevelWidth * density * smoothIncoming
+        val rightBevel = cfg.rightBevelWidth * density * smoothIncoming
+        val bottomBevel = cfg.bottomBevelWidth * density * smoothIncoming
         val maxBevel = max(max(leftBevel, rightBevel), bottomBevel)
-        val leftRefract = cfg.sideRefraction * density
-        val rightRefract = cfg.sideRefraction * density
-        val bottomRefract = cfg.bottomRefraction * density
+        val leftRefract = cfg.sideRefraction * density * smoothIncoming
+        val rightRefract = cfg.sideRefraction * density * smoothIncoming
+        val bottomRefract = cfg.bottomRefraction * density * smoothIncoming
         val maxRefract = max(max(leftRefract, rightRefract), bottomRefract)
-        val cornerRadius = cfg.cornerRadius * density
+        val cornerRadius = cfg.cornerRadius * density * smoothIncoming
+        val edgeStretch = (cfg.edgeStretch * density) * smoothIncoming
         val margin = ((maxBevel + maxRefract * 0.4f) + 16f * density).toInt().coerceAtLeast(32)
 
         val wp = LockScreenWallpaperHelper.getLiveLockWallpaper(context)
@@ -87,13 +104,14 @@ class LockScreenGlassSheetOptimizedView @JvmOverloads constructor(
                 leftRefract = leftRefract,
                 rightRefract = rightRefract,
                 bottomRefract = bottomRefract,
+                edgeStretch = edgeStretch,
                 dispersion = cfg.dispersionStrength,
                 lightX = 0f,
                 lightY = 1f,
-                spec = cfg.specularStrength,
-                hairline = cfg.hairlineStrength,
-                innerGlow = cfg.innerGlowStrength,
-                innerShadow = cfg.innerShadow,
+                spec = cfg.specularStrength * smoothIncoming,
+                hairline = cfg.hairlineStrength * smoothIncoming,
+                innerGlow = cfg.innerGlowStrength * smoothIncoming,
+                innerShadow = cfg.innerShadow * smoothIncoming,
                 saturation = cfg.saturationFactor,
                 rimSoftness = cfg.rimSoftness,
                 blurRadius = cfg.blurRadius * density

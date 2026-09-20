@@ -6,6 +6,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.Message
 import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
@@ -67,6 +68,8 @@ object LockScreenSheetHook {
     // Event-driven state tracking (0ms reflection in hot path)
     @Volatile private var isKeyguardShowing: Boolean = true
     @Volatile private var currentStatusBarState: Int = 1 // 1 = KEYGUARD
+    @Volatile private var isDozing: Boolean = false
+    @Volatile private var isGoingToSleep: Boolean = false
 
     // Dismissal animation coordinator (prevents Folme vs ViewPropertyAnimator clash)
     @Volatile private var isDismissAnimationRunning: Boolean = false
@@ -75,6 +78,34 @@ object LockScreenSheetHook {
     private var lastExpansionFraction: Float = 1.0f
     private var lastExpansionTime: Long = 0L
     private var lockscreenVelocityTracker: VelocityTracker? = null
+
+    private fun onSleepOrDozeTriggered() {
+        val resetUI = Runnable {
+            isDismissAnimationRunning = false
+            val rootView = cachedLockRootViewRef?.get()
+            val sheet = cachedLockGlassSheetRef?.get() ?: rootView?.findViewWithTag<LockScreenGlassSheetOptimizedView>(TAG_LOCK_GLASS_SHEET)
+            sheet?.visibility = View.GONE
+            sheet?.swipeProgress = 0.0f
+            if (rootView != null) {
+                rootView.animate().cancel()
+                rootView.translationY = 0.0f
+            }
+            val notifView = cachedLockNotifViewRef?.get()
+            if (notifView != null) {
+                notifView.animate().cancel()
+                notifView.translationY = 0.0f
+            }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            resetUI.run()
+        } else {
+            mainHandler.post(resetUI)
+        }
+    }
+
+    private fun isLockScreenActive(): Boolean {
+        return (currentStatusBarState == 1 || isKeyguardShowing) && !isDozing && !isGoingToSleep
+    }
 
     private fun getRootView(kpvc: Any): ViewGroup? {
         val cached = cachedLockRootViewRef?.get()
@@ -161,14 +192,11 @@ object LockScreenSheetHook {
         }
     }
 
-    private fun isLockScreenActive(): Boolean {
-        return currentStatusBarState == 1 || isKeyguardShowing
-    }
-
     fun init(module: XposedModule, classLoader: ClassLoader) {
         // 0. Event-driven state tracking to eliminate reflection from 120Hz hot path
         hookStatusBarState(module, classLoader)
         hookKeyguardState(module, classLoader)
+        hookWakefulnessAndDoze(module, classLoader)
 
         // 1. Hook KeyguardPanelViewController (HyperOS Lockscreen Controller)
         try {
@@ -189,8 +217,7 @@ object LockScreenSheetHook {
                                 }
 
                                 val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
-                                val f = (args[0] as Number).toFloat()
+                                val f = ((if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as Number).toFloat()
                                 val kpvc = chain.thisObject ?: return result
 
                                 val rootView = getRootView(kpvc)
@@ -204,7 +231,8 @@ object LockScreenSheetHook {
                                     if (viewH <= 0f) viewH = 2400f
                                     val instVel = (df * viewH) / (dt / 1000.0f)
                                     if (instVel > 50.0f) {
-                                        lockscreenFlingVelocity = lockscreenFlingVelocity * 0.3f + instVel * 0.7f
+                                        val clampedVel = instVel.coerceIn(50.0f, 10000.0f)
+                                        lockscreenFlingVelocity = lockscreenFlingVelocity * 0.3f + clampedVel * 0.7f
                                     }
                                 }
                                 lastExpansionFraction = f
@@ -212,17 +240,22 @@ object LockScreenSheetHook {
 
                                 if (rootView != null) {
                                     val fraction = f.coerceIn(0.0f, 1.0f)
+                                    val swipeProgress = (1.0f - fraction).coerceIn(0.0f, 1.0f)
                                     val cfg = LockScreenConfigHolder.sheet
-                                    val isActive = cfg.enabled && (isLockScreenActive() || (fraction > 0.01f && fraction < 1.0f))
-                                    if (!isActive) {
-                                        val existingSheet = cachedLockGlassSheetRef?.get() ?: rootView.findViewWithTag<View>(TAG_LOCK_GLASS_SHEET)
+                                    val active = cfg.enabled && isLockScreenActive()
+
+                                    if (!active || swipeProgress <= 0.001f) {
+                                        val existingSheet = cachedLockGlassSheetRef?.get() ?: rootView.findViewWithTag<LockScreenGlassSheetOptimizedView>(TAG_LOCK_GLASS_SHEET)
                                         existingSheet?.visibility = View.GONE
+                                        existingSheet?.swipeProgress = 0.0f
+                                        rootView.translationY = 0.0f
+                                        finalNotifView?.translationY = 0.0f
                                         return result
                                     }
 
                                     var viewHeight = rootView.height.toFloat()
-                                    if (viewHeight == 0f) viewHeight = 2400f
-                                    val upwardOffset = (1.0f - fraction) * -viewHeight
+                                    if (viewHeight <= 0f) viewHeight = 2400f
+                                    val upwardOffset = swipeProgress * -viewHeight
 
                                     // 1. Move root lockscreen layer upward smoothly (120Hz native performance)
                                     rootView.translationY = upwardOffset
@@ -235,8 +268,13 @@ object LockScreenSheetHook {
                                         ensureInjected(kpvc, rootView)
                                         sheet = cachedLockGlassSheetRef?.get()
                                     }
-                                    // Single invalidate per vsync tick (no double-invalidation)
-                                    sheet?.invalidate()
+                                    if (sheet != null) {
+                                        if (sheet.visibility != View.VISIBLE) {
+                                            sheet.visibility = View.VISIBLE
+                                        }
+                                        sheet.swipeProgress = swipeProgress
+                                        sheet.invalidate()
+                                    }
 
                                     // 3. Move notification container upward in sync
                                     if (finalNotifView != null) {
@@ -291,8 +329,7 @@ object LockScreenSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             try {
                                 val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
-                                val v = args[1] as? View
+                                val v = (if (rawArgs is List<*>) rawArgs[1] else (rawArgs as Array<*>)[1]) as? View
                                 if (v != null) {
                                     if (v.scaleX != 1.0f) v.scaleX = 1.0f
                                     if (v.scaleY != 1.0f) v.scaleY = 1.0f
@@ -317,18 +354,23 @@ object LockScreenSheetHook {
                                     isDismissAnimationRunning = true
                                     val animUI = Runnable {
                                         var viewHeight = rootView.height.toFloat()
-                                        if (viewHeight == 0f) viewHeight = 2400f
+                                        if (viewHeight <= 0f) viewHeight = 2400f
 
                                         // Cancel any lingering animators to prevent conflicting transformations
                                         rootView.animate().cancel()
                                         finalNotifView?.animate()?.cancel()
 
-                                         rootView.animate()
+                                        rootView.animate()
                                             .translationY(-viewHeight)
                                             .setDuration(220)
                                             .setInterpolator(DecelerateInterpolator(1.5f))
                                             .withEndAction {
                                                 isDismissAnimationRunning = false
+                                                rootView.translationY = 0.0f
+                                                finalNotifView?.translationY = 0.0f
+                                                val sheet = cachedLockGlassSheetRef?.get() ?: rootView.findViewWithTag<LockScreenGlassSheetOptimizedView>(TAG_LOCK_GLASS_SHEET)
+                                                sheet?.visibility = View.GONE
+                                                sheet?.swipeProgress = 0.0f
                                             }
                                             .start()
 
@@ -344,23 +386,25 @@ object LockScreenSheetHook {
                                         mainHandler.post(animUI)
                                     }
 
-                                    // Immediate broadcast dispatch with zero delay:
+                                    // Immediate broadcast dispatch offloaded to bgExecutor to prevent main-thread binder jank
                                     val context = rootView.context
                                     val vel = max(
                                         lockscreenFlingVelocity,
                                         dev.joseph.hyperbounce.notification.NotificationSheetHook.latestFlingVelocity
                                     )
-                                    listOf("com.miui.home", "com.mi.android.globallauncher").forEach { pkg ->
-                                        try {
-                                            val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
-                                                if (vel > 0.0f) {
-                                                    putExtra("EXTRA_VELOCITY", vel)
+                                    bgExecutor.execute {
+                                        listOf("com.miui.home", "com.mi.android.globallauncher").forEach { pkg ->
+                                            try {
+                                                val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
+                                                    if (vel > 0.0f) {
+                                                        putExtra("EXTRA_VELOCITY", vel)
+                                                    }
+                                                    setPackage(pkg)
+                                                    addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
                                                 }
-                                                setPackage(pkg)
-                                                addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
-                                            }
-                                            context.sendBroadcast(intent)
-                                        } catch (_: Throwable) {}
+                                                context.sendBroadcast(intent)
+                                            } catch (_: Throwable) {}
+                                        }
                                     }
                                 }
                             } catch (_: Throwable) {}
@@ -461,16 +505,30 @@ object LockScreenSheetHook {
                             val result = chain.proceed()
                             try {
                                 val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
-                                currentStatusBarState = (args[0] as Number).toInt()
+                                val state = (if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as Number
+                                currentStatusBarState = state.toInt()
                                 if (currentStatusBarState != 1) {
                                     isDismissAnimationRunning = false
+                                    onSleepOrDozeTriggered()
                                 }
                             } catch (_: Throwable) {}
                             return result
                         }
                     })
-                    break
+                } else if (m.name == "setIsDozing" && m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == Boolean::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val rawArgs = chain.args
+                            val dozing = (if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as Boolean
+                            isDozing = dozing
+                            if (dozing) {
+                                onSleepOrDozeTriggered()
+                            }
+                            return chain.proceed()
+                        }
+                    })
                 }
             }
         } catch (_: Throwable) {}
@@ -489,18 +547,118 @@ object LockScreenSheetHook {
                             val result = chain.proceed()
                             try {
                                 val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
-                                val showing = args[0] as Boolean
-                                val occluded = args[1] as Boolean
+                                val showing = (if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as Boolean
+                                val occluded = (if (rawArgs is List<*>) rawArgs[1] else (rawArgs as Array<*>)[1]) as Boolean
                                 isKeyguardShowing = showing && !occluded
                                 if (!isKeyguardShowing) {
                                     isDismissAnimationRunning = false
+                                    onSleepOrDozeTriggered()
                                 }
                             } catch (_: Throwable) {}
                             return result
                         }
                     })
                     break
+                }
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun hookWakefulnessAndDoze(module: XposedModule, classLoader: ClassLoader) {
+        // 1. Hook KeyguardLifecyclesDispatcher & KeyguardLifecycleHandler
+        try {
+            val dispatcherClass = Class.forName("com.android.systemui.keyguard.KeyguardLifecyclesDispatcher", false, classLoader)
+            for (m: Method in dispatcherClass.declaredMethods) {
+                if (m.name == "dispatch" && m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == Int::class.javaPrimitiveType
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            try {
+                                val rawArgs = chain.args
+                                val what = ((if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as Number).toInt()
+                                if (what == 2 || what == 3 || what == 6 || what == 7) {
+                                    isGoingToSleep = true
+                                    onSleepOrDozeTriggered()
+                                } else if (what == 0 || what == 1 || what == 4 || what == 5) {
+                                    isGoingToSleep = false
+                                }
+                            } catch (_: Throwable) {}
+                            return chain.proceed()
+                        }
+                    })
+                }
+            }
+        } catch (_: Throwable) {}
+
+        try {
+            val handlerClass = Class.forName("com.android.systemui.keyguard.KeyguardLifecyclesDispatcher\$KeyguardLifecycleHandler", false, classLoader)
+            for (m: Method in handlerClass.declaredMethods) {
+                if (m.name == "handleMessage" && m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == Message::class.java
+                ) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            try {
+                                val rawArgs = chain.args
+                                val msg = (if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as? Message
+                                if (msg != null) {
+                                    val what = msg.what
+                                    if (what == 2 || what == 3 || what == 6 || what == 7) {
+                                        isGoingToSleep = true
+                                        onSleepOrDozeTriggered()
+                                    } else if (what == 0 || what == 1 || what == 4 || what == 5) {
+                                        isGoingToSleep = false
+                                    }
+                                }
+                            } catch (_: Throwable) {}
+                            return chain.proceed()
+                        }
+                    })
+                }
+            }
+        } catch (_: Throwable) {}
+
+        // 2. Hook AnimationHelper.doAnimationToAod (HyperOS clock-to-AOD animation)
+        try {
+            val animHelperClass = Class.forName("com.android.keyguard.clock.animation.AnimationHelper", false, classLoader)
+            for (m: Method in animHelperClass.declaredMethods) {
+                if (m.name == "doAnimationToAod") {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            try {
+                                val rawArgs = chain.args
+                                val toAod = (if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as? Boolean ?: false
+                                if (toAod) {
+                                    isGoingToSleep = true
+                                    onSleepOrDozeTriggered()
+                                }
+                            } catch (_: Throwable) {}
+                            return chain.proceed()
+                        }
+                    })
+                }
+            }
+        } catch (_: Throwable) {}
+
+        // 3. Hook ClockBaseAnimation.doAnimationToAod
+        try {
+            val clockAnimClass = Class.forName("com.android.keyguard.clock.animation.ClockBaseAnimation", false, classLoader)
+            for (m: Method in clockAnimClass.declaredMethods) {
+                if (m.name == "doAnimationToAod") {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            try {
+                                val rawArgs = chain.args
+                                val toAod = (if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as? Boolean ?: false
+                                if (toAod) {
+                                    isGoingToSleep = true
+                                    onSleepOrDozeTriggered()
+                                }
+                            } catch (_: Throwable) {}
+                            return chain.proceed()
+                        }
+                    })
                 }
             }
         } catch (_: Throwable) {}
@@ -560,6 +718,7 @@ object LockScreenSheetHook {
 
             if (!active) {
                 glassSheet?.visibility = View.GONE
+                glassSheet?.swipeProgress = 0.0f
                 return
             }
 
@@ -592,13 +751,19 @@ object LockScreenSheetHook {
             }
 
             cachedLockGlassSheetRef = WeakReference(glassSheet)
-            if (glassSheet.visibility != View.VISIBLE) {
-                glassSheet.visibility = View.VISIBLE
+            if (glassSheet.swipeProgress > 0.001f) {
+                if (glassSheet.visibility != View.VISIBLE) {
+                    glassSheet.visibility = View.VISIBLE
+                }
+            } else {
+                glassSheet.visibility = View.GONE
             }
             if (rootView.width > 0 && rootView.height > 0 && (glassSheet.width != rootView.width || glassSheet.height != rootView.height)) {
                 glassSheet.layout(0, 0, rootView.width, rootView.height)
             }
-            glassSheet.invalidate()
+            if (glassSheet.visibility == View.VISIBLE) {
+                glassSheet.invalidate()
+            }
         } catch (_: Throwable) {}
     }
 }
