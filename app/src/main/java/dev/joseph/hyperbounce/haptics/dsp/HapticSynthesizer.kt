@@ -19,8 +19,7 @@ import kotlin.math.sqrt
 /**
  * Authentic Xiaomi / AAC RichTap Audio-to-Haptic Synthesizer.
  *
- * Reverse-engineered directly from Xiaomi stock ringtone firmware binaries
- * (/vendor/firmware/*_P_RTP.bin) and disassembly of libaachaptics.so.
+ * (vendor firmware RTP binaries) and disassembly of libaachaptics.so.
  *
  * Key Architectural Findings:
  * 1. Output stream is strictly 24,000 Hz Signed 8-bit PCM (int8_t).
