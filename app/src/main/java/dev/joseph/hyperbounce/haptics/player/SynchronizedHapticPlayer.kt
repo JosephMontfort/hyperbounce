@@ -74,7 +74,7 @@ class SynchronizedHapticPlayer(private val context: Context) {
                                         val effectIdToPlay = when (event.effectId) {
                                             5 -> VibrationEffect.EFFECT_HEAVY_CLICK
                                             4 -> 4
-                                            3 -> VibrationEffect.EFFECT_THUD
+                                            3 -> 3
                                             2 -> VibrationEffect.EFFECT_TICK
                                             1 -> VibrationEffect.EFFECT_DOUBLE_CLICK
                                             0 -> VibrationEffect.EFFECT_CLICK
