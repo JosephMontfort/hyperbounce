@@ -12,13 +12,51 @@ class IncomingCallReceiver : BroadcastReceiver() {
             val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
             when (state) {
                 TelephonyManager.EXTRA_STATE_RINGING -> {
-                    IncomingCallHapticService.start(context)
+                    val profile = HapticRingtoneStorage.load(context)
+                    if (profile != null && profile.events.isNotEmpty()) {
+                        suppressStockRingtoneVibration()
+                        IncomingCallHapticService.start(context)
+                    }
                 }
                 TelephonyManager.EXTRA_STATE_OFFHOOK,
                 TelephonyManager.EXTRA_STATE_IDLE -> {
                     IncomingCallHapticService.stop(context)
+                    restoreStockRingtoneVibration()
                 }
             }
+        }
+    }
+
+    companion object {
+        private var wasSuppressed = false
+
+        fun suppressStockRingtoneVibration() {
+            wasSuppressed = true
+            Thread {
+                try {
+                    Runtime.getRuntime().exec(
+                        arrayOf(
+                            "su", "-c",
+                            "settings put system vibrate_when_ringing 0 ; cmd vibrator_manager cancel || cmd vibrator cancel"
+                        )
+                    ).waitFor()
+                } catch (ignored: Exception) {}
+            }.start()
+        }
+
+        fun restoreStockRingtoneVibration() {
+            if (!wasSuppressed) return
+            wasSuppressed = false
+            Thread {
+                try {
+                    Runtime.getRuntime().exec(
+                        arrayOf(
+                            "su", "-c",
+                            "settings put system vibrate_when_ringing 1"
+                        )
+                    ).waitFor()
+                } catch (ignored: Exception) {}
+            }.start()
         }
     }
 }

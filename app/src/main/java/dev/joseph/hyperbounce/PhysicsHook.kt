@@ -125,7 +125,9 @@ class PhysicsHook : XposedModule() {
                     dev.joseph.hyperbounce.dialer.DialerRecentsHook.init(this, param.classLoader)
                 }
 
-                param.packageName == "com.android.server.telecom" -> {
+                param.packageName == "com.android.server.telecom" ||
+                param.packageName == "android" ||
+                param.packageName == "system" -> {
                     dev.joseph.hyperbounce.haptics.ringtone.TelecomRingtoneHapticHook.init(this, param.classLoader)
                 }
             }
@@ -148,6 +150,16 @@ class PhysicsHook : XposedModule() {
             }
         } catch (t: Throwable) {
             Log.e("HyperBounce", "PhysicsHook failed for ${param.packageName}, leaving stock UI untouched", t)
+        }
+    }
+
+    override fun onSystemServerStarting(param: XposedModuleInterface.SystemServerStartingParam) {
+        super.onSystemServerStarting(param)
+        try {
+            Log.d("HyperBounce", "onSystemServerStarting: initializing TelecomRingtoneHapticHook")
+            dev.joseph.hyperbounce.haptics.ringtone.TelecomRingtoneHapticHook.init(this, param.classLoader)
+        } catch (t: Throwable) {
+            Log.e("HyperBounce", "Failed to init TelecomRingtoneHapticHook in onSystemServerStarting", t)
         }
     }
 }

@@ -3,6 +3,7 @@ package dev.joseph.hyperbounce.haptics.ringtone
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
@@ -23,6 +24,13 @@ class IncomingCallHapticService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Default)
     private var playbackJob: Job? = null
     private var vibrator: Vibrator? = null
+
+    private val ringtoneAttributes by lazy {
+        AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -111,41 +119,50 @@ class IncomingCallHapticService : Service() {
         try {
             when (mode) {
                 HapticIntensityMode.MaxPunch -> {
-                    // Maximum physical excitation: 36ms full-rail 255 pulse on downbeats, 24ms on accents
-                    val dur = if (effectId == 5) 36L else 24L
-                    vibrator.vibrate(VibrationEffect.createOneShot(dur, 255))
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                        vibrator.areAllPrimitivesSupported(
+                            VibrationEffect.Composition.PRIMITIVE_QUICK_RISE,
+                            VibrationEffect.Composition.PRIMITIVE_CLICK
+                        )
+                    ) {
+                        val effect = VibrationEffect.startComposition()
+                            .addPrimitive(VibrationEffect.Composition.PRIMITIVE_QUICK_RISE, 1.0f)
+                            .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1.0f)
+                            .compose()
+                        vibrator.vibrate(effect, ringtoneAttributes)
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        vibrator.vibrate(
+                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK),
+                            ringtoneAttributes
+                        )
+                    } else {
+                        vibrator.vibrate(VibrationEffect.createOneShot(24L, 255), ringtoneAttributes)
+                    }
                 }
                 HapticIntensityMode.Punchy -> {
-                    if (effectId == 5) {
-                        vibrator.vibrate(VibrationEffect.createOneShot(30L, 255))
+                    val eff = when (effectId) {
+                        5 -> VibrationEffect.EFFECT_HEAVY_CLICK
+                        4, 3, 1 -> VibrationEffect.EFFECT_CLICK
+                        2 -> VibrationEffect.EFFECT_TICK
+                        else -> VibrationEffect.EFFECT_CLICK
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        vibrator.vibrate(VibrationEffect.createPredefined(eff), ringtoneAttributes)
                     } else {
-                        val eff = when (effectId) {
-                            4 -> 4
-                            3 -> 3
-                            2 -> VibrationEffect.EFFECT_TICK
-                            1 -> VibrationEffect.EFFECT_DOUBLE_CLICK
-                            else -> VibrationEffect.EFFECT_CLICK
-                        }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            vibrator.vibrate(VibrationEffect.createPredefined(eff))
-                        } else {
-                            vibrator.vibrate(VibrationEffect.createOneShot(18L, 230))
-                        }
+                        vibrator.vibrate(VibrationEffect.createOneShot(18L, 230), ringtoneAttributes)
                     }
                 }
                 HapticIntensityMode.Crisp -> {
                     val eff = when (effectId) {
                         5 -> VibrationEffect.EFFECT_HEAVY_CLICK
-                        4 -> 4
-                        3 -> 3
+                        4, 3, 1 -> VibrationEffect.EFFECT_CLICK
                         2 -> VibrationEffect.EFFECT_TICK
-                        1 -> VibrationEffect.EFFECT_DOUBLE_CLICK
                         else -> VibrationEffect.EFFECT_CLICK
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        vibrator.vibrate(VibrationEffect.createPredefined(eff))
+                        vibrator.vibrate(VibrationEffect.createPredefined(eff), ringtoneAttributes)
                     } else {
-                        vibrator.vibrate(VibrationEffect.createOneShot(18L, VibrationEffect.DEFAULT_AMPLITUDE))
+                        vibrator.vibrate(VibrationEffect.createOneShot(14L, 180), ringtoneAttributes)
                     }
                 }
             }
@@ -158,6 +175,7 @@ class IncomingCallHapticService : Service() {
         try {
             vibrator?.cancel()
         } catch (ignored: Exception) {}
+        IncomingCallReceiver.restoreStockRingtoneVibration()
     }
 
     override fun onDestroy() {
