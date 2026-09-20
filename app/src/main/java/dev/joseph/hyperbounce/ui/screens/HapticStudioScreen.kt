@@ -463,7 +463,7 @@ fun HapticStudioScreen(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(
-                                                if (isSelected) colors.accentBlue else colors.surfaceOverlay
+                                                if (isSelected) colors.accentBlue else colors.separator.copy(alpha = 0.25f)
                                             )
                                             .clickable { intensityMode = mode }
                                             .padding(horizontal = 9.dp, vertical = 5.dp)
@@ -587,7 +587,7 @@ fun HapticStudioScreen(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(
-                                        if (isCropMode) colors.accentOrange.copy(alpha = 0.25f) else colors.surfaceOverlay
+                                        if (isCropMode) colors.accentOrange.copy(alpha = 0.25f) else colors.separator.copy(alpha = 0.25f)
                                     )
                                     .clickable {
                                         isCropMode = !isCropMode
@@ -619,7 +619,7 @@ fun HapticStudioScreen(
                                         modifier = Modifier
                                             .weight(1f)
                                             .clip(RoundedCornerShape(6.dp))
-                                            .background(colors.surfaceOverlay)
+                                            .background(colors.separator.copy(alpha = 0.25f))
                                             .clickable {
                                                 val maxLen = sec * 1000
                                                 cropEndMs = (cropStartMs + maxLen).coerceAtMost(activeDuration)
@@ -640,7 +640,7 @@ fun HapticStudioScreen(
                                     modifier = Modifier
                                         .weight(1f)
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(colors.surfaceOverlay)
+                                        .background(colors.separator.copy(alpha = 0.25f))
                                         .clickable {
                                             cropStartMs = 0
                                             cropEndMs = activeDuration
