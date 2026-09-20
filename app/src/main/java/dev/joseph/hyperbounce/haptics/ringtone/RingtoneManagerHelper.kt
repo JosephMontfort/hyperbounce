@@ -1,5 +1,6 @@
 package dev.joseph.hyperbounce.haptics.ringtone
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.media.RingtoneManager
@@ -112,43 +113,49 @@ object RingtoneManagerHelper {
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
             }
 
-            // Remove existing entry with same title to prevent duplicate ringtones
+            // Check if existing MediaStore entry matches fileName
+            var targetUri: Uri? = null
             try {
-                resolver.delete(
+                resolver.query(
                     collectionUri,
-                    "${MediaStore.Audio.Media.TITLE} = ?",
-                    arrayOf(cleanTitle)
-                )
+                    arrayOf(MediaStore.Audio.Media._ID),
+                    "${MediaStore.Audio.Media.DISPLAY_NAME} = ?",
+                    arrayOf(fileName),
+                    null
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID))
+                        targetUri = ContentUris.withAppendedId(collectionUri, id)
+                    }
+                }
             } catch (ignored: Exception) {}
 
-            val values = ContentValues().apply {
-                put(MediaStore.Audio.Media.DISPLAY_NAME, fileName)
-                put(MediaStore.Audio.Media.TITLE, cleanTitle)
-                put(MediaStore.Audio.Media.MIME_TYPE, "audio/wav")
-                put(MediaStore.Audio.Media.IS_RINGTONE, 1)
-                put(MediaStore.Audio.Media.IS_NOTIFICATION, 0)
-                put(MediaStore.Audio.Media.IS_ALARM, 0)
-                put(MediaStore.Audio.Media.IS_MUSIC, 0)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_RINGTONES + "/HyperBounce")
-                    put(MediaStore.Audio.Media.IS_PENDING, 1)
+            // If not found, insert a new record
+            if (targetUri == null) {
+                val values = ContentValues().apply {
+                    put(MediaStore.Audio.Media.DISPLAY_NAME, fileName)
+                    put(MediaStore.Audio.Media.TITLE, cleanTitle)
+                    put(MediaStore.Audio.Media.MIME_TYPE, "audio/wav")
+                    put(MediaStore.Audio.Media.IS_RINGTONE, 1)
+                    put(MediaStore.Audio.Media.IS_NOTIFICATION, 0)
+                    put(MediaStore.Audio.Media.IS_ALARM, 0)
+                    put(MediaStore.Audio.Media.IS_MUSIC, 0)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_RINGTONES + "/HyperBounce")
+                    }
                 }
+                targetUri = resolver.insert(collectionUri, values)
             }
 
-            val uri = resolver.insert(collectionUri, values) ?: return null
-            resolver.openOutputStream(uri)?.use { os ->
-                os.write(wavBytes)
-                os.flush()
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val finalizeValues = ContentValues().apply {
-                    put(MediaStore.Audio.Media.IS_PENDING, 0)
+            if (targetUri != null) {
+                resolver.openOutputStream(targetUri!!, "wt")?.use { os ->
+                    os.write(wavBytes)
+                    os.flush()
                 }
-                resolver.update(uri, finalizeValues, null, null)
+                targetUri
+            } else {
+                installRingtoneDirectFile(context, wavBytes, cleanTitle)
             }
-
-            uri
         } catch (e: Exception) {
             Log.e(TAG, "Error installing ringtone via MediaStore, falling back to direct file", e)
             installRingtoneDirectFile(context, wavBytes, cleanTitle)
@@ -172,33 +179,45 @@ object RingtoneManagerHelper {
      * Sets the URI as the default phone ringtone and syncs HyperOS dual-SIM settings.
      */
     fun setAsDefaultRingtone(context: Context, ringtoneUri: Uri): Boolean {
-        var success = false
-        try {
-            if (Settings.System.canWrite(context)) {
-                RingtoneManager.setActualDefaultRingtoneUri(
-                    context,
-                    RingtoneManager.TYPE_RINGTONE,
-                    ringtoneUri
-                )
-                success = true
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Standard RingtoneManager set failed, attempting root sync: ${e.message}")
+        // Automatically ensure WRITE_SETTINGS appop is granted via root if not already allowed
+        if (!Settings.System.canWrite(context)) {
+            try {
+                Runtime.getRuntime().exec(
+                    arrayOf("su", "-c", "appops set ${context.packageName} WRITE_SETTINGS allow")
+                ).waitFor()
+            } catch (ignored: Exception) {}
         }
 
-        // On Xiaomi / HyperOS, sync dual-SIM ringtone slots via root shell for guaranteed application
+        var success = false
+
+        // Standard Android ringtone (1) + Xiaomi HyperOS dual-SIM slots (64 and 128)
+        val ringtoneTypes = intArrayOf(
+            RingtoneManager.TYPE_RINGTONE, // 1 (Default)
+            64,                            // Xiaomi HyperOS SIM 1
+            128                            // Xiaomi HyperOS SIM 2
+        )
+
+        for (type in ringtoneTypes) {
+            try {
+                RingtoneManager.setActualDefaultRingtoneUri(context, type, ringtoneUri)
+                success = true
+            } catch (e: Exception) {
+                Log.w(TAG, "RingtoneManager.setActualDefaultRingtoneUri failed for type $type: ${e.message}")
+            }
+        }
+
+        // On Xiaomi / HyperOS, sync dual-SIM ringtone slots and system settings directly via root
         try {
             val uriStr = ringtoneUri.toString()
             val cmd = arrayOf(
                 "su", "-c",
-                "settings put system ringtone '$uriStr' && " +
-                "settings put system ringtone_sound_slot_1 '$uriStr' && " +
-                "settings put system ringtone_sound_slot_2 '$uriStr' && " +
+                "settings put system ringtone '$uriStr' ; " +
+                "settings put system ringtone_sound_slot_1 '$uriStr' ; " +
+                "settings put system ringtone_sound_slot_2 '$uriStr' ; " +
                 "settings put system ringtone_set 1"
             )
             val proc = Runtime.getRuntime().exec(cmd)
             proc.waitFor()
-            success = proc.exitValue() == 0 || success
         } catch (ignored: Exception) {}
 
         return success
