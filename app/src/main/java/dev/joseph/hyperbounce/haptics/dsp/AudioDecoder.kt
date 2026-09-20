@@ -8,17 +8,20 @@ import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Decodes any audio file (WAV, MP3, OGG, M4A, FLAC) from a content Uri or File
+ * Decodes audio files (WAV, MP3, OGG, M4A, FLAC) from a content Uri or File
  * into normalized mono float PCM samples (-1.0f to 1.0f) using Android's MediaCodec.
+ *
+ * Implements high-performance unboxed primitive memory buffering to prevent OutOfMemoryError
+ * and caps synthesis decoding to the relevant window (default 30 seconds).
  */
 object AudioDecoder {
 
     private const val TAG = "AudioDecoder"
     private const val TIMEOUT_US = 5000L
+    private const val MAX_DECODE_DURATION_MS = 30000L // 30 seconds is plenty for haptics
 
     data class DecodedAudio(
         val samples: FloatArray,
@@ -41,9 +44,28 @@ object AudioDecoder {
         }
     }
 
+    private class PrimitiveFloatList(initialCapacity: Int = 131072) {
+        private var data = FloatArray(initialCapacity)
+        var size = 0
+            private set
+
+        fun add(value: Float) {
+            if (size == data.size) {
+                val newCap = if (data.size < 1048576) data.size * 2 else data.size + (data.size shr 1)
+                data = data.copyOf(newCap)
+            }
+            data[size++] = value
+        }
+
+        fun toTrimmedArray(): FloatArray {
+            return if (size == data.size) data else data.copyOf(size)
+        }
+    }
+
     suspend fun decode(
         context: Context,
         uri: Uri,
+        maxDurationMs: Long = MAX_DECODE_DURATION_MS,
         onProgress: (Float) -> Unit = {}
     ): DecodedAudio = withContext(Dispatchers.IO) {
         val extractor = MediaExtractor()
@@ -79,15 +101,18 @@ object AudioDecoder {
         val channelCount = if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
             format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
         } else 1
-        val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) {
+        val rawDurationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) {
             format.getLong(MediaFormat.KEY_DURATION)
         } else 0L
+
+        val maxDurationUs = maxDurationMs * 1000L
+        val effectiveDurationUs = if (rawDurationUs in 1..maxDurationUs) rawDurationUs else maxDurationUs
 
         val codec = MediaCodec.createDecoderByType(mime)
         codec.configure(format, null, null, 0)
         codec.start()
 
-        val decodedSamples = ArrayList<Float>()
+        val decodedSamples = PrimitiveFloatList(initialCapacity = 131072)
         val bufferInfo = MediaCodec.BufferInfo()
         var sawInputEOS = false
         var sawOutputEOS = false
@@ -100,20 +125,21 @@ object AudioDecoder {
                         val inputBuffer = codec.getInputBuffer(inputIndex) ?: continue
                         inputBuffer.clear()
                         val sampleSize = extractor.readSampleData(inputBuffer, 0)
-                        if (sampleSize < 0) {
+                        val presentationTimeUs = extractor.sampleTime
+
+                        if (sampleSize < 0 || presentationTimeUs >= maxDurationUs) {
                             codec.queueInputBuffer(
                                 inputIndex, 0, 0, 0L,
                                 MediaCodec.BUFFER_FLAG_END_OF_STREAM
                             )
                             sawInputEOS = true
                         } else {
-                            val presentationTimeUs = extractor.sampleTime
                             codec.queueInputBuffer(
                                 inputIndex, 0, sampleSize, presentationTimeUs, 0
                             )
                             extractor.advance()
-                            if (durationUs > 0) {
-                                val progress = (presentationTimeUs.toFloat() / durationUs).coerceIn(0f, 0.95f)
+                            if (effectiveDurationUs > 0) {
+                                val progress = (presentationTimeUs.toFloat() / effectiveDurationUs).coerceIn(0f, 0.95f)
                                 onProgress(progress * 0.4f) // First 40% is decoding
                             }
                         }
@@ -128,7 +154,7 @@ object AudioDecoder {
                         outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
                         outputBuffer.order(ByteOrder.LITTLE_ENDIAN)
 
-                        // Decode 16-bit PCM to normalized float mono
+                        // Decode 16-bit PCM to normalized float mono into primitive list
                         val shortBuffer = outputBuffer.asShortBuffer()
                         val shortArray = ShortArray(shortBuffer.remaining())
                         shortBuffer.get(shortArray)
@@ -159,12 +185,16 @@ object AudioDecoder {
                 }
             }
         } finally {
-            codec.stop()
-            codec.release()
-            extractor.release()
+            try {
+                codec.stop()
+                codec.release()
+            } catch (ignored: Exception) {}
+            try {
+                extractor.release()
+            } catch (ignored: Exception) {}
         }
 
-        val floatSamples = decodedSamples.toFloatArray()
+        val floatSamples = decodedSamples.toTrimmedArray()
         val durationMs = if (sampleRate > 0) {
             (floatSamples.size.toLong() * 1000L) / sampleRate
         } else 0L

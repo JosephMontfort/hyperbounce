@@ -10,6 +10,7 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="false"
+        android:largeHeap="true"
         android:supportsRtl="true">
 
         <!-- Companion settings UI. Purely additive: LSPosed loads hooks via
