@@ -13,6 +13,15 @@ import android.util.Log
 import dev.joseph.hyperbounce.haptics.dsp.HapticEvent
 import dev.joseph.hyperbounce.haptics.dsp.SynthesizedHaptic
 
+enum class HapticIntensityMode(
+    val title: String,
+    val description: String
+) {
+    Crisp("Crisp", "Hardware prebaked clicks with ultra-fast transient separation"),
+    Punchy("Punchy", "Boosted downbeat punch + crisp melodic snaps"),
+    MaxPunch("Max Punch", "Full-rail 255 peak amplitude resonant pulses")
+}
+
 class SynchronizedHapticPlayer(private val context: Context) {
 
     private var mediaPlayer: MediaPlayer? = null
@@ -37,6 +46,8 @@ class SynchronizedHapticPlayer(private val context: Context) {
         audioUri: Uri,
         haptic: SynthesizedHaptic,
         startFromMs: Int = 0,
+        endAtMs: Int = 0,
+        intensityMode: HapticIntensityMode = HapticIntensityMode.Punchy,
         onProgress: (currentMs: Int, totalMs: Int) -> Unit = { _, _ -> },
         onCompletion: () -> Unit = {}
     ) {
@@ -49,6 +60,8 @@ class SynchronizedHapticPlayer(private val context: Context) {
                 setDataSource(context, audioUri)
                 setOnPreparedListener { mp ->
                     val duration = mp.duration
+                    val targetEnd = if (endAtMs in (startFromMs + 1)..duration) endAtMs else duration
+
                     if (startFromMs in 1 until duration) {
                         mp.seekTo(startFromMs)
                     }
@@ -64,6 +77,13 @@ class SynchronizedHapticPlayer(private val context: Context) {
                             val player = mediaPlayer
                             if (this@SynchronizedHapticPlayer.isPlaying && player != null) {
                                 val current = player.currentPosition
+
+                                if (targetEnd in 1 until duration && current >= targetEnd) {
+                                    this@SynchronizedHapticPlayer.stop()
+                                    onCompletion()
+                                    return
+                                }
+
                                 onProgress(current, duration)
 
                                 // Advance events up to current playback position
@@ -71,31 +91,17 @@ class SynchronizedHapticPlayer(private val context: Context) {
                                     val event = currentEvents[nextEventIndex]
                                     // Guarantee hardware refractory debounce so the LRA motor has full spring recovery
                                     if (current - lastVibratedMs >= 95L) {
-                                        val effectIdToPlay = when (event.effectId) {
-                                            5 -> VibrationEffect.EFFECT_HEAVY_CLICK
-                                            4 -> 4
-                                            3 -> 3
-                                            2 -> VibrationEffect.EFFECT_TICK
-                                            1 -> VibrationEffect.EFFECT_DOUBLE_CLICK
-                                            0 -> VibrationEffect.EFFECT_CLICK
-                                            else -> event.effectId
-                                        }
-                                        try {
-                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                                vibrator.vibrate(VibrationEffect.createPredefined(effectIdToPlay))
-                                            } else {
-                                                val dur = if (event.effectId == 5) 24L else 18L
-                                                val amp = if (event.effectId == 5) 255 else 200
-                                                vibrator.vibrate(VibrationEffect.createOneShot(dur, amp))
-                                            }
-                                            lastVibratedMs = current.toLong()
-                                        } catch (ignored: Throwable) {}
+                                        triggerHapticPulse(vibrator, event.effectId, intensityMode)
+                                        lastVibratedMs = current.toLong()
                                     }
                                     nextEventIndex++
                                 }
 
-                                if (current < duration) {
+                                if (current < targetEnd) {
                                     handler.postDelayed(this, 12L) // 12ms sub-frame polling for tight synchronization
+                                } else {
+                                    this@SynchronizedHapticPlayer.stop()
+                                    onCompletion()
                                 }
                             }
                         }
@@ -146,5 +152,57 @@ class SynchronizedHapticPlayer(private val context: Context) {
 
     fun release() {
         stop()
+    }
+
+    companion object {
+        fun triggerHapticPulse(
+            vibrator: Vibrator,
+            effectId: Int,
+            intensityMode: HapticIntensityMode = HapticIntensityMode.Punchy
+        ) {
+            try {
+                when (intensityMode) {
+                    HapticIntensityMode.MaxPunch -> {
+                        // Deliver full-rail 255 amplitude pulse to maximize mechanical resonance
+                        val dur = if (effectId == 5) 36L else 24L
+                        vibrator.vibrate(VibrationEffect.createOneShot(dur, 255))
+                    }
+                    HapticIntensityMode.Punchy -> {
+                        // Downbeats get full-rail 255 kick, melodic notes get sharp hardware clicks
+                        if (effectId == 5) {
+                            vibrator.vibrate(VibrationEffect.createOneShot(30L, 255))
+                        } else {
+                            val eff = when (effectId) {
+                                4 -> 4
+                                3 -> 3
+                                2 -> VibrationEffect.EFFECT_TICK
+                                1 -> VibrationEffect.EFFECT_DOUBLE_CLICK
+                                else -> VibrationEffect.EFFECT_CLICK
+                            }
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                vibrator.vibrate(VibrationEffect.createPredefined(eff))
+                            } else {
+                                vibrator.vibrate(VibrationEffect.createOneShot(18L, 230))
+                            }
+                        }
+                    }
+                    HapticIntensityMode.Crisp -> {
+                        val eff = when (effectId) {
+                            5 -> VibrationEffect.EFFECT_HEAVY_CLICK
+                            4 -> 4
+                            3 -> 3
+                            2 -> VibrationEffect.EFFECT_TICK
+                            1 -> VibrationEffect.EFFECT_DOUBLE_CLICK
+                            else -> VibrationEffect.EFFECT_CLICK
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            vibrator.vibrate(VibrationEffect.createPredefined(eff))
+                        } else {
+                            vibrator.vibrate(VibrationEffect.createOneShot(18L, VibrationEffect.DEFAULT_AMPLITUDE))
+                        }
+                    }
+                }
+            } catch (ignored: Throwable) {}
+        }
     }
 }
