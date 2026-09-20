@@ -12,6 +12,8 @@ class IncomingCallReceiver : BroadcastReceiver() {
             val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
             when (state) {
                 TelephonyManager.EXTRA_STATE_RINGING -> {
+                    if (isRinging) return
+                    isRinging = true
                     val profile = HapticRingtoneStorage.load(context)
                     if (profile != null && profile.events.isNotEmpty()) {
                         suppressStockRingtoneVibration()
@@ -20,6 +22,7 @@ class IncomingCallReceiver : BroadcastReceiver() {
                 }
                 TelephonyManager.EXTRA_STATE_OFFHOOK,
                 TelephonyManager.EXTRA_STATE_IDLE -> {
+                    isRinging = false
                     IncomingCallHapticService.stop(context)
                     restoreStockRingtoneVibration()
                 }
@@ -28,6 +31,8 @@ class IncomingCallReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        @Volatile
+        private var isRinging = false
         private var wasSuppressed = false
 
         fun suppressStockRingtoneVibration() {

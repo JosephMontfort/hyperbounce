@@ -57,6 +57,10 @@ class IncomingCallHapticService : Service() {
     }
 
     private fun startPlayback() {
+        if (playbackJob?.isActive == true) {
+            Log.d("IncomingCallHapticService", "Playback already running, ignoring duplicate start")
+            return
+        }
         playbackJob?.cancel()
         val profile = HapticRingtoneStorage.load(this) ?: run {
             stopSelf()
@@ -80,18 +84,17 @@ class IncomingCallHapticService : Service() {
         playbackJob = serviceScope.launch {
             val totalTimeoutMs = 60_000L // 60s standard call timeout
 
-            // Initial audio sync lead-in:
-            // Telecom needs ~850-1000ms after telephony EXTRA_STATE_RINGING to acquire audio focus,
-            // initialize MediaPlayer/Ringtone, and begin rendering audio to AudioFlinger.
-            // We poll until STREAM_RING is active (or fallback to 950ms) so haptics start in lockstep with the music.
+            // Calibrated audio preroll sync lead-in:
+            // Telecom takes ~250-350ms to gain audio focus, initialize MediaPlayer, and begin speaker output.
+            // We poll until STREAM_RING is active (or fallback to 320ms) so haptics hit right on the first beat.
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
             var leadInWaitMs = 0L
-            while (isActive && leadInWaitMs < 950L) {
+            while (isActive && leadInWaitMs < 320L) {
                 if (isStreamRingActive(audioManager)) {
                     break
                 }
-                delay(30)
-                leadInWaitMs += 30
+                delay(20)
+                leadInWaitMs += 20
             }
 
             val globalStartTime = SystemClock.uptimeMillis()
