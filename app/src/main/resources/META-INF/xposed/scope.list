@@ -26,3 +26,7 @@ miui.systemui.plugin
 com.miui.home
 com.android.systemui
 com.android.incallui
+com.dts.freefireth
+com.dts.freefiremax
+org.videolan.vlc
+com.meld.app

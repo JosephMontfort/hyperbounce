@@ -42,7 +42,16 @@ class SynchronizedHapticPlayer(private val context: Context) {
                     val duration = mp.duration
                     mp.start()
                     // Fire haptic in exact lockstep
-                    vibrator.vibrate(haptic.vibrationEffect)
+                    try {
+                        vibrator.vibrate(haptic.vibrationEffect)
+                    } catch (t: Throwable) {
+                        Log.e("SynchronizedPlayer", "Vibration failed: ${t.message}", t)
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+                            }
+                        } catch (ignored: Throwable) {}
+                    }
                     this@SynchronizedHapticPlayer.isPlaying = true
 
                     progressRunnable = object : Runnable {
