@@ -172,7 +172,7 @@ object HapticPresetStorage {
                 val pipelines = mutableListOf<SavedPipelineData>()
                 for (i in 0 until pipesArray.length()) {
                     val pObj = pipesArray.getJSONObject(i)
-                    val pType = PipelineType.fromSerializedName(pObj.getString("pipelineType"))
+                    val pType = PipelineType.fromNameOrDefault(pObj.getString("pipelineType"))
                     val pDur = pObj.optLong("durationMs", durationMs)
                     val peakCount = pObj.optInt("peakCount", 0)
 
