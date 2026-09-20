@@ -42,26 +42,33 @@ class SynchronizedHapticPlayer(private val context: Context) {
                 setOnPreparedListener { mp ->
                     val duration = mp.duration
                     mp.start()
-                    // Fire haptic in exact lockstep
-                    try {
-                        vibrator.vibrate(haptic.vibrationEffect)
-                    } catch (t: Throwable) {
-                        Log.e("SynchronizedPlayer", "Vibration failed: ${t.message}", t)
-                        try {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
-                            }
-                        } catch (ignored: Throwable) {}
-                    }
                     this@SynchronizedHapticPlayer.isPlaying = true
+
+                    val events = haptic.events.sortedBy { it.timestampMs }
+                    var nextEventIndex = 0
 
                     progressRunnable = object : Runnable {
                         override fun run() {
-                            if (this@SynchronizedHapticPlayer.isPlaying && mediaPlayer != null) {
-                                val current = mediaPlayer?.currentPosition ?: 0
+                            val player = mediaPlayer
+                            if (this@SynchronizedHapticPlayer.isPlaying && player != null) {
+                                val current = player.currentPosition
                                 onProgress(current, duration)
+
+                                // Trigger exact hardware click/thud effect at every detected beat timestamp
+                                while (nextEventIndex < events.size && events[nextEventIndex].timestampMs <= current) {
+                                    val event = events[nextEventIndex]
+                                    try {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                            vibrator.vibrate(VibrationEffect.createPredefined(event.effectId))
+                                        } else {
+                                            vibrator.vibrate(VibrationEffect.createOneShot(16L, VibrationEffect.DEFAULT_AMPLITUDE))
+                                        }
+                                    } catch (ignored: Throwable) {}
+                                    nextEventIndex++
+                                }
+
                                 if (current < duration) {
-                                    handler.postDelayed(this, 16L) // 60fps UI sync
+                                    handler.postDelayed(this, 12L) // 12ms sub-frame polling for tight synchronization
                                 }
                             }
                         }
@@ -88,13 +95,11 @@ class SynchronizedHapticPlayer(private val context: Context) {
         try {
             mediaPlayer?.stop()
             mediaPlayer?.release()
-        } catch (ignored: Exception) {
-        }
+        } catch (ignored: Exception) {}
         mediaPlayer = null
         try {
             vibrator.cancel()
-        } catch (ignored: Exception) {
-        }
+        } catch (ignored: Exception) {}
     }
 
     fun release() {

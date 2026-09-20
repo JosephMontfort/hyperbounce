@@ -10,35 +10,40 @@ enum class PipelineType(
     SharpTransient(
         title = "Sharp Transient",
         subtitle = "Glass Click & Micro-Impact",
-        description = "High-frequency onset detection + active 180° braking pulse. Eliminates motor ringing for an ultra-crisp Apple-style glass click."
+        description = "High-frequency spectral flux onset detection mapped to crisp hardware clicks (Effect 0). Eliminates motor ringing for an ultra-crisp Apple-style glass click."
     ),
     ResonantPunch(
         title = "Resonant Punch",
         subtitle = "Deep Bass & Kick Impact",
-        description = "2nd-order bandpass centered around LRA resonance (~160Hz) with logarithmic envelope compression. Ideal for drum kicks and heavy alerts."
+        description = "2nd-order bandpass isolating sub-bass drops and kick transients, mapped to hardware Heavy Clicks (Effect 5) and Thuds (Effect 3)."
     ),
     HarmonicBeatSnap(
         title = "Harmonic Beat-Snap",
         subtitle = "Rhythmic Pitch Tracking",
-        description = "Sub-band energy tracking with heterodyne frequency shift to 160Hz. Perfectly follows musical rhythms, ringtones, and melodic chimes."
+        description = "Multi-band musical cadence tracking. Downbeats trigger Heavy Clicks while rhythmic off-beats trigger subtle micro-ticks."
     ),
     GranularTexture(
         title = "Granular Texture",
         subtitle = "Scrubbing, Spinning & Friction",
-        description = "Zero-crossing rate tracking with micro-staccato pulse bursts. Creates physical tactile friction for scrolling, slider scrubbers, and rotary dials."
+        description = "Zero-crossing rate and micro-rhythm tracking mapped to rapid tactile micro-ticks (Effect 2) with zero motor drag."
     ),
     AdaptiveHybrid(
         title = "Adaptive Hybrid",
         subtitle = "Full Dynamic Spectrum",
-        description = "Dual-band spectral crossover splitting transient attack and low-end body with Dynamic Range Compression (DRC). Rich cinematic feel."
+        description = "Dual-band crossover splitting transient attacks and bass body. Automatically alternates between heavy bass impacts and glass-like snare clicks."
     )
 }
+
+data class HapticEvent(
+    val timestampMs: Long,
+    val effectId: Int = 0 // 0 = EFFECT_CLICK, 5 = EFFECT_HEAVY_CLICK, 2 = EFFECT_TICK, 3 = EFFECT_THUD
+)
 
 data class PipelineConfig(
     val resonantFrequencyHz: Float = 160.0f,
     val sensitivity: Float = 1.0f,
     val brakingStrength: Float = 0.85f,
-    val maxDurationMs: Long = 10000L
+    val maxDurationMs: Long = 30000L // 30 seconds default
 )
 
 data class SynthesizedHaptic(
@@ -46,6 +51,7 @@ data class SynthesizedHaptic(
     val rtpRawBytes: ByteArray,        // Raw 24kHz signed 8-bit PCM (int8_t) ready to save as .bin
     val vibrationEffect: VibrationEffect, // Standard Android VibrationEffect for immediate UI preview
     val envelopePoints: FloatArray,   // Downsampled 0.0f - 1.0f amplitude envelope for live UI visualizer
+    val events: List<HapticEvent>,    // Exact beat timestamps and hardware effect IDs
     val durationMs: Long,
     val peakCount: Int,
     val sampleRateHz: Int = 24000

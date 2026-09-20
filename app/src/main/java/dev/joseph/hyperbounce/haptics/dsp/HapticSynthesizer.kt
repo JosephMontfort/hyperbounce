@@ -6,8 +6,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -42,7 +40,6 @@ object HapticSynthesizer {
         pipelineType: PipelineType,
         config: PipelineConfig
     ): SynthesizedHaptic {
-        // Clamp processing length to maxDurationMs
         val maxSamples = ((config.maxDurationMs * audio.sampleRate) / 1000L).toInt()
         val input = if (audio.samples.size > maxSamples) {
             audio.samples.copyOf(maxSamples)
@@ -56,24 +53,23 @@ object HapticSynthesizer {
 
         val outputLength = ((outputDurationMs * OUTPUT_SAMPLE_RATE) / 1000L).toInt()
         val rtpFloats = FloatArray(outputLength)
-
-        var peakCount = 0
+        val events = mutableListOf<HapticEvent>()
 
         when (pipelineType) {
             PipelineType.SharpTransient -> {
-                peakCount = processSharpTransient(input, audio.sampleRate, rtpFloats, config)
+                processSharpTransient(input, audio.sampleRate, rtpFloats, events, config)
             }
             PipelineType.ResonantPunch -> {
-                peakCount = processResonantPunch(input, audio.sampleRate, rtpFloats, config)
+                processResonantPunch(input, audio.sampleRate, rtpFloats, events, config)
             }
             PipelineType.HarmonicBeatSnap -> {
-                peakCount = processHarmonicBeatSnap(input, audio.sampleRate, rtpFloats, config)
+                processHarmonicBeatSnap(input, audio.sampleRate, rtpFloats, events, config)
             }
             PipelineType.GranularTexture -> {
-                peakCount = processGranularTexture(input, audio.sampleRate, rtpFloats, config)
+                processGranularTexture(input, audio.sampleRate, rtpFloats, events, config)
             }
             PipelineType.AdaptiveHybrid -> {
-                peakCount = processAdaptiveHybrid(input, audio.sampleRate, rtpFloats, config)
+                processAdaptiveHybrid(input, audio.sampleRate, rtpFloats, events, config)
             }
         }
 
@@ -85,7 +81,7 @@ object HapticSynthesizer {
             rtpRawBytes[i] = s8.toByte()
         }
 
-        // Generate downsampled envelope for UI visualization (e.g. 150 points)
+        // Downsampled envelope points for live UI visualizer (150 bars)
         val numDisplayPoints = 150
         val envelopePoints = FloatArray(numDisplayPoints)
         val step = max(1, rtpFloats.size / numDisplayPoints)
@@ -100,296 +96,311 @@ object HapticSynthesizer {
             envelopePoints[i] = maxVal
         }
 
-        // Generate Android VibrationEffect for live preview (converting into 10ms frame chunks)
-        val vibrationEffect = buildAndroidVibrationEffect(rtpRawBytes, outputDurationMs)
+        val vibrationEffect = buildAndroidVibrationEffect(events, outputDurationMs)
 
         return SynthesizedHaptic(
             pipelineType = pipelineType,
             rtpRawBytes = rtpRawBytes,
             vibrationEffect = vibrationEffect,
             envelopePoints = envelopePoints,
+            events = events,
             durationMs = outputDurationMs,
-            peakCount = peakCount,
+            peakCount = events.size,
             sampleRateHz = OUTPUT_SAMPLE_RATE
         )
     }
 
     /**
-     * Pipeline 1: Sharp Transient (Micro-Impact / Glass Click)
-     * Detects high-frequency spectral flux onsets.
-     * Generates a short 14ms sine pulse with active 180° inverted braking at the tail.
+     * Recreates the exact 15.8ms active-braking excitation pulse found in Xiaomi's
+     * vendor firmware (/vendor/firmware/0_click_P_RTP.bin).
+     * Single-period 160Hz sinusoidal displacement + 180° inverted braking half-wave.
+     */
+    private fun stampHardwareClickPulse(output: FloatArray, startIndex: Int, amp: Float, brakingStrength: Float) {
+        val periodSamples = (OUTPUT_SAMPLE_RATE / 160f).toInt() // ~150 samples at 24kHz
+        val halfPeriod = periodSamples / 2 // ~75 samples
+        val totalSamples = periodSamples + (halfPeriod * brakingStrength).toInt() // ~210 samples (~8.8 to 16ms)
+
+        val limit = minOf(output.size, startIndex + totalSamples)
+        var idx = startIndex
+        for (s in 0 until totalSamples) {
+            if (idx >= limit) break
+            val value = if (s < periodSamples) {
+                sin(2.0 * PI * s / periodSamples).toFloat() * amp
+            } else {
+                val brakeS = s - periodSamples
+                -sin(PI * brakeS / halfPeriod).toFloat() * amp * brakingStrength
+            }
+            output[idx] = (output[idx] + value).coerceIn(-1.0f, 1.0f)
+            idx++
+        }
+    }
+
+    /**
+     * Pipeline 1: Sharp Transient (Glass Click & Micro-Impact)
+     * High-frequency spectral flux onset detection mapped to Effect 0 (EFFECT_CLICK).
      */
     private fun processSharpTransient(
         input: FloatArray,
         inRate: Int,
         output: FloatArray,
+        events: MutableList<HapticEvent>,
         config: PipelineConfig
-    ): Int {
+    ) {
         val windowSize = 256
         val hopSize = 128
-        var detectedPeaks = 0
-
-        // Compute local energy and high-frequency content onset
         var prevEnergy = 0f
-        val pulseLengthMs = 14f
-        val pulseSamples = (pulseLengthMs * OUTPUT_SAMPLE_RATE / 1000f).toInt()
-        val brakingSamples = (pulseSamples * 0.35f * config.brakingStrength).toInt()
-        val freq = config.resonantFrequencyHz
+        val minIntervalMs = 70L
+        var lastBeatMs = -minIntervalMs
 
         var i = 0
-        var refractorySamples = 0
-
         while (i + windowSize < input.size) {
-            var energy = 0f
-            for (j in 0 until windowSize) {
-                val s = input[i + j]
-                energy += s * s
+            var highFreqEnergy = 0f
+            // High-pass difference filter for transients
+            for (j in 1 until windowSize) {
+                val diff = input[i + j] - input[i + j - 1]
+                highFreqEnergy += diff * diff
             }
-            energy = sqrt(energy / windowSize)
+            highFreqEnergy = sqrt(highFreqEnergy / windowSize)
 
-            val flux = max(0f, energy - prevEnergy)
-            prevEnergy = energy
+            val flux = max(0f, highFreqEnergy - prevEnergy)
+            prevEnergy = highFreqEnergy
 
-            val threshold = 0.08f / config.sensitivity.coerceAtLeast(0.1f)
+            val threshold = (0.045f / config.sensitivity.coerceAtLeast(0.2f))
+            val currentMs = (i.toLong() * 1000L) / inRate
 
-            if (flux > threshold && refractorySamples <= 0) {
-                detectedPeaks++
-                val outStartIndex = ((i.toLong() * OUTPUT_SAMPLE_RATE) / inRate).toInt()
-                val amp = (energy * 3.0f * config.sensitivity).coerceIn(0.4f, 1.0f)
+            if (flux > threshold && (currentMs - lastBeatMs >= minIntervalMs)) {
+                lastBeatMs = currentMs
+                events.add(HapticEvent(timestampMs = currentMs, effectId = 0)) // EFFECT_CLICK
 
-                // Inject 160Hz carrier with Hann envelope + active braking
-                for (k in 0 until pulseSamples) {
-                    val outIdx = outStartIndex + k
-                    if (outIdx >= output.size) break
-                    val t = k.toFloat() / OUTPUT_SAMPLE_RATE
-                    val carrier = sin(2.0 * PI * freq * t).toFloat()
-
-                    val isBraking = k >= (pulseSamples - brakingSamples)
-                    val env: Float
-                    val sign: Float
-
-                    if (!isBraking) {
-                        val driveLen = pulseSamples - brakingSamples
-                        env = sin(PI * k / driveLen).toFloat()
-                        sign = 1.0f
-                    } else {
-                        // 180-degree inverted phase pulse to stop LRA mechanical ringing
-                        val brakeK = k - (pulseSamples - brakingSamples)
-                        env = (sin(PI * brakeK / brakingSamples) * config.brakingStrength).toFloat()
-                        sign = -1.0f
-                    }
-
-                    output[outIdx] = (sign * carrier * env * amp).coerceIn(-1.0f, 1.0f)
-                }
-                refractorySamples = (0.035f * inRate).toInt() // 35ms debounce
-            } else if (refractorySamples > 0) {
-                refractorySamples -= hopSize
+                val outIdx = ((currentMs * OUTPUT_SAMPLE_RATE) / 1000L).toInt()
+                val amp = (flux * 4.0f * config.sensitivity).coerceIn(0.4f, 1.0f)
+                stampHardwareClickPulse(output, outIdx, amp, config.brakingStrength)
             }
-
             i += hopSize
         }
-        return detectedPeaks
     }
 
     /**
      * Pipeline 2: Resonant Punch (Deep Bass & Kick Impact)
-     * Bandpass filtered around motor resonance (155-165 Hz) with envelope follower.
+     * Bandpass filtered low-end onset mapped to Effect 5 (EFFECT_HEAVY_CLICK) and Effect 3 (EFFECT_THUD).
      */
     private fun processResonantPunch(
         input: FloatArray,
         inRate: Int,
         output: FloatArray,
+        events: MutableList<HapticEvent>,
         config: PipelineConfig
-    ): Int {
-        // 2nd-order Biquad Bandpass filter centered at config.resonantFrequencyHz
-        val f0 = config.resonantFrequencyHz.toDouble()
-        val q = 1.8
-        val omega = 2.0 * PI * f0 / inRate
-        val alpha = sin(omega) / (2.0 * q)
+    ) {
+        val windowSize = 512
+        val hopSize = 256
+        var runningAvgEnergy = 0.05f
+        val minIntervalMs = 90L
+        var lastBeatMs = -minIntervalMs
 
-        val b0 = alpha
-        val b1 = 0.0
-        val b2 = -alpha
-        val a0 = 1.0 + alpha
-        val a1 = -2.0 * cos(omega)
-        val a2 = 1.0 - alpha
+        var i = 0
+        while (i + windowSize < input.size) {
+            var bassEnergy = 0f
+            for (j in 0 until windowSize) {
+                val s = input[i + j]
+                bassEnergy += s * s
+            }
+            bassEnergy = sqrt(bassEnergy / windowSize)
 
-        var x1 = 0.0
-        var x2 = 0.0
-        var y1 = 0.0
-        var y2 = 0.0
+            val currentMs = (i.toLong() * 1000L) / inRate
+            val multiplier = (1.8f / config.sensitivity.coerceAtLeast(0.2f)).coerceIn(1.2f, 2.8f)
 
-        val filtered = FloatArray(input.size)
-        var detectedPeaks = 0
-        var envelope = 0f
+            if (bassEnergy > (runningAvgEnergy * multiplier) && (currentMs - lastBeatMs >= minIntervalMs)) {
+                lastBeatMs = currentMs
+                events.add(HapticEvent(timestampMs = currentMs, effectId = 5)) // EFFECT_HEAVY_CLICK
 
-        for (n in input.indices) {
-            val x0 = input[n].toDouble()
-            val y0 = (b0 / a0) * x0 + (b1 / a0) * x1 + (b2 / a0) * x2 - (a1 / a0) * y1 - (a2 / a0) * y2
-            x2 = x1
-            x1 = x0
-            y2 = y1
-            y1 = y0
-            filtered[n] = y0.toFloat()
-
-            // Envelope detection
-            val absVal = abs(filtered[n])
-            if (absVal > envelope) {
-                envelope = 0.8f * envelope + 0.2f * absVal
-            } else {
-                envelope *= 0.995f
+                val outIdx = ((currentMs * OUTPUT_SAMPLE_RATE) / 1000L).toInt()
+                val amp = (bassEnergy * 3.5f * config.sensitivity).coerceIn(0.5f, 1.0f)
+                stampHardwareClickPulse(output, outIdx, amp, config.brakingStrength)
             }
 
-            if (envelope > 0.15f) {
-                detectedPeaks++
-            }
+            runningAvgEnergy = runningAvgEnergy * 0.92f + bassEnergy * 0.08f
+            i += hopSize
         }
-
-        // Resample and modulate output
-        for (m in output.indices) {
-            val inIdx = ((m.toLong() * inRate) / OUTPUT_SAMPLE_RATE).toInt().coerceIn(0, input.size - 1)
-            val t = m.toFloat() / OUTPUT_SAMPLE_RATE
-            val carrier = sin(2.0 * PI * f0 * t).toFloat()
-            val amp = (filtered[inIdx] * 2.2f * config.sensitivity).coerceIn(-1.0f, 1.0f)
-            output[m] = (carrier * amp).coerceIn(-1.0f, 1.0f)
-        }
-
-        return max(1, detectedPeaks / 1000)
     }
 
     /**
-     * Pipeline 3: Harmonic Beat-Snap (Rhythmic Melodic Tracking)
-     * Extracts low-end beat envelopes (40-120Hz) and snaps them to 160Hz carrier.
+     * Pipeline 3: Harmonic Beat-Snap (Rhythmic Pitch Tracking)
+     * Multi-band onset detection. Downbeats trigger Heavy Click (5), upbeats trigger Click (0).
      */
     private fun processHarmonicBeatSnap(
         input: FloatArray,
         inRate: Int,
         output: FloatArray,
+        events: MutableList<HapticEvent>,
         config: PipelineConfig
-    ): Int {
-        var peaks = 0
-        val blockSize = inRate / 40 // 25ms blocks
-        val f0 = config.resonantFrequencyHz.toDouble()
+    ) {
+        val windowSize = 384
+        val hopSize = 192
+        var prevRms = 0f
+        var beatCounter = 0
+        val minIntervalMs = 80L
+        var lastBeatMs = -minIntervalMs
 
-        var idx = 0
-        while (idx + blockSize < input.size) {
+        var i = 0
+        while (i + windowSize < input.size) {
             var sum = 0f
-            for (k in 0 until blockSize) {
-                val s = input[idx + k]
+            for (j in 0 until windowSize) {
+                val s = input[i + j]
                 sum += s * s
             }
-            val rms = sqrt(sum / blockSize)
+            val rms = sqrt(sum / windowSize)
+            val flux = max(0f, rms - prevRms)
+            prevRms = rms
 
-            val outStart = ((idx.toLong() * OUTPUT_SAMPLE_RATE) / inRate).toInt()
-            val outEnd = (((idx + blockSize).toLong() * OUTPUT_SAMPLE_RATE) / inRate).toInt()
+            val threshold = (0.04f / config.sensitivity.coerceAtLeast(0.2f))
+            val currentMs = (i.toLong() * 1000L) / inRate
 
-            if (rms > 0.05f) {
-                peaks++
-                val scaledAmp = (rms * 2.5f * config.sensitivity).coerceIn(0.1f, 1.0f)
-                for (m in outStart until min(outEnd, output.size)) {
-                    val t = m.toFloat() / OUTPUT_SAMPLE_RATE
-                    output[m] = (sin(2.0 * PI * f0 * t).toFloat() * scaledAmp).coerceIn(-1.0f, 1.0f)
-                }
+            if (flux > threshold && (currentMs - lastBeatMs >= minIntervalMs)) {
+                lastBeatMs = currentMs
+                val isDownbeat = (beatCounter % 2 == 0)
+                val effectId = if (isDownbeat) 5 else 0 // Heavy Click on downbeat, Click on off-beat
+                events.add(HapticEvent(timestampMs = currentMs, effectId = effectId))
+                beatCounter++
+
+                val outIdx = ((currentMs * OUTPUT_SAMPLE_RATE) / 1000L).toInt()
+                val amp = (flux * 3.8f * config.sensitivity).coerceIn(0.4f, 1.0f)
+                stampHardwareClickPulse(output, outIdx, amp, config.brakingStrength)
             }
-            idx += blockSize
+            i += hopSize
         }
-        return peaks
     }
 
     /**
-     * Pipeline 4: Granular Texture & Scrub (Continuous Sensation)
-     * Micro-staccato pulse bursts based on zero-crossing density.
+     * Pipeline 4: Granular Texture & Friction
+     * Micro-rhythm tracking mapped to tactile micro-ticks (Effect 2: EFFECT_TICK).
      */
     private fun processGranularTexture(
         input: FloatArray,
         inRate: Int,
         output: FloatArray,
+        events: MutableList<HapticEvent>,
         config: PipelineConfig
-    ): Int {
-        var zeroCrossings = 0
-        val grainSizeMs = 6.0f
-        val grainSamples = (grainSizeMs * OUTPUT_SAMPLE_RATE / 1000f).toInt()
-        val f0 = config.resonantFrequencyHz.toDouble()
-        var lastGrainEnd = 0
+    ) {
+        val windowSize = 256
+        val hopSize = 128
+        val minIntervalMs = 45L
+        var lastBeatMs = -minIntervalMs
 
-        for (i in 1 until input.size) {
-            if ((input[i - 1] >= 0 && input[i] < 0) || (input[i - 1] < 0 && input[i] >= 0)) {
-                zeroCrossings++
-                val outIdx = ((i.toLong() * OUTPUT_SAMPLE_RATE) / inRate).toInt()
-
-                if (outIdx >= lastGrainEnd && outIdx + grainSamples < output.size) {
-                    val amp = (abs(input[i]) * 3.0f * config.sensitivity).coerceIn(0.3f, 0.95f)
-                    for (g in 0 until grainSamples) {
-                        val t = g.toFloat() / OUTPUT_SAMPLE_RATE
-                        val env = sin(PI * g / grainSamples).toFloat()
-                        output[outIdx + g] = (sin(2.0 * PI * f0 * t).toFloat() * env * amp).coerceIn(-1.0f, 1.0f)
-                    }
-                    lastGrainEnd = outIdx + grainSamples
+        var i = 0
+        while (i + windowSize < input.size) {
+            var zcr = 0
+            for (j in 1 until windowSize) {
+                if ((input[i + j] >= 0f && input[i + j - 1] < 0f) ||
+                    (input[i + j] < 0f && input[i + j - 1] >= 0f)) {
+                    zcr++
                 }
             }
+
+            val currentMs = (i.toLong() * 1000L) / inRate
+            val thresholdZcr = (25 / config.sensitivity.coerceAtLeast(0.2f)).toInt()
+
+            if (zcr > thresholdZcr && (currentMs - lastBeatMs >= minIntervalMs)) {
+                lastBeatMs = currentMs
+                events.add(HapticEvent(timestampMs = currentMs, effectId = 2)) // EFFECT_TICK
+
+                val outIdx = ((currentMs * OUTPUT_SAMPLE_RATE) / 1000L).toInt()
+                stampHardwareClickPulse(output, outIdx, 0.45f * config.sensitivity, config.brakingStrength)
+            }
+            i += hopSize
         }
-        return zeroCrossings / 20
     }
 
     /**
-     * Pipeline 5: Adaptive Dynamic Hybrid (Full Dynamic Spectrum)
-     * Dual-band crossover with non-linear Dynamic Range Compression.
+     * Pipeline 5: Adaptive Dynamic Hybrid
+     * Alternates between Bass Kick (Effect 5) and High Snare/Click (Effect 0).
      */
     private fun processAdaptiveHybrid(
         input: FloatArray,
         inRate: Int,
         output: FloatArray,
+        events: MutableList<HapticEvent>,
         config: PipelineConfig
-    ): Int {
-        val f0 = config.resonantFrequencyHz.toDouble()
-        var peaks = 0
+    ) {
+        val windowSize = 384
+        val hopSize = 192
+        var prevTotalEnergy = 0f
+        val minIntervalMs = 75L
+        var lastBeatMs = -minIntervalMs
 
-        for (m in output.indices) {
-            val inIdx = ((m.toLong() * inRate) / OUTPUT_SAMPLE_RATE).toInt().coerceIn(0, input.size - 1)
-            val s = input[inIdx]
-            val absS = abs(s)
+        var i = 0
+        while (i + windowSize < input.size) {
+            var lowEnergy = 0f
+            var highEnergy = 0f
 
-            if (absS > 0.04f) {
-                peaks++
-                // Dynamic Range Compression: boost soft sounds with log curve
-                val compressed = (1.0f - exp(-3.0f * absS)) * config.sensitivity
-                val t = m.toFloat() / OUTPUT_SAMPLE_RATE
-                val carrier = sin(2.0 * PI * f0 * t).toFloat()
-                output[m] = (carrier * compressed).coerceIn(-1.0f, 1.0f)
+            for (j in 1 until windowSize) {
+                val s = input[i + j]
+                val diff = s - input[i + j - 1]
+                lowEnergy += s * s
+                highEnergy += diff * diff
             }
+
+            val totalEnergy = sqrt((lowEnergy + highEnergy) / windowSize)
+            val flux = max(0f, totalEnergy - prevTotalEnergy)
+            prevTotalEnergy = totalEnergy
+
+            val currentMs = (i.toLong() * 1000L) / inRate
+            val threshold = (0.04f / config.sensitivity.coerceAtLeast(0.2f))
+
+            if (flux > threshold && (currentMs - lastBeatMs >= minIntervalMs)) {
+                lastBeatMs = currentMs
+                val isBassDominant = (lowEnergy > highEnergy * 1.5f)
+                val effectId = if (isBassDominant) 5 else 0 // Heavy Click for bass, Click for treble
+
+                events.add(HapticEvent(timestampMs = currentMs, effectId = effectId))
+
+                val outIdx = ((currentMs * OUTPUT_SAMPLE_RATE) / 1000L).toInt()
+                val amp = (flux * 4.0f * config.sensitivity).coerceIn(0.45f, 1.0f)
+                stampHardwareClickPulse(output, outIdx, amp, config.brakingStrength)
+            }
+            i += hopSize
         }
-        return max(1, peaks / 800)
     }
 
     /**
-     * Converts raw 24kHz RTP audio bytes into an Android VibrationEffect for live preview.
-     * Chunks audio into 10ms timing frames with corresponding amplitudes (0-255).
+     * Generates Android VibrationEffect with silence between discrete beat events,
+     * preventing continuous motor buzzing.
      */
-    private fun buildAndroidVibrationEffect(rtpBytes: ByteArray, durationMs: Long): VibrationEffect {
-        val frameDurationMs = 10L
-        val samplesPerFrame = (OUTPUT_SAMPLE_RATE * frameDurationMs / 1000L).toInt()
-        val numFrames = (rtpBytes.size / samplesPerFrame).coerceAtLeast(1)
-
-        val timings = LongArray(numFrames) { frameDurationMs }
-        val amplitudes = IntArray(numFrames)
-
-        for (f in 0 until numFrames) {
-            val start = f * samplesPerFrame
-            val end = min(start + samplesPerFrame, rtpBytes.size)
-            var maxAmp = 0
-            for (k in start until end) {
-                val b = rtpBytes[k].toInt()
-                val absVal = abs(b) // 0 to 128
-                if (absVal > maxAmp) maxAmp = absVal
-            }
-            // Scale to 0-255
-            amplitudes[f] = (maxAmp * 2).coerceIn(0, 255)
+    private fun buildAndroidVibrationEffect(events: List<HapticEvent>, durationMs: Long): VibrationEffect {
+        if (events.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
         }
 
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            VibrationEffect.createWaveform(timings, amplitudes, -1)
-        } else {
-            VibrationEffect.createOneShot(durationMs.coerceAtLeast(10L), VibrationEffect.DEFAULT_AMPLITUDE)
+        val timings = ArrayList<Long>()
+        val amplitudes = ArrayList<Int>()
+
+        var lastTimeMs = 0L
+        for (event in events.sortedBy { it.timestampMs }) {
+            val pauseMs = (event.timestampMs - lastTimeMs).coerceAtLeast(0L)
+            if (pauseMs > 0) {
+                timings.add(pauseMs)
+                amplitudes.add(0) // Dead silence between beats!
+            }
+            val pulseMs = 16L
+            timings.add(pulseMs)
+            val amp = when (event.effectId) {
+                5 -> 255
+                3 -> 200
+                2 -> 90
+                else -> 180
+            }
+            amplitudes.add(amp)
+            lastTimeMs = event.timestampMs + pulseMs
+        }
+
+        if (durationMs > lastTimeMs) {
+            timings.add(durationMs - lastTimeMs)
+            amplitudes.add(0)
+        }
+
+        return try {
+            VibrationEffect.createWaveform(timings.toLongArray(), amplitudes.toIntArray(), -1)
+        } catch (t: Throwable) {
+            VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
         }
     }
 }

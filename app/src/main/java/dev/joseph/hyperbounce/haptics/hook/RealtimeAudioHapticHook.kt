@@ -26,11 +26,23 @@ object RealtimeAudioHapticHook {
     @Volatile
     private var lastHapticTimestamp = 0L
 
+    // Dynamic energy history buffer to detect sudden transient spikes (beats/gunshots)
+    // instead of firing on continuous steady sound
+    private const val HISTORY_SIZE = 24
+    private val energyHistory = DoubleArray(HISTORY_SIZE)
+    private var historyIndex = 0
+    private var historyCount = 0
+    private var previousEnergy = 0.0
+
     fun init(module: XposedModule, classLoader: ClassLoader) {
         try {
-            val audioTrackClass = classLoader.loadClass("android.media.AudioTrack")
-            var hookedCount = 0
+            val audioTrackClass = try {
+                classLoader.loadClass("android.media.AudioTrack")
+            } catch (e: Exception) {
+                ClassLoader.getSystemClassLoader().loadClass("android.media.AudioTrack")
+            }
 
+            var hookedCount = 0
             for (method in audioTrackClass.declaredMethods) {
                 if (method.name == "write") {
                     try {
@@ -43,7 +55,7 @@ object RealtimeAudioHapticHook {
                         }
                         hookedCount++
                     } catch (t: Throwable) {
-                        Log.w(TAG, "Could not hook AudioTrack.write overload: ${method.parameterTypes.joinToString()}", t)
+                        Log.w(TAG, "Could not hook AudioTrack.write: ${method.parameterTypes.joinToString()}", t)
                     }
                 }
             }
@@ -81,25 +93,53 @@ object RealtimeAudioHapticHook {
         }
     }
 
-    private fun checkDebounceAndThrottle(): Boolean {
+    private fun evaluateOnsetBeat(instantEnergy: Double, silenceFloor: Double) {
+        if (instantEnergy < silenceFloor) {
+            previousEnergy = instantEnergy
+            return
+        }
+
+        // Calculate moving average energy of recent frames
+        var sum = 0.0
+        for (i in 0 until historyCount) {
+            sum += energyHistory[i]
+        }
+        val avgEnergy = if (historyCount > 0) sum / historyCount else instantEnergy
+
+        // Record current energy into circular history
+        energyHistory[historyIndex] = instantEnergy
+        historyIndex = (historyIndex + 1) % HISTORY_SIZE
+        if (historyCount < HISTORY_SIZE) historyCount++
+
         val now = SystemClock.uptimeMillis()
-        val debounce = AudioHapticConfigHolder.config.refractoryDebounceMs
-        if (now - lastHapticTimestamp < debounce) return false
-        lastHapticTimestamp = now
-        return true
+        val debounce = AudioHapticConfigHolder.config.refractoryDebounceMs.coerceAtLeast(60L)
+
+        // Beat onset requires:
+        // 1. Current energy is a sharp relative surge above moving average
+        // 2. Current energy is rising (onset attack), not trailing off
+        // 3. Debounce lockout has passed
+        val sensitivity = AudioHapticConfigHolder.config.sensitivity.coerceIn(0.2f, 2.0f)
+        val spikeMultiplier = (1.95 - (sensitivity * 0.45)).coerceIn(1.25, 2.1)
+        val isSpike = instantEnergy > (avgEnergy * spikeMultiplier)
+        val isRisingEdge = instantEnergy > (previousEnergy * 1.15)
+
+        previousEnergy = instantEnergy
+
+        if (isSpike && isRisingEdge && (now - lastHapticTimestamp >= debounce)) {
+            lastHapticTimestamp = now
+            triggerHapticTick()
+        }
     }
 
     private fun processShortAudioBuffer(buffer: ShortArray, offset: Int, size: Int) {
         val step = max(1, size / 32)
         var sumSquares = 0.0
         var count = 0
-        var maxPeak = 0
 
         var i = offset
         val limit = minOf(buffer.size, offset + size)
         while (i < limit) {
             val sample = abs(buffer[i].toInt())
-            if (sample > maxPeak) maxPeak = sample
             sumSquares += (sample * sample)
             count++
             i += step
@@ -107,21 +147,13 @@ object RealtimeAudioHapticHook {
 
         if (count == 0) return
         val rms = sqrt(sumSquares / count)
-
-        val sensitivity = AudioHapticConfigHolder.config.sensitivity.coerceAtLeast(0.1f)
-        val rmsThreshold = 3500.0 / sensitivity
-        val peakThreshold = 7000.0 / sensitivity
-
-        if (rms > rmsThreshold || maxPeak > peakThreshold) {
-            if (checkDebounceAndThrottle()) {
-                triggerHapticTick()
-            }
-        }
+        evaluateOnsetBeat(rms, silenceFloor = 1400.0)
     }
 
     private fun processByteAudioBuffer(buffer: ByteArray, offset: Int, size: Int) {
         val step = max(2, size / 32)
-        var maxPeak = 0
+        var sumSquares = 0.0
+        var count = 0
 
         var i = offset
         val limit = minOf(buffer.size - 1, offset + size - 1)
@@ -129,23 +161,18 @@ object RealtimeAudioHapticHook {
             val low = buffer[i].toInt() and 0xFF
             val high = buffer[i + 1].toInt()
             val sample = abs((high shl 8) or low)
-            if (sample > maxPeak) maxPeak = sample
+            sumSquares += (sample * sample)
+            count++
             i += step
         }
 
-        val sensitivity = AudioHapticConfigHolder.config.sensitivity.coerceAtLeast(0.1f)
-        val peakThreshold = 7000.0 / sensitivity
-
-        if (maxPeak > peakThreshold) {
-            if (checkDebounceAndThrottle()) {
-                triggerHapticTick()
-            }
-        }
+        if (count == 0) return
+        val rms = sqrt(sumSquares / count)
+        evaluateOnsetBeat(rms, silenceFloor = 1400.0)
     }
 
     private fun processFloatAudioBuffer(buffer: FloatArray, offset: Int, size: Int) {
         val step = max(1, size / 32)
-        var maxPeak = 0f
         var sumSquares = 0.0
         var count = 0
 
@@ -153,24 +180,15 @@ object RealtimeAudioHapticHook {
         val limit = minOf(buffer.size, offset + size)
         while (i < limit) {
             val s = abs(buffer[i])
-            if (s > maxPeak) maxPeak = s
             sumSquares += (s * s)
             count++
             i += step
         }
 
         if (count == 0) return
-        val rms = sqrt(sumSquares / count).toFloat()
-
-        val sensitivity = AudioHapticConfigHolder.config.sensitivity.coerceAtLeast(0.1f)
-        val rmsThreshold = 0.12f / sensitivity
-        val peakThreshold = 0.25f / sensitivity
-
-        if (rms > rmsThreshold || maxPeak > peakThreshold) {
-            if (checkDebounceAndThrottle()) {
-                triggerHapticTick()
-            }
-        }
+        val rms = sqrt(sumSquares / count)
+        // Scale float -1..1 to roughly 16-bit range for unified onset logic
+        evaluateOnsetBeat(rms * 32768.0, silenceFloor = 1400.0)
     }
 
     private fun processByteBuffer(buffer: ByteBuffer, sizeInBytes: Int) {
@@ -181,24 +199,21 @@ object RealtimeAudioHapticHook {
             if (availableShorts <= 0) return
 
             val step = max(1, availableShorts / 32)
-            var maxPeak = 0
+            var sumSquares = 0.0
+            var count = 0
             var i = 0
             while (i < availableShorts) {
                 val s = abs(shorts.get(i).toInt())
-                if (s > maxPeak) maxPeak = s
+                sumSquares += (s * s)
+                count++
                 i += step
             }
 
-            val sensitivity = AudioHapticConfigHolder.config.sensitivity.coerceAtLeast(0.1f)
-            val peakThreshold = 7000.0 / sensitivity
-
-            if (maxPeak > peakThreshold) {
-                if (checkDebounceAndThrottle()) {
-                    triggerHapticTick()
-                }
-            }
+            if (count == 0) return
+            val rms = sqrt(sumSquares / count)
+            evaluateOnsetBeat(rms, silenceFloor = 1400.0)
         } catch (t: Throwable) {
-            // Buffer parsing safety
+            // Safety
         }
     }
 
@@ -222,19 +237,18 @@ object RealtimeAudioHapticHook {
             }
 
             val vib = vibrator ?: return
-            val tickMs = AudioHapticConfigHolder.config.tickDurationMs.coerceIn(5L, 30L)
 
-            // Use EFFECT_CLICK (0) for a distinct, crisp snap (same as ResonanceX EFFECT_CLICK)
+            // Fire Xiaomi's crisp 16ms hardware click (Effect 0 / EFFECT_CLICK) on each beat onset
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 vib.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vib.vibrate(VibrationEffect.createOneShot(tickMs, VibrationEffect.DEFAULT_AMPLITUDE))
+                vib.vibrate(VibrationEffect.createOneShot(16L, VibrationEffect.DEFAULT_AMPLITUDE))
             } else {
                 @Suppress("DEPRECATION")
-                vib.vibrate(tickMs)
+                vib.vibrate(16L)
             }
         } catch (t: Throwable) {
-            // Avoid crashing host game or media player
+            // Never crash host app
         }
     }
 }
