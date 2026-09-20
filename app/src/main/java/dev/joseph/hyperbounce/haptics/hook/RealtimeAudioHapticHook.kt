@@ -54,7 +54,7 @@ object RealtimeAudioHapticHook {
         }
     }
 
-    private fun handleAudioTrackWrite(args: Array<Any?>) {
+    private fun handleAudioTrackWrite(args: List<Any?>) {
         if (args.isEmpty()) return
         val firstArg = args[0] ?: return
 
