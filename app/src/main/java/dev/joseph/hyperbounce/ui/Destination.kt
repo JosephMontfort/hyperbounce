@@ -32,6 +32,7 @@ sealed interface Destination {
     data object CallerScreen : Destination
     data object DialerRecents : Destination
     data object SafeMode : Destination
+    data object HapticStudio : Destination
     data object About : Destination
 }
 

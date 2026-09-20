@@ -134,6 +134,7 @@ class SettingsRepository(context: Context) {
     val callerScreen = CallerScreenHolder()
     val dialerRecents = DialerRecentsHolder()
     val safeMode = SafeModeHolder()
+    val audioHaptics = AudioHapticsHolder()
 
     @JvmName("setModuleEnabledPref")
     fun setModuleEnabled(value: Boolean) {
@@ -1430,6 +1431,20 @@ class SettingsRepository(context: Context) {
             setYoutubeSafeMode(false)
             dev.joseph.hyperbounce.safemode.SafeModeHandler.clearAllSafeModes()
         }
+    }
+
+    inner class AudioHapticsHolder {
+        var realTimeEnabled by prefsBooleanState("audio_haptics_realtime_enabled", false)
+        var sensitivity by prefsFloatState("audio_haptics_sensitivity", 0.75f)
+        var refractoryMs by prefsLongState("audio_haptics_refractory_ms", 35L)
+        var activePipeline by prefsStringState("active_haptic_pipeline", "SharpTransient")
+        var resonantFrequencyHz by prefsFloatState("active_haptic_freq", 160f)
+
+        fun setRealTimeEnabledPref(v: Boolean) { realTimeEnabled = v }
+        fun setSensitivityPref(v: Float) { sensitivity = v }
+        fun setRefractoryMsPref(v: Long) { refractoryMs = v }
+        fun setActivePipelinePref(v: String) { activePipeline = v }
+        fun setResonantFrequencyHzPref(v: Float) { resonantFrequencyHz = v }
     }
 
     // --- small property-delegate helpers over SharedPreferences --------------------------

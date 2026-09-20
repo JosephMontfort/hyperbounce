@@ -130,6 +130,15 @@ fun TuningScreen(
                 onClick = { onNavigate(Destination.CallerScreen) },
                 icon = { dev.joseph.hyperbounce.ui.components.PhoneIcon(color = Color.White, size = 15.dp) }
             )
+            RowDivider(colors.separator)
+            SettingsNavRow(
+                title = "Haptic Synthesizer Studio",
+                subtitle = "Audio-to-Haptic 5-pipeline synthesis & real-time gaming",
+                colors = colors,
+                iconTint = colors.accentOrange,
+                onClick = { onNavigate(Destination.HapticStudio) },
+                icon = { dev.joseph.hyperbounce.ui.components.SlidersIcon(color = Color.White, size = 15.dp) }
+            )
         }
     }
 }

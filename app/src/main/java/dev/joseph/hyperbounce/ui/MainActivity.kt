@@ -349,6 +349,13 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                             onBack = pop
                         )
 
+                        Destination.HapticStudio -> dev.joseph.hyperbounce.ui.screens.HapticStudioScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
                         Destination.About -> AboutScreen(
                             colors = colors,
                             backdrop = backdrop,
