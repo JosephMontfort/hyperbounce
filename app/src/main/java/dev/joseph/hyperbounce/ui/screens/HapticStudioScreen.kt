@@ -6,10 +6,6 @@ import android.os.Environment
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -18,12 +14,14 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -54,7 +52,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -68,25 +68,28 @@ import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
 import dev.joseph.hyperbounce.haptics.dsp.AudioDecoder
 import dev.joseph.hyperbounce.haptics.dsp.HapticSynthesizer
 import dev.joseph.hyperbounce.haptics.dsp.PipelineConfig
-import dev.joseph.hyperbounce.haptics.dsp.PipelineType
 import dev.joseph.hyperbounce.haptics.dsp.SynthesizedHaptic
 import dev.joseph.hyperbounce.haptics.player.HapticIntensityMode
 import dev.joseph.hyperbounce.haptics.player.SynchronizedHapticPlayer
 import dev.joseph.hyperbounce.haptics.ringtone.ActiveRingtoneProfile
+import dev.joseph.hyperbounce.haptics.ringtone.HapticPresetStorage
 import dev.joseph.hyperbounce.haptics.ringtone.HapticRingtoneStorage
 import dev.joseph.hyperbounce.haptics.ringtone.RingtoneManagerHelper
+import dev.joseph.hyperbounce.haptics.ringtone.SavedHapticPreset
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.glass.LiquidButton
 import dev.joseph.hyperbounce.ui.glass.LiquidSlider
-import dev.joseph.hyperbounce.ui.glass.LiquidToggle
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.max
 
 @Composable
@@ -118,13 +121,20 @@ fun HapticStudioScreen(
     var playbackProgressMs by remember { mutableIntStateOf(0) }
     var totalDurationMs by remember { mutableIntStateOf(0) }
 
-    // Haptic Intensity & Ringtone Cropping State
+    // Haptic Intensity & Ringtone Trimming State
     var intensityMode by remember { mutableStateOf(HapticIntensityMode.Punchy) }
-    var isCropMode by remember { mutableStateOf(false) }
-    var cropStartMs by remember { mutableIntStateOf(0) }
-    var cropEndMs by remember { mutableIntStateOf(0) }
+    var isTrimMode by remember { mutableStateOf(false) }
+    var trimStartMs by remember { mutableIntStateOf(0) }
+    var trimEndMs by remember { mutableIntStateOf(0) }
     var isSettingRingtone by remember { mutableStateOf(false) }
     var statusFeedback by remember { mutableStateOf<String?>(null) }
+
+    // Saved Library Presets
+    var savedPresets by remember { mutableStateOf<List<SavedHapticPreset>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        savedPresets = HapticPresetStorage.listPresets(context)
+    }
 
     LaunchedEffect(statusFeedback) {
         if (statusFeedback != null) {
@@ -133,7 +143,7 @@ fun HapticStudioScreen(
         }
     }
 
-    // Tuning Parameters
+    // DSP Re-Creation Parameters
     var resonantFreq by remember { mutableFloatStateOf(repository.audioHaptics.resonantFrequencyHz) }
     var sensitivity by remember { mutableFloatStateOf(1.0f) }
     var brakingStrength by remember { mutableFloatStateOf(0.85f) }
@@ -157,8 +167,8 @@ fun HapticStudioScreen(
                     decodedAudio = decoded
                     totalDurationMs = decoded.durationMs.toInt()
                     playbackProgressMs = 0
-                    cropStartMs = 0
-                    cropEndMs = decoded.durationMs.toInt().coerceAtMost(30000)
+                    trimStartMs = 0
+                    trimEndMs = decoded.durationMs.toInt().coerceAtMost(30000)
                     val config = PipelineConfig(
                         resonantFrequencyHz = resonantFreq,
                         sensitivity = sensitivity,
@@ -170,7 +180,7 @@ fun HapticStudioScreen(
                     synthesizedHaptics = results
                     selectedPipelineIndex = 0
                 } catch (e: Exception) {
-                    statusFeedback = "Error processing audio: ${e.message}"
+                    statusFeedback = "Error: ${e.message}"
                 } finally {
                     isProcessing = false
                 }
@@ -183,466 +193,480 @@ fun HapticStudioScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         ScreenScaffold(
-            title = "Haptic Studio",
-        colors = colors,
-        backdrop = backdrop,
-        onBack = onBack,
-        subtitle = "Audio-to-haptic precision engine"
-    ) { contentBackdrop ->
-        item {
-            SectionHeader("Audio Input", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    BasicText(
-                        text = if (audioFileName != null) "File: $audioFileName" else "No audio file loaded",
-                        style = HyperBounceType.body.copy(
-                            color = colors.label,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    BasicText(
-                        text = "Upload any ringtone, UI sound, or music (.wav, .mp3, .ogg, .m4a) to generate 5 distinct precision haptic waveforms.",
-                        style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
-                    )
-                    Spacer(Modifier.height(14.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        LiquidButton(
-                            onClick = {
-                                audioPickerLauncher.launch("audio/*")
-                            },
-                            backdrop = backdrop,
-                            tint = colors.accentBlue,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            BasicText(
-                                text = if (audioFileName == null) "Select Audio" else "Choose Different",
-                                style = HyperBounceType.body.copy(
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold
-                                )
+            title = "Ringtones & Haptics",
+            colors = colors,
+            backdrop = backdrop,
+            onBack = onBack,
+            subtitle = "Custom synced ringtones & precision haptics"
+        ) { _ ->
+            // Section 1: Audio Input
+            item {
+                SectionHeader("Audio Input", colors)
+                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        BasicText(
+                            text = if (audioFileName != null) "File: $audioFileName" else "No audio file loaded",
+                            style = HyperBounceType.body.copy(
+                                color = colors.label,
+                                fontWeight = FontWeight.SemiBold
                             )
-                        }
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        BasicText(
+                            text = "Select an audio track to synthesize 5 synchronized tactile pipelines.",
+                            style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
+                        )
+                        Spacer(Modifier.height(14.dp))
 
-                        if (selectedAudioUri != null && !isProcessing) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
                             LiquidButton(
                                 onClick = {
-                                    val uri = selectedAudioUri ?: return@LiquidButton
-                                    scope.launch {
-                                        isProcessing = true
-                                        processingProgress = 0.1f
-                                        try {
-                                            val decoded = decodedAudio ?: AudioDecoder.decode(context, uri)
-                                            decodedAudio = decoded
-                                            val config = PipelineConfig(
-                                                resonantFrequencyHz = resonantFreq,
-                                                sensitivity = sensitivity,
-                                                brakingStrength = brakingStrength
-                                            )
-                                            val results = HapticSynthesizer.synthesizeAll(decoded, config) { p ->
-                                                processingProgress = p
-                                            }
-                                            synthesizedHaptics = results
-                                        } finally {
-                                            isProcessing = false
-                                        }
-                                    }
+                                    audioPickerLauncher.launch("audio/*")
                                 },
                                 backdrop = backdrop,
-                                tint = colors.accentPurple,
+                                tint = colors.accentBlue,
                                 modifier = Modifier.weight(1f)
                             ) {
                                 BasicText(
-                                    text = "Re-Synthesize",
+                                    text = if (audioFileName == null) "Select Audio" else "Choose Different",
                                     style = HyperBounceType.body.copy(
                                         color = Color.White,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 )
                             }
-                        }
-                    }
-                }
-            }
-        }
 
-        // Processing Progress View
-        item {
-            AnimatedVisibility(visible = isProcessing, enter = fadeIn(), exit = fadeOut()) {
-                Column {
-                    Spacer(Modifier.height(16.dp))
-                    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(20.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            val infiniteTransition = rememberInfiniteTransition()
-                            val shimmerAlpha by infiniteTransition.animateFloat(
-                                initialValue = 0.3f,
-                                targetValue = 1.0f,
-                                animationSpec = infiniteRepeatable(
-                                    animation = tween(800, easing = LinearEasing),
-                                    repeatMode = RepeatMode.Reverse
-                                )
-                            )
-
-                            BasicText(
-                                text = "Synthesizing 5 Haptic Pipelines...",
-                                style = HyperBounceType.body.copy(
-                                    color = colors.accentBlue.copy(alpha = shimmerAlpha),
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                            Spacer(Modifier.height(12.dp))
-
-                            // Custom Progress Bar
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(colors.elevatedSurfaceTint)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(fraction = processingProgress.coerceIn(0.01f, 1f))
-                                        .height(8.dp)
-                                        .background(
-                                            Brush.horizontalGradient(
-                                                listOf(colors.accentBlue, colors.accentPurple, colors.accentPink)
-                                            )
-                                        )
-                                )
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            BasicText(
-                                text = "${(processingProgress * 100).toInt()}% • Onset detection & 24kHz RTP generation",
-                                style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Results & Synchronized Playback View
-        if (synthesizedHaptics.isNotEmpty() && !isProcessing) {
-            val currentHaptic = synthesizedHaptics.getOrNull(selectedPipelineIndex) ?: synthesizedHaptics[0]
-
-            item {
-                Spacer(Modifier.height(20.dp))
-                SectionHeader("Generated Haptics (${selectedPipelineIndex + 1} of ${synthesizedHaptics.size})", colors)
-
-                // Pipeline Selector Tabs
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    synthesizedHaptics.forEachIndexed { idx, haptic ->
-                        val isSelected = idx == selectedPipelineIndex
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(if (isSelected) colors.accentBlue else colors.elevatedSurfaceTint)
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isSelected) Color.Transparent else colors.separator,
-                                    shape = RoundedCornerShape(16.dp)
-                                )
-                                .clickable {
-                                    player.stop()
-                                    isPlaying = false
-                                    selectedPipelineIndex = idx
-                                }
-                                .padding(horizontal = 14.dp, vertical = 8.dp)
-                        ) {
-                            BasicText(
-                                text = "${idx + 1}. ${haptic.pipelineType.title}",
-                                style = HyperBounceType.caption.copy(
-                                    color = if (isSelected) Color.White else colors.label,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-
-            item {
-                Spacer(Modifier.height(12.dp))
-                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                BasicText(
-                                    text = currentHaptic.pipelineType.title,
-                                    style = HyperBounceType.body.copy(
-                                        color = colors.label,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 18.sp
-                                    )
-                                )
-                                BasicText(
-                                    text = currentHaptic.pipelineType.subtitle,
-                                    style = HyperBounceType.caption.copy(color = colors.accentBlue)
-                                )
-                            }
-
-                            // Pipeline Index Pill
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(colors.accentBlue.copy(alpha = 0.18f))
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                BasicText(
-                                    text = "${selectedPipelineIndex + 1} / ${synthesizedHaptics.size}",
-                                    style = HyperBounceType.caption.copy(
-                                        color = colors.accentBlue,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.height(8.dp))
-                        BasicText(
-                            text = currentHaptic.pipelineType.description,
-                            style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
-                        )
-
-                        Spacer(Modifier.height(16.dp))
-
-                        val activeDuration = if (totalDurationMs > 0) totalDurationMs else currentHaptic.durationMs.toInt()
-
-                        // Interactive Waveform Visualizer with Direct Touch Seeker & Ringtone Cropper
-                        WaveformVisualizer(
-                            envelopePoints = currentHaptic.envelopePoints,
-                            currentMs = playbackProgressMs,
-                            totalDurationMs = activeDuration,
-                            isCropMode = isCropMode,
-                            cropStartMs = cropStartMs,
-                            cropEndMs = if (cropEndMs > 0) cropEndMs else activeDuration.coerceAtMost(30000),
-                            colors = colors,
-                            onSeek = { fraction ->
-                                val targetMs = (fraction * activeDuration).toInt().coerceIn(0, activeDuration)
-                                playbackProgressMs = targetMs
-                                if (isPlaying) {
-                                    player.seekTo(targetMs)
-                                }
-                            },
-                            onCropChange = { newStart, newEnd ->
-                                cropStartMs = newStart
-                                cropEndMs = newEnd
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(104.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF0F141C))
-                        )
-
-                        Spacer(Modifier.height(14.dp))
-
-                        // Haptic Intensity Selector
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            BasicText(
-                                text = "Haptic Intensity",
-                                style = HyperBounceType.body.copy(
-                                    color = colors.label,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                HapticIntensityMode.entries.forEach { mode ->
-                                    val isSelected = intensityMode == mode
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(
-                                                if (isSelected) colors.accentBlue else colors.separator.copy(alpha = 0.25f)
-                                            )
-                                            .clickable { intensityMode = mode }
-                                            .padding(horizontal = 9.dp, vertical = 5.dp)
-                                    ) {
-                                        BasicText(
-                                            text = mode.title,
-                                            style = HyperBounceType.caption.copy(
-                                                color = if (isSelected) Color.White else colors.secondaryLabel,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                fontSize = 11.sp
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        BasicText(
-                            text = intensityMode.description,
-                            style = HyperBounceType.caption.copy(color = colors.tertiaryLabel, fontSize = 11.sp)
-                        )
-
-                        Spacer(Modifier.height(14.dp))
-
-                        // Synchronized Playback Control
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            val uri = selectedAudioUri
-                            Box(
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.linearGradient(
-                                            listOf(colors.accentBlue, colors.accentPurple)
-                                        )
-                                    )
-                                    .clickable {
-                                        if (uri == null) return@clickable
-                                        if (isPlaying) {
-                                            player.stop()
-                                            isPlaying = false
-                                        } else {
-                                            player.play(
-                                                audioUri = uri,
-                                                haptic = currentHaptic,
-                                                startFromMs = playbackProgressMs,
-                                                intensityMode = intensityMode,
-                                                onProgress = { cur, tot ->
-                                                    playbackProgressMs = cur
-                                                    totalDurationMs = tot
-                                                    isPlaying = true
-                                                },
-                                                onCompletion = {
-                                                    isPlaying = false
-                                                    playbackProgressMs = 0
+                            if (selectedAudioUri != null && !isProcessing) {
+                                LiquidButton(
+                                    onClick = {
+                                        val uri = selectedAudioUri ?: return@LiquidButton
+                                        scope.launch {
+                                            isProcessing = true
+                                            processingProgress = 0.1f
+                                            try {
+                                                val decoded = decodedAudio ?: AudioDecoder.decode(context, uri)
+                                                decodedAudio = decoded
+                                                val config = PipelineConfig(
+                                                    resonantFrequencyHz = resonantFreq,
+                                                    sensitivity = sensitivity,
+                                                    brakingStrength = brakingStrength
+                                                )
+                                                val results = HapticSynthesizer.synthesizeAll(decoded, config) { p ->
+                                                    processingProgress = p
                                                 }
-                                            )
+                                                synthesizedHaptics = results
+                                            } finally {
+                                                isProcessing = false
+                                            }
                                         }
                                     },
-                                contentAlignment = Alignment.Center
+                                    backdrop = backdrop,
+                                    tint = colors.accentPurple,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    BasicText(
+                                        text = "Re-Synthesize",
+                                        style = HyperBounceType.body.copy(
+                                            color = Color.White,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Section 2: Processing Progress
+            item {
+                AnimatedVisibility(visible = isProcessing, enter = fadeIn(), exit = fadeOut()) {
+                    Column {
+                        Spacer(Modifier.height(16.dp))
+                        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
+                                val infiniteTransition = rememberInfiniteTransition()
+                                val shimmerAlpha by infiniteTransition.animateFloat(
+                                    initialValue = 0.3f,
+                                    targetValue = 1.0f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(800, easing = LinearEasing),
+                                        repeatMode = RepeatMode.Reverse
+                                    )
+                                )
+
                                 BasicText(
-                                    text = if (isPlaying) "■" else "▶",
+                                    text = "Synthesizing 5 Haptic Pipelines...",
                                     style = HyperBounceType.body.copy(
-                                        color = Color.White,
-                                        fontSize = 20.sp,
+                                        color = colors.accentBlue.copy(alpha = shimmerAlpha),
                                         fontWeight = FontWeight.Bold
                                     )
                                 )
-                            }
+                                Spacer(Modifier.height(12.dp))
 
-                            Column(modifier = Modifier.weight(1f)) {
-                                BasicText(
-                                    text = if (isPlaying) "Playing Synchronized Audio + Haptic..." else "Tap to Play Synchronized Preview",
-                                    style = HyperBounceType.body.copy(
-                                        color = colors.label,
-                                        fontWeight = FontWeight.SemiBold
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(colors.elevatedSurfaceTint)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(fraction = processingProgress.coerceIn(0.01f, 1f))
+                                            .height(8.dp)
+                                            .background(
+                                                Brush.horizontalGradient(
+                                                    listOf(colors.accentBlue, colors.accentPurple, colors.accentPink)
+                                                )
+                                            )
                                     )
-                                )
+                                }
+                                Spacer(Modifier.height(8.dp))
                                 BasicText(
-                                    text = "${currentHaptic.durationMs}ms duration • ${currentHaptic.peakCount} peaks • 24kHz RTP",
+                                    text = "${(processingProgress * 100).toInt()}% • Analyzing transients & generating 24kHz RTP",
                                     style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
                                 )
                             }
                         }
+                    }
+                }
+            }
 
-                        Spacer(Modifier.height(16.dp))
-                        RowDivider(colors.separator)
-                        Spacer(Modifier.height(14.dp))
+            // Section 3: Synthesized Pipelines & Playback
+            if (synthesizedHaptics.isNotEmpty() && !isProcessing) {
+                val currentHaptic = synthesizedHaptics.getOrNull(selectedPipelineIndex) ?: synthesizedHaptics[0]
 
-                        // Ringtone & Audio Cropping Studio Section
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                BasicText(
-                                    text = "Ringtone Studio",
-                                    style = HyperBounceType.body.copy(
-                                        color = colors.label,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                                BasicText(
-                                    text = if (isCropMode) {
-                                        val durSec = ((cropEndMs - cropStartMs) / 1000).coerceAtLeast(0)
-                                        "Selected: ${formatTimeMs(cropStartMs)} – ${formatTimeMs(cropEndMs)} (${durSec}s)"
-                                    } else "Crop & set custom synced ringtone",
-                                    style = HyperBounceType.caption.copy(
-                                        color = if (isCropMode) colors.accentOrange else colors.secondaryLabel
-                                    )
-                                )
-                            }
+                item {
+                    Spacer(Modifier.height(20.dp))
+                    SectionHeader("Tactile Pipelines", colors)
 
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        synthesizedHaptics.forEachIndexed { idx, haptic ->
+                            val isSelected = idx == selectedPipelineIndex
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        if (isCropMode) colors.accentOrange.copy(alpha = 0.25f) else colors.separator.copy(alpha = 0.25f)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (isSelected) colors.accentBlue else colors.elevatedSurfaceTint)
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSelected) Color.Transparent else colors.separator,
+                                        shape = RoundedCornerShape(16.dp)
                                     )
                                     .clickable {
-                                        isCropMode = !isCropMode
-                                        if (isCropMode && cropEndMs <= cropStartMs) {
-                                            cropEndMs = (cropStartMs + 30000).coerceAtMost(activeDuration)
-                                        }
+                                        player.stop()
+                                        isPlaying = false
+                                        selectedPipelineIndex = idx
                                     }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    .padding(horizontal = 14.dp, vertical = 8.dp)
                             ) {
                                 BasicText(
-                                    text = "Crop",
+                                    text = "${idx + 1}. ${haptic.pipelineType.title}",
                                     style = HyperBounceType.caption.copy(
-                                        color = if (isCropMode) colors.accentOrange else colors.label,
-                                        fontWeight = FontWeight.SemiBold
+                                        color = if (isSelected) Color.White else colors.label,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                     )
                                 )
                             }
                         }
+                    }
+                }
 
-                        if (isCropMode) {
-                            Spacer(Modifier.height(10.dp))
-                            // Quick length presets
+                item {
+                    Spacer(Modifier.height(12.dp))
+                    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                listOf(15 to "15s", 20 to "20s", 30 to "30s").forEach { (sec, label) ->
+                                Column(modifier = Modifier.weight(1f)) {
+                                    BasicText(
+                                        text = currentHaptic.pipelineType.title,
+                                        style = HyperBounceType.body.copy(
+                                            color = colors.label,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 18.sp
+                                        )
+                                    )
+                                    BasicText(
+                                        text = currentHaptic.pipelineType.subtitle,
+                                        style = HyperBounceType.caption.copy(color = colors.accentBlue)
+                                    )
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(colors.accentBlue.copy(alpha = 0.18f))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    BasicText(
+                                        text = "${selectedPipelineIndex + 1} / ${synthesizedHaptics.size}",
+                                        style = HyperBounceType.caption.copy(
+                                            color = colors.accentBlue,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(14.dp))
+
+                            val activeDuration = if (totalDurationMs > 0) totalDurationMs else currentHaptic.durationMs.toInt()
+
+                            // Interactive Waveform Visualizer with Smooth Dragging Trim Handles
+                            WaveformVisualizer(
+                                envelopePoints = currentHaptic.envelopePoints,
+                                currentMs = playbackProgressMs,
+                                totalDurationMs = activeDuration,
+                                isTrimMode = isTrimMode,
+                                trimStartMs = trimStartMs,
+                                trimEndMs = if (trimEndMs > 0) trimEndMs else activeDuration.coerceAtMost(30000),
+                                colors = colors,
+                                onSeek = { fraction ->
+                                    val targetMs = (fraction * activeDuration).toInt().coerceIn(0, activeDuration)
+                                    playbackProgressMs = targetMs
+                                    if (isPlaying) {
+                                        player.seekTo(targetMs)
+                                    }
+                                },
+                                onTrimChange = { newStart, newEnd ->
+                                    trimStartMs = newStart
+                                    trimEndMs = newEnd
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(104.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF0F141C))
+                            )
+
+                            Spacer(Modifier.height(14.dp))
+
+                            // Haptic Intensity Selector
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                BasicText(
+                                    text = "Intensity",
+                                    style = HyperBounceType.body.copy(
+                                        color = colors.label,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    HapticIntensityMode.entries.forEach { mode ->
+                                        val isSelected = intensityMode == mode
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(
+                                                    if (isSelected) colors.accentBlue else colors.separator.copy(alpha = 0.25f)
+                                                )
+                                                .clickable { intensityMode = mode }
+                                                .padding(horizontal = 9.dp, vertical = 5.dp)
+                                        ) {
+                                            BasicText(
+                                                text = mode.title,
+                                                style = HyperBounceType.caption.copy(
+                                                    color = if (isSelected) Color.White else colors.secondaryLabel,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                    fontSize = 11.sp
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            BasicText(
+                                text = intensityMode.description,
+                                style = HyperBounceType.caption.copy(color = colors.tertiaryLabel, fontSize = 11.sp)
+                            )
+
+                            Spacer(Modifier.height(14.dp))
+
+                            // Synchronized Playback Control
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                val uri = selectedAudioUri
+                                Box(
+                                    modifier = Modifier
+                                        .size(52.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            Brush.linearGradient(
+                                                listOf(colors.accentBlue, colors.accentPurple)
+                                            )
+                                        )
+                                        .clickable {
+                                            if (uri == null) return@clickable
+                                            if (isPlaying) {
+                                                player.stop()
+                                                isPlaying = false
+                                            } else {
+                                                player.play(
+                                                    audioUri = uri,
+                                                    haptic = currentHaptic,
+                                                    startFromMs = if (isTrimMode) trimStartMs else playbackProgressMs,
+                                                    endAtMs = if (isTrimMode) trimEndMs else 0,
+                                                    intensityMode = intensityMode,
+                                                    onProgress = { cur, tot ->
+                                                        playbackProgressMs = cur
+                                                        totalDurationMs = tot
+                                                        isPlaying = true
+                                                    },
+                                                    onCompletion = {
+                                                        isPlaying = false
+                                                        playbackProgressMs = if (isTrimMode) trimStartMs else 0
+                                                    }
+                                                )
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    BasicText(
+                                        text = if (isPlaying) "■" else "▶",
+                                        style = HyperBounceType.body.copy(
+                                            color = Color.White,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    BasicText(
+                                        text = if (isPlaying) "Playing Synchronized Preview" else "Tap to Play Preview",
+                                        style = HyperBounceType.body.copy(
+                                            color = colors.label,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    )
+                                    BasicText(
+                                        text = "${currentHaptic.durationMs}ms duration • ${currentHaptic.peakCount} peaks • 24kHz RTP",
+                                        style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(16.dp))
+                            RowDivider(colors.separator)
+                            Spacer(Modifier.height(14.dp))
+
+                            // Ringtone Trimming Studio Section
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    BasicText(
+                                        text = "Ringtone Trimmer",
+                                        style = HyperBounceType.body.copy(
+                                            color = colors.label,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                    BasicText(
+                                        text = if (isTrimMode) {
+                                            val durSec = ((trimEndMs - trimStartMs) / 1000).coerceAtLeast(0)
+                                            "Trimmed: ${formatTimeMs(trimStartMs)} – ${formatTimeMs(trimEndMs)} (${durSec}s)"
+                                        } else "Trim bounds for incoming calls",
+                                        style = HyperBounceType.caption.copy(
+                                            color = if (isTrimMode) colors.accentOrange else colors.secondaryLabel
+                                        )
+                                    )
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            if (isTrimMode) colors.accentOrange.copy(alpha = 0.25f) else colors.separator.copy(alpha = 0.25f)
+                                        )
+                                        .clickable {
+                                            isTrimMode = !isTrimMode
+                                            if (isTrimMode && trimEndMs <= trimStartMs) {
+                                                trimEndMs = (trimStartMs + 30000).coerceAtMost(activeDuration)
+                                            }
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    ) {
+                                        BasicText(
+                                            text = "Trim",
+                                            style = HyperBounceType.caption.copy(
+                                                color = if (isTrimMode) colors.accentOrange else colors.label,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        )
+                                    }
+                            }
+
+                            if (isTrimMode) {
+                                Spacer(Modifier.height(10.dp))
+                                // Quick duration presets
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    listOf(15 to "15s", 20 to "20s", 30 to "30s").forEach { (sec, label) ->
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(colors.separator.copy(alpha = 0.25f))
+                                                .clickable {
+                                                    val maxLen = sec * 1000
+                                                    trimEndMs = (trimStartMs + maxLen).coerceAtMost(activeDuration)
+                                                }
+                                                .padding(vertical = 6.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            BasicText(
+                                                text = label,
+                                                style = HyperBounceType.caption.copy(
+                                                    color = colors.label,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            )
+                                        }
+                                    }
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
                                             .clip(RoundedCornerShape(6.dp))
                                             .background(colors.separator.copy(alpha = 0.25f))
                                             .clickable {
-                                                val maxLen = sec * 1000
-                                                cropEndMs = (cropStartMs + maxLen).coerceAtMost(activeDuration)
+                                                trimStartMs = 0
+                                                trimEndMs = activeDuration
                                             }
                                             .padding(vertical = 6.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         BasicText(
-                                            text = label,
+                                            text = "Full",
                                             style = HyperBounceType.caption.copy(
                                                 color = colors.label,
                                                 fontWeight = FontWeight.Medium
@@ -650,67 +674,152 @@ fun HapticStudioScreen(
                                         )
                                     }
                                 }
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(colors.separator.copy(alpha = 0.25f))
-                                        .clickable {
-                                            cropStartMs = 0
-                                            cropEndMs = activeDuration
-                                        }
-                                        .padding(vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
+
+                                Spacer(Modifier.height(12.dp))
+
+                                // Trim actions: Preview Trim & Set as Ringtone
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    BasicText(
-                                        text = "Full",
-                                        style = HyperBounceType.caption.copy(
-                                            color = colors.label,
-                                            fontWeight = FontWeight.Medium
+                                    val uri = selectedAudioUri
+                                    LiquidButton(
+                                        onClick = {
+                                            if (uri == null) return@LiquidButton
+                                            if (isPlaying) {
+                                                player.stop()
+                                                isPlaying = false
+                                            } else {
+                                                player.play(
+                                                    audioUri = uri,
+                                                    haptic = currentHaptic,
+                                                    startFromMs = trimStartMs,
+                                                    endAtMs = trimEndMs,
+                                                    intensityMode = intensityMode,
+                                                    onProgress = { cur, tot ->
+                                                        playbackProgressMs = cur
+                                                        totalDurationMs = tot
+                                                        isPlaying = true
+                                                    },
+                                                    onCompletion = {
+                                                        isPlaying = false
+                                                        playbackProgressMs = trimStartMs
+                                                    }
+                                                )
+                                            }
+                                        },
+                                        backdrop = backdrop,
+                                        tint = colors.accentBlue,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        BasicText(
+                                            text = if (isPlaying) "Stop Preview" else "Preview Trim",
+                                            style = HyperBounceType.body.copy(
+                                                color = Color.White,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
                                         )
-                                    )
+                                    }
+
+                                    LiquidButton(
+                                        onClick = {
+                                            val audio = decodedAudio
+                                            if (audio == null) {
+                                                statusFeedback = "No audio decoded to export"
+                                                return@LiquidButton
+                                            }
+                                            if (isSettingRingtone) return@LiquidButton
+
+                                            scope.launch {
+                                                isSettingRingtone = true
+                                                try {
+                                                    val start = trimStartMs.coerceAtLeast(0)
+                                                    val end = if (trimEndMs > start) trimEndMs else activeDuration
+                                                    val title = audioFileName?.substringBeforeLast('.') ?: "CustomRingtone"
+
+                                                    // 1. Crop audio samples and encode standard 16-bit PCM WAV
+                                                    val wavBytes = RingtoneManagerHelper.cropAndEncodeWav(audio, start, end)
+
+                                                    // 2. Crop synthesized haptic events and RTP wave
+                                                    val croppedHaptic = RingtoneManagerHelper.cropHaptic(currentHaptic, start, end)
+
+                                                    // 3. Install cropped WAV into system ringtones
+                                                    val ringtoneUri = RingtoneManagerHelper.installRingtoneAudio(context, wavBytes, title)
+
+                                                    if (ringtoneUri != null) {
+                                                        // 4. Set as default ringtone via RingtoneManager + HyperOS system settings
+                                                        RingtoneManagerHelper.setAsDefaultRingtone(context, ringtoneUri)
+
+                                                        // 5. Store active companion haptic profile for incoming call synchronization
+                                                        val profile = ActiveRingtoneProfile(
+                                                            title = title,
+                                                            durationMs = (end - start).toLong(),
+                                                            intensityMode = intensityMode,
+                                                            events = croppedHaptic.events
+                                                        )
+                                                        HapticRingtoneStorage.save(context, profile)
+
+                                                        // 6. Auto-persist to Saved Library
+                                                        HapticPresetStorage.savePreset(
+                                                            context = context,
+                                                            title = title,
+                                                            audioFileName = audioFileName ?: "$title.wav",
+                                                            decodedAudio = audio,
+                                                            synthesizedHaptics = synthesizedHaptics,
+                                                            selectedPipelineIndex = selectedPipelineIndex,
+                                                            trimStartMs = start,
+                                                            trimEndMs = end,
+                                                            intensityMode = intensityMode
+                                                        )
+                                                        savedPresets = HapticPresetStorage.listPresets(context)
+
+                                                        statusFeedback = "Ringtone and haptics applied"
+                                                    } else {
+                                                        statusFeedback = "Failed to register ringtone"
+                                                    }
+                                                } catch (e: Exception) {
+                                                    statusFeedback = "Error: ${e.message}"
+                                                } finally {
+                                                    isSettingRingtone = false
+                                                }
+                                            }
+                                        },
+                                        backdrop = backdrop,
+                                        tint = colors.accentPink,
+                                        modifier = Modifier.weight(1.3f)
+                                    ) {
+                                        BasicText(
+                                            text = if (isSettingRingtone) "Applying..." else "Set as Ringtone",
+                                            style = HyperBounceType.body.copy(
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        )
+                                    }
                                 }
                             }
 
-                            Spacer(Modifier.height(12.dp))
+                            Spacer(Modifier.height(16.dp))
+                            RowDivider(colors.separator)
+                            Spacer(Modifier.height(14.dp))
 
-                            // Crop actions: Preview Crop & Set as Ringtone
+                            // Actions: Export RTP .bin & Save Preset
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                val uri = selectedAudioUri
                                 LiquidButton(
                                     onClick = {
-                                        if (uri == null) return@LiquidButton
-                                        if (isPlaying) {
-                                            player.stop()
-                                            isPlaying = false
-                                        } else {
-                                            player.play(
-                                                audioUri = uri,
-                                                haptic = currentHaptic,
-                                                startFromMs = cropStartMs,
-                                                endAtMs = cropEndMs,
-                                                intensityMode = intensityMode,
-                                                onProgress = { cur, tot ->
-                                                    playbackProgressMs = cur
-                                                    totalDurationMs = tot
-                                                    isPlaying = true
-                                                },
-                                                onCompletion = {
-                                                    isPlaying = false
-                                                    playbackProgressMs = cropStartMs
-                                                }
-                                            )
+                                        exportRtpBinary(context, currentHaptic, audioFileName ?: "effect") { msg ->
+                                            statusFeedback = msg
                                         }
                                     },
                                     backdrop = backdrop,
-                                    tint = colors.accentBlue,
+                                    tint = colors.accentOrange,
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     BasicText(
-                                        text = if (isPlaying) "Stop Preview" else "Preview Crop",
+                                        text = "Export RTP .bin",
                                         style = HyperBounceType.body.copy(
                                             color = Color.White,
                                             fontWeight = FontWeight.SemiBold
@@ -721,261 +830,350 @@ fun HapticStudioScreen(
                                 LiquidButton(
                                     onClick = {
                                         val audio = decodedAudio
-                                        if (audio == null) {
-                                            statusFeedback = "No audio decoded to export"
+                                        if (audio == null || synthesizedHaptics.isEmpty()) {
+                                            statusFeedback = "No synthesized audio to save"
                                             return@LiquidButton
                                         }
-                                        if (isSettingRingtone) return@LiquidButton
-
-                                        scope.launch {
-                                            isSettingRingtone = true
-                                            try {
-                                                val start = cropStartMs.coerceAtLeast(0)
-                                                val end = if (cropEndMs > start) cropEndMs else activeDuration
-                                                val title = audioFileName?.substringBeforeLast('.') ?: "CustomRingtone"
-
-                                                // 1. Crop audio samples and encode standard 16-bit PCM WAV
-                                                val wavBytes = RingtoneManagerHelper.cropAndEncodeWav(audio, start, end)
-
-                                                // 2. Crop synthesized haptic events and RTP wave
-                                                val croppedHaptic = RingtoneManagerHelper.cropHaptic(currentHaptic, start, end)
-
-                                                // 3. Install cropped WAV into system ringtones
-                                                val ringtoneUri = RingtoneManagerHelper.installRingtoneAudio(context, wavBytes, title)
-
-                                                if (ringtoneUri != null) {
-                                                    // 4. Set as default ringtone via RingtoneManager + HyperOS system settings
-                                                    RingtoneManagerHelper.setAsDefaultRingtone(context, ringtoneUri)
-
-                                                    // 5. Store active companion haptic profile for incoming call synchronization
-                                                    val profile = ActiveRingtoneProfile(
-                                                        title = title,
-                                                        durationMs = (end - start).toLong(),
-                                                        intensityMode = intensityMode,
-                                                        events = croppedHaptic.events
-                                                    )
-                                                    HapticRingtoneStorage.save(context, profile)
-
-                                                    statusFeedback = "Ringtone and haptics applied"
-                                                } else {
-                                                    statusFeedback = "Failed to register ringtone"
-                                                }
-                                            } catch (e: Exception) {
-                                                statusFeedback = "Error: ${e.message}"
-                                            } finally {
-                                                isSettingRingtone = false
-                                            }
-                                        }
+                                        val title = audioFileName?.substringBeforeLast('.') ?: "Custom Preset"
+                                        HapticPresetStorage.savePreset(
+                                            context = context,
+                                            title = title,
+                                            audioFileName = audioFileName ?: "$title.wav",
+                                            decodedAudio = audio,
+                                            synthesizedHaptics = synthesizedHaptics,
+                                            selectedPipelineIndex = selectedPipelineIndex,
+                                            trimStartMs = trimStartMs,
+                                            trimEndMs = if (trimEndMs > trimStartMs) trimEndMs else totalDurationMs,
+                                            intensityMode = intensityMode
+                                        )
+                                        savedPresets = HapticPresetStorage.listPresets(context)
+                                        statusFeedback = "Saved \"$title\" to Library"
                                     },
                                     backdrop = backdrop,
-                                    tint = colors.accentPink,
-                                    modifier = Modifier.weight(1.3f)
+                                    tint = colors.accentGreen,
+                                    modifier = Modifier.weight(1f)
                                 ) {
                                     BasicText(
-                                        text = if (isSettingRingtone) "Applying..." else "Set as Ringtone",
+                                        text = "Save Preset",
                                         style = HyperBounceType.body.copy(
                                             color = Color.White,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.SemiBold
                                         )
                                     )
                                 }
                             }
                         }
+                    }
+                }
 
-                        Spacer(Modifier.height(16.dp))
-                        RowDivider(colors.separator)
-                        Spacer(Modifier.height(14.dp))
+                // Tuning Section
+                item {
+                    Spacer(Modifier.height(20.dp))
+                    SectionHeader("DSP Fine-Tuning", colors)
+                    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            BasicText(
+                                text = "Resonant Frequency: ${resonantFreq.toInt()} Hz",
+                                style = HyperBounceType.body.copy(color = colors.label)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            LiquidSlider(
+                                value = { resonantFreq },
+                                onValueChange = { resonantFreq = it },
+                                valueRange = 140f..180f,
+                                visibilityThreshold = 0.04f,
+                                backdrop = localBackdrop,
+                                modifier = Modifier.fillMaxWidth()
+                            )
 
-                        // Actions: Export .bin & Apply
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            LiquidButton(
-                                onClick = {
-                                    exportRtpBinary(context, currentHaptic, audioFileName ?: "effect") { msg ->
-                                        statusFeedback = msg
-                                    }
-                                },
-                                backdrop = backdrop,
-                                tint = colors.accentOrange,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                BasicText(
-                                    text = "Export RTP .bin",
-                                    style = HyperBounceType.body.copy(
-                                        color = Color.White,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                )
-                            }
+                            Spacer(Modifier.height(12.dp))
+                            RowDivider(colors.separator)
+                            Spacer(Modifier.height(12.dp))
 
-                            LiquidButton(
-                                onClick = {
-                                    repository.audioHaptics.setActivePipelinePref(currentHaptic.pipelineType.name)
-                                    repository.audioHaptics.setResonantFrequencyHzPref(resonantFreq)
-                                    statusFeedback = "Preset saved for HyperBounce"
-                                },
-                                backdrop = backdrop,
-                                tint = colors.accentGreen,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                BasicText(
-                                    text = "Save Preset",
-                                    style = HyperBounceType.body.copy(
-                                        color = Color.White,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                )
-                            }
+                            BasicText(
+                                text = "Transient Sensitivity: ${(sensitivity * 100).toInt()}%",
+                                style = HyperBounceType.body.copy(color = colors.label)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            LiquidSlider(
+                                value = { sensitivity },
+                                onValueChange = { sensitivity = it },
+                                valueRange = 0.4f..2.0f,
+                                visibilityThreshold = 0.01f,
+                                backdrop = localBackdrop,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(Modifier.height(12.dp))
+                            RowDivider(colors.separator)
+                            Spacer(Modifier.height(12.dp))
+
+                            BasicText(
+                                text = "Active Braking Strength: ${(brakingStrength * 100).toInt()}%",
+                                style = HyperBounceType.body.copy(color = colors.label)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            LiquidSlider(
+                                value = { brakingStrength },
+                                onValueChange = { brakingStrength = it },
+                                valueRange = 0.0f..1.0f,
+                                visibilityThreshold = 0.01f,
+                                backdrop = localBackdrop,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 }
             }
 
+            // Section: Saved Ringtone Library
             item {
-                Spacer(Modifier.height(20.dp))
-                SectionHeader("Fine-Tune Re-Creation Parameters", colors)
-                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        BasicText(
-                            text = "Motor Resonant Frequency: ${resonantFreq.toInt()} Hz",
-                            style = HyperBounceType.body.copy(color = colors.label)
-                        )
-                        BasicText(
-                            text = "Tuned to Garnet X-axis LRA sweet spot (~160 Hz)",
-                            style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        LiquidSlider(
-                            value = { resonantFreq },
-                            onValueChange = { resonantFreq = it },
-                            valueRange = 140f..180f,
-                            visibilityThreshold = 0.04f,
-                            backdrop = localBackdrop,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                Spacer(Modifier.height(24.dp))
+                SectionHeader("Saved Ringtones & Presets", colors)
 
-                        Spacer(Modifier.height(12.dp))
-                        RowDivider(colors.separator)
-                        Spacer(Modifier.height(12.dp))
-
-                        BasicText(
-                            text = "Transient Sensitivity: ${(sensitivity * 100).toInt()}%",
-                            style = HyperBounceType.body.copy(color = colors.label)
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        LiquidSlider(
-                            value = { sensitivity },
-                            onValueChange = { sensitivity = it },
-                            valueRange = 0.4f..2.0f,
-                            visibilityThreshold = 0.01f,
-                            backdrop = localBackdrop,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(Modifier.height(12.dp))
-                        RowDivider(colors.separator)
-                        Spacer(Modifier.height(12.dp))
-
-                        BasicText(
-                            text = "Active Braking Strength: ${(brakingStrength * 100).toInt()}%",
-                            style = HyperBounceType.body.copy(color = colors.label)
-                        )
-                        BasicText(
-                            text = "Inverts pulse phase at end of wave to stop mechanical ringing dead",
-                            style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        LiquidSlider(
-                            value = { brakingStrength },
-                            onValueChange = { brakingStrength = it },
-                            valueRange = 0.0f..1.0f,
-                            visibilityThreshold = 0.01f,
-                            backdrop = localBackdrop,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            }
-        }
-
-        // Real-Time Gaming & Media Section
-        item {
-            Spacer(Modifier.height(24.dp))
-            SectionHeader("Real-Time Game & Media Engine", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            BasicText(
-                                text = "Real-Time AudioTrack Haptics",
-                                style = HyperBounceType.body.copy(
-                                    color = colors.label,
-                                    fontWeight = FontWeight.Bold
+                if (savedPresets.isEmpty()) {
+                    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                BasicText(
+                                    text = "No Saved Presets",
+                                    style = HyperBounceType.body.copy(
+                                        color = colors.label,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
                                 )
-                            )
-                            BasicText(
-                                text = "Intercepts in-game audio buffers and fires ultra-fast micro-ticks on gunshots, beats & impacts",
-                                style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
-                            )
+                                Spacer(Modifier.height(4.dp))
+                                BasicText(
+                                    text = "Import an audio track above and tap Save Preset or Set as Ringtone.",
+                                    style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
+                                )
+                            }
                         }
-                        LiquidToggle(
-                            selected = { repository.audioHaptics.realTimeEnabled },
-                            onSelect = { repository.audioHaptics.setRealTimeEnabledPref(it) },
-                            backdrop = localBackdrop
-                        )
                     }
+                } else {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        savedPresets.forEach { preset ->
+                            GlassCard(backdrop, Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            BasicText(
+                                                text = preset.title,
+                                                style = HyperBounceType.body.copy(
+                                                    color = colors.label,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            )
+                                            val dateStr = SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(preset.createdAt))
+                                            BasicText(
+                                                text = "$dateStr • ${formatTimeMs(preset.durationMs.toInt())}",
+                                                style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
+                                            )
+                                        }
 
-                    if (repository.audioHaptics.realTimeEnabled) {
-                        Spacer(Modifier.height(14.dp))
-                        RowDivider(colors.separator)
-                        Spacer(Modifier.height(14.dp))
+                                        // Delete Button
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(colors.accentRed.copy(alpha = 0.12f))
+                                                .clickable {
+                                                    HapticPresetStorage.deletePreset(context, preset.id)
+                                                    savedPresets = HapticPresetStorage.listPresets(context)
+                                                    statusFeedback = "Deleted \"${preset.title}\""
+                                                }
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            BasicText(
+                                                text = "Delete",
+                                                style = HyperBounceType.caption.copy(
+                                                    color = colors.accentRed,
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontSize = 11.sp
+                                                )
+                                            )
+                                        }
+                                    }
 
-                        BasicText(
-                            text = "Gunfire & Beat Sensitivity: ${(repository.audioHaptics.sensitivity * 100).toInt()}%",
-                            style = HyperBounceType.body.copy(color = colors.label)
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        LiquidSlider(
-                            value = { repository.audioHaptics.sensitivity },
-                            onValueChange = { repository.audioHaptics.setSensitivityPref(it) },
-                            valueRange = 0.3f..1.8f,
-                            visibilityThreshold = 0.01f,
-                            backdrop = localBackdrop,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                                    Spacer(Modifier.height(8.dp))
 
-                        Spacer(Modifier.height(12.dp))
-                        BasicText(
-                            text = "Anti-Saturation Debounce: ${repository.audioHaptics.refractoryMs} ms",
-                            style = HyperBounceType.body.copy(color = colors.label)
-                        )
-                        BasicText(
-                            text = "Prevents high fire-rate weapons from turning into a muddy continuous buzz",
-                            style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        LiquidSlider(
-                            value = { repository.audioHaptics.refractoryMs.toFloat() },
-                            onValueChange = { repository.audioHaptics.setRefractoryMsPref(it.toLong()) },
-                            valueRange = 20f..80f,
-                            visibilityThreshold = 0.05f,
-                            backdrop = localBackdrop,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                                    // Details Row
+                                    val pipeName = preset.pipelines.getOrNull(preset.selectedPipelineIndex)?.pipelineType?.title
+                                        ?: "Melodic Crisp"
+                                    val trimInfo = "${formatTimeMs(preset.trimStartMs)} – ${formatTimeMs(preset.trimEndMs)}"
+
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(colors.accentBlue.copy(alpha = 0.15f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            BasicText(
+                                                text = pipeName,
+                                                style = HyperBounceType.caption.copy(
+                                                    color = colors.accentBlue,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontSize = 10.sp
+                                                )
+                                            )
+                                        }
+
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(colors.accentOrange.copy(alpha = 0.15f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            BasicText(
+                                                text = "Trim: $trimInfo",
+                                                style = HyperBounceType.caption.copy(
+                                                    color = colors.accentOrange,
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontSize = 10.sp
+                                                )
+                                            )
+                                        }
+
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(colors.separator.copy(alpha = 0.25f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            BasicText(
+                                                text = preset.intensityMode.title,
+                                                style = HyperBounceType.caption.copy(
+                                                    color = colors.secondaryLabel,
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontSize = 10.sp
+                                                )
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(Modifier.height(12.dp))
+
+                                    // Action buttons: Open in Studio & Apply Ringtone
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        LiquidButton(
+                                            onClick = {
+                                                player.stop()
+                                                isPlaying = false
+                                                val loaded = HapticPresetStorage.loadPresetData(context, preset)
+                                                if (loaded != null) {
+                                                    selectedAudioUri = loaded.audioUri
+                                                    audioFileName = preset.title
+                                                    decodedAudio = loaded.decodedAudio
+                                                    synthesizedHaptics = loaded.synthesizedHaptics
+                                                    selectedPipelineIndex = preset.selectedPipelineIndex.coerceIn(
+                                                        0,
+                                                        loaded.synthesizedHaptics.lastIndex
+                                                    )
+                                                    trimStartMs = preset.trimStartMs
+                                                    trimEndMs = preset.trimEndMs
+                                                    intensityMode = preset.intensityMode
+                                                    totalDurationMs = loaded.decodedAudio.durationMs.toInt()
+                                                    playbackProgressMs = preset.trimStartMs
+                                                    isTrimMode = true
+                                                    statusFeedback = "Loaded \"${preset.title}\""
+                                                } else {
+                                                    statusFeedback = "Failed to load preset"
+                                                }
+                                            },
+                                            backdrop = backdrop,
+                                            tint = colors.accentBlue,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            BasicText(
+                                                text = "Open in Studio",
+                                                style = HyperBounceType.caption.copy(
+                                                    color = Color.White,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            )
+                                        }
+
+                                        LiquidButton(
+                                            onClick = {
+                                                if (isSettingRingtone) return@LiquidButton
+                                                scope.launch {
+                                                    isSettingRingtone = true
+                                                    try {
+                                                        val loaded = HapticPresetStorage.loadPresetData(context, preset)
+                                                        if (loaded == null) {
+                                                            statusFeedback = "Could not load preset audio"
+                                                            return@launch
+                                                        }
+                                                        val start = preset.trimStartMs.coerceAtLeast(0)
+                                                        val end = if (preset.trimEndMs > start) preset.trimEndMs else loaded.decodedAudio.durationMs.toInt()
+                                                        val pipe = loaded.synthesizedHaptics.getOrNull(preset.selectedPipelineIndex)
+                                                            ?: loaded.synthesizedHaptics[0]
+
+                                                        val wavBytes = RingtoneManagerHelper.cropAndEncodeWav(loaded.decodedAudio, start, end)
+                                                        val croppedHaptic = RingtoneManagerHelper.cropHaptic(pipe, start, end)
+                                                        val ringtoneUri = RingtoneManagerHelper.installRingtoneAudio(context, wavBytes, preset.title)
+
+                                                        if (ringtoneUri != null) {
+                                                            RingtoneManagerHelper.setAsDefaultRingtone(context, ringtoneUri)
+                                                            val profile = ActiveRingtoneProfile(
+                                                                title = preset.title,
+                                                                durationMs = (end - start).toLong(),
+                                                                intensityMode = preset.intensityMode,
+                                                                events = croppedHaptic.events
+                                                            )
+                                                            HapticRingtoneStorage.save(context, profile)
+                                                            statusFeedback = "Ringtone applied: ${preset.title}"
+                                                        } else {
+                                                            statusFeedback = "Failed to register ringtone"
+                                                        }
+                                                    } catch (e: Exception) {
+                                                        statusFeedback = "Error: ${e.message}"
+                                                    } finally {
+                                                        isSettingRingtone = false
+                                                    }
+                                                }
+                                            },
+                                            backdrop = backdrop,
+                                            tint = colors.accentPink,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            BasicText(
+                                                text = "Apply Ringtone",
+                                                style = HyperBounceType.caption.copy(
+                                                    color = Color.White,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
+                Spacer(Modifier.height(36.dp))
             }
-            Spacer(Modifier.height(32.dp))
         }
-    }
 
-        // Floating iOS Dynamic Island style feedback pill
+        // Floating iOS feedback pill
         AnimatedVisibility(
             visible = statusFeedback != null,
             enter = fadeIn() + slideInVertically { it / 2 },
@@ -1010,109 +1208,84 @@ private fun WaveformVisualizer(
     envelopePoints: FloatArray,
     currentMs: Int,
     totalDurationMs: Int,
-    isCropMode: Boolean = false,
-    cropStartMs: Int = 0,
-    cropEndMs: Int = 0,
+    isTrimMode: Boolean = false,
+    trimStartMs: Int = 0,
+    trimEndMs: Int = 0,
     colors: HyperBounceColors,
     onSeek: (Float) -> Unit,
-    onCropChange: (startMs: Int, endMs: Int) -> Unit = { _, _ -> },
+    onTrimChange: (startMs: Int, endMs: Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val activeDur = totalDurationMs.coerceAtLeast(1)
     val playheadFraction = (currentMs.toFloat() / activeDur).coerceIn(0f, 1f)
 
-    val cropStartFraction = (cropStartMs.toFloat() / activeDur).coerceIn(0f, 1f)
-    val effectiveEndMs = if (cropEndMs > cropStartMs) cropEndMs else activeDur
-    val cropEndFraction = (effectiveEndMs.toFloat() / activeDur).coerceIn(cropStartFraction, 1f)
+    val trimStartFraction = (trimStartMs.toFloat() / activeDur).coerceIn(0f, 1f)
+    val effectiveEndMs = if (trimEndMs > trimStartMs) trimEndMs else activeDur
+    val trimEndFraction = (effectiveEndMs.toFloat() / activeDur).coerceIn(trimStartFraction, 1f)
 
-    val currentStartMs by rememberUpdatedState(cropStartMs)
+    val currentStartMs by rememberUpdatedState(trimStartMs)
     val currentEndMs by rememberUpdatedState(effectiveEndMs)
-    val currentOnCropChange by rememberUpdatedState(onCropChange)
+    val currentOnTrimChange by rememberUpdatedState(onTrimChange)
     val currentOnSeek by rememberUpdatedState(onSeek)
     val currentDuration by rememberUpdatedState(activeDur)
-    val currentCropMode by rememberUpdatedState(isCropMode)
+    val currentTrimMode by rememberUpdatedState(isTrimMode)
 
-    var draggingCropTarget by remember { mutableStateOf<String?>(null) } // "start", "end", or null
-
-    val cropHandleColor = Color(0xFFFF9F0A) // iOS System Amber / Gold
+    val trimHandleColor = Color(0xFFFF9F0A) // iOS System Amber
 
     Box(
         modifier = modifier
-            .pointerInput(Unit) {
-                detectTapGestures { offset ->
-                    if (size.width > 0) {
-                        val frac = (offset.x / size.width).coerceIn(0f, 1f)
-                        if (currentCropMode) {
-                            val touchMs = (frac * currentDuration).toInt()
-                            val distToStart = kotlin.math.abs(touchMs - currentStartMs)
-                            val distToEnd = kotlin.math.abs(touchMs - currentEndMs)
-                            if (distToStart < distToEnd && distToStart < (currentDuration * 0.15f)) {
-                                currentOnCropChange(touchMs.coerceIn(0, currentEndMs - 1000), currentEndMs)
-                            } else if (distToEnd <= distToStart && distToEnd < (currentDuration * 0.15f)) {
-                                currentOnCropChange(currentStartMs, touchMs.coerceIn(currentStartMs + 1000, currentDuration))
-                            } else {
-                                currentOnSeek(frac)
-                            }
-                        } else {
-                            currentOnSeek(frac)
+            .pointerInput(currentTrimMode, currentDuration) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val width = size.width.toFloat()
+                    if (width <= 0f) return@awaitEachGesture
+
+                    val downFrac = (down.position.x / width).coerceIn(0f, 1f)
+                    val touchTolerancePx = 40.dp.toPx()
+
+                    var target: String? = null
+                    if (currentTrimMode) {
+                        val startX = width * (currentStartMs.toFloat() / currentDuration)
+                        val endX = width * (currentEndMs.toFloat() / currentDuration)
+                        val distStart = kotlin.math.abs(down.position.x - startX)
+                        val distEnd = kotlin.math.abs(down.position.x - endX)
+
+                        if (distStart <= touchTolerancePx && distStart <= distEnd) {
+                            target = "start"
+                        } else if (distEnd <= touchTolerancePx) {
+                            target = "end"
                         }
                     }
-                }
-            }
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragStart = { offset ->
-                        if (size.width > 0 && currentCropMode) {
-                            val startX = size.width * (currentStartMs.toFloat() / currentDuration).coerceIn(0f, 1f)
-                            val endX = size.width * (currentEndMs.toFloat() / currentDuration).coerceIn(0f, 1f)
-                            val tolerance = 54.dp.toPx()
-                            val distStart = kotlin.math.abs(offset.x - startX)
-                            val distEnd = kotlin.math.abs(offset.x - endX)
 
-                            draggingCropTarget = if (distStart <= tolerance && distStart <= distEnd) {
-                                "start"
-                            } else if (distEnd <= tolerance) {
-                                "end"
-                            } else {
-                                null
-                            }
-                        } else {
-                            draggingCropTarget = null
-                        }
+                    if (target == null) {
+                        target = "scrub"
+                        currentOnSeek(downFrac)
+                    }
 
-                        if (draggingCropTarget == null && size.width > 0) {
-                            val frac = (offset.x / size.width).coerceIn(0f, 1f)
-                            currentOnSeek(frac)
-                        }
-                    },
-                    onHorizontalDrag = { change, _ ->
+                    do {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+                        if (!change.pressed) break
                         change.consume()
-                        if (size.width > 0) {
-                            val frac = (change.position.x / size.width).coerceIn(0f, 1f)
-                            val currentPosMs = (frac * currentDuration).toInt()
 
-                            when (draggingCropTarget) {
-                                "start" -> {
-                                    val newStart = currentPosMs.coerceIn(0, currentEndMs - 1000)
-                                    currentOnCropChange(newStart, currentEndMs)
-                                }
-                                "end" -> {
-                                    val newEnd = currentPosMs.coerceIn(currentStartMs + 1000, currentDuration)
-                                    currentOnCropChange(currentStartMs, newEnd)
-                                }
-                                else -> {
-                                    currentOnSeek(frac)
-                                }
+                        val currentFrac = (change.position.x / width).coerceIn(0f, 1f)
+                        val posMs = (currentFrac * currentDuration).toInt()
+
+                        when (target) {
+                            "start" -> {
+                                val newStart = posMs.coerceIn(0, currentEndMs - 500)
+                                currentOnTrimChange(newStart, currentEndMs)
+                            }
+                            "end" -> {
+                                val newEnd = posMs.coerceIn(currentStartMs + 500, currentDuration)
+                                currentOnTrimChange(currentStartMs, newEnd)
+                            }
+                            "scrub" -> {
+                                currentOnSeek(currentFrac)
                             }
                         }
-                    },
-                    onDragEnd = {
-                        draggingCropTarget = null
-                    },
-                    onDragCancel = {
-                        draggingCropTarget = null
-                    }
-                )
+                    } while (true)
+                }
             }
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -1133,11 +1306,11 @@ private fun WaveformVisualizer(
                 val botY = midY + barH
 
                 val barFrac = x / width
-                val isInsideCrop = !isCropMode || (barFrac in cropStartFraction..cropEndFraction)
+                val isInsideTrim = !isTrimMode || (barFrac in trimStartFraction..trimEndFraction)
                 val isPlayed = barFrac <= playheadFraction
 
                 val barColor = when {
-                    !isInsideCrop -> colors.accentBlue.copy(alpha = 0.12f)
+                    !isInsideTrim -> colors.accentBlue.copy(alpha = 0.12f)
                     isPlayed -> colors.accentBlue
                     else -> colors.accentBlue.copy(alpha = 0.40f)
                 }
@@ -1151,36 +1324,36 @@ private fun WaveformVisualizer(
                 )
             }
 
-            // 2. Dimmed overlay and authentic iOS trim handles
-            if (isCropMode) {
-                val startX = width * cropStartFraction
-                val endX = width * cropEndFraction
+            // 2. Dimmed overlay and iOS trim handles
+            if (isTrimMode) {
+                val startX = width * trimStartFraction
+                val endX = width * trimEndFraction
 
                 // Outside dimming
                 if (startX > 0f) {
                     drawRect(
                         color = Color(0x88000000),
                         topLeft = Offset(0f, 0f),
-                        size = androidx.compose.ui.geometry.Size(startX, height)
+                        size = Size(startX, height)
                     )
                 }
                 if (endX < width) {
                     drawRect(
                         color = Color(0x88000000),
                         topLeft = Offset(endX, 0f),
-                        size = androidx.compose.ui.geometry.Size(width - endX, height)
+                        size = Size(width - endX, height)
                     )
                 }
 
                 // Top and bottom boundary connector rails
                 drawLine(
-                    color = cropHandleColor,
+                    color = trimHandleColor,
                     start = Offset(startX, 1.5.dp.toPx()),
                     end = Offset(endX, 1.5.dp.toPx()),
                     strokeWidth = 3.dp.toPx()
                 )
                 drawLine(
-                    color = cropHandleColor,
+                    color = trimHandleColor,
                     start = Offset(startX, height - 1.5.dp.toPx()),
                     end = Offset(endX, height - 1.5.dp.toPx()),
                     strokeWidth = 3.dp.toPx()
@@ -1189,10 +1362,10 @@ private fun WaveformVisualizer(
                 // Start handle bracket (iOS trim tab style)
                 val handleW = 10.dp.toPx()
                 drawRoundRect(
-                    color = cropHandleColor,
+                    color = trimHandleColor,
                     topLeft = Offset(startX - handleW, 0f),
-                    size = androidx.compose.ui.geometry.Size(handleW, height),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                    size = Size(handleW, height),
+                    cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
                 )
                 // Grab ridges on start handle
                 val ridgeX = startX - handleW / 2f
@@ -1206,10 +1379,10 @@ private fun WaveformVisualizer(
 
                 // End handle bracket
                 drawRoundRect(
-                    color = cropHandleColor,
+                    color = trimHandleColor,
                     topLeft = Offset(endX, 0f),
-                    size = androidx.compose.ui.geometry.Size(handleW, height),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                    size = Size(handleW, height),
+                    cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
                 )
                 // Grab ridges on end handle
                 val endRidgeX = endX + handleW / 2f
@@ -1261,9 +1434,9 @@ private fun WaveformVisualizer(
                 .background(Color(0xD9000000))
                 .padding(horizontal = 7.dp, vertical = 3.dp)
         ) {
-            val badgeText = if (isCropMode) {
-                val clipSec = ((effectiveEndMs - cropStartMs) / 1000).coerceAtLeast(0)
-                "${formatTimeMs(cropStartMs)} – ${formatTimeMs(effectiveEndMs)} (${clipSec}s)"
+            val badgeText = if (isTrimMode) {
+                val clipSec = ((effectiveEndMs - trimStartMs) / 1000).coerceAtLeast(0)
+                "${formatTimeMs(trimStartMs)} – ${formatTimeMs(effectiveEndMs)} (${clipSec}s)"
             } else {
                 "${formatTimeMs(currentMs)} / ${formatTimeMs(totalDurationMs)}"
             }
@@ -1271,7 +1444,7 @@ private fun WaveformVisualizer(
             BasicText(
                 text = badgeText,
                 style = HyperBounceType.caption.copy(
-                    color = if (isCropMode) cropHandleColor else Color.White.copy(alpha = 0.9f),
+                    color = if (isTrimMode) trimHandleColor else Color.White.copy(alpha = 0.9f),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -1284,7 +1457,7 @@ private fun formatTimeMs(ms: Int): String {
     val totalSec = (ms / 1000).coerceAtLeast(0)
     val m = totalSec / 60
     val s = totalSec % 60
-    return String.format(java.util.Locale.US, "%02d:%02d", m, s)
+    return String.format(Locale.US, "%02d:%02d", m, s)
 }
 
 private fun exportRtpBinary(

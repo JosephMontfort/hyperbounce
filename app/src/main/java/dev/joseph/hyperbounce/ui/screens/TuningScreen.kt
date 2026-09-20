@@ -132,8 +132,8 @@ fun TuningScreen(
             )
             RowDivider(colors.separator)
             SettingsNavRow(
-                title = "Haptic Synthesizer Studio",
-                subtitle = "Audio-to-Haptic 5-pipeline synthesis & real-time gaming",
+                title = "Ringtones & Haptics",
+                subtitle = "Custom synced ringtones, trimming & 5-pipeline synthesis",
                 colors = colors,
                 iconTint = colors.accentOrange,
                 onClick = { onNavigate(Destination.HapticStudio) },

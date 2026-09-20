@@ -622,7 +622,7 @@ object HapticSynthesizer {
     /**
      * Generates standard Android VibrationEffect with discrete pulses and dead silence between beats.
      */
-    private fun buildAndroidVibrationEffect(events: List<HapticEvent>, durationMs: Long): VibrationEffect {
+    fun buildAndroidVibrationEffect(events: List<HapticEvent>, durationMs: Long): VibrationEffect {
         if (events.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             return VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
         }
