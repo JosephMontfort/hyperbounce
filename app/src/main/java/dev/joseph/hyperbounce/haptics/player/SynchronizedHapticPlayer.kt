@@ -1,6 +1,7 @@
 package dev.joseph.hyperbounce.haptics.player
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
@@ -17,9 +18,9 @@ enum class HapticIntensityMode(
     val title: String,
     val description: String
 ) {
-    Crisp("Crisp", "Hardware prebaked clicks with ultra-fast transient separation"),
-    Punchy("Punchy", "Boosted downbeat punch + crisp melodic snaps"),
-    MaxPunch("Max Punch", "Full-rail 255 peak amplitude resonant pulses")
+    Crisp("Crisp", "Fast transient hardware clicks with ultra-sharp separation"),
+    Punchy("Punchy", "Heavy hardware click on downbeats with melodic snaps"),
+    MaxPunch("Max Punch", "Dual-transient composed impulse kicks for maximum physical strike")
 }
 
 class SynchronizedHapticPlayer(private val context: Context) {
@@ -155,52 +156,63 @@ class SynchronizedHapticPlayer(private val context: Context) {
     }
 
     companion object {
+        private val RINGTONE_AUDIO_ATTRS: AudioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+
         fun triggerHapticPulse(
             vibrator: Vibrator,
             effectId: Int,
             intensityMode: HapticIntensityMode = HapticIntensityMode.Punchy
         ) {
             try {
-                when (intensityMode) {
+                val effect: VibrationEffect = when (intensityMode) {
                     HapticIntensityMode.MaxPunch -> {
-                        // Deliver full-rail 255 amplitude pulse to maximize mechanical resonance
-                        val dur = if (effectId == 5) 36L else 24L
-                        vibrator.vibrate(VibrationEffect.createOneShot(dur, 255))
-                    }
-                    HapticIntensityMode.Punchy -> {
-                        // Downbeats get full-rail 255 kick, melodic notes get sharp hardware clicks
                         if (effectId == 5) {
-                            vibrator.vibrate(VibrationEffect.createOneShot(30L, 255))
-                        } else {
-                            val eff = when (effectId) {
-                                4 -> 4
-                                3 -> 3
-                                2 -> VibrationEffect.EFFECT_TICK
-                                1 -> VibrationEffect.EFFECT_DOUBLE_CLICK
-                                else -> VibrationEffect.EFFECT_CLICK
-                            }
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                vibrator.vibrate(VibrationEffect.createPredefined(eff))
+                            // Downbeats: hardware composed impulse (quick rise + click) delivers massive physical snap with zero buzz
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                try {
+                                    VibrationEffect.startComposition()
+                                        .addPrimitive(VibrationEffect.Composition.PRIMITIVE_QUICK_RISE, 1.0f)
+                                        .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1.0f)
+                                        .compose()
+                                } catch (t: Throwable) {
+                                    VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
+                                }
                             } else {
-                                vibrator.vibrate(VibrationEffect.createOneShot(18L, 230))
+                                VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
                             }
+                        } else {
+                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
                         }
                     }
-                    HapticIntensityMode.Crisp -> {
+                    HapticIntensityMode.Punchy -> {
                         val eff = when (effectId) {
                             5 -> VibrationEffect.EFFECT_HEAVY_CLICK
-                            4 -> 4
-                            3 -> 3
+                            4 -> 4 // EFFECT_POP
+                            3 -> 3 // EFFECT_THUD
                             2 -> VibrationEffect.EFFECT_TICK
                             1 -> VibrationEffect.EFFECT_DOUBLE_CLICK
                             else -> VibrationEffect.EFFECT_CLICK
                         }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            vibrator.vibrate(VibrationEffect.createPredefined(eff))
-                        } else {
-                            vibrator.vibrate(VibrationEffect.createOneShot(18L, VibrationEffect.DEFAULT_AMPLITUDE))
-                        }
+                        VibrationEffect.createPredefined(eff)
                     }
+                    HapticIntensityMode.Crisp -> {
+                        val eff = when (effectId) {
+                            5 -> VibrationEffect.EFFECT_CLICK
+                            2 -> VibrationEffect.EFFECT_TICK
+                            1 -> VibrationEffect.EFFECT_DOUBLE_CLICK
+                            else -> VibrationEffect.EFFECT_TICK
+                        }
+                        VibrationEffect.createPredefined(eff)
+                    }
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    vibrator.vibrate(effect, RINGTONE_AUDIO_ATTRS)
+                } else {
+                    vibrator.vibrate(effect)
                 }
             } catch (ignored: Throwable) {}
         }

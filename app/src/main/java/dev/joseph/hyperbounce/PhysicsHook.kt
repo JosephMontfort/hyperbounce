@@ -124,6 +124,10 @@ class PhysicsHook : XposedModule() {
                     }
                     dev.joseph.hyperbounce.dialer.DialerRecentsHook.init(this, param.classLoader)
                 }
+
+                param.packageName == "com.android.server.telecom" -> {
+                    dev.joseph.hyperbounce.haptics.ringtone.TelecomRingtoneHapticHook.init(this, param.classLoader)
+                }
             }
 
             // Real-Time Audio-to-Haptic Engine (Games, Media, AudioTrack)

@@ -3,10 +3,13 @@ package dev.joseph.hyperbounce.ui.screens
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -119,6 +122,14 @@ fun HapticStudioScreen(
     var cropStartMs by remember { mutableIntStateOf(0) }
     var cropEndMs by remember { mutableIntStateOf(0) }
     var isSettingRingtone by remember { mutableStateOf(false) }
+    var statusFeedback by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(statusFeedback) {
+        if (statusFeedback != null) {
+            kotlinx.coroutines.delay(2500)
+            statusFeedback = null
+        }
+    }
 
     // Tuning Parameters
     var resonantFreq by remember { mutableFloatStateOf(repository.audioHaptics.resonantFrequencyHz) }
@@ -157,7 +168,7 @@ fun HapticStudioScreen(
                     synthesizedHaptics = results
                     selectedPipelineIndex = 0
                 } catch (e: Exception) {
-                    Toast.makeText(context, "Error processing audio: ${e.message}", Toast.LENGTH_LONG).show()
+                    statusFeedback = "Error processing audio: ${e.message}"
                 } finally {
                     isProcessing = false
                 }
@@ -168,8 +179,9 @@ fun HapticStudioScreen(
     val cardColor = colors.elevatedSurfaceTint
     val localBackdrop = rememberCanvasBackdrop { drawRect(cardColor) }
 
-    ScreenScaffold(
-        title = "Haptic Studio",
+    Box(modifier = Modifier.fillMaxSize()) {
+        ScreenScaffold(
+            title = "Haptic Studio",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
@@ -595,10 +607,10 @@ fun HapticStudioScreen(
                                             cropEndMs = (cropStartMs + 30000).coerceAtMost(activeDuration)
                                         }
                                     }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
                             ) {
                                 BasicText(
-                                    text = if (isCropMode) "Done Cropping" else "✂ Crop Clip",
+                                    text = "Crop",
                                     style = HyperBounceType.caption.copy(
                                         color = if (isCropMode) colors.accentOrange else colors.label,
                                         fontWeight = FontWeight.SemiBold
@@ -696,7 +708,7 @@ fun HapticStudioScreen(
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     BasicText(
-                                        text = if (isPlaying) "Stop Preview" else "▶ Preview Crop",
+                                        text = if (isPlaying) "Stop Preview" else "Preview Crop",
                                         style = HyperBounceType.body.copy(
                                             color = Color.White,
                                             fontWeight = FontWeight.SemiBold
@@ -708,7 +720,7 @@ fun HapticStudioScreen(
                                     onClick = {
                                         val audio = decodedAudio
                                         if (audio == null) {
-                                            Toast.makeText(context, "No audio decoded to export", Toast.LENGTH_SHORT).show()
+                                            statusFeedback = "No audio decoded to export"
                                             return@LiquidButton
                                         }
                                         if (isSettingRingtone) return@LiquidButton
@@ -742,16 +754,12 @@ fun HapticStudioScreen(
                                                     )
                                                     HapticRingtoneStorage.save(context, profile)
 
-                                                    Toast.makeText(
-                                                        context,
-                                                        "🔔 Ringtone set with synchronized haptics!",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
+                                                    statusFeedback = "Ringtone and haptics applied"
                                                 } else {
-                                                    Toast.makeText(context, "Failed to register ringtone", Toast.LENGTH_SHORT).show()
+                                                    statusFeedback = "Failed to register ringtone"
                                                 }
                                             } catch (e: Exception) {
-                                                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                                                statusFeedback = "Error: ${e.message}"
                                             } finally {
                                                 isSettingRingtone = false
                                             }
@@ -762,7 +770,7 @@ fun HapticStudioScreen(
                                     modifier = Modifier.weight(1.3f)
                                 ) {
                                     BasicText(
-                                        text = if (isSettingRingtone) "Setting..." else "🔔 Set Ringtone",
+                                        text = if (isSettingRingtone) "Applying..." else "Set as Ringtone",
                                         style = HyperBounceType.body.copy(
                                             color = Color.White,
                                             fontWeight = FontWeight.Bold
@@ -783,7 +791,9 @@ fun HapticStudioScreen(
                         ) {
                             LiquidButton(
                                 onClick = {
-                                    exportRtpBinary(context, currentHaptic, audioFileName ?: "effect")
+                                    exportRtpBinary(context, currentHaptic, audioFileName ?: "effect") { msg ->
+                                        statusFeedback = msg
+                                    }
                                 },
                                 backdrop = backdrop,
                                 tint = colors.accentOrange,
@@ -802,7 +812,7 @@ fun HapticStudioScreen(
                                 onClick = {
                                     repository.audioHaptics.setActivePipelinePref(currentHaptic.pipelineType.name)
                                     repository.audioHaptics.setResonantFrequencyHzPref(resonantFreq)
-                                    Toast.makeText(context, "Preset saved for HyperBounce!", Toast.LENGTH_SHORT).show()
+                                    statusFeedback = "Preset saved for HyperBounce"
                                 },
                                 backdrop = backdrop,
                                 tint = colors.accentGreen,
@@ -961,6 +971,34 @@ fun HapticStudioScreen(
             }
             Spacer(Modifier.height(32.dp))
         }
+
+        // Floating iOS Dynamic Island style feedback pill
+        AnimatedVisibility(
+            visible = statusFeedback != null,
+            enter = fadeIn() + slideInVertically { it / 2 },
+            exit = fadeOut() + slideOutVertically { it / 2 },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 36.dp)
+        ) {
+            statusFeedback?.let { msg ->
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color(0xE61C1C1E))
+                        .border(0.5.dp, Color(0x33FFFFFF), RoundedCornerShape(22.dp))
+                        .padding(horizontal = 20.dp, vertical = 10.dp)
+                ) {
+                    BasicText(
+                        text = msg,
+                        style = HyperBounceType.subheadline.copy(
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -984,40 +1022,47 @@ private fun WaveformVisualizer(
     val effectiveEndMs = if (cropEndMs > cropStartMs) cropEndMs else activeDur
     val cropEndFraction = (effectiveEndMs.toFloat() / activeDur).coerceIn(cropStartFraction, 1f)
 
+    val currentStartMs by rememberUpdatedState(cropStartMs)
+    val currentEndMs by rememberUpdatedState(effectiveEndMs)
+    val currentOnCropChange by rememberUpdatedState(onCropChange)
+    val currentOnSeek by rememberUpdatedState(onSeek)
+    val currentDuration by rememberUpdatedState(activeDur)
+    val currentCropMode by rememberUpdatedState(isCropMode)
+
     var draggingCropTarget by remember { mutableStateOf<String?>(null) } // "start", "end", or null
 
-    val cropHandleColor = Color(0xFFFFB300) // Vibrant Gold/Amber for crop boundaries
+    val cropHandleColor = Color(0xFFFF9F0A) // iOS System Amber / Gold
 
     Box(
         modifier = modifier
-            .pointerInput(totalDurationMs, isCropMode, cropStartMs, cropEndMs) {
+            .pointerInput(Unit) {
                 detectTapGestures { offset ->
                     if (size.width > 0) {
                         val frac = (offset.x / size.width).coerceIn(0f, 1f)
-                        if (isCropMode) {
-                            val touchMs = (frac * activeDur).toInt()
-                            val distToStart = kotlin.math.abs(touchMs - cropStartMs)
-                            val distToEnd = kotlin.math.abs(touchMs - effectiveEndMs)
-                            if (distToStart < distToEnd && distToStart < (activeDur * 0.15f)) {
-                                onCropChange(touchMs.coerceIn(0, effectiveEndMs - 1000), effectiveEndMs)
-                            } else if (distToEnd <= distToStart && distToEnd < (activeDur * 0.15f)) {
-                                onCropChange(cropStartMs, touchMs.coerceIn(cropStartMs + 1000, activeDur))
+                        if (currentCropMode) {
+                            val touchMs = (frac * currentDuration).toInt()
+                            val distToStart = kotlin.math.abs(touchMs - currentStartMs)
+                            val distToEnd = kotlin.math.abs(touchMs - currentEndMs)
+                            if (distToStart < distToEnd && distToStart < (currentDuration * 0.15f)) {
+                                currentOnCropChange(touchMs.coerceIn(0, currentEndMs - 1000), currentEndMs)
+                            } else if (distToEnd <= distToStart && distToEnd < (currentDuration * 0.15f)) {
+                                currentOnCropChange(currentStartMs, touchMs.coerceIn(currentStartMs + 1000, currentDuration))
                             } else {
-                                onSeek(frac)
+                                currentOnSeek(frac)
                             }
                         } else {
-                            onSeek(frac)
+                            currentOnSeek(frac)
                         }
                     }
                 }
             }
-            .pointerInput(totalDurationMs, isCropMode, cropStartMs, cropEndMs) {
+            .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragStart = { offset ->
-                        if (size.width > 0 && isCropMode) {
-                            val startX = size.width * cropStartFraction
-                            val endX = size.width * cropEndFraction
-                            val tolerance = 48.dp.toPx()
+                        if (size.width > 0 && currentCropMode) {
+                            val startX = size.width * (currentStartMs.toFloat() / currentDuration).coerceIn(0f, 1f)
+                            val endX = size.width * (currentEndMs.toFloat() / currentDuration).coerceIn(0f, 1f)
+                            val tolerance = 54.dp.toPx()
                             val distStart = kotlin.math.abs(offset.x - startX)
                             val distEnd = kotlin.math.abs(offset.x - endX)
 
@@ -1034,26 +1079,26 @@ private fun WaveformVisualizer(
 
                         if (draggingCropTarget == null && size.width > 0) {
                             val frac = (offset.x / size.width).coerceIn(0f, 1f)
-                            onSeek(frac)
+                            currentOnSeek(frac)
                         }
                     },
                     onHorizontalDrag = { change, _ ->
                         change.consume()
                         if (size.width > 0) {
                             val frac = (change.position.x / size.width).coerceIn(0f, 1f)
-                            val currentPosMs = (frac * activeDur).toInt()
+                            val currentPosMs = (frac * currentDuration).toInt()
 
                             when (draggingCropTarget) {
                                 "start" -> {
-                                    val newStart = currentPosMs.coerceIn(0, effectiveEndMs - 1000)
-                                    onCropChange(newStart, effectiveEndMs)
+                                    val newStart = currentPosMs.coerceIn(0, currentEndMs - 1000)
+                                    currentOnCropChange(newStart, currentEndMs)
                                 }
                                 "end" -> {
-                                    val newEnd = currentPosMs.coerceIn(cropStartMs + 1000, activeDur)
-                                    onCropChange(cropStartMs, newEnd)
+                                    val newEnd = currentPosMs.coerceIn(currentStartMs + 1000, currentDuration)
+                                    currentOnCropChange(currentStartMs, newEnd)
                                 }
                                 else -> {
-                                    onSeek(frac)
+                                    currentOnSeek(frac)
                                 }
                             }
                         }
@@ -1103,66 +1148,74 @@ private fun WaveformVisualizer(
                 )
             }
 
-            // 2. Dimmed overlay for regions outside crop bounds
+            // 2. Dimmed overlay and authentic iOS trim handles
             if (isCropMode) {
                 val startX = width * cropStartFraction
                 val endX = width * cropEndFraction
 
+                // Outside dimming
                 if (startX > 0f) {
                     drawRect(
-                        color = Color(0x77000000),
+                        color = Color(0x88000000),
                         topLeft = Offset(0f, 0f),
                         size = androidx.compose.ui.geometry.Size(startX, height)
                     )
                 }
                 if (endX < width) {
                     drawRect(
-                        color = Color(0x77000000),
+                        color = Color(0x88000000),
                         topLeft = Offset(endX, 0f),
                         size = androidx.compose.ui.geometry.Size(width - endX, height)
                     )
                 }
 
-                // Start crop handle
+                // Top and bottom boundary connector rails
                 drawLine(
-                    color = cropHandleColor.copy(alpha = 0.35f),
-                    start = Offset(startX, 0f),
-                    end = Offset(startX, height),
-                    strokeWidth = 6.dp.toPx(),
-                    cap = StrokeCap.Round
+                    color = cropHandleColor,
+                    start = Offset(startX, 1.5.dp.toPx()),
+                    end = Offset(endX, 1.5.dp.toPx()),
+                    strokeWidth = 3.dp.toPx()
                 )
                 drawLine(
                     color = cropHandleColor,
-                    start = Offset(startX, 0f),
-                    end = Offset(startX, height),
-                    strokeWidth = 2.5.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-                drawCircle(
-                    color = cropHandleColor,
-                    radius = 5.dp.toPx(),
-                    center = Offset(startX, 10.dp.toPx())
+                    start = Offset(startX, height - 1.5.dp.toPx()),
+                    end = Offset(endX, height - 1.5.dp.toPx()),
+                    strokeWidth = 3.dp.toPx()
                 )
 
-                // End crop handle
+                // Start handle bracket (iOS trim tab style)
+                val handleW = 10.dp.toPx()
+                drawRoundRect(
+                    color = cropHandleColor,
+                    topLeft = Offset(startX - handleW, 0f),
+                    size = androidx.compose.ui.geometry.Size(handleW, height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                )
+                // Grab ridges on start handle
+                val ridgeX = startX - handleW / 2f
                 drawLine(
-                    color = cropHandleColor.copy(alpha = 0.35f),
-                    start = Offset(endX, 0f),
-                    end = Offset(endX, height),
-                    strokeWidth = 6.dp.toPx(),
+                    color = Color.White.copy(alpha = 0.7f),
+                    start = Offset(ridgeX, height * 0.40f),
+                    end = Offset(ridgeX, height * 0.60f),
+                    strokeWidth = 1.8.dp.toPx(),
                     cap = StrokeCap.Round
                 )
-                drawLine(
+
+                // End handle bracket
+                drawRoundRect(
                     color = cropHandleColor,
-                    start = Offset(endX, 0f),
-                    end = Offset(endX, height),
-                    strokeWidth = 2.5.dp.toPx(),
-                    cap = StrokeCap.Round
+                    topLeft = Offset(endX, 0f),
+                    size = androidx.compose.ui.geometry.Size(handleW, height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
                 )
-                drawCircle(
-                    color = cropHandleColor,
-                    radius = 5.dp.toPx(),
-                    center = Offset(endX, height - 10.dp.toPx())
+                // Grab ridges on end handle
+                val endRidgeX = endX + handleW / 2f
+                drawLine(
+                    color = Color.White.copy(alpha = 0.7f),
+                    start = Offset(endRidgeX, height * 0.40f),
+                    end = Offset(endRidgeX, height * 0.60f),
+                    strokeWidth = 1.8.dp.toPx(),
+                    cap = StrokeCap.Round
                 )
             }
 
@@ -1207,7 +1260,7 @@ private fun WaveformVisualizer(
         ) {
             val badgeText = if (isCropMode) {
                 val clipSec = ((effectiveEndMs - cropStartMs) / 1000).coerceAtLeast(0)
-                "✂ ${formatTimeMs(cropStartMs)} – ${formatTimeMs(effectiveEndMs)} (${clipSec}s)"
+                "${formatTimeMs(cropStartMs)} – ${formatTimeMs(effectiveEndMs)} (${clipSec}s)"
             } else {
                 "${formatTimeMs(currentMs)} / ${formatTimeMs(totalDurationMs)}"
             }
@@ -1231,7 +1284,12 @@ private fun formatTimeMs(ms: Int): String {
     return String.format(java.util.Locale.US, "%02d:%02d", m, s)
 }
 
-private fun exportRtpBinary(context: Context, haptic: SynthesizedHaptic, baseName: String) {
+private fun exportRtpBinary(
+    context: Context,
+    haptic: SynthesizedHaptic,
+    baseName: String,
+    onStatus: (String) -> Unit = {}
+) {
     try {
         val cleanName = baseName.replace("[^a-zA-Z0-9_]".toRegex(), "_")
         val fileName = "${cleanName}_${haptic.pipelineType.name}_P_RTP.bin"
@@ -1247,12 +1305,8 @@ private fun exportRtpBinary(context: Context, haptic: SynthesizedHaptic, baseNam
             fos.write(haptic.rtpRawBytes)
         }
 
-        Toast.makeText(
-            context,
-            "Exported 24kHz RTP: Downloads/HyperBounce_Haptics/$fileName",
-            Toast.LENGTH_LONG
-        ).show()
+        onStatus("Exported 24kHz RTP: $fileName")
     } catch (e: Exception) {
-        Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+        onStatus("Export failed: ${e.message}")
     }
 }

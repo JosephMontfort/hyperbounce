@@ -194,7 +194,8 @@ object RingtoneManagerHelper {
                 "settings put system ringtone '$uriStr' && " +
                 "settings put system ringtone_sound_slot_1 '$uriStr' && " +
                 "settings put system ringtone_sound_slot_2 '$uriStr' && " +
-                "settings put system ringtone_set 1"
+                "settings put system ringtone_set 1 && " +
+                "pkill -f com.android.phone || true"
             )
             val proc = Runtime.getRuntime().exec(cmd)
             proc.waitFor()

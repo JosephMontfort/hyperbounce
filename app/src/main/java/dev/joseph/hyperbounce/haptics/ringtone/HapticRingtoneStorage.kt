@@ -37,7 +37,18 @@ object HapticRingtoneStorage {
             }
 
             val file = File(context.filesDir, FILE_NAME)
-            file.writeText(json.toString())
+            val jsonString = json.toString()
+            file.writeText(jsonString)
+
+            // Export to /data/system so Telecom process has instant uninhibited access
+            try {
+                val sysPath = "/data/system/hyperbounce_ringtone_haptics.json"
+                val cmd = arrayOf(
+                    "su", "-c",
+                    "cat << 'EOF' > $sysPath\n$jsonString\nEOF\nchmod 644 $sysPath"
+                )
+                Runtime.getRuntime().exec(cmd).waitFor()
+            } catch (ignored: Exception) {}
         } catch (ignored: Exception) {}
     }
 
