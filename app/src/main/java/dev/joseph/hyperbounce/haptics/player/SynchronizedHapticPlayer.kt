@@ -6,7 +6,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -23,12 +22,6 @@ class SynchronizedHapticPlayer(private val context: Context) {
     } else {
         context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
     }
-
-    private val ringtoneAttributes: VibrationAttributes? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        VibrationAttributes.Builder()
-            .setUsage(VibrationAttributes.USAGE_RINGTONE)
-            .build()
-    } else null
 
     private val handler = Handler(Looper.getMainLooper())
     private var progressRunnable: Runnable? = null
@@ -78,8 +71,25 @@ class SynchronizedHapticPlayer(private val context: Context) {
                                     val event = currentEvents[nextEventIndex]
                                     // Guarantee hardware refractory debounce so the LRA motor has full spring recovery
                                     if (current - lastVibratedMs >= 95L) {
-                                        triggerFullIntensityEffect(event.effectId)
-                                        lastVibratedMs = current.toLong()
+                                        val effectIdToPlay = when (event.effectId) {
+                                            5 -> VibrationEffect.EFFECT_HEAVY_CLICK
+                                            4 -> 4
+                                            3 -> VibrationEffect.EFFECT_THUD
+                                            2 -> VibrationEffect.EFFECT_TICK
+                                            1 -> VibrationEffect.EFFECT_DOUBLE_CLICK
+                                            0 -> VibrationEffect.EFFECT_CLICK
+                                            else -> event.effectId
+                                        }
+                                        try {
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                                vibrator.vibrate(VibrationEffect.createPredefined(effectIdToPlay))
+                                            } else {
+                                                val dur = if (event.effectId == 5) 24L else 18L
+                                                val amp = if (event.effectId == 5) 255 else 200
+                                                vibrator.vibrate(VibrationEffect.createOneShot(dur, amp))
+                                            }
+                                            lastVibratedMs = current.toLong()
+                                        } catch (ignored: Throwable) {}
                                     }
                                     nextEventIndex++
                                 }
@@ -119,81 +129,6 @@ class SynchronizedHapticPlayer(private val context: Context) {
         } catch (e: Exception) {
             Log.e("SynchronizedPlayer", "Error seeking playback", e)
         }
-    }
-
-    /**
-     * Fires the hardware actuator at 100% full-rail voltage using USAGE_RINGTONE
-     * and API 30+ primitive composition to match stock Xiaomi ringtone punch.
-     */
-    private fun triggerFullIntensityEffect(effectId: Int) {
-        try {
-            val effect = when (effectId) {
-                5 -> { // Bass downbeat / Heavy punch
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        VibrationEffect.startComposition()
-                            .addPrimitive(VibrationEffect.Composition.PRIMITIVE_THUD, 1.0f)
-                            .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1.0f)
-                            .compose()
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
-                    } else {
-                        VibrationEffect.createOneShot(24L, 255)
-                    }
-                }
-                4 -> { // Pop / Droplet
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        VibrationEffect.startComposition()
-                            .addPrimitive(VibrationEffect.Composition.PRIMITIVE_QUICK_RISE, 0.9f)
-                            .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1.0f)
-                            .compose()
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        VibrationEffect.createPredefined(4)
-                    } else {
-                        VibrationEffect.createOneShot(20L, 240)
-                    }
-                }
-                2 -> { // Tick / Micro-texture
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        VibrationEffect.startComposition()
-                            .addPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, 1.0f)
-                            .compose()
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
-                    } else {
-                        VibrationEffect.createOneShot(12L, 180)
-                    }
-                }
-                1 -> { // Double Click
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        VibrationEffect.startComposition()
-                            .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1.0f)
-                            .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1.0f, 25)
-                            .compose()
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        VibrationEffect.createPredefined(VibrationEffect.EFFECT_DOUBLE_CLICK)
-                    } else {
-                        VibrationEffect.createWaveform(longArrayOf(0, 16, 25, 16), intArrayOf(0, 255, 0, 255), -1)
-                    }
-                }
-                else -> { // Melodic & Transient Click (Effect 0)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        VibrationEffect.startComposition()
-                            .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1.0f)
-                            .compose()
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
-                    } else {
-                        VibrationEffect.createOneShot(18L, 255)
-                    }
-                }
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && ringtoneAttributes != null) {
-                vibrator.vibrate(effect, ringtoneAttributes)
-            } else {
-                vibrator.vibrate(effect)
-            }
-        } catch (ignored: Throwable) {}
     }
 
     fun stop() {
