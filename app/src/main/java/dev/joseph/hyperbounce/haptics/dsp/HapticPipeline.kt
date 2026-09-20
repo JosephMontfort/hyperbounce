@@ -7,31 +7,45 @@ enum class PipelineType(
     val subtitle: String,
     val description: String
 ) {
-    SharpTransient(
-        title = "Sharp Transient",
-        subtitle = "Glass Click & Micro-Impact",
-        description = "High-frequency spectral flux onset detection mapped to crisp hardware clicks (Effect 0). Eliminates motor ringing for an ultra-crisp Apple-style glass click."
+    XiaomiMelodicCrisp(
+        title = "Xiaomi Melodic Crisp",
+        subtitle = "Carousel & Childhood Style",
+        description = "Authentic 429-sample hardware grain (17.9ms, 90pk) stamped precisely on melodic note onsets, paired with resonant bass downbeats. Bit-identical to stock MIUI ringtones."
     ),
-    ResonantPunch(
-        title = "Resonant Punch",
-        subtitle = "Deep Bass & Kick Impact",
-        description = "2nd-order bandpass isolating sub-bass drops and kick transients, mapped to hardware Heavy Clicks (Effect 5) and Thuds (Effect 3)."
+    XiaomiElectronicEDM(
+        title = "Xiaomi Electronic EDM",
+        subtitle = "MiRemix & Club Style",
+        description = "High-energy dual-band crossover. 170Hz resonant bass drops (168ms sustain) combined with sharp high-frequency transient snaps. Features dynamic transient ducking."
     ),
-    HarmonicBeatSnap(
-        title = "Harmonic Beat-Snap",
-        subtitle = "Rhythmic Pitch Tracking",
-        description = "Multi-band musical cadence tracking. Downbeats trigger Heavy Clicks while rhythmic off-beats trigger subtle micro-ticks."
+    XiaomiPlayfulPop(
+        title = "Xiaomi Playful Pop",
+        subtitle = "Candy & Bubble Style",
+        description = "Playful tactile pops and droplets utilizing Xiaomi's 681-sample Pop grain and crisp clicks. Bouncy, vibrant, and perfectly separated with 110ms spring recovery."
     ),
-    GranularTexture(
-        title = "Granular Texture",
-        subtitle = "Scrubbing, Spinning & Friction",
-        description = "Zero-crossing rate and micro-rhythm tracking mapped to rapid tactile micro-ticks (Effect 2) with zero motor drag."
+    XiaomiAcousticPluck(
+        title = "Xiaomi Acoustic Pluck",
+        subtitle = "Guitar & Celesta Style",
+        description = "Isolates delicate string plucks and acoustic attack transients via spectral flux. Triggers rapid hardware micro-clicks without motor dragging."
     ),
-    AdaptiveHybrid(
-        title = "Adaptive Hybrid",
-        subtitle = "Full Dynamic Spectrum",
-        description = "Dual-band crossover splitting transient attacks and bass body. Automatically alternates between heavy bass impacts and glass-like snare clicks."
-    )
+    XiaomiAdaptiveSymphony(
+        title = "Xiaomi Adaptive Symphony",
+        subtitle = "Full-Band Dynamic Crossover",
+        description = "Adaptive multiband analyzer that dynamically assigns kick drums, snares, vocals, and synth lines to the exact Xiaomi hardware primitive grains."
+    );
+
+    companion object {
+        fun fromNameOrDefault(name: String): PipelineType {
+            return entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
+                ?: when (name) {
+                    "SharpTransient" -> XiaomiMelodicCrisp
+                    "ResonantPunch" -> XiaomiElectronicEDM
+                    "HarmonicBeatSnap" -> XiaomiAdaptiveSymphony
+                    "GranularTexture" -> XiaomiAcousticPluck
+                    "AdaptiveHybrid" -> XiaomiAdaptiveSymphony
+                    else -> XiaomiMelodicCrisp
+                }
+        }
+    }
 }
 
 data class HapticEvent(

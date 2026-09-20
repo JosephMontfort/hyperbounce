@@ -46,6 +46,7 @@ class SynchronizedHapticPlayer(private val context: Context) {
 
                     val events = haptic.events.sortedBy { it.timestampMs }
                     var nextEventIndex = 0
+                    var lastVibratedMs = -150L
 
                     progressRunnable = object : Runnable {
                         override fun run() {
@@ -54,16 +55,20 @@ class SynchronizedHapticPlayer(private val context: Context) {
                                 val current = player.currentPosition
                                 onProgress(current, duration)
 
-                                // Trigger exact hardware click/thud effect at every detected beat timestamp
+                                // Advance events up to current playback position
                                 while (nextEventIndex < events.size && events[nextEventIndex].timestampMs <= current) {
                                     val event = events[nextEventIndex]
-                                    try {
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                            vibrator.vibrate(VibrationEffect.createPredefined(event.effectId))
-                                        } else {
-                                            vibrator.vibrate(VibrationEffect.createOneShot(16L, VibrationEffect.DEFAULT_AMPLITUDE))
-                                        }
-                                    } catch (ignored: Throwable) {}
+                                    // Guarantee hardware refractory debounce so the LRA motor has full spring recovery
+                                    if (current - lastVibratedMs >= 95L) {
+                                        try {
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                                vibrator.vibrate(VibrationEffect.createPredefined(event.effectId))
+                                            } else {
+                                                vibrator.vibrate(VibrationEffect.createOneShot(18L, VibrationEffect.DEFAULT_AMPLITUDE))
+                                            }
+                                            lastVibratedMs = current.toLong()
+                                        } catch (ignored: Throwable) {}
+                                    }
                                     nextEventIndex++
                                 }
 
