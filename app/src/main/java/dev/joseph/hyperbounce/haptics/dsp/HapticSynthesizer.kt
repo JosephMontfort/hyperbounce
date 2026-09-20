@@ -91,9 +91,13 @@ object HapticSynthesizer {
         pipelineType: PipelineType,
         config: PipelineConfig
     ): SynthesizedHaptic {
-        val maxSamples = ((config.maxDurationMs * audio.sampleRate) / 1000L).toInt()
-        val input = if (audio.samples.size > maxSamples) {
-            audio.samples.copyOf(maxSamples)
+        val input = if (config.maxDurationMs > 0L) {
+            val maxSamples = ((config.maxDurationMs * audio.sampleRate) / 1000L).toInt()
+            if (audio.samples.size > maxSamples) {
+                audio.samples.copyOf(maxSamples)
+            } else {
+                audio.samples
+            }
         } else {
             audio.samples
         }

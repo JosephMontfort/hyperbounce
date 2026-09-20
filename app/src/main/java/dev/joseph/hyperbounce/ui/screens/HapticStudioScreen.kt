@@ -19,6 +19,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +53,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -128,6 +131,8 @@ fun HapticStudioScreen(
                         processingProgress = p
                     }
                     decodedAudio = decoded
+                    totalDurationMs = decoded.durationMs.toInt()
+                    playbackProgressMs = 0
                     val config = PipelineConfig(
                         resonantFrequencyHz = resonantFreq,
                         sensitivity = sensitivity,
@@ -394,14 +399,24 @@ fun HapticStudioScreen(
 
                         Spacer(Modifier.height(16.dp))
 
-                        // Waveform Visualizer
+                        val activeDuration = if (totalDurationMs > 0) totalDurationMs else currentHaptic.durationMs.toInt()
+
+                        // Interactive Waveform Visualizer & Direct Touch Seeker
                         WaveformVisualizer(
                             envelopePoints = currentHaptic.envelopePoints,
-                            playheadFraction = if (totalDurationMs > 0) playbackProgressMs.toFloat() / totalDurationMs else 0f,
+                            currentMs = playbackProgressMs,
+                            totalDurationMs = activeDuration,
                             colors = colors,
+                            onSeek = { fraction ->
+                                val targetMs = (fraction * activeDuration).toInt().coerceIn(0, activeDuration)
+                                playbackProgressMs = targetMs
+                                if (isPlaying) {
+                                    player.seekTo(targetMs)
+                                }
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(90.dp)
+                                .height(96.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(Color(0xFF0F141C))
                         )
@@ -433,6 +448,7 @@ fun HapticStudioScreen(
                                             player.play(
                                                 audioUri = uri,
                                                 haptic = currentHaptic,
+                                                startFromMs = playbackProgressMs,
                                                 onProgress = { cur, tot ->
                                                     playbackProgressMs = cur
                                                     totalDurationMs = tot
@@ -667,47 +683,137 @@ fun HapticStudioScreen(
 @Composable
 private fun WaveformVisualizer(
     envelopePoints: FloatArray,
-    playheadFraction: Float,
+    currentMs: Int,
+    totalDurationMs: Int,
     colors: HyperBounceColors,
+    onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-        val midY = height / 2f
+    val playheadFraction = if (totalDurationMs > 0) {
+        (currentMs.toFloat() / totalDurationMs).coerceIn(0f, 1f)
+    } else 0f
 
-        if (envelopePoints.isEmpty()) return@Canvas
+    Box(
+        modifier = modifier
+            .pointerInput(totalDurationMs) {
+                detectTapGestures { offset ->
+                    if (size.width > 0) {
+                        val frac = (offset.x / size.width).coerceIn(0f, 1f)
+                        onSeek(frac)
+                    }
+                }
+            }
+            .pointerInput(totalDurationMs) {
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        if (size.width > 0) {
+                            val frac = (offset.x / size.width).coerceIn(0f, 1f)
+                            onSeek(frac)
+                        }
+                    },
+                    onHorizontalDrag = { change, _ ->
+                        change.consume()
+                        if (size.width > 0) {
+                            val frac = (change.position.x / size.width).coerceIn(0f, 1f)
+                            onSeek(frac)
+                        }
+                    }
+                )
+            }
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val width = size.width
+            val height = size.height
+            val midY = height / 2f
 
-        val stepX = width / envelopePoints.size.toFloat()
+            if (envelopePoints.isEmpty()) return@Canvas
 
-        for (i in envelopePoints.indices) {
-            val amp = envelopePoints[i].coerceIn(0f, 1f)
-            val barH = amp * (height * 0.42f)
-            val x = i * stepX
-            val topY = midY - barH
-            val botY = midY + barH
+            val stepX = width / envelopePoints.size.toFloat()
 
-            drawLine(
-                color = colors.accentBlue.copy(alpha = 0.7f),
-                start = Offset(x, topY),
-                end = Offset(x, botY),
-                strokeWidth = max(2f, stepX * 0.7f),
-                cap = StrokeCap.Round
-            )
+            for (i in envelopePoints.indices) {
+                val amp = envelopePoints[i].coerceIn(0f, 1f)
+                val barH = amp * (height * 0.42f)
+                val x = i * stepX
+                val topY = midY - barH
+                val botY = midY + barH
+
+                val isPlayed = (x / width) <= playheadFraction
+                val barColor = if (isPlayed) {
+                    colors.accentBlue
+                } else {
+                    colors.accentBlue.copy(alpha = 0.35f)
+                }
+
+                drawLine(
+                    color = barColor,
+                    start = Offset(x, topY),
+                    end = Offset(x, botY),
+                    strokeWidth = max(2f, stepX * 0.75f),
+                    cap = StrokeCap.Round
+                )
+            }
+
+            // Playhead scrubber needle
+            if (playheadFraction > 0f) {
+                val playheadX = width * playheadFraction
+                // Glowing aura behind playhead
+                drawLine(
+                    color = colors.accentPink.copy(alpha = 0.35f),
+                    start = Offset(playheadX, 0f),
+                    end = Offset(playheadX, height),
+                    strokeWidth = 6.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                // Crisp scrubber needle
+                drawLine(
+                    color = colors.accentPink,
+                    start = Offset(playheadX, 0f),
+                    end = Offset(playheadX, height),
+                    strokeWidth = 2.5.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                // Scrubber indicator dot at top
+                drawCircle(
+                    color = colors.accentPink,
+                    radius = 4.5.dp.toPx(),
+                    center = Offset(playheadX, 8.dp.toPx())
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 2.dp.toPx(),
+                    center = Offset(playheadX, 8.dp.toPx())
+                )
+            }
         }
 
-        // Playhead indicator
-        if (playheadFraction > 0f) {
-            val playheadX = width * playheadFraction.coerceIn(0f, 1f)
-            drawLine(
-                color = colors.accentPink,
-                start = Offset(playheadX, 0f),
-                end = Offset(playheadX, height),
-                strokeWidth = 3.dp.toPx(),
-                cap = StrokeCap.Round
+        // Time indicator pill directly embedded inside the WaveformVisualizer
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(8.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0xCC000000))
+                .padding(horizontal = 7.dp, vertical = 3.dp)
+        ) {
+            val curText = formatTimeMs(currentMs)
+            val totText = formatTimeMs(totalDurationMs)
+            BasicText(
+                text = "$curText / $totText",
+                style = HyperBounceType.caption.copy(
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
             )
         }
     }
+}
+
+private fun formatTimeMs(ms: Int): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0)
+    val m = totalSec / 60
+    val s = totalSec % 60
+    return String.format(java.util.Locale.US, "%02d:%02d", m, s)
 }
 
 private fun exportRtpBinary(context: Context, haptic: SynthesizedHaptic, baseName: String) {

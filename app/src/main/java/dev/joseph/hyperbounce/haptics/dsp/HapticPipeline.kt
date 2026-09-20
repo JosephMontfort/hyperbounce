@@ -57,7 +57,7 @@ data class PipelineConfig(
     val resonantFrequencyHz: Float = 160.0f,
     val sensitivity: Float = 1.0f,
     val brakingStrength: Float = 0.85f,
-    val maxDurationMs: Long = 30000L // 30 seconds default
+    val maxDurationMs: Long = 0L // 0L means full unconstrained duration
 )
 
 data class SynthesizedHaptic(

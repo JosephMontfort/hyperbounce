@@ -21,7 +21,7 @@ object AudioDecoder {
 
     private const val TAG = "AudioDecoder"
     private const val TIMEOUT_US = 5000L
-    private const val MAX_DECODE_DURATION_MS = 30000L // 30 seconds is plenty for haptics
+    private const val MAX_DECODE_DURATION_MS = 0L // 0L = full unconstrained song duration
 
     data class DecodedAudio(
         val samples: FloatArray,
@@ -105,8 +105,10 @@ object AudioDecoder {
             format.getLong(MediaFormat.KEY_DURATION)
         } else 0L
 
-        val maxDurationUs = maxDurationMs * 1000L
-        val effectiveDurationUs = if (rawDurationUs in 1..maxDurationUs) rawDurationUs else maxDurationUs
+        val maxDurationUs = if (maxDurationMs > 0L) maxDurationMs * 1000L else Long.MAX_VALUE
+        val effectiveDurationUs = if (rawDurationUs > 0L) {
+            if (maxDurationMs > 0L) minOf(rawDurationUs, maxDurationUs) else rawDurationUs
+        } else if (maxDurationMs > 0L) maxDurationUs else 120_000_000L
 
         val codec = MediaCodec.createDecoderByType(mime)
         codec.configure(format, null, null, 0)
