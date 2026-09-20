@@ -147,6 +147,9 @@ fun HapticStudioScreen(
         }
     }
 
+    val cardColor = colors.elevatedSurfaceTint
+    val localBackdrop = rememberCanvasBackdrop { drawRect(cardColor) }
+
     ScreenScaffold(
         title = "Haptic Studio",
         colors = colors,
@@ -154,9 +157,6 @@ fun HapticStudioScreen(
         onBack = onBack,
         subtitle = "Audio-to-haptic precision engine"
     ) { contentBackdrop ->
-        val cardColor = colors.elevatedSurfaceTint
-        val localBackdrop = rememberCanvasBackdrop { drawRect(cardColor) }
-
         item {
             SectionHeader("Audio Input", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {

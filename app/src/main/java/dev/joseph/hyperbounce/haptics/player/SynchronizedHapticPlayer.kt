@@ -43,11 +43,11 @@ class SynchronizedHapticPlayer(private val context: Context) {
                     mp.start()
                     // Fire haptic in exact lockstep
                     vibrator.vibrate(haptic.vibrationEffect)
-                    isPlaying = true
+                    this@SynchronizedHapticPlayer.isPlaying = true
 
                     progressRunnable = object : Runnable {
                         override fun run() {
-                            if (isPlaying && mediaPlayer != null) {
+                            if (this@SynchronizedHapticPlayer.isPlaying && mediaPlayer != null) {
                                 val current = mediaPlayer?.currentPosition ?: 0
                                 onProgress(current, duration)
                                 if (current < duration) {
@@ -59,7 +59,7 @@ class SynchronizedHapticPlayer(private val context: Context) {
                     progressRunnable?.let { handler.post(it) }
                 }
                 setOnCompletionListener {
-                    isPlaying = false
+                    this@SynchronizedHapticPlayer.isPlaying = false
                     progressRunnable?.let { handler.removeCallbacks(it) }
                     vibrator.cancel()
                     onCompletion()
