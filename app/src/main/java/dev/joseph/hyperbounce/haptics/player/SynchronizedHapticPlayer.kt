@@ -147,7 +147,7 @@ class SynchronizedHapticPlayer(private val context: Context) {
                             .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1.0f)
                             .compose()
                     } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        VibrationEffect.createPredefined(VibrationEffect.EFFECT_POP)
+                        VibrationEffect.createPredefined(4)
                     } else {
                         VibrationEffect.createOneShot(20L, 240)
                     }
