@@ -563,16 +563,17 @@ private fun StepConfirmationContent(
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 200.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .heightIn(max = 220.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(items, key = { it.presetId }) { item ->
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(colors.separator.copy(alpha = 0.10f))
-                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.separator.copy(alpha = 0.08f))
+                        .border(0.5.dp, colors.separator.copy(alpha = 0.15f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -581,33 +582,52 @@ private fun StepConfirmationContent(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             BasicText(
-                                text = "${item.cleanName}.ogg",
-                                style = HyperBounceType.caption.copy(
+                                text = item.title,
+                                style = HyperBounceType.body.copy(
                                     color = colors.label,
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = 12.5.sp
+                                    fontSize = 13.5.sp
                                 )
                             )
-                            BasicText(
-                                text = "Haptic: ${item.effectId}_${item.cleanName}_P_RTP.bin",
-                                style = HyperBounceType.caption.copy(
-                                    color = colors.secondaryLabel,
-                                    fontSize = 10.5.sp
+                            Spacer(Modifier.height(2.dp))
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                BasicText(
+                                    text = "${item.cleanName}.ogg",
+                                    style = HyperBounceType.caption.copy(
+                                        color = colors.secondaryLabel,
+                                        fontSize = 11.sp
+                                    )
                                 )
-                            )
+                                BasicText(
+                                    text = "•",
+                                    style = HyperBounceType.caption.copy(color = colors.secondaryLabel.copy(alpha = 0.5f))
+                                )
+                                BasicText(
+                                    text = "24kHz RTP",
+                                    style = HyperBounceType.caption.copy(
+                                        color = colors.accentBlue,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 10.5.sp
+                                    )
+                                )
+                            }
                         }
 
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(5.dp))
-                                .background(colors.accentGreen.copy(alpha = 0.15f))
-                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(colors.accentGreen.copy(alpha = 0.12f))
+                                .border(0.5.dp, colors.accentGreen.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             BasicText(
-                                text = "Slot #${item.effectId}",
+                                text = "LRA Slot #${item.effectId}",
                                 style = HyperBounceType.caption.copy(
                                     color = colors.accentGreen,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.SemiBold,
                                     fontSize = 11.sp
                                 )
                             )
@@ -623,34 +643,34 @@ private fun StepConfirmationContent(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(colors.accentBlue.copy(alpha = 0.08f))
-                .border(1.dp, colors.accentBlue.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
-                .padding(10.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(colors.accentBlue.copy(alpha = 0.06f))
+                .border(0.5.dp, colors.accentBlue.copy(alpha = 0.22f), RoundedCornerShape(10.dp))
+                .padding(12.dp)
         ) {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     BasicText(
-                        text = "⚡ Magisk / KernelSU Output:",
+                        text = "⚡ Magisk / KernelSU / APatch Module",
                         style = HyperBounceType.caption.copy(
                             color = colors.accentBlue,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
+                            fontSize = 11.5.sp
                         )
                     )
                 }
-                Spacer(Modifier.height(2.dp))
+                Spacer(Modifier.height(4.dp))
                 BasicText(
                     text = "Download/${RingtoneModuleBuilder.MODULE_NAME}",
                     style = HyperBounceType.caption.copy(
                         color = colors.label,
                         fontWeight = FontWeight.Medium,
-                        fontSize = 11.5.sp
+                        fontSize = 12.sp
                     )
                 )
                 Spacer(Modifier.height(2.dp))
                 BasicText(
-                    text = "Non-destructive. Stock Xiaomi ringtones are untouched.",
+                    text = "Non-destructive. Fully isolated overlay with zero modifications to system partition.",
                     style = HyperBounceType.caption.copy(
                         color = colors.secondaryLabel,
                         fontSize = 10.5.sp

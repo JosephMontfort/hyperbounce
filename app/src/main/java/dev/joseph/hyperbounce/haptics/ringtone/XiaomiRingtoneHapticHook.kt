@@ -102,7 +102,18 @@ object XiaomiRingtoneHapticHook {
                             }
                         }
 
-                        chain.proceed()
+                        val original = chain.proceed() as? VibrationEffect
+                        if (original != null) return@intercept original
+
+                        if (ctx != null && uri != null) {
+                            val fallbackId = RingtoneRegistry.resolveEffectId(ctx, uri.toString())
+                            if (fallbackId != null) {
+                                Log.i(TAG, "VibrationEffect.get fallback matched [$uri] -> Effect ID #$fallbackId")
+                                return@intercept VibrationEffect.createPredefined(fallbackId)
+                            }
+                        }
+
+                        null
                     }
                     Log.d(TAG, "Successfully hooked android.os.VibrationEffect.get(Uri, Context)")
                     break

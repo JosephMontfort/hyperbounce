@@ -33,18 +33,36 @@ object TelecomRingtoneHapticHook {
                 ) {
                     m.isAccessible = true
                     module.hook(m).intercept { chain ->
+                        val uri = chain.args[0] as? Uri
+                        if (uri != null) {
+                            try {
+                                val context = getContextFromRinger(chain.thisObject)
+                                val query = if (context != null) RingtoneRegistry.resolvePathFromUri(context, uri) ?: uri.toString() else uri.toString()
+                                val customId = RingtoneRegistry.resolveEffectId(context, query)
+                                if (customId != null) {
+                                    Log.i(TAG, "getVibrationEffectForRingtone mapped [$query] to hardware Effect ID #$customId")
+                                    return@intercept VibrationEffect.createPredefined(customId)
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "Error resolving custom effect in getVibrationEffectForRingtone", t)
+                            }
+                        }
+
                         val originalResult = chain.proceed() as? VibrationEffect
+                        if (originalResult != null) return@intercept originalResult
+
+                        // Fallback waveform ONLY if no hardware effect exists
                         try {
-                            val uri = chain.args[0] as? Uri
-                            val customEffect = createWaveformEffectForActiveRingtone(uri)
-                            if (customEffect != null) {
-                                Log.i(TAG, "Replaced Telecom ringtone vibration with synchronized custom haptic effect")
-                                return@intercept customEffect
+                            val fallbackEffect = createWaveformEffectForActiveRingtone(uri)
+                            if (fallbackEffect != null) {
+                                Log.i(TAG, "Telecom fallback: provided custom haptic waveform effect")
+                                return@intercept fallbackEffect
                             }
                         } catch (t: Throwable) {
-                            Log.e(TAG, "Error in getVibrationEffectForRingtone interceptor", t)
+                            Log.e(TAG, "Error in fallback createWaveformEffectForActiveRingtone", t)
                         }
-                        originalResult
+
+                        null
                     }
                     Log.d(TAG, "Hooked Ringer.getVibrationEffectForRingtone successfully")
                     break
@@ -62,27 +80,31 @@ object TelecomRingtoneHapticHook {
                     ) {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            val originalResult = chain.proceed() as? VibrationEffect
-                            try {
-                                val uri = chain.args[0] as? Uri
-                                val ctx = chain.args[1] as? Context
-                                if (ctx != null && uri != null) {
+                            val uri = chain.args[0] as? Uri
+                            val ctx = chain.args[1] as? Context
+                            if (ctx != null && uri != null) {
+                                try {
                                     val path = RingtoneRegistry.resolvePathFromUri(ctx, uri) ?: uri.toString()
                                     val customId = RingtoneRegistry.resolveEffectId(ctx, path)
                                     if (customId != null) {
                                         Log.i(TAG, "VibrationEffectProxy.get mapped [$path] to hardware Effect ID #$customId")
                                         return@intercept VibrationEffect.createPredefined(customId)
                                     }
+                                } catch (t: Throwable) {
+                                    Log.e(TAG, "Error in VibrationEffectProxy.get interceptor", t)
                                 }
-                                val customEffect = createWaveformEffectForActiveRingtone(uri)
-                                if (customEffect != null) {
-                                    Log.i(TAG, "VibrationEffectProxy.get provided custom haptic effect")
-                                    return@intercept customEffect
-                                }
-                            } catch (t: Throwable) {
-                                Log.e(TAG, "Error in VibrationEffectProxy.get interceptor", t)
                             }
-                            originalResult
+
+                            val originalResult = chain.proceed() as? VibrationEffect
+                            if (originalResult != null) return@intercept originalResult
+
+                            // Fallback waveform ONLY if stock returned null
+                            val fallbackEffect = createWaveformEffectForActiveRingtone(uri)
+                            if (fallbackEffect != null) {
+                                return@intercept fallbackEffect
+                            }
+
+                            null
                         }
                         Log.d(TAG, "Hooked VibrationEffectProxy.get successfully")
                         break
@@ -99,14 +121,22 @@ object TelecomRingtoneHapticHook {
                     if (vibrationEffectIndex != -1) {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            try {
-                                val customEffect = createWaveformEffectForActiveRingtone(null)
-                                if (customEffect != null) {
-                                    chain.args[vibrationEffectIndex] = customEffect
-                                    Log.i(TAG, "maybeStartVibration replaced vibrationEffect argument with custom haptic waveform")
+                            val currentEffect = chain.args[vibrationEffectIndex] as? VibrationEffect
+                            if (currentEffect != null) {
+                                // A valid effect (hardware predefined effect or stock vibration) is already bound!
+                                // DO NOT OVERWRITE IT with synthetic tick clicks!
+                                Log.i(TAG, "maybeStartVibration: keeping hardware/resolved effect: $currentEffect")
+                            } else {
+                                // Only substitute waveform if current effect is null
+                                try {
+                                    val customEffect = createWaveformEffectForActiveRingtone(null)
+                                    if (customEffect != null) {
+                                        chain.args[vibrationEffectIndex] = customEffect
+                                        Log.i(TAG, "maybeStartVibration substituted fallback haptic waveform")
+                                    }
+                                } catch (t: Throwable) {
+                                    Log.e(TAG, "Error substituting fallback effect in maybeStartVibration", t)
                                 }
-                            } catch (t: Throwable) {
-                                Log.e(TAG, "Error replacing maybeStartVibration effect", t)
                             }
                             chain.proceed()
                         }
@@ -182,6 +212,17 @@ object TelecomRingtoneHapticHook {
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to parse active ringtone haptics JSON", t)
             return null
+        }
+    }
+
+    private fun getContextFromRinger(ringerObj: Any?): Context? {
+        if (ringerObj == null) return null
+        return try {
+            val field = ringerObj.javaClass.getDeclaredField("mContext")
+            field.isAccessible = true
+            field.get(ringerObj) as? Context
+        } catch (_: Throwable) {
+            null
         }
     }
 }
