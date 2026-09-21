@@ -53,16 +53,6 @@ class LockScreenGlassSheetOptimizedView @JvmOverloads constructor(
         postInvalidateOnAnimation()
     }
 
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        LockScreenWallpaperHelper.addUnblurredWallpaperListener(wallpaperLoadListener)
-    }
-
-    override fun onDetachedFromWindow() {
-        super.onDetachedFromWindow()
-        LockScreenWallpaperHelper.removeUnblurredWallpaperListener(wallpaperLoadListener)
-    }
-
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val parent = parent as? View
         val w = if (parent != null && parent.width > 0) parent.width else resources.displayMetrics.widthPixels
@@ -179,10 +169,12 @@ class LockScreenGlassSheetOptimizedView @JvmOverloads constructor(
         super.onAttachedToWindow()
         LockScreenWallpaperHelper.registerIfNeeded(context)
         LockScreenWallpaperHelper.triggerAsyncWallpaperLoad(context)
+        LockScreenWallpaperHelper.addUnblurredWallpaperListener(wallpaperLoadListener)
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        LockScreenWallpaperHelper.removeUnblurredWallpaperListener(wallpaperLoadListener)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             renderer?.release()
         }
