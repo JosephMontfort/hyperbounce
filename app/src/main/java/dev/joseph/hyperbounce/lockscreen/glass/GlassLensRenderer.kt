@@ -38,6 +38,7 @@ class GlassLensRenderer {
             uniform shader backdrop;
             uniform float  margin;
             uniform float2 viewSize;
+            uniform float2 viewPos;
             uniform float  cornerRadius;
             uniform float3 edgeBevels;     // x = left, y = right, z = bottom
             uniform float3 edgeRefracts;   // x = left, y = right, z = bottom
@@ -437,7 +438,6 @@ class GlassLensRenderer {
         sh.setFloatUniform("margin", margin.toFloat())
         sh.setFloatUniform("viewSize", width.toFloat(), height.toFloat())
         sh.setFloatUniform("viewPos", viewX.toFloat(), viewY.toFloat())
-        sh.setFloatUniform("screenSize", screenW.toFloat(), screenH.toFloat())
         sh.setFloatUniform("cornerRadius", p.cornerRadius)
         sh.setFloatUniform("edgeBevels", p.leftBevel, p.rightBevel, p.bottomBevel)
 

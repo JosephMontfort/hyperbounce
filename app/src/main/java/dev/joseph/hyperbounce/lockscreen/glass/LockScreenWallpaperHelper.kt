@@ -83,49 +83,7 @@ object LockScreenWallpaperHelper {
      * Loads fallback lockscreen wallpaper strictly on an offload thread to eliminate main-thread lag.
      */
     fun triggerAsyncWallpaperLoad(context: Context) {
-        if (isLoadInProgress) return
-        isLoadInProgress = true
-        val appContext = context.applicationContext ?: context
-
-        bgExecutor.execute {
-            try {
-                var result: Drawable? = null
-
-                // Try HyperOS MiuiWallpaperManager.getFitScreenWallpaperPreview(2, context)
-                try {
-                    val ifaceClass = Class.forName("com.miui.systemui.interfacesmanager.InterfacesImplManager", false, appContext.classLoader)
-                    val miuiWpClass = Class.forName("com.miui.miwallpaper.MiuiWallpaperManager", false, appContext.classLoader)
-                    val getImplMethod = ifaceClass.getMethod("getImpl", Class::class.java)
-                    val miuiWp = getImplMethod.invoke(null, miuiWpClass)
-                    if (miuiWp != null) {
-                        val method = miuiWpClass.getMethod("getFitScreenWallpaperPreview", Int::class.javaPrimitiveType, Context::class.java)
-                        val bmp = method.invoke(miuiWp, 2, appContext) as? Bitmap
-                        if (bmp != null) {
-                            result = BitmapDrawable(appContext.resources, bmp)
-                        }
-                    }
-                } catch (t: Throwable) {
-                    Log.d(TAG, "MiuiWallpaperManager async lookup: ${t.message}")
-                }
-
-                // Fallback to WallpaperManager
-                if (result == null) {
-                    try {
-                        val wm = WallpaperManager.getInstance(appContext)
-                        result = wm.drawable ?: wm.peekDrawable()
-                    } catch (t: Throwable) {
-                        Log.w(TAG, "WallpaperManager async fallback failed", t)
-                    }
-                }
-
-                if (result != null) {
-                    cachedDrawable = result
-                }
-            } catch (_: Throwable) {
-            } finally {
-                isLoadInProgress = false
-            }
-        }
+        triggerAsyncUnblurredWallpaperLoad(context)
     }
 
     /**
