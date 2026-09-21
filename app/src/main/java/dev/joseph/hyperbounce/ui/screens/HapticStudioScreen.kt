@@ -678,7 +678,7 @@ fun HapticStudioScreen(
 
                                 Spacer(Modifier.height(12.dp))
 
-                                // Row 1: Preview Trim & Save Preset
+                                // Trim preview action
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -711,7 +711,7 @@ fun HapticStudioScreen(
                                         },
                                         backdrop = backdrop,
                                         tint = colors.accentBlue,
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
                                         BasicText(
                                             text = if (isPlaying) "Stop Preview" else "Preview Trim",
@@ -721,91 +721,94 @@ fun HapticStudioScreen(
                                             )
                                         )
                                     }
-
-                                    LiquidButton(
-                                        onClick = {
-                                            val audio = decodedAudio
-                                            if (audio == null || synthesizedHaptics.isEmpty()) {
-                                                statusFeedback = "No synthesized audio to save"
-                                                return@LiquidButton
-                                            }
-                                            val title = audioFileName?.substringBeforeLast('.') ?: "Custom Preset"
-                                            val start = trimStartMs.coerceAtLeast(0)
-                                            val end = if (trimEndMs > start) trimEndMs else totalDurationMs
-                                            HapticPresetStorage.savePreset(
-                                                context = context,
-                                                title = title,
-                                                audioFileName = audioFileName ?: "$title.wav",
-                                                decodedAudio = audio,
-                                                synthesizedHaptics = synthesizedHaptics,
-                                                selectedPipelineIndex = selectedPipelineIndex,
-                                                trimStartMs = start,
-                                                trimEndMs = end,
-                                                intensityMode = intensityMode
-                                            )
-                                            savedPresets = HapticPresetStorage.listPresets(context)
-                                            statusFeedback = "Saved \"$title\" to Library"
-                                        },
-                                        backdrop = backdrop,
-                                        tint = colors.accentGreen,
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        BasicText(
-                                            text = "Save Preset",
-                                            style = HyperBounceType.body.copy(
-                                                color = Color.White,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                        )
-                                    }
                                 }
+                            }
 
-                                Spacer(Modifier.height(14.dp))
-                                RowDivider(colors.separator)
-                                Spacer(Modifier.height(14.dp))
+                            Spacer(Modifier.height(16.dp))
+                            RowDivider(colors.separator)
+                            Spacer(Modifier.height(14.dp))
 
-                                // Row 2: Export RTP .bin & Build Ringtone Module
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            // Actions: Save Preset & Build Module
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                LiquidButton(
+                                    onClick = {
+                                        val audio = decodedAudio
+                                        if (audio == null || synthesizedHaptics.isEmpty()) {
+                                            statusFeedback = "No synthesized audio to save"
+                                            return@LiquidButton
+                                        }
+                                        val title = audioFileName?.substringBeforeLast('.') ?: "Custom Preset"
+                                        val start = trimStartMs.coerceAtLeast(0)
+                                        val end = if (trimEndMs > start) trimEndMs else totalDurationMs
+                                        HapticPresetStorage.savePreset(
+                                            context = context,
+                                            title = title,
+                                            audioFileName = audioFileName ?: "$title.wav",
+                                            decodedAudio = audio,
+                                            synthesizedHaptics = synthesizedHaptics,
+                                            selectedPipelineIndex = selectedPipelineIndex,
+                                            trimStartMs = start,
+                                            trimEndMs = end,
+                                            intensityMode = intensityMode
+                                        )
+                                        savedPresets = HapticPresetStorage.listPresets(context)
+                                        statusFeedback = "Saved \"$title\" to Library"
+                                    },
+                                    backdrop = backdrop,
+                                    tint = colors.accentGreen,
+                                    modifier = Modifier.weight(1f)
                                 ) {
-                                    LiquidButton(
-                                        onClick = {
-                                            exportRtpBinary(context, currentHaptic, audioFileName ?: "effect") { msg ->
-                                                statusFeedback = msg
-                                            }
-                                        },
-                                        backdrop = backdrop,
-                                        tint = colors.accentOrange,
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        BasicText(
-                                            text = "Export RTP .bin",
-                                            style = HyperBounceType.body.copy(
-                                                color = Color.White,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
+                                    BasicText(
+                                        text = "Save Preset",
+                                        style = HyperBounceType.body.copy(
+                                            color = Color.White,
+                                            fontWeight = FontWeight.SemiBold
                                         )
-                                    }
-
-                                    LiquidButton(
-                                        onClick = {
-                                            moduleDialogTargetPresetId = null
-                                            isModuleDialogOpen = true
-                                        },
-                                        backdrop = backdrop,
-                                        tint = colors.accentPink,
-                                        modifier = Modifier.weight(1.3f)
-                                    ) {
-                                        BasicText(
-                                            text = "Build Module",
-                                            style = HyperBounceType.body.copy(
-                                                color = Color.White,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        )
-                                    }
+                                    )
                                 }
+
+                                LiquidButton(
+                                    onClick = {
+                                        moduleDialogTargetPresetId = null
+                                        isModuleDialogOpen = true
+                                    },
+                                    backdrop = backdrop,
+                                    tint = colors.accentPink,
+                                    modifier = Modifier.weight(1.3f)
+                                ) {
+                                    BasicText(
+                                        text = "Build Module",
+                                        style = HyperBounceType.body.copy(
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(10.dp))
+
+                            LiquidButton(
+                                onClick = {
+                                    exportRtpBinary(context, currentHaptic, audioFileName ?: "effect") { msg ->
+                                        statusFeedback = msg
+                                    }
+                                },
+                                backdrop = backdrop,
+                                tint = colors.accentOrange,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                BasicText(
+                                    text = "Export RTP .bin",
+                                    style = HyperBounceType.body.copy(
+                                        color = Color.White,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                            }
                         }
                     }
                 }
@@ -1420,7 +1423,7 @@ private fun WaveformVisualizer(
     }
 }
 
-private fun formatTimeMs(ms: Int): String {
+internal fun formatTimeMs(ms: Int): String {
     val totalSec = (ms / 1000).coerceAtLeast(0)
     val m = totalSec / 60
     val s = totalSec % 60
