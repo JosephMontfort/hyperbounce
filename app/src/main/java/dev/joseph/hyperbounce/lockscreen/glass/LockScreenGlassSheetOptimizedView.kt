@@ -49,6 +49,20 @@ class LockScreenGlassSheetOptimizedView @JvmOverloads constructor(
     }
     private val boundsRect = RectF()
 
+    private val wallpaperLoadListener: () -> Unit = {
+        postInvalidateOnAnimation()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        LockScreenWallpaperHelper.addUnblurredWallpaperListener(wallpaperLoadListener)
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        LockScreenWallpaperHelper.removeUnblurredWallpaperListener(wallpaperLoadListener)
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val parent = parent as? View
         val w = if (parent != null && parent.width > 0) parent.width else resources.displayMetrics.widthPixels
@@ -83,10 +97,15 @@ class LockScreenGlassSheetOptimizedView @JvmOverloads constructor(
         val bottomRefract = cfg.bottomRefraction * density * smoothIncoming
         val maxRefract = max(max(leftRefract, rightRefract), bottomRefract)
         val cornerRadius = cfg.cornerRadius * density * smoothIncoming
-        val edgeStretch = (cfg.edgeStretch * density) * smoothIncoming
+
+        // Multi-cycle squeeze and unsqueeze breathing as swipe progresses (3 full cycles between 0.15 and 1.0)
+        val squeezeProgress = ((swipeProgress - 0.15f) / 0.85f).coerceIn(0.0f, 1.0f)
+        val squeezeBreathing = kotlin.math.sin(squeezeProgress * Math.PI.toFloat() * 6.0f) * 0.35f
+        val edgeStretch = (cfg.edgeStretch * density) * smoothIncoming * (1.0f + squeezeBreathing)
         val margin = ((maxBevel + maxRefract * 0.4f) + 16f * density).toInt().coerceAtLeast(32)
 
-        val wp = LockScreenWallpaperHelper.getLiveLockWallpaper(context)
+        // Pure unblurred lockscreen wallpaper: strictly immune to notification center / bouncer blur leaks
+        val wp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
         val screenW = resources.displayMetrics.widthPixels
         val screenH = resources.displayMetrics.heightPixels
 
@@ -117,7 +136,17 @@ class LockScreenGlassSheetOptimizedView @JvmOverloads constructor(
                 blurRadius = cfg.blurRadius * density
             )
 
-            val success = renderer.draw(canvas, w, h, params, margin) { recordingCanvas ->
+            val success = renderer.draw(
+                canvas = canvas,
+                width = w,
+                height = h,
+                params = params,
+                margin = margin,
+                viewX = viewX,
+                viewY = viewY,
+                screenW = screenW,
+                screenH = screenH
+            ) { recordingCanvas ->
                 recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
                 if (wp != null) {
                     wp.setBounds(0, 0, screenW, screenH)

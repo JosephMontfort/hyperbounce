@@ -216,28 +216,15 @@ fun LockScreenSheetScreen(
         }
 
         item {
-            SectionHeader("Per-Edge Glass Thickness", colors)
+            SectionHeader("Edge Glass Thickness", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
-                    title = "Left Edge Glass Bevel",
-                    subtitle = "Thickness of glass refraction band on left border",
+                    title = "Side Edges Glass Bevel",
+                    subtitle = "Thickness of glass refraction band on left & right borders",
                     colors = colors,
                     backdrop = backdrop,
                     value = sheet.leftBevelWidth,
-                    onValueChange = sheet::setLeftBevelWidth,
-                    valueRange = 0.0f..120.0f,
-                    defaultValue = 38.0f,
-                    valueLabel = { if (it <= 0.5f) "Off" else String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Right Edge Glass Bevel",
-                    subtitle = "Thickness of glass refraction band on right border",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.rightBevelWidth,
-                    onValueChange = sheet::setRightBevelWidth,
+                    onValueChange = sheet::setSideBevelWidth,
                     valueRange = 0.0f..120.0f,
                     defaultValue = 38.0f,
                     valueLabel = { if (it <= 0.5f) "Off" else String.format(Locale.US, "%.0f dp", it) },
@@ -258,7 +245,7 @@ fun LockScreenSheetScreen(
                 )
             }
             SectionFooter(
-                "Each edge's glass thickness can be adjusted independently or turned completely off (0 dp). Center of the screen remains 100% transparent wallpaper.",
+                "Side and bottom glass thickness can be adjusted or turned completely off (0 dp). Center of the screen remains 100% transparent wallpaper.",
                 colors
             )
         }

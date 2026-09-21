@@ -476,6 +476,10 @@ class SettingsRepository(context: Context) {
         @JvmName("setSheetSideRefractionPref") fun setSideRefraction(v: Float) { sideRefraction = v }
         @JvmName("setSheetBottomRefractionPref") fun setBottomRefraction(v: Float) { bottomRefraction = v }
         @JvmName("setSheetBevelWidthPref") fun setBevelWidth(v: Float) { bevelWidth = v }
+        @JvmName("setSheetSideBevelWidthPref") fun setSideBevelWidth(v: Float) {
+            leftBevelWidth = v
+            rightBevelWidth = v
+        }
         @JvmName("setSheetLeftBevelWidthPref") fun setLeftBevelWidth(v: Float) { leftBevelWidth = v }
         @JvmName("setSheetRightBevelWidthPref") fun setRightBevelWidth(v: Float) { rightBevelWidth = v }
         @JvmName("setSheetBottomBevelWidthPref") fun setBottomBevelWidth(v: Float) { bottomBevelWidth = v }

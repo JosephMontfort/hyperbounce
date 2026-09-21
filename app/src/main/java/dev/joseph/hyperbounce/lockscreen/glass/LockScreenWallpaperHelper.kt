@@ -42,11 +42,6 @@ object LockScreenWallpaperHelper {
 
     private val bgExecutor = Executors.newSingleThreadExecutor()
 
-    // Cached reflection fields for 0ms in-memory access during 120 FPS rendering
-    @Volatile private var initializedReflection = false
-    private var miuiWpMgrInstance: Any? = null
-    private var blurPreviewField: Field? = null
-
     fun addUnblurredWallpaperListener(listener: () -> Unit) {
         if (!unblurredListeners.contains(listener)) {
             unblurredListeners.add(listener)
@@ -58,7 +53,7 @@ object LockScreenWallpaperHelper {
     }
 
     /**
-     * Obtains the pure unblurred lockscreen wallpaper for the notification sheet background.
+     * Obtains the pure unblurred lockscreen wallpaper for the lockscreen and notification sheets.
      * Guaranteed 0ms overhead on the UI thread.
      */
     fun getUnblurredLockWallpaper(context: Context): Drawable? {
@@ -77,67 +72,11 @@ object LockScreenWallpaperHelper {
     }
 
     /**
-     * Obtains the live lockscreen wallpaper with all HyperOS effects applied.
-     * Guaranteed 0ms overhead on the UI thread.
+     * Obtains the pristine, unblurred lockscreen wallpaper.
+     * Guaranteed zero-blur leak from notification center or security bouncer.
      */
     fun getLiveLockWallpaper(context: Context): Drawable? {
-        registerIfNeeded(context)
-
-        // 1. Priority #1: Live in-memory effected wallpaper from HyperOS MiuiKeyguardWallPaperManager
-        // This holds the exact wallpaper rendered with active lockscreen effects (blur, glass, etc.)
-        // Accessing it via pre-cached Field takes < 5 nanoseconds.
-        val effectPreview = getMiuiBlurPreview(context)
-        if (effectPreview != null) {
-            return effectPreview
-        }
-
-        // 2. Priority #2: Cached wallpaper from previous background load
-        val cached = cachedDrawable
-        if (cached != null) {
-            return cached
-        }
-
-        // 3. Priority #3: Fast in-memory peek while background load triggers asynchronously
-        triggerAsyncWallpaperLoad(context)
-
-        return try {
-            val wm = WallpaperManager.getInstance(context)
-            wm.peekDrawable()
-        } catch (_: Throwable) {
-            null
-        }
-    }
-
-    /**
-     * Reads HyperOS's pre-rendered lockscreen effect wallpaper directly from memory.
-     */
-    private fun getMiuiBlurPreview(context: Context): Drawable? {
-        try {
-            if (!initializedReflection) {
-                synchronized(this) {
-                    if (!initializedReflection) {
-                        val ifaceClass = Class.forName("com.miui.systemui.interfacesmanager.InterfacesImplManager", false, context.classLoader)
-                        val mgrClass = Class.forName("com.android.keyguard.wallpaper.MiuiKeyguardWallPaperManager", false, context.classLoader)
-                        val getImplMethod = ifaceClass.getMethod("getImpl", Class::class.java)
-                        miuiWpMgrInstance = getImplMethod.invoke(null, mgrClass)
-                        blurPreviewField = mgrClass.getField("mKeyguardWallpaperBlurPreview").apply {
-                            isAccessible = true
-                        }
-                        initializedReflection = true
-                    }
-                }
-            }
-
-            val mgr = miuiWpMgrInstance
-            val field = blurPreviewField
-            if (mgr != null && field != null) {
-                val d = field.get(mgr) as? Drawable
-                if (d != null) {
-                    return d
-                }
-            }
-        } catch (_: Throwable) {}
-        return null
+        return getUnblurredLockWallpaper(context)
     }
 
     /**

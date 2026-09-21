@@ -157,8 +157,11 @@ class GlassLensRenderer {
                 // === CASE 2: CURVED LIQUID GLASS BEVEL EDGES (OPTICAL REFRACTION) ===
                 // Inward optical refraction along the edges (offset points inward: -n)
                 float2 offset = -n * (slope * refr);
-                // Horizontal stretch of region underlying the edges alone
-                offset.x += (-n.x) * (hStretch * edgeStretch);
+                // Dynamic squeeze & unsqueeze on side edges alone that modulates with vertical translation
+                float worldY = p.y - viewPos.y;
+                float squeezeWave = 0.28 * sin(worldY * 0.012);
+                float dynamicStretch = edgeStretch * (1.0 + squeezeWave);
+                offset.x += (-n.x) * (hStretch * dynamicStretch);
 
                 // Physical chromatic dispersion
                 float2 cR = coord + offset * (1.0 - dispersion * slope);
@@ -433,6 +436,8 @@ class GlassLensRenderer {
     ): RenderEffect {
         sh.setFloatUniform("margin", margin.toFloat())
         sh.setFloatUniform("viewSize", width.toFloat(), height.toFloat())
+        sh.setFloatUniform("viewPos", viewX.toFloat(), viewY.toFloat())
+        sh.setFloatUniform("screenSize", screenW.toFloat(), screenH.toFloat())
         sh.setFloatUniform("cornerRadius", p.cornerRadius)
         sh.setFloatUniform("edgeBevels", p.leftBevel, p.rightBevel, p.bottomBevel)
 
