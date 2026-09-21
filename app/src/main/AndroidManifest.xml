@@ -36,6 +36,16 @@
             android:authorities="dev.joseph.hyperbounce.provider"
             android:exported="true" />
 
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="dev.joseph.hyperbounce.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <receiver
             android:name=".haptics.ringtone.IncomingCallReceiver"
             android:exported="true">

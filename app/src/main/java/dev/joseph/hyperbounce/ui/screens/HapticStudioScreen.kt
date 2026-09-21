@@ -126,7 +126,8 @@ fun HapticStudioScreen(
     var isTrimMode by remember { mutableStateOf(false) }
     var trimStartMs by remember { mutableIntStateOf(0) }
     var trimEndMs by remember { mutableIntStateOf(0) }
-    var isSettingRingtone by remember { mutableStateOf(false) }
+    var isModuleDialogOpen by remember { mutableStateOf(false) }
+    var moduleDialogTargetPresetId by remember { mutableStateOf<String?>(null) }
     var statusFeedback by remember { mutableStateOf<String?>(null) }
 
     // Saved Library Presets
@@ -677,7 +678,7 @@ fun HapticStudioScreen(
 
                                 Spacer(Modifier.height(12.dp))
 
-                                // Trim actions: Preview Trim & Set as Ringtone
+                                // Row 1: Preview Trim & Save Preset
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -724,72 +725,80 @@ fun HapticStudioScreen(
                                     LiquidButton(
                                         onClick = {
                                             val audio = decodedAudio
-                                            if (audio == null) {
-                                                statusFeedback = "No audio decoded to export"
+                                            if (audio == null || synthesizedHaptics.isEmpty()) {
+                                                statusFeedback = "No synthesized audio to save"
                                                 return@LiquidButton
                                             }
-                                            if (isSettingRingtone) return@LiquidButton
+                                            val title = audioFileName?.substringBeforeLast('.') ?: "Custom Preset"
+                                            val start = trimStartMs.coerceAtLeast(0)
+                                            val end = if (trimEndMs > start) trimEndMs else totalDurationMs
+                                            HapticPresetStorage.savePreset(
+                                                context = context,
+                                                title = title,
+                                                audioFileName = audioFileName ?: "$title.wav",
+                                                decodedAudio = audio,
+                                                synthesizedHaptics = synthesizedHaptics,
+                                                selectedPipelineIndex = selectedPipelineIndex,
+                                                trimStartMs = start,
+                                                trimEndMs = end,
+                                                intensityMode = intensityMode
+                                            )
+                                            savedPresets = HapticPresetStorage.listPresets(context)
+                                            statusFeedback = "Saved \"$title\" to Library"
+                                        },
+                                        backdrop = backdrop,
+                                        tint = colors.accentGreen,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        BasicText(
+                                            text = "Save Preset",
+                                            style = HyperBounceType.body.copy(
+                                                color = Color.White,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        )
+                                    }
+                                }
 
-                                            scope.launch {
-                                                isSettingRingtone = true
-                                                try {
-                                                    val start = trimStartMs.coerceAtLeast(0)
-                                                    val end = if (trimEndMs > start) trimEndMs else activeDuration
-                                                    val title = audioFileName?.substringBeforeLast('.') ?: "CustomRingtone"
+                                Spacer(Modifier.height(14.dp))
+                                RowDivider(colors.separator)
+                                Spacer(Modifier.height(14.dp))
 
-                                                    // 1. Crop audio samples and encode standard 16-bit PCM WAV
-                                                    val wavBytes = RingtoneManagerHelper.cropAndEncodeWav(audio, start, end)
-
-                                                    // 2. Crop synthesized haptic events and RTP wave
-                                                    val croppedHaptic = RingtoneManagerHelper.cropHaptic(currentHaptic, start, end)
-
-                                                    // 3. Install cropped WAV into system ringtones
-                                                    val ringtoneUri = RingtoneManagerHelper.installRingtoneAudio(context, wavBytes, title)
-
-                                                    if (ringtoneUri != null) {
-                                                        // 4. Set as default ringtone via RingtoneManager + HyperOS system settings
-                                                        RingtoneManagerHelper.setAsDefaultRingtone(context, ringtoneUri)
-
-                                                        // 5. Store active companion haptic profile for incoming call synchronization
-                                                        val profile = ActiveRingtoneProfile(
-                                                            title = title,
-                                                            durationMs = (end - start).toLong(),
-                                                            intensityMode = intensityMode,
-                                                            events = croppedHaptic.events
-                                                        )
-                                                        HapticRingtoneStorage.save(context, profile)
-
-                                                        // 6. Auto-persist to Saved Library
-                                                        HapticPresetStorage.savePreset(
-                                                            context = context,
-                                                            title = title,
-                                                            audioFileName = audioFileName ?: "$title.wav",
-                                                            decodedAudio = audio,
-                                                            synthesizedHaptics = synthesizedHaptics,
-                                                            selectedPipelineIndex = selectedPipelineIndex,
-                                                            trimStartMs = start,
-                                                            trimEndMs = end,
-                                                            intensityMode = intensityMode
-                                                        )
-                                                        savedPresets = HapticPresetStorage.listPresets(context)
-
-                                                        statusFeedback = "Ringtone and haptics applied"
-                                                    } else {
-                                                        statusFeedback = "Failed to register ringtone"
-                                                    }
-                                                } catch (e: Exception) {
-                                                    statusFeedback = "Error: ${e.message}"
-                                                } finally {
-                                                    isSettingRingtone = false
-                                                }
+                                // Row 2: Export RTP .bin & Build Ringtone Module
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    LiquidButton(
+                                        onClick = {
+                                            exportRtpBinary(context, currentHaptic, audioFileName ?: "effect") { msg ->
+                                                statusFeedback = msg
                                             }
+                                        },
+                                        backdrop = backdrop,
+                                        tint = colors.accentOrange,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        BasicText(
+                                            text = "Export RTP .bin",
+                                            style = HyperBounceType.body.copy(
+                                                color = Color.White,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        )
+                                    }
+
+                                    LiquidButton(
+                                        onClick = {
+                                            moduleDialogTargetPresetId = null
+                                            isModuleDialogOpen = true
                                         },
                                         backdrop = backdrop,
                                         tint = colors.accentPink,
                                         modifier = Modifier.weight(1.3f)
                                     ) {
                                         BasicText(
-                                            text = if (isSettingRingtone) "Applying..." else "Set as Ringtone",
+                                            text = "Build Module",
                                             style = HyperBounceType.body.copy(
                                                 color = Color.White,
                                                 fontWeight = FontWeight.Bold
@@ -797,71 +806,6 @@ fun HapticStudioScreen(
                                         )
                                     }
                                 }
-                            }
-
-                            Spacer(Modifier.height(16.dp))
-                            RowDivider(colors.separator)
-                            Spacer(Modifier.height(14.dp))
-
-                            // Actions: Export RTP .bin & Save Preset
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                LiquidButton(
-                                    onClick = {
-                                        exportRtpBinary(context, currentHaptic, audioFileName ?: "effect") { msg ->
-                                            statusFeedback = msg
-                                        }
-                                    },
-                                    backdrop = backdrop,
-                                    tint = colors.accentOrange,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    BasicText(
-                                        text = "Export RTP .bin",
-                                        style = HyperBounceType.body.copy(
-                                            color = Color.White,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    )
-                                }
-
-                                LiquidButton(
-                                    onClick = {
-                                        val audio = decodedAudio
-                                        if (audio == null || synthesizedHaptics.isEmpty()) {
-                                            statusFeedback = "No synthesized audio to save"
-                                            return@LiquidButton
-                                        }
-                                        val title = audioFileName?.substringBeforeLast('.') ?: "Custom Preset"
-                                        HapticPresetStorage.savePreset(
-                                            context = context,
-                                            title = title,
-                                            audioFileName = audioFileName ?: "$title.wav",
-                                            decodedAudio = audio,
-                                            synthesizedHaptics = synthesizedHaptics,
-                                            selectedPipelineIndex = selectedPipelineIndex,
-                                            trimStartMs = trimStartMs,
-                                            trimEndMs = if (trimEndMs > trimStartMs) trimEndMs else totalDurationMs,
-                                            intensityMode = intensityMode
-                                        )
-                                        savedPresets = HapticPresetStorage.listPresets(context)
-                                        statusFeedback = "Saved \"$title\" to Library"
-                                    },
-                                    backdrop = backdrop,
-                                    tint = colors.accentGreen,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    BasicText(
-                                        text = "Save Preset",
-                                        style = HyperBounceType.body.copy(
-                                            color = Color.White,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    )
-                                }
-                            }
                         }
                     }
                 }
@@ -949,13 +893,58 @@ fun HapticStudioScreen(
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 BasicText(
-                                    text = "Import an audio track above and tap Save Preset or Set as Ringtone.",
+                                    text = "Import an audio track above and tap Save Preset to add it here.",
                                     style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
                                 )
                             }
                         }
                     }
                 } else {
+                    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                BasicText(
+                                    text = "Package Magisk / KSU Module",
+                                    style = HyperBounceType.body.copy(
+                                        color = colors.label,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                BasicText(
+                                    text = "${savedPresets.size} preset(s) ready to compile with 24kHz haptics",
+                                    style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
+                                )
+                            }
+
+                            LiquidButton(
+                                onClick = {
+                                    moduleDialogTargetPresetId = null
+                                    isModuleDialogOpen = true
+                                },
+                                backdrop = backdrop,
+                                tint = colors.accentPink,
+                                modifier = Modifier.padding(start = 8.dp)
+                            ) {
+                                BasicText(
+                                    text = "Build Pack",
+                                    style = HyperBounceType.caption.copy(
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+
                     Column(
                         modifier = Modifier.padding(horizontal = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1068,7 +1057,7 @@ fun HapticStudioScreen(
 
                                     Spacer(Modifier.height(12.dp))
 
-                                    // Action buttons: Open in Studio & Apply Ringtone
+                                    // Action buttons: Open in Studio & Package Module
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1113,50 +1102,15 @@ fun HapticStudioScreen(
 
                                         LiquidButton(
                                             onClick = {
-                                                if (isSettingRingtone) return@LiquidButton
-                                                scope.launch {
-                                                    isSettingRingtone = true
-                                                    try {
-                                                        val loaded = HapticPresetStorage.loadPresetData(context, preset)
-                                                        if (loaded == null) {
-                                                            statusFeedback = "Could not load preset audio"
-                                                            return@launch
-                                                        }
-                                                        val start = preset.trimStartMs.coerceAtLeast(0)
-                                                        val end = if (preset.trimEndMs > start) preset.trimEndMs else loaded.decodedAudio.durationMs.toInt()
-                                                        val pipe = loaded.synthesizedHaptics.getOrNull(preset.selectedPipelineIndex)
-                                                            ?: loaded.synthesizedHaptics[0]
-
-                                                        val wavBytes = RingtoneManagerHelper.cropAndEncodeWav(loaded.decodedAudio, start, end)
-                                                        val croppedHaptic = RingtoneManagerHelper.cropHaptic(pipe, start, end)
-                                                        val ringtoneUri = RingtoneManagerHelper.installRingtoneAudio(context, wavBytes, preset.title)
-
-                                                        if (ringtoneUri != null) {
-                                                            RingtoneManagerHelper.setAsDefaultRingtone(context, ringtoneUri)
-                                                            val profile = ActiveRingtoneProfile(
-                                                                title = preset.title,
-                                                                durationMs = (end - start).toLong(),
-                                                                intensityMode = preset.intensityMode,
-                                                                events = croppedHaptic.events
-                                                            )
-                                                            HapticRingtoneStorage.save(context, profile)
-                                                            statusFeedback = "Ringtone applied: ${preset.title}"
-                                                        } else {
-                                                            statusFeedback = "Failed to register ringtone"
-                                                        }
-                                                    } catch (e: Exception) {
-                                                        statusFeedback = "Error: ${e.message}"
-                                                    } finally {
-                                                        isSettingRingtone = false
-                                                    }
-                                                }
+                                                moduleDialogTargetPresetId = preset.id
+                                                isModuleDialogOpen = true
                                             },
                                             backdrop = backdrop,
                                             tint = colors.accentPink,
                                             modifier = Modifier.weight(1f)
                                         ) {
                                             BasicText(
-                                                text = "Apply Ringtone",
+                                                text = "Package Module",
                                                 style = HyperBounceType.caption.copy(
                                                     color = Color.White,
                                                     fontWeight = FontWeight.SemiBold
@@ -1200,6 +1154,19 @@ fun HapticStudioScreen(
                 }
             }
         }
+
+        // Magisk / KernelSU Ringtone Module Packaging Modal
+        RingtoneModuleBuilderDialog(
+            isOpen = isModuleDialogOpen,
+            savedPresets = savedPresets,
+            colors = colors,
+            backdrop = backdrop,
+            initialSelectedPresetId = moduleDialogTargetPresetId,
+            onDismiss = {
+                isModuleDialogOpen = false
+                moduleDialogTargetPresetId = null
+            }
+        )
     }
 }
 

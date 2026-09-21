@@ -125,10 +125,16 @@ class PhysicsHook : XposedModule() {
                     dev.joseph.hyperbounce.dialer.DialerRecentsHook.init(this, param.classLoader)
                 }
 
+                param.packageName == "com.android.settings" ||
+                param.packageName == "com.android.thememanager" -> {
+                    dev.joseph.hyperbounce.haptics.ringtone.XiaomiRingtoneHapticHook.init(this, param.classLoader)
+                }
+
                 param.packageName == "com.android.server.telecom" ||
                 param.packageName == "android" ||
                 param.packageName == "system" -> {
                     dev.joseph.hyperbounce.haptics.ringtone.TelecomRingtoneHapticHook.init(this, param.classLoader)
+                    dev.joseph.hyperbounce.haptics.ringtone.XiaomiRingtoneHapticHook.init(this, param.classLoader)
                 }
             }
 
@@ -156,10 +162,11 @@ class PhysicsHook : XposedModule() {
     override fun onSystemServerStarting(param: XposedModuleInterface.SystemServerStartingParam) {
         super.onSystemServerStarting(param)
         try {
-            Log.d("HyperBounce", "onSystemServerStarting: initializing TelecomRingtoneHapticHook")
+            Log.d("HyperBounce", "onSystemServerStarting: initializing Telecom and Xiaomi ringtone haptic hooks")
             dev.joseph.hyperbounce.haptics.ringtone.TelecomRingtoneHapticHook.init(this, param.classLoader)
+            dev.joseph.hyperbounce.haptics.ringtone.XiaomiRingtoneHapticHook.init(this, param.classLoader)
         } catch (t: Throwable) {
-            Log.e("HyperBounce", "Failed to init TelecomRingtoneHapticHook in onSystemServerStarting", t)
+            Log.e("HyperBounce", "Failed to init ringtone hooks in onSystemServerStarting", t)
         }
     }
 }

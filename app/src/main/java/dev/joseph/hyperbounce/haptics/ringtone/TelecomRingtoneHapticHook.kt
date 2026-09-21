@@ -65,6 +65,15 @@ object TelecomRingtoneHapticHook {
                             val originalResult = chain.proceed() as? VibrationEffect
                             try {
                                 val uri = chain.args[0] as? Uri
+                                val ctx = chain.args[1] as? Context
+                                if (ctx != null && uri != null) {
+                                    val path = RingtoneRegistry.resolvePathFromUri(ctx, uri) ?: uri.toString()
+                                    val customId = RingtoneRegistry.resolveEffectId(ctx, path)
+                                    if (customId != null) {
+                                        Log.i(TAG, "VibrationEffectProxy.get mapped [$path] to hardware Effect ID #$customId")
+                                        return@intercept VibrationEffect.createPredefined(customId)
+                                    }
+                                }
                                 val customEffect = createWaveformEffectForActiveRingtone(uri)
                                 if (customEffect != null) {
                                     Log.i(TAG, "VibrationEffectProxy.get provided custom haptic effect")
