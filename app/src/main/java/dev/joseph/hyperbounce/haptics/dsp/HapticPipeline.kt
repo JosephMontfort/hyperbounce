@@ -54,7 +54,7 @@ data class HapticEvent(
 )
 
 data class PipelineConfig(
-    val resonantFrequencyHz: Float = 160.0f,
+    val resonantFrequencyHz: Float = 171.4f,
     val sensitivity: Float = 1.0f,
     val brakingStrength: Float = 0.85f,
     val maxDurationMs: Long = 0L // 0L means full unconstrained duration

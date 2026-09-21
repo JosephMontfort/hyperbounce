@@ -1445,7 +1445,7 @@ class SettingsRepository(context: Context) {
         var sensitivity by prefsFloatState("audio_haptics_sensitivity", 0.75f)
         var refractoryMs by prefsLongState("audio_haptics_refractory_ms", 35L)
         var activePipeline by prefsStringState("active_haptic_pipeline", "XiaomiMelodicCrisp")
-        var resonantFrequencyHz by prefsFloatState("active_haptic_freq", 160f)
+        var resonantFrequencyHz by prefsFloatState("active_haptic_freq", 171.4f)
 
         fun setRealTimeEnabledPref(v: Boolean) { realTimeEnabled = v }
         fun setSensitivityPref(v: Float) { sensitivity = v }

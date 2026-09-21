@@ -237,9 +237,17 @@ object HapticSynthesizer {
             }
         }
 
+        // Normalize grain relative to its own native peak so gain precisely sets the output peak
+        var maxAbs = 0
+        for (b in grain) {
+            val a = abs(b.toInt())
+            if (a > maxAbs) maxAbs = a
+        }
+        val normFactor = if (maxAbs > 0) (gain / maxAbs) else (gain / 127.0f)
+
         for (k in 0 until (end - startIndex)) {
             val s8 = grain[k].toInt()
-            val normalized = (s8 / 127.0f) * gain
+            val normalized = s8 * normFactor
             output[startIndex + k] = (output[startIndex + k] + normalized).coerceIn(-1.0f, 1.0f)
         }
     }
@@ -247,17 +255,26 @@ object HapticSynthesizer {
     private fun stampResonantBass(
         output: FloatArray,
         startIndex: Int,
-        durationMs: Int,
-        freqHz: Float = 165.0f,
+        durationMs: Int = 120,
+        freqHz: Float = 171.4f,
         gain: Float = 0.95f
     ) {
         val numSamples = ((durationMs * OUTPUT_SAMPLE_RATE) / 1000).coerceAtMost(output.size - startIndex)
         if (numSamples <= 0) return
 
+        val attackSamples = ((0.012f * OUTPUT_SAMPLE_RATE).toInt()).coerceAtMost(numSamples / 3)
+        val releaseSamples = ((0.018f * OUTPUT_SAMPLE_RATE).toInt()).coerceAtMost(numSamples / 3)
+
         for (s in 0 until numSamples) {
             val t = s.toFloat() / OUTPUT_SAMPLE_RATE
-            // Hann window envelope for soft transient clickless start/stop
-            val env = (0.5f - 0.5f * cos(2.0 * PI * s / numSamples)).toFloat()
+            val env = when {
+                s < attackSamples -> (0.5f - 0.5f * cos(PI * s / attackSamples)).toFloat()
+                s > numSamples - releaseSamples -> {
+                    val rem = numSamples - s
+                    (0.5f - 0.5f * cos(PI * rem / releaseSamples)).toFloat()
+                }
+                else -> 1.0f
+            }
             val sine = sin(2.0 * PI * freqHz * t).toFloat()
             output[startIndex + s] = (output[startIndex + s] + sine * env * gain).coerceIn(-1.0f, 1.0f)
         }
@@ -332,14 +349,17 @@ object HapticSynthesizer {
                     lastOnsetMs = currTimeMs
                     val outIdx = ((currTimeMs * OUTPUT_SAMPLE_RATE) / 1000L).toInt()
 
-                    if (currLp > currBp * 1.5f) {
-                        // Downbeat bass impact
+                    // Distinguish primary downbeat/accents (POCO Tier 1) vs melodic snaps (POCO Tier 2 / Stock Melodic)
+                    val isPrimaryAccent = (currLp > currBp * 1.0f) || (currLp > 0.030f) || (currBp > threshold * 1.35f && currBp > 0.038f)
+
+                    if (isPrimaryAccent) {
+                        // POCO Tier 1: Resonant bass downbeat impact (120ms at 171.4Hz, peak ~121)
                         events.add(HapticEvent(timestampMs = currTimeMs, effectId = 5)) // EFFECT_HEAVY_CLICK
-                        stampResonantBass(output, outIdx, durationMs = 110, freqHz = 165f, gain = 0.9f)
+                        stampResonantBass(output, outIdx, durationMs = 120, freqHz = config.resonantFrequencyHz, gain = 0.95f)
                     } else {
-                        // Melodic transient snap
+                        // POCO Tier 2 / Stock Melodic: Crisp note snap (peak 90-108)
                         events.add(HapticEvent(timestampMs = currTimeMs, effectId = 0)) // EFFECT_CLICK
-                        val gain = (currBp * 3.5f * config.sensitivity).coerceIn(0.6f, 1.0f)
+                        val gain = (currBp * 4.5f * config.sensitivity).coerceIn(0.72f, 0.85f)
                         stampGrain(output, outIdx, MELODIC_CLICK_429_GRAIN, gain = gain, duckExisting = true)
                     }
                 }
@@ -414,7 +434,7 @@ object HapticSynthesizer {
 
                 if (bassTrigger) {
                     events.add(HapticEvent(timestampMs = currTimeMs, effectId = 5)) // EFFECT_HEAVY_CLICK
-                    stampResonantBass(output, outIdx, durationMs = 168, freqHz = config.resonantFrequencyHz, gain = 1.0f)
+                    stampResonantBass(output, outIdx, durationMs = 150, freqHz = config.resonantFrequencyHz, gain = 0.98f)
                 } else {
                     events.add(HapticEvent(timestampMs = currTimeMs, effectId = 0)) // EFFECT_CLICK
                     stampGrain(output, outIdx, HEAVY_CLICK_GRAIN, gain = 0.95f, duckExisting = true)
@@ -602,18 +622,18 @@ object HapticSynthesizer {
                 lastOnsetMs = currTimeMs
                 val outIdx = ((currTimeMs * OUTPUT_SAMPLE_RATE) / 1000L).toInt()
 
-                if (currLp > currBp * 1.6f) {
+                if (currLp > currBp * 1.2f || currLp > 0.030f) {
                     // Deep low-end drop
                     events.add(HapticEvent(timestampMs = currTimeMs, effectId = 5)) // EFFECT_HEAVY_CLICK
-                    stampResonantBass(output, outIdx, durationMs = 120, freqHz = 165f, gain = 0.95f)
+                    stampResonantBass(output, outIdx, durationMs = 125, freqHz = config.resonantFrequencyHz, gain = 0.96f)
                 } else if (currBp > currLp * 1.8f) {
                     // Crisp treble click
                     events.add(HapticEvent(timestampMs = currTimeMs, effectId = 0)) // EFFECT_CLICK
-                    stampGrain(output, outIdx, MELODIC_CLICK_429_GRAIN, gain = 0.9f, duckExisting = true)
+                    stampGrain(output, outIdx, MELODIC_CLICK_429_GRAIN, gain = 0.85f, duckExisting = true)
                 } else {
                     // Balanced punch
                     events.add(HapticEvent(timestampMs = currTimeMs, effectId = 1)) // EFFECT_DOUBLE_CLICK
-                    stampGrain(output, outIdx, DOUBLE_CLICK_GRAIN, gain = 0.85f, duckExisting = true)
+                    stampGrain(output, outIdx, DOUBLE_CLICK_GRAIN, gain = 0.88f, duckExisting = true)
                 }
             }
         }
@@ -637,14 +657,15 @@ object HapticSynthesizer {
                 timings.add(pauseMs)
                 amplitudes.add(0) // Dead silence between beats!
             }
-            val pulseMs = 18L
+            val isHeavy = (event.effectId == 5)
+            val pulseMs = if (isHeavy) 30L else 18L
             timings.add(pulseMs)
             val amp = when (event.effectId) {
                 5 -> 255
-                3 -> 210
-                4 -> 170
-                2 -> 90
-                else -> 180
+                3 -> 220
+                4 -> 180
+                2 -> 100
+                else -> 190
             }
             amplitudes.add(amp)
             lastTimeMs = event.timestampMs + pulseMs
