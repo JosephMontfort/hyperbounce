@@ -254,6 +254,26 @@ object HapticSynthesizer {
         }
     }
 
+    private fun stampPreloadTexture(
+        output: FloatArray,
+        startMs: Long,
+        endMs: Long,
+        freqHz: Float = 171.4f,
+        amp: Float = 19.0f / 127.0f
+    ) {
+        if (endMs <= startMs) return
+        val startSample = ((startMs * OUTPUT_SAMPLE_RATE) / 1000L).toInt().coerceIn(0, output.size)
+        val endSample = ((endMs * OUTPUT_SAMPLE_RATE) / 1000L).toInt().coerceIn(startSample, output.size)
+        val count = endSample - startSample
+        if (count <= 0) return
+
+        for (s in 0 until count) {
+            val t = s.toFloat() / OUTPUT_SAMPLE_RATE
+            val sine = sin(2.0 * PI * freqHz * t).toFloat()
+            output[startSample + s] = (output[startSample + s] + sine * amp).coerceIn(-1.0f, 1.0f)
+        }
+    }
+
     private fun stampResonantBass(
         output: FloatArray,
         startIndex: Int,
@@ -273,7 +293,7 @@ object HapticSynthesizer {
 
         val targetPeak = (121.0f / 127.0f)
         val attackGain = 0.85f * targetPeak * gain
-        val holdGain = 0.22f * targetPeak * gain
+        val holdGain = (19.0f / 127.0f) * gain
         val strikeGain = targetPeak * gain
 
         for (s in 0 until numSamples) {
@@ -372,22 +392,30 @@ object HapticSynthesizer {
                 if (currTimeMs - lastOnsetMs >= minIntervalMs) {
                     val outIdx = ((currTimeMs * OUTPUT_SAMPLE_RATE) / 1000L).toInt()
 
-                    // Distinguish true downbeats/phrase accents (>= 450ms apart) vs crisp melodic notes
+                    // Continuous texture pre-load between closely-spaced rhythmic notes (115ms - 260ms)
+                    if (lastOnsetMs > 0L && currTimeMs - lastOnsetMs in 115L..260L) {
+                        stampPreloadTexture(output, lastOnsetMs + 20L, currTimeMs, config.resonantFrequencyHz, 19.0f / 127.0f)
+                    }
+
+                    // Distinguish true downbeats/phrase accents (>= 280ms apart) vs crisp melodic notes
                     val hasBassEnergy = (currLp > currBp * 1.25f) && (currLp > 0.024f)
-                    val isPhraseAccent = (currTimeMs - lastOnsetMs >= 280L) && (currBp > threshold * 1.35f) && (currBp > 0.028f)
-                    val isDownbeat = (hasBassEnergy || isPhraseAccent) && (currTimeMs - lastBassMs >= 450L)
+                    val isPhraseAccent = (currTimeMs - lastOnsetMs >= 220L) && (currBp > threshold * 1.35f) && (currBp > 0.028f)
+                    val isDownbeat = (hasBassEnergy || isPhraseAccent) && (currTimeMs - lastBassMs >= 280L)
 
                     lastOnsetMs = currTimeMs
 
                     if (isDownbeat) {
                         lastBassMs = currTimeMs
-                        // POCO Tier 1: Resonant bass downbeat impact (100ms at 171.4Hz, POCO ASR envelope peaking at 121)
+                        // POCO Tier 1: Resonant bass downbeat impact (100ms, POCO ASR envelope peaking at 121)
                         events.add(HapticEvent(timestampMs = currTimeMs, effectId = 5)) // EFFECT_HEAVY_CLICK
                         stampResonantBass(output, outIdx, durationMs = 100, freqHz = config.resonantFrequencyHz, gain = 1.0f)
                     } else {
-                        // POCO Tier 2 / Stock Melodic: Crisp note snap (peak 85-108)
+                        // POCO Tier 2 / Stock Melodic: Crisp note snap (peak 104-108)
                         events.add(HapticEvent(timestampMs = currTimeMs, effectId = 0)) // EFFECT_CLICK
-                        val gain = (currBp * 4.8f * config.sensitivity).coerceIn(0.70f, 0.85f)
+                        val minGain = 104.0f / 127.0f
+                        val maxGain = 108.0f / 127.0f
+                        val velocity = (currBp / (threshold * 1.4f)).coerceIn(0.0f, 1.0f)
+                        val gain = minGain + velocity * (maxGain - minGain)
                         stampGrain(output, outIdx, MELODIC_CLICK_429_GRAIN, gain = gain, duckExisting = true)
                     }
                 }
@@ -454,10 +482,15 @@ object HapticSynthesizer {
             val meanLp = localSumLp / (win * 2)
             val meanBp = localSumBp / (win * 2)
 
-            val bassTrigger = isBassPeak && currLp > meanLp * (1.18f / config.sensitivity.coerceIn(0.25f, 2.5f)) && currLp > 0.016f && (currTimeMs - lastBassMs >= 350L)
+            val bassTrigger = isBassPeak && currLp > meanLp * (1.18f / config.sensitivity.coerceIn(0.25f, 2.5f)) && currLp > 0.016f && (currTimeMs - lastBassMs >= 280L)
             val highTrigger = isHighPeak && currBp > meanBp * (1.25f / config.sensitivity.coerceIn(0.25f, 2.5f)) && currBp > 0.018f
 
             if ((bassTrigger || highTrigger) && (currTimeMs - lastOnsetMs >= minIntervalMs)) {
+                // Continuous texture pre-load between closely-spaced beats (125ms - 260ms)
+                if (lastOnsetMs > 0L && currTimeMs - lastOnsetMs in 125L..260L) {
+                    stampPreloadTexture(output, lastOnsetMs + 20L, currTimeMs, config.resonantFrequencyHz, 19.0f / 127.0f)
+                }
+
                 lastOnsetMs = currTimeMs
                 val outIdx = ((currTimeMs * OUTPUT_SAMPLE_RATE) / 1000L).toInt()
 
@@ -467,7 +500,7 @@ object HapticSynthesizer {
                     stampResonantBass(output, outIdx, durationMs = 110, freqHz = config.resonantFrequencyHz, gain = 1.0f)
                 } else {
                     events.add(HapticEvent(timestampMs = currTimeMs, effectId = 0)) // EFFECT_CLICK
-                    stampGrain(output, outIdx, HEAVY_CLICK_GRAIN, gain = 0.90f, duckExisting = true)
+                    stampGrain(output, outIdx, HEAVY_CLICK_GRAIN, gain = 108.0f / 127.0f, duckExisting = true)
                 }
             }
         }
@@ -647,25 +680,30 @@ object HapticSynthesizer {
                     totalEnergy >= (bpEnergy[f + 1] + lpEnergy[f + 1]) &&
                     totalEnergy >= (bpEnergy[f - 2] + lpEnergy[f - 2])
 
-            val threshold = meanTotal * (1.35f / config.sensitivity.coerceIn(0.4f, 2.5f))
+            val threshold = meanTotal * (1.18f / config.sensitivity.coerceIn(0.25f, 2.5f))
 
-            if (isPeak && totalEnergy > threshold && totalEnergy > 0.02f && (currTimeMs - lastOnsetMs >= minIntervalMs)) {
+            if (isPeak && totalEnergy > threshold && totalEnergy > 0.015f && (currTimeMs - lastOnsetMs >= minIntervalMs)) {
+                // Continuous texture pre-load between closely-spaced beats (115ms - 260ms)
+                if (lastOnsetMs > 0L && currTimeMs - lastOnsetMs in 115L..260L) {
+                    stampPreloadTexture(output, lastOnsetMs + 20L, currTimeMs, config.resonantFrequencyHz, 19.0f / 127.0f)
+                }
+
                 lastOnsetMs = currTimeMs
                 val outIdx = ((currTimeMs * OUTPUT_SAMPLE_RATE) / 1000L).toInt()
 
-                if ((currLp > currBp * 1.3f || currLp > 0.035f) && (currTimeMs - lastBassMs >= 450L)) {
+                if ((currLp > currBp * 1.25f || currLp > 0.028f) && (currTimeMs - lastBassMs >= 280L)) {
                     lastBassMs = currTimeMs
                     // Deep low-end drop
                     events.add(HapticEvent(timestampMs = currTimeMs, effectId = 5)) // EFFECT_HEAVY_CLICK
                     stampResonantBass(output, outIdx, durationMs = 100, freqHz = config.resonantFrequencyHz, gain = 1.0f)
-                } else if (currBp > currLp * 1.5f) {
+                } else if (currBp > currLp * 1.35f) {
                     // Crisp treble click
                     events.add(HapticEvent(timestampMs = currTimeMs, effectId = 0)) // EFFECT_CLICK
-                    stampGrain(output, outIdx, MELODIC_CLICK_429_GRAIN, gain = 0.71f, duckExisting = true)
+                    stampGrain(output, outIdx, MELODIC_CLICK_429_GRAIN, gain = 108.0f / 127.0f, duckExisting = true)
                 } else {
                     // Balanced punch
                     events.add(HapticEvent(timestampMs = currTimeMs, effectId = 1)) // EFFECT_DOUBLE_CLICK
-                    stampGrain(output, outIdx, DOUBLE_CLICK_GRAIN, gain = 0.75f, duckExisting = true)
+                    stampGrain(output, outIdx, DOUBLE_CLICK_GRAIN, gain = 105.0f / 127.0f, duckExisting = true)
                 }
             }
         }
