@@ -40,8 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.layerBackdrop
 import com.kyant.shapes.Capsule
 import dev.joseph.hyperbounce.lockscreen.glass.LockScreenWallpaperHelper
 import dev.joseph.hyperbounce.notification.glass.CustomWallpaperHelper
@@ -276,7 +276,7 @@ fun DepthSubjectAdjusterDialog(
                         ) {
                             BasicText(
                                 "Show Background",
-                                style = HyperBounceType.subheadline.copy(
+                                style = HyperBounceType.subhead.copy(
                                     color = Color.White,
                                     fontWeight = FontWeight.Medium
                                 )

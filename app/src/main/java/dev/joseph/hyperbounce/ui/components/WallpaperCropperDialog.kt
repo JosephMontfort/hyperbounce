@@ -39,8 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.layerBackdrop
 import com.kyant.shapes.Capsule
 import dev.joseph.hyperbounce.ui.glass.LiquidButton
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
