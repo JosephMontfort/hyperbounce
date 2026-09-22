@@ -20,6 +20,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
@@ -38,6 +39,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +59,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -122,12 +125,14 @@ fun HapticStudioScreen(
     var totalDurationMs by remember { mutableIntStateOf(0) }
 
     // Haptic Intensity & Ringtone Trimming State
-    var intensityMode by remember { mutableStateOf(HapticIntensityMode.Punchy) }
+    var intensityMode by remember { mutableStateOf(HapticIntensityMode.Crisp) }
     var isTrimMode by remember { mutableStateOf(false) }
     var trimStartMs by remember { mutableIntStateOf(0) }
     var trimEndMs by remember { mutableIntStateOf(0) }
     var isModuleDialogOpen by remember { mutableStateOf(false) }
     var moduleDialogTargetPresetId by remember { mutableStateOf<String?>(null) }
+    var presetToRename by remember { mutableStateOf<SavedHapticPreset?>(null) }
+    var isRenamePresetDialogOpen by remember { mutableStateOf(false) }
     var statusFeedback by remember { mutableStateOf<String?>(null) }
 
     // Saved Library Presets
@@ -456,51 +461,6 @@ fun HapticStudioScreen(
                                     .height(104.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(Color(0xFF0F141C))
-                            )
-
-                            Spacer(Modifier.height(14.dp))
-
-                            // Haptic Intensity Selector
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                BasicText(
-                                    text = "Intensity",
-                                    style = HyperBounceType.body.copy(
-                                        color = colors.label,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                )
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    HapticIntensityMode.entries.forEach { mode ->
-                                        val isSelected = intensityMode == mode
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(
-                                                    if (isSelected) colors.accentBlue else colors.separator.copy(alpha = 0.25f)
-                                                )
-                                                .clickable { intensityMode = mode }
-                                                .padding(horizontal = 9.dp, vertical = 5.dp)
-                                        ) {
-                                            BasicText(
-                                                text = mode.title,
-                                                style = HyperBounceType.caption.copy(
-                                                    color = if (isSelected) Color.White else colors.secondaryLabel,
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                    fontSize = 11.sp
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            Spacer(Modifier.height(4.dp))
-                            BasicText(
-                                text = intensityMode.description,
-                                style = HyperBounceType.caption.copy(color = colors.tertiaryLabel, fontSize = 11.sp)
                             )
 
                             Spacer(Modifier.height(14.dp))
@@ -975,26 +935,52 @@ fun HapticStudioScreen(
                                             )
                                         }
 
-                                        // Delete Button
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .background(colors.accentRed.copy(alpha = 0.12f))
-                                                .clickable {
-                                                    HapticPresetStorage.deletePreset(context, preset.id)
-                                                    savedPresets = HapticPresetStorage.listPresets(context)
-                                                    statusFeedback = "Deleted \"${preset.title}\""
-                                                }
-                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            BasicText(
-                                                text = "Delete",
-                                                style = HyperBounceType.caption.copy(
-                                                    color = colors.accentRed,
-                                                    fontWeight = FontWeight.Medium,
-                                                    fontSize = 11.sp
+                                            // Rename Button
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(colors.accentBlue.copy(alpha = 0.12f))
+                                                    .clickable {
+                                                        presetToRename = preset
+                                                        isRenamePresetDialogOpen = true
+                                                    }
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                BasicText(
+                                                    text = "Rename",
+                                                    style = HyperBounceType.caption.copy(
+                                                        color = colors.accentBlue,
+                                                        fontWeight = FontWeight.Medium,
+                                                        fontSize = 11.sp
+                                                    )
                                                 )
-                                            )
+                                            }
+
+                                            // Delete Button
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(colors.accentRed.copy(alpha = 0.12f))
+                                                    .clickable {
+                                                        HapticPresetStorage.deletePreset(context, preset.id)
+                                                        savedPresets = HapticPresetStorage.listPresets(context)
+                                                        statusFeedback = "Deleted \"${preset.title}\""
+                                                    }
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                BasicText(
+                                                    text = "Delete",
+                                                    style = HyperBounceType.caption.copy(
+                                                        color = colors.accentRed,
+                                                        fontWeight = FontWeight.Medium,
+                                                        fontSize = 11.sp
+                                                    )
+                                                )
+                                            }
                                         }
                                     }
 
@@ -1035,22 +1021,6 @@ fun HapticStudioScreen(
                                                 text = "Trim: $trimInfo",
                                                 style = HyperBounceType.caption.copy(
                                                     color = colors.accentOrange,
-                                                    fontWeight = FontWeight.Medium,
-                                                    fontSize = 10.sp
-                                                )
-                                            )
-                                        }
-
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(colors.separator.copy(alpha = 0.25f))
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            BasicText(
-                                                text = preset.intensityMode.title,
-                                                style = HyperBounceType.caption.copy(
-                                                    color = colors.secondaryLabel,
                                                     fontWeight = FontWeight.Medium,
                                                     fontSize = 10.sp
                                                 )
@@ -1168,6 +1138,32 @@ fun HapticStudioScreen(
             onDismiss = {
                 isModuleDialogOpen = false
                 moduleDialogTargetPresetId = null
+            }
+        )
+
+        // Rename Saved Preset Modal
+        RenamePresetDialog(
+            isOpen = isRenamePresetDialogOpen,
+            preset = presetToRename,
+            colors = colors,
+            backdrop = backdrop,
+            onDismiss = {
+                isRenamePresetDialogOpen = false
+                presetToRename = null
+            },
+            onConfirm = { newTitle ->
+                val target = presetToRename
+                if (target != null) {
+                    val success = HapticPresetStorage.renamePreset(context, target.id, newTitle)
+                    if (success) {
+                        savedPresets = HapticPresetStorage.listPresets(context)
+                        statusFeedback = "Renamed preset to \"$newTitle\""
+                    } else {
+                        statusFeedback = "Failed to rename preset"
+                    }
+                }
+                isRenamePresetDialogOpen = false
+                presetToRename = null
             }
         )
     }
@@ -1454,5 +1450,129 @@ private fun exportRtpBinary(
         onStatus("Exported 24kHz RTP: $fileName")
     } catch (e: Exception) {
         onStatus("Export failed: ${e.message}")
+    }
+}
+
+@Composable
+private fun RenamePresetDialog(
+    isOpen: Boolean,
+    preset: SavedHapticPreset?,
+    colors: HyperBounceColors,
+    backdrop: Backdrop,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    if (!isOpen || preset == null) return
+
+    var currentTitle by remember(preset) { mutableStateOf(preset.title) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.68f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        GlassCard(
+            backdrop = backdrop,
+            modifier = Modifier
+                .fillMaxWidth(0.88f)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {}
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                BasicText(
+                    text = "Rename Preset",
+                    style = HyperBounceType.headline.copy(
+                        color = colors.label,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                )
+                Spacer(Modifier.height(4.dp))
+                BasicText(
+                    text = "Enter a new title for this audio preset.",
+                    style = HyperBounceType.caption.copy(
+                        color = colors.secondaryLabel,
+                        fontSize = 12.sp
+                    )
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.separator.copy(alpha = 0.12f))
+                        .border(1.dp, colors.accentBlue.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                ) {
+                    BasicTextField(
+                        value = currentTitle,
+                        onValueChange = { currentTitle = it },
+                        singleLine = true,
+                        textStyle = HyperBounceType.body.copy(
+                            color = colors.label,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        ),
+                        cursorBrush = SolidColor(colors.accentBlue),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    LiquidButton(
+                        onClick = onDismiss,
+                        backdrop = backdrop,
+                        tint = colors.separator.copy(alpha = 0.5f),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        BasicText(
+                            text = "Cancel",
+                            style = HyperBounceType.body.copy(
+                                color = colors.label,
+                                fontWeight = FontWeight.Medium
+                            )
+                        )
+                    }
+
+                    val canSave = currentTitle.isNotBlank() && currentTitle.trim() != preset.title
+                    LiquidButton(
+                        onClick = {
+                            if (canSave) {
+                                onConfirm(currentTitle.trim())
+                            }
+                        },
+                        backdrop = backdrop,
+                        tint = if (canSave) colors.accentBlue else colors.separator.copy(alpha = 0.3f),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        BasicText(
+                            text = "Save",
+                            style = HyperBounceType.body.copy(
+                                color = if (canSave) Color.White else colors.secondaryLabel,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+                }
+            }
+        }
     }
 }

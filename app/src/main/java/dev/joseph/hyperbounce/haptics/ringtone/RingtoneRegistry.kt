@@ -17,6 +17,7 @@ object RingtoneRegistry {
     private const val TAG = "RingtoneRegistry"
     private const val REGISTRY_FILE = "custom_ringtone_mapping.json"
     private const val SHARED_TMP_REGISTRY = "/data/local/tmp/hyperbounce_ringtone_mapping.json"
+    private const val SETTINGS_KEY = "hyperbounce_ringtone_mappings"
     const val BASE_CUSTOM_EFFECT_ID = 901
 
     data class RingtoneMapping(
@@ -26,10 +27,17 @@ object RingtoneRegistry {
         val addedAt: Long = System.currentTimeMillis()
     )
 
+    fun getGlobalContext(): Context? = try {
+        val at = Class.forName("android.app.ActivityThread")
+        at.getMethod("currentApplication").invoke(null) as? Context
+    } catch (_: Throwable) {
+        null
+    }
+
     private fun getFile(context: Context?): File? {
-        if (context == null) return null
+        val ctx = context ?: getGlobalContext() ?: return null
         return try {
-            File(context.filesDir, REGISTRY_FILE)
+            File(ctx.filesDir, REGISTRY_FILE)
         } catch (_: Throwable) {
             null
         }
@@ -37,30 +45,70 @@ object RingtoneRegistry {
 
     /**
      * Loads all currently registered custom ringtones.
-     * Checks context.filesDir, shared tmp mirror, and parses /vendor/firmware directly.
+     * Checks Settings.System, context.filesDir, shared tmp mirror, and parses /vendor/firmware directly.
      */
     fun loadMappings(context: Context?): List<RingtoneMapping> {
         val list = ArrayList<RingtoneMapping>()
+        val ctx = context ?: getGlobalContext()
 
-        // 1. Try context private file
-        val file = getFile(context)
+        // 1. Try Settings.System (accessible cross-process by any app/service)
+        if (ctx != null) {
+            try {
+                val jsonText = android.provider.Settings.System.getString(ctx.contentResolver, SETTINGS_KEY)
+                if (!jsonText.isNullOrBlank()) {
+                    parseJsonIntoList(jsonText, list)
+                    if (list.isNotEmpty()) return list
+                }
+            } catch (t: Throwable) {
+                Log.d(TAG, "Settings.System read fallback: ${t.message}")
+            }
+        }
+
+        // 2. Try context private file
+        val file = getFile(ctx)
         if (file != null && file.exists()) {
             try {
                 parseJsonIntoList(file.readText(), list)
+                if (list.isNotEmpty()) return list
             } catch (t: Throwable) {
                 Log.w(TAG, "Failed reading app private mapping: ${t.message}")
             }
         }
 
-        // 2. If list is empty, try shared /data/local/tmp mirror
-        if (list.isEmpty()) {
-            try {
-                val tmpFile = File(SHARED_TMP_REGISTRY)
-                if (tmpFile.exists() && tmpFile.canRead()) {
-                    parseJsonIntoList(tmpFile.readText(), list)
+        // 3. Try shared /data/local/tmp mirror
+        try {
+            val tmpFile = File(SHARED_TMP_REGISTRY)
+            if (tmpFile.exists() && tmpFile.canRead()) {
+                parseJsonIntoList(tmpFile.readText(), list)
+                if (list.isNotEmpty()) return list
+            }
+        } catch (_: Throwable) {}
+
+        // 4. Fallback: inspect /vendor/firmware directly if accessible
+        try {
+            val dir = File("/vendor/firmware")
+            if (dir.exists() && dir.canRead()) {
+                dir.listFiles()?.forEach { f ->
+                    val name = f.name
+                    if (name.endsWith("_P_RTP.bin", ignoreCase = true) || name.endsWith("_RTP.bin", ignoreCase = true)) {
+                        val idStr = name.substringBefore('_', "")
+                        val id = idStr.toIntOrNull()
+                        if (id != null && id >= 900) {
+                            val namePart = name.substringAfter('_')
+                                .substringBeforeLast("_P_RTP.bin")
+                                .substringBeforeLast("_RTP.bin")
+                            list.add(
+                                RingtoneMapping(
+                                    title = namePart,
+                                    filename = "${namePart}.ogg",
+                                    effectId = id
+                                )
+                            )
+                        }
+                    }
                 }
-            } catch (_: Throwable) {}
-        }
+            }
+        } catch (_: Throwable) {}
 
         return list
     }
@@ -83,7 +131,7 @@ object RingtoneRegistry {
     }
 
     /**
-     * Saves or replaces mappings in internal storage and mirrors to world-readable shared location.
+     * Saves or replaces mappings in internal storage, Settings.System, and mirrors to world-readable shared location.
      */
     fun saveMappings(context: Context, mappings: List<RingtoneMapping>) {
         try {
@@ -102,14 +150,26 @@ object RingtoneRegistry {
                 put("ringtones", arr)
                 put("updatedAt", System.currentTimeMillis())
             }
+            val jsonString = root.toString()
 
             val file = getFile(context)
-            file?.writeText(root.toString())
+            file?.writeText(jsonString)
+
+            // Persist to Settings.System for cross-process accessibility
+            try {
+                android.provider.Settings.System.putString(context.contentResolver, SETTINGS_KEY, jsonString)
+            } catch (t: Throwable) {
+                // If permission denied in unprivileged app, push via root
+                try {
+                    val escaped = jsonString.replace("'", "'\\''")
+                    Runtime.getRuntime().exec(arrayOf("su", "-c", "settings put system $SETTINGS_KEY '$escaped'"))
+                } catch (_: Throwable) {}
+            }
 
             // Mirror to /data/local/tmp for cross-process access across system services
             try {
                 val tmpFile = File(SHARED_TMP_REGISTRY)
-                tmpFile.writeText(root.toString())
+                tmpFile.writeText(jsonString)
                 tmpFile.setReadable(true, false)
             } catch (_: Throwable) {}
 
@@ -149,6 +209,20 @@ object RingtoneRegistry {
      * Resilient against process boundaries and path prefixes.
      */
     fun resolveEffectId(context: Context?, query: String): Int? {
+        val ctx = context ?: getGlobalContext()
+
+        // If query is a content:// URI string, resolve its media path or title first
+        if (query.startsWith("content://")) {
+            val parsedUri = try { Uri.parse(query) } catch (_: Throwable) { null }
+            if (parsedUri != null) {
+                val resolvedPath = resolvePathFromUri(ctx, parsedUri)
+                if (!resolvedPath.isNullOrBlank() && resolvedPath != query) {
+                    val idFromPath = resolveEffectId(ctx, resolvedPath)
+                    if (idFromPath != null) return idFromPath
+                }
+            }
+        }
+
         val cleanQuery = query.substringAfterLast('/').substringBefore('?')
         val queryStem = cleanQuery.substringBeforeLast('.')
         val alphaQuery = queryStem.filter { it.isLetterOrDigit() }.lowercase(java.util.Locale.ROOT)
@@ -156,7 +230,7 @@ object RingtoneRegistry {
         // 0. Direct numeric check
         cleanQuery.toIntOrNull()?.let { if (it >= 900) return it }
 
-        val mappings = loadMappings(context)
+        val mappings = loadMappings(ctx)
 
         // 1. Check mapped filename
         val matchByFile = mappings.firstOrNull { it.filename.equals(cleanQuery, ignoreCase = true) }
@@ -220,17 +294,18 @@ object RingtoneRegistry {
      * Resolves a file path or title on disk from a MediaStore content URI.
      * Queries DATA, DISPLAY_NAME, and TITLE to guarantee extraction even with scoped storage.
      */
-    fun resolvePathFromUri(context: Context, uri: Uri): String? {
+    fun resolvePathFromUri(context: Context?, uri: Uri): String? {
         if (uri.scheme == "file") return uri.path
         if (uri.scheme != "content") return uri.toString()
 
+        val ctx = context ?: getGlobalContext() ?: return uri.toString()
         val proj = arrayOf(
             MediaStore.Audio.Media.DATA,
             MediaStore.Audio.Media.DISPLAY_NAME,
             MediaStore.Audio.Media.TITLE
         )
         return try {
-            context.contentResolver.query(uri, proj, null, null, null)?.use { cursor ->
+            ctx.contentResolver.query(uri, proj, null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) {
                     val dataIdx = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
                     val data = if (dataIdx >= 0) cursor.getString(dataIdx) else null

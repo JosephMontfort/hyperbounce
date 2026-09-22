@@ -49,20 +49,7 @@ object TelecomRingtoneHapticHook {
                         }
 
                         val originalResult = chain.proceed() as? VibrationEffect
-                        if (originalResult != null) return@intercept originalResult
-
-                        // Fallback waveform ONLY if no hardware effect exists
-                        try {
-                            val fallbackEffect = createWaveformEffectForActiveRingtone(uri)
-                            if (fallbackEffect != null) {
-                                Log.i(TAG, "Telecom fallback: provided custom haptic waveform effect")
-                                return@intercept fallbackEffect
-                            }
-                        } catch (t: Throwable) {
-                            Log.e(TAG, "Error in fallback createWaveformEffectForActiveRingtone", t)
-                        }
-
-                        null
+                        originalResult
                     }
                     Log.d(TAG, "Hooked Ringer.getVibrationEffectForRingtone successfully")
                     break
@@ -95,16 +82,7 @@ object TelecomRingtoneHapticHook {
                                 }
                             }
 
-                            val originalResult = chain.proceed() as? VibrationEffect
-                            if (originalResult != null) return@intercept originalResult
-
-                            // Fallback waveform ONLY if stock returned null
-                            val fallbackEffect = createWaveformEffectForActiveRingtone(uri)
-                            if (fallbackEffect != null) {
-                                return@intercept fallbackEffect
-                            }
-
-                            null
+                            chain.proceed()
                         }
                         Log.d(TAG, "Hooked VibrationEffectProxy.get successfully")
                         break
@@ -123,20 +101,7 @@ object TelecomRingtoneHapticHook {
                         module.hook(m).intercept { chain ->
                             val currentEffect = chain.args[vibrationEffectIndex] as? VibrationEffect
                             if (currentEffect != null) {
-                                // A valid effect (hardware predefined effect or stock vibration) is already bound!
-                                // DO NOT OVERWRITE IT with synthetic tick clicks!
                                 Log.i(TAG, "maybeStartVibration: keeping hardware/resolved effect: $currentEffect")
-                            } else {
-                                // Only substitute waveform if current effect is null
-                                try {
-                                    val customEffect = createWaveformEffectForActiveRingtone(null)
-                                    if (customEffect != null) {
-                                        chain.args[vibrationEffectIndex] = customEffect
-                                        Log.i(TAG, "maybeStartVibration substituted fallback haptic waveform")
-                                    }
-                                } catch (t: Throwable) {
-                                    Log.e(TAG, "Error substituting fallback effect in maybeStartVibration", t)
-                                }
                             }
                             chain.proceed()
                         }

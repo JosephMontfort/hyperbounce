@@ -81,7 +81,8 @@ object RingtoneModuleBuilder {
 
     suspend fun buildModule(
         context: Context,
-        selectedPresets: List<SavedHapticPreset>
+        selectedPresets: List<SavedHapticPreset>,
+        customItems: List<RingtonePackageItem>? = null
     ): BuildResult = withContext(Dispatchers.IO) {
         if (selectedPresets.isEmpty()) {
             return@withContext BuildResult(
@@ -117,10 +118,17 @@ object RingtoneModuleBuilder {
                     val loaded = HapticPresetStorage.loadPresetData(context, preset)
                         ?: continue
 
-                    val rawTitle = preset.title.ifBlank { "CustomRingtone" }
-                    val cleanName = rawTitle.filter { it.isLetterOrDigit() }.ifBlank { "CustomRingtone" }
+                    val customItem = customItems?.find { it.presetId == preset.id }
+                    val rawTitle = customItem?.title ?: preset.title.ifBlank { "CustomRingtone" }
+                    val cleanName = customItem?.cleanName ?: rawTitle.filter { it.isLetterOrDigit() }.ifBlank { "CustomRingtone" }
+
+                    // Also sync rename back to preset storage if changed
+                    if (rawTitle != preset.title) {
+                        HapticPresetStorage.renamePreset(context, preset.id, rawTitle)
+                    }
+
                     val existing = existingMappings.find { it.filename.equals("${cleanName}.ogg", ignoreCase = true) }
-                    val effectId = existing?.effectId ?: nextId++
+                    val effectId = customItem?.effectId ?: (existing?.effectId ?: nextId++)
                     val pipeIdx = preset.selectedPipelineIndex.coerceIn(0, loaded.synthesizedHaptics.lastIndex)
                     val haptic = loaded.synthesizedHaptics[pipeIdx]
 
@@ -129,27 +137,17 @@ object RingtoneModuleBuilder {
                     val croppedWavBytes = RingtoneManagerHelper.cropAndEncodeWav(loaded.decodedAudio, start, end)
                     val croppedHaptic = RingtoneManagerHelper.cropHaptic(haptic, start, end)
 
-                    // Audio path in module: system/product/media/audio/ringtones/<CleanName>.ogg
+                    // Audio path in module: standard Magisk/KSU overlay path
+                    // DO NOT add duplicate entries in product/ as MediaScanner will index twice!
                     val audioEntryName = "system/product/media/audio/ringtones/${cleanName}.ogg"
                     zos.putNextEntry(ZipEntry(audioEntryName))
                     zos.write(croppedWavBytes)
                     zos.closeEntry()
 
-                    // Dual entry without system prefix for direct vendor/product mounts
-                    val audioAltEntry = "product/media/audio/ringtones/${cleanName}.ogg"
-                    zos.putNextEntry(ZipEntry(audioAltEntry))
-                    zos.write(croppedWavBytes)
-                    zos.closeEntry()
-
                     // Haptic binary path in module: system/vendor/firmware/<ID>_<CleanName>_P_RTP.bin
-                    // IMPORTANT: cleanName MUST NOT contain underscores so Xiaomi HAL regex matches!
+                    // cleanName MUST NOT contain underscores so Xiaomi HAL regex matches!
                     val hapticEntryName = "system/vendor/firmware/${effectId}_${cleanName}_P_RTP.bin"
                     zos.putNextEntry(ZipEntry(hapticEntryName))
-                    zos.write(croppedHaptic.rtpRawBytes)
-                    zos.closeEntry()
-
-                    val hapticAltEntry = "vendor/firmware/${effectId}_${cleanName}_P_RTP.bin"
-                    zos.putNextEntry(ZipEntry(hapticAltEntry))
                     zos.write(croppedHaptic.rtpRawBytes)
                     zos.closeEntry()
 
@@ -189,8 +187,8 @@ object RingtoneModuleBuilder {
                 val modulePropContent = buildString {
                     appendLine("id=hyperbounce_custom_ringtones")
                     appendLine("name=HyperBounce Custom Haptic Ringtones")
-                    appendLine("version=v1.0")
-                    appendLine("versionCode=100")
+                    appendLine("version=v1.1")
+                    appendLine("versionCode=101")
                     appendLine("author=JosephMontfort & HyperBounce")
                     appendLine("description=Custom ringtones with handcrafted 24kHz tactile haptics mapped to Xiaomi linear resonant actuator. Bundles ${packageItems.size} custom ringtone(s).")
                 }
@@ -214,8 +212,6 @@ object RingtoneModuleBuilder {
                     appendLine("set_perm_recursive \$MODPATH 0 0 0755 0644")
                     appendLine("set_perm_recursive \$MODPATH/system/vendor/firmware 0 0 0755 0644 2>/dev/null || true")
                     appendLine("set_perm_recursive \$MODPATH/system/product/media/audio/ringtones 0 0 0755 0644 2>/dev/null || true")
-                    appendLine("set_perm_recursive \$MODPATH/vendor/firmware 0 0 0755 0644 2>/dev/null || true")
-                    appendLine("set_perm_recursive \$MODPATH/product/media/audio/ringtones 0 0 0755 0644 2>/dev/null || true")
                     appendLine("# Restart vibrator daemon to reindex firmware files")
                     appendLine("killall vendor.xiaomi.hardware.vibratorfeature.service 2>/dev/null || true")
                     appendLine("ui_print \"- Installation complete. Reboot to activate!\"")
@@ -231,11 +227,10 @@ object RingtoneModuleBuilder {
                     appendLine("    sleep 2")
                     appendLine("done")
                     appendLine("# Reseed Xiaomi vibratorfeature daemon to scan newly mounted /vendor/firmware/ files")
-                    appendLine("killall vendor.xiaomi.hardware.vibratorfeature.service")
-                    appendLine("# Notify MediaStore to index new ringtones immediately")
+                    appendLine("killall vendor.xiaomi.hardware.vibratorfeature.service 2>/dev/null || true")
+                    appendLine("# Notify MediaStore to index new ringtones cleanly (single broadcast)")
                     packageItems.forEach { item ->
                         appendLine("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d \"file:///product/media/audio/ringtones/${item.cleanName}.ogg\" >/dev/null 2>&1")
-                        appendLine("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d \"file:///system/product/media/audio/ringtones/${item.cleanName}.ogg\" >/dev/null 2>&1")
                     }
                 }
                 zos.putNextEntry(ZipEntry("service.sh"))

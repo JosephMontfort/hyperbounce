@@ -36,6 +36,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -111,11 +113,12 @@ fun RingtoneModuleBuilderDialog(
         savedPresets.filter { it.id in selectedIds }
     }
 
-    val previewAllocations = remember(selectedPresets) {
+    val packageItems = remember { mutableStateListOf<RingtoneModuleBuilder.RingtonePackageItem>() }
+
+    LaunchedEffect(selectedPresets) {
+        packageItems.clear()
         if (selectedPresets.isNotEmpty()) {
-            RingtoneModuleBuilder.previewAllocations(context, selectedPresets)
-        } else {
-            emptyList()
+            packageItems.addAll(RingtoneModuleBuilder.previewAllocations(context, selectedPresets))
         }
     }
 
@@ -178,17 +181,29 @@ fun RingtoneModuleBuilderDialog(
 
                         ModuleBuilderStep.CONFIRM -> {
                             StepConfirmationContent(
-                                items = previewAllocations,
+                                items = packageItems.toList(),
                                 isBuilding = isBuilding,
                                 errorMessage = errorMessage,
                                 colors = colors,
                                 backdrop = backdrop,
                                 onBack = { step = ModuleBuilderStep.SELECT },
+                                onRenameItem = { presetId, newTitle ->
+                                    val idx = packageItems.indexOfFirst { it.presetId == presetId }
+                                    if (idx != -1) {
+                                        val old = packageItems[idx]
+                                        val clean = newTitle.filter { it.isLetterOrDigit() }.ifBlank { "CustomRingtone" }
+                                        packageItems[idx] = old.copy(title = newTitle, cleanName = clean)
+                                    }
+                                },
                                 onConfirm = {
                                     scope.launch {
                                         isBuilding = true
                                         errorMessage = null
-                                        val result = RingtoneModuleBuilder.buildModule(context, selectedPresets)
+                                        val result = RingtoneModuleBuilder.buildModule(
+                                            context = context,
+                                            selectedPresets = selectedPresets,
+                                            customItems = packageItems.toList()
+                                        )
                                         isBuilding = false
                                         if (result.success) {
                                             buildResult = result
@@ -532,10 +547,13 @@ private fun StepConfirmationContent(
     colors: HyperBounceColors,
     backdrop: Backdrop,
     onBack: () -> Unit,
+    onRenameItem: (presetId: String, newTitle: String) -> Unit,
     onConfirm: () -> Unit
 ) {
     val context = LocalContext.current
     val hasStoragePerm = remember { RingtoneModuleBuilder.hasStoragePermission(context) }
+    var editingItem by remember { mutableStateOf<RingtoneModuleBuilder.RingtonePackageItem?>(null) }
+    var editTitleInput by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         BasicText(
@@ -581,14 +599,38 @@ private fun StepConfirmationContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            BasicText(
-                                text = item.title,
-                                style = HyperBounceType.body.copy(
-                                    color = colors.label,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.5.sp
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                BasicText(
+                                    text = item.title,
+                                    style = HyperBounceType.body.copy(
+                                        color = colors.label,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.5.sp
+                                    )
                                 )
-                            )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(colors.accentBlue.copy(alpha = 0.12f))
+                                        .clickable {
+                                            editingItem = item
+                                            editTitleInput = item.title
+                                        }
+                                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                                ) {
+                                    BasicText(
+                                        text = "Rename",
+                                        style = HyperBounceType.caption.copy(
+                                            color = colors.accentBlue,
+                                            fontWeight = FontWeight.Medium,
+                                            fontSize = 10.sp
+                                        )
+                                    )
+                                }
+                            }
                             Spacer(Modifier.height(2.dp))
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -797,6 +839,132 @@ private fun StepConfirmationContent(
                         fontWeight = FontWeight.Bold
                     )
                 )
+            }
+        }
+    }
+
+    if (editingItem != null) {
+        val targetItem = editingItem!!
+        val cleanPreview = editTitleInput.filter { it.isLetterOrDigit() }.ifBlank { "CustomRingtone" }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.75f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { editingItem = null },
+            contentAlignment = Alignment.Center
+        ) {
+            GlassCard(
+                backdrop = backdrop,
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {}
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp)
+                ) {
+                    BasicText(
+                        text = "Rename Ringtone",
+                        style = HyperBounceType.headline.copy(
+                            color = colors.label,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp
+                        )
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    BasicText(
+                        text = "Customize ringtone title and audio filename for this pack.",
+                        style = HyperBounceType.caption.copy(
+                            color = colors.secondaryLabel,
+                            fontSize = 12.sp
+                        )
+                    )
+
+                    Spacer(Modifier.height(14.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.separator.copy(alpha = 0.12f))
+                            .border(1.dp, colors.accentBlue.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                    ) {
+                        BasicTextField(
+                            value = editTitleInput,
+                            onValueChange = { editTitleInput = it },
+                            singleLine = true,
+                            textStyle = HyperBounceType.body.copy(
+                                color = colors.label,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp
+                            ),
+                            cursorBrush = SolidColor(colors.accentBlue),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    Spacer(Modifier.height(6.dp))
+                    BasicText(
+                        text = "Target audio file: $cleanPreview.ogg",
+                        style = HyperBounceType.caption.copy(
+                            color = colors.accentOrange,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 11.sp
+                        )
+                    )
+
+                    Spacer(Modifier.height(18.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        LiquidButton(
+                            onClick = { editingItem = null },
+                            backdrop = backdrop,
+                            tint = colors.separator.copy(alpha = 0.5f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            BasicText(
+                                text = "Cancel",
+                                style = HyperBounceType.body.copy(
+                                    color = colors.label,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            )
+                        }
+
+                        val canSave = editTitleInput.isNotBlank()
+                        LiquidButton(
+                            onClick = {
+                                if (canSave) {
+                                    onRenameItem(targetItem.presetId, editTitleInput.trim())
+                                    editingItem = null
+                                }
+                            },
+                            backdrop = backdrop,
+                            tint = if (canSave) colors.accentBlue else colors.separator.copy(alpha = 0.3f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            BasicText(
+                                text = "Done",
+                                style = HyperBounceType.body.copy(
+                                    color = if (canSave) Color.White else colors.secondaryLabel,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+                    }
+                }
             }
         }
     }

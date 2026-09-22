@@ -46,16 +46,5 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <receiver
-            android:name=".haptics.ringtone.IncomingCallReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.PHONE_STATE" />
-            </intent-filter>
-        </receiver>
-
-        <service
-            android:name=".haptics.ringtone.IncomingCallHapticService"
-            android:exported="false" />
     </application>
 </manifest>

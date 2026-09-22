@@ -259,6 +259,21 @@ object HapticPresetStorage {
         }
     }
 
+    fun renamePreset(context: Context, id: String, newTitle: String): Boolean {
+        if (newTitle.isBlank()) return false
+        val dir = getPresetsDir(context)
+        val file = File(dir, "preset_${id}.json")
+        if (!file.exists()) return false
+        return try {
+            val json = JSONObject(file.readText())
+            json.put("title", newTitle.trim())
+            file.writeText(json.toString())
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     fun deletePreset(context: Context, id: String) {
         val dir = getPresetsDir(context)
         File(dir, "preset_${id}.json").delete()
