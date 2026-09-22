@@ -40,8 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.shapes.Capsule
 import dev.joseph.hyperbounce.lockscreen.glass.LockScreenWallpaperHelper
 import dev.joseph.hyperbounce.notification.glass.CustomWallpaperHelper
@@ -62,7 +60,6 @@ fun DepthSubjectAdjusterDialog(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
-    val localBackdrop = rememberLayerBackdrop()
 
     var showBackground by remember { mutableStateOf(true) }
 
@@ -106,7 +103,6 @@ fun DepthSubjectAdjusterDialog(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFF121214))
-                .layerBackdrop(localBackdrop)
         ) {
             BoxWithConstraints(
                 modifier = Modifier.fillMaxSize()
@@ -284,7 +280,7 @@ fun DepthSubjectAdjusterDialog(
                             LiquidToggle(
                                 selected = { showBackground },
                                 onSelect = { showBackground = it },
-                                backdrop = localBackdrop
+                                backdrop = backdrop
                             )
                         }
                     }
@@ -300,7 +296,7 @@ fun DepthSubjectAdjusterDialog(
                     ) {
                         LiquidButton(
                             onClick = onDismiss,
-                            backdrop = localBackdrop,
+                            backdrop = backdrop,
                             surfaceColor = Color.White.copy(alpha = 0.15f),
                             modifier = Modifier.weight(1f)
                         ) {
@@ -315,7 +311,7 @@ fun DepthSubjectAdjusterDialog(
 
                         LiquidButton(
                             onClick = { onConfirmAction?.invoke() },
-                            backdrop = localBackdrop,
+                            backdrop = backdrop,
                             tint = colors.accentBlue,
                             modifier = Modifier.weight(1f)
                         ) {
