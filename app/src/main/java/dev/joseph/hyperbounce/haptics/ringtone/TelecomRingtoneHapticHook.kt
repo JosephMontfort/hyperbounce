@@ -169,14 +169,15 @@ object TelecomRingtoneHapticHook {
                                         // Register looping listener after 1 second
                                         ownerHandler.postDelayed({
                                             try {
-                                                if (ringerField.getBoolean(thisObj)) {
                                                     val listenerField = miuiPlayerClass.getDeclaredField("vibratorStateChangedListener").apply { isAccessible = true }
-                                                    val listener = listenerField.get(thisObj) as? Vibrator.OnVibratorStateChangedListener
+                                                    val listener = listenerField.get(thisObj)
                                                     if (listener != null) {
-                                                        vib.addVibratorStateListener(listener)
+                                                        val addListenerMethod = vib.javaClass.methods.firstOrNull {
+                                                            it.name == "addVibratorStateListener" && it.parameterTypes.size == 1
+                                                        }
+                                                        addListenerMethod?.invoke(vib, listener)
                                                         miuiPlayerClass.getDeclaredField("mIsVibratorListenerRegisted").apply { isAccessible = true }.setBoolean(thisObj, true)
                                                     }
-                                                }
                                             } catch (t: Throwable) {
                                                 Log.e(TAG, "Error registering delayed looping listener", t)
                                             }
