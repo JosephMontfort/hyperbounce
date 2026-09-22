@@ -257,7 +257,7 @@ object HapticSynthesizer {
     private fun stampResonantBass(
         output: FloatArray,
         startIndex: Int,
-        durationMs: Int = 100,
+        durationMs: Int = 135,
         freqHz: Float = 171.4f,
         gain: Float = 1.0f
     ) {
@@ -265,15 +265,16 @@ object HapticSynthesizer {
         if (numSamples <= 0) return
 
         // Authentic POCO Dual-Frequency Resonance Architecture:
-        // 1. Attack & Hold: resonant frequency (freqHz, 160-171.4Hz) builds physical body mass displacement without buzz
-        // 2. Terminal Strike: 233.0Hz high-acceleration tactile snap phase-locked to exactly 121 peak (targetPeak)
+        // 1. Attack (0-12ms): resonant frequency (freqHz, 160-171.4Hz) builds physical body mass displacement peaking at 105
+        // 2. Hold Body (12-115ms): stable spring displacement at 20 (holdGain)
+        // 3. Terminal Strike (115-135ms): 233.0Hz high-acceleration tactile snap phase-locked to exactly 121 peak (targetPeak)
         val strikeFreqHz = 233.0f
-        val attackSamples = ((2.0f * OUTPUT_SAMPLE_RATE / freqHz).toInt()).coerceAtMost(numSamples / 3)
-        val strikeSamples = ((2.0f * OUTPUT_SAMPLE_RATE / strikeFreqHz).toInt()).coerceAtMost(numSamples / 3)
+        val attackSamples = ((2.0f * OUTPUT_SAMPLE_RATE / freqHz).toInt()).coerceAtMost(numSamples / 4)
+        val strikeSamples = ((2.0f * OUTPUT_SAMPLE_RATE / strikeFreqHz).toInt()).coerceAtMost(numSamples / 4)
 
         val targetPeak = (121.0f / 127.0f)
-        val attackGain = 0.85f * targetPeak * gain
-        val holdGain = (19.0f / 127.0f) * gain
+        val attackGain = (105.0f / 127.0f) * gain
+        val holdGain = (20.0f / 127.0f) * gain
         val strikeGain = targetPeak * gain
 
         for (s in 0 until numSamples) {
@@ -344,8 +345,10 @@ object HapticSynthesizer {
             lpEnergy[f] = sqrt(sumLp / frameSamples)
         }
 
-        val minIntervalMs = 115L
-        var lastOnsetMs = -minIntervalMs
+        val minSnapIntervalMs = 160L
+        val downbeatLockoutMs = 200L
+        var lastOnsetMs = -downbeatLockoutMs
+        var lastWasDownbeat = false
         var lastBassMs = -600L
         val win = 30 // 150ms moving window
 
@@ -366,32 +369,32 @@ object HapticSynthesizer {
                     currBp >= bpEnergy[f - 2] &&
                     currBp >= bpEnergy[f + 2]
 
-            val threshold = localMean * (1.18f / config.sensitivity.coerceIn(0.25f, 2.5f))
+            val threshold = localMean * (1.24f / config.sensitivity.coerceIn(0.25f, 2.5f))
 
-            if (isLocalPeak && currBp > threshold && currBp > 0.012f) {
-                if (currTimeMs - lastOnsetMs >= minIntervalMs) {
+            if (isLocalPeak && currBp > threshold && currBp > 0.016f) {
+                val requiredLockout = if (lastWasDownbeat) downbeatLockoutMs else minSnapIntervalMs
+                if (currTimeMs - lastOnsetMs >= requiredLockout) {
                     val outIdx = ((currTimeMs * OUTPUT_SAMPLE_RATE) / 1000L).toInt()
 
-                    // Distinguish true downbeats/phrase accents (>= 280ms apart) vs crisp melodic notes
-                    val hasBassEnergy = (currLp > currBp * 1.25f) && (currLp > 0.024f)
-                    val isPhraseAccent = (currTimeMs - lastOnsetMs >= 220L) && (currBp > threshold * 1.35f) && (currBp > 0.028f)
+                    // Distinguish true downbeats/heavy rhythmic thuds (>= 280ms apart) vs crisp melodic snaps
+                    val hasBassEnergy = (currLp > currBp * 1.20f) && (currLp > 0.024f)
+                    val isPhraseAccent = (currBp > threshold * 1.40f) && (currBp > 0.028f)
                     val isDownbeat = (hasBassEnergy || isPhraseAccent) && (currTimeMs - lastBassMs >= 280L)
 
                     lastOnsetMs = currTimeMs
 
                     if (isDownbeat) {
                         lastBassMs = currTimeMs
-                        // POCO Tier 1: Resonant bass downbeat impact (100ms, POCO ASR envelope peaking at 121)
+                        lastWasDownbeat = true
+                        // POCO Tier 1: Authentic 135ms heavy resonant downbeat impact (105 attack -> 20 hold -> 121 kick)
                         events.add(HapticEvent(timestampMs = currTimeMs, effectId = 5)) // EFFECT_HEAVY_CLICK
-                        stampResonantBass(output, outIdx, durationMs = 100, freqHz = config.resonantFrequencyHz, gain = 1.0f)
+                        stampResonantBass(output, outIdx, durationMs = 135, freqHz = config.resonantFrequencyHz, gain = 1.0f)
                     } else {
-                        // POCO Tier 2 / Stock Melodic: Crisp note snap with dynamic contrast (peak 66-108, matching POCO short clicks)
+                        lastWasDownbeat = false
+                        // POCO Tier 2: Authentic 108 crisp melodic snap grain (well-spaced, no continuous buzz)
                         events.add(HapticEvent(timestampMs = currTimeMs, effectId = 0)) // EFFECT_CLICK
-                        val minGain = 66.0f / 127.0f
-                        val maxGain = 108.0f / 127.0f
-                        val velocity = (currBp / (threshold * 1.4f)).coerceIn(0.0f, 1.0f)
-                        val gain = minGain + velocity * (maxGain - minGain)
-                        stampGrain(output, outIdx, MELODIC_CLICK_429_GRAIN, gain = gain, duckExisting = true)
+                        val snapGain = (108.0f / 127.0f)
+                        stampGrain(output, outIdx, MELODIC_CLICK_429_GRAIN, gain = snapGain, duckExisting = true)
                     }
                 }
             }
@@ -467,7 +470,7 @@ object HapticSynthesizer {
                 if (bassTrigger) {
                     lastBassMs = currTimeMs
                     events.add(HapticEvent(timestampMs = currTimeMs, effectId = 5)) // EFFECT_HEAVY_CLICK
-                    stampResonantBass(output, outIdx, durationMs = 110, freqHz = config.resonantFrequencyHz, gain = 1.0f)
+                    stampResonantBass(output, outIdx, durationMs = 135, freqHz = config.resonantFrequencyHz, gain = 1.0f)
                 } else {
                     events.add(HapticEvent(timestampMs = currTimeMs, effectId = 0)) // EFFECT_CLICK
                     stampGrain(output, outIdx, HEAVY_CLICK_GRAIN, gain = 108.0f / 127.0f, duckExisting = true)
@@ -660,7 +663,7 @@ object HapticSynthesizer {
                     lastBassMs = currTimeMs
                     // Deep low-end drop
                     events.add(HapticEvent(timestampMs = currTimeMs, effectId = 5)) // EFFECT_HEAVY_CLICK
-                    stampResonantBass(output, outIdx, durationMs = 100, freqHz = config.resonantFrequencyHz, gain = 1.0f)
+                    stampResonantBass(output, outIdx, durationMs = 135, freqHz = config.resonantFrequencyHz, gain = 1.0f)
                 } else if (currBp > currLp * 1.35f) {
                     // Crisp treble click
                     events.add(HapticEvent(timestampMs = currTimeMs, effectId = 0)) // EFFECT_CLICK
