@@ -2,6 +2,8 @@ package dev.joseph.hyperbounce.haptics.ringtone
 
 import android.content.Context
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.util.Log
 import io.github.libxposed.api.XposedModule
@@ -18,6 +20,10 @@ import java.lang.reflect.Method
 object XiaomiRingtoneHapticHook {
 
     private const val TAG = "HyperBounce_RingtoneHook"
+    private const val AUDIO_BUFFER_COMPENSATION_DELAY_MS = 130L
+    private val previewHandler by lazy { Handler(Looper.getMainLooper()) }
+    @Volatile
+    private var pendingPreviewRunnable: Runnable? = null
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
         hookVibrationEffectStubImpl(module, classLoader)
@@ -73,7 +79,7 @@ object XiaomiRingtoneHapticHook {
             Log.d(TAG, "ThemeManager a0 not present in this classloader: ${t.message}")
         }
 
-        // 2. Direct hook into BatchMediaPlayer.l(Uri) to guarantee vibration playback
+        // 2. Hook into BatchMediaPlayer.l(Uri) with audio buffer latency compensation (130ms)
         try {
             val bmpClass = Class.forName("com.android.thememanager.basemodule.ui.widget.BatchMediaPlayer", false, classLoader)
             for (m: Method in bmpClass.declaredMethods) {
@@ -85,23 +91,37 @@ object XiaomiRingtoneHapticHook {
                             try {
                                 val customId = RingtoneRegistry.resolveEffectId(null, uri.toString())
                                 if (customId != null) {
-                                    Log.i(TAG, "BatchMediaPlayer.${m.name} intercepted [$uri] -> Effect ID #$customId")
-                                    // Let original run, and also ensure vibrator features fire
+                                    Log.i(TAG, "BatchMediaPlayer.${m.name} intercepted custom ringtone [$uri] -> Effect ID #$customId")
                                     val thisObj = chain.thisObject
                                     val vibratorField = bmpClass.declaredFields.firstOrNull {
                                         android.os.Vibrator::class.java.isAssignableFrom(it.type)
                                     }
-                                    if (vibratorField != null) {
-                                        vibratorField.isAccessible = true
-                                        val vib = vibratorField.get(thisObj) as? android.os.Vibrator
-                                        if (vib != null) {
-                                            val attr = android.media.AudioAttributes.Builder()
-                                                .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
-                                                .build()
-                                            vib.vibrate(VibrationEffect.createPredefined(customId), attr)
-                                            Log.i(TAG, "BatchMediaPlayer directly triggered LRA effect #$customId on vibrator")
+
+                                    // Cancel any previous pending preview haptic to avoid collision
+                                    pendingPreviewRunnable?.let { previewHandler.removeCallbacks(it) }
+
+                                    val r = Runnable {
+                                        try {
+                                            if (vibratorField != null) {
+                                                vibratorField.isAccessible = true
+                                                val vib = vibratorField.get(thisObj) as? android.os.Vibrator
+                                                if (vib != null) {
+                                                    val attr = android.media.AudioAttributes.Builder()
+                                                        .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                                                        .build()
+                                                    vib.vibrate(VibrationEffect.createPredefined(customId), attr)
+                                                    Log.i(TAG, "BatchMediaPlayer delayed vibration fired for #$customId (+${AUDIO_BUFFER_COMPENSATION_DELAY_MS}ms audio sync)")
+                                                }
+                                            }
+                                        } catch (t: Throwable) {
+                                            Log.e(TAG, "Error in delayed preview vibration", t)
                                         }
                                     }
+                                    pendingPreviewRunnable = r
+                                    previewHandler.postDelayed(r, AUDIO_BUFFER_COMPENSATION_DELAY_MS)
+
+                                    // Return null to prevent immediate un-delayed vibration and eliminate double-trigger
+                                    return@intercept null
                                 }
                             } catch (t: Throwable) {
                                 Log.e(TAG, "Error in BatchMediaPlayer hook", t)
@@ -109,7 +129,23 @@ object XiaomiRingtoneHapticHook {
                         }
                         chain.proceed()
                     }
-                    Log.i(TAG, "Successfully hooked BatchMediaPlayer.${m.name}(Uri)")
+                    Log.i(TAG, "Successfully hooked BatchMediaPlayer.${m.name}(Uri) with audio delay compensation")
+                    break
+                }
+            }
+
+            // Hook BatchMediaPlayer.t(int) to cancel delayed vibration if preview stopped early
+            for (m: Method in bmpClass.declaredMethods) {
+                if (m.name == "t" && m.parameterTypes.size == 1 && m.parameterTypes[0] == Int::class.javaPrimitiveType) {
+                    m.isAccessible = true
+                    module.hook(m).intercept { chain ->
+                        pendingPreviewRunnable?.let {
+                            previewHandler.removeCallbacks(it)
+                            pendingPreviewRunnable = null
+                        }
+                        chain.proceed()
+                    }
+                    Log.i(TAG, "Successfully hooked BatchMediaPlayer.t(int) for preview cancellation")
                     break
                 }
             }

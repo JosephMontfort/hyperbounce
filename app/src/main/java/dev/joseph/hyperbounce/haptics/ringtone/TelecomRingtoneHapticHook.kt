@@ -3,7 +3,11 @@ package dev.joseph.hyperbounce.haptics.ringtone
 import android.content.Context
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
+import android.os.Vibrator
 import android.util.Log
 import io.github.libxposed.api.XposedModule
 import org.json.JSONObject
@@ -18,10 +22,17 @@ import java.lang.reflect.Method
 object TelecomRingtoneHapticHook {
 
     private const val TAG = "HyperBounce_Telecom"
+    private const val AUDIO_BUFFER_COMPENSATION_DELAY_MS = 130L
+    @Volatile
+    private var telecomPendingRunnable: Runnable? = null
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
         Log.i(TAG, "Initializing Telecom Ringtone Haptic Hook...")
+        hookRinger(module, classLoader)
+        hookMiuiAsyncRingtonePlayer(module, classLoader)
+    }
 
+    private fun hookRinger(module: XposedModule, classLoader: ClassLoader) {
         try {
             val ringerClass = Class.forName("com.android.server.telecom.Ringer", false, classLoader)
 
@@ -114,6 +125,127 @@ object TelecomRingtoneHapticHook {
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook Telecom Ringer", t)
         }
+    }
+
+    private fun hookMiuiAsyncRingtonePlayer(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val miuiPlayerClass = Class.forName("com.android.server.telecom.MiuiAsyncRingtonePlayer", false, classLoader)
+
+            // 1. Hook startLinearVibratorInner() to inject audio buffer compensation delay
+            for (m: Method in miuiPlayerClass.declaredMethods) {
+                if (m.name == "startLinearVibratorInner" && m.parameterTypes.isEmpty()) {
+                    m.isAccessible = true
+                    module.hook(m).intercept { chain ->
+                        val thisObj = chain.thisObject
+                        val effectField = miuiPlayerClass.getDeclaredField("mEffect").apply { isAccessible = true }
+                        val effect = effectField.get(thisObj) as? VibrationEffect
+                        if (isCustomRingtoneEffect(effect)) {
+                            Log.i(TAG, "MiuiAsyncRingtonePlayer.startLinearVibratorInner: custom ringtone haptic detected. Applying ${AUDIO_BUFFER_COMPENSATION_DELAY_MS}ms audio sync delay.")
+
+                            val vibField = miuiPlayerClass.getDeclaredField("mVibrator").apply { isAccessible = true }
+                            val attrField = miuiPlayerClass.getDeclaredField("mAttributes").apply { isAccessible = true }
+                            val ringerField = miuiPlayerClass.getDeclaredField("mHasRinger").apply { isAccessible = true }
+                            val ownerField = miuiPlayerClass.getDeclaredField("mOwner").apply { isAccessible = true }
+                            val owner = ownerField.get(thisObj)
+                            val ownerHandler = owner?.javaClass?.getDeclaredField("mHandler")?.apply { isAccessible = true }?.get(owner) as? Handler
+                                ?: Handler(Looper.getMainLooper())
+
+                            telecomPendingRunnable?.let { ownerHandler.removeCallbacks(it) }
+
+                            val r = Runnable {
+                                try {
+                                    val hasRinger = ringerField.getBoolean(thisObj)
+                                    val vib = vibField.get(thisObj) as? Vibrator
+                                    val attr = attrField.get(thisObj) as? VibrationAttributes
+                                    val curEffect = effectField.get(thisObj) as? VibrationEffect
+                                    if (hasRinger && vib != null && curEffect != null) {
+                                        Log.i(TAG, "MiuiAsyncRingtonePlayer delayed vibration firing now (+${AUDIO_BUFFER_COMPENSATION_DELAY_MS}ms, synced with speaker audio)")
+                                        if (attr != null) {
+                                            vib.vibrate(curEffect, attr)
+                                        } else {
+                                            vib.vibrate(curEffect)
+                                        }
+
+                                        // Register looping listener after 1 second
+                                        ownerHandler.postDelayed({
+                                            try {
+                                                if (ringerField.getBoolean(thisObj)) {
+                                                    val listenerField = miuiPlayerClass.getDeclaredField("vibratorStateChangedListener").apply { isAccessible = true }
+                                                    val listener = listenerField.get(thisObj) as? Vibrator.OnVibratorStateChangedListener
+                                                    if (listener != null) {
+                                                        vib.addVibratorStateListener(listener)
+                                                        miuiPlayerClass.getDeclaredField("mIsVibratorListenerRegisted").apply { isAccessible = true }.setBoolean(thisObj, true)
+                                                    }
+                                                }
+                                            } catch (t: Throwable) {
+                                                Log.e(TAG, "Error registering delayed looping listener", t)
+                                            }
+                                        }, 1000L)
+                                    }
+                                } catch (t: Throwable) {
+                                    Log.e(TAG, "Error in delayed custom ringtone vibration", t)
+                                }
+                            }
+                            telecomPendingRunnable = r
+                            ownerHandler.postDelayed(r, AUDIO_BUFFER_COMPENSATION_DELAY_MS)
+                            return@intercept null
+                        }
+
+                        chain.proceed()
+                    }
+                    Log.d(TAG, "Hooked MiuiAsyncRingtonePlayer.startLinearVibratorInner successfully")
+                    break
+                }
+            }
+
+            // 2. Hook stopVibrator() to cancel pending delayed vibration when call ends
+            for (m: Method in miuiPlayerClass.declaredMethods) {
+                if (m.name == "stopVibrator" && m.parameterTypes.isEmpty()) {
+                    m.isAccessible = true
+                    module.hook(m).intercept { chain ->
+                        telecomPendingRunnable?.let { r ->
+                            try {
+                                val thisObj = chain.thisObject
+                                val ownerField = miuiPlayerClass.getDeclaredField("mOwner").apply { isAccessible = true }
+                                val owner = ownerField.get(thisObj)
+                                val ownerHandler = owner?.javaClass?.getDeclaredField("mHandler")?.apply { isAccessible = true }?.get(owner) as? Handler
+                                ownerHandler?.removeCallbacks(r)
+                                telecomPendingRunnable = null
+                            } catch (_: Throwable) {}
+                        }
+                        chain.proceed()
+                    }
+                    Log.d(TAG, "Hooked MiuiAsyncRingtonePlayer.stopVibrator successfully")
+                    break
+                }
+            }
+        } catch (t: Throwable) {
+            Log.d(TAG, "MiuiAsyncRingtonePlayer not hooked in this classloader: ${t.message}")
+        }
+    }
+
+    private fun isCustomRingtoneEffect(effect: VibrationEffect?): Boolean {
+        if (effect == null) return false
+        try {
+            if (effect.javaClass.name.contains("Composed")) {
+                val segmentsField = effect.javaClass.getDeclaredField("mSegments").apply { isAccessible = true }
+                val segments = segmentsField.get(effect) as? List<*>
+                val first = segments?.firstOrNull()
+                if (first != null) {
+                    val effectIdField = first.javaClass.getDeclaredField("mEffectId").apply { isAccessible = true }
+                    val id = effectIdField.getInt(first)
+                    if (id >= RingtoneRegistry.BASE_CUSTOM_EFFECT_ID) return true
+                }
+            }
+        } catch (_: Throwable) {}
+
+        val str = effect.toString()
+        val match = Regex("""(?:effectId|effect|id)[=:\s]+(\d+)""").find(str)
+        if (match != null) {
+            val id = match.groupValues[1].toIntOrNull() ?: 0
+            if (id >= RingtoneRegistry.BASE_CUSTOM_EFFECT_ID) return true
+        }
+        return false
     }
 
     private fun createWaveformEffectForActiveRingtone(ringtoneUri: Uri?): VibrationEffect? {
