@@ -273,10 +273,79 @@ object DepthWallpaperHelper {
         }
     }
 
+    fun decodeBitmapFromUri(context: Context, uri: Uri): Bitmap? {
+        val appContext = context.applicationContext ?: context
+        return try {
+            var rotationDegrees = 0
+            try {
+                appContext.contentResolver.openInputStream(uri)?.use { stream ->
+                    val exif = android.media.ExifInterface(stream)
+                    val orientation = exif.getAttributeInt(
+                        android.media.ExifInterface.TAG_ORIENTATION,
+                        android.media.ExifInterface.ORIENTATION_NORMAL
+                    )
+                    rotationDegrees = when (orientation) {
+                        android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                        android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                        android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                        else -> 0
+                    }
+                }
+            } catch (_: Throwable) {}
+
+            val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+            val rawBitmap = appContext.contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, opts)
+            } ?: return null
+
+            if (rotationDegrees != 0) {
+                val matrix = android.graphics.Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+                Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
+            } else {
+                rawBitmap
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to decode subject bitmap from URI", t)
+            null
+        }
+    }
+
+    fun saveCustomSubjectBitmap(
+        context: Context,
+        bitmap: Bitmap,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        val appContext = context.applicationContext ?: context
+        bgExecutor.execute {
+            try {
+                val customFile = File(appContext.filesDir, CUSTOM_FILENAME)
+                val activeFile = File(appContext.filesDir, CACHE_FILENAME)
+                val tmp = File(appContext.filesDir, "custom_depth_subject.tmp")
+                FileOutputStream(tmp).use { fos ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                    fos.flush()
+                }
+                tmp.copyTo(customFile, overwrite = true)
+                tmp.renameTo(activeFile)
+
+                cachedSubjectBitmap = bitmap
+                Log.d(TAG, "Custom depth subject saved successfully: ${bitmap.width}x${bitmap.height}")
+
+                mainHandler.post {
+                    notifyListeners()
+                    onComplete?.invoke(true)
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Error saving custom depth subject", t)
+                mainHandler.post { onComplete?.invoke(false) }
+            }
+        }
+    }
+
     fun clearCache(context: Context, forceClearAll: Boolean = false) {
         val appContext = context.applicationContext ?: context
         cachedSubjectBitmap = null
-        if (forceClearAll) {
+        if (forceClearAll && appContext.packageName != "dev.joseph.hyperbounce") {
             try {
                 val customFile = File(appContext.filesDir, CUSTOM_FILENAME)
                 if (customFile.exists()) customFile.delete()

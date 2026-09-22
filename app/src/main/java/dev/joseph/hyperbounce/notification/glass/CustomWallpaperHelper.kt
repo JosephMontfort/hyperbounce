@@ -27,22 +27,33 @@ object CustomWallpaperHelper {
         if (inMem != null && !inMem.isRecycled) return inMem
 
         val appContext = context.applicationContext ?: context
-        // 1. Try local file in current process
-        try {
-            val file = File(appContext.filesDir, FILENAME)
-            if (file.exists() && file.length() > 0) {
-                val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
-                val bmp = BitmapFactory.decodeFile(file.absolutePath, opts)
-                if (bmp != null) {
-                    cachedBitmap = bmp
-                    return bmp
+        val isCompanionApp = appContext.packageName == "dev.joseph.hyperbounce"
+
+        // If in companion app, read directly from local filesDir
+        if (isCompanionApp) {
+            try {
+                val file = File(appContext.filesDir, FILENAME)
+                if (file.exists() && file.length() > 0) {
+                    val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+                    val bmp = BitmapFactory.decodeFile(file.absolutePath, opts)
+                    if (bmp != null) {
+                        cachedBitmap = bmp
+                        return bmp
+                    }
                 }
+            } catch (t: Throwable) {
+                Log.d(TAG, "Local custom wallpaper read failed: ${t.message}")
             }
-        } catch (t: Throwable) {
-            Log.d(TAG, "Local custom wallpaper read failed: ${t.message}")
+            return null
         }
 
-        // 2. Fetch from ConfigProvider across processes (SystemUI access)
+        // SystemUI process: check if custom wallpaper is actually active
+        if (!hasCustomWallpaper(appContext)) {
+            clearCache(appContext)
+            return null
+        }
+
+        // Fetch from ConfigProvider across processes (SystemUI access)
         try {
             val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/$FILENAME")
             appContext.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
@@ -50,15 +61,6 @@ object CustomWallpaperHelper {
                 val bmp = BitmapFactory.decodeFileDescriptor(pfd.fileDescriptor, null, opts)
                 if (bmp != null) {
                     cachedBitmap = bmp
-                    try {
-                        val file = File(appContext.filesDir, FILENAME)
-                        val tmp = File(appContext.filesDir, "$FILENAME.tmp")
-                        FileOutputStream(tmp).use { fos ->
-                            bmp.compress(Bitmap.CompressFormat.PNG, 100, fos)
-                            fos.flush()
-                        }
-                        tmp.renameTo(file)
-                    } catch (_: Throwable) {}
                     return bmp
                 }
             }
@@ -107,17 +109,30 @@ object CustomWallpaperHelper {
 
     fun clearCustomWallpaper(context: Context) {
         val appContext = context.applicationContext ?: context
-        cachedBitmap = null
+        clearCache(appContext)
         try {
             val file = File(appContext.filesDir, FILENAME)
             if (file.exists()) file.delete()
+            val tmp = File(appContext.filesDir, "$FILENAME.tmp")
+            if (tmp.exists()) tmp.delete()
         } catch (_: Throwable) {}
-        if (appContext.packageName == "dev.joseph.hyperbounce") {
+        try {
+            appContext.contentResolver.call(
+                Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                "clearCustomWallpaper", null, null
+            )
+        } catch (_: Throwable) {}
+    }
+
+    fun clearCache(context: Context? = null) {
+        cachedBitmap = null
+        if (context != null) {
             try {
-                appContext.contentResolver.call(
-                    Uri.parse("content://dev.joseph.hyperbounce.provider"),
-                    "clearCustomWallpaper", null, null
-                )
+                val appContext = context.applicationContext ?: context
+                val file = File(appContext.filesDir, FILENAME)
+                if (file.exists()) file.delete()
+                val tmp = File(appContext.filesDir, "$FILENAME.tmp")
+                if (tmp.exists()) tmp.delete()
             } catch (_: Throwable) {}
         }
     }

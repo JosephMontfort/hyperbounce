@@ -445,7 +445,8 @@ object NotificationSheetHook {
             sheet?.postInvalidateOnAnimation()
             pill?.visibility = View.VISIBLE
             pill?.translationY = 0.0f
-            if (cfg.isLockScreenActive) {
+            val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+            if (cfg.isLockScreenActive && isHomescreenAllowed) {
                 LockScreenCoverSheetController.onShadeFullyOpened(container)
             } else {
                 LockScreenCoverSheetController.onShadeReset(container)
@@ -458,7 +459,8 @@ object NotificationSheetHook {
         val container = containerRef?.get()
         val isLandscape = container != null && (container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height)
         if (isLandscape) return
-        if (cfg.isDepthActive && currentStatusBarState == 0 && !isControlCenterActive()) {
+        val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+        if (cfg.isDepthActive && isHomescreenAllowed && currentStatusBarState == 0 && !isControlCenterActive()) {
             val anim = blurAnimatorRef?.get() ?: return
             try {
                 for (m in anim.javaClass.declaredMethods) {
@@ -643,7 +645,8 @@ object NotificationSheetHook {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 val cfg = NotificationSheetConfigHolder.sheet
-                                if (cfg.isLockScreenActive && isUnlockedShadeActive) {
+                                val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+                                if (cfg.isLockScreenActive && isHomescreenAllowed && isUnlockedShadeActive) {
                                     return false
                                 }
                                 return chain.proceed()
@@ -654,7 +657,8 @@ object NotificationSheetHook {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 val cfg = NotificationSheetConfigHolder.sheet
-                                if (cfg.isLockScreenActive && isUnlockedShadeActive) {
+                                val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+                                if (cfg.isLockScreenActive && isHomescreenAllowed && isUnlockedShadeActive) {
                                     return null
                                 }
                                 isControlCenterExpanded = true
@@ -704,7 +708,8 @@ object NotificationSheetHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.isLockScreenActive && isUnlockedShadeActive) {
+                            val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+                            if (cfg.isLockScreenActive && isHomescreenAllowed && isUnlockedShadeActive) {
                                 return false
                             }
                             return chain.proceed()
@@ -1190,6 +1195,7 @@ object NotificationSheetHook {
                         intent?.action == android.content.Intent.ACTION_WALLPAPER_CHANGED
                     ) {
                         dev.joseph.hyperbounce.lockscreen.glass.LockScreenWallpaperHelper.invalidateCache()
+                        CustomWallpaperHelper.clearCache(targetCtx)
                         DepthWallpaperHelper.clearCache(targetCtx, forceClearAll = true)
                         DepthWallpaperHelper.triggerAsyncSubjectGeneration(targetCtx, forceRefresh = true) {
                             mainHandler.post {
@@ -1216,7 +1222,8 @@ object NotificationSheetHook {
                         }
                         "notif_sheet_custom_wallpaper_enabled" -> {
                             cfg.customWallpaperEnabled = intent.getBooleanExtra("value_boolean", cfg.customWallpaperEnabled)
-                            CustomWallpaperHelper.invalidateCache()
+                            CustomWallpaperHelper.clearCache(targetCtx)
+                            containerRef?.get()?.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)?.postInvalidateOnAnimation()
                         }
                         "notif_sheet_lock_wallpaper_homescreen_only" -> cfg.lockWallpaperHomescreenOnly = intent.getBooleanExtra("value_boolean", cfg.lockWallpaperHomescreenOnly)
                         "notif_sheet_depth_wallpaper_enabled" -> {
@@ -2124,8 +2131,10 @@ object NotificationSheetHook {
                 }
                 // Refresh backdrop continuously if glass effects are actively required
                 val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height
-                val shouldDrawWallpaper = cfg.isWallpaperActive && !isLandscape &&
-                        (!cfg.lockWallpaperHomescreenOnly || isHomeScreenCached)
+                val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+                val isDepthActive = cfg.isDepthActive && isHomescreenAllowed
+                val isLockScreenActive = cfg.isLockScreenActive && isHomescreenAllowed
+                val shouldDrawWallpaper = cfg.isWallpaperActive && !isLandscape && isHomescreenAllowed
                 val shouldRenderGlass = cfg.glassEffectsEnabled && (!cfg.glassOnlyWithoutWallpaper || !shouldDrawWallpaper)
                 if (shouldRenderGlass) {
                     RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
@@ -2134,7 +2143,7 @@ object NotificationSheetHook {
                 }
 
                 // Suppress background blur and dimming when iOS 27 Depth Wallpaper is active
-                if (cfg.isDepthActive && currentStatusBarState == 0) {
+                if (isDepthActive && currentStatusBarState == 0) {
                     val bgAlpha = if (curSheet.isClosingFromFullOpen) 1f else if (fraction >= 0.90f) ((fraction - 0.90f) / 0.10f).coerceIn(0f, 1f) else 0f
                     curSheet.shadeBackgroundView?.alpha = bgAlpha
                     themeBackgroundViewRef?.get()?.alpha = bgAlpha
@@ -2149,7 +2158,8 @@ object NotificationSheetHook {
                 curPill.alpha = (fraction - 0.2f).coerceIn(0f, 1f)
             }
 
-            if (cfg.isLockScreenActive) {
+            val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+            if (cfg.isLockScreenActive && isHomescreenAllowed) {
                 LockScreenCoverSheetController.onExpansionFractionChanged(container, fraction, finalSheetY, currentStretchOffset)
             } else {
                 LockScreenCoverSheetController.onShadeReset(container)
@@ -2432,7 +2442,8 @@ object NotificationSheetHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.isLockScreenActive && isUnlockedShadeActive) {
+                            val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+                            if (cfg.isLockScreenActive && isHomescreenAllowed && isUnlockedShadeActive) {
                                 val container = containerRef?.get()
                                 if (container != null) {
                                     val density = container.resources.displayMetrics.density
@@ -2465,7 +2476,8 @@ object NotificationSheetHook {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 val result = chain.proceed()
                                 val cfg = NotificationSheetConfigHolder.sheet
-                                if (cfg.isLockScreenActive && isUnlockedShadeActive) {
+                                val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+                                if (cfg.isLockScreenActive && isHomescreenAllowed && isUnlockedShadeActive) {
                                     val container = containerRef?.get()
                                     if (container != null) {
                                         mainHandler.post {
@@ -2504,7 +2516,8 @@ object NotificationSheetHook {
                             module.hook(m).intercept(object : XposedInterface.Hooker {
                                 override fun intercept(chain: XposedInterface.Chain): Any? {
                                     val cfg = NotificationSheetConfigHolder.sheet
-                                    val isImageBgActive = cfg.isWallpaperActive
+                                    val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+                                    val isImageBgActive = cfg.isWallpaperActive && isHomescreenAllowed
                                     if (isImageBgActive && isUnlockedShadeActive) {
                                         Log.d(TAG, "Suppressed ${clazz.simpleName}.onEmptySpaceClick because image background is active")
                                         return null
@@ -2519,7 +2532,8 @@ object NotificationSheetHook {
                             module.hook(m).intercept(object : XposedInterface.Hooker {
                                 override fun intercept(chain: XposedInterface.Chain): Any? {
                                     val cfg = NotificationSheetConfigHolder.sheet
-                                    val isImageBgActive = cfg.isWallpaperActive
+                                    val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+                                    val isImageBgActive = cfg.isWallpaperActive && isHomescreenAllowed
                                     if (isImageBgActive && isUnlockedShadeActive) {
                                         Log.d(TAG, "Suppressed ${clazz.simpleName}.handleEmptySpaceClick because image background is active")
                                         return null
@@ -2541,7 +2555,8 @@ object NotificationSheetHook {
                                                     module.hook(lm).intercept(object : XposedInterface.Hooker {
                                                         override fun intercept(lChain: XposedInterface.Chain): Any? {
                                                             val cfg = NotificationSheetConfigHolder.sheet
-                                                            val isImageBgActive = cfg.isWallpaperActive
+                                                            val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+                                                            val isImageBgActive = cfg.isWallpaperActive && isHomescreenAllowed
                                                             if (isImageBgActive && isUnlockedShadeActive) {
                                                                 Log.d(TAG, "Suppressed dynamic empty space click listener ${listener.javaClass.name}.${lm.name}")
                                                                 return if (lm.returnType == Boolean::class.javaPrimitiveType) false else null

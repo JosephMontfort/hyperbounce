@@ -3,8 +3,6 @@ package dev.joseph.hyperbounce.ui.components
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,8 +13,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -28,19 +27,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.layerBackdrop
+import com.kyant.shapes.Capsule
+import dev.joseph.hyperbounce.ui.glass.LiquidButton
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlin.math.max
@@ -53,180 +55,245 @@ fun WallpaperCropperDialog(
     onDismiss: () -> Unit,
     onCropConfirmed: (Bitmap) -> Unit
 ) {
-    val configuration = LocalConfiguration.current
     val density = LocalDensity.current
-
-    // Device screen aspect ratio constraint
-    val screenW = configuration.screenWidthDp.toFloat()
-    val screenH = configuration.screenHeightDp.toFloat()
-    val screenAspect = screenW / screenH
+    val localBackdrop = rememberLayerBackdrop()
 
     var onConfirmAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.85f))
-                .padding(24.dp),
-            contentAlignment = Alignment.Center
+                .background(Color.Black)
+                .layerBackdrop(localBackdrop)
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxWidth()
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxSize()
             ) {
-                BasicText(
-                    "Crop Wallpaper",
-                    style = HyperBounceType.title2.copy(
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                )
-                Spacer(Modifier.height(6.dp))
-                BasicText(
-                    "Pinch to zoom and drag to adjust position",
-                    style = HyperBounceType.caption.copy(
-                        color = Color.White.copy(alpha = 0.65f)
-                    )
-                )
-                Spacer(Modifier.height(20.dp))
+                val vpWidthPx = with(density) { maxWidth.toPx() }
+                val vpHeightPx = with(density) { maxHeight.toPx() }
 
-                // Crop Viewport Frame constrained to device screen aspect ratio
-                BoxWithConstraints(
-                    modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .height(420.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val maxH = maxHeight
-                    val maxW = maxWidth
-                    val targetW = minOf(maxW, maxH * screenAspect)
-                    val targetH = targetW / screenAspect
+                val bmpW = sourceBitmap.width.toFloat()
+                val bmpH = sourceBitmap.height.toFloat()
+                val baseScale = max(vpWidthPx / bmpW, vpHeightPx / bmpH)
 
-                    val vpWidthPx = with(density) { targetW.toPx() }
-                    val vpHeightPx = with(density) { targetH.toPx() }
+                var zoom by remember { mutableFloatStateOf(1f) }
+                var panX by remember { mutableFloatStateOf((vpWidthPx - bmpW * baseScale) / 2f) }
+                var panY by remember { mutableFloatStateOf((vpHeightPx - bmpH * baseScale) / 2f) }
 
-                    val bmpW = sourceBitmap.width.toFloat()
-                    val bmpH = sourceBitmap.height.toFloat()
-                    val baseScale = max(vpWidthPx / bmpW, vpHeightPx / bmpH)
+                // Wire confirmation lambda with exact crop math
+                remember(zoom, panX, panY, baseScale, vpWidthPx, vpHeightPx) {
+                    onConfirmAction = {
+                        val currentScale = baseScale * zoom
+                        val currentDrawnW = bmpW * currentScale
+                        val currentDrawnH = bmpH * currentScale
 
-                    var zoom by remember { mutableFloatStateOf(1f) }
-                    var panX by remember { mutableFloatStateOf((vpWidthPx - bmpW * baseScale) / 2f) }
-                    var panY by remember { mutableFloatStateOf((vpHeightPx - bmpH * baseScale) / 2f) }
+                        val minPanX = (vpWidthPx - currentDrawnW).coerceAtMost(0f)
+                        val maxPanX = 0f.coerceAtLeast((vpWidthPx - currentDrawnW) / 2f)
+                        val minPanY = (vpHeightPx - currentDrawnH).coerceAtMost(0f)
+                        val maxPanY = 0f.coerceAtLeast((vpHeightPx - currentDrawnH) / 2f)
 
-                    // Wire confirmation lambda
-                    remember(zoom, panX, panY, baseScale, vpWidthPx, vpHeightPx) {
-                        onConfirmAction = {
-                            val currentScale = baseScale * zoom
-                            val currentDrawnW = bmpW * currentScale
-                            val currentDrawnH = bmpH * currentScale
+                        val clampedPanX = if (minPanX < maxPanX) panX.coerceIn(minPanX, maxPanX) else (vpWidthPx - currentDrawnW) / 2f
+                        val clampedPanY = if (minPanY < maxPanY) panY.coerceIn(minPanY, maxPanY) else (vpHeightPx - currentDrawnH) / 2f
 
-                            val clampedPanX = panX.coerceIn(vpWidthPx - currentDrawnW, 0f)
-                            val clampedPanY = panY.coerceIn(vpHeightPx - currentDrawnH, 0f)
+                        val srcX = ((-clampedPanX) / currentScale).toInt().coerceIn(0, sourceBitmap.width - 1)
+                        val srcY = ((-clampedPanY) / currentScale).toInt().coerceIn(0, sourceBitmap.height - 1)
+                        val srcW = (vpWidthPx / currentScale).toInt().coerceIn(1, sourceBitmap.width - srcX)
+                        val srcH = (vpHeightPx / currentScale).toInt().coerceIn(1, sourceBitmap.height - srcY)
 
-                            val srcX = ((-clampedPanX) / currentScale).toInt().coerceIn(0, sourceBitmap.width - 1)
-                            val srcY = ((-clampedPanY) / currentScale).toInt().coerceIn(0, sourceBitmap.height - 1)
-                            val srcW = (vpWidthPx / currentScale).toInt().coerceIn(1, sourceBitmap.width - srcX)
-                            val srcH = (vpHeightPx / currentScale).toInt().coerceIn(1, sourceBitmap.height - srcY)
-
-                            val cropped = try {
-                                Bitmap.createBitmap(sourceBitmap, srcX, srcY, srcW, srcH)
-                            } catch (_: Throwable) {
-                                sourceBitmap
-                            }
-                            onCropConfirmed(cropped)
+                        val cropped = try {
+                            Bitmap.createBitmap(sourceBitmap, srcX, srcY, srcW, srcH)
+                        } catch (_: Throwable) {
+                            sourceBitmap
                         }
-                        Unit
+                        onCropConfirmed(cropped)
                     }
-
-                    Box(
-                        modifier = Modifier
-                            .width(targetW)
-                            .height(targetH)
-                            .clip(RoundedCornerShape(16.dp))
-                            .border(2.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(16.dp))
-                            .clipToBounds()
-                            .pointerInput(Unit) {
-                                detectTransformGestures { _, pan, gestureZoom, _ ->
-                                    zoom = (zoom * gestureZoom).coerceIn(1f, 4f)
-                                    val currentScale = baseScale * zoom
-                                    val currentDrawnW = bmpW * currentScale
-                                    val currentDrawnH = bmpH * currentScale
-
-                                    val minX = vpWidthPx - currentDrawnW
-                                    val minY = vpHeightPx - currentDrawnH
-
-                                    panX = (panX + pan.x).coerceIn(minX, 0f)
-                                    panY = (panY + pan.y).coerceIn(minY, 0f)
-                                }
-                            }
-                    ) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val currentScale = baseScale * zoom
-                            val currentDrawnW = bmpW * currentScale
-                            val currentDrawnH = bmpH * currentScale
-
-                            val clampedPanX = panX.coerceIn(vpWidthPx - currentDrawnW, 0f)
-                            val clampedPanY = panY.coerceIn(vpHeightPx - currentDrawnH, 0f)
-
-                            drawIntoCanvas { canvas ->
-                                val matrix = android.graphics.Matrix().apply {
-                                    postScale(currentScale, currentScale)
-                                    postTranslate(clampedPanX, clampedPanY)
-                                }
-                                val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
-                                canvas.nativeCanvas.drawBitmap(sourceBitmap, matrix, paint)
-                            }
-
-                            // 3x3 Grid Overlay for alignment
-                            val linePaint = Color.White.copy(alpha = 0.25f)
-                            drawLine(linePaint, Offset(size.width / 3f, 0f), Offset(size.width / 3f, size.height), strokeWidth = 1.dp.toPx())
-                            drawLine(linePaint, Offset(size.width * 2f / 3f, 0f), Offset(size.width * 2f / 3f, size.height), strokeWidth = 1.dp.toPx())
-                            drawLine(linePaint, Offset(0f, size.height / 3f), Offset(size.width, size.height / 3f), strokeWidth = 1.dp.toPx())
-                            drawLine(linePaint, Offset(0f, size.height * 2f / 3f), Offset(size.width, size.height * 2f / 3f), strokeWidth = 1.dp.toPx())
-                        }
-                    }
+                    Unit
                 }
 
-                Spacer(Modifier.height(24.dp))
+                // Interactive full-screen viewport with focal-point zoom
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTransformGestures { centroid, pan, gestureZoom, _ ->
+                                val oldZoom = zoom
+                                val newZoom = (zoom * gestureZoom).coerceIn(1f, 5f)
+                                val actualZoomFactor = newZoom / oldZoom
+                                zoom = newZoom
 
-                // Action Buttons
-                Row(
-                    Modifier.fillMaxWidth(0.85f),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                // Adjust pan relative to gesture focal point (centroid)
+                                panX = centroid.x - (centroid.x - panX) * actualZoomFactor + pan.x
+                                panY = centroid.y - (centroid.y - panY) * actualZoomFactor + pan.y
+
+                                val currentScale = baseScale * zoom
+                                val currentDrawnW = bmpW * currentScale
+                                val currentDrawnH = bmpH * currentScale
+
+                                val minPanX = (vpWidthPx - currentDrawnW).coerceAtMost(0f)
+                                val maxPanX = 0f.coerceAtLeast((vpWidthPx - currentDrawnW) / 2f)
+                                val minPanY = (vpHeightPx - currentDrawnH).coerceAtMost(0f)
+                                val maxPanY = 0f.coerceAtLeast((vpHeightPx - currentDrawnH) / 2f)
+
+                                panX = if (minPanX < maxPanX) panX.coerceIn(minPanX, maxPanX) else (vpWidthPx - currentDrawnW) / 2f
+                                panY = if (minPanY < maxPanY) panY.coerceIn(minPanY, maxPanY) else (vpHeightPx - currentDrawnH) / 2f
+                            }
+                        }
                 ) {
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .height(44.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.15f))
-                            .clickable(onClick = onDismiss),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        BasicText("Cancel", style = HyperBounceType.body.copy(color = Color.White))
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val currentScale = baseScale * zoom
+                        val currentDrawnW = bmpW * currentScale
+                        val currentDrawnH = bmpH * currentScale
+
+                        val minPanX = (vpWidthPx - currentDrawnW).coerceAtMost(0f)
+                        val maxPanX = 0f.coerceAtLeast((vpWidthPx - currentDrawnW) / 2f)
+                        val minPanY = (vpHeightPx - currentDrawnH).coerceAtMost(0f)
+                        val maxPanY = 0f.coerceAtLeast((vpHeightPx - currentDrawnH) / 2f)
+
+                        val clampedPanX = if (minPanX < maxPanX) panX.coerceIn(minPanX, maxPanX) else (vpWidthPx - currentDrawnW) / 2f
+                        val clampedPanY = if (minPanY < maxPanY) panY.coerceIn(minPanY, maxPanY) else (vpHeightPx - currentDrawnH) / 2f
+
+                        drawIntoCanvas { canvas ->
+                            val matrix = android.graphics.Matrix().apply {
+                                postScale(currentScale, currentScale)
+                                postTranslate(clampedPanX, clampedPanY)
+                            }
+                            val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG or android.graphics.Paint.ANTI_ALIAS_FLAG)
+                            canvas.nativeCanvas.drawBitmap(sourceBitmap, matrix, paint)
+                        }
+
+                        // 3x3 Rule-of-Thirds Grid Overlay
+                        val linePaint = Color.White.copy(alpha = 0.22f)
+                        val gridStroke = 1.dp.toPx()
+                        drawLine(linePaint, Offset(size.width / 3f, 0f), Offset(size.width / 3f, size.height), strokeWidth = gridStroke)
+                        drawLine(linePaint, Offset(size.width * 2f / 3f, 0f), Offset(size.width * 2f / 3f, size.height), strokeWidth = gridStroke)
+                        drawLine(linePaint, Offset(0f, size.height / 3f), Offset(size.width, size.height / 3f), strokeWidth = gridStroke)
+                        drawLine(linePaint, Offset(0f, size.height * 2f / 3f), Offset(size.width, size.height * 2f / 3f), strokeWidth = gridStroke)
+
+                        // Outer framing border & corner brackets to clearly show it's a cropping viewport
+                        val cornerLen = 28.dp.toPx()
+                        val cornerStroke = 3.dp.toPx()
+                        val cornerColor = Color.White.copy(alpha = 0.85f)
+                        val pad = 12.dp.toPx()
+
+                        // Top-Left corner
+                        drawLine(cornerColor, Offset(pad, pad), Offset(pad + cornerLen, pad), strokeWidth = cornerStroke)
+                        drawLine(cornerColor, Offset(pad, pad), Offset(pad, pad + cornerLen), strokeWidth = cornerStroke)
+                        // Top-Right corner
+                        drawLine(cornerColor, Offset(size.width - pad, pad), Offset(size.width - pad - cornerLen, pad), strokeWidth = cornerStroke)
+                        drawLine(cornerColor, Offset(size.width - pad, pad), Offset(size.width - pad, pad + cornerLen), strokeWidth = cornerStroke)
+                        // Bottom-Left corner
+                        drawLine(cornerColor, Offset(pad, size.height - pad), Offset(pad + cornerLen, size.height - pad), strokeWidth = cornerStroke)
+                        drawLine(cornerColor, Offset(pad, size.height - pad), Offset(pad, size.height - pad - cornerLen), strokeWidth = cornerStroke)
+                        // Bottom-Right corner
+                        drawLine(cornerColor, Offset(size.width - pad, size.height - pad), Offset(size.width - pad - cornerLen, size.height - pad), strokeWidth = cornerStroke)
+                        drawLine(cornerColor, Offset(size.width - pad, size.height - pad), Offset(size.width - pad, size.height - pad - cornerLen), strokeWidth = cornerStroke)
                     }
 
+                    // Top gradient scrim for readability
                     Box(
-                        Modifier
-                            .weight(1f)
-                            .height(44.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(colors.accentBlue)
-                            .clickable { onConfirmAction?.invoke() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        BasicText(
-                            "Set Wallpaper",
-                            style = HyperBounceType.body.copy(
-                                color = Color.White,
-                                fontWeight = FontWeight.SemiBold
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(130.dp)
+                            .align(Alignment.TopCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Black.copy(alpha = 0.65f), Color.Transparent)
+                                )
                             )
-                        )
+                    )
+
+                    // Bottom gradient scrim for buttons
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(160.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.80f))
+                                )
+                            )
+                    )
+
+                    // Top Header Overlay
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .statusBarsPadding()
+                            .padding(top = 16.dp, start = 20.dp, end = 20.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(Capsule())
+                                .background(Color.Black.copy(alpha = 0.50f))
+                                .padding(horizontal = 18.dp, vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                BasicText(
+                                    "Crop Wallpaper",
+                                    style = HyperBounceType.title3.copy(
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                                Spacer(Modifier.height(3.dp))
+                                BasicText(
+                                    "Pinch to zoom and drag to adjust position",
+                                    style = HyperBounceType.caption.copy(
+                                        color = Color.White.copy(alpha = 0.75f)
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    // Bottom Action Overlay with LiquidButton
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
+                            .padding(horizontal = 24.dp, vertical = 24.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        LiquidButton(
+                            onClick = onDismiss,
+                            backdrop = localBackdrop,
+                            surfaceColor = Color.White.copy(alpha = 0.15f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            BasicText(
+                                "Cancel",
+                                style = HyperBounceType.body.copy(
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Normal
+                                )
+                            )
+                        }
+
+                        LiquidButton(
+                            onClick = { onConfirmAction?.invoke() },
+                            backdrop = localBackdrop,
+                            tint = colors.accentBlue,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            BasicText(
+                                "Set Wallpaper",
+                                style = HyperBounceType.body.copy(
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                        }
                     }
                 }
             }

@@ -116,7 +116,8 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
         // Draw attached unblurred lock screen wallpaper background if enabled
         val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || w > h
-        val isDepthActive = cfg.isDepthActive && !isLandscape && isUnlocked
+        val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached
+        val isDepthActive = cfg.isDepthActive && !isLandscape && isUnlocked && isHomescreenAllowed
         val subjectBmp = if (isDepthActive) DepthWallpaperHelper.getSubjectBitmap(context) else null
 
         val isClosing = isClosingMode || isClosingFromFullOpen
@@ -155,8 +156,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
             }
         }
 
-        val shouldDrawWallpaper = !isDepthActive && cfg.isWallpaperActive && !isLandscape &&
-                (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
+        val shouldDrawWallpaper = !isDepthActive && cfg.isWallpaperActive && !isLandscape && isHomescreenAllowed
         val shouldBlurBackdrop = !isDepthActive && !shouldDrawWallpaper
 
         getLocationOnScreen(location)
@@ -239,7 +239,8 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
         val density = resources.displayMetrics.density
         val cfg = NotificationSheetConfigHolder.sheet
-        val isLockScreenActive = cfg.isLockScreenActive && !isLandscape && isUnlocked
+        val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached
+        val isLockScreenActive = cfg.isLockScreenActive && !isLandscape && isUnlocked && isHomescreenAllowed
 
         val isClosing = isClosingMode || isClosingFromFullOpen
 

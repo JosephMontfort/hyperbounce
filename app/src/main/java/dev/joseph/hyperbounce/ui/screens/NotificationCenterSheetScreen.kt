@@ -33,6 +33,7 @@ import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
 import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.components.TrashIcon
 import dev.joseph.hyperbounce.ui.components.WallpaperCropperDialog
+import dev.joseph.hyperbounce.ui.components.DepthSubjectAdjusterDialog
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import java.util.Locale
@@ -49,6 +50,7 @@ fun NotificationCenterSheetScreen(
     var hasCustomSubject by remember { mutableStateOf(DepthWallpaperHelper.hasCustomSubject(context) || sheet.depthCustomSubject) }
     var hasCustomWallpaper by remember { mutableStateOf(CustomWallpaperHelper.hasCustomWallpaper(context)) }
     var croppingBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var adjustingSubjectBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(sheet.depthWallpaperEnabled, sheet.depthCustomSubject) {
         hasCustomSubject = DepthWallpaperHelper.hasCustomSubject(context) || sheet.depthCustomSubject
@@ -94,23 +96,40 @@ fun NotificationCenterSheetScreen(
         )
     }
 
+    adjustingSubjectBitmap?.let { bmp ->
+        DepthSubjectAdjusterDialog(
+            subjectBitmap = bmp,
+            colors = colors,
+            backdrop = backdrop,
+            onDismiss = { adjustingSubjectBitmap = null },
+            onSubjectConfirmed = { adjusted ->
+                adjustingSubjectBitmap = null
+                DepthWallpaperHelper.saveCustomSubjectBitmap(context, adjusted) { success ->
+                    if (success) {
+                        hasCustomSubject = true
+                        sheet.setDepthCustomSubject(true)
+                        Toast.makeText(context, "Custom depth subject applied successfully", Toast.LENGTH_SHORT).show()
+                        try {
+                            val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
+                            context.sendBroadcast(intent)
+                        } catch (_: Throwable) {}
+                    } else {
+                        Toast.makeText(context, "Failed to save custom subject", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        )
+    }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
-            Toast.makeText(context, "Processing custom cutout image...", Toast.LENGTH_SHORT).show()
-            DepthWallpaperHelper.saveCustomSubjectFromUri(context, uri) { success ->
-                if (success) {
-                    hasCustomSubject = true
-                    sheet.setDepthCustomSubject(true)
-                    Toast.makeText(context, "Custom subject image applied successfully", Toast.LENGTH_SHORT).show()
-                    try {
-                        val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
-                        context.sendBroadcast(intent)
-                    } catch (_: Throwable) {}
-                } else {
-                    Toast.makeText(context, "Failed to load custom image", Toast.LENGTH_SHORT).show()
-                }
+            val bmp = DepthWallpaperHelper.decodeBitmapFromUri(context, uri)
+            if (bmp != null) {
+                adjustingSubjectBitmap = bmp
+            } else {
+                Toast.makeText(context, "Failed to decode cutout image", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -265,6 +284,22 @@ fun NotificationCenterSheetScreen(
                             icon = { ImageIcon(color = Color.White, size = 15.dp) }
                         )
                         if (hasCustomSubject) {
+                            RowDivider(colors.separator)
+                            SettingsClickableRow(
+                                title = "Adjust Depth Subject Position",
+                                subtitle = "Reposition and scale the cutout over the wallpaper",
+                                colors = colors,
+                                iconTint = colors.accentPurple,
+                                onClick = {
+                                    val currentBmp = DepthWallpaperHelper.getSubjectBitmap(context)
+                                    if (currentBmp != null) {
+                                        adjustingSubjectBitmap = currentBmp
+                                    } else {
+                                        Toast.makeText(context, "No subject image available to adjust", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                icon = { LockIcon(color = Color.White, size = 15.dp) }
+                            )
                             RowDivider(colors.separator)
                             SettingsClickableRow(
                                 title = "Remove Custom Subject",

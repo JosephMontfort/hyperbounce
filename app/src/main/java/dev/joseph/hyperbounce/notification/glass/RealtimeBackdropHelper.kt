@@ -164,9 +164,9 @@ object RealtimeBackdropHelper {
             val cfg = NotificationSheetConfigHolder.sheet
             val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
             val isLandscape = bmp.width > bmp.height
-            val isDepthActive = cfg.isDepthActive && !isLandscape && isUnlocked
-            val shouldDrawWallpaper = !isDepthActive && cfg.isWallpaperActive && !isLandscape &&
-                    (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
+            val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached
+            val isDepthActive = cfg.isDepthActive && !isLandscape && isUnlocked && isHomescreenAllowed
+            val shouldDrawWallpaper = !isDepthActive && cfg.isWallpaperActive && !isLandscape && isHomescreenAllowed
             if (!isDepthActive && !shouldDrawWallpaper) {
                 if (wasHardwareBlurred) {
                     latestBlurredBitmap = bmp
@@ -205,9 +205,9 @@ object RealtimeBackdropHelper {
                 val cfg = NotificationSheetConfigHolder.sheet
                 val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
                 val isLandscape = appContext.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                val isDepthActive = cfg.isDepthActive && !isLandscape && isUnlocked
-                val shouldDrawWallpaper = !isDepthActive && cfg.isWallpaperActive && !isLandscape &&
-                        (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
+                val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached
+                val isDepthActive = cfg.isDepthActive && !isLandscape && isUnlocked && isHomescreenAllowed
+                val shouldDrawWallpaper = !isDepthActive && cfg.isWallpaperActive && !isLandscape && isHomescreenAllowed
                 val needBlur = !isDepthActive && !shouldDrawWallpaper
                 val (bmp, hwBlurred) = captureDisplayInternal(appContext, needBlur)
                 if (bmp != null) {
@@ -243,9 +243,9 @@ object RealtimeBackdropHelper {
                     val cfg = NotificationSheetConfigHolder.sheet
                     val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
                     val isLandscape = appContext.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                    val isDepthActive = cfg.isDepthActive && !isLandscape && isUnlocked
-                    val shouldDrawWallpaper = !isDepthActive && cfg.isWallpaperActive && !isLandscape &&
-                            (!cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached)
+                    val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached
+                    val isDepthActive = cfg.isDepthActive && !isLandscape && isUnlocked && isHomescreenAllowed
+                    val shouldDrawWallpaper = !isDepthActive && cfg.isWallpaperActive && !isLandscape && isHomescreenAllowed
                     val needBlur = !isDepthActive && !shouldDrawWallpaper
                     val (bmp, hwBlurred) = captureDisplayInternal(appContext, needBlur)
                     if (bmp != null && sessionId == refreshSessionId) {
