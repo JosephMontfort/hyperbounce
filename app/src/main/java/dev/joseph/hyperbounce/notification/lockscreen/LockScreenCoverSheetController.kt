@@ -140,12 +140,10 @@ object LockScreenCoverSheetController {
 
                 try {
                     targetView.visibility = View.VISIBLE
-                    targetView.alpha = 1.0f
+                    targetView.alpha = prevAlpha * alpha.coerceIn(0f, 1f)
 
                     try {
-                        val canScaleField = targetView.javaClass.getDeclaredField("mClockCanScale")
-                        canScaleField.isAccessible = true
-                        canScaleField.setBoolean(targetView, true)
+                        getCanScaleField(targetView.javaClass)?.setBoolean(targetView, true)
                     } catch (_: Throwable) {}
 
                     val clockScale = 1.0f - (0.32f * morph)
@@ -155,12 +153,6 @@ object LockScreenCoverSheetController {
                     canvas.translate(0f, translationY + clockShiftY)
                     if (morph > 0.001f) {
                         canvas.scale(clockScale, clockScale, viewW / 2f, 50f * density)
-                    }
-                    if (alpha < 0.999f) {
-                        canvas.saveLayerAlpha(
-                            0f, 0f, viewW.toFloat(), viewH.toFloat(),
-                            (alpha * 255f).toInt().coerceIn(0, 255)
-                        )
                     }
                     targetView.draw(canvas)
                     canvas.restoreToCount(saveCount)

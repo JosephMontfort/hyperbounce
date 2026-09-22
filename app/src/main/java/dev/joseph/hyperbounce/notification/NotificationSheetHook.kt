@@ -7,6 +7,7 @@ import android.app.ActivityManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.database.ContentObserver
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
@@ -246,11 +247,20 @@ object NotificationSheetHook {
     @Volatile
     var isLaunchingNotificationActivity: Boolean = false
 
+    @Volatile
+    private var cachedHomePkg: String? = null
+    private var cachedCommonUtilMethod: Method? = null
+    private var isCommonUtilMethodLookupDone = false
+    private val bgCheckExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
     fun updateHomeScreenCache(context: Context?) {
         if (context == null) return
-        try {
-            isHomeScreenCached = isHomeScreenTop(context)
-        } catch (_: Throwable) {}
+        val appContext = context.applicationContext ?: context
+        bgCheckExecutor.execute {
+            try {
+                isHomeScreenCached = isHomeScreenTop(appContext)
+            } catch (_: Throwable) {}
+        }
     }
 
     fun isKeyguard(context: Context? = null): Boolean {
@@ -1290,12 +1300,17 @@ object NotificationSheetHook {
     }
 
     fun isHomeScreenTop(context: Context): Boolean {
-        var homePkg: String? = null
-        try {
-            val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-            val resolveInfo = context.packageManager?.resolveActivity(homeIntent, 0)
-            homePkg = resolveInfo?.activityInfo?.packageName
-        } catch (_: Throwable) {}
+        var homePkg = cachedHomePkg
+        if (homePkg == null) {
+            try {
+                val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                val resolveInfo = context.packageManager?.resolveActivity(homeIntent, 0)
+                homePkg = resolveInfo?.activityInfo?.packageName
+                if (homePkg != null) {
+                    cachedHomePkg = homePkg
+                }
+            } catch (_: Throwable) {}
+        }
 
         fun isLauncher(pkg: String?): Boolean {
             if (pkg.isNullOrEmpty()) return false
@@ -1304,14 +1319,21 @@ object NotificationSheetHook {
             return false
         }
 
-        // 1. Check via Miui CommonUtil.isTopActivityLauncher(context)
+        // 1. Check via Miui CommonUtil.isTopActivityLauncher(context) with cached reflection
         try {
-            val commonUtilClass = Class.forName("com.miui.systemui.util.CommonUtil", false, context.classLoader)
-            val method = commonUtilClass.getMethod("isTopActivityLauncher", Context::class.java)
-            val result = method.invoke(null, context) as? Boolean
-            if (result == true) {
-                Log.d(TAG, "isHomeScreenTop: true via CommonUtil")
-                return true
+            if (!isCommonUtilMethodLookupDone) {
+                isCommonUtilMethodLookupDone = true
+                try {
+                    val commonUtilClass = Class.forName("com.miui.systemui.util.CommonUtil", false, context.classLoader)
+                    cachedCommonUtilMethod = commonUtilClass.getMethod("isTopActivityLauncher", Context::class.java)
+                } catch (_: Throwable) {}
+            }
+            val method = cachedCommonUtilMethod
+            if (method != null) {
+                val result = method.invoke(null, context) as? Boolean
+                if (result != null) {
+                    return result
+                }
             }
         } catch (_: Throwable) {}
 
@@ -2477,48 +2499,65 @@ object NotificationSheetHook {
             try {
                 val clazz = Class.forName(clsName, false, classLoader)
                 for (m: Method in clazz.declaredMethods) {
-                    val nameLower = m.name.lowercase()
-                    if (m.name == "setEmptySpaceClickListener" && m.parameterTypes.isNotEmpty()) {
-                        module.hook(m).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val rawArgs = chain.args
-                                val listener = if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]
-                                if (listener != null) {
-                                    try {
-                                        for (lm in listener.javaClass.declaredMethods) {
-                                            if (lm.name.lowercase().contains("empty")) {
-                                                module.hook(lm).intercept(object : XposedInterface.Hooker {
-                                                    override fun intercept(lChain: XposedInterface.Chain): Any? {
-                                                        val cfg = NotificationSheetConfigHolder.sheet
-                                                        val isImageBgActive = cfg.isWallpaperActive
-                                                        if (isImageBgActive && isUnlockedShadeActive) {
-                                                            Log.d(TAG, "Suppressed dynamic empty space click listener ${listener.javaClass.name}.${lm.name}")
-                                                            return if (lm.returnType == Boolean::class.javaPrimitiveType) false else null
+                    when {
+                        m.name == "onEmptySpaceClick" && m.parameterTypes.isEmpty() -> {
+                            module.hook(m).intercept(object : XposedInterface.Hooker {
+                                override fun intercept(chain: XposedInterface.Chain): Any? {
+                                    val cfg = NotificationSheetConfigHolder.sheet
+                                    val isImageBgActive = cfg.isWallpaperActive
+                                    if (isImageBgActive && isUnlockedShadeActive) {
+                                        Log.d(TAG, "Suppressed ${clazz.simpleName}.onEmptySpaceClick because image background is active")
+                                        return null
+                                    }
+                                    return chain.proceed()
+                                }
+                            })
+                            Log.d(TAG, "Hooked $clsName.onEmptySpaceClick successfully")
+                        }
+                        m.name == "handleEmptySpaceClick" && m.parameterTypes.size == 1 &&
+                        MotionEvent::class.java.isAssignableFrom(m.parameterTypes[0]) -> {
+                            module.hook(m).intercept(object : XposedInterface.Hooker {
+                                override fun intercept(chain: XposedInterface.Chain): Any? {
+                                    val cfg = NotificationSheetConfigHolder.sheet
+                                    val isImageBgActive = cfg.isWallpaperActive
+                                    if (isImageBgActive && isUnlockedShadeActive) {
+                                        Log.d(TAG, "Suppressed ${clazz.simpleName}.handleEmptySpaceClick because image background is active")
+                                        return null
+                                    }
+                                    return chain.proceed()
+                                }
+                            })
+                            Log.d(TAG, "Hooked $clsName.handleEmptySpaceClick successfully")
+                        }
+                        (m.name == "setOnEmptySpaceClickListener" || m.name == "setEmptySpaceClickListener") && m.parameterTypes.size == 1 -> {
+                            module.hook(m).intercept(object : XposedInterface.Hooker {
+                                override fun intercept(chain: XposedInterface.Chain): Any? {
+                                    val rawArgs = chain.args
+                                    val listener = if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]
+                                    if (listener != null) {
+                                        try {
+                                            for (lm in listener.javaClass.declaredMethods) {
+                                                if (lm.name == "onEmptySpaceClick") {
+                                                    module.hook(lm).intercept(object : XposedInterface.Hooker {
+                                                        override fun intercept(lChain: XposedInterface.Chain): Any? {
+                                                            val cfg = NotificationSheetConfigHolder.sheet
+                                                            val isImageBgActive = cfg.isWallpaperActive
+                                                            if (isImageBgActive && isUnlockedShadeActive) {
+                                                                Log.d(TAG, "Suppressed dynamic empty space click listener ${listener.javaClass.name}.${lm.name}")
+                                                                return if (lm.returnType == Boolean::class.javaPrimitiveType) false else null
+                                                            }
+                                                            return lChain.proceed()
                                                         }
-                                                        return lChain.proceed()
-                                                    }
-                                                })
+                                                    })
+                                                }
                                             }
-                                        }
-                                    } catch (_: Throwable) {}
+                                        } catch (_: Throwable) {}
+                                    }
+                                    return chain.proceed()
                                 }
-                                return chain.proceed()
-                            }
-                        })
-                        Log.d(TAG, "Hooked $clsName.setEmptySpaceClickListener for empty space click suppression")
-                    } else if (nameLower.contains("emptyspace")) {
-                        module.hook(m).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val cfg = NotificationSheetConfigHolder.sheet
-                                val isImageBgActive = cfg.isWallpaperActive
-                                if (isImageBgActive && isUnlockedShadeActive) {
-                                    Log.d(TAG, "Suppressed ${clazz.simpleName}.${m.name} because image background is active")
-                                    return if (m.returnType == Boolean::class.javaPrimitiveType) false else null
-                                }
-                                return chain.proceed()
-                            }
-                        })
-                        Log.d(TAG, "Hooked $clsName.${m.name} for empty space click suppression")
+                            })
+                            Log.d(TAG, "Hooked $clsName.${m.name} successfully")
+                        }
                     }
                 }
             } catch (t: Throwable) {
@@ -2640,9 +2679,38 @@ object NotificationSheetHook {
         return null
     }
 
+    @Volatile
+    private var cachedAdvancedTexturesOn: Boolean? = null
+    @Volatile
+    private var isObserverRegistered = false
+
+    private fun registerAdvancedTexturesObserver(context: Context) {
+        if (isObserverRegistered) return
+        synchronized(this) {
+            if (isObserverRegistered) return
+            val appContext = context.applicationContext ?: context
+            try {
+                val uri = Settings.Secure.getUriFor("background_blur_enable")
+                val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+                    override fun onChange(selfChange: Boolean) {
+                        try {
+                            cachedAdvancedTexturesOn = Settings.Secure.getInt(appContext.contentResolver, "background_blur_enable", 0) == 1
+                        } catch (_: Throwable) {}
+                    }
+                }
+                appContext.contentResolver.registerContentObserver(uri, false, observer)
+                isObserverRegistered = true
+                cachedAdvancedTexturesOn = Settings.Secure.getInt(appContext.contentResolver, "background_blur_enable", 0) == 1
+            } catch (_: Throwable) {}
+        }
+    }
+
     private fun isAdvancedTexturesOn(context: Context?): Boolean {
+        cachedAdvancedTexturesOn?.let { return it }
+
         val ctx = context ?: containerRef?.get()?.context ?: return false
-        return try {
+        registerAdvancedTexturesObserver(ctx)
+        return cachedAdvancedTexturesOn ?: try {
             Settings.Secure.getInt(ctx.contentResolver, "background_blur_enable", 0) == 1
         } catch (_: Throwable) {
             false
