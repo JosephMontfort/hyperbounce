@@ -383,14 +383,20 @@ fun NotificationCenterSheetScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "3-Edge Liquid Glass Effects",
-                    subtitle = if (sheet.glassEffectsEnabled) "Real-time optical refraction, dispersion, and specular highlight along edges" else "Disabled by default (Clean border outline without shader overhead)",
+                    subtitle = if (!sheet.lockWallpaperEnabled) {
+                        "Requires Lockscreen Wallpaper background to be enabled"
+                    } else if (sheet.glassEffectsEnabled) {
+                        "Real-time optical refraction, dispersion, and specular highlight along edges"
+                    } else {
+                        "Disabled by default (Clean border outline without shader overhead)"
+                    },
                     colors = colors,
                     iconTint = colors.accentBlue,
                     backdrop = backdrop,
                     checked = sheet.glassEffectsEnabled,
                     onCheckedChange = sheet::setGlassEffectsEnabled,
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) },
-                    enabled = sheet.enabled
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled
                 )
                 if (sheet.glassEffectsEnabled) {
                     RowDivider(colors.separator)
@@ -403,7 +409,7 @@ fun NotificationCenterSheetScreen(
                         checked = sheet.glassOnlyWithoutWallpaper,
                         onCheckedChange = sheet::setGlassOnlyWithoutWallpaper,
                         icon = { LockIcon(color = Color.White, size = 15.dp) },
-                        enabled = sheet.enabled && sheet.glassEffectsEnabled
+                        enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                     )
                 }
             }
@@ -426,7 +432,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..120.0f,
                     defaultValue = 32.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -439,7 +445,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..80.0f,
                     defaultValue = 18.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -452,7 +458,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..0.30f,
                     defaultValue = 0.03f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -465,7 +471,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..8.0f,
                     defaultValue = 2.0f,
                     valueLabel = { String.format(Locale.US, "%.1f dp", it) },
-                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -478,7 +484,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 50.0f..200.0f,
                     defaultValue = 120.0f,
                     valueLabel = { String.format(Locale.US, "%.0f%%", it) },
-                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -491,7 +497,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..60.0f,
                     defaultValue = 0.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
             }
             SectionFooter(
@@ -513,7 +519,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..2.0f,
                     defaultValue = 0.90f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -526,7 +532,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..2.0f,
                     defaultValue = 0.75f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -539,7 +545,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..1.0f,
                     defaultValue = 0.20f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -552,7 +558,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..1.0f,
                     defaultValue = 0.40f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
             }
             SectionFooter(
@@ -574,7 +580,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..80.0f,
                     defaultValue = 28.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -587,7 +593,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..80.0f,
                     defaultValue = 28.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -600,7 +606,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..80.0f,
                     defaultValue = 28.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled && sheet.glassEffectsEnabled
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(

@@ -163,7 +163,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val viewX = location[0]
         val viewY = location[1]
 
-        val shouldRenderGlass = cfg.glassEffectsEnabled && (!cfg.glassOnlyWithoutWallpaper || (!shouldDrawWallpaper && !isDepthActive))
+        val shouldRenderGlass = !isLandscape && cfg.isGlassEffectsActive && (!cfg.glassOnlyWithoutWallpaper || (!shouldDrawWallpaper && !isDepthActive))
 
         var glassRendered = false
         if (shouldRenderGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderer != null) {
@@ -419,16 +419,18 @@ class NotificationGlassSheetView @JvmOverloads constructor(
 
     private fun drawFallbackBorder(canvas: Canvas, w: Float, h: Float, radius: Float) {
         val density = resources.displayMetrics.density
-        fallbackBorderPaint.strokeWidth = 2.0f * density
-        boundsRect.set(0f, 0f, w, h)
+        val strokeW = 1.5f * density
+        fallbackBorderPaint.strokeWidth = strokeW
+        val half = strokeW / 2f
+        val r = radius.coerceAtLeast(0f)
+
         sheetClipPath.reset()
-        val radii = floatArrayOf(
-            0f, 0f,
-            0f, 0f,
-            radius, radius,
-            radius, radius
-        )
-        sheetClipPath.addRoundRect(boundsRect, radii, android.graphics.Path.Direction.CW)
+        sheetClipPath.moveTo(half, 0f)
+        sheetClipPath.lineTo(half, h - r)
+        sheetClipPath.arcTo(half, h - 2 * r, half + 2 * r, h, 180f, -90f, false)
+        sheetClipPath.lineTo(w - half - r, h)
+        sheetClipPath.arcTo(w - half - 2 * r, h - 2 * r, w - half, h, 90f, -90f, false)
+        sheetClipPath.lineTo(w - half, 0f)
         canvas.drawPath(sheetClipPath, fallbackBorderPaint)
     }
 

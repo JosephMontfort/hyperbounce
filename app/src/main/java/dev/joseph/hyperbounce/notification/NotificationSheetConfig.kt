@@ -71,6 +71,13 @@ data class NotificationSheetConfig(
      */
     val isOneToOneTrackingActive: Boolean
         get() = isWallpaperActive && oneToOneTrackingEnabled
+
+    /**
+     * 3-Edge Liquid Glass effects are active only if the lockscreen wallpaper feature is enabled.
+     * Stored user preferences are preserved even when wallpaper is toggled off.
+     */
+    val isGlassEffectsActive: Boolean
+        get() = isWallpaperActive && glassEffectsEnabled
 }
 
 object NotificationSheetConfigHolder {

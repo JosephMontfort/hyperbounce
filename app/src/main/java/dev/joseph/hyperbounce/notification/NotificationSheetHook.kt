@@ -435,6 +435,7 @@ object NotificationSheetHook {
             if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
                 return@post
             }
+            val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height
             val sheet = cachedGlassSheetRef?.get() ?: ensureGlassSheetInjected(container)
             val pill = cachedHomePillRef?.get() ?: ensureHomePillInjected(container)
             adjustNotificationMargins(container)
@@ -446,11 +447,18 @@ object NotificationSheetHook {
             pill?.visibility = View.VISIBLE
             pill?.translationY = 0.0f
             val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
-            if (cfg.isLockScreenActive && isHomescreenAllowed) {
+            if (!isLandscape && cfg.isLockScreenActive && isHomescreenAllowed) {
                 LockScreenCoverSheetController.onShadeFullyOpened(container)
             } else {
                 LockScreenCoverSheetController.onShadeReset(container)
             }
+            if (!isLandscape && cfg.isGlassEffectsActive) {
+                sheet?.let { RealtimeBackdropHelper.startLiveRefresh(container.context, it) }
+            } else {
+                RealtimeBackdropHelper.stopLiveRefresh()
+            }
+            sheet?.shadeBackgroundView?.alpha = 1.0f
+            themeBackgroundViewRef?.get()?.alpha = 1.0f
         }
     }
 
@@ -2010,35 +2018,6 @@ object NotificationSheetHook {
     private fun applyExpansionFractionInternal(fraction: Float, prevFraction: Float = -1f) {
         try {
             val container = containerRef?.get() ?: return
-            val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height
-            if (isLandscape) {
-                val curSheet = cachedGlassSheetRef?.get() ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
-                val curPill = cachedHomePillRef?.get() ?: container.findViewWithTag<View>(TAG_HOME_PILL)
-                curSheet?.isClosingMode = false
-                curSheet?.isClosingFromFullOpen = false
-                curSheet?.visibility = View.GONE
-                curSheet?.shadeBackgroundView?.alpha = 1.0f
-                themeBackgroundViewRef?.get()?.alpha = 1.0f
-                curPill?.visibility = View.GONE
-                RealtimeBackdropHelper.stopLiveRefresh()
-                LockScreenCoverSheetController.onShadeReset(container)
-                resetNotificationMargins(container)
-
-                val anim = blurAnimatorRef?.get()
-                if (anim != null) {
-                    try {
-                        for (m in anim.javaClass.declaredMethods) {
-                            if (m.name.startsWith("updateBlurRatio")) {
-                                m.isAccessible = true
-                                m.invoke(anim, fraction, false)
-                                break
-                            }
-                        }
-                    } catch (_: Throwable) {}
-                }
-                return
-            }
-
             val cfg = NotificationSheetConfigHolder.sheet
             if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
                 val curSheet = cachedGlassSheetRef?.get() ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
@@ -2132,10 +2111,10 @@ object NotificationSheetHook {
                 // Refresh backdrop continuously if glass effects are actively required
                 val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height
                 val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
-                val isDepthActive = cfg.isDepthActive && isHomescreenAllowed
-                val isLockScreenActive = cfg.isLockScreenActive && isHomescreenAllowed
+                val isDepthActive = cfg.isDepthActive && !isLandscape && isHomescreenAllowed
+                val isLockScreenActive = cfg.isLockScreenActive && !isLandscape && isHomescreenAllowed
                 val shouldDrawWallpaper = cfg.isWallpaperActive && !isLandscape && isHomescreenAllowed
-                val shouldRenderGlass = cfg.glassEffectsEnabled && (!cfg.glassOnlyWithoutWallpaper || !shouldDrawWallpaper)
+                val shouldRenderGlass = !isLandscape && cfg.isGlassEffectsActive && (!cfg.glassOnlyWithoutWallpaper || !shouldDrawWallpaper)
                 if (shouldRenderGlass) {
                     RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
                 } else {
@@ -2147,6 +2126,23 @@ object NotificationSheetHook {
                     val bgAlpha = if (curSheet.isClosingFromFullOpen) 1f else if (fraction >= 0.90f) ((fraction - 0.90f) / 0.10f).coerceIn(0f, 1f) else 0f
                     curSheet.shadeBackgroundView?.alpha = bgAlpha
                     themeBackgroundViewRef?.get()?.alpha = bgAlpha
+                } else {
+                    curSheet.shadeBackgroundView?.alpha = 1.0f
+                    themeBackgroundViewRef?.get()?.alpha = 1.0f
+                    if (isLandscape) {
+                        val anim = blurAnimatorRef?.get()
+                        if (anim != null) {
+                            try {
+                                for (m in anim.javaClass.declaredMethods) {
+                                    if (m.name.startsWith("updateBlurRatio")) {
+                                        m.isAccessible = true
+                                        m.invoke(anim, fraction, false)
+                                        break
+                                    }
+                                }
+                            } catch (_: Throwable) {}
+                        }
+                    }
                 }
             }
 
@@ -2159,7 +2155,8 @@ object NotificationSheetHook {
             }
 
             val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
-            if (cfg.isLockScreenActive && isHomescreenAllowed) {
+            val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height
+            if (!isLandscape && cfg.isLockScreenActive && isHomescreenAllowed) {
                 LockScreenCoverSheetController.onExpansionFractionChanged(container, fraction, finalSheetY, currentStretchOffset)
             } else {
                 LockScreenCoverSheetController.onShadeReset(container)
@@ -2365,7 +2362,8 @@ object NotificationSheetHook {
                             val cfg = NotificationSheetConfigHolder.sheet
                             val container = containerRef?.get()
                             val isLandscape = container != null && (container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height)
-                            if (cfg.isDepthActive && !isLandscape && currentStatusBarState == 0 && !isControlCenterActive()) {
+                            val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+                            if (cfg.isDepthActive && !isLandscape && isHomescreenAllowed && currentStatusBarState == 0 && !isControlCenterActive()) {
                                 val args = chain.args.toTypedArray()
                                 if (args.isNotEmpty()) {
                                     args[0] = 0.0f
