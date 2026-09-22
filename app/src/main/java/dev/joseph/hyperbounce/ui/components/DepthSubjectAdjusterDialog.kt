@@ -113,12 +113,31 @@ fun DepthSubjectAdjusterDialog(
                 val bmpW = subjectBitmap.width.toFloat()
                 val bmpH = subjectBitmap.height.toFloat()
 
-                // Initial scale: fit subject nicely on screen
-                val initialScale = min(vpWidthPx / bmpW, vpHeightPx / bmpH) * 0.85f
+                // Match exact full-screen placement as it displays when pulling down notification shade
+                val (initialScale, initialPanX, initialPanY) = remember(bmpW, bmpH, vpWidthPx, vpHeightPx, backgroundBitmap) {
+                    if (backgroundBitmap != null &&
+                        kotlin.math.abs(bmpW - backgroundBitmap.width.toFloat()) < 2f &&
+                        kotlin.math.abs(bmpH - backgroundBitmap.height.toFloat()) < 2f
+                    ) {
+                        // Cutout generated from this wallpaper — align 1:1 pixel-for-pixel over background
+                        val bgW = backgroundBitmap.width.toFloat()
+                        val bgH = backgroundBitmap.height.toFloat()
+                        val s = max(vpWidthPx / bgW, vpHeightPx / bgH)
+                        val px = (vpWidthPx - bgW * s) / 2f
+                        val py = (vpHeightPx - bgH * s) / 2f
+                        Triple(s, px, py)
+                    } else {
+                        // Full-screen center-crop scale matching notification shade
+                        val s = max(vpWidthPx / bmpW, vpHeightPx / bmpH)
+                        val px = (vpWidthPx - bmpW * s) / 2f
+                        val py = (vpHeightPx - bmpH * s) / 2f
+                        Triple(s, px, py)
+                    }
+                }
 
                 var zoom by remember { mutableFloatStateOf(1f) }
-                var panX by remember { mutableFloatStateOf((vpWidthPx - bmpW * initialScale) / 2f) }
-                var panY by remember { mutableFloatStateOf((vpHeightPx - bmpH * initialScale) / 2f) }
+                var panX by remember { mutableFloatStateOf(initialPanX) }
+                var panY by remember { mutableFloatStateOf(initialPanY) }
 
                 // Confirmation lambda: renders subject at exact scale & position on screen-sized canvas
                 remember(zoom, panX, panY, initialScale, vpWidthPx, vpHeightPx) {

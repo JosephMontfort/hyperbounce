@@ -4,9 +4,12 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.Executors
 
 /**
  * Handles persistent storage, cross-process access, and memory caching for
@@ -18,6 +21,9 @@ object CustomWallpaperHelper {
 
     @Volatile
     private var cachedBitmap: Bitmap? = null
+
+    private val bgExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     /**
      * Obtains the custom wallpaper bitmap, cached in memory or loaded from filesDir/ConfigProvider.
@@ -82,28 +88,36 @@ object CustomWallpaperHelper {
                 Uri.parse("content://dev.joseph.hyperbounce.provider"),
                 "hasCustomWallpaper", null, null
             )
-            return res?.getBoolean("hasCustom", false) ?: false
+            val hasCustom = res?.getBoolean("hasCustom", false) ?: false
+            if (hasCustom) return true
         } catch (_: Throwable) {}
-        val file = File(appContext.filesDir, FILENAME)
-        return file.exists() && file.length() > 0
+        return false
     }
 
-    fun saveCustomWallpaper(context: Context, bitmap: Bitmap): Boolean {
+    fun saveCustomWallpaper(
+        context: Context,
+        bitmap: Bitmap,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
         val appContext = context.applicationContext ?: context
-        return try {
-            val file = File(appContext.filesDir, FILENAME)
-            val tmp = File(appContext.filesDir, "$FILENAME.tmp")
-            FileOutputStream(tmp).use { fos ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
-                fos.flush()
+        bgExecutor.execute {
+            try {
+                val file = File(appContext.filesDir, FILENAME)
+                val tmp = File(appContext.filesDir, "$FILENAME.tmp")
+                FileOutputStream(tmp).use { fos ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                    fos.flush()
+                }
+                tmp.copyTo(file, overwrite = true)
+                tmp.delete()
+                file.setReadable(true, false)
+                cachedBitmap = bitmap
+                Log.d(TAG, "Custom wallpaper saved successfully (${bitmap.width}x${bitmap.height})")
+                mainHandler.post { onComplete?.invoke(true) }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to save custom wallpaper", t)
+                mainHandler.post { onComplete?.invoke(false) }
             }
-            tmp.renameTo(file)
-            cachedBitmap = bitmap
-            Log.d(TAG, "Custom wallpaper saved successfully (${bitmap.width}x${bitmap.height})")
-            true
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to save custom wallpaper", t)
-            false
         }
     }
 
@@ -129,10 +143,14 @@ object CustomWallpaperHelper {
         if (context != null) {
             try {
                 val appContext = context.applicationContext ?: context
-                val file = File(appContext.filesDir, FILENAME)
-                if (file.exists()) file.delete()
-                val tmp = File(appContext.filesDir, "$FILENAME.tmp")
-                if (tmp.exists()) tmp.delete()
+                val deContext = try { appContext.createDeviceProtectedStorageContext() } catch (_: Throwable) { null }
+                val dirs = listOfNotNull(appContext.filesDir, deContext?.filesDir).distinct()
+                for (dir in dirs) {
+                    val file = File(dir, FILENAME)
+                    if (file.exists()) file.delete()
+                    val tmp = File(dir, "$FILENAME.tmp")
+                    if (tmp.exists()) tmp.delete()
+                }
             } catch (_: Throwable) {}
         }
     }

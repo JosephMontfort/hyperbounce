@@ -80,17 +80,18 @@ fun NotificationCenterSheetScreen(
             onDismiss = { croppingBitmap = null },
             onCropConfirmed = { cropped ->
                 croppingBitmap = null
-                val saved = CustomWallpaperHelper.saveCustomWallpaper(context, cropped)
-                if (saved) {
-                    hasCustomWallpaper = true
-                    sheet.setCustomWallpaperEnabled(true)
-                    Toast.makeText(context, "Custom wallpaper set successfully", Toast.LENGTH_SHORT).show()
-                    try {
-                        val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
-                        context.sendBroadcast(intent)
-                    } catch (_: Throwable) {}
-                } else {
-                    Toast.makeText(context, "Failed to save wallpaper", Toast.LENGTH_SHORT).show()
+                CustomWallpaperHelper.saveCustomWallpaper(context, cropped) { saved ->
+                    if (saved) {
+                        hasCustomWallpaper = true
+                        sheet.setCustomWallpaperEnabled(true)
+                        Toast.makeText(context, "Custom wallpaper set successfully", Toast.LENGTH_SHORT).show()
+                        try {
+                            val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
+                            context.sendBroadcast(intent)
+                        } catch (_: Throwable) {}
+                    } else {
+                        Toast.makeText(context, "Failed to save wallpaper", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         )
