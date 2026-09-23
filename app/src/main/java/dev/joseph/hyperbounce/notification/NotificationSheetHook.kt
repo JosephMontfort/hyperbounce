@@ -2185,21 +2185,11 @@ object NotificationSheetHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             if (isUnlockedShadeActive) {
-                                val rawArgs = chain.args
-                                if (rawArgs is Array<*>) {
-                                    @Suppress("UNCHECKED_CAST")
-                                    val arr = rawArgs as Array<Any?>
-                                    arr[1] = 0.0f
-                                    return chain.proceed(arr)
-                                } else if (rawArgs is MutableList<*>) {
-                                    @Suppress("UNCHECKED_CAST")
-                                    val list = rawArgs as MutableList<Any?>
-                                    list[1] = 0.0f
-                                    return chain.proceed(list)
+                                val args = chain.args
+                                if (args.size > 1) {
+                                    args[1] = 0.0f
+                                    return chain.proceed(args)
                                 }
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
-                                args[1] = 0.0f
-                                return chain.proceed(args)
                             }
                             return chain.proceed()
                         }
@@ -2775,19 +2765,7 @@ object NotificationSheetHook {
                             if (cfg.enabled) {
                                 val ctx = getInjectorContext(chain.thisObject)
                                 if (isAdvancedTexturesOn(ctx)) {
-                                    val rawArgs = chain.args
-                                    if (rawArgs is Array<*> && rawArgs.size > 2) {
-                                        @Suppress("UNCHECKED_CAST")
-                                        val args = rawArgs as Array<Any?>
-                                        args[2] = false
-                                        return chain.proceed(args)
-                                    } else if (rawArgs is MutableList<*> && rawArgs.size > 2) {
-                                        @Suppress("UNCHECKED_CAST")
-                                        val list = rawArgs as MutableList<Any?>
-                                        list[2] = false
-                                        return chain.proceed(list)
-                                    }
-                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else (rawArgs as Array<Any?>).clone()
+                                    val args = chain.args
                                     if (args.size > 2) {
                                         args[2] = false
                                         return chain.proceed(args)
