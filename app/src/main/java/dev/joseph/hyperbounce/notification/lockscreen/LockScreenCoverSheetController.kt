@@ -31,7 +31,12 @@ object LockScreenCoverSheetController {
     private var cachedClockContainerRef: WeakReference<ViewGroup>? = null
     private var cachedFgClockContainerRef: WeakReference<ViewGroup>? = null
     private var cachedHeaderViewRef: WeakReference<View>? = null
+    private var cachedBottomAreaRef: WeakReference<LockScreenBottomAreaView>? = null
     private var isHeaderSuppressedByUs = false
+
+    private var cachedClockId: Int = 0
+    private var cachedFgClockId: Int = 0
+    private var cachedHeaderId: Int = 0
 
     // Cached reflection fields for zero-overhead live clock sync (option 2)
     private var cachedCanScaleField: Field? = null
@@ -43,6 +48,16 @@ object LockScreenCoverSheetController {
     private var cachedSetShowFullTimeMethod: Method? = null
     private var cachedNsslId: Int = 0
     private var cachedNsslRef: WeakReference<ViewGroup>? = null
+
+    init {
+        // Immediate style update: when user changes lockscreen clock theme/style, invalidate references
+        LockScreenInfoReader.addListener { _ ->
+            cachedClockContainerRef = null
+            cachedFgClockContainerRef = null
+            isClockSyncedSmall = false
+            Log.d(TAG, "Lockscreen clock style updated, refreshed clock view references immediately")
+        }
+    }
 
     @Volatile
     var currentMorphFraction: Float = 1f
@@ -60,6 +75,18 @@ object LockScreenCoverSheetController {
         morphAnimator = null
     }
 
+    fun getBottomAreaView(container: ViewGroup): LockScreenBottomAreaView? {
+        val cached = cachedBottomAreaRef?.get()
+        if (cached != null && cached.parent == container) {
+            return cached
+        }
+        val view = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
+        if (view != null) {
+            cachedBottomAreaRef = WeakReference(view)
+        }
+        return view
+    }
+
     /**
      * Resolves the authentic lockscreen clock views from the SystemUI view hierarchy.
      */
@@ -67,18 +94,22 @@ object LockScreenCoverSheetController {
         if (rootView == null) return
         try {
             if (cachedClockContainerRef?.get() == null) {
-                val clockId = rootView.resources.getIdentifier("miui_keyguard_clock_container", "id", "com.android.systemui")
-                if (clockId != 0) {
-                    val clockView = rootView.findViewById<ViewGroup>(clockId)
+                if (cachedClockId == 0) {
+                    cachedClockId = rootView.resources.getIdentifier("miui_keyguard_clock_container", "id", "com.android.systemui")
+                }
+                if (cachedClockId != 0) {
+                    val clockView = rootView.findViewById<ViewGroup>(cachedClockId)
                     if (clockView != null) {
                         cachedClockContainerRef = WeakReference(clockView)
                     }
                 }
             }
             if (cachedFgClockContainerRef?.get() == null) {
-                val fgId = rootView.resources.getIdentifier("miui_keyguard_foreground_clock_container", "id", "com.android.systemui")
-                if (fgId != 0) {
-                    val fgView = rootView.findViewById<ViewGroup>(fgId)
+                if (cachedFgClockId == 0) {
+                    cachedFgClockId = rootView.resources.getIdentifier("miui_keyguard_foreground_clock_container", "id", "com.android.systemui")
+                }
+                if (cachedFgClockId != 0) {
+                    val fgView = rootView.findViewById<ViewGroup>(cachedFgClockId)
                     if (fgView != null) {
                         cachedFgClockContainerRef = WeakReference(fgView)
                     }
@@ -132,38 +163,24 @@ object LockScreenCoverSheetController {
                     targetView.layout(0, 0, viewW, viewH)
                 }
 
-                val prevVis = targetView.visibility
-                val prevAlpha = targetView.alpha
-                val prevTransX = targetView.translationX
-                val prevTransY = targetView.translationY
-                val prevScaleX = targetView.scaleX
-                val prevScaleY = targetView.scaleY
+                val clockScale = 1.0f - (0.32f * morph)
+                val clockShiftY = -18f * density * morph
+
+                val effectiveAlpha = (alpha.coerceIn(0f, 1f) * 255f).toInt()
+                val saveCount = if (effectiveAlpha < 255) {
+                    canvas.saveLayerAlpha(0f, 0f, viewW.toFloat(), viewH.toFloat(), effectiveAlpha)
+                } else {
+                    canvas.save()
+                }
 
                 try {
-                    targetView.visibility = View.VISIBLE
-                    targetView.alpha = prevAlpha * alpha.coerceIn(0f, 1f)
-
-                    try {
-                        getCanScaleField(targetView.javaClass)?.setBoolean(targetView, true)
-                    } catch (_: Throwable) {}
-
-                    val clockScale = 1.0f - (0.32f * morph)
-                    val clockShiftY = -18f * density * morph
-
-                    val saveCount = canvas.save()
                     canvas.translate(0f, translationY + clockShiftY)
                     if (morph > 0.001f) {
                         canvas.scale(clockScale, clockScale, viewW / 2f, 50f * density)
                     }
                     targetView.draw(canvas)
-                    canvas.restoreToCount(saveCount)
                 } finally {
-                    targetView.visibility = prevVis
-                    targetView.alpha = prevAlpha
-                    targetView.translationX = prevTransX
-                    targetView.translationY = prevTransY
-                    targetView.scaleX = prevScaleX
-                    targetView.scaleY = prevScaleY
+                    canvas.restoreToCount(saveCount)
                 }
                 return
             } catch (t: Throwable) {
@@ -204,9 +221,11 @@ object LockScreenCoverSheetController {
 
             var headerView = cachedHeaderViewRef?.get()
             if (headerView == null) {
-                val headerId = rootView.resources.getIdentifier("normal_notification_header_view", "id", "com.android.systemui")
-                if (headerId != 0) {
-                    headerView = rootView.findViewById(headerId)
+                if (cachedHeaderId == 0) {
+                    cachedHeaderId = rootView.resources.getIdentifier("normal_notification_header_view", "id", "com.android.systemui")
+                }
+                if (cachedHeaderId != 0) {
+                    headerView = rootView.findViewById(cachedHeaderId)
                     if (headerView != null) {
                         cachedHeaderViewRef = WeakReference(headerView)
                     }
@@ -215,16 +234,19 @@ object LockScreenCoverSheetController {
 
             if (!isUnlocked) {
                 // On lockscreen, normal_notification_header_view MUST ALWAYS be hidden!
-                headerView?.alpha = 0.0f
-                headerView?.visibility = View.GONE
+                if (headerView != null && headerView.visibility != View.GONE) {
+                    headerView.alpha = 0.0f
+                    headerView.visibility = View.GONE
+                }
                 isHeaderSuppressedByUs = false
                 return
             }
 
             if (!cfg.isLockScreenActive || isLandscape) {
                 // When feature is disabled or in landscape, only restore if we previously suppressed it!
-                if (isHeaderSuppressedByUs) {
-                    headerView?.alpha = 1.0f
+                if (isHeaderSuppressedByUs && headerView != null) {
+                    headerView.visibility = View.VISIBLE
+                    headerView.alpha = 1.0f
                     isHeaderSuppressedByUs = false
                 }
                 return
@@ -232,10 +254,13 @@ object LockScreenCoverSheetController {
 
             if (headerView != null) {
                 if (isSuppress) {
-                    headerView.alpha = 0.0f
-                    headerView.visibility = View.GONE
-                    isHeaderSuppressedByUs = true
+                    if (!isHeaderSuppressedByUs) {
+                        headerView.alpha = 0.0f
+                        headerView.visibility = View.GONE
+                        isHeaderSuppressedByUs = true
+                    }
                 } else if (isHeaderSuppressedByUs) {
+                    headerView.visibility = View.VISIBLE
                     headerView.alpha = 1.0f
                     isHeaderSuppressedByUs = false
                 }
@@ -251,7 +276,7 @@ object LockScreenCoverSheetController {
     fun ensureBottomAffordancesInjected(container: ViewGroup) {
         try {
             val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-            var bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
+            var bottomArea = getBottomAreaView(container)
             if (isLandscape) {
                 bottomArea?.visibility = View.GONE
                 return
@@ -291,9 +316,8 @@ object LockScreenCoverSheetController {
                 }
                 container.addView(bottomArea, lp)
                 bottomArea.bringToFront()
+                cachedBottomAreaRef = WeakReference(bottomArea)
                 Log.d(TAG, "Injected LockScreenBottomAreaView successfully")
-            } else {
-                bottomArea.bringToFront()
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to inject LockScreenBottomAreaView", t)
@@ -538,7 +562,7 @@ object LockScreenCoverSheetController {
     fun onTorchStateChanged(enabled: Boolean) {
         try {
             val container = dev.joseph.hyperbounce.notification.NotificationSheetHook.getContainer() ?: return
-            val bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
+            val bottomArea = getBottomAreaView(container)
             bottomArea?.setTorchActive(enabled)
         } catch (_: Throwable) {}
     }
@@ -556,7 +580,7 @@ object LockScreenCoverSheetController {
             val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
             if (isLandscape) {
                 suppressStockShadeHeader(container.rootView, false)
-                container.findViewWithTag<View>(TAG_BOTTOM_AFFORDANCES)?.visibility = View.GONE
+                getBottomAreaView(container)?.visibility = View.GONE
                 return
             }
             val cfg = NotificationSheetConfigHolder.sheet
@@ -570,10 +594,9 @@ object LockScreenCoverSheetController {
 
             // 3. Ensure bottom affordances injected and tracked
             ensureBottomAffordancesInjected(container)
-            val bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
+            val bottomArea = getBottomAreaView(container)
             if (bottomArea != null) {
                 if (cfg.showBottomWidgets) {
-                    bottomArea.bringToFront()
                     bottomArea.translationY = finalSheetY + (if (finalSheetY == 0f) currentStretchOffset else 0f)
                     bottomArea.setExpansionFraction(fraction)
                 } else {
@@ -592,7 +615,7 @@ object LockScreenCoverSheetController {
         try {
             val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
             if (isLandscape) {
-                container.findViewWithTag<View>(TAG_BOTTOM_AFFORDANCES)?.visibility = View.GONE
+                getBottomAreaView(container)?.visibility = View.GONE
                 return
             }
             val cfg = NotificationSheetConfigHolder.sheet
@@ -601,9 +624,8 @@ object LockScreenCoverSheetController {
             suppressStockShadeHeader(container.rootView, true)
             syncClockWithNotifications(container)
             ensureBottomAffordancesInjected(container)
-            val bottomArea = container.findViewWithTag<LockScreenBottomAreaView>(TAG_BOTTOM_AFFORDANCES)
+            val bottomArea = getBottomAreaView(container)
             if (bottomArea != null && cfg.showBottomWidgets) {
-                bottomArea.bringToFront()
                 bottomArea.visibility = View.VISIBLE
                 bottomArea.translationY = 0.0f
                 bottomArea.setExpansionFraction(1.0f)
@@ -628,10 +650,12 @@ object LockScreenCoverSheetController {
             suppressStockShadeHeader(container.rootView, false)
 
             // Hide bottom affordances
-            container.findViewWithTag<View>(TAG_BOTTOM_AFFORDANCES)?.visibility = View.GONE
+            getBottomAreaView(container)?.visibility = View.GONE
 
-            val nsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
-            val nssl = if (nsslId != 0) container.findViewById<ViewGroup>(nsslId) else null
+            if (cachedNsslId == 0) {
+                cachedNsslId = container.resources.getIdentifier("notification_stack_scroller", "id", "com.android.systemui")
+            }
+            val nssl = if (cachedNsslId != 0) cachedNsslRef?.get() ?: container.findViewById<ViewGroup>(cachedNsslId)?.also { cachedNsslRef = WeakReference(it) } else null
             nssl?.clipBounds = null
 
             lastKnownHasNotification = null

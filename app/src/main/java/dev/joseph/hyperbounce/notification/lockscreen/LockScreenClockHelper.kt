@@ -60,6 +60,39 @@ object LockScreenClockHelper {
 
     private val textBounds = Rect()
 
+    @Volatile
+    private var lastMinute: Long = -1L
+    @Volatile
+    private var is24HourCached: Boolean? = null
+    @Volatile
+    private var cachedHourStr: String = ""
+    @Volatile
+    private var cachedMinuteStr: String = ""
+    @Volatile
+    private var cachedTimeFullStr: String = ""
+    @Volatile
+    private var cachedDateFullStr: String = ""
+    @Volatile
+    private var cachedDateCompactStr: String = ""
+
+    private fun updateTimeStrings(context: Context, nowMs: Long, currentMinute: Long) {
+        val is24Hour = is24HourCached ?: DateFormat.is24HourFormat(context).also { is24HourCached = it }
+        val now = Calendar.getInstance().apply { timeInMillis = nowMs }
+        val locale = Locale.getDefault()
+        val hourFormat = if (is24Hour) "HH" else "h"
+        val hour = SimpleDateFormat(hourFormat, locale).format(now.time)
+        val minute = SimpleDateFormat("mm", locale).format(now.time)
+        cachedHourStr = hour
+        cachedMinuteStr = minute
+        cachedTimeFullStr = "$hour:$minute"
+
+        val dateFullPattern = if (locale.language == "zh") "M月d日 EEEE" else "EEEE, MMMM d"
+        val dateCompactPattern = if (locale.language == "zh") "M月d日 EEE" else "EEE, MMM d"
+        cachedDateFullStr = SimpleDateFormat(dateFullPattern, locale).format(now.time)
+        cachedDateCompactStr = SimpleDateFormat(dateCompactPattern, locale).format(now.time)
+        lastMinute = currentMinute
+    }
+
     fun addTickListener(listener: () -> Unit) {
         if (!tickListeners.contains(listener)) {
             tickListeners.add(listener)
@@ -82,6 +115,12 @@ object LockScreenClockHelper {
             }
             val receiver = object : BroadcastReceiver() {
                 override fun onReceive(c: Context?, intent: Intent?) {
+                    is24HourCached = null
+                    lastMinute = -1L
+                    if (c != null) {
+                        val nowMs = System.currentTimeMillis()
+                        updateTimeStrings(c, nowMs, nowMs / 60000L)
+                    }
                     mainHandler.post {
                         for (listener in tickListeners) {
                             try {
@@ -118,20 +157,16 @@ object LockScreenClockHelper {
 
         registerTimeTickReceiverIfNeeded(context)
 
-        val is24Hour = DateFormat.is24HourFormat(context)
-        val now = Calendar.getInstance()
-        val hourFormat = if (is24Hour) "HH" else "h"
-        val hourStr = SimpleDateFormat(hourFormat, Locale.getDefault()).format(now.time)
-        val minuteStr = SimpleDateFormat("mm", Locale.getDefault()).format(now.time)
-        val timeFullStr = "$hourStr:$minuteStr"
+        val nowMs = System.currentTimeMillis()
+        val currentMinute = nowMs / 60000L
+        if (currentMinute != lastMinute || is24HourCached == null) {
+            updateTimeStrings(context, nowMs, currentMinute)
+        }
 
-        // Date string: e.g. "Friday, September 12"
-        val dateFullPattern = if (Locale.getDefault().language == "zh") "M月d日 EEEE" else "EEEE, MMMM d"
-        val dateCompactPattern = if (Locale.getDefault().language == "zh") "M月d日 EEE" else "EEE, MMM d"
-        val dateStr = SimpleDateFormat(
-            if (morphFraction >= 0.5f) dateCompactPattern else dateFullPattern,
-            Locale.getDefault()
-        ).format(now.time)
+        val hourStr = cachedHourStr
+        val minuteStr = cachedMinuteStr
+        val timeFullStr = cachedTimeFullStr
+        val dateStr = if (morphFraction >= 0.5f) cachedDateCompactStr else cachedDateFullStr
 
         val templateId = config.templateId.lowercase()
         val isOversize = templateId.startsWith("oversize")
