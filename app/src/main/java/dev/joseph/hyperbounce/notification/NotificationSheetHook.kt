@@ -2185,7 +2185,7 @@ object NotificationSheetHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             if (isUnlockedShadeActive) {
-                                val args = chain.args
+                                val args = chain.args.toTypedArray()
                                 if (args.size > 1) {
                                     args[1] = 0.0f
                                     return chain.proceed(args)
@@ -2765,7 +2765,7 @@ object NotificationSheetHook {
                             if (cfg.enabled) {
                                 val ctx = getInjectorContext(chain.thisObject)
                                 if (isAdvancedTexturesOn(ctx)) {
-                                    val args = chain.args
+                                    val args = chain.args.toTypedArray()
                                     if (args.size > 2) {
                                         args[2] = false
                                         return chain.proceed(args)
