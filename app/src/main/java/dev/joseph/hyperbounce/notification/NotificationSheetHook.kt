@@ -1267,7 +1267,6 @@ object NotificationSheetHook {
                         "notif_card_left_bevel" -> cfg.leftBevelWidth = intent.getFloatExtra("value_float", cfg.leftBevelWidth)
                         "notif_card_right_bevel" -> cfg.rightBevelWidth = intent.getFloatExtra("value_float", cfg.rightBevelWidth)
                         "notif_card_bottom_bevel" -> cfg.bottomBevelWidth = intent.getFloatExtra("value_float", cfg.bottomBevelWidth)
-                        "notif_card_edge_stretch" -> cfg.edgeStretch = intent.getFloatExtra("value_float", cfg.edgeStretch)
                         "notif_card_dispersion" -> cfg.dispersionStrength = intent.getFloatExtra("value_float", cfg.dispersionStrength)
                         "notif_card_specular" -> cfg.specularStrength = intent.getFloatExtra("value_float", cfg.specularStrength)
                         "notif_card_hairline" -> cfg.hairlineStrength = intent.getFloatExtra("value_float", cfg.hairlineStrength)

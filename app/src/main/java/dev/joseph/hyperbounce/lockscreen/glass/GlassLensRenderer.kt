@@ -43,7 +43,6 @@ class GlassLensRenderer {
             uniform float3 edgeBevels;     // x = left, y = right, z = bottom
             uniform float3 edgeRefracts;   // x = left, y = right, z = bottom
             uniform float  edgeStretch;
-            uniform float  wavyStrength;
             uniform float  dispersion;
             uniform float2 lightDir;
             uniform float  specStrength;
@@ -161,7 +160,7 @@ class GlassLensRenderer {
                 float2 offset = -n * (slope * refr);
                 // Dynamic squeeze & unsqueeze on side edges alone that modulates with vertical translation
                 float worldY = p.y - viewPos.y;
-                float squeezeWave = wavyStrength * 0.28 * sin(worldY * 0.012);
+                float squeezeWave = 0.28 * sin(worldY * 0.012);
                 float dynamicStretch = edgeStretch * (1.0 + squeezeWave);
                 offset.x += (-n.x) * (hStretch * dynamicStretch);
 
@@ -329,7 +328,6 @@ class GlassLensRenderer {
         val rightRefract: Float = refract,
         val bottomRefract: Float = refract,
         val edgeStretch: Float = 0f,
-        val wavyStrength: Float = 0f,
         val dispersion: Float = 0.030f,
         val lightX: Float = 0f,
         val lightY: Float = 1f,
@@ -448,7 +446,6 @@ class GlassLensRenderer {
         val safeBottomRefr = p.bottomRefract.coerceIn(0f, p.bottomBevel.coerceAtLeast(1f) * 0.35f)
         sh.setFloatUniform("edgeRefracts", safeLeftRefr, safeRightRefr, safeBottomRefr)
         sh.setFloatUniform("edgeStretch", p.edgeStretch)
-        sh.setFloatUniform("wavyStrength", p.wavyStrength)
 
         sh.setFloatUniform("dispersion", p.dispersion)
         sh.setFloatUniform("lightDir", p.lightX, p.lightY)

@@ -167,7 +167,6 @@ data class NotificationSheetSettings(
     val leftBevelWidth: Float = 32.0f,
     val rightBevelWidth: Float = 32.0f,
     val bottomBevelWidth: Float = 28.0f,
-    val edgeStretch: Float = 28.0f,
     val dispersionStrength: Float = 0.030f,
     val specularStrength: Float = 0.90f,
     val hairlineStrength: Float = 0.75f,

@@ -447,20 +447,6 @@ fun NotificationCenterSheetScreen(
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Side Edges Horizontal Stretch",
-                    subtitle = "Pre-refraction horizontal stretch along left and right borders",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.edgeStretch,
-                    onValueChange = sheet::setEdgeStretch,
-                    valueRange = 0.0f..80.0f,
-                    defaultValue = 28.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
-                )
-                RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Chromatic Dispersion",
                     subtitle = "Physical R/G/B spectral separation along surface normals",

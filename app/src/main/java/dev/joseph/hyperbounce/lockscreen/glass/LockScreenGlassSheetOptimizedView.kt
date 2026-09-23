@@ -114,7 +114,6 @@ class LockScreenGlassSheetOptimizedView @JvmOverloads constructor(
                 rightRefract = rightRefract,
                 bottomRefract = bottomRefract,
                 edgeStretch = edgeStretch,
-                wavyStrength = 1.0f,
                 dispersion = cfg.dispersionStrength,
                 lightX = 0f,
                 lightY = 1f,
