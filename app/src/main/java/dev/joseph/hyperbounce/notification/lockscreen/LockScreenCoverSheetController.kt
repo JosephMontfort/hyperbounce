@@ -51,6 +51,7 @@ object LockScreenCoverSheetController {
     private var targetMorphFraction: Float = 1f
     private var morphAnimator: android.animation.ValueAnimator? = null
     private var isClockSyncedSmall: Boolean = false
+    val isCompactClockSynced: Boolean get() = isClockSyncedSmall
 
     fun updateMorphFraction(target: Float) {
         currentMorphFraction = 1f

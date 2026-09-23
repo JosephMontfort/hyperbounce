@@ -449,6 +449,19 @@ fun NotificationCenterSheetScreen(
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
+                    title = "Side Edges Horizontal Stretch",
+                    subtitle = "Pre-refraction horizontal stretch along left and right borders",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.edgeStretch,
+                    onValueChange = sheet::setEdgeStretch,
+                    valueRange = 0.0f..80.0f,
+                    defaultValue = 28.0f,
+                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
+                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
                     title = "Chromatic Dispersion",
                     subtitle = "Physical R/G/B spectral separation along surface normals",
                     colors = colors,
@@ -571,27 +584,17 @@ fun NotificationCenterSheetScreen(
             SectionHeader("3-Edge Bevel Geometry", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
-                    title = "Left Edge Bevel Width",
-                    subtitle = "Width of the left optical glass bevel slope",
+                    title = "Side Edges Bevel Width",
+                    subtitle = "Width of the left and right optical glass bevel slopes",
                     colors = colors,
                     backdrop = backdrop,
                     value = sheet.leftBevelWidth,
-                    onValueChange = sheet::setLeftBevelWidth,
+                    onValueChange = {
+                        sheet.setLeftBevelWidth(it)
+                        sheet.setRightBevelWidth(it)
+                    },
                     valueRange = 0.0f..80.0f,
-                    defaultValue = 28.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Right Edge Bevel Width",
-                    subtitle = "Width of the right optical glass bevel slope",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.rightBevelWidth,
-                    onValueChange = sheet::setRightBevelWidth,
-                    valueRange = 0.0f..80.0f,
-                    defaultValue = 28.0f,
+                    defaultValue = 32.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )

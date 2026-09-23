@@ -387,18 +387,22 @@ object NotificationSheetHook {
                 stackField.isAccessible = true
             } catch (_: Throwable) {}
 
+            var isStackScrollerControllerInjected = false
             val guardedMethods = setOf("updateDozeAmount", "updateHideAmount", "notifyAnimationStart", "setWakingUp", "setHardDozeAmountOverride")
             for (m in nwcClass.declaredMethods) {
                 if (m.name in guardedMethods) {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
-                            val inst = chain.thisObject
-                            if (inst != null && stackField != null) {
-                                val controller = stackField.get(inst)
-                                if (controller == null) {
-                                    // stackScrollerController has not yet been injected by NotificationPanelViewController.
-                                    // Return early to prevent NPE during early SystemUI startup.
-                                    return null
+                            if (!isStackScrollerControllerInjected) {
+                                val inst = chain.thisObject
+                                if (inst != null && stackField != null) {
+                                    val controller = stackField.get(inst)
+                                    if (controller == null) {
+                                        // stackScrollerController has not yet been injected by NotificationPanelViewController.
+                                        // Return early to prevent NPE during early SystemUI startup.
+                                        return null
+                                    }
+                                    isStackScrollerControllerInjected = true
                                 }
                             }
                             return chain.proceed()
@@ -1263,6 +1267,7 @@ object NotificationSheetHook {
                         "notif_card_left_bevel" -> cfg.leftBevelWidth = intent.getFloatExtra("value_float", cfg.leftBevelWidth)
                         "notif_card_right_bevel" -> cfg.rightBevelWidth = intent.getFloatExtra("value_float", cfg.rightBevelWidth)
                         "notif_card_bottom_bevel" -> cfg.bottomBevelWidth = intent.getFloatExtra("value_float", cfg.bottomBevelWidth)
+                        "notif_card_edge_stretch" -> cfg.edgeStretch = intent.getFloatExtra("value_float", cfg.edgeStretch)
                         "notif_card_dispersion" -> cfg.dispersionStrength = intent.getFloatExtra("value_float", cfg.dispersionStrength)
                         "notif_card_specular" -> cfg.specularStrength = intent.getFloatExtra("value_float", cfg.specularStrength)
                         "notif_card_hairline" -> cfg.hairlineStrength = intent.getFloatExtra("value_float", cfg.hairlineStrength)
@@ -2181,6 +2186,17 @@ object NotificationSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             if (isUnlockedShadeActive) {
                                 val rawArgs = chain.args
+                                if (rawArgs is Array<*>) {
+                                    @Suppress("UNCHECKED_CAST")
+                                    val arr = rawArgs as Array<Any?>
+                                    arr[1] = 0.0f
+                                    return chain.proceed(arr)
+                                } else if (rawArgs is MutableList<*>) {
+                                    @Suppress("UNCHECKED_CAST")
+                                    val list = rawArgs as MutableList<Any?>
+                                    list[1] = 0.0f
+                                    return chain.proceed(list)
+                                }
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
                                 args[1] = 0.0f
                                 return chain.proceed(args)
@@ -2476,11 +2492,13 @@ object NotificationSheetHook {
                                 val cfg = NotificationSheetConfigHolder.sheet
                                 val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
                                 if (cfg.isLockScreenActive && isHomescreenAllowed && isUnlockedShadeActive) {
-                                    val container = containerRef?.get()
-                                    if (container != null) {
-                                        mainHandler.post {
-                                            LockScreenCoverSheetController.syncClockWithNotifications(container)
-                                            container.findViewWithTag<View>(TAG_GLASS_SHEET)?.invalidate()
+                                    if (!LockScreenCoverSheetController.isCompactClockSynced) {
+                                        val container = containerRef?.get()
+                                        if (container != null) {
+                                            mainHandler.post {
+                                                LockScreenCoverSheetController.syncClockWithNotifications(container)
+                                                container.findViewWithTag<View>(TAG_GLASS_SHEET)?.invalidate()
+                                            }
                                         }
                                     }
                                 }
@@ -2677,15 +2695,25 @@ object NotificationSheetHook {
         }
     }
 
+    private var cachedInjectorContextField: Field? = null
+    private var cachedInjectorViewField: Field? = null
+    private var cachedExpandableBgNormalField: Field? = null
+    private var cachedSetCustomBgMethod: Method? = null
+    private var cachedMatBgResId: Int = 0
+
     private fun getInjectorContext(injector: Any?): Context? {
         if (injector == null) return null
         try {
-            val fCtx = injector.javaClass.getField("context")
+            val fCtx = cachedInjectorContextField ?: run {
+                injector.javaClass.getField("context").also { cachedInjectorContextField = it }
+            }
             val ctx = fCtx.get(injector) as? Context
             if (ctx != null) return ctx
         } catch (_: Throwable) {}
         try {
-            val fView = injector.javaClass.getField("view")
+            val fView = cachedInjectorViewField ?: run {
+                injector.javaClass.getField("view").also { cachedInjectorViewField = it }
+            }
             val v = fView.get(injector) as? View
             if (v != null) return v.context
         } catch (_: Throwable) {}
@@ -2748,9 +2776,19 @@ object NotificationSheetHook {
                                 val ctx = getInjectorContext(chain.thisObject)
                                 if (isAdvancedTexturesOn(ctx)) {
                                     val rawArgs = chain.args
+                                    if (rawArgs is Array<*> && rawArgs.size > 2) {
+                                        @Suppress("UNCHECKED_CAST")
+                                        val args = rawArgs as Array<Any?>
+                                        args[2] = false
+                                        return chain.proceed(args)
+                                    } else if (rawArgs is MutableList<*> && rawArgs.size > 2) {
+                                        @Suppress("UNCHECKED_CAST")
+                                        val list = rawArgs as MutableList<Any?>
+                                        list[2] = false
+                                        return chain.proceed(list)
+                                    }
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else (rawArgs as Array<Any?>).clone()
                                     if (args.size > 2) {
-                                        // Force non-blur path: material normal bg (r14), blur mode 0, clear blend
                                         args[2] = false
                                         return chain.proceed(args)
                                     }
@@ -2781,16 +2819,24 @@ object NotificationSheetHook {
                                     val injector = chain.thisObject ?: return result
                                     val ctx = getInjectorContext(injector) ?: containerRef?.get()?.context
                                     if (isAdvancedTexturesOn(ctx)) {
-                                        val viewField = injector.javaClass.getField("view")
+                                        val viewField = cachedInjectorViewField ?: run {
+                                            injector.javaClass.getField("view").also { cachedInjectorViewField = it }
+                                        }
                                         val expandableView = viewField.get(injector)
                                         if (expandableView != null) {
-                                            val bgNormalField = expandableView.javaClass.getField("mBackgroundNormal")
+                                            val bgNormalField = cachedExpandableBgNormalField ?: run {
+                                                expandableView.javaClass.getField("mBackgroundNormal").also { cachedExpandableBgNormalField = it }
+                                            }
                                             val bgNormal = bgNormalField.get(expandableView)
                                             if (bgNormal != null && ctx != null) {
-                                                val matBgId = ctx.resources.getIdentifier("notification_material_bg", "drawable", "com.android.systemui")
-                                                if (matBgId != 0) {
-                                                    val setCustomBgMethod = bgNormal.javaClass.getMethod("setCustomBackground", Int::class.javaPrimitiveType)
-                                                    setCustomBgMethod.invoke(bgNormal, matBgId)
+                                                if (cachedMatBgResId == 0) {
+                                                    cachedMatBgResId = ctx.resources.getIdentifier("notification_material_bg", "drawable", "com.android.systemui")
+                                                }
+                                                if (cachedMatBgResId != 0) {
+                                                    val setCustomBgMethod = cachedSetCustomBgMethod ?: run {
+                                                        bgNormal.javaClass.getMethod("setCustomBackground", Int::class.javaPrimitiveType).also { cachedSetCustomBgMethod = it }
+                                                    }
+                                                    setCustomBgMethod.invoke(bgNormal, cachedMatBgResId)
                                                 }
                                             }
                                         }

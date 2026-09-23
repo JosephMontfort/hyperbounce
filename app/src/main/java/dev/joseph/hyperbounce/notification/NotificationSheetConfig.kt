@@ -22,6 +22,7 @@ data class NotificationSheetConfig(
     var leftBevelWidth: Float = 32.0f,
     var rightBevelWidth: Float = 32.0f,
     var bottomBevelWidth: Float = 28.0f,
+    var edgeStretch: Float = 28.0f,
     var dispersionStrength: Float = 0.030f,
     var specularStrength: Float = 0.90f,
     var hairlineStrength: Float = 0.75f,
@@ -103,6 +104,7 @@ object NotificationSheetConfigHolder {
         sheet.leftBevelWidth = prefs.getFloat("notif_card_left_bevel", 32.0f)
         sheet.rightBevelWidth = prefs.getFloat("notif_card_right_bevel", 32.0f)
         sheet.bottomBevelWidth = prefs.getFloat("notif_card_bottom_bevel", 28.0f)
+        sheet.edgeStretch = prefs.getFloat("notif_card_edge_stretch", 28.0f)
         sheet.dispersionStrength = prefs.getFloat("notif_card_dispersion", 0.030f)
         sheet.specularStrength = prefs.getFloat("notif_card_specular", 0.90f)
         sheet.hairlineStrength = prefs.getFloat("notif_card_hairline", 0.75f)

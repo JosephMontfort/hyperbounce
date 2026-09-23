@@ -159,14 +159,15 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val shouldDrawWallpaper = !isDepthActive && cfg.isWallpaperActive && !isLandscape && isHomescreenAllowed
         val shouldBlurBackdrop = !isDepthActive && !shouldDrawWallpaper
 
-        getLocationOnScreen(location)
-        val viewX = location[0]
-        val viewY = location[1]
+        // Zero-overhead coordinate resolution: avoid recursive getLocationOnScreen() view-tree walks in onDraw()
+        val viewX = 0
+        val viewY = translationY.toInt()
 
         val shouldRenderGlass = !isLandscape && cfg.isGlassEffectsActive && (!cfg.glassOnlyWithoutWallpaper || (!shouldDrawWallpaper && !isDepthActive))
 
         var glassRendered = false
         if (shouldRenderGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderer != null) {
+            val edgeStretch = cfg.edgeStretch * density
             val params = GlassLensRenderer.LensParams(
                 cornerRadius = cornerRadius,
                 leftBevel = leftBevel,
@@ -176,6 +177,8 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 leftRefract = leftRefract,
                 rightRefract = rightRefract,
                 bottomRefract = bottomRefract,
+                edgeStretch = edgeStretch,
+                wavyStrength = 0.0f,
                 dispersion = cfg.dispersionStrength,
                 lightX = 0f,
                 lightY = 1f,

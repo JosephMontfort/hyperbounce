@@ -547,6 +547,7 @@ class SettingsRepository(context: Context) {
         var leftBevelWidth by prefsFloatState("notif_card_left_bevel", defaults.leftBevelWidth); private set
         var rightBevelWidth by prefsFloatState("notif_card_right_bevel", defaults.rightBevelWidth); private set
         var bottomBevelWidth by prefsFloatState("notif_card_bottom_bevel", defaults.bottomBevelWidth); private set
+        var edgeStretch by prefsFloatState("notif_card_edge_stretch", defaults.edgeStretch); private set
         var dispersionStrength by prefsFloatState("notif_card_dispersion", defaults.dispersionStrength); private set
         var specularStrength by prefsFloatState("notif_card_specular", defaults.specularStrength); private set
         var hairlineStrength by prefsFloatState("notif_card_hairline", defaults.hairlineStrength); private set
@@ -566,6 +567,7 @@ class SettingsRepository(context: Context) {
             glassEffectsEnabled, glassOnlyWithoutWallpaper,
             refractionHeight, sideRefraction, bottomRefraction,
             bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
+            edgeStretch,
             dispersionStrength, specularStrength, hairlineStrength, innerGlowStrength, rimSoftness,
             innerShadow, saturationFactor, blurRadius,
             cornerRadius, sideMargin
@@ -590,6 +592,7 @@ class SettingsRepository(context: Context) {
         @JvmName("setNotifSheetLeftBevelWidthPref") fun setLeftBevelWidth(v: Float) { leftBevelWidth = v }
         @JvmName("setNotifSheetRightBevelWidthPref") fun setRightBevelWidth(v: Float) { rightBevelWidth = v }
         @JvmName("setNotifSheetBottomBevelWidthPref") fun setBottomBevelWidth(v: Float) { bottomBevelWidth = v }
+        @JvmName("setNotifSheetEdgeStretchPref") fun setEdgeStretch(v: Float) { edgeStretch = v }
         @JvmName("setNotifSheetDispersionStrengthPref") fun setDispersionStrength(v: Float) { dispersionStrength = v }
         @JvmName("setNotifSheetSpecularStrengthPref") fun setSpecularStrength(v: Float) { specularStrength = v }
         @JvmName("setNotifSheetHairlineStrengthPref") fun setHairlineStrength(v: Float) { hairlineStrength = v }
@@ -620,6 +623,7 @@ class SettingsRepository(context: Context) {
             leftBevelWidth = defaults.leftBevelWidth
             rightBevelWidth = defaults.rightBevelWidth
             bottomBevelWidth = defaults.bottomBevelWidth
+            edgeStretch = defaults.edgeStretch
             dispersionStrength = defaults.dispersionStrength
             specularStrength = defaults.specularStrength
             hairlineStrength = defaults.hairlineStrength
