@@ -544,6 +544,7 @@ object True2DGridEngine {
             var isAnyHeader = false
 
             for (i in viewsInChunk.indices) {
+                val view = viewsInChunk[i]
                 val itemPos = try {
                     val lp = view.layoutParams
                     val getPosM = lp.javaClass.getMethod("getViewLayoutPosition")
