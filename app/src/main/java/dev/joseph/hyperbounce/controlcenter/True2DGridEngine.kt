@@ -102,13 +102,20 @@ object True2DGridEngine {
     @Volatile private var sLastCalculatedGrid: AdapterGridData? = null
 
     fun isFullWidthSystemItem(item: Any?, vt: Int): Boolean {
-        if (vt == 3348 || vt == 334833) {
+        if (vt == 432337 || vt == 366837 || vt == 3348 || vt == 334833 ||
+            vt == 8398 || vt == 8397 || vt == 732873 || vt == 3484337) {
             return true
         }
         if (item != null) {
             val className = item.javaClass.name
-            if (className.contains("EditButton") ||
-                className.contains("WordlessMode")
+            if (className.contains("HeaderSpace") ||
+                className.contains("FooterSpace") ||
+                className.contains("EditButton") ||
+                className.contains("WordlessMode") ||
+                className.contains("SecurityFooter") ||
+                className.contains("Divider") ||
+                className.contains("DividerItem") ||
+                className.contains("DividerText")
             ) {
                 return true
             }
@@ -571,8 +578,7 @@ object True2DGridEngine {
                 val col = gridData.getItemCol(itemPos, targetAdapter)
                 val spanW = gridData.getItemSpanW(itemPos, targetAdapter).coerceIn(1, SPAN_COUNT)
                 val spanH = gridData.getItemSpanH(itemPos).coerceIn(1, 6)
-                val isSystem = gridData.isSystemItem(itemPos, targetAdapter)
-                val isHeader = (itemPos == 0 && spanW == SPAN_COUNT) || isSystem
+                val isHeader = (itemPos == 0 && spanW == SPAN_COUNT)
                 if (isHeader) isAnyHeader = true
 
                 val lp = view.layoutParams as ViewGroup.MarginLayoutParams
