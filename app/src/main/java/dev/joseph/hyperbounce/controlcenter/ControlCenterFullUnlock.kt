@@ -374,12 +374,19 @@ object ControlCenterFullUnlock {
         }
     }
 
+    fun isNonDraggableItem(vt: Int): Boolean {
+        return vt == 432337 || vt == 366837 || vt == 3348 || vt == 334833 ||
+               vt == 8398 || vt == 8397 || vt == 3484337 || vt == 732873 ||
+               True2DGridEngine.isFullWidthSystemItem(null, vt)
+    }
+
     /**
      * Calculates width and height spans for any item.
      */
     fun getItemSpans(item: Any, viewType: Int, spec: String?): Pair<Int, Int> {
-        // 0. Full-width system items -> 4x1
-        if (True2DGridEngine.isFullWidthSystemItem(item, viewType)) {
+        // 0. Full-width system items & spacers/dividers -> 4x1
+        if (viewType == 432337 || viewType == 366837 || viewType == 8398 || viewType == 8397 || viewType == 3484337 || viewType == 732873 ||
+            True2DGridEngine.isFullWidthSystemItem(item, viewType)) {
             return Pair(4, 1)
         }
         // 1. Media Player -> dynamic size
@@ -1030,30 +1037,14 @@ object ControlCenterFullUnlock {
             val fromId = getSlotIdFromViewHolder(sourceVh)
             val toId = getSlotIdFromViewHolder(targetVh)
 
-            if (fromId != null && toId != null && fromId != toId) {
-                val fromIdx = sUnifiedSlotOrder.indexOf(fromId)
-                val toIdx = sUnifiedSlotOrder.indexOf(toId)
-                if (fromIdx >= 0 && toIdx >= 0 && fromIdx != toIdx) {
-                    val moved = sUnifiedSlotOrder.removeAt(fromIdx)
-                    sUnifiedSlotOrder.add(toIdx, moved)
-                }
-            } else if (fromPos < sUnifiedSlotOrder.size && toPos < sUnifiedSlotOrder.size) {
-                val moved = sUnifiedSlotOrder.removeAt(fromPos)
-                sUnifiedSlotOrder.add(toPos, moved)
-            }
+            if (fromId == null || toId == null || fromId == toId) return false
 
-            // Rebuild contentMap immediately
-            buildAndSetContentMap(adapter, classLoader)
-            if (sDistributor != null) {
-                val otherAdapter = if (adapter === sRightAdapter) sLeftAdapter else if (adapter === sLeftAdapter) sRightAdapter else null
-                if (otherAdapter != null) {
-                    buildAndSetContentMap(otherAdapter, classLoader)
-                }
-            }
+            val fromIdx = sUnifiedSlotOrder.indexOf(fromId)
+            val toIdx = sUnifiedSlotOrder.indexOf(toId)
+            if (fromIdx < 0 || toIdx < 0 || fromIdx == toIdx) return false
 
-            // Notify adapter of visual move
-            val notifyItemMovedMethod = adapter.javaClass.getMethod("notifyItemMoved", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-            notifyItemMovedMethod.invoke(adapter, fromPos, toPos)
+            val moved = sUnifiedSlotOrder.removeAt(fromIdx)
+            sUnifiedSlotOrder.add(toIdx, moved)
 
             // Sync Wi-Fi first flag if cards were moved
             val wifiIdx = sUnifiedSlotOrder.indexOf("card:wifi")
@@ -1062,7 +1053,8 @@ object ControlCenterFullUnlock {
                 ControlCenterConfigHolder.sIsWifiFirst = (wifiIdx < cellIdx)
             }
 
-            // Sync QSListController addedTiles if both are circular tiles
+            // Sync QSListController addedTiles in-memory if both are circular tiles
+            // WITHOUT calling moveElement (which would trigger distributor.notifyChanged and DiffUtil)
             try {
                 if (sourceVh != null && targetVh != null) {
                     val getOwnerMethod = try { sourceVh.javaClass.getMethod("getOwner") } catch (e: Throwable) { null }
@@ -1080,17 +1072,34 @@ object ControlCenterFullUnlock {
                         val sourceItem = getItemMethod.invoke(sourceVh)
                         val getTargetItemMethod = targetVh.javaClass.getMethod("getItem\$miui_controlcenter_release")
                         val targetItem = getTargetItemMethod.invoke(targetVh)
-                        val moveElementMethod = srcTarget.javaClass.getMethod("moveElement", getItemMethod.returnType, getTargetItemMethod.returnType)
-                        moveElementMethod.invoke(srcTarget, sourceItem, targetItem)
+                        val addedTilesField = try { srcTarget.javaClass.getDeclaredField("addedTiles") } catch (e: Throwable) { null }
+                        if (addedTilesField != null) {
+                            addedTilesField.isAccessible = true
+                            val addedList = addedTilesField.get(srcTarget) as? MutableList<Any>
+                            if (addedList != null) {
+                                val i1 = addedList.indexOf(sourceItem)
+                                val i2 = addedList.indexOf(targetItem)
+                                if (i1 >= 0 && i2 >= 0 && i1 != i2) {
+                                    java.util.Collections.swap(addedList, i1, i2)
+                                }
+                            }
+                        }
                     }
                 }
             } catch (t: Throwable) {}
 
-            // Save order asynchronously
-            val ctxField = adapter.javaClass.getDeclaredField("context")
-            ctxField.isAccessible = true
-            val ctx = ctxField.get(adapter) as? Context
-            saveOrder(ctx)
+            // Rebuild contentMap immediately and invalidate 2D layout cache
+            buildAndSetContentMap(adapter, classLoader)
+            if (sDistributor != null) {
+                val otherAdapter = if (adapter === sRightAdapter) sLeftAdapter else if (adapter === sLeftAdapter) sRightAdapter else null
+                if (otherAdapter != null) {
+                    buildAndSetContentMap(otherAdapter, classLoader)
+                }
+            }
+
+            // Notify adapter of visual move
+            val notifyItemMovedMethod = adapter.javaClass.getMethod("notifyItemMoved", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+            notifyItemMovedMethod.invoke(adapter, fromPos, toPos)
 
             return true
         } catch (t: Throwable) {
@@ -1265,23 +1274,24 @@ object ControlCenterFullUnlock {
                                     if (vh != null) {
                                         val getItemViewTypeMethod = vh.javaClass.getMethod("getItemViewType")
                                         val vt = getItemViewTypeMethod.invoke(vh) as Int
-                                        if (!True2DGridEngine.isFullWidthSystemItem(null, vt)) {
-                                            // Check if it's an inactive tile in the available pool
-                                            val getItemMethod = try { vh.javaClass.getMethod("getItem\$miui_controlcenter_release") } catch (e: Throwable) { null }
-                                            val item = getItemMethod?.invoke(vh)
-                                            if (item != null) {
-                                                val addedField = try { item.javaClass.getDeclaredField("added") } catch (e: Throwable) { null }
-                                                if (addedField != null) {
-                                                    addedField.isAccessible = true
-                                                    val isAdded = addedField.getBoolean(item)
-                                                    if (!isAdded) {
-                                                        return@intercept chain.proceed()
-                                                    }
+                                        if (isNonDraggableItem(vt)) {
+                                            return@intercept 0
+                                        }
+                                        // Check if it's an inactive tile in the available pool
+                                        val getItemMethod = try { vh.javaClass.getMethod("getItem\$miui_controlcenter_release") } catch (e: Throwable) { null }
+                                        val item = getItemMethod?.invoke(vh)
+                                        if (item != null) {
+                                            val addedField = try { item.javaClass.getDeclaredField("added") } catch (e: Throwable) { null }
+                                            if (addedField != null) {
+                                                addedField.isAccessible = true
+                                                val isAdded = addedField.getBoolean(item)
+                                                if (!isAdded) {
+                                                    return@intercept chain.proceed()
                                                 }
                                             }
-                                            // Return DRAG_FLAG: 15 shl 16 (UP | DOWN | LEFT | RIGHT)
-                                            return@intercept (15 shl 16)
                                         }
+                                        // Return DRAG_FLAG: 15 shl 16 (UP | DOWN | LEFT | RIGHT)
+                                        return@intercept (15 shl 16)
                                     }
                                 }
                             } catch (t: Throwable) {}
@@ -1298,7 +1308,7 @@ object ControlCenterFullUnlock {
                                     if (targetVh != null) {
                                         val getItemViewTypeMethod = targetVh.javaClass.getMethod("getItemViewType")
                                         val vt = getItemViewTypeMethod.invoke(targetVh) as Int
-                                        if (True2DGridEngine.isFullWidthSystemItem(null, vt)) {
+                                        if (isNonDraggableItem(vt)) {
                                             return@intercept false
                                         }
                                         val getItemMethod = try { targetVh.javaClass.getMethod("getItem\$miui_controlcenter_release") } catch (e: Throwable) { null }
@@ -1368,6 +1378,9 @@ object ControlCenterFullUnlock {
                                     ctxField.isAccessible = true
                                     val ctx = ctxField.get(adapter) as? Context
                                     saveOrder(ctx)
+                                    True2DGridEngine.invalidate(adapter)
+                                    val notifyDataSetChangedM = adapter.javaClass.getMethod("notifyDataSetChanged")
+                                    notifyDataSetChangedM.invoke(adapter)
                                 }
                             } catch (t: Throwable) {}
                             result

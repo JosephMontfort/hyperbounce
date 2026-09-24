@@ -50,7 +50,7 @@ data class ControlCenterConfig(
     var frictionMultiplier: Float = 0.40f,
     var lowEndFlashlightEnabled: Boolean = false,
     var flashlightMaxBrightness: Int = 100,
-    var true2dGridEnabled: Boolean = false
+    var true2dGridEnabled: Boolean = true
 )
 
 /**
@@ -199,7 +199,7 @@ object ControlCenterConfigHolder {
             frictionMultiplier = prefs.getFloat("cc_friction_multiplier", 0.40f),
             lowEndFlashlightEnabled = prefs.getBoolean("cc_low_end_flashlight_enabled", false),
             flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", 100),
-            true2dGridEnabled = prefs.getBoolean("cc_true_2d_grid_enabled", false)
+            true2dGridEnabled = prefs.getBoolean("cc_true_2d_grid_enabled", true)
         )
     }
 

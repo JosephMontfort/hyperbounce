@@ -60,17 +60,7 @@ fun ControlCenterScreen(
                     onCheckedChange = cc::setModularEditEnabled,
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "True 2D Grid Layout",
-                    subtitle = "Eliminates tile vertical stretching next to 2x2/1x2 components and fills adjacent vertical slots",
-                    colors = colors,
-                    iconTint = colors.accentGreen,
-                    backdrop = backdrop,
-                    checked = cc.true2dGridEnabled,
-                    onCheckedChange = cc::setTrue2dGridEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
-                )
+
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "Center Bounce Animation",

@@ -102,20 +102,13 @@ object True2DGridEngine {
     @Volatile private var sLastCalculatedGrid: AdapterGridData? = null
 
     fun isFullWidthSystemItem(item: Any?, vt: Int): Boolean {
-        if (vt == 432337 || vt == 366837 || vt == 3348 || vt == 334833 ||
-            vt == 8398 || vt == 8397 || vt == 732873 || vt == 3484337) {
+        if (vt == 3348 || vt == 334833) {
             return true
         }
         if (item != null) {
             val className = item.javaClass.name
-            if (className.contains("HeaderSpace") ||
-                className.contains("FooterSpace") ||
-                className.contains("EditButton") ||
-                className.contains("WordlessMode") ||
-                className.contains("SecurityFooter") ||
-                className.contains("Divider") ||
-                className.contains("DividerItem") ||
-                className.contains("DividerText")
+            if (className.contains("EditButton") ||
+                className.contains("WordlessMode")
             ) {
                 return true
             }
@@ -126,9 +119,8 @@ object True2DGridEngine {
     fun invalidate(adapter: Any?) {
         if (adapter != null) {
             adapterGrids.remove(adapter)
-        } else {
-            invalidateAll()
         }
+        sLastCalculatedGrid = null
     }
 
     fun invalidateAll() {
@@ -552,8 +544,11 @@ object True2DGridEngine {
             var isAnyHeader = false
 
             for (i in viewsInChunk.indices) {
-                val view = viewsInChunk[i]
-                val itemPos = positionsInChunk[i]
+                val itemPos = try {
+                    val lp = view.layoutParams
+                    val getPosM = lp.javaClass.getMethod("getViewLayoutPosition")
+                    (getPosM.invoke(lp) as? Int)?.takeIf { it in 0 until itemCount }
+                } catch (t: Throwable) { null } ?: positionsInChunk.getOrNull(i) ?: currentPos
 
                 // 1. Add view to RecyclerView
                 if (!isScrap) {
