@@ -378,6 +378,10 @@ object ControlCenterFullUnlock {
      * Calculates width and height spans for any item.
      */
     fun getItemSpans(item: Any, viewType: Int, spec: String?): Pair<Int, Int> {
+        // 0. Full-width system items -> 4x1
+        if (True2DGridEngine.isFullWidthSystemItem(item, viewType)) {
+            return Pair(4, 1)
+        }
         // 1. Media Player -> dynamic size
         if (viewType == 3484336 || item.javaClass.name.contains("MediaPlayer")) {
             return when (ControlCenterConfigHolder.sMediaPlayerSize) {
@@ -1151,6 +1155,7 @@ object ControlCenterFullUnlock {
                             val result = chain.proceed()
                             try {
                                 val adapter = chain.thisObject
+                                True2DGridEngine.invalidate(adapter)
                                 reorganizeContentMap(adapter, classLoader)
                             } catch (t: Throwable) {
                                 Log.e(TAG, "distributeContent post-intercept error", t)
@@ -1260,7 +1265,7 @@ object ControlCenterFullUnlock {
                                     if (vh != null) {
                                         val getItemViewTypeMethod = vh.javaClass.getMethod("getItemViewType")
                                         val vt = getItemViewTypeMethod.invoke(vh) as Int
-                                        if (vt != 8398 && vt != 3484337 && vt != 8397 && vt != 432337 && vt != 366837 && vt != 334833 && vt != 3348) {
+                                        if (!True2DGridEngine.isFullWidthSystemItem(null, vt)) {
                                             // Check if it's an inactive tile in the available pool
                                             val getItemMethod = try { vh.javaClass.getMethod("getItem\$miui_controlcenter_release") } catch (e: Throwable) { null }
                                             val item = getItemMethod?.invoke(vh)
@@ -1293,7 +1298,7 @@ object ControlCenterFullUnlock {
                                     if (targetVh != null) {
                                         val getItemViewTypeMethod = targetVh.javaClass.getMethod("getItemViewType")
                                         val vt = getItemViewTypeMethod.invoke(targetVh) as Int
-                                        if (vt == 8398 || vt == 3484337 || vt == 8397 || vt == 432337 || vt == 366837 || vt == 334833 || vt == 3348) {
+                                        if (True2DGridEngine.isFullWidthSystemItem(null, vt)) {
                                             return@intercept false
                                         }
                                         val getItemMethod = try { targetVh.javaClass.getMethod("getItem\$miui_controlcenter_release") } catch (e: Throwable) { null }

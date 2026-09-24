@@ -28,31 +28,49 @@ object True2DGridEngine {
         val row: Int,
         val spanW: Int,
         val spanH: Int,
-        val isHeader: Boolean
+        val isHeader: Boolean,
+        val isSystemItem: Boolean = false
     )
 
     class AdapterGridData(
         val items: Array<ItemLayout?>,
         val maxRows: Int,
-        val unitRowHeight: Int
+        val unitRowHeight: Int,
+        val itemsCount: Int = 0
     ) {
-        fun getItemRow(pos: Int): Int {
+        fun getItemRow(pos: Int, adapter: Any? = null): Int {
             if (pos in items.indices && items[pos] != null) {
                 return items[pos]!!.row
             }
             return (pos / SPAN_COUNT).coerceIn(0, MAX_GRID_ROWS - 1)
         }
 
-        fun getItemCol(pos: Int): Int {
+        fun getItemCol(pos: Int, adapter: Any? = null): Int {
             if (pos in items.indices && items[pos] != null) {
                 return items[pos]!!.col
+            }
+            val targetAdapter = adapter ?: getActiveAdapter()
+            if (targetAdapter != null) {
+                try {
+                    val getItemViewTypeM = targetAdapter.javaClass.getMethod("getItemViewType", Int::class.javaPrimitiveType)
+                    val vt = getItemViewTypeM.invoke(targetAdapter, pos) as Int
+                    if (isFullWidthSystemItem(null, vt)) return 0
+                } catch (t: Throwable) {}
             }
             return (pos % SPAN_COUNT).coerceIn(0, SPAN_COUNT - 1)
         }
 
-        fun getItemSpanW(pos: Int): Int {
+        fun getItemSpanW(pos: Int, adapter: Any? = null): Int {
             if (pos in items.indices && items[pos] != null) {
                 return items[pos]!!.spanW
+            }
+            val targetAdapter = adapter ?: getActiveAdapter()
+            if (targetAdapter != null) {
+                try {
+                    val getItemViewTypeM = targetAdapter.javaClass.getMethod("getItemViewType", Int::class.javaPrimitiveType)
+                    val vt = getItemViewTypeM.invoke(targetAdapter, pos) as Int
+                    if (isFullWidthSystemItem(null, vt)) return SPAN_COUNT
+                } catch (t: Throwable) {}
             }
             return 1
         }
@@ -63,10 +81,47 @@ object True2DGridEngine {
             }
             return 1
         }
+
+        fun isSystemItem(pos: Int, adapter: Any? = null): Boolean {
+            if (pos in items.indices && items[pos] != null) {
+                return items[pos]!!.isSystemItem
+            }
+            val targetAdapter = adapter ?: getActiveAdapter()
+            if (targetAdapter != null) {
+                try {
+                    val getItemViewTypeM = targetAdapter.javaClass.getMethod("getItemViewType", Int::class.javaPrimitiveType)
+                    val vt = getItemViewTypeM.invoke(targetAdapter, pos) as Int
+                    return isFullWidthSystemItem(null, vt)
+                } catch (t: Throwable) {}
+            }
+            return false
+        }
     }
 
     private val adapterGrids = ConcurrentHashMap<Any, AdapterGridData>()
     @Volatile private var sLastCalculatedGrid: AdapterGridData? = null
+
+    fun isFullWidthSystemItem(item: Any?, vt: Int): Boolean {
+        if (vt == 432337 || vt == 366837 || vt == 3348 || vt == 334833 ||
+            vt == 8398 || vt == 8397 || vt == 732873 || vt == 3484337) {
+            return true
+        }
+        if (item != null) {
+            val className = item.javaClass.name
+            if (className.contains("HeaderSpace") ||
+                className.contains("FooterSpace") ||
+                className.contains("EditButton") ||
+                className.contains("WordlessMode") ||
+                className.contains("SecurityFooter") ||
+                className.contains("Divider") ||
+                className.contains("DividerItem") ||
+                className.contains("DividerText")
+            ) {
+                return true
+            }
+        }
+        return false
+    }
 
     fun invalidate(adapter: Any?) {
         if (adapter != null) {
@@ -99,8 +154,12 @@ object True2DGridEngine {
         if (adapter == null) {
             return sLastCalculatedGrid ?: calculateLayout(null, context)
         }
+        val currentItemCount = try {
+            (adapter.javaClass.getMethod("getItemCount").invoke(adapter) as? Int) ?: -1
+        } catch (t: Throwable) { -1 }
+
         val cached = adapterGrids[adapter]
-        if (cached != null) {
+        if (cached != null && (currentItemCount < 0 || currentItemCount == cached.itemsCount)) {
             return cached
         }
         val computed = calculateLayout(adapter, context)
@@ -109,22 +168,28 @@ object True2DGridEngine {
         return computed
     }
 
+    fun isSystemItemForActiveAdapter(pos: Int): Boolean {
+        val adapter = getActiveAdapter()
+        val data = getGridData(adapter, ControlCenterConfigHolder.sLastKnownContext)
+        return data.isSystemItem(pos, adapter)
+    }
+
     fun getItemRowForActiveAdapter(pos: Int): Int {
         val adapter = getActiveAdapter()
         val data = getGridData(adapter, ControlCenterConfigHolder.sLastKnownContext)
-        return data.getItemRow(pos)
+        return data.getItemRow(pos, adapter)
     }
 
     fun getItemColForActiveAdapter(pos: Int): Int {
         val adapter = getActiveAdapter()
         val data = getGridData(adapter, ControlCenterConfigHolder.sLastKnownContext)
-        return data.getItemCol(pos)
+        return data.getItemCol(pos, adapter)
     }
 
     fun getItemSpanWForActiveAdapter(pos: Int): Int {
         val adapter = getActiveAdapter()
         val data = getGridData(adapter, ControlCenterConfigHolder.sLastKnownContext)
-        return data.getItemSpanW(pos)
+        return data.getItemSpanW(pos, adapter)
     }
 
     fun getItemSpanHForActiveAdapter(pos: Int): Int {
@@ -176,7 +241,7 @@ object True2DGridEngine {
         val itemCount = flatList.size
         if (itemCount == 0) {
             val emptyItems = arrayOfNulls<ItemLayout>(64)
-            val fallback = AdapterGridData(emptyItems, 16, unitRowHeight)
+            val fallback = AdapterGridData(emptyItems, 16, unitRowHeight, 0)
             sLastCalculatedGrid = fallback
             return fallback
         }
@@ -244,21 +309,25 @@ object True2DGridEngine {
                 getTypeMethod.invoke(item) as Int
             } catch (t: Throwable) { -1 }
 
-            val spec = ControlCenterConfigHolder.getRecordSpec(item)
-            val isFullWidthSpecial = (vt == 432337 || vt == 366837 || vt == 8398 || vt == 8397 || vt == 3484337)
-            val spans = if (isFullWidthSpecial) {
-                Pair(4, 1)
+            val isSystem = isFullWidthSystemItem(item, vt)
+            val spec = if (!isSystem) ControlCenterConfigHolder.getRecordSpec(item) else null
+            val spans = if (isSystem) {
+                Pair(SPAN_COUNT, 1)
             } else {
                 ControlCenterFullUnlock.getItemSpans(item, vt, spec)
             }
 
-            val spanW = spans.first.coerceIn(1, 4)
+            val spanW = spans.first.coerceIn(1, SPAN_COUNT)
             val spanH = spans.second.coerceIn(1, 6)
-            val isHeader = (vt == 432337 || (p == 0 && spanW == 4))
+            val isHeader = (vt == 432337 || (p == 0 && spanW == SPAN_COUNT) || isSystem)
 
             val (assignedRow, assignedCol) = findSlot(spanW, spanH, maxStartRow)
             markOccupied(assignedRow, assignedCol, spanW, spanH)
-            maxStartRow = assignedRow
+            if (isSystem) {
+                maxStartRow = assignedRow + spanH
+            } else {
+                maxStartRow = assignedRow
+            }
 
             val endRow = assignedRow + spanH
             if (endRow > highestOccupiedRow) {
@@ -271,11 +340,12 @@ object True2DGridEngine {
                 row = assignedRow,
                 spanW = spanW,
                 spanH = spanH,
-                isHeader = isHeader
+                isHeader = isHeader,
+                isSystemItem = isSystem
             )
         }
 
-        val gridData = AdapterGridData(itemsArray, highestOccupiedRow, unitRowHeight)
+        val gridData = AdapterGridData(itemsArray, highestOccupiedRow, unitRowHeight, itemCount)
         sLastCalculatedGrid = gridData
         return gridData
     }
@@ -433,14 +503,21 @@ object True2DGridEngine {
             val context = rv?.context ?: ControlCenterConfigHolder.sLastKnownContext
             val gridData = getGridData(targetAdapter, context)
             val unitRowHeight = gridData.unitRowHeight
-            val targetRow = gridData.getItemRow(currentPos)
+            val targetRow = gridData.getItemRow(currentPos, targetAdapter)
+
+            // System full-width items (Edit Button, WordlessMode strip, Dividers, Spaces):
+            // Let stock GridLayoutManager layoutChunk handle them natively with full 4-column width,
+            // center gravity, and natural wrap_content height!
+            if (gridData.isSystemItem(currentPos, targetAdapter)) {
+                return false
+            }
 
             // Collect views belonging to targetRow
             val viewsInChunk = ArrayList<View>()
             val positionsInChunk = ArrayList<Int>()
 
             var scanPos = currentPos
-            while (scanPos in 0 until itemCount && gridData.getItemRow(scanPos) == targetRow) {
+            while (scanPos in 0 until itemCount && gridData.getItemRow(scanPos, targetAdapter) == targetRow && !gridData.isSystemItem(scanPos, targetAdapter)) {
                 val nextView = ReflectionCache.layoutStateNextMethod?.invoke(layoutState, recycler) as? View ?: break
                 viewsInChunk.add(nextView)
                 positionsInChunk.add(scanPos)
@@ -498,8 +575,8 @@ object True2DGridEngine {
                 ReflectionCache.calculateItemDecorationsMethod?.invoke(glm, view, decorInsets)
 
                 // 3. Grid positioning
-                val col = gridData.getItemCol(itemPos)
-                val spanW = gridData.getItemSpanW(itemPos).coerceIn(1, SPAN_COUNT)
+                val col = gridData.getItemCol(itemPos, targetAdapter)
+                val spanW = gridData.getItemSpanW(itemPos, targetAdapter).coerceIn(1, SPAN_COUNT)
                 val spanH = gridData.getItemSpanH(itemPos).coerceIn(1, 6)
                 val isHeader = (itemPos == 0 && spanW == SPAN_COUNT)
                 if (isHeader) isAnyHeader = true
@@ -560,7 +637,7 @@ object True2DGridEngine {
                 val nextPos = ReflectionCache.layoutStateCurrentPositionField?.getInt(layoutState) ?: -1
                 if (isForward) {
                     val nextRow = if (nextPos in 0 until itemCount) {
-                        gridData.getItemRow(nextPos)
+                        gridData.getItemRow(nextPos, targetAdapter)
                     } else {
                         targetRow + (maxViewHeight / unitRowHeight).coerceAtLeast(1)
                     }
@@ -568,7 +645,7 @@ object True2DGridEngine {
                     consumed = deltaRows * unitRowHeight
                 } else {
                     val prevRow = if (nextPos in 0 until itemCount) {
-                        gridData.getItemRow(nextPos)
+                        gridData.getItemRow(nextPos, targetAdapter)
                     } else {
                         targetRow - 1
                     }
