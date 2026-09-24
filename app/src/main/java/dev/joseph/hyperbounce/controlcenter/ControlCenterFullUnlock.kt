@@ -1069,7 +1069,7 @@ object ControlCenterFullUnlock {
             }
 
             // Reset translation on all visible non-dragged ViewHolders to eliminate stuck translation offsets
-            val rv = ControlCenterConfigHolder.sRecyclerView?.get()
+            val rv = ControlCenterConfigHolder.sRecyclerView?.get() as? RecyclerView
             if (rv != null) {
                 for (i in 0 until rv.childCount) {
                     val child = rv.getChildAt(i)

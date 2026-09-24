@@ -570,6 +570,7 @@ object True2DGridEngine {
                 // 3. Grid positioning
                 val col = gridData.getItemCol(itemPos, targetAdapter)
                 val spanW = gridData.getItemSpanW(itemPos, targetAdapter).coerceIn(1, SPAN_COUNT)
+                val spanH = gridData.getItemSpanH(itemPos).coerceIn(1, 6)
                 val isSystem = gridData.isSystemItem(itemPos, targetAdapter)
                 val isHeader = (itemPos == 0 && spanW == SPAN_COUNT) || isSystem
                 if (isHeader) isAnyHeader = true
