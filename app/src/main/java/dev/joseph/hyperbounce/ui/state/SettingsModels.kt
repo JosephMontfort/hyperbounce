@@ -179,7 +179,8 @@ data class NotificationSheetSettings(
     val sideMargin: Float = 14.0f,
     val iosHunAnimationEnabled: Boolean = true,
     val iosHunDurationMs: Float = 380.0f,
-    val iosHunStartScale: Float = 0.45f
+    val iosHunStartScale: Float = 0.45f,
+    val iosHunSqueezeStrength: Float = 0.40f
 )
 
 /** Feature 2: Liquid Glass 2.0 Button PIN Pad Engine Settings */

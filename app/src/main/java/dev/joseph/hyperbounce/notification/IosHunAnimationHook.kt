@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.Interpolator
+import android.view.animation.LinearInterpolator
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
@@ -20,7 +21,8 @@ import java.lang.reflect.Method
  *
  * Exclusively intercepts incoming Heads-Up (pop-up) notifications AFTER the screen is unlocked:
  * - Originates shrunken from the center top notch of the screen.
- * - Emerges smoothly into its resting position with an authentic iOS single spring overshoot and settle.
+ * - Emerges smoothly with authentic iOS 26 velocity-based inertia stretch and impact squeeze physics.
+ * - Single critically underdamped spring overshoot and settle.
  * - Manages multiple simultaneous notifications with a layered cascading deck presentation.
  * - Does NOT affect lockscreen notifications, notification shade opening, or notifications in open shade.
  * - Fully crash-resilient and thread-safe.
@@ -39,24 +41,36 @@ object IosHunAnimationHook {
 
     /**
      * Authentically models the iOS 26 critically underdamped spring curve.
-     * With dampingRatio ≈ 0.74 and response ≈ 0.58, it produces a single, elegant
-     * overshoot of ~3.2% at 58% duration and settles smoothly to 1.000 by completion.
+     * With dampingRatio ≈ 0.74 and response ≈ 0.55, it produces a single, elegant
+     * overshoot of ~3.2% at 55% duration and settles smoothly to 1.000 by completion.
+     * Includes analytical first-derivative for physics-based velocity & inertia deformation.
      */
     class Ios26SpringInterpolator(
         private val dampingRatio: Float = 0.74f,
-        private val response: Float = 0.58f
+        private val response: Float = 0.55f
     ) : Interpolator {
+        private val omega = (Math.PI / response).toFloat()
+        private val beta = omega * (dampingRatio / Math.sqrt(1.0 - dampingRatio * dampingRatio).toFloat())
+        private val factor = omega + (beta * beta / omega)
+
         override fun getInterpolation(input: Float): Float {
             if (input <= 0.0f) return 0.0f
             if (input >= 1.0f) return 1.0f
 
-            val omega = (Math.PI / response).toFloat()
-            val beta = omega * (dampingRatio / Math.sqrt(1.0 - dampingRatio * dampingRatio).toFloat())
             val decay = Math.exp((-beta * input).toDouble()).toFloat()
             val osc = Math.cos((omega * input).toDouble()).toFloat() +
                     (beta / omega) * Math.sin((omega * input).toDouble()).toFloat()
 
             return 1.0f - decay * osc
+        }
+
+        /**
+         * First derivative (normalized downward velocity) with respect to input time [0..1].
+         */
+        fun getVelocity(input: Float): Float {
+            if (input <= 0.0f || input >= 1.0f) return 0.0f
+            val decay = Math.exp((-beta * input).toDouble()).toFloat()
+            return decay * Math.sin((omega * input).toDouble()).toFloat() * factor
         }
     }
 
@@ -222,26 +236,51 @@ object IosHunAnimationHook {
         currentFrontRow = WeakReference(row)
 
         val durationMs = cfg.iosHunDurationMs.toLong().coerceIn(200L, 800L)
-        val spring = Ios26SpringInterpolator(dampingRatio = 0.74f, response = 0.58f)
+        val spring = Ios26SpringInterpolator(dampingRatio = 0.74f, response = 0.55f)
+        val squeezeStrength = cfg.iosHunSqueezeStrength.coerceIn(0.0f, 1.0f)
+        val kv = 0.040f * squeezeStrength
+        val ks = 1.10f * squeezeStrength
+
+        // Prevent clipping if the card expands slightly beyond parent bounds during landing squash
+        (row.parent as? ViewGroup)?.clipChildren = false
+
+        // Ensure newly emerged notification displays on top of existing ones
+        val density = row.resources.displayMetrics.density
+        row.translationZ = 12f * density
 
         val animator = ValueAnimator.ofFloat(0.0f, 1.0f).apply {
             duration = durationMs
-            interpolator = spring
+            interpolator = LinearInterpolator()
             addUpdateListener { va ->
                 val fraction = va.animatedFraction
-                val springVal = va.animatedValue as Float
+                val springVal = spring.getInterpolation(fraction)
+                val velocity = spring.getVelocity(fraction)
 
-                // Pop outward with single overshoot and settling
-                val curScale = startScale + (1.0f - startScale) * springVal
-                row.scaleX = curScale
-                row.scaleY = curScale
+                // Base expansion from startScale up to 1.0
+                val baseScale = startScale + (1.0f - startScale) * springVal.coerceAtMost(1.0f)
 
-                // Translation emerges from notch to target resting Y
+                // 1. Velocity stretch: physical elongation along motion axis Y, subtle lateral thinning along X
+                val velStretch = velocity.coerceAtLeast(0.0f) * kv
+                val velThin = velStretch * 0.5f
+
+                // 2. Impact squash: deceleration inertia converts into lateral bulging and vertical compression
+                val overshoot = (springVal - 1.0f).coerceAtLeast(0.0f)
+                val impactBulge = overshoot * ks
+                val impactCompress = overshoot * (ks * 0.70f)
+
+                // Decoupled physical scale with velocity-inertia squash & stretch
+                val curScaleX = (baseScale - velThin + impactBulge).coerceIn(0.1f, 1.15f)
+                val curScaleY = (baseScale + velStretch - impactCompress).coerceIn(0.1f, 1.15f)
+
+                row.scaleX = curScaleX
+                row.scaleY = curScaleY
+
+                // Translation emerges from notch to target resting Y with spring overshoot
                 val curY = notchY + (targetY - notchY) * springVal
                 row.translationY = curY
 
-                // Alpha swiftly reaches full opacity within first 30% of movement
-                val alphaProg = (fraction / 0.30f).coerceIn(0.0f, 1.0f)
+                // Alpha swiftly reaches full opacity within first 25% of movement
+                val alphaProg = (fraction / 0.25f).coerceIn(0.0f, 1.0f)
                 row.alpha = alphaProg
             }
             addListener(object : AnimatorListenerAdapter() {
@@ -289,7 +328,7 @@ object IosHunAnimationHook {
                     .translationY(restY)
                     .alpha(1.0f)
                     .setDuration(durationMs)
-                    .setInterpolator(Ios26SpringInterpolator(0.74f, 0.58f))
+                    .setInterpolator(Ios26SpringInterpolator(0.74f, 0.55f))
                     .start()
                 currentFrontRow = currentDeckRow
                 currentDeckRow = null

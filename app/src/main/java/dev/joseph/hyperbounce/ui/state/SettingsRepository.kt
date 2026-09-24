@@ -560,6 +560,7 @@ class SettingsRepository(context: Context) {
         var iosHunAnimationEnabled by prefsBooleanState("notif_ios_hun_animation_enabled", defaults.iosHunAnimationEnabled); private set
         var iosHunDurationMs by prefsFloatState("notif_ios_hun_duration_ms", defaults.iosHunDurationMs); private set
         var iosHunStartScale by prefsFloatState("notif_ios_hun_start_scale", defaults.iosHunStartScale); private set
+        var iosHunSqueezeStrength by prefsFloatState("notif_ios_hun_squeeze_strength", defaults.iosHunSqueezeStrength); private set
 
         fun snapshot(): NotificationSheetSettings = NotificationSheetSettings(
             enabled, lockWallpaperEnabled, customWallpaperEnabled, lockWallpaperHomescreenOnly,
@@ -572,7 +573,7 @@ class SettingsRepository(context: Context) {
             dispersionStrength, specularStrength, hairlineStrength, innerGlowStrength, rimSoftness,
             innerShadow, saturationFactor, blurRadius,
             cornerRadius, sideMargin,
-            iosHunAnimationEnabled, iosHunDurationMs, iosHunStartScale
+            iosHunAnimationEnabled, iosHunDurationMs, iosHunStartScale, iosHunSqueezeStrength
         )
 
         @JvmName("setNotifSheetEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
@@ -607,6 +608,7 @@ class SettingsRepository(context: Context) {
         @JvmName("setNotifIosHunAnimationEnabledPref") fun setIosHunAnimationEnabled(v: Boolean) { iosHunAnimationEnabled = v }
         @JvmName("setNotifIosHunDurationMsPref") fun setIosHunDurationMs(v: Float) { iosHunDurationMs = v }
         @JvmName("setNotifIosHunStartScalePref") fun setIosHunStartScale(v: Float) { iosHunStartScale = v }
+        @JvmName("setNotifIosHunSqueezeStrengthPref") fun setIosHunSqueezeStrength(v: Float) { iosHunSqueezeStrength = v }
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
@@ -640,6 +642,7 @@ class SettingsRepository(context: Context) {
             iosHunAnimationEnabled = defaults.iosHunAnimationEnabled
             iosHunDurationMs = defaults.iosHunDurationMs
             iosHunStartScale = defaults.iosHunStartScale
+            iosHunSqueezeStrength = defaults.iosHunSqueezeStrength
         }
     }
 

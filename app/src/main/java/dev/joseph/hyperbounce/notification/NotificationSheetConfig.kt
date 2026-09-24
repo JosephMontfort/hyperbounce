@@ -42,7 +42,8 @@ data class NotificationSheetConfig(
     // iOS 26 Heads-Up Banner Animation
     var iosHunAnimationEnabled: Boolean = true,
     var iosHunDurationMs: Float = 380.0f,
-    var iosHunStartScale: Float = 0.45f
+    var iosHunStartScale: Float = 0.45f,
+    var iosHunSqueezeStrength: Float = 0.40f
 ) {
     /**
      * True only if sheet is enabled and lockscreen wallpaper toggle is on.
@@ -123,5 +124,6 @@ object NotificationSheetConfigHolder {
         sheet.iosHunAnimationEnabled = prefs.getBoolean("notif_ios_hun_animation_enabled", true)
         sheet.iosHunDurationMs = prefs.getFloat("notif_ios_hun_duration_ms", 380.0f)
         sheet.iosHunStartScale = prefs.getFloat("notif_ios_hun_start_scale", 0.45f)
+        sheet.iosHunSqueezeStrength = prefs.getFloat("notif_ios_hun_squeeze_strength", 0.40f)
     }
 }

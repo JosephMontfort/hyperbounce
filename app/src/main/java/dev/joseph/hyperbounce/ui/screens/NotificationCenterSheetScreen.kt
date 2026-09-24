@@ -676,6 +676,19 @@ fun NotificationCenterSheetScreen(
                         valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
                         enabled = sheet.enabled
                     )
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Inertia Squeeze & Stretch",
+                        subtitle = "Physics velocity elongation during transit and lateral squash upon landing",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = sheet.iosHunSqueezeStrength,
+                        onValueChange = sheet::setIosHunSqueezeStrength,
+                        valueRange = 0.0f..1.0f,
+                        defaultValue = 0.40f,
+                        valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
+                        enabled = sheet.enabled
+                    )
                 }
             }
             SectionFooter(
