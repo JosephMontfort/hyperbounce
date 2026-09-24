@@ -36,18 +36,15 @@ object IosHunAnimationHook {
     @Volatile
     private var isHooked = false
 
-    private var currentFrontRow: WeakReference<View>? = null
-    private var currentDeckRow: WeakReference<View>? = null
-
     /**
-     * Authentically models the iOS 26 critically underdamped spring curve.
-     * With dampingRatio ≈ 0.74 and response ≈ 0.55, it produces a single, elegant
-     * overshoot of ~3.2% at 55% duration and settles smoothly to 1.000 by completion.
+     * Authentically models the iOS 26 lively, fluid spring curve.
+     * With dampingRatio ≈ 0.65 and response ≈ 0.48, it produces a lovely, expressive
+     * overshoot of ~6.8% at 48% duration and settles silky-smooth to 1.000 by completion.
      * Includes analytical first-derivative for physics-based velocity & inertia deformation.
      */
     class Ios26SpringInterpolator(
-        private val dampingRatio: Float = 0.74f,
-        private val response: Float = 0.55f
+        private val dampingRatio: Float = 0.65f,
+        private val response: Float = 0.48f
     ) : Interpolator {
         private val omega = (Math.PI / response).toFloat()
         private val beta = omega * (dampingRatio / Math.sqrt(1.0 - dampingRatio * dampingRatio).toFloat())
@@ -212,39 +209,24 @@ object IosHunAnimationHook {
         row.pivotX = row.width / 2.0f
         row.pivotY = 0.0f
 
-        // Initial shrunken state at notch
-        val startScale = cfg.iosHunStartScale.coerceIn(0.20f, 0.85f)
-        row.scaleX = startScale
-        row.scaleY = startScale
+        // Initial capsule pill shape at notch (mimicking Dynamic Island)
+        val startScaleX = cfg.iosHunStartScale.coerceIn(0.20f, 0.85f)
+        val startScaleY = startScaleX * 0.72f
+        row.scaleX = startScaleX
+        row.scaleY = startScaleY
         row.translationY = notchY
         row.alpha = 0.0f
 
-        // Handle multiple incoming notifications (cascading deck)
-        val prevRow = currentFrontRow?.get()
-        if (prevRow != null && prevRow != row && prevRow.isAttachedToWindow) {
-            val deckOffset = 12f * row.resources.displayMetrics.density
-            prevRow.animate()
-                .scaleX(0.93f)
-                .scaleY(0.93f)
-                .translationY(prevRow.translationY + deckOffset)
-                .alpha(0.82f)
-                .setDuration(240L)
-                .setInterpolator(DecelerateInterpolator())
-                .start()
-            currentDeckRow = WeakReference(prevRow)
-        }
-        currentFrontRow = WeakReference(row)
-
         val durationMs = cfg.iosHunDurationMs.toLong().coerceIn(200L, 800L)
-        val spring = Ios26SpringInterpolator(dampingRatio = 0.74f, response = 0.55f)
+        val spring = Ios26SpringInterpolator(dampingRatio = 0.65f, response = 0.48f)
         val squeezeStrength = cfg.iosHunSqueezeStrength.coerceIn(0.0f, 1.0f)
-        val kv = 0.040f * squeezeStrength
-        val ks = 1.10f * squeezeStrength
+        val kv = 0.045f * squeezeStrength
+        val ks = 1.25f * squeezeStrength
 
         // Prevent clipping if the card expands slightly beyond parent bounds during landing squash
         (row.parent as? ViewGroup)?.clipChildren = false
 
-        // Ensure newly emerged notification displays on top of existing ones
+        // Ensure newly emerged notification displays crisply on top
         val density = row.resources.displayMetrics.density
         row.translationZ = 12f * density
 
@@ -256,8 +238,9 @@ object IosHunAnimationHook {
                 val springVal = spring.getInterpolation(fraction)
                 val velocity = spring.getVelocity(fraction)
 
-                // Base expansion from startScale up to 1.0
-                val baseScale = startScale + (1.0f - startScale) * springVal.coerceAtMost(1.0f)
+                // Base expansion from capsule pill up to 1.0
+                val baseScaleX = startScaleX + (1.0f - startScaleX) * springVal.coerceAtMost(1.0f)
+                val baseScaleY = startScaleY + (1.0f - startScaleY) * springVal.coerceAtMost(1.0f)
 
                 // 1. Velocity stretch: physical elongation along motion axis Y, subtle lateral thinning along X
                 val velStretch = velocity.coerceAtLeast(0.0f) * kv
@@ -268,19 +251,19 @@ object IosHunAnimationHook {
                 val impactBulge = overshoot * ks
                 val impactCompress = overshoot * (ks * 0.70f)
 
-                // Decoupled physical scale with velocity-inertia squash & stretch
-                val curScaleX = (baseScale - velThin + impactBulge).coerceIn(0.1f, 1.15f)
-                val curScaleY = (baseScale + velStretch - impactCompress).coerceIn(0.1f, 1.15f)
+                // Decoupled physical scale with lively velocity-inertia squash & stretch
+                val curScaleX = (baseScaleX - velThin + impactBulge).coerceIn(0.1f, 1.20f)
+                val curScaleY = (baseScaleY + velStretch - impactCompress).coerceIn(0.1f, 1.20f)
 
                 row.scaleX = curScaleX
                 row.scaleY = curScaleY
 
-                // Translation emerges from notch to target resting Y with spring overshoot
+                // Translation emerges from notch to target resting Y with lively spring overshoot
                 val curY = notchY + (targetY - notchY) * springVal
                 row.translationY = curY
 
-                // Alpha swiftly reaches full opacity within first 25% of movement
-                val alphaProg = (fraction / 0.25f).coerceIn(0.0f, 1.0f)
+                // Alpha swiftly reaches full opacity within first 20% of movement
+                val alphaProg = (fraction / 0.20f).coerceIn(0.0f, 1.0f)
                 row.alpha = alphaProg
             }
             addListener(object : AnimatorListenerAdapter() {
@@ -308,34 +291,101 @@ object IosHunAnimationHook {
     }
 
     /**
-     * When a heads-up notification disappears, restore any deck notification to the foreground.
+     * Dismisses the heads-up notification in reverse back into the center top notch,
+     * unless the user has manually swiped it away horizontally.
      */
     private fun handleHeadsUpDisappear(row: View) {
+        val density = row.resources.displayMetrics.density
+        // If the user swiped the card horizontally, allow system swipe gesture to dismiss naturally
+        if (Math.abs(row.translationX) > 20f * density) {
+            (row.getTag(TAG_ACTIVE_ANIMATOR) as? Animator)?.cancel()
+            row.setTag(TAG_IOS_HUN_ACTIVE, null)
+            row.setTag(TAG_ACTIVE_ANIMATOR, null)
+            return
+        }
+
+        val cfg = NotificationSheetConfigHolder.sheet
+        executeReverseDismiss(row, cfg)
+    }
+
+    /**
+     * Executes the authentic reverse dismiss animation back into the top notch / Dynamic Island.
+     */
+    private fun executeReverseDismiss(row: View, cfg: NotificationSheetConfig) {
+        if (!row.isAttachedToWindow) {
+            finalizeDismiss(row)
+            return
+        }
+
         (row.getTag(TAG_ACTIVE_ANIMATOR) as? Animator)?.cancel()
+        row.setTag(TAG_IOS_HUN_ACTIVE, true)
+
+        val currentY = row.translationY
+        val currentScaleX = row.scaleX
+        val currentScaleY = row.scaleY
+        val currentAlpha = row.alpha
+        val notchY = 0.0f
+
+        val startScaleX = cfg.iosHunStartScale.coerceIn(0.20f, 0.85f)
+        val startScaleY = startScaleX * 0.72f
+
+        // Ensure pivot is anchored to the top center notch
+        row.pivotX = row.width / 2.0f
+        row.pivotY = 0.0f
+
+        val dismissDurationMs = (cfg.iosHunDurationMs * 0.75f).toLong().coerceIn(180L, 450L)
+        val squeezeStrength = cfg.iosHunSqueezeStrength.coerceIn(0.0f, 1.0f)
+        val kv = 0.035f * squeezeStrength
+
+        val animator = ValueAnimator.ofFloat(0.0f, 1.0f).apply {
+            duration = dismissDurationMs
+            interpolator = LinearInterpolator()
+            addUpdateListener { va ->
+                val t = va.animatedFraction
+
+                // Smooth cubic progress for retreat into notch
+                val prog = t * t * (3.0f - 2.0f * t)
+
+                // Upward transit velocity peaks at mid-flight
+                val v = 6.0f * t * (1.0f - t)
+                val velStretch = v * kv
+                val velThin = velStretch * 0.5f
+
+                // Translate smoothly from current resting Y back into notch (0f)
+                row.translationY = currentY + (notchY - currentY) * prog
+
+                // Shrink from current scale into compact dynamic island capsule pill
+                val curScaleX = (currentScaleX + (startScaleX - currentScaleX) * prog - velThin).coerceIn(0.1f, 1.15f)
+                val curScaleY = (currentScaleY + (startScaleY - currentScaleY) * prog + velStretch).coerceIn(0.1f, 1.15f)
+                row.scaleX = curScaleX
+                row.scaleY = curScaleY
+
+                // Alpha fades gracefully during the final 45% of retreat into the notch
+                val alphaProg = if (t < 0.55f) currentAlpha else currentAlpha * (1.0f - (t - 0.55f) / 0.45f)
+                row.alpha = alphaProg.coerceIn(0.0f, 1.0f)
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    finalizeDismiss(row)
+                }
+
+                override fun onAnimationCancel(animation: Animator) {
+                    finalizeDismiss(row)
+                }
+            })
+        }
+
+        row.setTag(TAG_ACTIVE_ANIMATOR, animator)
+        animator.start()
+    }
+
+    private fun finalizeDismiss(row: View) {
+        row.translationY = 0.0f
+        row.alpha = 0.0f
+        row.scaleX = 1.0f
+        row.scaleY = 1.0f
         row.setTag(TAG_IOS_HUN_ACTIVE, null)
         row.setTag(TAG_ACTIVE_ANIMATOR, null)
-
-        if (currentFrontRow?.get() == row) {
-            currentFrontRow = null
-            val deck = currentDeckRow?.get()
-            if (deck != null && deck.isAttachedToWindow) {
-                val restY = getTargetRestingY(deck, null)
-                val cfg = NotificationSheetConfigHolder.sheet
-                val durationMs = cfg.iosHunDurationMs.toLong().coerceIn(200L, 800L)
-                deck.animate()
-                    .scaleX(1.0f)
-                    .scaleY(1.0f)
-                    .translationY(restY)
-                    .alpha(1.0f)
-                    .setDuration(durationMs)
-                    .setInterpolator(Ios26SpringInterpolator(0.74f, 0.55f))
-                    .start()
-                currentFrontRow = currentDeckRow
-                currentDeckRow = null
-            }
-        } else if (currentDeckRow?.get() == row) {
-            currentDeckRow = null
-        }
     }
 
     private fun getTargetRestingY(row: View, controller: Any?): Float {

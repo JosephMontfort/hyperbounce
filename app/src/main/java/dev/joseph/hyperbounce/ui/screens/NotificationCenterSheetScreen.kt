@@ -640,7 +640,7 @@ fun NotificationCenterSheetScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "iOS 26 Pop-Up Animation",
-                    subtitle = "Emerges from center top notch with spring overshoot bounce and physical deck stacking",
+                    subtitle = "Emerges from and retreats into center top notch with lively spring overshoot bounce and inertia squeeze",
                     colors = colors,
                     iconTint = colors.accentBlue,
                     backdrop = backdrop,
