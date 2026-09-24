@@ -321,7 +321,8 @@ data class ControlCenterSettings(
     val blurDamping: Float = 0.88f,
     val frictionMultiplier: Float = 0.40f,
     val lowEndFlashlightEnabled: Boolean = false,
-    val flashlightMaxBrightness: Int = 100
+    val flashlightMaxBrightness: Int = 100,
+    val true2dGridEnabled: Boolean = false
 )
 
 /** Feature 10: Dropdown Menu to Dialog Fluid Morph Physics */

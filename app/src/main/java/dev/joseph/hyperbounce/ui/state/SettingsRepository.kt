@@ -1148,6 +1148,7 @@ class SettingsRepository(context: Context) {
         var frictionMultiplier by prefsFloatState("cc_friction_multiplier", defaults.frictionMultiplier); private set
         var lowEndFlashlightEnabled by prefsBooleanState("cc_low_end_flashlight_enabled", defaults.lowEndFlashlightEnabled); private set
         var flashlightMaxBrightness by prefsIntState("cc_flashlight_max_brightness", defaults.flashlightMaxBrightness); private set
+        var true2dGridEnabled by prefsBooleanState("cc_true_2d_grid_enabled", defaults.true2dGridEnabled); private set
 
         fun snapshot(): ControlCenterSettings = ControlCenterSettings(
             modularEditEnabled, restartOnEditExit, animEnabled, jellyEnabled, lowEndAnim,
@@ -1155,9 +1156,10 @@ class SettingsRepository(context: Context) {
             spreadRatio, spreadResponse, spreadDamping, spreadReleaseResponse, spreadReleaseDamping,
             tileShowResponse, tileShowDamping, tileHideResponse, tileHideDamping,
             tileShrinkResponse, tileShrinkDamping, tileDelayScale, blurResponse, blurDamping, frictionMultiplier,
-            lowEndFlashlightEnabled, flashlightMaxBrightness
+            lowEndFlashlightEnabled, flashlightMaxBrightness, true2dGridEnabled
         )
 
+        @JvmName("setCcTrue2dGridEnabledPref") fun setTrue2dGridEnabled(v: Boolean) { true2dGridEnabled = v }
         @JvmName("setCcModularEditEnabledPref") fun setModularEditEnabled(v: Boolean) { modularEditEnabled = v }
         @JvmName("setCcRestartOnEditExitPref") fun setRestartOnEditExit(v: Boolean) { restartOnEditExit = v }
         @JvmName("setCcAnimEnabledPref") fun setAnimEnabled(v: Boolean) { animEnabled = v }
@@ -1187,6 +1189,7 @@ class SettingsRepository(context: Context) {
 
         fun reloadFromDefaults() {
             modularEditEnabled = defaults.modularEditEnabled
+            true2dGridEnabled = defaults.true2dGridEnabled
             restartOnEditExit = defaults.restartOnEditExit
             animEnabled = defaults.animEnabled
             jellyEnabled = defaults.jellyEnabled

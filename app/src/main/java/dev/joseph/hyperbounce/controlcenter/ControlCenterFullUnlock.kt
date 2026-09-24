@@ -368,6 +368,7 @@ object ControlCenterFullUnlock {
                     Settings.Secure.putString(targetCtx.contentResolver, SECURE_KEY_UNIFIED_ORDER, "")
                 } catch (t: Throwable) {}
             }
+            True2DGridEngine.invalidateAll()
         } catch (t: Throwable) {
             Log.e(TAG, "resetOrder error", t)
         }
@@ -1008,6 +1009,7 @@ object ControlCenterFullUnlock {
 
             // Apply new ContentMap to adapter
             contentMapField.set(adapter, newContentMap)
+            True2DGridEngine.invalidate(adapter)
 
         } catch (t: Throwable) {
             Log.e(TAG, "buildAndSetContentMap error", t)

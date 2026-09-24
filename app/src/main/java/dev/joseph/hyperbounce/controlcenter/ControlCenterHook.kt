@@ -2779,6 +2779,121 @@ object ControlCenterHook {
                 }
             } catch (t: Throwable) {}
 
+            // 16d. Hook True 2D Grid Layout in GridLayoutManager
+            try {
+                val glmClass = Class.forName("androidx.recyclerview.widget.GridLayoutManager", false, classLoader)
+                for (m in glmClass.declaredMethods) {
+                    if (m.name == "layoutChunk") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            if (!ControlCenterConfigHolder.config.true2dGridEnabled) {
+                                return@intercept chain.proceed()
+                            }
+                            try {
+                                val glm = chain.thisObject
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                if (args != null && args.size >= 4) {
+                                    val recycler = args[0]
+                                    val state = args[1]
+                                    val layoutState = args[2]
+                                    val layoutChunkResult = args[3]
+                                    if (recycler != null && state != null && layoutState != null && layoutChunkResult != null) {
+                                        val handled = True2DGridEngine.handleLayoutChunk(
+                                            glm, recycler, state, layoutState, layoutChunkResult, classLoader
+                                        )
+                                        if (handled) return@intercept null
+                                    }
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "Error in True2DGridEngine layoutChunk intercept", t)
+                            }
+                            chain.proceed()
+                        }
+                    }
+                }
+
+                val spanSizeLookupClass = Class.forName("androidx.recyclerview.widget.GridLayoutManager\$SpanSizeLookup", false, classLoader)
+                for (m in spanSizeLookupClass.declaredMethods) {
+                    if (m.name == "getSpanGroupIndex" || m.name == "getCachedSpanGroupIndex") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            if (ControlCenterConfigHolder.config.true2dGridEnabled) {
+                                try {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                    val pos = (args?.getOrNull(0) as? Int) ?: -1
+                                    if (pos >= 0) {
+                                        val row = True2DGridEngine.getItemRowForActiveAdapter(pos)
+                                        if (row >= 0) return@intercept row
+                                    }
+                                } catch (t: Throwable) {}
+                            }
+                            chain.proceed()
+                        }
+                    }
+                    if (m.name == "getSpanIndex" || m.name == "getCachedSpanIndex") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            if (ControlCenterConfigHolder.config.true2dGridEnabled) {
+                                try {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                    val pos = (args?.getOrNull(0) as? Int) ?: -1
+                                    if (pos >= 0) {
+                                        val col = True2DGridEngine.getItemColForActiveAdapter(pos)
+                                        if (col >= 0) return@intercept col
+                                    }
+                                } catch (t: Throwable) {}
+                            }
+                            chain.proceed()
+                        }
+                    }
+                    if (m.name == "getSpanSize") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            if (ControlCenterConfigHolder.config.true2dGridEnabled) {
+                                try {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                    val pos = (args?.getOrNull(0) as? Int) ?: -1
+                                    if (pos >= 0) {
+                                        val spanW = True2DGridEngine.getItemSpanWForActiveAdapter(pos)
+                                        if (spanW > 0) return@intercept spanW
+                                    }
+                                } catch (t: Throwable) {}
+                            }
+                            chain.proceed()
+                        }
+                    }
+                }
+
+                try {
+                    val adapterLookupClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelAdapter\$layoutManager\$1\$1", false, classLoader)
+                    for (m in adapterLookupClass.declaredMethods) {
+                        if (m.name == "getSpanSize") {
+                            m.isAccessible = true
+                            module.hook(m).intercept { chain ->
+                                if (ControlCenterConfigHolder.config.true2dGridEnabled) {
+                                    try {
+                                        val rawArgs = chain.args
+                                        val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                        val pos = (args?.getOrNull(0) as? Int) ?: -1
+                                        if (pos >= 0) {
+                                            val spanW = True2DGridEngine.getItemSpanWForActiveAdapter(pos)
+                                            if (spanW > 0) return@intercept spanW
+                                        }
+                                    } catch (t: Throwable) {}
+                                }
+                                chain.proceed()
+                            }
+                        }
+                    }
+                } catch (t: Throwable) {}
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to hook GridLayoutManager for True2DGridEngine", t)
+            }
+
             // 17. Full 100% Unlock (Zero Boundaries & Dynamic Landscape Flow)
             try {
                 ControlCenterFullUnlock.init(module, classLoader)
