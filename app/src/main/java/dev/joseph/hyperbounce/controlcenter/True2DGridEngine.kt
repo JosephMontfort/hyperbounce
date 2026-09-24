@@ -543,13 +543,13 @@ object True2DGridEngine {
             var maxViewHeight = 0
             var isAnyHeader = false
 
+            val chunkLefts = IntArray(viewsInChunk.size)
+            val chunkRights = IntArray(viewsInChunk.size)
+            val chunkHeights = IntArray(viewsInChunk.size)
+
             for (i in viewsInChunk.indices) {
                 val view = viewsInChunk[i]
-                val itemPos = try {
-                    val lp = view.layoutParams
-                    val getPosM = lp.javaClass.getMethod("getViewLayoutPosition")
-                    (getPosM.invoke(lp) as? Int)?.takeIf { it in 0 until itemCount }
-                } catch (t: Throwable) { null } ?: positionsInChunk.getOrNull(i) ?: currentPos
+                val itemPos = positionsInChunk.getOrNull(i) ?: currentPos
 
                 // 1. Add view to RecyclerView
                 if (!isScrap) {
@@ -570,7 +570,7 @@ object True2DGridEngine {
                 decorInsets.setEmpty()
                 ReflectionCache.calculateItemDecorationsMethod?.invoke(glm, view, decorInsets)
 
-                // 3. Grid positioning
+                // 3. Grid positioning & measurement
                 val col = gridData.getItemCol(itemPos, targetAdapter)
                 val spanW = gridData.getItemSpanW(itemPos, targetAdapter).coerceIn(1, SPAN_COUNT)
                 val spanH = gridData.getItemSpanH(itemPos).coerceIn(1, 6)
@@ -606,48 +606,52 @@ object True2DGridEngine {
 
                 view.measure(widthSpec, heightSpec)
 
-                val left = paddingLeft + leftBorder
-                val right = paddingLeft + rightBorder
-                val top: Int
-                val bottom: Int
-                if (isForward) {
-                    top = offset
-                    bottom = offset + targetDecoratedHeight
-                } else {
-                    bottom = offset
-                    top = offset - targetDecoratedHeight
-                }
-
-                ReflectionCache.layoutDecoratedWithMarginsMethod?.invoke(glm, view, left, top, right, bottom)
+                chunkLefts[i] = paddingLeft + leftBorder
+                chunkRights[i] = paddingLeft + rightBorder
+                chunkHeights[i] = targetDecoratedHeight
 
                 if (targetDecoratedHeight > maxViewHeight) {
                     maxViewHeight = targetDecoratedHeight
                 }
             }
 
-            // 4. Calculate consumed row height
+            // 4. Calculate consumed row height and row top
             val consumed: Int
+            val chunkTop: Int
             if (isAnyHeader) {
                 consumed = maxViewHeight
-            } else {
+                chunkTop = if (isForward) offset else offset - maxViewHeight
+            } else if (isForward) {
                 val nextPos = ReflectionCache.layoutStateCurrentPositionField?.getInt(layoutState) ?: -1
-                if (isForward) {
-                    val nextRow = if (nextPos in 0 until itemCount) {
-                        gridData.getItemRow(nextPos, targetAdapter)
-                    } else {
-                        targetRow + (maxViewHeight / unitRowHeight).coerceAtLeast(1)
-                    }
-                    val deltaRows = (nextRow - targetRow).coerceAtLeast(1)
-                    consumed = deltaRows * unitRowHeight
+                val nextRow = if (nextPos in 0 until itemCount) {
+                    gridData.getItemRow(nextPos, targetAdapter)
                 } else {
-                    val prevRow = if (nextPos in 0 until itemCount) {
-                        gridData.getItemRow(nextPos, targetAdapter)
-                    } else {
-                        targetRow - 1
-                    }
-                    val deltaRows = (targetRow - prevRow).coerceAtLeast(1)
-                    consumed = deltaRows * unitRowHeight
+                    targetRow + (maxViewHeight / unitRowHeight).coerceAtLeast(1)
                 }
+                val deltaRows = (nextRow - targetRow).coerceAtLeast(1)
+                consumed = deltaRows * unitRowHeight
+                chunkTop = offset
+            } else {
+                val maxPosInChunk = positionsInChunk.maxOrNull() ?: currentPos
+                val belowPos = maxPosInChunk + 1
+                val belowRow = if (belowPos in 0 until itemCount) {
+                    gridData.getItemRow(belowPos, targetAdapter)
+                } else {
+                    targetRow + (maxViewHeight / unitRowHeight).coerceAtLeast(1)
+                }
+                val deltaRows = (belowRow - targetRow).coerceAtLeast(1)
+                consumed = deltaRows * unitRowHeight
+                chunkTop = offset - consumed
+            }
+
+            // 5. Lay out each view in this row starting at chunkTop and growing downward
+            for (i in viewsInChunk.indices) {
+                val view = viewsInChunk[i]
+                val left = chunkLefts[i]
+                val right = chunkRights[i]
+                val top = chunkTop
+                val bottom = chunkTop + chunkHeights[i]
+                ReflectionCache.layoutDecoratedWithMarginsMethod?.invoke(glm, view, left, top, right, bottom)
             }
 
             ReflectionCache.layoutChunkResultConsumedField?.setInt(layoutChunkResult, consumed)
