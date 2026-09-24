@@ -641,13 +641,16 @@ fun NotificationCenterSheetScreen(
                 SettingsToggleRow(
                     title = "iOS 26 Pop-Up Animation",
                     subtitle = "Emerges from center top notch with spring overshoot bounce and physical deck stacking",
+                    colors = colors,
+                    iconTint = colors.accentBlue,
+                    backdrop = backdrop,
                     checked = sheet.iosHunAnimationEnabled,
                     onCheckedChange = sheet::setIosHunAnimationEnabled,
-                    colors = colors,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) },
                     enabled = sheet.enabled
                 )
                 if (sheet.iosHunAnimationEnabled) {
-                    RowDivider(colors)
+                    RowDivider(colors.separator)
                     SettingsSliderRow(
                         title = "Animation Speed (Duration)",
                         subtitle = "Controls spring emergence duration and physical responsiveness",
@@ -660,7 +663,7 @@ fun NotificationCenterSheetScreen(
                         valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                         enabled = sheet.enabled
                     )
-                    RowDivider(colors)
+                    RowDivider(colors.separator)
                     SettingsSliderRow(
                         title = "Emergence Start Scale",
                         subtitle = "Initial size when emerging outward from the center top notch",
