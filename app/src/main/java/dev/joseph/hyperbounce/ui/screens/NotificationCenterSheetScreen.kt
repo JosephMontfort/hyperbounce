@@ -634,5 +634,51 @@ fun NotificationCenterSheetScreen(
                 colors
             )
         }
+
+        item {
+            SectionHeader("iOS 26 Heads-Up Banner Animation", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "iOS 26 Pop-Up Animation",
+                    subtitle = "Emerges from center top notch with spring overshoot bounce and physical deck stacking",
+                    checked = sheet.iosHunAnimationEnabled,
+                    onCheckedChange = sheet::setIosHunAnimationEnabled,
+                    colors = colors,
+                    enabled = sheet.enabled
+                )
+                if (sheet.iosHunAnimationEnabled) {
+                    RowDivider(colors)
+                    SettingsSliderRow(
+                        title = "Animation Speed (Duration)",
+                        subtitle = "Controls spring emergence duration and physical responsiveness",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = sheet.iosHunDurationMs,
+                        onValueChange = sheet::setIosHunDurationMs,
+                        valueRange = 200.0f..600.0f,
+                        defaultValue = 380.0f,
+                        valueLabel = { String.format(Locale.US, "%.0f ms", it) },
+                        enabled = sheet.enabled
+                    )
+                    RowDivider(colors)
+                    SettingsSliderRow(
+                        title = "Emergence Start Scale",
+                        subtitle = "Initial size when emerging outward from the center top notch",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = sheet.iosHunStartScale,
+                        onValueChange = sheet::setIosHunStartScale,
+                        valueRange = 0.25f..0.70f,
+                        defaultValue = 0.45f,
+                        valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
+                        enabled = sheet.enabled
+                    )
+                }
+            }
+            SectionFooter(
+                "Applies exclusively to incoming heads-up pop-up notifications after the screen is unlocked. Does not affect lock screen notifications or open notification shade.",
+                colors
+            )
+        }
     }
 }

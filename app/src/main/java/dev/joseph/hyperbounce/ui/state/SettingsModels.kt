@@ -176,7 +176,10 @@ data class NotificationSheetSettings(
     val saturationFactor: Float = 120.0f,
     val blurRadius: Float = 0.0f,
     val cornerRadius: Float = 36.0f,
-    val sideMargin: Float = 14.0f
+    val sideMargin: Float = 14.0f,
+    val iosHunAnimationEnabled: Boolean = true,
+    val iosHunDurationMs: Float = 380.0f,
+    val iosHunStartScale: Float = 0.45f
 )
 
 /** Feature 2: Liquid Glass 2.0 Button PIN Pad Engine Settings */

@@ -38,7 +38,11 @@ data class NotificationSheetConfig(
     var pillHeight: Float = 6.0f,
     var pillBottomMargin: Float = 9.0f,
     // 1:1 physical finger tracking on pulldown
-    var oneToOneTrackingEnabled: Boolean = false
+    var oneToOneTrackingEnabled: Boolean = false,
+    // iOS 26 Heads-Up Banner Animation
+    var iosHunAnimationEnabled: Boolean = true,
+    var iosHunDurationMs: Float = 380.0f,
+    var iosHunStartScale: Float = 0.45f
 ) {
     /**
      * True only if sheet is enabled and lockscreen wallpaper toggle is on.
@@ -116,5 +120,8 @@ object NotificationSheetConfigHolder {
         sheet.pillWidth = prefs.getFloat("notif_pill_width", 156.0f)
         sheet.pillHeight = prefs.getFloat("notif_pill_height", 6.0f)
         sheet.pillBottomMargin = prefs.getFloat("notif_pill_bottom_margin", 9.0f)
+        sheet.iosHunAnimationEnabled = prefs.getBoolean("notif_ios_hun_animation_enabled", true)
+        sheet.iosHunDurationMs = prefs.getFloat("notif_ios_hun_duration_ms", 380.0f)
+        sheet.iosHunStartScale = prefs.getFloat("notif_ios_hun_start_scale", 0.45f)
     }
 }
