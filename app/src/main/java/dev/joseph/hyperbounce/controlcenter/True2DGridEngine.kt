@@ -190,7 +190,7 @@ object True2DGridEngine {
         return data.getItemSpanH(pos)
     }
 
-    private fun getActiveAdapter(): Any? {
+    fun getActiveAdapter(): Any? {
         val rv = ControlCenterConfigHolder.sRecyclerView?.get()
         if (rv != null) {
             try {
@@ -206,8 +206,15 @@ object True2DGridEngine {
 
     /**
      * Computes the 2D bin-packing layout for all items currently in adapter.contentMap.
+     * Can optionally simulate a candidate span override for live resize animations.
      */
-    fun calculateLayout(adapter: Any?, context: Context?): AdapterGridData {
+    fun calculateLayout(
+        adapter: Any?,
+        context: Context?,
+        overrideSpec: String? = null,
+        overrideSpanW: Int = 1,
+        overrideSpanH: Int = 1
+    ): AdapterGridData {
         val unitRowHeight = getUnitRowHeight(context)
         val flatList = ArrayList<Any>()
 
@@ -234,7 +241,9 @@ object True2DGridEngine {
         if (itemCount == 0) {
             val emptyItems = arrayOfNulls<ItemLayout>(64)
             val fallback = AdapterGridData(emptyItems, 16, unitRowHeight, 0)
-            sLastCalculatedGrid = fallback
+            if (overrideSpec == null) {
+                sLastCalculatedGrid = fallback
+            }
             return fallback
         }
 
@@ -303,8 +312,16 @@ object True2DGridEngine {
 
             val isSystem = isFullWidthSystemItem(item, vt)
             val spec = if (!isSystem) ControlCenterConfigHolder.getRecordSpec(item) else null
+            val isTargetOverride = (overrideSpec != null && (
+                (spec != null && spec.equals(overrideSpec, ignoreCase = true)) ||
+                (overrideSpec.equals("brightness", ignoreCase = true) && (vt == 3484338 || vt == 274442 || item.javaClass.name.contains("Brightness"))) ||
+                (overrideSpec.equals("volume", ignoreCase = true) && (vt == 3484339 || item.javaClass.name.contains("Volume")))
+            ))
+
             val spans = if (isSystem) {
                 Pair(SPAN_COUNT, 1)
+            } else if (isTargetOverride) {
+                Pair(overrideSpanW, overrideSpanH)
             } else {
                 ControlCenterFullUnlock.getItemSpans(item, vt, spec)
             }
@@ -338,7 +355,9 @@ object True2DGridEngine {
         }
 
         val gridData = AdapterGridData(itemsArray, highestOccupiedRow, unitRowHeight, itemCount)
-        sLastCalculatedGrid = gridData
+        if (overrideSpec == null) {
+            sLastCalculatedGrid = gridData
+        }
         return gridData
     }
 
