@@ -322,7 +322,8 @@ data class ControlCenterSettings(
     val frictionMultiplier: Float = 0.40f,
     val lowEndFlashlightEnabled: Boolean = false,
     val flashlightMaxBrightness: Int = 100,
-    val true2dGridEnabled: Boolean = true
+    val true2dGridEnabled: Boolean = true,
+    val fluidResizeEnabled: Boolean = true
 )
 
 /** Feature 10: Dropdown Menu to Dialog Fluid Morph Physics */

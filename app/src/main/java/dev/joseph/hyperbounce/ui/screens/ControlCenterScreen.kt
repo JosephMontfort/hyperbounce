@@ -60,6 +60,17 @@ fun ControlCenterScreen(
                     onCheckedChange = cc::setModularEditEnabled,
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "Fluid Tile Resizing",
+                    subtitle = "Real-time tile expansion with dynamic neighbour displacement during resize drag",
+                    colors = colors,
+                    iconTint = colors.accentTeal,
+                    backdrop = backdrop,
+                    checked = cc.fluidResizeEnabled,
+                    onCheckedChange = cc::setFluidResizeEnabled,
+                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                )
 
                 RowDivider(colors.separator)
                 SettingsToggleRow(

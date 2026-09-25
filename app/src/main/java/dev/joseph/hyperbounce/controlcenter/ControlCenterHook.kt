@@ -2217,7 +2217,7 @@ object ControlCenterHook {
                                                 resizeHandle.bringToFront()
                                                 resizeHandle.isClickable = true
                                                 if (spec != null) {
-                                                    resizeHandle.setOnTouchListener(TileResizeDragTouchListener(ctx, spec, itemView, density))
+                                                    FluidTileResizeHandler.attach(resizeHandle, ctx, spec, itemView, density)
                                                 }
                                             } else {
                                                 resizeHandle.visibility = View.GONE
@@ -2400,7 +2400,7 @@ object ControlCenterHook {
 
                                                     resizeHandle.isClickable = true
                                                     if (spec != null) {
-                                                        resizeHandle.setOnTouchListener(TileResizeDragTouchListener(itemView.context, spec, itemView, density))
+                                                        FluidTileResizeHandler.attach(resizeHandle, itemView.context, spec, itemView, density)
                                                     }
                                                 } else {
                                                     resizeHandle.visibility = View.GONE
@@ -2496,6 +2496,13 @@ object ControlCenterHook {
                             if (itemView != null && itemView.findViewById<View>(0x7f099995) != null) {
                                 ControlCenterGrouping.applyGroupContainerStyle(itemView, classLoader)
                                 null
+                            } else if (itemView != null && isChildOfContainer(itemView)) {
+                                if (m.name == "updateBlurBlendBackground" || m.name == "updateBackground") {
+                                    ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, null, classLoader)
+                                    null
+                                } else {
+                                    chain.proceed()
+                                }
                             } else {
                                 chain.proceed()
                             }
@@ -2526,6 +2533,24 @@ object ControlCenterHook {
                                 } else {
                                     true
                                 }
+                            } else {
+                                chain.proceed()
+                            }
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val iconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemIconView", false, classLoader)
+                for (m in iconViewClass.declaredMethods) {
+                    if (m.name == "applyBlendColor") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val iconView = chain.thisObject as? View
+                            if (iconView != null && isChildOfContainer(iconView)) {
+                                ControlCenterGrouping.applyNonAdvancedStyleToChildTile(iconView, null, classLoader)
+                                null
                             } else {
                                 chain.proceed()
                             }
@@ -2781,6 +2806,11 @@ object ControlCenterHook {
                                 val lastField = mediaAnimClass.getDeclaredField("lastAnimValue").apply { isAccessible = true }
                                 lastField.set(chain.thisObject, null)
                             } catch (t: Throwable) {}
+                            if (m.name == "collapse") {
+                                try {
+                                    sMediaPlayerViewHolder?.get()?.let { applyMediaPlayerLayout(it) }
+                                } catch (t: Throwable) {}
+                            }
                             chain.proceed()
                         }
                     } else if (m.name == "frameCallback") {
@@ -3470,7 +3500,7 @@ object ControlCenterHook {
                         resizeHandle.setOnClickListener {
                             ControlCenterConfigHolder.cycleSliderWidth(ctx, isBrightness, itemView)
                         }
-                        resizeHandle.setOnTouchListener(TileResizeDragTouchListener(ctx, if (isBrightness) "brightness" else "volume", itemView, density))
+                        FluidTileResizeHandler.attach(resizeHandle, ctx, if (isBrightness) "brightness" else "volume", itemView, density)
                     } else {
                         resizeHandle.isClickable = false
                         resizeHandle.setOnClickListener(null)
@@ -3628,16 +3658,32 @@ object ControlCenterHook {
             }
         }
 
+        private fun requestDisallowAll(disallow: Boolean) {
+            var p = parent
+            while (p != null) {
+                p.requestDisallowInterceptTouchEvent(disallow)
+                p = p.parent
+            }
+        }
+
+        override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                requestDisallowAll(true)
+            }
+            return super.dispatchTouchEvent(event)
+        }
+
         override fun onTouchEvent(event: MotionEvent): Boolean {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    parent?.requestDisallowInterceptTouchEvent(true)
+                    requestDisallowAll(true)
                     isDragging = true
                     dragProgress = (event.x / width.toFloat()).coerceIn(0f, 1f)
                     invalidate()
                     return true
                 }
                 MotionEvent.ACTION_MOVE -> {
+                    requestDisallowAll(true)
                     dragProgress = (event.x / width.toFloat()).coerceIn(0f, 1f)
                     invalidate()
                     return true
@@ -3648,7 +3694,7 @@ object ControlCenterHook {
                         progressRatio = finalRatio
                         isDragging = false
                         invalidate()
-                        parent?.requestDisallowInterceptTouchEvent(false)
+                        requestDisallowAll(false)
                         if (event.actionMasked == MotionEvent.ACTION_UP) {
                             seekToRatio(finalRatio)
                         }
@@ -3832,27 +3878,25 @@ object ControlCenterHook {
                     if (collapsedSeek != null && collapsedSeek.visibility == View.VISIBLE && collapsedSeek.width > 0) {
                         val locC = IntArray(2)
                         collapsedSeek.getLocationInWindow(locC)
-                        val itemFrame = try {
-                            val getToViewM = animClass.getDeclaredMethod("getToView").apply { isAccessible = true }
-                            val toView = getToViewM.invoke(animator)
-                            toView.javaClass.getMethod("getItemFrame").invoke(toView) as? View
-                        } catch (t: Throwable) { null }
-
-                        if (itemFrame != null) {
-                            val locFrame = IntArray(2)
-                            itemFrame.getLocationInWindow(locFrame)
-                            val fromTopInFrame = (locC[1] - locFrame[1]).toFloat()
+                        val parentView = progView.parent as? View
+                        if (parentView != null) {
+                            val locParent = IntArray(2)
+                            parentView.getLocationInWindow(locParent)
+                            val fromTopInParent = (locC[1] - locParent[1]).toFloat()
+                            val fromLeftInParent = (locC[0] - locParent[0]).toFloat()
                             val fromW = collapsedSeek.width.toFloat()
                             val toW = (toProg.javaClass.getMethod("getWidth").invoke(toProg) as Int).toFloat()
+                            val toLeft = (try { toProg.javaClass.getMethod("getLeft").invoke(toProg) as Int } catch (t: Throwable) { progView.left }).toFloat()
 
-                            val curTop = fromTopInFrame + (toTop.toFloat() - fromTopInFrame) * progress
+                            val curTop = fromTopInParent + (toTop.toFloat() - fromTopInParent) * progress
+                            val curLeft = fromLeftInParent + (toLeft - fromLeftInParent) * progress
                             val curScaleX = if (toW > 0f) (fromW + (toW - fromW) * progress) / toW else 1f
 
+                            progView.layout(curLeft.toInt(), curTop.toInt(), (curLeft + toW).toInt(), curTop.toInt() + progView.height)
                             progView.pivotX = 0f
                             progView.pivotY = 0f
                             progView.scaleX = curScaleX
                             progView.scaleY = 1f
-                            progView.top = curTop.toInt()
                             progView.alpha = 1f
                         }
                     }
@@ -3911,18 +3955,34 @@ object ControlCenterHook {
                 }
             }
 
+            val holder = sMediaPlayerViewHolder?.get()
+            val itemView = holder?.let { getHolderItemView(it) }
+            val prevBtn = itemView?.let { getChildView(it, "prev") }
+            val playBtn = itemView?.let { getChildView(it, "play") }
+            val nextBtn = itemView?.let { getChildView(it, "next") }
+
+            val avPrev = getCtrlView("getAvPrevView")
+            val avPlay = getCtrlView("getAvPlayView")
+            val avNext = getCtrlView("getAvNextView")
+
+            val density = (itemView?.context ?: (progView ?: volView)?.context)?.resources?.displayMetrics?.density ?: 3f
+            val toBtnW = 40f * density
+
+            if (currentTileSize == "4x1" || currentTileSize == "4x2" || currentTileSize == "2x4") {
+                val fromBtnW = prevBtn?.width?.toFloat()?.takeIf { it > 0f } ?: (26f * density)
+                if (toBtnW > 0f) {
+                    val curBtnScale = (fromBtnW + (toBtnW - fromBtnW) * progress) / toBtnW
+                    avPrev?.scaleX = curBtnScale
+                    avPrev?.scaleY = curBtnScale
+                    avPlay?.scaleX = curBtnScale
+                    avPlay?.scaleY = curBtnScale
+                    avNext?.scaleX = curBtnScale
+                    avNext?.scaleY = curBtnScale
+                }
+            }
+
             // 5. 1x2 Vertical Buttons interpolation
             if (currentTileSize == "1x2") {
-                val holder = sMediaPlayerViewHolder?.get()
-                val itemView = holder?.let { getHolderItemView(it) }
-                val prevBtn = itemView?.let { getChildView(it, "prev") }
-                val playBtn = itemView?.let { getChildView(it, "play") }
-                val nextBtn = itemView?.let { getChildView(it, "next") }
-
-                val avPrev = getCtrlView("getAvPrevView")
-                val avPlay = getCtrlView("getAvPlayView")
-                val avNext = getCtrlView("getAvNextView")
-
                 if (avPrev != null && prevBtn != null) {
                     val topP = (prevBtn.top * (1f - progress)).toInt()
                     avPrev.layout(avPrev.left, topP, avPrev.right, topP + avPrev.height)
@@ -5088,7 +5148,7 @@ object ControlCenterHook {
                         resizeHandle.setOnClickListener {
                             ControlCenterConfigHolder.cycleMediaPlayerSize(ctx, itemView)
                         }
-                        resizeHandle.setOnTouchListener(TileResizeDragTouchListener(ctx, "media", itemView, density))
+                        FluidTileResizeHandler.attach(resizeHandle, ctx, "media", itemView, density)
                     } else {
                         resizeHandle.isClickable = false
                         resizeHandle.setOnClickListener(null)

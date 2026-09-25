@@ -50,7 +50,8 @@ data class ControlCenterConfig(
     var frictionMultiplier: Float = 0.40f,
     var lowEndFlashlightEnabled: Boolean = false,
     var flashlightMaxBrightness: Int = 100,
-    var true2dGridEnabled: Boolean = true
+    var true2dGridEnabled: Boolean = true,
+    var fluidResizeEnabled: Boolean = true
 )
 
 /**
@@ -199,7 +200,8 @@ object ControlCenterConfigHolder {
             frictionMultiplier = prefs.getFloat("cc_friction_multiplier", 0.40f),
             lowEndFlashlightEnabled = prefs.getBoolean("cc_low_end_flashlight_enabled", false),
             flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", 100),
-            true2dGridEnabled = prefs.getBoolean("cc_true_2d_grid_enabled", true)
+            true2dGridEnabled = prefs.getBoolean("cc_true_2d_grid_enabled", true),
+            fluidResizeEnabled = prefs.getBoolean("cc_fluid_resize_enabled", true)
         )
     }
 
@@ -1126,7 +1128,7 @@ object ControlCenterConfigHolder {
                                     resizeHandle.setOnClickListener {
                                         cycleSliderWidth(itemView.context, isBright, itemView)
                                     }
-                                    resizeHandle.setOnTouchListener(TileResizeDragTouchListener(itemView.context, if (isBright) "brightness" else "volume", itemView, density))
+                                    FluidTileResizeHandler.attach(resizeHandle, itemView.context, if (isBright) "brightness" else "volume", itemView, density)
                                 } else {
                                     resizeHandle.isClickable = false
                                     resizeHandle.setOnClickListener(null)
@@ -1176,7 +1178,7 @@ object ControlCenterConfigHolder {
                                 resizeHandle.setOnClickListener {
                                     cycleMediaPlayerSize(itemView.context, itemView)
                                 }
-                                resizeHandle.setOnTouchListener(TileResizeDragTouchListener(itemView.context, "media", itemView, density))
+                                FluidTileResizeHandler.attach(resizeHandle, itemView.context, "media", itemView, density)
                             } else {
                                 resizeHandle.isClickable = false
                                 resizeHandle.setOnClickListener(null)
@@ -1472,7 +1474,7 @@ object ControlCenterConfigHolder {
                             }
                             resizeHandle.bringToFront()
                             resizeHandle.isClickable = true
-                            resizeHandle.setOnTouchListener(TileResizeDragTouchListener(itemView.context, spec, itemView, density))
+                            FluidTileResizeHandler.attach(resizeHandle, itemView.context, spec, itemView, density)
                         }
                     }
                     } catch (t: Throwable) {
@@ -1919,7 +1921,7 @@ object ControlCenterConfigHolder {
                     resizeHandle.setOnClickListener {
                         cycleSliderWidth(ctx, isBrightness, tileView)
                     }
-                    resizeHandle.setOnTouchListener(TileResizeDragTouchListener(ctx, if (isBrightness) "brightness" else "volume", tileView, density))
+                    FluidTileResizeHandler.attach(resizeHandle, ctx, if (isBrightness) "brightness" else "volume", tileView, density)
                 } else {
                     resizeHandle.isClickable = false
                     resizeHandle.setOnClickListener(null)

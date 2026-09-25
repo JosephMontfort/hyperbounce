@@ -531,16 +531,7 @@ object ControlCenterGrouping {
                 iflp.bottomMargin = 0
                 iconFrame.layoutParams = iflp
             }
-            if (blurEnabled) {
-                val discBg = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(Color.parseColor("#38FFFFFF"))
-                    setStroke(Math.max(1, (1.5f * density).toInt()), Color.parseColor("#80FFFFFF"))
-                }
-                iconFrame.background = discBg
-            } else {
-                iconFrame.background = null
-            }
+            iconFrame.background = null
         }
         return childTile
     }
@@ -993,30 +984,15 @@ object ControlCenterGrouping {
                 clearEffect.invoke(commonUtils, view)
             } catch (t: Throwable) {}
 
-            val typedValue = android.util.TypedValue()
-            var hasThemeColor = false
-            var themeColor = 0
-            val attrResId = ctx.resources.getIdentifier("qsCardDisabledColor", "attr", ctx.packageName)
-            if (attrResId != 0 && ctx.theme.resolveAttribute(attrResId, typedValue, true)) {
-                themeColor = typedValue.data
-                if (Color.alpha(themeColor) > 0) {
-                    hasThemeColor = true
-                }
-            }
-
-            val finalColor = if (hasThemeColor) {
-                themeColor
-            } else {
-                val colorResId = ctx.resources.getIdentifier("qs_card_disabled_color", "color", ctx.packageName)
-                if (colorResId != 0) {
-                    try {
-                        ctx.getColor(colorResId)
-                    } catch (t: Throwable) {
-                        Color.parseColor("#66000000")
-                    }
-                } else {
+            val colorResId = ctx.resources.getIdentifier("qs_card_disabled_color", "color", ctx.packageName)
+            val finalColor = if (colorResId != 0) {
+                try {
+                    ctx.resources.getColor(colorResId, null)
+                } catch (t: Throwable) {
                     Color.parseColor("#66000000")
                 }
+            } else {
+                Color.parseColor("#66000000")
             }
 
             val cardBg = GradientDrawable().apply {
@@ -1053,6 +1029,109 @@ object ControlCenterGrouping {
         } catch (t: Throwable) {}
 
         return false
+    }
+
+    fun applyNonAdvancedStyleToChildTile(childView: View?, curState: Any?, classLoader: ClassLoader) {
+        if (childView == null) return
+        try {
+            val ctx = childView.context
+            val density = ctx.resources.displayMetrics.density
+            val radiusResId = ctx.resources.getIdentifier("control_center_universal_corner_radius", "dimen", ctx.packageName)
+            val cornerRadius = if (radiusResId != 0) ctx.resources.getDimension(radiusResId) else 20f * density
+
+            try {
+                val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
+                val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
+                setModeMethod.invoke(null, childView, 0)
+
+                val clearBlendMethod = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
+                clearBlendMethod.invoke(null, childView)
+            } catch (t: Throwable) {}
+
+            try {
+                val commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
+                val commonUtils = commonUtilsClass.getDeclaredField("INSTANCE").get(null)
+                val clearEffect = commonUtilsClass.getMethod("clearMiBlurBlendEffect", View::class.java)
+                clearEffect.invoke(commonUtils, childView)
+            } catch (t: Throwable) {}
+
+            val stateInt = try {
+                val f = curState?.javaClass?.getField("state")
+                f?.getInt(curState) ?: 1
+            } catch (t: Throwable) { 1 }
+
+            val isCard = childView.javaClass.name.contains("QSCardItemView")
+            if (isCard) {
+                val enabledColorResId = ctx.resources.getIdentifier("qs_card_enabled_color", "color", ctx.packageName)
+                val disabledColorResId = ctx.resources.getIdentifier("qs_card_disabled_color", "color", ctx.packageName)
+                val enabledColor = if (enabledColorResId != 0) {
+                    try { ctx.resources.getColor(enabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#ebffffff") }
+                } else Color.parseColor("#ebffffff")
+                val disabledColor = if (disabledColorResId != 0) {
+                    try { ctx.resources.getColor(disabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#66000000") }
+                } else Color.parseColor("#66000000")
+
+                val cardBg = GradientDrawable().apply {
+                    this.cornerRadius = cornerRadius
+                    setColor(if (stateInt == 2) enabledColor else disabledColor)
+                }
+                childView.background = cardBg
+                childView.outlineProvider = object : android.view.ViewOutlineProvider() {
+                    override fun getOutline(v: View, outline: android.graphics.Outline) {
+                        outline.setRoundRect(0, 0, v.width, v.height, cornerRadius)
+                    }
+                }
+                childView.clipToOutline = true
+            } else {
+                val iconView = try {
+                    val f = childView.javaClass.getDeclaredField("icon")
+                    f.isAccessible = true
+                    f.get(childView) as? View
+                } catch (t: Throwable) { childView }
+
+                if (iconView != null) {
+                    try {
+                        val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
+                        val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
+                        setModeMethod.invoke(null, iconView, 0)
+                        val clearBlendMethod = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
+                        clearBlendMethod.invoke(null, iconView)
+                        val commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
+                        val commonUtils = commonUtilsClass.getDeclaredField("INSTANCE").get(null)
+                        val clearEffect = commonUtilsClass.getMethod("clearMiBlurBlendEffect", View::class.java)
+                        clearEffect.invoke(commonUtils, iconView)
+                    } catch (t: Throwable) {}
+
+                    val enabledColorResId = ctx.resources.getIdentifier("qs_enabled_color", "color", ctx.packageName)
+                    val disabledColorResId = ctx.resources.getIdentifier("qs_disabled_color", "color", ctx.packageName)
+                    val enabledColor = if (enabledColorResId != 0) {
+                        try { ctx.resources.getColor(enabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#ebffffff") }
+                    } else Color.parseColor("#ebffffff")
+                    val disabledColor = if (disabledColorResId != 0) {
+                        try { ctx.resources.getColor(disabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#66000000") }
+                    } else Color.parseColor("#66000000")
+
+                    val tileBg = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(if (stateInt == 2) enabledColor else disabledColor)
+                    }
+                    val innerIcon = iconView.findViewById<ImageView>(ctx.resources.getIdentifier("icon", "id", ctx.packageName))
+                    if (innerIcon != null) {
+                        innerIcon.background = tileBg
+                    } else {
+                        iconView.background = tileBg
+                    }
+                }
+
+                val iconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
+                if (iconFrameId != 0) {
+                    val iconFrame = childView.findViewById<View>(iconFrameId)
+                    iconFrame?.background = null
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "applyNonAdvancedStyleToChildTile error", t)
+        }
     }
 
     fun rebindGroupContainer(
@@ -1240,6 +1319,7 @@ object ControlCenterGrouping {
                                         if (vm.name == "updateState" && vm.parameterTypes.size == 3) {
                                             vm.isAccessible = true
                                             vm.invoke(childView, curState, true, false)
+                                            applyNonAdvancedStyleToChildTile(childView, curState, classLoader)
                                             break
                                         }
                                     }
