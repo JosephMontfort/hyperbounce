@@ -1,17 +1,32 @@
 package dev.joseph.hyperbounce.controlcenter
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.ColorFilter
+import android.graphics.Paint
+import android.graphics.PixelFormat
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.graphics.drawable.Drawable
+import android.text.TextPaint
 import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
+import android.widget.ImageView
+import android.widget.TextView
 
 /**
- * FluidTileResizeHandler provides real-time, ultra-fluid tile expansion and
- * immediate neighbour tile displacement following stock HyperOS rearrangement logic
- * as the user drags the resize handle.
+ * FluidTileResizeHandler provides real-time, ultra-fluid tile expansion and shrinking
+ * with strict corner radius preservation, unstretched icon rendering, smooth label fade-in/fade-out,
+ * and live neighbour displacement following stock HyperOS grid rearrangement logic.
  */
 object FluidTileResizeHandler {
 
@@ -21,20 +36,176 @@ object FluidTileResizeHandler {
     const val STATE_EXPANDED = 1
     const val STATE_VERTICAL = 2
     const val STATE_LARGE = 3
-    const val STATE_WIDE_1 = 4
-    const val STATE_WIDE_2 = 5
-    const val STATE_TALL_4 = 6
 
     /**
      * Attaches the appropriate resize listener to the given handle view based on
      * the companion app configuration switch.
      */
     fun attach(handleView: View, ctx: Context, spec: String, tileView: View, density: Float) {
-        if (ControlCenterConfigHolder.config.fluidResizeEnabled) {
+        val isBrightnessSpec = "brightness".equals(spec, ignoreCase = true)
+        val isVolumeSpec = "volume".equals(spec, ignoreCase = true)
+        val isSliderSpec = isBrightnessSpec || isVolumeSpec
+        val isMediaSpec = "media".equals(spec, ignoreCase = true)
+
+        if (ControlCenterConfigHolder.config.fluidResizeEnabled && !isSliderSpec && !isMediaSpec) {
             handleView.setOnTouchListener(FluidTileResizeTouchListener(ctx, spec, tileView, density))
         } else {
             handleView.setOnTouchListener(TileResizeDragTouchListener(ctx, spec, tileView, density))
         }
+    }
+
+    /**
+     * Custom morphing overlay drawable that renders the fluidly expanding or shrinking tile.
+     * Preserves exact corner radius without stretching, keeps icons crisp and unstretched,
+     * smoothly fades labels in/out, and draws the corner resize handle.
+     */
+    class FluidTileMorphOverlayDrawable(private val density: Float) : Drawable() {
+        private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+        }
+        private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 2.0f * density
+            color = Color.parseColor("#4DFFFFFF")
+        }
+        private val snapBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 2.5f * density
+            color = Color.parseColor("#FF0088FF") // HyperOS blue snap highlight
+        }
+
+        private val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 14f * density
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        }
+        private val subtitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#B3FFFFFF")
+            textSize = 11f * density
+            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+        }
+        private val handleDrawable = CurvedResizeHandleDrawable(density)
+
+        val currentRect = RectF()
+        var cornerRadius = 26f * density
+        var isSnapping = false
+        var labelAlpha = 0f
+        var iconAlpha = 1f
+        var isLightMode = false
+
+        var iconDrawable: Drawable? = null
+        var titleText: String? = null
+        var subtitleText: String? = null
+        val iconRect = RectF()
+
+        fun setup(
+            icon: Drawable?,
+            title: String?,
+            subtitle: String?,
+            bgColor: Int,
+            active: Boolean,
+            light: Boolean
+        ) {
+            iconDrawable = icon
+            titleText = title
+            subtitleText = subtitle
+            bgPaint.color = bgColor
+            isLightMode = light
+            if (active && light) {
+                titlePaint.color = Color.BLACK
+                subtitlePaint.color = Color.DKGRAY
+            } else {
+                titlePaint.color = Color.WHITE
+                subtitlePaint.color = Color.parseColor("#B3FFFFFF")
+            }
+        }
+
+        fun updateMorph(
+            rect: RectF,
+            radius: Float,
+            iconBox: RectF,
+            lblAlpha: Float,
+            snapping: Boolean
+        ) {
+            currentRect.set(rect)
+            cornerRadius = radius
+            iconRect.set(iconBox)
+            labelAlpha = lblAlpha
+            isSnapping = snapping
+            setBounds(rect.left.toInt(), rect.top.toInt(), rect.right.toInt(), rect.bottom.toInt())
+            invalidateSelf()
+        }
+
+        override fun draw(canvas: Canvas) {
+            if (currentRect.isEmpty) return
+
+            // 1. Draw smooth rounded rectangle background (Corner radius is strictly preserved, never stretched!)
+            canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, bgPaint)
+
+            // 2. Draw border
+            if (isSnapping) {
+                canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, snapBorderPaint)
+            } else {
+                canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, borderPaint)
+            }
+
+            // 3. Draw Unstretched Icon
+            iconDrawable?.let { ic ->
+                ic.setBounds(
+                    iconRect.left.toInt(),
+                    iconRect.top.toInt(),
+                    iconRect.right.toInt(),
+                    iconRect.bottom.toInt()
+                )
+                ic.alpha = (iconAlpha * 255).toInt().coerceIn(0, 255)
+                ic.draw(canvas)
+            }
+
+            // 4. Draw Unstretched Text (Smoothly fades in with elongation)
+            if (labelAlpha > 0.02f && !titleText.isNullOrEmpty()) {
+                titlePaint.alpha = (labelAlpha * 255).toInt().coerceIn(0, 255)
+                subtitlePaint.alpha = (labelAlpha * 180).toInt().coerceIn(0, 255)
+
+                val textX = iconRect.right + 12f * density
+                val fontMetrics = titlePaint.fontMetrics
+                val titleH = fontMetrics.descent - fontMetrics.ascent
+                val subH = if (!subtitleText.isNullOrEmpty()) {
+                    val sm = subtitlePaint.fontMetrics
+                    sm.descent - sm.ascent
+                } else 0f
+                val totalTextH = if (subH > 0) titleH + subH + 2f * density else titleH
+
+                val textCenterY = currentRect.centerY()
+                val titleBaseline = textCenterY - totalTextH / 2f - fontMetrics.ascent
+
+                canvas.save()
+                canvas.clipRect(textX, currentRect.top, currentRect.right - 10f * density, currentRect.bottom)
+                canvas.drawText(titleText!!, textX, titleBaseline, titlePaint)
+                if (!subtitleText.isNullOrEmpty()) {
+                    val subMetrics = subtitlePaint.fontMetrics
+                    val subBaseline = titleBaseline + fontMetrics.descent + 2f * density - subMetrics.ascent
+                    canvas.drawText(subtitleText!!, textX, subBaseline, subtitlePaint)
+                }
+                canvas.restore()
+            }
+
+            // 5. Draw Curved Resize Handle at bottom-right corner
+            val handleSize = 34f * density
+            val hLeft = currentRect.right - handleSize
+            val hTop = currentRect.bottom - handleSize
+            handleDrawable.setBounds(hLeft.toInt(), hTop.toInt(), currentRect.right.toInt(), currentRect.bottom.toInt())
+            handleDrawable.draw(canvas)
+        }
+
+        override fun setAlpha(alpha: Int) {
+            bgPaint.alpha = alpha
+        }
+
+        override fun setColorFilter(colorFilter: ColorFilter?) {
+            bgPaint.colorFilter = colorFilter
+        }
+
+        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
     }
 
     class FluidTileResizeTouchListener(
@@ -44,33 +215,25 @@ object FluidTileResizeHandler {
         private val density: Float
     ) : View.OnTouchListener {
 
-        private val isBrightnessSpec = "brightness".equals(spec, ignoreCase = true)
-        private val isVolumeSpec = "volume".equals(spec, ignoreCase = true)
-        private val isSliderSpec = isBrightnessSpec || isVolumeSpec
-        private val isMediaSpec = "media".equals(spec, ignoreCase = true)
-
         private var downRawX = 0f
         private var downRawY = 0f
         private var isDragging = false
         private var initialState = STATE_NORMAL
-        private var lastCandidateState = -1
+        private var candidateTargetState = -1
 
         private var targetContainer: ViewGroup? = null
-        private var activeViewHolder: Any? = null
+        private var morphDrawable: FluidTileMorphOverlayDrawable? = null
 
+        private var originLeft = 0f
+        private var originTop = 0f
         private var originWidth = 0f
         private var originHeight = 0f
-        private var unitWidth1x1 = 0f
-        private var unitHeight1x1 = 0f
-        private var cardWidth2x1 = 0f
-        private var cardHeight1x2 = 0f
-        private var oneColW = 0f
+
+        private var colW = 0f
         private var twoColW = 0f
-        private var threeColW = 0f
-        private var fourColW = 0f
-        private var row1H = 0f
-        private var row2H = 0f
-        private var row4H = 0f
+        private var cardH = 0f
+        private var tallH = 0f
+        private var gap = 0f
 
         private fun lerp(start: Float, end: Float, fraction: Float): Float {
             return start + (end - start) * fraction.coerceIn(0f, 1f)
@@ -95,98 +258,81 @@ object FluidTileResizeHandler {
             return null
         }
 
-        private fun findViewHolder(view: View, rv: ViewGroup): Any? {
-            try {
-                val findMethod = rv.javaClass.getMethod("findContainingViewHolder", View::class.java)
-                return findMethod.invoke(rv, view)
-            } catch (t: Throwable) {}
-            try {
-                val getHolderMethod = rv.javaClass.getMethod("getChildViewHolder", View::class.java)
-                return getHolderMethod.invoke(rv, view)
-            } catch (t: Throwable) {}
+        private fun findIcon(v: View?): Drawable? {
+            if (v == null) return null
+            if (v is ImageView && v.id != 0x7f099999 && v.id != 0x7f099998 && v.id != 0x7f099992) {
+                if (v.drawable != null) return v.drawable
+            }
+            if (v is ViewGroup) {
+                for (i in 0 until v.childCount) {
+                    val d = findIcon(v.getChildAt(i))
+                    if (d != null) return d
+                }
+            }
             return null
         }
 
-        private fun setIsRecyclable(viewHolder: Any?, recyclable: Boolean) {
-            if (viewHolder == null) return
-            try {
-                val m = viewHolder.javaClass.getMethod("setIsRecyclable", Boolean::class.javaPrimitiveType)
-                m.invoke(viewHolder, recyclable)
-            } catch (t: Throwable) {}
-        }
-
-        private fun triggerStockDisplacement(rv: ViewGroup) {
-            try {
-                val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
-                val adp = getAdapterMethod.invoke(rv)
-                if (adp != null) {
-                    try {
-                        val distMethod = adp.javaClass.getDeclaredMethod("distributeContent", Boolean::class.javaPrimitiveType)
-                        distMethod.isAccessible = true
-                        distMethod.invoke(adp, true)
-                    } catch (t: Throwable) {}
-                    val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
-                    notifyDataSetChangedMethod.invoke(adp)
+        private fun findTexts(v: View?, list: MutableList<String>) {
+            if (v == null) return
+            if (v is TextView && v.id != 0x7f099999) {
+                val t = v.text?.toString()?.trim()
+                if (!t.isNullOrEmpty()) list.add(t)
+            } else if (v is ViewGroup) {
+                for (i in 0 until v.childCount) {
+                    findTexts(v.getChildAt(i), list)
                 }
-            } catch (t: Throwable) {
-                Log.e(TAG, "triggerStockDisplacement error", t)
             }
         }
 
-        private fun applyInMemState(targetState: Int) {
-            if (targetState == -1) return
-            try {
-                if (isSliderSpec) {
-                    if (isBrightnessSpec) {
-                        ControlCenterConfigHolder.sBrightnessSliderWidth = targetState.coerceIn(2, 4)
-                    } else {
-                        ControlCenterConfigHolder.sVolumeSliderWidth = targetState.coerceIn(2, 4)
-                    }
-                } else if (isMediaSpec) {
-                    val targetMediaSize = when (targetState) {
-                        STATE_EXPANDED -> "2x1"
-                        STATE_VERTICAL -> "1x2"
-                        STATE_LARGE -> "2x2"
-                        STATE_WIDE_1 -> "4x1"
-                        STATE_WIDE_2 -> "4x2"
-                        STATE_TALL_4 -> "2x4"
-                        else -> "2x2"
-                    }
-                    ControlCenterConfigHolder.sMediaPlayerSize = targetMediaSize
-                } else {
-                    when (targetState) {
-                        STATE_EXPANDED -> {
-                            ControlCenterConfigHolder.sExpandedTileSpecs.add(spec)
-                            ControlCenterConfigHolder.sVerticalTileSpecs.remove(spec)
-                            ControlCenterConfigHolder.sLargeTileSpecs.remove(spec)
-                            ControlCenterConfigHolder.sCircularCardSpecs.remove(spec)
-                        }
-                        STATE_VERTICAL -> {
-                            ControlCenterConfigHolder.sVerticalTileSpecs.add(spec)
-                            ControlCenterConfigHolder.sExpandedTileSpecs.remove(spec)
-                            ControlCenterConfigHolder.sLargeTileSpecs.remove(spec)
-                            ControlCenterConfigHolder.sCircularCardSpecs.remove(spec)
-                        }
-                        STATE_LARGE -> {
-                            ControlCenterConfigHolder.sLargeTileSpecs.add(spec)
-                            ControlCenterConfigHolder.sExpandedTileSpecs.remove(spec)
-                            ControlCenterConfigHolder.sVerticalTileSpecs.remove(spec)
-                            ControlCenterConfigHolder.sCircularCardSpecs.remove(spec)
-                        }
-                        STATE_NORMAL -> {
-                            ControlCenterConfigHolder.sExpandedTileSpecs.remove(spec)
-                            ControlCenterConfigHolder.sVerticalTileSpecs.remove(spec)
-                            ControlCenterConfigHolder.sLargeTileSpecs.remove(spec)
-                            if ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) {
-                                ControlCenterConfigHolder.sCircularCardSpecs.add(spec)
-                            } else {
-                                ControlCenterConfigHolder.sCircularCardSpecs.remove(spec)
-                            }
-                        }
-                    }
+        private fun updateNeighbourDisplacements(
+            rv: ViewGroup,
+            targetState: Int,
+            initState: Int
+        ) {
+            val originCol = ((originLeft - rv.paddingLeft + gap / 2f) / (colW + gap)).toInt().coerceIn(0, 3)
+            val originRow = ((originTop - rv.paddingTop + gap / 2f) / (cardH + gap)).toInt().coerceAtLeast(0)
+
+            val spanDelta: Int = when {
+                initState == STATE_NORMAL && (targetState == STATE_EXPANDED || targetState == STATE_LARGE) -> 1
+                initState == STATE_EXPANDED && targetState == STATE_NORMAL -> -1
+                initState == STATE_LARGE && targetState == STATE_VERTICAL -> -1
+                initState == STATE_VERTICAL && targetState == STATE_LARGE -> 1
+                else -> 0
+            }
+
+            for (i in 0 until rv.childCount) {
+                val child = rv.getChildAt(i) ?: continue
+                if (child === tileView) continue
+
+                val childLeft = child.left.toFloat()
+                val childTop = child.top.toFloat()
+                val childCol = ((childLeft - rv.paddingLeft + gap / 2f) / (colW + gap)).toInt().coerceIn(0, 3)
+                val childRow = ((childTop - rv.paddingTop + gap / 2f) / (cardH + gap)).toInt().coerceAtLeast(0)
+
+                val isAfterTile = (childRow > originRow) || (childRow == originRow && childCol > originCol)
+
+                var tx = 0f
+                var ty = 0f
+
+                if (isAfterTile && spanDelta != 0) {
+                    val originalIndex = childRow * 4 + childCol
+                    val newIndex = (originalIndex + spanDelta).coerceAtLeast(0)
+                    val newRow = newIndex / 4
+                    val newCol = newIndex % 4
+
+                    val targetLeft = rv.paddingLeft + newCol * (colW + gap)
+                    val targetTop = rv.paddingTop + newRow * (cardH + gap)
+
+                    tx = targetLeft - childLeft
+                    ty = targetTop - childTop
                 }
-            } catch (t: Throwable) {
-                Log.e(TAG, "applyInMemState error", t)
+
+                child.animate()
+                    .translationX(tx)
+                    .translationY(ty)
+                    .setDuration(220)
+                    .setInterpolator(DecelerateInterpolator())
+                    .start()
             }
         }
 
@@ -198,16 +344,6 @@ object FluidTileResizeHandler {
                 v.isClickable = false
                 return false
             }
-            if (isSliderSpec) {
-                val isHoriz = if (isBrightnessSpec) ControlCenterConfigHolder.sBrightnessSliderHorizontal else ControlCenterConfigHolder.sVolumeSliderHorizontal
-                if (!isHoriz) {
-                    v.visibility = View.GONE
-                    v.setOnTouchListener(null)
-                    v.setOnClickListener(null)
-                    v.isClickable = false
-                    return false
-                }
-            }
 
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -217,22 +353,9 @@ object FluidTileResizeHandler {
                     downRawX = event.rawX
                     downRawY = event.rawY
                     isDragging = false
-                    lastCandidateState = -1
+                    candidateTargetState = -1
 
                     initialState = when {
-                        isSliderSpec -> {
-                            val w = if (isBrightnessSpec) ControlCenterConfigHolder.sBrightnessSliderWidth else ControlCenterConfigHolder.sVolumeSliderWidth
-                            w.coerceIn(2, 4)
-                        }
-                        isMediaSpec -> when (ControlCenterConfigHolder.sMediaPlayerSize) {
-                            "2x1" -> STATE_EXPANDED
-                            "1x2" -> STATE_VERTICAL
-                            "2x2" -> STATE_LARGE
-                            "4x1" -> STATE_WIDE_1
-                            "4x2" -> STATE_WIDE_2
-                            "2x4" -> STATE_TALL_4
-                            else -> STATE_LARGE
-                        }
                         ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) -> STATE_LARGE
                         ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) -> STATE_EXPANDED
                         ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) -> STATE_VERTICAL
@@ -240,85 +363,59 @@ object FluidTileResizeHandler {
                         else -> STATE_NORMAL
                     }
 
-                    lastCandidateState = initialState
+                    candidateTargetState = initialState
 
                     val rv = findRecyclerView(tileView) ?: (tileView.rootView as? ViewGroup)
                     targetContainer = rv
 
                     if (rv != null) {
-                        activeViewHolder = findViewHolder(tileView, rv)
-                        setIsRecyclable(activeViewHolder, false)
-
                         val iconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
                         val iconFrame = if (iconFrameId != 0) tileView.findViewById<View>(iconFrameId) else null
                         val visualView = if (initialState == STATE_NORMAL && iconFrame != null) iconFrame else tileView
 
+                        val locTile = IntArray(2)
+                        val locRv = IntArray(2)
+                        visualView.getLocationInWindow(locTile)
+                        rv.getLocationInWindow(locRv)
+                        originLeft = (locTile[0] - locRv[0]).toFloat()
+                        originTop = (locTile[1] - locRv[1]).toFloat()
                         originWidth = visualView.width.toFloat().coerceAtLeast(56f * density)
                         originHeight = visualView.height.toFloat().coerceAtLeast(56f * density)
 
                         val cardHId = ctx.resources.getIdentifier("qs_card_item_height", "dimen", ctx.packageName)
-                        val cardH = if (cardHId != 0) ctx.resources.getDimensionPixelSize(cardHId).toFloat() else (71.5f * density)
+                        cardH = if (cardHId != 0) ctx.resources.getDimensionPixelSize(cardHId).toFloat() else (71.5f * density)
                         val res2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
-                        val tallH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId).toFloat() else (157f * density)
+                        tallH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId).toFloat() else (157f * density)
                         val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
-                        val gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId).toFloat() else (10f * density)
+                        gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId).toFloat() else (10f * density)
 
                         val rvContentW = (rv.width - rv.paddingLeft - rv.paddingRight).toFloat()
-                        val colW = if (rvContentW > 100f * density) {
+                        colW = if (rvContentW > 100f * density) {
                             (rvContentW - 3f * gap) / 4f
                         } else {
                             originWidth
                         }
-                        val calcTwoColW = colW * 2f + gap
+                        twoColW = colW * 2f + gap
 
-                        oneColW = colW
-                        twoColW = calcTwoColW
-                        threeColW = colW * 3f + 2f * gap
-                        fourColW = if (rvContentW > 100f * density) rvContentW else (colW * 4f + 3f * gap)
-                        row1H = cardH
-                        row2H = tallH
-                        row4H = 4f * cardH + 3f * gap
+                        // Extract visual components for morph overlay
+                        val rawIcon = findIcon(iconFrame) ?: findIcon(tileView)
+                        val iconClone = rawIcon?.constantState?.newDrawable()?.mutate() ?: rawIcon
 
-                        if (isSliderSpec) {
-                            originWidth = when (initialState) {
-                                3 -> threeColW
-                                4 -> fourColW
-                                else -> twoColW
-                            }
-                            originHeight = row1H
-                        } else {
-                            when (initialState) {
-                                STATE_NORMAL -> {
-                                    unitWidth1x1 = originWidth
-                                    unitHeight1x1 = originHeight
-                                    cardWidth2x1 = twoColW.coerceAtLeast(originWidth * 2f + gap)
-                                    cardHeight1x2 = tallH
-                                }
-                                STATE_EXPANDED -> {
-                                    cardWidth2x1 = originWidth
-                                    unitHeight1x1 = originHeight
-                                    unitWidth1x1 = colW.coerceAtLeast(56f * density)
-                                    cardHeight1x2 = tallH
-                                }
-                                STATE_VERTICAL -> {
-                                    unitWidth1x1 = originWidth
-                                    cardHeight1x2 = originHeight
-                                    unitHeight1x1 = colW.coerceAtLeast(56f * density)
-                                    cardWidth2x1 = twoColW.coerceAtLeast(originWidth * 2f + gap)
-                                }
-                                STATE_LARGE -> {
-                                    cardWidth2x1 = originWidth
-                                    cardHeight1x2 = originHeight
-                                    unitWidth1x1 = colW.coerceAtLeast(56f * density)
-                                    unitHeight1x1 = colW.coerceAtLeast(56f * density)
-                                }
-                                STATE_WIDE_1, STATE_WIDE_2, STATE_TALL_4 -> {
-                                    cardWidth2x1 = twoColW
-                                    cardHeight1x2 = tallH
-                                    unitWidth1x1 = colW.coerceAtLeast(56f * density)
-                                    unitHeight1x1 = colW.coerceAtLeast(56f * density)
-                                }
-                            }
+                        val textList = mutableListOf<String>()
+                        findTexts(tileView, textList)
+                        val title = if (textList.isNotEmpty()) textList[0] else spec.replaceFirstChar { it.uppercase() }
+                        val subtitle = if (textList.size > 1) textList[1] else "Off"
+
+                        val isActive = tileView.isActivated || tileView.isSelected || (iconFrame?.isActivated == true) || (iconFrame?.isSelected == true)
+                        val isInsideContainer = ControlCenterHook.isChildOfContainer(tileView)
+                        val bgColor = when {
+                            isActive -> 0xFF0088FF.toInt()
+                            isInsideContainer -> 0x66000000
+                            else -> 0x33FFFFFF
+                        }
+
+                        morphDrawable = FluidTileMorphOverlayDrawable(density).apply {
+                            setup(iconClone, title, subtitle, bgColor, isActive, false)
                         }
                     }
 
@@ -335,223 +432,204 @@ object FluidTileResizeHandler {
                     val dist = Math.hypot(dx.toDouble(), dy.toDouble()).toFloat()
                     val slop = 5f * density
 
-                    if (dist > slop) {
-                        if (!isDragging) {
-                            isDragging = true
-                            tileView.bringToFront()
-                            tileView.elevation = 20f * density
-                            tileView.translationZ = 10f * density
+                    if (dist > slop && !isDragging) {
+                        isDragging = true
+                        morphDrawable?.let { md ->
+                            targetContainer?.overlay?.add(md)
                         }
+                        tileView.alpha = 0f
                     }
 
                     if (!isDragging) return true
 
+                    val cardRadius = 26f * density
+                    val circRadius = originWidth.coerceAtMost(colW) / 2f
+                    val iconSize = 26f * density
+
+                    val deltaW = (twoColW - originWidth).coerceAtLeast(30f * density)
+                    val deltaH = (tallH - originHeight).coerceAtLeast(30f * density)
+                    val snapDistX = deltaW * 0.28f
+                    val snapDistY = deltaH * 0.28f
+
                     var targetState = initialState
+                    var curW = originWidth
+                    var curH = originHeight
+                    var curRadius = cardRadius
+                    var lblAlpha = 0f
+                    val iconBox = RectF()
 
-                    if (isSliderSpec) {
-                        val rawW = (originWidth + dx).coerceIn(twoColW * 0.85f, fourColW * 1.05f)
-                        targetState = when {
-                            rawW > (threeColW + fourColW) / 2f -> 4
-                            rawW > (twoColW + threeColW) / 2f -> 3
-                            else -> 2
-                        }
-                        val curW = (originWidth + dx).coerceAtLeast(twoColW * 0.8f)
-                        val sx = curW / originWidth
-                        tileView.pivotX = 0f
-                        tileView.pivotY = 0f
-                        tileView.scaleX = sx
-                        tileView.scaleY = 1f
-                    } else if (isMediaSpec) {
-                        val snapDistX = (oneColW + 10f * density) * 0.35f
-                        val snapDistY = (row1H + 10f * density) * 0.35f
+                    when (initialState) {
+                        STATE_NORMAL -> {
+                            val isDiagonal = dx > snapDistX * 0.65f && dy > snapDistY * 0.65f
+                            targetState = when {
+                                isDiagonal && dx >= snapDistX && dy >= snapDistY -> STATE_LARGE
+                                dx >= dy && dx >= snapDistX -> STATE_EXPANDED
+                                dy > dx && dy >= snapDistY -> STATE_VERTICAL
+                                else -> STATE_NORMAL
+                            }
 
-                        when (initialState) {
-                            STATE_LARGE -> {
-                                if (dx > snapDistX) {
-                                    targetState = if (dy < -snapDistY * 0.6f) STATE_WIDE_1 else STATE_WIDE_2
-                                } else if (dx < -snapDistX) {
-                                    targetState = STATE_VERTICAL
-                                } else if (dy > snapDistY) {
-                                    targetState = STATE_TALL_4
-                                } else if (dy < -snapDistY) {
-                                    targetState = STATE_EXPANDED
+                            when {
+                                isDiagonal -> {
+                                    val progX = (dx / deltaW).coerceIn(0f, 1f)
+                                    val progY = (dy / deltaH).coerceIn(0f, 1f)
+                                    curW = (originWidth + dx).coerceIn(originWidth, twoColW * 1.05f)
+                                    curH = (originHeight + dy).coerceIn(originHeight, tallH * 1.05f)
+                                    val pMax = Math.max(progX, progY)
+                                    curRadius = lerp(circRadius, cardRadius, pMax)
+                                    lblAlpha = ((pMax - 0.2f) / 0.8f).coerceIn(0f, 1f)
+                                    val ix = originLeft + lerp((originWidth - iconSize) / 2f, 16f * density, progX)
+                                    val iy = originTop + lerp((originHeight - iconSize) / 2f, 16f * density, progY)
+                                    iconBox.set(ix, iy, ix + iconSize, iy + iconSize)
                                 }
-                            }
-                            STATE_EXPANDED -> {
-                                if (dx > snapDistX) {
-                                    targetState = if (dy > snapDistY * 0.6f) STATE_WIDE_2 else STATE_WIDE_1
-                                } else if (dy > snapDistY) {
-                                    targetState = if (dy > snapDistY * 2.0f) STATE_TALL_4 else STATE_LARGE
-                                } else if (dx < -snapDistX && dy > snapDistY * 0.5f) {
-                                    targetState = STATE_VERTICAL
+                                dx >= dy && dx > 0 -> {
+                                    val progress = (dx / deltaW).coerceIn(0f, 1f)
+                                    curW = (originWidth + dx).coerceIn(originWidth, twoColW * 1.05f)
+                                    curH = lerp(originHeight, cardH, progress)
+                                    curRadius = lerp(circRadius, cardRadius, progress)
+                                    lblAlpha = ((curW - originWidth * 1.15f) / (twoColW * 0.55f)).coerceIn(0f, 1f)
+                                    val ix = originLeft + lerp((originWidth - iconSize) / 2f, 16f * density, progress)
+                                    val iy = originTop + (curH - iconSize) / 2f
+                                    iconBox.set(ix, iy, ix + iconSize, iy + iconSize)
                                 }
-                            }
-                            STATE_VERTICAL -> {
-                                if (dx > snapDistX) {
-                                    if (dx > snapDistX * 2.0f) {
-                                        targetState = if (dy < -snapDistY * 0.6f) STATE_WIDE_1 else STATE_WIDE_2
-                                    } else {
-                                        targetState = if (dy < -snapDistY * 0.6f) STATE_EXPANDED else STATE_LARGE
-                                    }
-                                } else if (dy > snapDistY) {
-                                    targetState = STATE_TALL_4
-                                } else if (dy < -snapDistY && dx > snapDistX * 0.5f) {
-                                    targetState = STATE_EXPANDED
+                                dy > dx && dy > 0 -> {
+                                    val progress = (dy / deltaH).coerceIn(0f, 1f)
+                                    curW = lerp(originWidth, colW, progress)
+                                    curH = (originHeight + dy).coerceIn(originHeight, tallH * 1.05f)
+                                    curRadius = lerp(circRadius, cardRadius, progress)
+                                    lblAlpha = ((curH - originHeight * 1.15f) / (tallH * 0.55f)).coerceIn(0f, 1f)
+                                    val ix = originLeft + (curW - iconSize) / 2f
+                                    val iy = originTop + lerp((originHeight - iconSize) / 2f, 16f * density, progress)
+                                    iconBox.set(ix, iy, ix + iconSize, iy + iconSize)
                                 }
-                            }
-                            STATE_WIDE_1 -> {
-                                if (dx < -snapDistX && dy > snapDistY * 1.2f) {
-                                    targetState = STATE_TALL_4
-                                } else if (dy > snapDistY) {
-                                    targetState = if (dx < -snapDistX * 1.5f) STATE_LARGE else STATE_WIDE_2
-                                } else if (dx < -snapDistX) {
-                                    targetState = if (dy > snapDistY * 0.5f) STATE_LARGE else STATE_EXPANDED
-                                }
-                            }
-                            STATE_WIDE_2 -> {
-                                if (dy < -snapDistY) {
-                                    targetState = if (dx < -snapDistX) STATE_EXPANDED else STATE_WIDE_1
-                                } else if (dx < -snapDistX) {
-                                    if (dy > snapDistY) {
-                                        targetState = STATE_TALL_4
-                                    } else if (dy < -snapDistY) {
-                                        targetState = STATE_EXPANDED
-                                    } else if (dx < -snapDistX * 2.2f) {
-                                        targetState = STATE_VERTICAL
-                                    } else {
-                                        targetState = STATE_LARGE
-                                    }
-                                } else if (dy > snapDistY && dx < -snapDistX * 0.5f) {
-                                    targetState = STATE_TALL_4
-                                }
-                            }
-                            STATE_TALL_4 -> {
-                                if (dx > snapDistX && dy < -snapDistY * 1.2f) {
-                                    targetState = STATE_WIDE_1
-                                } else if (dy < -snapDistY) {
-                                    if (dy < -snapDistY * 2.0f) {
-                                        targetState = if (dx > snapDistX) STATE_WIDE_1 else STATE_EXPANDED
-                                    } else {
-                                        if (dx > snapDistX) {
-                                            targetState = STATE_WIDE_2
-                                        } else if (dx < -snapDistX) {
-                                            targetState = STATE_VERTICAL
-                                        } else {
-                                            targetState = STATE_LARGE
-                                        }
-                                    }
-                                } else if (dx > snapDistX && dy < -snapDistY * 0.5f) {
-                                    targetState = STATE_WIDE_2
-                                } else if (dx < -snapDistX && dy < -snapDistY * 0.5f) {
-                                    targetState = STATE_VERTICAL
-                                } else if (dx > snapDistX) {
-                                    targetState = STATE_WIDE_2
-                                } else if (dx < -snapDistX) {
-                                    targetState = STATE_VERTICAL
-                                }
-                            }
-                            else -> {
-                                targetState = STATE_LARGE
-                            }
-                        }
-
-                        val curW = (originWidth + dx).coerceAtLeast(oneColW * 0.7f)
-                        val curH = (originHeight + dy).coerceAtLeast(row1H * 0.7f)
-                        tileView.pivotX = 0f
-                        tileView.pivotY = 0f
-                        tileView.scaleX = curW / originWidth
-                        tileView.scaleY = curH / originHeight
-                    } else {
-                        val deltaW = (cardWidth2x1 - unitWidth1x1).coerceAtLeast(40f * density)
-                        val deltaH = (cardHeight1x2 - unitHeight1x1).coerceAtLeast(40f * density)
-                        val snapThreshold = 0.22f
-                        val snapDistX = deltaW * snapThreshold
-                        val snapDistY = deltaH * snapThreshold
-
-                        when (initialState) {
-                            STATE_NORMAL -> {
-                                val isDiagonal = dx > snapDistX * 0.65f && dy > snapDistY * 0.65f
-                                if (isDiagonal) {
-                                    if (dx >= snapDistX && dy >= snapDistY) {
-                                        targetState = STATE_LARGE
-                                    }
-                                } else if (dx >= dy) {
-                                    if (dx >= snapDistX) {
-                                        targetState = STATE_EXPANDED
-                                    }
-                                } else {
-                                    if (dy >= snapDistY) {
-                                        targetState = STATE_VERTICAL
-                                    }
-                                }
-                            }
-                            STATE_EXPANDED -> {
-                                val isDownLeft = -dx > snapDistX * 0.55f && dy > snapDistY * 0.55f
-                                if (isDownLeft) {
-                                    if (-dx >= snapDistX && dy >= snapDistY) {
-                                        targetState = STATE_VERTICAL
-                                    }
-                                } else if (dy > snapDistY * 0.5f && dy > -dx) {
-                                    if (dy >= snapDistY) {
-                                        targetState = STATE_LARGE
-                                    }
-                                } else if (dx < 0) {
-                                    if (-dx >= snapDistX) {
-                                        targetState = STATE_NORMAL
-                                    }
-                                }
-                            }
-                            STATE_VERTICAL -> {
-                                val isUpRight = dx > snapDistX * 0.55f && -dy > snapDistY * 0.55f
-                                if (isUpRight) {
-                                    if (dx >= snapDistX && -dy >= snapDistY) {
-                                        targetState = STATE_EXPANDED
-                                    }
-                                } else if (dx > snapDistX * 0.5f && dx > -dy) {
-                                    if (dx >= snapDistX) {
-                                        targetState = STATE_LARGE
-                                    }
-                                } else if (dy < 0) {
-                                    if (-dy >= snapDistY) {
-                                        targetState = STATE_NORMAL
-                                    }
-                                }
-                            }
-                            STATE_LARGE -> {
-                                val isUpLeft = -dx > snapDistX * 0.55f && -dy > snapDistY * 0.55f
-                                if (isUpLeft) {
-                                    if (-dx >= snapDistX && -dy >= snapDistY) {
-                                        targetState = STATE_NORMAL
-                                    }
-                                } else if (-dy >= -dx && -dy > snapDistY * 0.4f) {
-                                    if (-dy >= snapDistY) {
-                                        targetState = STATE_EXPANDED
-                                    }
-                                } else if (-dx > 0) {
-                                    if (-dx >= snapDistX) {
-                                        targetState = STATE_VERTICAL
-                                    }
+                                else -> {
+                                    curW = originWidth
+                                    curH = originHeight
+                                    curRadius = circRadius
+                                    lblAlpha = 0f
+                                    val ix = originLeft + (curW - iconSize) / 2f
+                                    val iy = originTop + (curH - iconSize) / 2f
+                                    iconBox.set(ix, iy, ix + iconSize, iy + iconSize)
                                 }
                             }
                         }
 
-                        val curW = (originWidth + dx).coerceAtLeast(30f * density)
-                        val curH = (originHeight + dy).coerceAtLeast(30f * density)
-                        tileView.pivotX = 0f
-                        tileView.pivotY = 0f
-                        tileView.scaleX = curW / originWidth
-                        tileView.scaleY = curH / originHeight
+                        STATE_EXPANDED -> {
+                            // Shrink horizontally or expand vertically to 2x2
+                            val shrinkDeltaW = (originWidth - colW).coerceAtLeast(30f * density)
+                            val snapShrinkX = shrinkDeltaW * 0.28f
+
+                            targetState = when {
+                                dy >= snapDistY -> STATE_LARGE
+                                -dx >= snapShrinkX && dy > snapDistY * 0.5f -> STATE_VERTICAL
+                                -dx >= snapShrinkX -> STATE_NORMAL
+                                else -> STATE_EXPANDED
+                            }
+
+                            if (dx < 0) {
+                                val shrinkProgress = (-dx / shrinkDeltaW).coerceIn(0f, 1f)
+                                curW = (originWidth + dx).coerceIn(colW * 0.85f, originWidth)
+                                curH = lerp(originHeight, colW, shrinkProgress)
+                                curRadius = lerp(cardRadius, circRadius, shrinkProgress)
+                                lblAlpha = (1f - shrinkProgress * 1.5f).coerceIn(0f, 1f)
+                                val ix = originLeft + lerp(16f * density, (curW - iconSize) / 2f, shrinkProgress)
+                                val iy = originTop + (curH - iconSize) / 2f
+                                iconBox.set(ix, iy, ix + iconSize, iy + iconSize)
+                            } else if (dy > 0) {
+                                val expandProgress = (dy / deltaH).coerceIn(0f, 1f)
+                                curW = originWidth
+                                curH = (originHeight + dy).coerceIn(originHeight, tallH * 1.05f)
+                                curRadius = cardRadius
+                                lblAlpha = 1f
+                                val ix = originLeft + 16f * density
+                                val iy = originTop + 16f * density
+                                iconBox.set(ix, iy, ix + iconSize, iy + iconSize)
+                            } else {
+                                curW = originWidth
+                                curH = originHeight
+                                curRadius = cardRadius
+                                lblAlpha = 1f
+                                val ix = originLeft + 16f * density
+                                val iy = originTop + (curH - iconSize) / 2f
+                                iconBox.set(ix, iy, ix + iconSize, iy + iconSize)
+                            }
+                        }
+
+                        STATE_VERTICAL -> {
+                            // Shrink vertically or expand horizontally to 2x2
+                            val shrinkDeltaH = (originHeight - cardH).coerceAtLeast(30f * density)
+                            val snapShrinkY = shrinkDeltaH * 0.28f
+
+                            targetState = when {
+                                dx >= snapDistX -> STATE_LARGE
+                                -dy >= snapShrinkY && dx > snapDistX * 0.5f -> STATE_EXPANDED
+                                -dy >= snapShrinkY -> STATE_NORMAL
+                                else -> STATE_VERTICAL
+                            }
+
+                            if (dy < 0) {
+                                val shrinkProgress = (-dy / shrinkDeltaH).coerceIn(0f, 1f)
+                                curW = lerp(originWidth, colW, shrinkProgress)
+                                curH = (originHeight + dy).coerceIn(colW * 0.85f, originHeight)
+                                curRadius = lerp(cardRadius, circRadius, shrinkProgress)
+                                lblAlpha = (1f - shrinkProgress * 1.5f).coerceIn(0f, 1f)
+                                val ix = originLeft + (curW - iconSize) / 2f
+                                val iy = originTop + lerp(16f * density, (curH - iconSize) / 2f, shrinkProgress)
+                                iconBox.set(ix, iy, ix + iconSize, iy + iconSize)
+                            } else if (dx > 0) {
+                                val expandProgress = (dx / deltaW).coerceIn(0f, 1f)
+                                curW = (originWidth + dx).coerceIn(originWidth, twoColW * 1.05f)
+                                curH = originHeight
+                                curRadius = cardRadius
+                                lblAlpha = 1f
+                                val ix = originLeft + 16f * density
+                                val iy = originTop + 16f * density
+                                iconBox.set(ix, iy, ix + iconSize, iy + iconSize)
+                            } else {
+                                curW = originWidth
+                                curH = originHeight
+                                curRadius = cardRadius
+                                lblAlpha = 1f
+                                val ix = originLeft + (curW - iconSize) / 2f
+                                val iy = originTop + 16f * density
+                                iconBox.set(ix, iy, ix + iconSize, iy + iconSize)
+                            }
+                        }
+
+                        STATE_LARGE -> {
+                            val shrinkDeltaW = (originWidth - colW).coerceAtLeast(30f * density)
+                            val shrinkDeltaH = (originHeight - cardH).coerceAtLeast(30f * density)
+                            val snapShrinkX = shrinkDeltaW * 0.28f
+                            val snapShrinkY = shrinkDeltaH * 0.28f
+
+                            targetState = when {
+                                -dx >= snapShrinkX && -dy >= snapShrinkY -> STATE_NORMAL
+                                -dx >= snapShrinkX -> STATE_VERTICAL
+                                -dy >= snapShrinkY -> STATE_EXPANDED
+                                else -> STATE_LARGE
+                            }
+
+                            curW = (originWidth + dx).coerceIn(colW * 0.85f, originWidth)
+                            curH = (originHeight + dy).coerceIn(cardH * 0.85f, originHeight)
+                            curRadius = cardRadius
+                            lblAlpha = 1f
+                            val ix = originLeft + 16f * density
+                            val iy = originTop + 16f * density
+                            iconBox.set(ix, iy, ix + iconSize, iy + iconSize)
+                        }
                     }
 
-                    // Dynamic Neighbour Displacement:
-                    // If candidate target state switched (crossing snap threshold), rearrange neighbours immediately
-                    if (targetState != lastCandidateState) {
-                        lastCandidateState = targetState
-                        v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    // Update morph overlay
+                    val drawRect = RectF(originLeft, originTop, originLeft + curW, originTop + curH)
+                    val isSnapping = (targetState != initialState && targetState != -1)
+                    morphDrawable?.updateMorph(drawRect, curRadius, iconBox, lblAlpha, isSnapping)
+                    targetContainer?.invalidate()
 
-                        applyInMemState(targetState)
+                    // Live neighbour displacement without destroying active ViewHolder
+                    if (targetState != candidateTargetState) {
+                        candidateTargetState = targetState
+                        v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                         targetContainer?.let { rv ->
-                            triggerStockDisplacement(rv)
+                            updateNeighbourDisplacements(rv, targetState, initialState)
                         }
                     }
 
@@ -563,48 +641,83 @@ object FluidTileResizeHandler {
                     requestDisallowAll(v, false)
 
                     if (isDragging) {
-                        if (lastCandidateState != -1 && lastCandidateState != initialState) {
-                            v.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                            applyInMemState(lastCandidateState)
-                            ControlCenterConfigHolder.savePriorities(ctx)
-                            targetContainer?.let { rv ->
-                                triggerStockDisplacement(rv)
-                            }
-                        } else {
-                            // Revert to initialState if dragged back
-                            applyInMemState(initialState)
-                            targetContainer?.let { rv ->
-                                triggerStockDisplacement(rv)
-                            }
-                        }
+                        val finalState = if (candidateTargetState != -1) candidateTargetState else initialState
+                        v.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
 
-                        // Settle spring animation for tileView
-                        tileView.animate()
-                            .scaleX(1f)
-                            .scaleY(1f)
-                            .translationZ(0f)
-                            .setDuration(280)
-                            .setInterpolator(OvershootInterpolator(1.15f))
-                            .withEndAction {
-                                tileView.elevation = 0f
-                                setIsRecyclable(activeViewHolder, true)
-                                activeViewHolder = null
+                        val finalW = when (finalState) {
+                            STATE_EXPANDED, STATE_LARGE -> twoColW
+                            else -> colW
+                        }
+                        val finalH = when (finalState) {
+                            STATE_VERTICAL, STATE_LARGE -> tallH
+                            STATE_EXPANDED -> cardH
+                            else -> if (initialState == STATE_NORMAL) originHeight else colW
+                        }
+                        val finalRadius = if (finalState == STATE_NORMAL) finalW / 2f else (26f * density)
+
+                        val md = morphDrawable
+                        val rv = targetContainer
+
+                        if (md != null && rv != null) {
+                            val startRect = RectF(md.currentRect)
+                            val targetRect = RectF(originLeft, originTop, originLeft + finalW, originTop + finalH)
+                            val startRad = md.cornerRadius
+                            val startAlpha = md.labelAlpha
+                            val targetAlpha = if (finalState == STATE_NORMAL) 0f else 1f
+
+                            val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+                                duration = 240
+                                interpolator = OvershootInterpolator(1.1f)
+                                addUpdateListener { va ->
+                                    val f = va.animatedFraction
+                                    val r = RectF(
+                                        lerp(startRect.left, targetRect.left, f),
+                                        lerp(startRect.top, targetRect.top, f),
+                                        lerp(startRect.right, targetRect.right, f),
+                                        lerp(startRect.bottom, targetRect.bottom, f)
+                                    )
+                                    val rad = lerp(startRad, finalRadius, f)
+                                    val lAlpha = lerp(startAlpha, targetAlpha, f)
+                                    md.updateMorph(r, rad, md.iconRect, lAlpha, false)
+                                    rv.invalidate()
+                                }
+                                addListener(object : AnimatorListenerAdapter() {
+                                    override fun onAnimationEnd(animation: Animator) {
+                                        // Clear all sibling displacements
+                                        for (i in 0 until rv.childCount) {
+                                            val child = rv.getChildAt(i) ?: continue
+                                            child.translationX = 0f
+                                            child.translationY = 0f
+                                        }
+                                        rv.overlay.remove(md)
+                                        tileView.alpha = 1.0f
+
+                                        // Apply permanent state to HyperOS
+                                        if (finalState != initialState) {
+                                            when (finalState) {
+                                                STATE_EXPANDED -> ControlCenterConfigHolder.setTileToExpanded(ctx, spec, tileView)
+                                                STATE_VERTICAL -> ControlCenterConfigHolder.setTileToVertical(ctx, spec, tileView)
+                                                STATE_LARGE -> ControlCenterConfigHolder.setTileToLarge(ctx, spec, tileView)
+                                                STATE_NORMAL -> ControlCenterConfigHolder.setTileToNormal(ctx, spec, tileView)
+                                            }
+                                        } else {
+                                            ControlCenterConfigHolder.refreshRecyclerView(tileView)
+                                        }
+                                    }
+                                })
                             }
-                            .start()
+                            anim.start()
+                        } else {
+                            tileView.alpha = 1.0f
+                        }
                     } else {
                         // Regular tap to toggle/cycle
                         v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                        if (isSliderSpec) {
-                            ControlCenterConfigHolder.cycleSliderWidth(ctx, isBrightnessSpec, tileView)
-                        } else {
-                            ControlCenterConfigHolder.toggleTileSize(ctx, spec, tileView)
-                        }
-                        setIsRecyclable(activeViewHolder, true)
-                        activeViewHolder = null
+                        ControlCenterConfigHolder.toggleTileSize(ctx, spec, tileView)
                     }
 
                     isDragging = false
-                    lastCandidateState = -1
+                    candidateTargetState = -1
                     return true
                 }
 
@@ -613,29 +726,20 @@ object FluidTileResizeHandler {
                     requestDisallowAll(v, false)
 
                     if (isDragging) {
-                        applyInMemState(initialState)
-                        targetContainer?.let { rv ->
-                            triggerStockDisplacement(rv)
+                        morphDrawable?.let { md ->
+                            targetContainer?.overlay?.remove(md)
                         }
-
-                        tileView.animate()
-                            .scaleX(1f)
-                            .scaleY(1f)
-                            .translationZ(0f)
-                            .setDuration(200)
-                            .withEndAction {
-                                tileView.elevation = 0f
-                                setIsRecyclable(activeViewHolder, true)
-                                activeViewHolder = null
+                        targetContainer?.let { rv ->
+                            for (i in 0 until rv.childCount) {
+                                val child = rv.getChildAt(i) ?: continue
+                                child.animate().translationX(0f).translationY(0f).setDuration(180).start()
                             }
-                            .start()
-                    } else {
-                        setIsRecyclable(activeViewHolder, true)
-                        activeViewHolder = null
+                        }
+                        tileView.alpha = 1.0f
                     }
 
                     isDragging = false
-                    lastCandidateState = -1
+                    candidateTargetState = -1
                     return true
                 }
             }
