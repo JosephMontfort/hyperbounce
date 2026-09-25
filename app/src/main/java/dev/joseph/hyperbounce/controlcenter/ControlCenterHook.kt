@@ -674,6 +674,21 @@ object ControlCenterHook {
                         }
                     }
 
+                    if (m.name == "updateBlendBlur") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val holder = chain.thisObject
+                            val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
+                            if (itemView != null && (itemView.findViewById<View>(0x7f099995) != null || itemView.getTag(0x7f099994) != null)) {
+                                // Group container: preserve normal mode blur / container styling and prevent applying CC_TILE_DEFAULT_BLEND_COLORS
+                                ControlCenterGrouping.applyGroupContainerStyle(itemView, classLoader)
+                                null
+                            } else {
+                                chain.proceed()
+                            }
+                        }
+                    }
+
                     if (m.name == "changeVisible" && m.parameterTypes.size == 3) {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
@@ -3403,6 +3418,68 @@ object ControlCenterHook {
                 rotateBtn?.setOnClickListener(null)
                 rotateBtn?.isClickable = false
             }
+
+            val resizeTag = 0x7f099999
+            var resizeHandle = itemView.findViewById<ImageView>(resizeTag)
+            if (ControlCenterConfigHolder.sIsEditMode && isHorizontal) {
+                val badgeSize = (38 * density).toInt()
+                if (resizeHandle == null && itemView is ViewGroup) {
+                    resizeHandle = ImageView(ctx).apply {
+                        id = resizeTag
+                        layoutParams = ControlCenterConfigHolder.createMediaBadgeLayoutParams(itemView, badgeSize)
+                        setImageDrawable(CurvedResizeHandleDrawable(density))
+                    }
+                    itemView.addView(resizeHandle)
+                } else if (resizeHandle != null && ControlCenterConfigHolder.isConstraintLayout(itemView) && !resizeHandle.layoutParams.javaClass.name.contains("ConstraintLayout")) {
+                    resizeHandle.layoutParams = ControlCenterConfigHolder.createMediaBadgeLayoutParams(itemView as ViewGroup, badgeSize)
+                }
+                if (resizeHandle != null) {
+                    val shouldShowResize = !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
+                    resizeHandle.visibility = if (shouldShowResize) View.VISIBLE else View.GONE
+                    if (shouldShowResize) {
+                        val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
+                        val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
+                        if (itemView.width > 0 && itemView.height > 0) {
+                            resizeHandle.layout(itemView.width - bw, itemView.height - bh, itemView.width, itemView.height)
+                        }
+                        resizeHandle.bringToFront()
+                        resizeHandle.isClickable = true
+                        resizeHandle.setOnClickListener {
+                            ControlCenterConfigHolder.cycleSliderWidth(ctx, isBrightness, itemView)
+                        }
+                        resizeHandle.setOnTouchListener(TileResizeDragTouchListener(ctx, if (isBrightness) "brightness" else "volume", itemView, density))
+                    } else {
+                        resizeHandle.isClickable = false
+                        resizeHandle.setOnClickListener(null)
+                        resizeHandle.setOnTouchListener(null)
+                    }
+                }
+            } else {
+                if (resizeHandle != null) {
+                    resizeHandle.visibility = View.GONE
+                    resizeHandle.isClickable = false
+                    resizeHandle.setOnClickListener(null)
+                    resizeHandle.setOnTouchListener(null)
+                    (itemView as? ViewGroup)?.removeView(resizeHandle)
+                }
+            }
+
+            if (itemView.getTag(0x7f099993) == null) {
+                itemView.setTag(0x7f099993, true)
+                itemView.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ ->
+                    val curHandle = itemView.findViewById<ImageView>(0x7f099999)
+                    if (curHandle != null && curHandle.visibility == View.VISIBLE) {
+                        val w = r - l
+                        val h = b - t
+                        val bw = curHandle.measuredWidth.takeIf { it > 0 } ?: (38 * density).toInt()
+                        val bh = curHandle.measuredHeight.takeIf { it > 0 } ?: (38 * density).toInt()
+                        if (w > 0 && h > 0) {
+                            curHandle.layout(w - bw, h - bh, w, h)
+                            curHandle.bringToFront()
+                        }
+                    }
+                }
+            }
         } catch (t: Throwable) {
             Log.e(TAG, "applySliderLayoutAndTouch error", t)
         }
@@ -4781,6 +4858,16 @@ class TileResizeDragTouchListener(
             v.setOnClickListener(null)
             v.isClickable = false
             return false
+        }
+        if (isSliderSpec) {
+            val isHoriz = if (isBrightnessSpec) ControlCenterConfigHolder.sBrightnessSliderHorizontal else ControlCenterConfigHolder.sVolumeSliderHorizontal
+            if (!isHoriz) {
+                v.visibility = View.GONE
+                v.setOnTouchListener(null)
+                v.setOnClickListener(null)
+                v.isClickable = false
+                return false
+            }
         }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {

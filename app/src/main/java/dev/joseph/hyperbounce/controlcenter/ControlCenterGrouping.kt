@@ -968,68 +968,79 @@ object ControlCenterGrouping {
             }
             view.invalidateOutline()
 
-            if (blurEnabled) {
-                view.background = null
+            // The container background should NEVER use the tile advanced texture blend color (CC_TILE_DEFAULT_BLEND_COLORS),
+            // because otherwise both the container and inner child tiles have identical colors and blend into a single flat shape.
+            // When advanced textures is ON, the container background alone is rendered with normal blur / non-advanced mode:
+            // window blur pass-through enabled, but with view blur mode 0, cleared color blend effects, and the normal card background drawable.
+            try {
+                val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
                 try {
-                    val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
-                    try {
-                        val setPassWindowBlur = miBlurClass.getMethod("setPassWindowBlurEnabledCompat", View::class.java, Boolean::class.javaPrimitiveType)
-                        setPassWindowBlur.invoke(null, view, true)
-                    } catch (t: Throwable) {}
+                    val setPassWindowBlur = miBlurClass.getMethod("setPassWindowBlurEnabledCompat", View::class.java, Boolean::class.javaPrimitiveType)
+                    setPassWindowBlur.invoke(null, view, true)
+                } catch (t: Throwable) {}
 
-                    val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
-                    setModeMethod.invoke(null, view, 1)
+                val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
+                setModeMethod.invoke(null, view, 0)
 
-                    val tokenClass = Class.forName("miui.systemui.util.MiuiColorBlendToken", false, classLoader)
-                    val tokenInst = tokenClass.getDeclaredField("INSTANCE").get(null)
-                    val getBlendMethod = tokenClass.getMethod("getCC_TILE_DEFAULT_BLEND_COLORS")
-                    val blendColors = getBlendMethod.invoke(tokenInst)
+                val clearBlendMethod = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
+                clearBlendMethod.invoke(null, view)
+            } catch (t: Throwable) {}
 
-                    val setBlendMethod = miBlurClass.getMethod("setMiBackgroundBlendColors", View::class.java, blendColors.javaClass)
-                    setBlendMethod.invoke(null, view, blendColors)
-                } catch (t: Throwable) {
-                    Log.e(TAG, "applyGroupContainerStyle MiBlur error", t)
-                }
+            try {
+                val commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
+                val commonUtils = commonUtilsClass.getDeclaredField("INSTANCE").get(null)
+                val clearEffect = commonUtilsClass.getMethod("clearMiBlurBlendEffect", View::class.java)
+                clearEffect.invoke(commonUtils, view)
+            } catch (t: Throwable) {}
+
+            var cardBg: Drawable? = null
+            var bgResId = ctx.resources.getIdentifier("qs_card_background_disabled", "drawable", ctx.packageName)
+            if (bgResId == 0) {
+                bgResId = ctx.resources.getIdentifier("qs_background_disabled", "drawable", ctx.packageName)
+            }
+            if (bgResId != 0) {
+                try {
+                    cardBg = ctx.theme.getDrawable(bgResId).mutate()
+                } catch (t: Throwable) {}
+            }
+            if (cardBg != null) {
+                view.background = cardBg
             } else {
-                try {
-                    val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
-                    val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
-                    setModeMethod.invoke(null, view, 0)
-
-                    val clearBlendMethod = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
-                    clearBlendMethod.invoke(null, view)
-                } catch (t: Throwable) {}
-
-                try {
-                    val commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
-                    val commonUtils = commonUtilsClass.getDeclaredField("INSTANCE").get(null)
-                    val clearEffect = commonUtilsClass.getMethod("clearMiBlurBlendEffect", View::class.java)
-                    clearEffect.invoke(commonUtils, view)
-                } catch (t: Throwable) {}
-
-                var cardBg: Drawable? = null
-                var bgResId = ctx.resources.getIdentifier("qs_card_background_disabled", "drawable", ctx.packageName)
-                if (bgResId == 0) {
-                    bgResId = ctx.resources.getIdentifier("qs_background_disabled", "drawable", ctx.packageName)
+                val fallbackBg = GradientDrawable().apply {
+                    this.cornerRadius = cornerRadius
+                    setColor(Color.parseColor("#26808080"))
                 }
-                if (bgResId != 0) {
-                    try {
-                        cardBg = ctx.theme.getDrawable(bgResId).mutate()
-                    } catch (t: Throwable) {}
-                }
-                if (cardBg != null) {
-                    view.background = cardBg
-                } else {
-                    val fallbackBg = GradientDrawable().apply {
-                        this.cornerRadius = cornerRadius
-                        setColor(Color.parseColor("#26808080"))
-                    }
-                    view.background = fallbackBg
-                }
+                view.background = fallbackBg
             }
         } catch (t: Throwable) {
             Log.e(TAG, "applyGroupContainerStyle error", t)
         }
+    }
+
+    fun isAdvancedTexturesEnabled(context: Context, classLoader: ClassLoader? = null): Boolean {
+        try {
+            if (android.provider.Settings.Secure.getInt(context.contentResolver, "background_blur_enable", 0) == 1) {
+                return true
+            }
+        } catch (t: Throwable) {}
+
+        try {
+            val cl = classLoader ?: context.classLoader
+            val hmuClass = Class.forName("miuix.core.util.HyperMaterialUtils", false, cl)
+            val isFeatureEnableM = hmuClass.getMethod("isFeatureEnable", Context::class.java)
+            val res = isFeatureEnableM.invoke(null, context) as? Boolean
+            if (res == true) return true
+        } catch (t: Throwable) {}
+
+        try {
+            val cl = classLoader ?: context.classLoader
+            val ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, cl)
+            val getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context::class.java)
+            val res = getBlurM.invoke(null, context) as? Boolean
+            if (res == true) return true
+        } catch (t: Throwable) {}
+
+        return false
     }
 
     fun rebindGroupContainer(

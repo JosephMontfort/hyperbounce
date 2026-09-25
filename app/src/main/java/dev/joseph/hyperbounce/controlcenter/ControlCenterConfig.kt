@@ -1139,6 +1139,7 @@ object ControlCenterConfigHolder {
                                 resizeHandle.isClickable = false
                                 resizeHandle.setOnClickListener(null)
                                 resizeHandle.setOnTouchListener(null)
+                                (itemView as? ViewGroup)?.removeView(resizeHandle)
                             }
                         }
 
@@ -1885,8 +1886,59 @@ object ControlCenterConfigHolder {
         } else {
             sVolumeSliderHorizontal = !sVolumeSliderHorizontal
         }
+        val isHoriz = if (isBrightness) sBrightnessSliderHorizontal else sVolumeSliderHorizontal
         savePriorities(ctx)
+
+        // Immediately update resize handle on the targeted slider view if present
+        if (tileView is ViewGroup) {
+            val resizeTag = 0x7f099999
+            var resizeHandle = tileView.findViewById<ImageView>(resizeTag)
+            val density = ctx.resources.displayMetrics.density
+            val badgeSize = (38 * density).toInt()
+            if (sIsEditMode && isHoriz) {
+                if (resizeHandle == null) {
+                    resizeHandle = ImageView(ctx).apply {
+                        id = resizeTag
+                        layoutParams = createMediaBadgeLayoutParams(tileView, badgeSize)
+                        setImageDrawable(CurvedResizeHandleDrawable(density))
+                    }
+                    tileView.addView(resizeHandle)
+                } else if (isConstraintLayout(tileView) && !resizeHandle.layoutParams.javaClass.name.contains("ConstraintLayout")) {
+                    resizeHandle.layoutParams = createMediaBadgeLayoutParams(tileView, badgeSize)
+                }
+                val shouldShowResize = !sIsGroupSelectMode && !sIsDisassembleMode
+                resizeHandle.visibility = if (shouldShowResize) View.VISIBLE else View.GONE
+                if (shouldShowResize) {
+                    val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
+                    val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
+                    if (tileView.width > 0 && tileView.height > 0) {
+                        resizeHandle.layout(tileView.width - bw, tileView.height - bh, tileView.width, tileView.height)
+                    }
+                    resizeHandle.bringToFront()
+                    resizeHandle.isClickable = true
+                    resizeHandle.setOnClickListener {
+                        cycleSliderWidth(ctx, isBrightness, tileView)
+                    }
+                    resizeHandle.setOnTouchListener(TileResizeDragTouchListener(ctx, if (isBrightness) "brightness" else "volume", tileView, density))
+                } else {
+                    resizeHandle.isClickable = false
+                    resizeHandle.setOnClickListener(null)
+                    resizeHandle.setOnTouchListener(null)
+                }
+            } else {
+                if (resizeHandle != null) {
+                    resizeHandle.visibility = View.GONE
+                    resizeHandle.isClickable = false
+                    resizeHandle.setOnClickListener(null)
+                    resizeHandle.setOnTouchListener(null)
+                    tileView.removeView(resizeHandle)
+                }
+            }
+        }
+
         refreshRecyclerView(tileView)
+        updateAllVisibleTileBadges()
+        refreshAdapter(tileView?.rootView, ctx, true)
     }
 
     fun cycleSliderWidth(ctx: Context, isBrightness: Boolean, tileView: View?) {
