@@ -65,7 +65,7 @@ fun ControlCenterScreen(
                     title = "Fluid Tile Resizing",
                     subtitle = "Real-time tile expansion with dynamic neighbour displacement during resize drag",
                     colors = colors,
-                    iconTint = colors.accentTeal,
+                    iconTint = colors.accentPurple,
                     backdrop = backdrop,
                     checked = cc.fluidResizeEnabled,
                     onCheckedChange = cc::setFluidResizeEnabled,
