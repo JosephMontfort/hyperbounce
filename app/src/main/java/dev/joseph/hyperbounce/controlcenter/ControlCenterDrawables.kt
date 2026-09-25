@@ -71,16 +71,18 @@ open class CurvedResizeHandleDrawable(private val density: Float = 2.75f) : Draw
     private val arcRect = RectF()
 
     override fun draw(canvas: Canvas) {
+        val bLeft = bounds.left.toFloat()
+        val bTop = bounds.top.toFloat()
         val w = bounds.width().toFloat()
         val h = bounds.height().toFloat()
         if (w <= 0f || h <= 0f) return
 
-        // In a bounding box (e.g. 38dp x 38dp):
-        // Curve along bottom-right quadrant
+        // In a bounding box (e.g. 34dp x 34dp):
+        // Curve along bottom-right quadrant respecting bounds position
         val inset = 4.0f * density
         val radius = (w - inset) * 0.70f
-        val cx = w - inset - radius
-        val cy = h - inset - radius
+        val cx = bLeft + w - inset - radius
+        val cy = bTop + h - inset - radius
 
         arcRect.set(cx - radius, cy - radius, cx + radius, cy + radius)
         arcPath.reset()
