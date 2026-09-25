@@ -854,6 +854,7 @@ object FluidTileResizeHandler {
                             if (md != null && rv != null) {
                                 val startRect = RectF(md.currentRect)
                                 val targetRect = RectF(originLeft, originTop, originLeft + finalW, originTop + cardH)
+                                val cardRadius = 26f * density
 
                                 val anim = ValueAnimator.ofFloat(0f, 1f).apply {
                                     duration = 240
