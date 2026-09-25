@@ -7,9 +7,14 @@ import android.content.IntentFilter
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Outline
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
+import android.util.AttributeSet
 import android.util.Log
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
@@ -2765,11 +2770,29 @@ object ControlCenterHook {
                 }
             } catch (t: Throwable) {}
 
-            // 16d. Hook MediaPanelAnimator for secondary panel expand/collapse persistence
+            // 16d. Hook MediaPanelAnimator for secondary panel expand/collapse persistence and smooth one-to-one transitions
             try {
                 val mediaAnimClass = Class.forName("miui.systemui.controlcenter.panel.secondary.media.MediaPanelAnimator", false, classLoader)
                 for (m in mediaAnimClass.declaredMethods) {
-                    if (m.name == "onAnimComplete") {
+                    if (m.name == "calculateViewValues" || m.name == "expand" || m.name == "collapse") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            try {
+                                val lastField = mediaAnimClass.getDeclaredField("lastAnimValue").apply { isAccessible = true }
+                                lastField.set(chain.thisObject, null)
+                            } catch (t: Throwable) {}
+                            chain.proceed()
+                        }
+                    } else if (m.name == "frameCallback") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            try {
+                                handleMediaPanelTransitionFrame(chain.thisObject, classLoader)
+                            } catch (t: Throwable) {}
+                            result
+                        }
+                    } else if (m.name == "onAnimComplete") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
@@ -3485,6 +3508,439 @@ object ControlCenterHook {
         }
     }
 
+    class CollapsedMediaSeekBar @JvmOverloads constructor(
+        context: Context,
+        attrs: AttributeSet? = null,
+        defStyleAttr: Int = 0
+    ) : View(context, attrs, defStyleAttr) {
+
+        private val density = context.resources.displayMetrics.density
+        private var progressRatio = 0f
+        private var isDragging = false
+        private var dragProgress = 0f
+
+        private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#33FFFFFF")
+            style = Paint.Style.FILL
+        }
+
+        private val progressPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.FILL
+        }
+
+        private val thumbPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.FILL
+        }
+
+        private val bgRect = RectF()
+        private val progressRect = RectF()
+
+        private val updateRunnable = object : Runnable {
+            override fun run() {
+                if (!isDragging && isAttachedToWindow && visibility == View.VISIBLE) {
+                    updateProgressFromSystem()
+                }
+                if (isAttachedToWindow) {
+                    postDelayed(this, 500)
+                }
+            }
+        }
+
+        override fun onAttachedToWindow() {
+            super.onAttachedToWindow()
+            post(updateRunnable)
+        }
+
+        override fun onDetachedFromWindow() {
+            super.onDetachedFromWindow()
+            removeCallbacks(updateRunnable)
+        }
+
+        fun setProgressRatio(ratio: Float) {
+            if (!isDragging) {
+                val clamped = ratio.coerceIn(0f, 1f)
+                if (Math.abs(progressRatio - clamped) > 0.001f) {
+                    progressRatio = clamped
+                    postInvalidateOnAnimation()
+                }
+            }
+        }
+
+        fun updateProgressFromSystem() {
+            try {
+                val cl = context.classLoader
+                val vmClass = Class.forName("com.android.systemui.MiPlayDetailViewModel", false, cl)
+                val vm = vmClass.getDeclaredField("INSTANCE").get(null)
+                val posLiveData = vmClass.getMethod("getMPosition").invoke(vm)
+                val pos = if (posLiveData != null) {
+                    val getValM = posLiveData.javaClass.getMethod("getValue")
+                    (getValM.invoke(posLiveData) as? Long) ?: 0L
+                } else 0L
+
+                val metaLiveData = vmClass.getMethod("getMMediaMetaData").invoke(vm)
+                val meta = if (metaLiveData != null) {
+                    val getValM = metaLiveData.javaClass.getMethod("getValue")
+                    getValM.invoke(metaLiveData)
+                } else ControlCenterHook.sLastMediaPlayerMetaData
+
+                val duration = if (meta != null) {
+                    try {
+                        meta.javaClass.getMethod("getDuration").invoke(meta) as? Long ?: 0L
+                    } catch (t: Throwable) { 0L }
+                } else 0L
+
+                if (duration > 0L) {
+                    setProgressRatio(pos.toFloat() / duration.toFloat())
+                } else {
+                    setProgressRatio(0f)
+                }
+            } catch (t: Throwable) {}
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val w = width.toFloat()
+            val h = height.toFloat()
+            if (w <= 0 || h <= 0) return
+
+            val barH = if (isDragging) 5f * density else 3.5f * density
+            val top = (h - barH) / 2f
+            val bottom = top + barH
+            val corner = barH / 2f
+
+            bgRect.set(0f, top, w, bottom)
+            canvas.drawRoundRect(bgRect, corner, corner, bgPaint)
+
+            val active = if (isDragging) dragProgress else progressRatio
+            val fillW = (w * active).coerceIn(0f, w)
+            if (fillW > 0f) {
+                progressRect.set(0f, top, fillW, bottom)
+                canvas.drawRoundRect(progressRect, corner, corner, progressPaint)
+            }
+
+            if (isDragging) {
+                val thumbRadius = 4.5f * density
+                val thumbX = fillW.coerceIn(thumbRadius, w - thumbRadius)
+                val thumbY = h / 2f
+                canvas.drawCircle(thumbX, thumbY, thumbRadius, thumbPaint)
+            }
+        }
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    isDragging = true
+                    dragProgress = (event.x / width.toFloat()).coerceIn(0f, 1f)
+                    invalidate()
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    dragProgress = (event.x / width.toFloat()).coerceIn(0f, 1f)
+                    invalidate()
+                    return true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (isDragging) {
+                        val finalRatio = (event.x / width.toFloat()).coerceIn(0f, 1f)
+                        progressRatio = finalRatio
+                        isDragging = false
+                        invalidate()
+                        parent?.requestDisallowInterceptTouchEvent(false)
+                        if (event.actionMasked == MotionEvent.ACTION_UP) {
+                            seekToRatio(finalRatio)
+                        }
+                    }
+                    return true
+                }
+            }
+            return super.onTouchEvent(event)
+        }
+
+        private fun seekToRatio(ratio: Float) {
+            try {
+                val cl = context.classLoader
+                val vmClass = Class.forName("com.android.systemui.MiPlayDetailViewModel", false, cl)
+                val vm = vmClass.getDeclaredField("INSTANCE").get(null)
+                val metaLiveData = vmClass.getMethod("getMMediaMetaData").invoke(vm)
+                val meta = if (metaLiveData != null) {
+                    val getValM = metaLiveData.javaClass.getMethod("getValue")
+                    getValM.invoke(metaLiveData)
+                } else ControlCenterHook.sLastMediaPlayerMetaData
+
+                val duration = if (meta != null) {
+                    try {
+                        meta.javaClass.getMethod("getDuration").invoke(meta) as? Long ?: 0L
+                    } catch (t: Throwable) { 0L }
+                } else 0L
+
+                if (duration > 0L) {
+                    val targetMs = (ratio * duration).toLong()
+                    seekMedia(targetMs, cl)
+                }
+            } catch (t: Throwable) {
+                Log.e("CollapsedMediaSeekBar", "seek error", t)
+            }
+        }
+
+        private fun seekMedia(targetMs: Long, cl: ClassLoader) {
+            try {
+                val miplayClass = Class.forName("miui.systemui.controlcenter.panel.main.media.MiPlayController", false, cl)
+                val miplayInst = miplayClass.getDeclaredField("INSTANCE").get(null)
+                val getMgrM = miplayClass.getMethod("getMIPLAY_AUDIO_MANAGER")
+                val mgr = getMgrM.invoke(miplayInst)
+                if (mgr != null) {
+                    val listM = mgr.javaClass.getMethod("i")
+                    val list = listM.invoke(mgr) as? List<*>
+                    val firstSession = list?.firstOrNull()
+                    if (firstSession != null) {
+                        val bM = firstSession.javaClass.getMethod("b")
+                        val w = bM.invoke(firstSession)
+                        val xM = w.javaClass.getMethod("x", Long::class.javaPrimitiveType)
+                        xM.invoke(w, targetMs)
+                        return
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val mediaSessionMgr = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as? android.media.session.MediaSessionManager
+                val controllers = mediaSessionMgr?.getActiveSessions(null)
+                controllers?.firstOrNull()?.transportControls?.seekTo(targetMs)
+            } catch (t: Throwable) {}
+        }
+    }
+
+    fun getHolderView(holder: Any, name: String): View? {
+        return try {
+            val bField = holder.javaClass.getDeclaredField("binding").apply { isAccessible = true }
+            val binding = bField.get(holder) ?: return null
+            val f = binding.javaClass.getField(name)
+            f.get(binding) as? View
+        } catch (t: Throwable) {
+            try {
+                val bField = holder.javaClass.getDeclaredField("binding").apply { isAccessible = true }
+                val binding = bField.get(holder) ?: return null
+                val m = binding.javaClass.getMethod("get" + name.replaceFirstChar { it.uppercase() })
+                m.invoke(binding) as? View
+            } catch (t2: Throwable) { null }
+        }
+    }
+
+    fun getHolderItemView(holder: Any): View? {
+        return try {
+            holder.javaClass.getField("itemView").get(holder) as? View
+        } catch (t: Throwable) {
+            try {
+                val f = holder.javaClass.getDeclaredField("itemView").apply { isAccessible = true }
+                f.get(holder) as? View
+            } catch (t2: Throwable) { null }
+        }
+    }
+
+    fun getChildView(root: View, name: String): View? {
+        if (root !is ViewGroup) return null
+        for (i in 0 until root.childCount) {
+            val child = root.getChildAt(i)
+            val entryName = try { root.resources.getResourceEntryName(child.id) } catch (t: Throwable) { "" }
+            if (entryName == name) return child
+            if (child is ViewGroup) {
+                val nested = getChildView(child, name)
+                if (nested != null) return nested
+            }
+        }
+        return null
+    }
+
+    fun handleMediaPanelTransitionFrame(animator: Any, classLoader: ClassLoader) {
+        try {
+            val animClass = animator.javaClass
+            val animValueField = animClass.getDeclaredField("animValue").apply { isAccessible = true }
+            val animValue = animValueField.get(animator) ?: return
+
+            val contentCtrlField = animClass.getDeclaredField("contentController").apply { isAccessible = true }
+            val contentCtrl = contentCtrlField.get(animator) ?: return
+
+            val sizeField = animClass.getDeclaredField("size").apply { isAccessible = true }
+            val progress = sizeField.getFloat(animator)
+
+            val alphaProgField = animClass.getDeclaredField("alphaProgress").apply { isAccessible = true }
+            val alphaProgress = alphaProgField.getFloat(animator)
+
+            val alphaDevField = animClass.getDeclaredField("alphaDeviceIcon").apply { isAccessible = true }
+            val alphaDeviceIcon = alphaDevField.getFloat(animator)
+
+            val currentTileSize = ControlCenterConfigHolder.sMediaPlayerSize
+
+            fun getCtrlView(methodName: String): View? {
+                return try {
+                    contentCtrl.javaClass.getMethod(methodName).invoke(contentCtrl) as? View
+                } catch (t: Throwable) { null }
+            }
+
+            fun getAnimVal(methodName: String): Any? {
+                return try {
+                    animValue.javaClass.getMethod(methodName).invoke(animValue)
+                } catch (t: Throwable) { null }
+            }
+
+            // 1. Components never in collapsed: VolumeBar, TvContainer, ListView
+            val volView = getCtrlView("getVolumeBarContainerView")
+            val toVol = getAnimVal("getToVolumeContainer")
+            if (volView != null && toVol != null) {
+                val top = toVol.javaClass.getMethod("getTop").invoke(toVol) as Int
+                volView.scaleX = 1f
+                volView.scaleY = 1f
+                volView.top = top
+                volView.alpha = alphaProgress
+            }
+
+            val tvView = getCtrlView("getTvContainerView")
+            val toTv = getAnimVal("getToTvContainer")
+            if (tvView != null && toTv != null && tvView.visibility == View.VISIBLE) {
+                val top = toTv.javaClass.getMethod("getTop").invoke(toTv) as Int
+                tvView.scaleX = 1f
+                tvView.scaleY = 1f
+                tvView.top = top
+                tvView.alpha = alphaProgress
+            }
+
+            val listView = getCtrlView("getListView")
+            if (listView != null) {
+                listView.scaleX = 1f
+                listView.scaleY = 1f
+                listView.alpha = alphaProgress
+            }
+
+            // 2. Progress container (Seek Bar)
+            val progView = getCtrlView("getProgressContainerView")
+            val toProg = getAnimVal("getToProgressContainer")
+            val hasCollapsedProgress = (currentTileSize == "4x1" || currentTileSize == "4x2" || currentTileSize == "2x4")
+            if (progView != null && toProg != null) {
+                val toTop = toProg.javaClass.getMethod("getTop").invoke(toProg) as Int
+                if (!hasCollapsedProgress) {
+                    progView.scaleX = 1f
+                    progView.scaleY = 1f
+                    progView.top = toTop
+                    progView.alpha = alphaProgress
+                } else {
+                    val holder = sMediaPlayerViewHolder?.get()
+                    val itemView = holder?.let { getHolderItemView(it) }
+                    val collapsedSeek = itemView?.findViewById<View>(0x7f099992)
+                    if (collapsedSeek != null && collapsedSeek.visibility == View.VISIBLE && collapsedSeek.width > 0) {
+                        val locC = IntArray(2)
+                        collapsedSeek.getLocationInWindow(locC)
+                        val itemFrame = try {
+                            val getToViewM = animClass.getDeclaredMethod("getToView").apply { isAccessible = true }
+                            val toView = getToViewM.invoke(animator)
+                            toView.javaClass.getMethod("getItemFrame").invoke(toView) as? View
+                        } catch (t: Throwable) { null }
+
+                        if (itemFrame != null) {
+                            val locFrame = IntArray(2)
+                            itemFrame.getLocationInWindow(locFrame)
+                            val fromTopInFrame = (locC[1] - locFrame[1]).toFloat()
+                            val fromW = collapsedSeek.width.toFloat()
+                            val toW = (toProg.javaClass.getMethod("getWidth").invoke(toProg) as Int).toFloat()
+
+                            val curTop = fromTopInFrame + (toTop.toFloat() - fromTopInFrame) * progress
+                            val curScaleX = if (toW > 0f) (fromW + (toW - fromW) * progress) / toW else 1f
+
+                            progView.pivotX = 0f
+                            progView.pivotY = 0f
+                            progView.scaleX = curScaleX
+                            progView.scaleY = 1f
+                            progView.top = curTop.toInt()
+                            progView.alpha = 1f
+                        }
+                    }
+                }
+            }
+
+            // 3. Views not present in 2x1 and 1x2 (title, subtitle, emptyState)
+            if (currentTileSize == "2x1" || currentTileSize == "1x2") {
+                val titleView = getCtrlView("getTitleView")
+                val toTitle = getAnimVal("getToTitle")
+                if (titleView != null && toTitle != null) {
+                    val tL = toTitle.javaClass.getMethod("getLeft").invoke(toTitle) as Int
+                    val tT = toTitle.javaClass.getMethod("getTop").invoke(toTitle) as Int
+                    val tW = toTitle.javaClass.getMethod("getWidth").invoke(toTitle) as Int
+                    val tH = toTitle.javaClass.getMethod("getHeight").invoke(toTitle) as Int
+                    titleView.layout(tL, tT, tL + tW, tT + tH)
+                    titleView.scaleX = 1f
+                    titleView.scaleY = 1f
+                    titleView.alpha = alphaProgress
+                }
+
+                val subView = getCtrlView("getSubtitleView")
+                val toSub = getAnimVal("getToSubtitle")
+                if (subView != null && toSub != null) {
+                    val sL = toSub.javaClass.getMethod("getLeft").invoke(toSub) as Int
+                    val sT = toSub.javaClass.getMethod("getTop").invoke(toSub) as Int
+                    val sW = toSub.javaClass.getMethod("getWidth").invoke(toSub) as Int
+                    val sH = toSub.javaClass.getMethod("getHeight").invoke(toSub) as Int
+                    subView.layout(sL, sT, sL + sW, sT + sH)
+                    subView.scaleX = 1f
+                    subView.scaleY = 1f
+                    subView.alpha = alphaProgress
+                }
+
+                val noPlayView = getCtrlView("getNoPlayView")
+                val toNoPlay = getAnimVal("getToNoPlay")
+                if (noPlayView != null && toNoPlay != null) {
+                    val nL = toNoPlay.javaClass.getMethod("getLeft").invoke(toNoPlay) as Int
+                    val nT = toNoPlay.javaClass.getMethod("getTop").invoke(toNoPlay) as Int
+                    val nW = toNoPlay.javaClass.getMethod("getWidth").invoke(toNoPlay) as Int
+                    val nH = toNoPlay.javaClass.getMethod("getHeight").invoke(toNoPlay) as Int
+                    noPlayView.layout(nL, nT, nL + nW, nT + nH)
+                    noPlayView.scaleX = 1f
+                    noPlayView.scaleY = 1f
+                    noPlayView.alpha = alphaProgress
+                }
+            }
+
+            // 4. Device icon
+            if (currentTileSize == "2x1" || currentTileSize == "1x2" || currentTileSize == "4x1") {
+                val diView = getCtrlView("getDeviceIconView")
+                if (diView != null) {
+                    diView.scaleX = 1f
+                    diView.scaleY = 1f
+                    diView.alpha = alphaDeviceIcon
+                }
+            }
+
+            // 5. 1x2 Vertical Buttons interpolation
+            if (currentTileSize == "1x2") {
+                val holder = sMediaPlayerViewHolder?.get()
+                val itemView = holder?.let { getHolderItemView(it) }
+                val prevBtn = itemView?.let { getChildView(it, "prev") }
+                val playBtn = itemView?.let { getChildView(it, "play") }
+                val nextBtn = itemView?.let { getChildView(it, "next") }
+
+                val avPrev = getCtrlView("getAvPrevView")
+                val avPlay = getCtrlView("getAvPlayView")
+                val avNext = getCtrlView("getAvNextView")
+
+                if (avPrev != null && prevBtn != null) {
+                    val topP = (prevBtn.top * (1f - progress)).toInt()
+                    avPrev.layout(avPrev.left, topP, avPrev.right, topP + avPrev.height)
+                }
+                if (avPlay != null && playBtn != null) {
+                    val topPl = (playBtn.top * (1f - progress)).toInt()
+                    avPlay.layout(avPlay.left, topPl, avPlay.right, topPl + avPlay.height)
+                }
+                if (avNext != null && nextBtn != null) {
+                    val topN = (nextBtn.top * (1f - progress)).toInt()
+                    avNext.layout(avNext.left, topN, avNext.right, topN + avNext.height)
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "handleMediaPanelTransitionFrame error", t)
+        }
+    }
+
     fun applyMediaPlayerLayout(holder: Any) {
         try {
             val holderClass = holder.javaClass
@@ -3547,6 +4003,15 @@ object ControlCenterHook {
             val emptyState = getView("emptyState")
             val audioContainer = getView("audioContainer")
 
+            val progressTag = 0x7f099992
+            var progressBar = itemView.findViewById<View>(progressTag)
+            if (progressBar == null && itemView is ViewGroup) {
+                progressBar = CollapsedMediaSeekBar(ctx).apply {
+                    id = progressTag
+                }
+                itemView.addView(progressBar)
+            }
+
             val curLp = itemView.layoutParams
             if (curLp != null) {
                 curLp.width = ViewGroup.LayoutParams.MATCH_PARENT
@@ -3568,6 +4033,7 @@ object ControlCenterHook {
             val deviceIconId = ensureId(deviceIcon)
             val emptyStateId = ensureId(emptyState)
             val audioContainerId = ensureId(audioContainer)
+            val progressBarId = ensureId(progressBar)
 
             val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
             val gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId) else (14 * density).toInt()
@@ -3615,7 +4081,7 @@ object ControlCenterHook {
                 cover.clipToOutline = true
             }
 
-            listOf(cover, play, prev, next, audioContainer).forEach { v ->
+            listOf(cover, play, prev, next, audioContainer, progressBar).forEach { v ->
                 v?.alpha = 1f
                 v?.scaleX = 1f
                 v?.scaleY = 1f
@@ -3659,6 +4125,7 @@ object ControlCenterHook {
 
                     val cLp = cover?.layoutParams
                     val acLp = audioContainer?.layoutParams
+                    val pbLp = progressBar?.layoutParams
                     val prevLp = prev?.layoutParams
                     val playLp = play?.layoutParams
                     val nextLp = next?.layoutParams
@@ -3677,6 +4144,7 @@ object ControlCenterHook {
                             artist?.visibility = View.GONE
                             emptyState?.visibility = View.GONE
                             deviceIcon?.visibility = View.GONE
+                            progressBar?.visibility = View.GONE
 
                             if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
                                 resetConstraints(cLp)
@@ -3751,6 +4219,7 @@ object ControlCenterHook {
                             artist?.visibility = View.GONE
                             emptyState?.visibility = View.GONE
                             deviceIcon?.visibility = View.GONE
+                            progressBar?.visibility = View.GONE
 
                             if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
                                 resetConstraints(cLp)
@@ -3826,10 +4295,12 @@ object ControlCenterHook {
                                 title?.visibility = View.VISIBLE
                                 artist?.visibility = View.VISIBLE
                                 emptyState?.visibility = View.GONE
+                                progressBar?.visibility = View.VISIBLE
                             } else {
                                 title?.visibility = View.GONE
                                 artist?.visibility = View.GONE
                                 emptyState?.visibility = View.VISIBLE
+                                progressBar?.visibility = View.GONE
                             }
 
                             if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
@@ -3846,21 +4317,42 @@ object ControlCenterHook {
                                 cover.layoutParams = cLp
                             }
 
+                            val btnSize = (26 * density).toInt()
+                            val playSize = (30 * density).toInt()
+
                             if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
                                 resetConstraints(acLp)
                                 acLp.width = ViewGroup.LayoutParams.WRAP_CONTENT
                                 acLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
                                 setField(acLp, "endToEnd", pId)
                                 setField(acLp, "topToTop", pId)
-                                setField(acLp, "bottomToBottom", pId)
+                                if (hasTrack) {
+                                    setField(acLp, "bottomToTop", progressBarId)
+                                    setField(acLp, "verticalChainStyle", 2)
+                                } else {
+                                    setField(acLp, "bottomToBottom", pId)
+                                }
                                 if (acLp is ViewGroup.MarginLayoutParams) {
                                     acLp.marginEnd = (14 * density).toInt()
+                                    acLp.topMargin = if (hasTrack) (6 * density).toInt() else 0
                                 }
                                 audioContainer.layoutParams = acLp
                             }
 
-                            val btnSize = (34 * density).toInt()
-                            val playSize = (38 * density).toInt()
+                            if (pbLp != null && pbLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(pbLp)
+                                pbLp.width = 0
+                                pbLp.height = (12 * density).toInt()
+                                setField(pbLp, "startToStart", audioContainerId)
+                                setField(pbLp, "endToEnd", audioContainerId)
+                                setField(pbLp, "topToBottom", audioContainerId)
+                                setField(pbLp, "bottomToBottom", pId)
+                                if (pbLp is ViewGroup.MarginLayoutParams) {
+                                    pbLp.bottomMargin = (6 * density).toInt()
+                                }
+                                progressBar.layoutParams = pbLp
+                            }
+
                             if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
                                 resetConstraints(prevLp)
                                 prevLp.width = btnSize
@@ -3969,10 +4461,12 @@ object ControlCenterHook {
                                 title?.visibility = View.VISIBLE
                                 artist?.visibility = View.VISIBLE
                                 emptyState?.visibility = View.GONE
+                                progressBar?.visibility = View.VISIBLE
                             } else {
                                 title?.visibility = View.GONE
                                 artist?.visibility = View.GONE
                                 emptyState?.visibility = View.VISIBLE
+                                progressBar?.visibility = View.GONE
                             }
 
                             val coverSize = (129 * density).toInt()
@@ -4017,9 +4511,24 @@ object ControlCenterHook {
                                 if (acLp is ViewGroup.MarginLayoutParams) {
                                     acLp.marginStart = (16 * density).toInt()
                                     acLp.marginEnd = (16 * density).toInt()
-                                    acLp.bottomMargin = (18 * density).toInt()
+                                    acLp.bottomMargin = (14 * density).toInt()
                                 }
                                 audioContainer.layoutParams = acLp
+                            }
+
+                            if (pbLp != null && pbLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(pbLp)
+                                pbLp.width = 0
+                                pbLp.height = (14 * density).toInt()
+                                setField(pbLp, "startToEnd", coverId)
+                                setField(pbLp, "endToEnd", pId)
+                                setField(pbLp, "bottomToTop", audioContainerId)
+                                if (pbLp is ViewGroup.MarginLayoutParams) {
+                                    pbLp.marginStart = (16 * density).toInt()
+                                    pbLp.marginEnd = (16 * density).toInt()
+                                    pbLp.bottomMargin = (4 * density).toInt()
+                                }
+                                progressBar.layoutParams = pbLp
                             }
 
                             val btnSize = (36 * density).toInt()
@@ -4075,7 +4584,7 @@ object ControlCenterHook {
                                     if (tLp is ViewGroup.MarginLayoutParams) {
                                         tLp.marginStart = (16 * density).toInt()
                                         tLp.marginEnd = (8 * density).toInt()
-                                        tLp.topMargin = (20 * density).toInt()
+                                        tLp.topMargin = (16 * density).toInt()
                                     }
                                     if (title is TextView) {
                                         title.ellipsize = android.text.TextUtils.TruncateAt.END
@@ -4090,7 +4599,7 @@ object ControlCenterHook {
                                     setField(aLp, "startToEnd", coverId)
                                     setField(aLp, "endToEnd", pId)
                                     setField(aLp, "topToBottom", titleId)
-                                    setField(aLp, "bottomToTop", audioContainerId)
+                                    setField(aLp, "bottomToTop", progressBarId)
                                     if (aLp is ViewGroup.MarginLayoutParams) {
                                         aLp.marginStart = (16 * density).toInt()
                                         aLp.marginEnd = (16 * density).toInt()
@@ -4135,10 +4644,12 @@ object ControlCenterHook {
                                 title?.visibility = View.VISIBLE
                                 artist?.visibility = View.VISIBLE
                                 emptyState?.visibility = View.GONE
+                                progressBar?.visibility = View.VISIBLE
                             } else {
                                 title?.visibility = View.GONE
                                 artist?.visibility = View.GONE
                                 emptyState?.visibility = View.VISIBLE
+                                progressBar?.visibility = View.GONE
                             }
 
                             val coverH = (130 * density).toInt()
@@ -4186,7 +4697,7 @@ object ControlCenterHook {
                                     if (tLp is ViewGroup.MarginLayoutParams) {
                                         tLp.marginStart = (14 * density).toInt()
                                         tLp.marginEnd = (14 * density).toInt()
-                                        tLp.topMargin = (16 * density).toInt()
+                                        tLp.topMargin = (14 * density).toInt()
                                     }
                                     if (title is TextView) {
                                         title.textAlignment = View.TEXT_ALIGNMENT_CENTER
@@ -4203,7 +4714,7 @@ object ControlCenterHook {
                                     setField(aLp, "startToStart", pId)
                                     setField(aLp, "endToEnd", pId)
                                     setField(aLp, "topToBottom", titleId)
-                                    setField(aLp, "bottomToTop", audioContainerId)
+                                    setField(aLp, "bottomToTop", progressBarId)
                                     if (aLp is ViewGroup.MarginLayoutParams) {
                                         aLp.marginStart = (14 * density).toInt()
                                         aLp.marginEnd = (14 * density).toInt()
@@ -4241,6 +4752,23 @@ object ControlCenterHook {
                                 }
                             }
 
+                            if (pbLp != null && pbLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(pbLp)
+                                pbLp.width = 0
+                                pbLp.height = (14 * density).toInt()
+                                setField(pbLp, "startToStart", pId)
+                                setField(pbLp, "endToEnd", pId)
+                                setField(pbLp, "topToBottom", artistId)
+                                setField(pbLp, "bottomToTop", audioContainerId)
+                                if (pbLp is ViewGroup.MarginLayoutParams) {
+                                    pbLp.marginStart = (20 * density).toInt()
+                                    pbLp.marginEnd = (20 * density).toInt()
+                                    pbLp.topMargin = (4 * density).toInt()
+                                    pbLp.bottomMargin = (6 * density).toInt()
+                                }
+                                progressBar.layoutParams = pbLp
+                            }
+
                             if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
                                 resetConstraints(acLp)
                                 acLp.width = ViewGroup.LayoutParams.WRAP_CONTENT
@@ -4249,7 +4777,7 @@ object ControlCenterHook {
                                 setField(acLp, "endToEnd", pId)
                                 setField(acLp, "bottomToBottom", pId)
                                 if (acLp is ViewGroup.MarginLayoutParams) {
-                                    acLp.bottomMargin = (22 * density).toInt()
+                                    acLp.bottomMargin = (20 * density).toInt()
                                 }
                                 audioContainer.layoutParams = acLp
                             }
@@ -4301,6 +4829,7 @@ object ControlCenterHook {
                                 itemView.layoutParams = curLp
                             }
                             deviceIcon?.visibility = View.VISIBLE
+                            progressBar?.visibility = View.GONE
                             if (hasTrack) {
                                 title?.visibility = View.VISIBLE
                                 artist?.visibility = View.VISIBLE
@@ -4476,6 +5005,7 @@ object ControlCenterHook {
                         hasTrackNow = true
                     }
 
+                    val pb = itemView.findViewById<View>(progressTag)
                     if (curSize == "2x1" || curSize == "1x2") {
                         if (title?.visibility != View.GONE) title?.visibility = View.GONE
                         if (artist?.visibility != View.GONE) artist?.visibility = View.GONE
@@ -4484,7 +5014,26 @@ object ControlCenterHook {
                             emptyState.layoutParams.width = 0
                         }
                         if (deviceIcon?.visibility != View.GONE) deviceIcon?.visibility = View.GONE
-                    } else {
+                        if (pb?.visibility != View.GONE) pb?.visibility = View.GONE
+                    } else if (curSize == "4x1" || curSize == "4x2" || curSize == "2x4") {
+                        if (hasTrackNow) {
+                            if (title?.visibility != View.VISIBLE) title?.visibility = View.VISIBLE
+                            if (artist?.visibility != View.VISIBLE) artist?.visibility = View.VISIBLE
+                            if (emptyState?.visibility != View.GONE) emptyState?.visibility = View.GONE
+                            if (pb?.visibility != View.VISIBLE) {
+                                pb?.visibility = View.VISIBLE
+                                (pb as? CollapsedMediaSeekBar)?.updateProgressFromSystem()
+                            }
+                        } else {
+                            if (title?.visibility != View.GONE) title?.visibility = View.GONE
+                            if (artist?.visibility != View.GONE) artist?.visibility = View.GONE
+                            if (emptyState?.visibility != View.VISIBLE) emptyState?.visibility = View.VISIBLE
+                            if (pb?.visibility != View.GONE) pb?.visibility = View.GONE
+                        }
+                        if (curSize != "4x1" && deviceIcon?.visibility != View.VISIBLE) {
+                            deviceIcon?.visibility = View.VISIBLE
+                        }
+                    } else { // 2x2 stock
                         if (hasTrackNow) {
                             if (title?.visibility != View.VISIBLE) title?.visibility = View.VISIBLE
                             if (artist?.visibility != View.VISIBLE) artist?.visibility = View.VISIBLE
@@ -4494,9 +5043,10 @@ object ControlCenterHook {
                             if (artist?.visibility != View.GONE) artist?.visibility = View.GONE
                             if (emptyState?.visibility != View.VISIBLE) emptyState?.visibility = View.VISIBLE
                         }
-                        if (curSize != "4x1" && deviceIcon?.visibility != View.VISIBLE) {
+                        if (deviceIcon?.visibility != View.VISIBLE) {
                             deviceIcon?.visibility = View.VISIBLE
                         }
+                        if (pb?.visibility != View.GONE) pb?.visibility = View.GONE
                     }
                     if (cover?.visibility != View.VISIBLE) cover?.visibility = View.VISIBLE
                     if (prev?.visibility != View.VISIBLE) prev?.visibility = View.VISIBLE

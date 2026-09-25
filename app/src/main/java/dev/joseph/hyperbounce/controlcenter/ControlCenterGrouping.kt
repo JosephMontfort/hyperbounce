@@ -993,25 +993,37 @@ object ControlCenterGrouping {
                 clearEffect.invoke(commonUtils, view)
             } catch (t: Throwable) {}
 
-            var cardBg: Drawable? = null
-            var bgResId = ctx.resources.getIdentifier("qs_card_background_disabled", "drawable", ctx.packageName)
-            if (bgResId == 0) {
-                bgResId = ctx.resources.getIdentifier("qs_background_disabled", "drawable", ctx.packageName)
-            }
-            if (bgResId != 0) {
-                try {
-                    cardBg = ctx.theme.getDrawable(bgResId).mutate()
-                } catch (t: Throwable) {}
-            }
-            if (cardBg != null) {
-                view.background = cardBg
-            } else {
-                val fallbackBg = GradientDrawable().apply {
-                    this.cornerRadius = cornerRadius
-                    setColor(Color.parseColor("#26808080"))
+            val typedValue = android.util.TypedValue()
+            var hasThemeColor = false
+            var themeColor = 0
+            val attrResId = ctx.resources.getIdentifier("qsCardDisabledColor", "attr", ctx.packageName)
+            if (attrResId != 0 && ctx.theme.resolveAttribute(attrResId, typedValue, true)) {
+                themeColor = typedValue.data
+                if (Color.alpha(themeColor) > 0) {
+                    hasThemeColor = true
                 }
-                view.background = fallbackBg
             }
+
+            val finalColor = if (hasThemeColor) {
+                themeColor
+            } else {
+                val colorResId = ctx.resources.getIdentifier("qs_card_disabled_color", "color", ctx.packageName)
+                if (colorResId != 0) {
+                    try {
+                        ctx.getColor(colorResId)
+                    } catch (t: Throwable) {
+                        Color.parseColor("#66000000")
+                    }
+                } else {
+                    Color.parseColor("#66000000")
+                }
+            }
+
+            val cardBg = GradientDrawable().apply {
+                this.cornerRadius = cornerRadius
+                setColor(finalColor)
+            }
+            view.background = cardBg
         } catch (t: Throwable) {
             Log.e(TAG, "applyGroupContainerStyle error", t)
         }
