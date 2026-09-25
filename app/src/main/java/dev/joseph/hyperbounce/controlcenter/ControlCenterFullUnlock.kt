@@ -685,15 +685,16 @@ object ControlCenterFullUnlock {
                     } else if (ctrlName.contains("QSListController")) {
                         val rawFooterItems = ArrayList<Any>()
                         val seenAvailableSpecs = HashSet<String>()
+                        var inActiveSection = true
+                        var orderRemoved = false
+                        val addedTilesList = try {
+                            val f = realController.javaClass.getDeclaredField("addedTiles")
+                            f.isAccessible = true
+                            f.get(realController) as? List<*>
+                        } catch (t: Throwable) { null }
 
                         for (item in items) {
                             val spec = ControlCenterConfigHolder.getRecordSpec(item)
-                            var isAdded = true
-                            try {
-                                val addedField = item.javaClass.getDeclaredField("added")
-                                addedField.isAccessible = true
-                                isAdded = addedField.getBoolean(item)
-                            } catch (t: Throwable) {}
 
                             var vt = 2272
                             try {
@@ -702,6 +703,11 @@ object ControlCenterFullUnlock {
                             } catch (t: Throwable) {}
 
                             val isDividerOrHeader = (vt == 8398 || vt == 3484337 || vt == 8397)
+                            if (isDividerOrHeader) {
+                                inActiveSection = false
+                            }
+
+                            val isAdded = inActiveSection && (addedTilesList == null || addedTilesList.contains(item))
 
                             if (isAdded && !isDividerOrHeader) {
                                 if (spec != null) {
@@ -714,6 +720,8 @@ object ControlCenterFullUnlock {
                                         }
                                         sKnownSlots.remove("tile:$spec")
                                         sUnifiedSlotOrder.remove("tile:$spec")
+                                        sKnownSlots.remove("card:$spec")
+                                        sUnifiedSlotOrder.remove("card:$spec")
                                         continue
                                     }
                                 }
@@ -723,7 +731,13 @@ object ControlCenterFullUnlock {
                             } else {
                                 if (spec != null) {
                                     sKnownSlots.remove("tile:$spec")
-                                    sUnifiedSlotOrder.remove("tile:$spec")
+                                    if (sUnifiedSlotOrder.remove("tile:$spec")) {
+                                        orderRemoved = true
+                                    }
+                                    sKnownSlots.remove("card:$spec")
+                                    if (sUnifiedSlotOrder.remove("card:$spec")) {
+                                        orderRemoved = true
+                                    }
                                 }
                                 // Potential footer item: either divider/header or unadded available tile
                                 if (isDividerOrHeader) {
@@ -741,6 +755,10 @@ object ControlCenterFullUnlock {
                                     }
                                 }
                             }
+                        }
+
+                        if (orderRemoved && context != null) {
+                            saveOrder(context)
                         }
 
                         // Clean up consecutive or empty dividers from rawFooterItems
