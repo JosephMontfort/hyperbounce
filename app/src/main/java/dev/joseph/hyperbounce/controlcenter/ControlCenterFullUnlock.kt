@@ -1681,6 +1681,10 @@ object ControlCenterFullUnlock {
 
             val maxRightRows = ControlCenterConfigHolder.landscapeRightMaxRows
 
+            // Current ordered slots before candidate move
+            val currentOrderedSlots = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
+            val currentSplitCount = calculateSplitIndex(currentOrderedSlots, maxRightRows)
+
             // Moving into top section (above the divider)
             val isMovingIntoTopSection = (toIdx < currentSplitCount)
 
