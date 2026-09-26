@@ -471,38 +471,46 @@ object ControlCenterFullUnlock {
                 }
             }
 
-            // Refresh spans for this slot
-            val slot = sKnownSlots[slotId]
-            if (slot != null) {
-                val currentSpans = getItemSpans(slot.item, slot.viewType, if (slotId.startsWith("group:")) slotId else spec)
-                slot.spanW = currentSpans.first
-                slot.spanH = currentSpans.second
-            } else if (slotId.startsWith("group:")) {
-                val gId = slotId.substring(6)
-                val group = ControlCenterConfigHolder.sTileGroups.find { it.id == gId }
-                if (group != null) {
-                    val spans = if (group.specs.size == 2) {
-                        if (group.isVertical) Pair(1, 2) else Pair(2, 1)
-                    } else {
-                        Pair(2, group.getEffectiveRowCount().coerceIn(1, 6))
-                    }
-                    val anchorSpec = group.specs.firstOrNull()
-                    val anchorSlot = if (anchorSpec != null) sKnownSlots["tile:$anchorSpec"] ?: sKnownSlots["card:$anchorSpec"] else null
-                    if (anchorSlot != null) {
-                        sKnownSlots[slotId] = SlotItem(slotId, anchorSlot.owner, anchorSlot.item, anchorSlot.viewType, spans.first, spans.second)
-                    }
-                }
-            }
-
             val currentSlotIdx = sUnifiedSlotOrder.indexOf(slotId)
             if (currentSlotIdx >= 0) {
-                // Current ordered slots
-                val orderedSlots = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
-                val (currentRightSlots, _) = calculateLandscapeRowSplit(orderedSlots, maxRightRows = maxRows)
+                // Check if this slot was above the divider BEFORE this resize
+                val orderedSlotsBefore = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
+                val (prevRightSlots, _) = calculateLandscapeRowSplit(orderedSlotsBefore, maxRightRows = maxRows)
+                val wasAboveDivider = prevRightSlots.any { it.id == slotId } || (currentSlotIdx < prevRightSlots.size)
 
-                // Only reposition if the tile was PREVIOUSLY above the divider and now overflows
-                val wasAboveDivider = currentSlotIdx < currentRightSlots.size
-                if (wasAboveDivider && !currentRightSlots.any { it.id == slotId }) {
+                // Refresh spans for this slot
+                val slot = sKnownSlots[slotId]
+                if (slot != null) {
+                    val currentSpans = getItemSpans(slot.item, slot.viewType, if (slotId.startsWith("group:")) slotId else spec)
+                    slot.spanW = currentSpans.first
+                    slot.spanH = currentSpans.second
+                } else if (slotId.startsWith("group:")) {
+                    val gId = slotId.substring(6)
+                    val group = ControlCenterConfigHolder.sTileGroups.find { it.id == gId }
+                    if (group != null) {
+                        val spans = if (group.specs.size == 2) {
+                            if (group.isVertical) Pair(1, 2) else Pair(2, 1)
+                        } else {
+                            Pair(2, group.getEffectiveRowCount().coerceIn(1, 6))
+                        }
+                        val anchorSpec = group.specs.firstOrNull()
+                        val anchorSlot = if (anchorSpec != null) sKnownSlots["tile:$anchorSpec"] ?: sKnownSlots["card:$anchorSpec"] else null
+                        if (anchorSlot != null) {
+                            sKnownSlots[slotId] = SlotItem(slotId, anchorSlot.owner, anchorSlot.item, anchorSlot.viewType, spans.first, spans.second)
+                        }
+                    }
+                }
+
+                val updatedSlot = sKnownSlots[slotId]
+                val canFitAbove = if (updatedSlot != null && updatedSlot.spanH > maxRows) {
+                    false
+                } else {
+                    val orderedSlotsAfter = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
+                    val (newRightSlots, _) = calculateLandscapeRowSplit(orderedSlotsAfter, maxRightRows = maxRows)
+                    newRightSlots.any { it.id == slotId }
+                }
+
+                if (wasAboveDivider && !canFitAbove) {
                     val remainingOrder = ArrayList(sUnifiedSlotOrder)
                     remainingOrder.remove(slotId)
 
@@ -516,6 +524,13 @@ object ControlCenterFullUnlock {
                     sUnifiedSlotOrder.clear()
                     sUnifiedSlotOrder.addAll(remainingOrder)
                     Log.i(TAG, "Tile $spec resized and shifted below landscape divider to index $newSplitIndex")
+                }
+            } else {
+                val slot = sKnownSlots[slotId]
+                if (slot != null) {
+                    val currentSpans = getItemSpans(slot.item, slot.viewType, if (slotId.startsWith("group:")) slotId else spec)
+                    slot.spanW = currentSpans.first
+                    slot.spanH = currentSpans.second
                 }
             }
 
@@ -870,8 +885,8 @@ object ControlCenterFullUnlock {
 
         fun canFit(startRow: Int, startCol: Int, w: Int, h: Int): Boolean {
             if (startCol + w > 4) return false
+            if (startRow + h > 60) return false
             for (r in startRow until (startRow + h)) {
-                if (r >= 60) return false
                 for (c in startCol until (startCol + w)) {
                     if (grid[r][c]) return false
                 }
@@ -881,32 +896,43 @@ object ControlCenterFullUnlock {
 
         fun markOccupied(startRow: Int, startCol: Int, w: Int, h: Int) {
             for (r in startRow until (startRow + h)) {
-                for (c in startCol until (startCol + w)) {
-                    grid[r][c] = true
+                if (r < 60) {
+                    for (c in startCol until (startCol + w)) {
+                        grid[r][c] = true
+                    }
                 }
             }
         }
 
-        fun findEarliestFit(w: Int, h: Int): Pair<Int, Int>? {
-            for (r in 0 until 60) {
-                for (c in 0..4 - w) {
+        fun findSlot(w: Int, h: Int, minRow: Int): Pair<Int, Int>? {
+            var r = minRow
+            while (r < 60) {
+                for (c in 0..(4 - w)) {
                     if (canFit(r, c, w, h)) {
                         return Pair(r, c)
                     }
                 }
+                r++
             }
             return null
         }
 
+        var maxStartRow = 0
         var overflowedToLeft = false
 
         for (slot in activeSlots) {
+            // An item whose height alone exceeds maxRightRows can NEVER fit in the right panel
+            if (slot.spanH > maxRightRows) {
+                leftList.add(slot)
+                continue
+            }
+
             if (overflowedToLeft) {
                 leftList.add(slot)
                 continue
             }
 
-            val fit = findEarliestFit(slot.spanW, slot.spanH)
+            val fit = findSlot(slot.spanW, slot.spanH, maxStartRow)
             if (fit == null) {
                 overflowedToLeft = true
                 leftList.add(slot)
@@ -918,6 +944,7 @@ object ControlCenterFullUnlock {
 
             if (endRow <= maxRightRows) {
                 markOccupied(row, col, slot.spanW, slot.spanH)
+                maxStartRow = row
                 rightList.add(slot)
             } else {
                 overflowedToLeft = true
@@ -1381,6 +1408,30 @@ object ControlCenterFullUnlock {
 
                 if (ControlCenterConfigHolder.sIsEditMode) {
                     val maxRows = ControlCenterConfigHolder.landscapeRightMaxRows
+
+                    // Safety check: ensure no oversized item (spanH > maxRows) is located before the divider
+                    val tempSlots = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
+                    val (tempRight, _) = calculateLandscapeRowSplit(tempSlots, maxRightRows = maxRows)
+                    val targetSplit = tempRight.size
+                    val oversizedAboveDivider = sUnifiedSlotOrder.take(targetSplit).filter { id ->
+                        val s = sKnownSlots[id]
+                        s != null && s.spanH > maxRows
+                    }
+                    if (oversizedAboveDivider.isNotEmpty()) {
+                        for (id in oversizedAboveDivider) {
+                            sUnifiedSlotOrder.remove(id)
+                        }
+                        val remSlots = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
+                        val (remRight, _) = calculateLandscapeRowSplit(remSlots, maxRightRows = maxRows)
+                        val insertPos = remRight.size
+                        for ((idx, id) in oversizedAboveDivider.withIndex()) {
+                            sUnifiedSlotOrder.add((insertPos + idx).coerceIn(0, sUnifiedSlotOrder.size), id)
+                        }
+                        orderedSlots.clear()
+                        orderedSlots.addAll(sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] })
+                        if (context != null) saveOrder(context)
+                    }
+
                     val (rightSlots, _) = calculateLandscapeRowSplit(orderedSlots, maxRightRows = maxRows)
                     val splitIndex = rightSlots.size
 
