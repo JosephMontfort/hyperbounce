@@ -325,8 +325,7 @@ object True2DGridEngine {
                 (item != null && item.toString().contains("LandscapeSplitDivider")))
 
             if (isLandscapeDivider) {
-                val defRows = ControlCenterConfigHolder.landscapeRightMaxRows
-                val assignedRow = maxOf(defRows, maxStartRow)
+                val assignedRow = highestOccupiedRow
                 val assignedCol = 0
                 markOccupied(assignedRow, assignedCol, SPAN_COUNT, 1)
                 maxStartRow = assignedRow + 1
@@ -746,7 +745,7 @@ object True2DGridEngine {
                 ReflectionCache.layoutDecoratedWithMarginsMethod?.invoke(glm, view, left, top, right, bottom)
             }
 
-            ReflectionCache.layoutChunkResultConsumedField?.setInt(layoutChunkResult, consumed)
+            ReflectionCache.layoutChunkResultConsumedField?.setInt(layoutChunkResult, consumed.coerceAtLeast(unitRowHeight))
 
             for (v in viewsInChunk) {
                 if (v.hasFocusable()) {

@@ -52,7 +52,7 @@ data class ControlCenterConfig(
     var flashlightMaxBrightness: Int = 100,
     var true2dGridEnabled: Boolean = true,
     var fluidResizeEnabled: Boolean = true,
-    var landscapeRightMaxRows: Int = 4
+    var landscapeRightMaxRows: Int = 3
 )
 
 /**
@@ -205,7 +205,7 @@ object ControlCenterConfigHolder {
             flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", 100),
             true2dGridEnabled = prefs.getBoolean("cc_true_2d_grid_enabled", true),
             fluidResizeEnabled = prefs.getBoolean("cc_fluid_resize_enabled", true),
-            landscapeRightMaxRows = prefs.getInt("cc_landscape_right_max_rows", 4)
+            landscapeRightMaxRows = prefs.getInt("cc_landscape_right_max_rows", 3)
         )
     }
 
@@ -304,7 +304,7 @@ object ControlCenterConfigHolder {
                     sBrightnessSliderWidth = json.optInt("brightness_slider_width", sBrightnessSliderWidth).coerceIn(2, 4)
                     sVolumeSliderWidth = json.optInt("volume_slider_width", sVolumeSliderWidth).coerceIn(2, 4)
                     if (json.has("landscape_right_max_rows")) {
-                        config.landscapeRightMaxRows = json.optInt("landscape_right_max_rows", 4).coerceIn(1, 6)
+                        config.landscapeRightMaxRows = json.optInt("landscape_right_max_rows", 3).coerceIn(1, 6)
                     }
 
                     if (json.has("tile_groups_v2")) {
@@ -399,7 +399,7 @@ object ControlCenterConfigHolder {
                 sBrightnessSliderWidth = prefs.getInt("brightness_slider_width", sBrightnessSliderWidth).coerceIn(2, 4)
                 sVolumeSliderWidth = prefs.getInt("volume_slider_width", sVolumeSliderWidth).coerceIn(2, 4)
                 if (prefs.contains("landscape_right_max_rows")) {
-                    config.landscapeRightMaxRows = prefs.getInt("landscape_right_max_rows", 4).coerceIn(1, 6)
+                    config.landscapeRightMaxRows = prefs.getInt("landscape_right_max_rows", 3).coerceIn(1, 6)
                 }
 
                 if (prefs.contains("tile_groups_v2")) {
@@ -567,6 +567,7 @@ object ControlCenterConfigHolder {
             sVerticalTileSpecs.clear()
             sLargeTileSpecs.clear()
             sCircularCardSpecs.clear()
+            config.landscapeRightMaxRows = 3
             sMediaPlayerSize = "2x2"
             sBrightnessSliderHorizontal = false
             sVolumeSliderHorizontal = false

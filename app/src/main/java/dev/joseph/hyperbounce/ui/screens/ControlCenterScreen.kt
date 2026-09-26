@@ -80,7 +80,7 @@ fun ControlCenterScreen(
                     value = cc.landscapeRightMaxRows.toFloat().coerceIn(1f, 6f),
                     onValueChange = { cc.setLandscapeRightMaxRows(it.roundToInt()) },
                     valueRange = 1f..6f,
-                    defaultValue = 4f,
+                    defaultValue = 3f,
                     valueLabel = { "${it.roundToInt()} Rows" },
                     allowCustomInput = false
                 )
@@ -176,6 +176,7 @@ fun ControlCenterScreen(
                             confirmColor = Color(0xFFFF453A),
                             onConfirm = {
                                 try {
+                                    cc.setLandscapeRightMaxRows(3)
                                     context.sendBroadcast(Intent("dev.joseph.hyperbounce.RESET_CC_LAYOUT"))
                                     context.contentResolver.call(
                                         Uri.parse("content://dev.joseph.hyperbounce.provider"),

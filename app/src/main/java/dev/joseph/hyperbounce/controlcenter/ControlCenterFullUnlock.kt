@@ -51,6 +51,8 @@ object ControlCenterFullUnlock {
     val sUnifiedSlotOrder = CopyOnWriteArrayList<String>()
     @Volatile var sOrderLoaded = false
     @Volatile var sLastDemotedSlotId: String? = null
+    @Volatile var sLastMoveTime: Long = 0L
+    @Volatile var sLastMovedPair: String = ""
 
     // Cache of proxies keyed by slot ID
     private val sProxyCache = ConcurrentHashMap<String, Any>()
@@ -817,26 +819,87 @@ object ControlCenterFullUnlock {
     }
 
     /**
-     * Clears all unified order state and caches on reset.
+     * Resets unified order state and restores the exact stock layout sequence live.
      */
     fun resetOrder(context: Context?) {
         try {
+            val stockList = mutableListOf(
+                "card:wifi",
+                "card:cell",
+                "component:media",
+                "component:brightness",
+                "component:volume"
+            )
+            val seen = stockList.toMutableSet()
+            for (id in sUnifiedSlotOrder) {
+                if (seen.add(id)) {
+                    stockList.add(id)
+                }
+            }
+            for (id in sKnownSlots.keys) {
+                if (seen.add(id)) {
+                    stockList.add(id)
+                }
+            }
+
             sUnifiedSlotOrder.clear()
-            sKnownSlots.clear()
-            sProxyCache.clear()
-            sProxyHandlers.clear()
-            sOrderLoaded = false
+            sUnifiedSlotOrder.addAll(stockList)
+            cleanStaleSlots()
+
+            // Reset spans in sKnownSlots for stock items
+            sKnownSlots["card:wifi"]?.apply { spanW = 2; spanH = 1 }
+            sKnownSlots["card:cell"]?.apply { spanW = 2; spanH = 1 }
+            sKnownSlots["component:media"]?.apply { spanW = 2; spanH = 2 }
+            sKnownSlots["component:brightness"]?.apply { spanW = 1; spanH = 2 }
+            sKnownSlots["component:volume"]?.apply { spanW = 1; spanH = 2 }
+
             val targetCtx = context ?: ControlCenterConfigHolder.sLastKnownContext
             if (targetCtx != null) {
                 try {
                     val prefs = targetCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                    prefs.edit().remove(PREF_UNIFIED_ORDER).apply()
+                    val joined = sUnifiedSlotOrder.joinToString(",")
+                    prefs.edit().putString(PREF_UNIFIED_ORDER, joined).apply()
                 } catch (t: Throwable) {}
                 try {
-                    Settings.Secure.putString(targetCtx.contentResolver, SECURE_KEY_UNIFIED_ORDER, "")
+                    val joined = sUnifiedSlotOrder.joinToString(",")
+                    Settings.Secure.putString(targetCtx.contentResolver, SECURE_KEY_UNIFIED_ORDER, joined)
                 } catch (t: Throwable) {}
             }
-            True2DGridEngine.invalidateAll()
+
+            // Immediately rebuild live adapters on main UI thread so UI updates without restart
+            Handler(Looper.getMainLooper()).post {
+                try {
+                    val adapter = ControlCenterConfigHolder.sMainPanelAdapter
+                    if (adapter != null) {
+                        val cl = adapter.javaClass.classLoader
+                        if (cl != null) {
+                            buildAndSetContentMap(adapter, cl)
+                            try {
+                                adapter.javaClass.getMethod("notifyDataSetChanged").invoke(adapter)
+                            } catch (t: Throwable) {}
+                        }
+                    }
+                    val leftAdp = sLeftAdapter
+                    val rightAdp = sRightAdapter
+                    if (leftAdp != null && leftAdp !== adapter) {
+                        val cl = leftAdp.javaClass.classLoader
+                        if (cl != null) {
+                            buildAndSetContentMap(leftAdp, cl)
+                            try { leftAdp.javaClass.getMethod("notifyDataSetChanged").invoke(leftAdp) } catch (t: Throwable) {}
+                        }
+                    }
+                    if (rightAdp != null && rightAdp !== adapter) {
+                        val cl = rightAdp.javaClass.classLoader
+                        if (cl != null) {
+                            buildAndSetContentMap(rightAdp, cl)
+                            try { rightAdp.javaClass.getMethod("notifyDataSetChanged").invoke(rightAdp) } catch (t: Throwable) {}
+                        }
+                    }
+                    True2DGridEngine.invalidateAll()
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Error applying reset layout to adapter", t)
+                }
+            }
         } catch (t: Throwable) {
             Log.e(TAG, "resetOrder error", t)
         }
@@ -1386,6 +1449,24 @@ object ControlCenterFullUnlock {
                 slot.spanH = currentSpans.second
             }
 
+            // If sUnifiedSlotOrder is empty, initialize it with the true stock layout sequence
+            if (sUnifiedSlotOrder.isEmpty()) {
+                val stockPrio = listOf(
+                    "card:wifi",
+                    "card:cell",
+                    "component:media",
+                    "component:brightness",
+                    "component:volume",
+                    "component:device_center",
+                    "component:device_controls"
+                )
+                for (pId in stockPrio) {
+                    if (sKnownSlots.containsKey(pId) && !sUnifiedSlotOrder.contains(pId)) {
+                        sUnifiedSlotOrder.add(pId)
+                    }
+                }
+            }
+
             // Order active slots according to sUnifiedSlotOrder
             val orderedSlots = ArrayList<SlotItem>()
             val remainingAvailable = LinkedHashMap(sKnownSlots)
@@ -1563,6 +1644,14 @@ object ControlCenterFullUnlock {
             val fromIdx = sUnifiedSlotOrder.indexOf(fromId)
             val toIdx = sUnifiedSlotOrder.indexOf(toId)
             if (fromIdx < 0 || toIdx < 0 || fromIdx == toIdx) return false
+
+            val now = SystemClock.uptimeMillis()
+            val movePair = if (fromId < toId) "$fromId:$toId" else "$toId:$fromId"
+            if (movePair == sLastMovedPair && (now - sLastMoveTime) < 80L) {
+                return false
+            }
+            sLastMoveTime = now
+            sLastMovedPair = movePair
 
             val maxRightRows = ControlCenterConfigHolder.landscapeRightMaxRows
 
@@ -1903,6 +1992,63 @@ object ControlCenterFullUnlock {
                         }
                     }
 
+                    if (m.name == "chooseDropTarget") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            try {
+                                if (ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
+                                    val selected = chain.args.getOrNull(0)
+                                    val dropTargets = chain.args.getOrNull(1) as? List<*>
+                                    val curX = (chain.args.getOrNull(2) as? Int) ?: 0
+                                    val curY = (chain.args.getOrNull(3) as? Int) ?: 0
+
+                                    if (selected != null && !dropTargets.isNullOrEmpty()) {
+                                        val selViewField = try { selected.javaClass.getField("itemView") } catch (e: Throwable) { null }
+                                        val selView = selViewField?.get(selected) as? View
+
+                                        if (selView != null) {
+                                            val selCenterX = curX + selView.width / 2
+                                            val selCenterY = curY + selView.height / 2
+
+                                            var bestTarget: Any? = null
+                                            var minDistanceSq = Long.MAX_VALUE
+
+                                            for (target in dropTargets) {
+                                                if (target == null || target === selected) continue
+                                                val tgtViewField = try { target.javaClass.getField("itemView") } catch (e: Throwable) { null }
+                                                val tgtView = tgtViewField?.get(target) as? View ?: continue
+
+                                                val vt = try {
+                                                    val getItemViewTypeMethod = target.javaClass.getMethod("getItemViewType")
+                                                    getItemViewTypeMethod.invoke(target) as Int
+                                                } catch (t: Throwable) { -1 }
+
+                                                if (isNonDraggableItem(vt)) continue
+
+                                                val tgtCenterX = tgtView.left + tgtView.width / 2
+                                                val tgtCenterY = tgtView.top + tgtView.height / 2
+
+                                                val dx = (selCenterX - tgtCenterX).toLong()
+                                                val dy = (selCenterY - tgtCenterY).toLong()
+                                                val distSq = dx * dx + dy * dy
+
+                                                if (distSq < minDistanceSq) {
+                                                    minDistanceSq = distSq
+                                                    bestTarget = target
+                                                }
+                                            }
+
+                                            if (bestTarget != null) {
+                                                return@intercept bestTarget
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (t: Throwable) {}
+                            chain.proceed()
+                        }
+                    }
+
                     if (m.name == "onMove") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
@@ -1948,6 +2094,8 @@ object ControlCenterFullUnlock {
                                 this0Field.isAccessible = true
                                 val adapter = this0Field.get(helperCallback)
                                 sLastDemotedSlotId = null
+                                sLastMovedPair = ""
+                                sLastMoveTime = 0L
                                 if (adapter != null) {
                                     val ctxField = adapter.javaClass.getDeclaredField("context")
                                     ctxField.isAccessible = true

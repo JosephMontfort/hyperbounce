@@ -324,7 +324,7 @@ data class ControlCenterSettings(
     val flashlightMaxBrightness: Int = 100,
     val true2dGridEnabled: Boolean = true,
     val fluidResizeEnabled: Boolean = true,
-    val landscapeRightMaxRows: Int = 4
+    val landscapeRightMaxRows: Int = 3
 )
 
 /** Feature 10: Dropdown Menu to Dialog Fluid Morph Physics */
