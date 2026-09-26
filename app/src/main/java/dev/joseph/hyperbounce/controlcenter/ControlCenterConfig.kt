@@ -1748,7 +1748,7 @@ object ControlCenterConfigHolder {
         }
     }
 
-    fun setMediaSize(ctx: Context, size: String, tileView: View?) {
+    fun setMediaSize(ctx: Context, size: String, tileView: View?, onRefreshed: (() -> Unit)? = null) {
         sMediaPlayerSize = size
         savePriorities(ctx)
         try {
@@ -1756,13 +1756,13 @@ object ControlCenterConfigHolder {
                 ControlCenterHook.applyMediaPlayerLayout(it)
             }
         } catch (t: Throwable) {}
-        refreshRecyclerView(tileView)
+        refreshRecyclerView(tileView, onRefreshed)
     }
 
-    fun setTileToExpanded(ctx: Context, spec: String?, tileView: View?) {
+    fun setTileToExpanded(ctx: Context, spec: String?, tileView: View?, onRefreshed: (() -> Unit)? = null) {
         if (spec == null) return
         if ("media".equals(spec, ignoreCase = true)) {
-            setMediaSize(ctx, "2x1", tileView)
+            setMediaSize(ctx, "2x1", tileView, onRefreshed)
             return
         }
         sExpandedTileSpecs.add(spec)
@@ -1770,13 +1770,13 @@ object ControlCenterConfigHolder {
         sLargeTileSpecs.remove(spec)
         sCircularCardSpecs.remove(spec)
         savePriorities(ctx)
-        refreshRecyclerView(tileView)
+        refreshRecyclerView(tileView, onRefreshed)
     }
 
-    fun setTileToVertical(ctx: Context, spec: String?, tileView: View?) {
+    fun setTileToVertical(ctx: Context, spec: String?, tileView: View?, onRefreshed: (() -> Unit)? = null) {
         if (spec == null) return
         if ("media".equals(spec, ignoreCase = true)) {
-            setMediaSize(ctx, "1x2", tileView)
+            setMediaSize(ctx, "1x2", tileView, onRefreshed)
             return
         }
         sVerticalTileSpecs.add(spec)
@@ -1784,13 +1784,13 @@ object ControlCenterConfigHolder {
         sLargeTileSpecs.remove(spec)
         sCircularCardSpecs.remove(spec)
         savePriorities(ctx)
-        refreshRecyclerView(tileView)
+        refreshRecyclerView(tileView, onRefreshed)
     }
 
-    fun setTileToLarge(ctx: Context, spec: String?, tileView: View?) {
+    fun setTileToLarge(ctx: Context, spec: String?, tileView: View?, onRefreshed: (() -> Unit)? = null) {
         if (spec == null) return
         if ("media".equals(spec, ignoreCase = true)) {
-            setMediaSize(ctx, "2x2", tileView)
+            setMediaSize(ctx, "2x2", tileView, onRefreshed)
             return
         }
         sLargeTileSpecs.add(spec)
@@ -1798,13 +1798,13 @@ object ControlCenterConfigHolder {
         sVerticalTileSpecs.remove(spec)
         sCircularCardSpecs.remove(spec)
         savePriorities(ctx)
-        refreshRecyclerView(tileView)
+        refreshRecyclerView(tileView, onRefreshed)
     }
 
-    fun setTileToNormal(ctx: Context, spec: String?, tileView: View?) {
+    fun setTileToNormal(ctx: Context, spec: String?, tileView: View?, onRefreshed: (() -> Unit)? = null) {
         if (spec == null) return
         if ("media".equals(spec, ignoreCase = true)) {
-            setMediaSize(ctx, "2x2", tileView)
+            setMediaSize(ctx, "2x2", tileView, onRefreshed)
             return
         }
         sExpandedTileSpecs.remove(spec)
@@ -1816,7 +1816,7 @@ object ControlCenterConfigHolder {
             sCircularCardSpecs.remove(spec)
         }
         savePriorities(ctx)
-        refreshRecyclerView(tileView)
+        refreshRecyclerView(tileView, onRefreshed)
     }
 
     fun toggleTileSize(ctx: Context, spec: String?, tileView: View?) {
@@ -1975,7 +1975,7 @@ object ControlCenterConfigHolder {
         tileView?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
     }
 
-    fun setSliderWidth(ctx: Context, isBrightness: Boolean, width: Int, tileView: View?) {
+    fun setSliderWidth(ctx: Context, isBrightness: Boolean, width: Int, tileView: View?, onRefreshed: (() -> Unit)? = null) {
         val clamped = width.coerceIn(2, 4)
         if (isBrightness) {
             sBrightnessSliderWidth = clamped
@@ -1983,7 +1983,7 @@ object ControlCenterConfigHolder {
             sVolumeSliderWidth = clamped
         }
         savePriorities(ctx)
-        refreshRecyclerView(tileView)
+        refreshRecyclerView(tileView, onRefreshed)
     }
 
     fun triggerTileToggle(tile: Any?, record: Any?, childView: View?, classLoader: ClassLoader) {

@@ -52,9 +52,7 @@ object FluidTileResizeHandler {
      * the companion app configuration switch.
      */
     fun attach(handleView: View, ctx: Context, spec: String, tileView: View, density: Float) {
-        val isMediaSpec = "media".equals(spec, ignoreCase = true)
-
-        if (ControlCenterConfigHolder.config.fluidResizeEnabled && !isMediaSpec) {
+        if (ControlCenterConfigHolder.config.fluidResizeEnabled) {
             handleView.setOnTouchListener(FluidTileResizeTouchListener(ctx, spec, tileView, density))
         } else {
             handleView.setOnTouchListener(TileResizeDragTouchListener(ctx, spec, tileView, density))
@@ -99,6 +97,13 @@ object FluidTileResizeHandler {
         var isSlider = false
         var layoutMode = LAYOUT_MODE_HORIZONTAL
 
+        var isMedia = false
+        var coverDrawable: Drawable? = null
+        var playDrawable: Drawable? = null
+        var prevDrawable: Drawable? = null
+        var nextDrawable: Drawable? = null
+        var mediaProgressFraction: Float = 0f
+
         var iconDrawable: Drawable? = null
         var customBgDrawable: Drawable? = null
         var sliderProgressFraction: Float = 0.5f
@@ -115,6 +120,7 @@ object FluidTileResizeHandler {
             customBg: Drawable? = null,
             sliderProgress: Float = 0.5f
         ) {
+            isMedia = false
             iconDrawable = icon
             titleText = title
             subtitleText = subtitle
@@ -122,6 +128,30 @@ object FluidTileResizeHandler {
             isSlider = isSliderItem
             customBgDrawable = customBg
             sliderProgressFraction = sliderProgress
+        }
+
+        fun setupMedia(
+            cover: Drawable?,
+            play: Drawable?,
+            prev: Drawable?,
+            next: Drawable?,
+            title: String?,
+            artist: String?,
+            bgColor: Int,
+            customBg: Drawable? = null,
+            progress: Float = 0f
+        ) {
+            isMedia = true
+            isSlider = false
+            coverDrawable = cover
+            playDrawable = play
+            prevDrawable = prev
+            nextDrawable = next
+            titleText = title
+            subtitleText = artist
+            bgPaint.color = bgColor
+            customBgDrawable = customBg
+            mediaProgressFraction = progress
         }
 
         fun updateMorph(
@@ -177,6 +207,203 @@ object FluidTileResizeHandler {
                 }
 
                 // 5. Curved resize handle at bottom-right corner
+                val handleSize = 34f * density
+                val hLeft = currentRect.right - handleSize
+                val hTop = currentRect.bottom - handleSize
+                handleDrawable.setBounds(hLeft.toInt(), hTop.toInt(), currentRect.right.toInt(), currentRect.bottom.toInt())
+                handleDrawable.draw(canvas)
+                return
+            }
+
+            // If media player, render album art, controls, and title/artist with strict corner radius and unstretched elements
+            if (isMedia) {
+                if (customBgDrawable != null && customBgDrawable is GradientDrawable) {
+                    val gd = customBgDrawable as GradientDrawable
+                    gd.cornerRadius = cornerRadius
+                    gd.setBounds(
+                        currentRect.left.toInt(),
+                        currentRect.top.toInt(),
+                        currentRect.right.toInt(),
+                        currentRect.bottom.toInt()
+                    )
+                    gd.draw(canvas)
+                } else {
+                    canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, bgPaint)
+                }
+
+                // Subtle border
+                canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, borderPaint)
+
+                val w = currentRect.width()
+                val h = currentRect.height()
+
+                val isTall4 = h > 220f * density
+                val isWide2 = w > 230f * density && h > 105f * density
+                val isWide1 = w > 230f * density && !isWide2
+                val isVert = w < 95f * density
+                val isExpanded2x1 = h < 95f * density && !isWide1
+
+                // 1. Draw Unstretched Album Art
+                val coverRect = RectF()
+                var coverRad = 12f * density
+
+                if (isWide2) {
+                    val coverSize = (h - 28f * density).coerceAtLeast(48f * density)
+                    coverRad = 18f * density
+                    coverRect.set(
+                        currentRect.left + 14f * density,
+                        currentRect.top + 14f * density,
+                        currentRect.left + 14f * density + coverSize,
+                        currentRect.top + 14f * density + coverSize
+                    )
+                } else if (isTall4) {
+                    val coverSize = (w - 28f * density).coerceAtLeast(48f * density)
+                    coverRad = 18f * density
+                    coverRect.set(
+                        currentRect.left + 14f * density,
+                        currentRect.top + 14f * density,
+                        currentRect.left + 14f * density + coverSize,
+                        currentRect.top + 14f * density + coverSize
+                    )
+                } else if (isVert) {
+                    val coverSize = (w - 24f * density).coerceIn(40f * density, 52f * density)
+                    coverRect.set(
+                        currentRect.centerX() - coverSize / 2f,
+                        currentRect.top + 14f * density,
+                        currentRect.centerX() + coverSize / 2f,
+                        currentRect.top + 14f * density + coverSize
+                    )
+                } else {
+                    val coverSize = 48f * density
+                    val coverTop = if (isExpanded2x1 || isWide1) {
+                        currentRect.top + (h - coverSize) / 2f
+                    } else {
+                        currentRect.top + 14f * density
+                    }
+                    coverRect.set(
+                        currentRect.left + 14f * density,
+                        coverTop,
+                        currentRect.left + 14f * density + coverSize,
+                        coverTop + coverSize
+                    )
+                }
+
+                coverDrawable?.let { cov ->
+                    canvas.save()
+                    clipPath.reset()
+                    clipPath.addRoundRect(coverRect, coverRad, coverRad, Path.Direction.CW)
+                    canvas.clipPath(clipPath)
+                    cov.setBounds(
+                        coverRect.left.toInt(),
+                        coverRect.top.toInt(),
+                        coverRect.right.toInt(),
+                        coverRect.bottom.toInt()
+                    )
+                    cov.draw(canvas)
+                    canvas.restore()
+                }
+
+                // 2. Draw Playback Controls
+                val btnSize = 30f * density
+                val playSize = 36f * density
+                val spacing = 8f * density
+
+                if (isVert) {
+                    val remHeight = currentRect.bottom - coverRect.bottom
+                    val centerY = coverRect.bottom + remHeight / 2f
+                    val playTop = centerY - playSize / 2f
+                    val prevTop = playTop - spacing - btnSize
+                    val nextTop = playTop + playSize + spacing
+
+                    val prevL = currentRect.centerX() - btnSize / 2f
+                    val playL = currentRect.centerX() - playSize / 2f
+                    val nextL = currentRect.centerX() - btnSize / 2f
+
+                    prevDrawable?.setBounds(prevL.toInt(), prevTop.toInt(), (prevL + btnSize).toInt(), (prevTop + btnSize).toInt())
+                    prevDrawable?.draw(canvas)
+
+                    playDrawable?.setBounds(playL.toInt(), playTop.toInt(), (playL + playSize).toInt(), (playTop + playSize).toInt())
+                    playDrawable?.draw(canvas)
+
+                    nextDrawable?.setBounds(nextL.toInt(), nextTop.toInt(), (nextL + btnSize).toInt(), (nextTop + btnSize).toInt())
+                    nextDrawable?.draw(canvas)
+                } else {
+                    val ctrlCenterY = when {
+                        isExpanded2x1 || isWide1 -> currentRect.centerY()
+                        isWide2 -> currentRect.bottom - 28f * density
+                        isTall4 -> currentRect.bottom - 36f * density
+                        else -> currentRect.bottom - 28f * density
+                    }
+
+                    val ctrlRight = currentRect.right - 14f * density
+                    val nextR = ctrlRight
+                    val nextL = nextR - btnSize
+                    val playR = nextL - spacing
+                    val playL = playR - playSize
+                    val prevR = playL - spacing
+                    val prevL = prevR - btnSize
+
+                    val btnTop = ctrlCenterY - btnSize / 2f
+                    val playTop = ctrlCenterY - playSize / 2f
+
+                    prevDrawable?.setBounds(prevL.toInt(), btnTop.toInt(), prevR.toInt(), (btnTop + btnSize).toInt())
+                    prevDrawable?.draw(canvas)
+
+                    playDrawable?.setBounds(playL.toInt(), playTop.toInt(), playR.toInt(), (playTop + playSize).toInt())
+                    playDrawable?.draw(canvas)
+
+                    nextDrawable?.setBounds(nextL.toInt(), btnTop.toInt(), nextR.toInt(), (btnTop + btnSize).toInt())
+                    nextDrawable?.draw(canvas)
+                }
+
+                // 3. Draw Song Title & Artist (revealed via clipping)
+                if (!titleText.isNullOrEmpty() && !isExpanded2x1 && !isVert) {
+                    val fontMetrics = titlePaint.fontMetrics
+                    val titleH = fontMetrics.descent - fontMetrics.ascent
+                    val gapBetween = 3f * density
+
+                    val textStartX: Float
+                    val textTopY: Float
+                    val clipRight: Float
+
+                    when {
+                        isWide2 -> {
+                            textStartX = coverRect.right + 16f * density
+                            textTopY = currentRect.top + 24f * density
+                            clipRight = currentRect.right - 14f * density
+                        }
+                        isTall4 -> {
+                            textStartX = currentRect.left + 16f * density
+                            textTopY = coverRect.bottom + 16f * density
+                            clipRight = currentRect.right - 14f * density
+                        }
+                        isWide1 -> {
+                            textStartX = coverRect.right + 14f * density
+                            textTopY = currentRect.centerY() - titleH / 2f - 4f * density
+                            clipRight = ctrlRight - btnSize * 2f - playSize - spacing * 2f - 14f * density
+                        }
+                        else -> { // 2x2
+                            textStartX = coverRect.right + 12f * density
+                            textTopY = coverRect.top + 2f * density
+                            clipRight = currentRect.right - 12f * density
+                        }
+                    }
+
+                    if (clipRight > textStartX) {
+                        canvas.save()
+                        canvas.clipRect(textStartX, currentRect.top, clipRight, currentRect.bottom)
+                        val titleBaseline = textTopY - fontMetrics.ascent
+                        canvas.drawText(titleText!!, textStartX, titleBaseline, titlePaint)
+
+                        if (!subtitleText.isNullOrEmpty()) {
+                            val subBaseline = titleBaseline + fontMetrics.descent + gapBetween - subtitlePaint.fontMetrics.ascent
+                            canvas.drawText(subtitleText!!, textStartX, subBaseline, subtitlePaint)
+                        }
+                        canvas.restore()
+                    }
+                }
+
+                // 4. Curved resize handle at bottom-right corner
                 val handleSize = 34f * density
                 val hLeft = currentRect.right - handleSize
                 val hTop = currentRect.bottom - handleSize
@@ -318,6 +545,21 @@ object FluidTileResizeHandler {
         private val isBrightnessSpec = "brightness".equals(spec, ignoreCase = true)
         private val isVolumeSpec = "volume".equals(spec, ignoreCase = true)
         private val isSliderSpec = isBrightnessSpec || isVolumeSpec
+        private val isMediaSpec = "media".equals(spec, ignoreCase = true)
+
+        companion object {
+            const val STATE_NORMAL = 0
+            const val STATE_EXPANDED = 1
+            const val STATE_VERTICAL = 2
+            const val STATE_LARGE = 3
+
+            const val MEDIA_2X1 = 10
+            const val MEDIA_1X2 = 11
+            const val MEDIA_2X2 = 12
+            const val MEDIA_4X1 = 13
+            const val MEDIA_4X2 = 14
+            const val MEDIA_2X4 = 15
+        }
 
         private var downRawX = 0f
         private var downRawY = 0f
@@ -350,11 +592,11 @@ object FluidTileResizeHandler {
         private var fourColW = 0f
         private var cardH = 0f
         private var tallH = 0f
+        private var fourRowsH = 0f
         private var gap = 0f
 
         private var fixedCornerRadius = 20f * density
         private var stockCardRadius = 20f * density
-        private var sliderRadius = 16f * density
 
         private fun lerp(start: Float, end: Float, fraction: Float): Float {
             return start + (end - start) * fraction.coerceIn(0f, 1f)
@@ -584,6 +826,7 @@ object FluidTileResizeHandler {
                         tallH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId).toFloat() else (157f * density)
                         val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
                         gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId).toFloat() else (10f * density)
+                        fourRowsH = 4f * cardH + 3f * gap
 
                         val rvContentW = (rv.width - rv.paddingLeft - rv.paddingRight).toFloat()
                         colW = if (rvContentW > 100f * density) {
@@ -615,7 +858,6 @@ object FluidTileResizeHandler {
                         // Query stock corner radii
                         val cardRadiusResId = ctx.resources.getIdentifier("control_center_universal_corner_radius", "dimen", ctx.packageName)
                         stockCardRadius = if (cardRadiusResId != 0) ctx.resources.getDimension(cardRadiusResId) else (20f * density)
-                        sliderRadius = 16f * density
 
                         if (isSliderSpec) {
                             val w = if (isBrightnessSpec) ControlCenterConfigHolder.sBrightnessSliderWidth else ControlCenterConfigHolder.sVolumeSliderWidth
@@ -624,14 +866,15 @@ object FluidTileResizeHandler {
 
                             originLeft = tileLeft
                             originTop = tileTop
-                            originWidth = when (initialCols) {
+                            originWidth = if (tileView.width > 0) tileView.width.toFloat() else when (initialCols) {
                                 3 -> threeColW
                                 4 -> fourColW
                                 else -> twoColW
                             }
-                            originHeight = cardH
+                            originHeight = if (tileView.height > 0) tileView.height.toFloat() else cardH
 
-                            fixedCornerRadius = sliderRadius
+                            // Slider corner radius strictly equals universal stock card radius
+                            fixedCornerRadius = stockCardRadius
 
                             val rawIcon = findIcon(tileView)
                             val iconClone = rawIcon?.constantState?.newDrawable()?.mutate() ?: rawIcon
@@ -641,15 +884,159 @@ object FluidTileResizeHandler {
                                 seekBar.progress.toFloat() / seekBar.max.toFloat()
                             } else 0.5f
 
+                            val nativeBgDrawable = tileView.background?.constantState?.newDrawable()?.mutate()
+                            val currentBgColor = extractColorFromDrawable(tileView.background)
+                            val resolvedBgColor = when {
+                                currentBgColor != null && currentBgColor != 0 -> currentBgColor
+                                else -> stockDisabledColor
+                            }
+
                             morphDrawable = FluidTileMorphOverlayDrawable(density).apply {
                                 setup(
                                     icon = iconClone,
                                     title = null,
                                     subtitle = null,
-                                    bgColor = stockDisabledColor,
+                                    bgColor = resolvedBgColor,
                                     isSliderItem = true,
-                                    customBg = null,
+                                    customBg = if (nativeBgDrawable is GradientDrawable) nativeBgDrawable else null,
                                     sliderProgress = sliderProgress
+                                )
+                                cornerRadius = fixedCornerRadius
+                            }
+                        } else if (isMediaSpec) {
+                            initialState = when (ControlCenterConfigHolder.sMediaPlayerSize) {
+                                "2x1" -> MEDIA_2X1
+                                "1x2" -> MEDIA_1X2
+                                "4x1" -> MEDIA_4X1
+                                "4x2" -> MEDIA_4X2
+                                "2x4" -> MEDIA_2X4
+                                else -> MEDIA_2X2
+                            }
+                            candidateTargetState = initialState
+
+                            originLeft = tileLeft
+                            originTop = tileTop
+                            originWidth = if (tileView.width > 0) tileView.width.toFloat() else when (initialState) {
+                                MEDIA_1X2 -> colW
+                                MEDIA_4X1, MEDIA_4X2 -> fourColW
+                                else -> twoColW
+                            }
+                            originHeight = if (tileView.height > 0) tileView.height.toFloat() else when (initialState) {
+                                MEDIA_2X1, MEDIA_4X1 -> cardH
+                                MEDIA_2X4 -> fourRowsH
+                                else -> tallH
+                            }
+
+                            fixedCornerRadius = stockCardRadius
+
+                            // Sample media components: album art, title, artist, controls
+                            var mediaCover: Drawable? = null
+                            var mediaPlay: Drawable? = null
+                            var mediaPrev: Drawable? = null
+                            var mediaNext: Drawable? = null
+                            var mediaTitle: String? = null
+                            var mediaArtist: String? = null
+
+                            val holder = ControlCenterHook.sMediaPlayerViewHolder?.get()
+                            if (holder != null) {
+                                try {
+                                    val bField = holder.javaClass.getDeclaredField("binding").apply { isAccessible = true }
+                                    val b = bField.get(holder)
+                                    if (b != null) {
+                                        fun getV(name: String): View? = try {
+                                            b.javaClass.getField(name).get(b) as? View
+                                        } catch (t: Throwable) { null }
+
+                                        val covView = getV("cover") as? ImageView
+                                        mediaCover = covView?.drawable?.constantState?.newDrawable()?.mutate() ?: covView?.drawable
+
+                                        val plView = getV("play") as? ImageView
+                                        mediaPlay = plView?.drawable?.constantState?.newDrawable()?.mutate() ?: plView?.drawable
+
+                                        val prView = getV("prev") as? ImageView
+                                        mediaPrev = prView?.drawable?.constantState?.newDrawable()?.mutate() ?: prView?.drawable
+
+                                        val nxView = getV("next") as? ImageView
+                                        mediaNext = nxView?.drawable?.constantState?.newDrawable()?.mutate() ?: nxView?.drawable
+
+                                        val tView = getV("title") as? TextView
+                                        mediaTitle = tView?.text?.toString()?.takeIf { it.isNotBlank() }
+
+                                        val aView = getV("artist") as? TextView
+                                        mediaArtist = aView?.text?.toString()?.takeIf { it.isNotBlank() }
+                                    }
+                                } catch (t: Throwable) {}
+                            }
+
+                            if (mediaCover == null || mediaPlay == null) {
+                                val imageViews = mutableListOf<ImageView>()
+                                fun findImages(v: View?) {
+                                    if (v == null) return
+                                    if (v is ImageView && v.id != 0x7f099999 && v.id != 0x7f099998 && v.id != 0x7f099992) {
+                                        if (v.drawable != null) imageViews.add(v)
+                                    } else if (v is ViewGroup) {
+                                        for (i in 0 until v.childCount) findImages(v.getChildAt(i))
+                                    }
+                                }
+                                findImages(tileView)
+
+                                if (mediaCover == null && imageViews.isNotEmpty()) {
+                                    val largest = imageViews.maxByOrNull { it.width * it.height }
+                                    mediaCover = largest?.drawable?.constantState?.newDrawable()?.mutate() ?: largest?.drawable
+                                }
+                                if (mediaPlay == null) {
+                                    val buttons = imageViews.filter { it !== imageViews.maxByOrNull { iv -> iv.width * iv.height } }
+                                    if (buttons.isNotEmpty()) {
+                                        mediaPrev = buttons.getOrNull(0)?.drawable?.constantState?.newDrawable()?.mutate() ?: buttons.getOrNull(0)?.drawable
+                                        mediaPlay = buttons.getOrNull(1)?.drawable?.constantState?.newDrawable()?.mutate() ?: buttons.getOrNull(1)?.drawable
+                                        mediaNext = buttons.getOrNull(2)?.drawable?.constantState?.newDrawable()?.mutate() ?: buttons.getOrNull(2)?.drawable
+                                    }
+                                }
+                            }
+
+                            if (mediaCover == null) {
+                                val defCoverId = ctx.resources.getIdentifier("miplay_cover_default", "drawable", ctx.packageName)
+                                if (defCoverId != 0) {
+                                    try { mediaCover = ctx.resources.getDrawable(defCoverId, null)?.constantState?.newDrawable()?.mutate() } catch (t: Throwable) {}
+                                }
+                                if (mediaCover == null) {
+                                    mediaCover = DefaultCoverDrawable(density)
+                                }
+                            }
+
+                            if (mediaPlay == null) mediaPlay = MediaVectorButtonDrawable("play", density)
+                            if (mediaPrev == null) mediaPrev = MediaVectorButtonDrawable("prev", density)
+                            if (mediaNext == null) mediaNext = MediaVectorButtonDrawable("next", density)
+
+                            if (mediaTitle == null || mediaArtist == null) {
+                                val textViews = mutableListOf<TextView>()
+                                inspectTextViews(tileView, textViews)
+                                if (mediaTitle == null) {
+                                    mediaTitle = textViews.getOrNull(0)?.text?.toString()?.takeIf { it.isNotBlank() } ?: "Music"
+                                }
+                                if (mediaArtist == null) {
+                                    mediaArtist = textViews.getOrNull(1)?.text?.toString()?.takeIf { it.isNotBlank() }
+                                }
+                            }
+
+                            val nativeBgDrawable = tileView.background?.constantState?.newDrawable()?.mutate()
+                            val currentBgColor = extractColorFromDrawable(tileView.background)
+                            val resolvedBgColor = when {
+                                currentBgColor != null && currentBgColor != 0 -> currentBgColor
+                                else -> stockDisabledColor
+                            }
+
+                            morphDrawable = FluidTileMorphOverlayDrawable(density).apply {
+                                setupMedia(
+                                    cover = mediaCover,
+                                    play = mediaPlay,
+                                    prev = mediaPrev,
+                                    next = mediaNext,
+                                    title = mediaTitle,
+                                    artist = mediaArtist,
+                                    bgColor = resolvedBgColor,
+                                    customBg = if (nativeBgDrawable is GradientDrawable) nativeBgDrawable else null,
+                                    progress = 0.35f
                                 )
                                 cornerRadius = fixedCornerRadius
                             }
@@ -789,8 +1176,8 @@ object FluidTileResizeHandler {
                     val iconBox = RectF()
 
                     if (isSliderSpec) {
-                        // Slider resizing: Height strictly locked to 1 row, corner radius strictly preserved
-                        curH = cardH
+                        // Slider resizing: Height strictly locked to live tileView height, corner radius strictly preserved
+                        curH = originHeight
                         curW = (originWidth + dx).coerceIn(twoColW * 0.85f, fourColW * 1.05f)
 
                         val candidateCols = when {
@@ -800,12 +1187,12 @@ object FluidTileResizeHandler {
                         }
 
                         val iconX = originLeft + 16f * density
-                        val iconY = originTop + (cardH - iconSize) / 2f
+                        val iconY = originTop + (curH - iconSize) / 2f
                         iconBox.set(iconX, iconY, iconX + iconSize, iconY + iconSize)
 
                         val drawRect = RectF(originLeft, originTop, originLeft + curW, originTop + curH)
                         val isSnapping = (candidateCols != initialCols)
-                        morphDrawable?.updateMorph(drawRect, curRadius, iconBox, isSnapping, LAYOUT_MODE_HORIZONTAL)
+                        morphDrawable?.updateMorph(drawRect, fixedCornerRadius, iconBox, isSnapping, LAYOUT_MODE_HORIZONTAL)
                         targetContainer?.invalidate()
 
                         if (candidateCols != candidateTargetState) {
@@ -813,6 +1200,119 @@ object FluidTileResizeHandler {
                             v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                             targetContainer?.let { rv ->
                                 updateNeighbourDisplacements(rv, candidateCols, 1)
+                            }
+                        }
+                        return true
+                    }
+
+                    if (isMediaSpec) {
+                        val snapDistX = (colW + gap) * 0.30f
+                        val snapDistY = cardH * 0.30f
+
+                        var targetState = initialState
+                        when (initialState) {
+                            MEDIA_2X2 -> {
+                                when {
+                                    dx > snapDistX -> targetState = if (dy < -snapDistY * 0.6f) MEDIA_4X1 else MEDIA_4X2
+                                    dx < -snapDistX -> targetState = MEDIA_1X2
+                                    dy > snapDistY -> targetState = MEDIA_2X4
+                                    dy < -snapDistY -> targetState = MEDIA_2X1
+                                }
+                            }
+                            MEDIA_2X1 -> {
+                                when {
+                                    dx > snapDistX -> targetState = if (dy > snapDistY * 0.6f) MEDIA_4X2 else MEDIA_4X1
+                                    dy > snapDistY -> targetState = if (dy > snapDistY * 2.0f) MEDIA_2X4 else MEDIA_2X2
+                                    dx < -snapDistX && dy > snapDistY * 0.5f -> targetState = MEDIA_1X2
+                                }
+                            }
+                            MEDIA_1X2 -> {
+                                when {
+                                    dx > snapDistX -> {
+                                        targetState = if (dx > snapDistX * 2.0f) {
+                                            if (dy < -snapDistY * 0.6f) MEDIA_4X1 else MEDIA_4X2
+                                        } else {
+                                            if (dy < -snapDistY * 0.6f) MEDIA_2X1 else MEDIA_2X2
+                                        }
+                                    }
+                                    dy > snapDistY -> targetState = MEDIA_2X4
+                                    dy < -snapDistY && dx > snapDistX * 0.5f -> targetState = MEDIA_2X1
+                                }
+                            }
+                            MEDIA_4X1 -> {
+                                when {
+                                    dx < -snapDistX && dy > snapDistY * 1.2f -> targetState = MEDIA_2X4
+                                    dy > snapDistY -> targetState = if (dx < -snapDistX * 1.5f) MEDIA_2X2 else MEDIA_4X2
+                                    dx < -snapDistX -> targetState = if (dy > snapDistY * 0.5f) MEDIA_2X2 else MEDIA_2X1
+                                }
+                            }
+                            MEDIA_4X2 -> {
+                                when {
+                                    dy < -snapDistY -> targetState = if (dx < -snapDistX) MEDIA_2X1 else MEDIA_4X1
+                                    dx < -snapDistX -> {
+                                        targetState = if (dy > snapDistY) {
+                                            MEDIA_2X4
+                                        } else if (dy < -snapDistY) {
+                                            MEDIA_2X1
+                                        } else if (dx < -snapDistX * 2.0f) {
+                                            MEDIA_1X2
+                                        } else {
+                                            MEDIA_2X2
+                                        }
+                                    }
+                                    dy > snapDistY && dx < -snapDistX * 0.5f -> targetState = MEDIA_2X4
+                                }
+                            }
+                            MEDIA_2X4 -> {
+                                when {
+                                    dx > snapDistX && dy < -snapDistY * 1.2f -> targetState = MEDIA_4X1
+                                    dy < -snapDistY -> {
+                                        if (dy < -snapDistY * 2.0f) {
+                                            targetState = if (dx > snapDistX) MEDIA_4X1 else MEDIA_2X1
+                                        } else {
+                                            targetState = if (dx > snapDistX) MEDIA_4X2 else if (dx < -snapDistX) MEDIA_1X2 else MEDIA_2X2
+                                        }
+                                    }
+                                    dx > snapDistX -> targetState = MEDIA_4X2
+                                    dx < -snapDistX -> targetState = MEDIA_1X2
+                                }
+                            }
+                        }
+
+                        val (targetW, targetH) = when (targetState) {
+                            MEDIA_2X1 -> Pair(twoColW, cardH)
+                            MEDIA_1X2 -> Pair(colW, tallH)
+                            MEDIA_4X1 -> Pair(fourColW, cardH)
+                            MEDIA_4X2 -> Pair(fourColW, tallH)
+                            MEDIA_2X4 -> Pair(twoColW, fourRowsH)
+                            else -> Pair(twoColW, tallH)
+                        }
+
+                        curW = (originWidth + dx).coerceIn(colW * 0.85f, fourColW * 1.05f)
+                        curH = (originHeight + dy).coerceIn(cardH * 0.85f, fourRowsH * 1.05f)
+                        if (targetState != initialState) {
+                            curW = lerp(curW, targetW, 0.45f)
+                            curH = lerp(curH, targetH, 0.45f)
+                        }
+
+                        val drawRect = RectF(originLeft, originTop, originLeft + curW, originTop + curH)
+                        val isSnapping = (targetState != initialState)
+                        morphDrawable?.updateMorph(drawRect, fixedCornerRadius, iconBox, isSnapping, LAYOUT_MODE_HORIZONTAL)
+                        targetContainer?.invalidate()
+
+                        if (targetState != candidateTargetState) {
+                            candidateTargetState = targetState
+                            v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            val targetSpans = when (targetState) {
+                                MEDIA_2X1 -> Pair(2, 1)
+                                MEDIA_1X2 -> Pair(1, 2)
+                                MEDIA_4X1 -> Pair(4, 1)
+                                MEDIA_4X2 -> Pair(4, 2)
+                                MEDIA_2X4 -> Pair(2, 4)
+                                else -> Pair(2, 2)
+                            }
+                            targetContainer?.let { rv ->
+                                updateNeighbourDisplacements(rv, targetSpans.first, targetSpans.second)
                             }
                         }
                         return true
@@ -1036,7 +1536,7 @@ object FluidTileResizeHandler {
 
                             if (md != null && rv != null) {
                                 val startRect = RectF(md.currentRect)
-                                val targetRect = RectF(tileLeft, tileTop, tileLeft + finalW, tileTop + cardH)
+                                val targetRect = RectF(originLeft, originTop, originLeft + finalW, originTop + originHeight)
 
                                 if (finalCols != initialCols) {
                                     var animationEnded = false
@@ -1049,7 +1549,7 @@ object FluidTileResizeHandler {
                                         }
                                     }
 
-                                    ControlCenterConfigHolder.refreshRecyclerView(tileView) {
+                                    ControlCenterConfigHolder.setSliderWidth(ctx, isBrightnessSpec, finalCols, tileView) {
                                         layoutRefreshed = true
                                         // Layout with new spans is complete: reset translations with zero visual jump!
                                         for (i in 0 until rv.childCount) {
@@ -1071,7 +1571,7 @@ object FluidTileResizeHandler {
                                                 lerp(startRect.right, targetRect.right, f),
                                                 lerp(startRect.bottom, targetRect.bottom, f)
                                             )
-                                            md.updateMorph(r, sliderRadius, md.iconRect, false, LAYOUT_MODE_HORIZONTAL)
+                                            md.updateMorph(r, fixedCornerRadius, md.iconRect, false, LAYOUT_MODE_HORIZONTAL)
                                             rv.invalidate()
                                         }
                                         addListener(object : AnimatorListenerAdapter() {
@@ -1099,7 +1599,114 @@ object FluidTileResizeHandler {
                                                 lerp(startRect.right, targetRect.right, f),
                                                 lerp(startRect.bottom, targetRect.bottom, f)
                                             )
-                                            md.updateMorph(r, sliderRadius, md.iconRect, false, LAYOUT_MODE_HORIZONTAL)
+                                            md.updateMorph(r, fixedCornerRadius, md.iconRect, false, LAYOUT_MODE_HORIZONTAL)
+                                            rv.invalidate()
+                                        }
+                                        addListener(object : AnimatorListenerAdapter() {
+                                            override fun onAnimationEnd(animation: Animator) {
+                                                rv.overlay.clear()
+                                                tileView.alpha = 1.0f
+                                            }
+                                        })
+                                    }
+                                    anim.start()
+                                }
+                            } else {
+                                rv?.overlay?.clear()
+                                tileView.alpha = 1.0f
+                            }
+                        } else if (isMediaSpec) {
+                            val finalState = if (candidateTargetState != -1) candidateTargetState else initialState
+                            v.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+
+                            val targetSize = when (finalState) {
+                                MEDIA_2X1 -> "2x1"
+                                MEDIA_1X2 -> "1x2"
+                                MEDIA_4X1 -> "4x1"
+                                MEDIA_4X2 -> "4x2"
+                                MEDIA_2X4 -> "2x4"
+                                else -> "2x2"
+                            }
+                            val (targetW, targetH) = when (finalState) {
+                                MEDIA_2X1 -> Pair(twoColW, cardH)
+                                MEDIA_1X2 -> Pair(colW, tallH)
+                                MEDIA_4X1 -> Pair(fourColW, cardH)
+                                MEDIA_4X2 -> Pair(fourColW, tallH)
+                                MEDIA_2X4 -> Pair(twoColW, fourRowsH)
+                                else -> Pair(twoColW, tallH)
+                            }
+
+                            if (finalState != initialState) {
+                                ControlCenterConfigHolder.sMediaPlayerSize = targetSize
+                                ControlCenterConfigHolder.savePriorities(ctx)
+                            }
+
+                            if (md != null && rv != null) {
+                                val startRect = RectF(md.currentRect)
+                                val targetRect = RectF(originLeft, originTop, originLeft + targetW, originTop + targetH)
+
+                                if (finalState != initialState) {
+                                    var animationEnded = false
+                                    var layoutRefreshed = false
+
+                                    fun tryFinish() {
+                                        if (animationEnded && layoutRefreshed) {
+                                            rv.overlay.clear()
+                                            tileView.alpha = 1.0f
+                                        }
+                                    }
+
+                                    ControlCenterConfigHolder.setMediaSize(ctx, targetSize, tileView) {
+                                        layoutRefreshed = true
+                                        // Layout pass with new media size complete: reset translations
+                                        for (i in 0 until rv.childCount) {
+                                            val child = rv.getChildAt(i) ?: continue
+                                            child.translationX = 0f
+                                            child.translationY = 0f
+                                        }
+                                        tryFinish()
+                                    }
+
+                                    val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+                                        duration = 200
+                                        interpolator = OvershootInterpolator(1.05f)
+                                        addUpdateListener { va ->
+                                            val f = va.animatedFraction
+                                            val r = RectF(
+                                                lerp(startRect.left, targetRect.left, f),
+                                                lerp(startRect.top, targetRect.top, f),
+                                                lerp(startRect.right, targetRect.right, f),
+                                                lerp(startRect.bottom, targetRect.bottom, f)
+                                            )
+                                            md.updateMorph(r, fixedCornerRadius, md.iconRect, false, md.layoutMode)
+                                            rv.invalidate()
+                                        }
+                                        addListener(object : AnimatorListenerAdapter() {
+                                            override fun onAnimationEnd(animation: Animator) {
+                                                animationEnded = true
+                                                tryFinish()
+                                            }
+                                        })
+                                    }
+                                    anim.start()
+                                } else {
+                                    for (i in 0 until rv.childCount) {
+                                        val child = rv.getChildAt(i) ?: continue
+                                        child.animate().translationX(0f).translationY(0f).setDuration(200).start()
+                                    }
+
+                                    val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+                                        duration = 200
+                                        interpolator = OvershootInterpolator(1.05f)
+                                        addUpdateListener { va ->
+                                            val f = va.animatedFraction
+                                            val r = RectF(
+                                                lerp(startRect.left, targetRect.left, f),
+                                                lerp(startRect.top, targetRect.top, f),
+                                                lerp(startRect.right, targetRect.right, f),
+                                                lerp(startRect.bottom, targetRect.bottom, f)
+                                            )
+                                            md.updateMorph(r, fixedCornerRadius, md.iconRect, false, md.layoutMode)
                                             rv.invalidate()
                                         }
                                         addListener(object : AnimatorListenerAdapter() {
@@ -1259,6 +1866,8 @@ object FluidTileResizeHandler {
                         v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         if (isSliderSpec) {
                             ControlCenterConfigHolder.cycleSliderWidth(ctx, isBrightnessSpec, tileView)
+                        } else if (isMediaSpec) {
+                            ControlCenterConfigHolder.cycleMediaPlayerSize(ctx, tileView)
                         } else {
                             ControlCenterConfigHolder.toggleTileSize(ctx, spec, tileView)
                         }
@@ -1291,5 +1900,90 @@ object FluidTileResizeHandler {
             }
             return true
         }
+    }
+
+    class MediaVectorButtonDrawable(private val type: String, private val density: Float) : Drawable() {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.FILL
+        }
+        private val path = Path()
+
+        override fun draw(canvas: Canvas) {
+            val b = bounds
+            val w = b.width().toFloat()
+            val h = b.height().toFloat()
+            if (w <= 0f || h <= 0f) return
+            val cx = b.left + w / 2f
+            val cy = b.top + h / 2f
+            val s = Math.min(w, h) * 0.40f
+
+            path.reset()
+            when (type) {
+                "play" -> {
+                    path.moveTo(cx - s * 0.5f, cy - s * 0.7f)
+                    path.lineTo(cx + s * 0.7f, cy)
+                    path.lineTo(cx - s * 0.5f, cy + s * 0.7f)
+                    path.close()
+                    canvas.drawPath(path, paint)
+                }
+                "prev" -> {
+                    val offset = s * 0.45f
+                    path.moveTo(cx - offset + s * 0.45f, cy - s * 0.6f)
+                    path.lineTo(cx - offset - s * 0.45f, cy)
+                    path.lineTo(cx - offset + s * 0.45f, cy + s * 0.6f)
+                    path.close()
+                    path.moveTo(cx + offset + s * 0.45f, cy - s * 0.6f)
+                    path.lineTo(cx + offset - s * 0.45f, cy)
+                    path.lineTo(cx + offset + s * 0.45f, cy + s * 0.6f)
+                    path.close()
+                    canvas.drawPath(path, paint)
+                }
+                "next" -> {
+                    val offset = s * 0.45f
+                    path.moveTo(cx - offset - s * 0.45f, cy - s * 0.6f)
+                    path.lineTo(cx - offset + s * 0.45f, cy)
+                    path.lineTo(cx - offset - s * 0.45f, cy + s * 0.6f)
+                    path.close()
+                    path.moveTo(cx + offset - s * 0.45f, cy - s * 0.6f)
+                    path.lineTo(cx + offset + s * 0.45f, cy)
+                    path.lineTo(cx + offset - s * 0.45f, cy + s * 0.6f)
+                    path.close()
+                    canvas.drawPath(path, paint)
+                }
+            }
+        }
+
+        override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+        override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
+        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+    }
+
+    class DefaultCoverDrawable(private val density: Float) : Drawable() {
+        private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#33FFFFFF")
+            style = Paint.Style.FILL
+        }
+        private val notePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#B3FFFFFF")
+            style = Paint.Style.FILL
+        }
+
+        override fun draw(canvas: Canvas) {
+            val b = bounds
+            canvas.drawRect(b, bgPaint)
+            val cx = b.exactCenterX()
+            val cy = b.exactCenterY()
+            val r = 4f * density
+            canvas.drawCircle(cx - 5f * density, cy + 3f * density, r, notePaint)
+            canvas.drawCircle(cx + 5f * density, cy, r, notePaint)
+            canvas.drawRect(cx - 2f * density, cy - 8f * density, cx, cy + 3f * density, notePaint)
+            canvas.drawRect(cx + 8f * density, cy - 11f * density, cx + 10f * density, cy, notePaint)
+            canvas.drawRect(cx - 2f * density, cy - 11f * density, cx + 10f * density, cy - 7f * density, notePaint)
+        }
+
+        override fun setAlpha(alpha: Int) { bgPaint.alpha = alpha; notePaint.alpha = alpha }
+        override fun setColorFilter(colorFilter: ColorFilter?) { notePaint.colorFilter = colorFilter }
+        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
     }
 }

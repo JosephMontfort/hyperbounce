@@ -314,6 +314,7 @@ object True2DGridEngine {
             val spec = if (!isSystem) ControlCenterConfigHolder.getRecordSpec(item) else null
             val isTargetOverride = (overrideSpec != null && (
                 (spec != null && spec.equals(overrideSpec, ignoreCase = true)) ||
+                (overrideSpec.equals("media", ignoreCase = true) && (vt == 3484336 || vt == 63342 || item.javaClass.name.contains("MediaPlayer") || (spec != null && spec.equals("media", ignoreCase = true)))) ||
                 (overrideSpec.equals("brightness", ignoreCase = true) && (vt == 3484338 || vt == 274442 || item.javaClass.name.contains("Brightness"))) ||
                 (overrideSpec.equals("volume", ignoreCase = true) && (vt == 3484339 || item.javaClass.name.contains("Volume")))
             ))
