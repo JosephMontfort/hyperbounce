@@ -21,6 +21,7 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.widget.ImageView
@@ -30,7 +31,8 @@ import android.widget.TextView
 /**
  * FluidTileResizeHandler provides semi-fluid, directional tile and slider expansion/shrinking
  * with strict corner radius preservation, unstretched 1:1 icon rendering, full-scale stock text reveal,
- * exact stock theme color sampling, and real-time 2D bin-packing neighbour displacement matching HyperOS stock layout.
+ * exact stock theme color sampling, zero-flicker release-to-resize transition,
+ * and real-time 2D bin-packing neighbour displacement matching HyperOS stock layout.
  */
 object FluidTileResizeHandler {
 
@@ -80,19 +82,19 @@ object FluidTileResizeHandler {
 
         val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
-            textSize = 14.5f * density
+            textSize = 15.5f * density
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         }
         val subtitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#B3FFFFFF")
-            textSize = 12f * density
+            textSize = 13.5f * density
             typeface = Typeface.create("sans-serif", Typeface.NORMAL)
         }
         private val handleDrawable = CurvedResizeHandleDrawable(density)
         private val clipPath = Path()
 
         val currentRect = RectF()
-        var cornerRadius = 26f * density
+        var cornerRadius = 20f * density
         var isSnapping = false
         var isSlider = false
         var layoutMode = LAYOUT_MODE_HORIZONTAL
@@ -141,47 +143,28 @@ object FluidTileResizeHandler {
         override fun draw(canvas: Canvas) {
             if (currentRect.isEmpty) return
 
-            // 1. Draw smooth background matching native cards/tiles
-            if (customBgDrawable != null) {
-                if (customBgDrawable is GradientDrawable) {
-                    (customBgDrawable as GradientDrawable).cornerRadius = cornerRadius
-                    customBgDrawable?.setBounds(
-                        currentRect.left.toInt(),
-                        currentRect.top.toInt(),
-                        currentRect.right.toInt(),
-                        currentRect.bottom.toInt()
-                    )
-                    customBgDrawable?.draw(canvas)
-                } else {
-                    canvas.save()
-                    clipPath.reset()
-                    clipPath.addRoundRect(currentRect, cornerRadius, cornerRadius, Path.Direction.CW)
-                    canvas.clipPath(clipPath)
-                    customBgDrawable?.setBounds(
-                        currentRect.left.toInt(),
-                        currentRect.top.toInt(),
-                        currentRect.right.toInt(),
-                        currentRect.bottom.toInt()
-                    )
-                    customBgDrawable?.draw(canvas)
-                    canvas.restore()
-                }
-            } else {
-                canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, bgPaint)
-            }
-
-            // If slider, draw progress fill, unstretched icon, subtle border and handle
+            // If slider, draw background track, progress fill (clipped to corner radius), border, icon, and handle
             if (isSlider) {
-                if (sliderProgressFraction > 0.02f) {
-                    val progressW = (currentRect.width() * sliderProgressFraction)
-                        .coerceAtLeast(cornerRadius * 2f)
-                        .coerceAtMost(currentRect.width())
-                    val progressRect = RectF(currentRect.left, currentRect.top, currentRect.left + progressW, currentRect.bottom)
-                    canvas.drawRoundRect(progressRect, cornerRadius, cornerRadius, sliderProgressPaint)
-                }
+                canvas.save()
+                clipPath.reset()
+                clipPath.addRoundRect(currentRect, cornerRadius, cornerRadius, Path.Direction.CW)
+                canvas.clipPath(clipPath)
 
+                // 1. Slider track background
+                canvas.drawRect(currentRect, bgPaint)
+
+                // 2. Slider progress fill (white pill clipped by the track's rounded boundary)
+                if (sliderProgressFraction > 0.01f) {
+                    val progressW = currentRect.width() * sliderProgressFraction
+                    val progressRect = RectF(currentRect.left, currentRect.top, currentRect.left + progressW, currentRect.bottom)
+                    canvas.drawRect(progressRect, sliderProgressPaint)
+                }
+                canvas.restore()
+
+                // 3. Subtle border
                 canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, borderPaint)
 
+                // 4. Unstretched icon
                 iconDrawable?.let { ic ->
                     ic.setBounds(
                         iconRect.left.toInt(),
@@ -193,12 +176,28 @@ object FluidTileResizeHandler {
                     ic.draw(canvas)
                 }
 
+                // 5. Curved resize handle at bottom-right corner
                 val handleSize = 34f * density
                 val hLeft = currentRect.right - handleSize
                 val hTop = currentRect.bottom - handleSize
                 handleDrawable.setBounds(hLeft.toInt(), hTop.toInt(), currentRect.right.toInt(), currentRect.bottom.toInt())
                 handleDrawable.draw(canvas)
                 return
+            }
+
+            // 1. Draw smooth background matching native cards/tiles with strictly preserved corner radius
+            if (customBgDrawable != null && customBgDrawable is GradientDrawable) {
+                val gd = customBgDrawable as GradientDrawable
+                gd.cornerRadius = cornerRadius
+                gd.setBounds(
+                    currentRect.left.toInt(),
+                    currentRect.top.toInt(),
+                    currentRect.right.toInt(),
+                    currentRect.bottom.toInt()
+                )
+                gd.draw(canvas)
+            } else {
+                canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, bgPaint)
             }
 
             // 2. Draw subtle border (Preserves clean stock look without blue frame)
@@ -224,7 +223,7 @@ object FluidTileResizeHandler {
                     val sm = subtitlePaint.fontMetrics
                     sm.descent - sm.ascent
                 } else 0f
-                val gapBetween = 2.5f * density
+                val gapBetween = 3f * density
                 val totalTextH = if (subH > 0) titleH + subH + gapBetween else titleH
 
                 when (layoutMode) {
@@ -249,7 +248,7 @@ object FluidTileResizeHandler {
                     LAYOUT_MODE_VERTICAL -> {
                         // Icon at top, text below icon
                         val textStartX = currentRect.left + 14f * density
-                        val textStartY = iconRect.bottom + 8f * density
+                        val textStartY = iconRect.bottom + 10f * density
                         val titleBaseline = textStartY - fontMetrics.ascent
                         val subBaseline = titleBaseline + fontMetrics.descent + gapBetween - subtitlePaint.fontMetrics.ascent
 
@@ -266,7 +265,7 @@ object FluidTileResizeHandler {
                     }
                     LAYOUT_MODE_LARGE -> {
                         // 2x2: Icon at upper-center, text below icon centered
-                        val textStartY = iconRect.bottom + 10f * density
+                        val textStartY = iconRect.bottom + 12f * density
                         val titleBaseline = textStartY - fontMetrics.ascent
                         val subBaseline = titleBaseline + fontMetrics.descent + gapBetween - subtitlePaint.fontMetrics.ascent
                         val centerX = currentRect.centerX()
@@ -352,6 +351,10 @@ object FluidTileResizeHandler {
         private var cardH = 0f
         private var tallH = 0f
         private var gap = 0f
+
+        private var fixedCornerRadius = 20f * density
+        private var stockCardRadius = 20f * density
+        private var sliderRadius = 16f * density
 
         private fun lerp(start: Float, end: Float, fraction: Float): Float {
             return start + (end - start) * fraction.coerceIn(0f, 1f)
@@ -609,6 +612,11 @@ object FluidTileResizeHandler {
                             try { ctx.resources.getColor(disabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#4D000000") }
                         } else Color.parseColor("#4D000000")
 
+                        // Query stock corner radii
+                        val cardRadiusResId = ctx.resources.getIdentifier("control_center_universal_corner_radius", "dimen", ctx.packageName)
+                        stockCardRadius = if (cardRadiusResId != 0) ctx.resources.getDimension(cardRadiusResId) else (20f * density)
+                        sliderRadius = 16f * density
+
                         if (isSliderSpec) {
                             val w = if (isBrightnessSpec) ControlCenterConfigHolder.sBrightnessSliderWidth else ControlCenterConfigHolder.sVolumeSliderWidth
                             initialCols = w.coerceIn(2, 4)
@@ -622,6 +630,8 @@ object FluidTileResizeHandler {
                                 else -> twoColW
                             }
                             originHeight = cardH
+
+                            fixedCornerRadius = sliderRadius
 
                             val rawIcon = findIcon(tileView)
                             val iconClone = rawIcon?.constantState?.newDrawable()?.mutate() ?: rawIcon
@@ -641,6 +651,7 @@ object FluidTileResizeHandler {
                                     customBg = null,
                                     sliderProgress = sliderProgress
                                 )
+                                cornerRadius = fixedCornerRadius
                             }
                         } else {
                             initialState = when {
@@ -670,6 +681,12 @@ object FluidTileResizeHandler {
                             originWidth = iconFrameW
                             originHeight = iconFrameH
 
+                            fixedCornerRadius = if (initialState == STATE_NORMAL) {
+                                originWidth.coerceAtMost(colW) / 2f
+                            } else {
+                                stockCardRadius
+                            }
+
                             // Extract visual components for morph overlay
                             val rawIcon = findIcon(iconFrame) ?: findIcon(tileView)
                             val iconClone = rawIcon?.constantState?.newDrawable()?.mutate() ?: rawIcon
@@ -678,40 +695,6 @@ object FluidTileResizeHandler {
                             inspectTextViews(tileView, textViews)
                             val titleTv = textViews.getOrNull(0)
                             val subTv = textViews.getOrNull(1)
-
-                            // Sample reference card in rv for exact text size/color if current tile lacks them
-                            var refTitleSize: Float? = null
-                            var refSubTitleSize: Float? = null
-                            var refSubColor: Int? = null
-                            for (i in 0 until rv.childCount) {
-                                val other = rv.getChildAt(i) ?: continue
-                                val otherTvs = mutableListOf<TextView>()
-                                inspectTextViews(other, otherTvs)
-                                if (otherTvs.size >= 2) {
-                                    val t0 = otherTvs[0]
-                                    val t1 = otherTvs[1]
-                                    if (t0.textSize > 0f && t1.textSize > 0f) {
-                                        refTitleSize = t0.textSize
-                                        refSubTitleSize = t1.textSize
-                                        refSubColor = t1.currentTextColor
-                                        break
-                                    }
-                                }
-                            }
-
-                            val subTitleDimenId = ctx.resources.getIdentifier("qs_card_item_sub_title_size", "dimen", ctx.packageName)
-                                .takeIf { it != 0 } ?: ctx.resources.getIdentifier("control_center_qs_sub_title_size", "dimen", ctx.packageName)
-                                .takeIf { it != 0 } ?: ctx.resources.getIdentifier("qs_tile_sub_title_size", "dimen", ctx.packageName)
-                            val fallbackSubTitleSize = if (subTitleDimenId != null && subTitleDimenId != 0) {
-                                try { ctx.resources.getDimension(subTitleDimenId) } catch (t: Throwable) { 12f * density }
-                            } else 12f * density
-
-                            val titleDimenId = ctx.resources.getIdentifier("qs_card_item_title_size", "dimen", ctx.packageName)
-                                .takeIf { it != 0 } ?: ctx.resources.getIdentifier("control_center_qs_title_size", "dimen", ctx.packageName)
-                                .takeIf { it != 0 } ?: ctx.resources.getIdentifier("qs_tile_title_size", "dimen", ctx.packageName)
-                            val fallbackTitleSize = if (titleDimenId != null && titleDimenId != 0) {
-                                try { ctx.resources.getDimension(titleDimenId) } catch (t: Throwable) { 14.5f * density }
-                            } else 14.5f * density
 
                             val title = titleTv?.text?.toString()?.takeIf { it.isNotBlank() } ?: spec.replaceFirstChar { it.uppercase() }
                             val subtitle = if (subTv != null && !subTv.text.isNullOrBlank() && subTv.text.length <= 20) {
@@ -744,16 +727,30 @@ object FluidTileResizeHandler {
                                     subtitle = subtitle,
                                     bgColor = resolvedBgColor,
                                     isSliderItem = false,
-                                    customBg = nativeBgDrawable,
+                                    customBg = if (nativeBgDrawable is GradientDrawable) nativeBgDrawable else null,
                                     sliderProgress = 0f
                                 )
-                                titlePaint.textSize = titleTv?.textSize ?: refTitleSize ?: fallbackTitleSize
-                                titlePaint.typeface = titleTv?.typeface ?: Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                                titlePaint.color = titleTv?.currentTextColor ?: Color.WHITE
+                                cornerRadius = fixedCornerRadius
 
-                                subtitlePaint.textSize = subTv?.textSize ?: refSubTitleSize ?: fallbackSubTitleSize
-                                subtitlePaint.typeface = subTv?.typeface ?: Typeface.create("sans-serif", Typeface.NORMAL)
-                                subtitlePaint.color = subTv?.currentTextColor ?: refSubColor ?: Color.parseColor("#B3FFFFFF")
+                                // Exact stock typography preservation
+                                if (titleTv != null && titleTv.textSize >= 14f * density) {
+                                    titlePaint.textSize = titleTv.textSize
+                                    titlePaint.typeface = titleTv.typeface ?: Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                                    titlePaint.color = titleTv.currentTextColor
+                                } else {
+                                    titlePaint.textSize = 15.5f * density
+                                    titlePaint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                                    titlePaint.color = Color.WHITE
+                                }
+                                if (subTv != null && subTv.textSize >= 12.5f * density) {
+                                    subtitlePaint.textSize = subTv.textSize
+                                    subtitlePaint.typeface = subTv.typeface ?: Typeface.create("sans-serif", Typeface.NORMAL)
+                                    subtitlePaint.color = subTv.currentTextColor
+                                } else {
+                                    subtitlePaint.textSize = 13.5f * density
+                                    subtitlePaint.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+                                    subtitlePaint.color = Color.parseColor("#B3FFFFFF")
+                                }
                             }
                         }
                     }
@@ -782,21 +779,19 @@ object FluidTileResizeHandler {
 
                     if (!isDragging) return true
 
-                    val cardRadius = 26f * density
-                    val circRadius = originWidth.coerceAtMost(colW) / 2f
                     val iconSize = 26f * density
 
                     var curW = originWidth
                     var curH = originHeight
-                    var curRadius = cardRadius
+                    // Corner radius is strictly preserved at fixedCornerRadius throughout the drag
+                    val curRadius = fixedCornerRadius
                     var layoutMode = LAYOUT_MODE_HORIZONTAL
                     val iconBox = RectF()
 
                     if (isSliderSpec) {
-                        // Slider resizing: Height strictly locked to 1 row, corner radius locked to 16dp
+                        // Slider resizing: Height strictly locked to 1 row, corner radius strictly preserved
                         curH = cardH
                         curW = (originWidth + dx).coerceIn(twoColW * 0.85f, fourColW * 1.05f)
-                        curRadius = 16f * density
 
                         val candidateCols = when {
                             curW > (threeColW + fourColW) / 2f -> 4
@@ -824,7 +819,7 @@ object FluidTileResizeHandler {
                     }
 
                     // Regular Tile Resizing: Semi-fluid directional expansion and shrinking
-                    // Top-left anchor is rigidly fixed at originLeft/originTop to eliminate reverse resistance!
+                    // Top-left anchor is rigidly fixed at originLeft/originTop to eliminate reverse resistance
                     val deltaW = (twoColW - originWidth).coerceAtLeast(30f * density)
                     val deltaH = (tallH - originHeight).coerceAtLeast(30f * density)
                     val snapDistX = deltaW * 0.28f
@@ -845,7 +840,6 @@ object FluidTileResizeHandler {
                                     targetState = if (dx >= snapDistX && dy >= snapDistY) STATE_LARGE else STATE_NORMAL
                                     curW = (originWidth + dx).coerceIn(originWidth, twoColW * 1.05f)
                                     curH = (originHeight + dy).coerceIn(originHeight, tallH * 1.05f)
-                                    curRadius = cardRadius
                                     layoutMode = LAYOUT_MODE_LARGE
 
                                     val targetIconX = curLeft + (curW - iconSize) / 2f
@@ -860,7 +854,6 @@ object FluidTileResizeHandler {
                                     val progress = (dx / deltaW).coerceIn(0f, 1f)
                                     curW = (originWidth + dx).coerceIn(originWidth, twoColW * 1.05f)
                                     curH = cardH // Strictly locked to 1 row! No vertical growth
-                                    curRadius = lerp(circRadius, cardRadius, progress)
                                     layoutMode = LAYOUT_MODE_HORIZONTAL
 
                                     val ix = curLeft + lerp((originWidth - iconSize) / 2f, 16f * density, progress)
@@ -872,7 +865,6 @@ object FluidTileResizeHandler {
                                     val progress = (dy / deltaH).coerceIn(0f, 1f)
                                     curW = colW // Strictly locked to 1 col! No horizontal growth
                                     curH = (originHeight + dy).coerceIn(originHeight, tallH * 1.05f)
-                                    curRadius = lerp(circRadius, cardRadius, progress)
                                     layoutMode = LAYOUT_MODE_VERTICAL
 
                                     val ix = curLeft + (curW - iconSize) / 2f
@@ -885,7 +877,6 @@ object FluidTileResizeHandler {
                                         val progress = (dx / deltaW).coerceIn(0f, 1f)
                                         curW = (originWidth + dx).coerceIn(originWidth, twoColW * 1.05f)
                                         curH = cardH // Strictly locked to 1 row!
-                                        curRadius = lerp(circRadius, cardRadius, progress)
                                         layoutMode = LAYOUT_MODE_HORIZONTAL
                                         val ix = curLeft + lerp((originWidth - iconSize) / 2f, 16f * density, progress)
                                         val iy = curTop + (curH - iconSize) / 2f
@@ -895,7 +886,6 @@ object FluidTileResizeHandler {
                                         val progress = (dy / deltaH).coerceIn(0f, 1f)
                                         curW = colW // Strictly locked to 1 col!
                                         curH = (originHeight + dy).coerceIn(originHeight, tallH * 1.05f)
-                                        curRadius = lerp(circRadius, cardRadius, progress)
                                         layoutMode = LAYOUT_MODE_VERTICAL
                                         val ix = curLeft + (curW - iconSize) / 2f
                                         val iy = curTop + lerp((originHeight - iconSize) / 2f, 16f * density, progress)
@@ -914,7 +904,6 @@ object FluidTileResizeHandler {
                                 val shrinkProgress = (-dx / shrinkDeltaW).coerceIn(0f, 1f)
                                 curW = (originWidth + dx).coerceIn(colW * 0.85f, originWidth)
                                 curH = cardH // Locked to 1 row
-                                curRadius = lerp(cardRadius, circRadius, shrinkProgress)
                                 layoutMode = LAYOUT_MODE_HORIZONTAL
 
                                 val ix = curLeft + lerp(16f * density, (curW - iconSize) / 2f, shrinkProgress)
@@ -924,7 +913,6 @@ object FluidTileResizeHandler {
                                 targetState = if (dy >= snapDistY) STATE_LARGE else STATE_EXPANDED
                                 curW = originWidth // Locked to 2 cols
                                 curH = (originHeight + dy).coerceIn(originHeight, tallH * 1.05f)
-                                curRadius = cardRadius
                                 layoutMode = LAYOUT_MODE_LARGE
 
                                 val ix = curLeft + (curW - iconSize) / 2f
@@ -933,7 +921,6 @@ object FluidTileResizeHandler {
                             } else {
                                 curW = originWidth
                                 curH = originHeight
-                                curRadius = cardRadius
                                 layoutMode = LAYOUT_MODE_HORIZONTAL
                                 val ix = curLeft + 16f * density
                                 val iy = curTop + (curH - iconSize) / 2f
@@ -950,7 +937,6 @@ object FluidTileResizeHandler {
                                 val shrinkProgress = (-dy / shrinkDeltaH).coerceIn(0f, 1f)
                                 curW = colW // Locked to 1 col
                                 curH = (originHeight + dy).coerceIn(cardH * 0.85f, originHeight)
-                                curRadius = lerp(cardRadius, circRadius, shrinkProgress)
                                 layoutMode = LAYOUT_MODE_VERTICAL
 
                                 val ix = curLeft + (curW - iconSize) / 2f
@@ -960,7 +946,6 @@ object FluidTileResizeHandler {
                                 targetState = if (dx >= snapDistX) STATE_LARGE else STATE_VERTICAL
                                 curW = (originWidth + dx).coerceIn(originWidth, twoColW * 1.05f)
                                 curH = originHeight // Locked to 2 rows
-                                curRadius = cardRadius
                                 layoutMode = LAYOUT_MODE_LARGE
 
                                 val ix = curLeft + (curW - iconSize) / 2f
@@ -969,7 +954,6 @@ object FluidTileResizeHandler {
                             } else {
                                 curW = originWidth
                                 curH = originHeight
-                                curRadius = cardRadius
                                 layoutMode = LAYOUT_MODE_VERTICAL
                                 val ix = curLeft + (curW - iconSize) / 2f
                                 val iy = curTop + 16f * density
@@ -992,7 +976,6 @@ object FluidTileResizeHandler {
 
                             curW = (originWidth + dx).coerceIn(colW * 0.85f, originWidth)
                             curH = (originHeight + dy).coerceIn(cardH * 0.85f, originHeight)
-                            curRadius = cardRadius
                             layoutMode = if (targetState == STATE_VERTICAL) LAYOUT_MODE_VERTICAL else if (targetState == STATE_EXPANDED) LAYOUT_MODE_HORIZONTAL else LAYOUT_MODE_LARGE
                             val ix = curLeft + (curW - iconSize) / 2f
                             val iy = curTop + 24f * density
@@ -1000,7 +983,7 @@ object FluidTileResizeHandler {
                         }
                     }
 
-                    // Update morph overlay
+                    // Update morph overlay with strictly preserved corner radius
                     val drawRect = RectF(curLeft, curTop, curLeft + curW, curTop + curH)
                     val isSnapping = (targetState != initialState && targetState != -1)
                     morphDrawable?.updateMorph(drawRect, curRadius, iconBox, isSnapping, layoutMode)
@@ -1036,6 +1019,16 @@ object FluidTileResizeHandler {
                             val finalCols = if (candidateTargetState != -1) candidateTargetState.coerceIn(2, 4) else initialCols
                             v.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
 
+                            if (finalCols != initialCols) {
+                                if (isBrightnessSpec) {
+                                    ControlCenterConfigHolder.sBrightnessSliderWidth = finalCols
+                                } else {
+                                    ControlCenterConfigHolder.sVolumeSliderWidth = finalCols
+                                }
+                                ControlCenterConfigHolder.savePriorities(ctx)
+                                ControlCenterConfigHolder.refreshRecyclerView(tileView)
+                            }
+
                             val finalW = when (finalCols) {
                                 3 -> threeColW
                                 4 -> fourColW
@@ -1045,11 +1038,32 @@ object FluidTileResizeHandler {
                             if (md != null && rv != null) {
                                 val startRect = RectF(md.currentRect)
                                 val targetRect = RectF(tileLeft, tileTop, tileLeft + finalW, tileTop + cardH)
-                                val sliderRadius = 16f * density
+
+                                if (finalCols != initialCols) {
+                                    // Zero-flicker pre-draw: when RecyclerView completes the new layout pass,
+                                    // reset translation offsets without any visual jump or snap-back.
+                                    val preDrawListener = object : ViewTreeObserver.OnPreDrawListener {
+                                        override fun onPreDraw(): Boolean {
+                                            rv.viewTreeObserver.removeOnPreDrawListener(this)
+                                            for (i in 0 until rv.childCount) {
+                                                val child = rv.getChildAt(i) ?: continue
+                                                child.translationX = 0f
+                                                child.translationY = 0f
+                                            }
+                                            return true
+                                        }
+                                    }
+                                    rv.viewTreeObserver.addOnPreDrawListener(preDrawListener)
+                                } else {
+                                    for (i in 0 until rv.childCount) {
+                                        val child = rv.getChildAt(i) ?: continue
+                                        child.animate().translationX(0f).translationY(0f).setDuration(200).start()
+                                    }
+                                }
 
                                 val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-                                    duration = 240
-                                    interpolator = OvershootInterpolator(1.1f)
+                                    duration = 220
+                                    interpolator = OvershootInterpolator(1.05f)
                                     addUpdateListener { va ->
                                         val f = va.animatedFraction
                                         val r = RectF(
@@ -1063,21 +1077,10 @@ object FluidTileResizeHandler {
                                     }
                                     addListener(object : AnimatorListenerAdapter() {
                                         override fun onAnimationEnd(animation: Animator) {
-                                            for (i in 0 until rv.childCount) {
-                                                val child = rv.getChildAt(i) ?: continue
-                                                child.translationX = 0f
-                                                child.translationY = 0f
+                                            rv.post {
+                                                rv.overlay.clear()
+                                                tileView.alpha = 1.0f
                                             }
-                                            rv.overlay.clear()
-                                            tileView.alpha = 1.0f
-
-                                            if (isBrightnessSpec) {
-                                                ControlCenterConfigHolder.sBrightnessSliderWidth = finalCols
-                                            } else {
-                                                ControlCenterConfigHolder.sVolumeSliderWidth = finalCols
-                                            }
-                                            ControlCenterConfigHolder.savePriorities(ctx)
-                                            ControlCenterConfigHolder.refreshRecyclerView(tileView)
                                         }
                                     })
                                 }
@@ -1101,16 +1104,75 @@ object FluidTileResizeHandler {
                             }
                             val finalTargetLeft = if (finalState == STATE_NORMAL) iconFrameLeft else tileLeft
                             val finalTargetTop = if (finalState == STATE_NORMAL) iconFrameTop else tileTop
-                            val finalRadius = if (finalState == STATE_NORMAL) (finalW / 2f) else (26f * density)
+                            val finalRadius = if (finalState == STATE_NORMAL) (finalW / 2f) else stockCardRadius
+
+                            if (finalState != initialState) {
+                                // Update layout configuration immediately upon handle release!
+                                when (finalState) {
+                                    STATE_EXPANDED -> {
+                                        ControlCenterConfigHolder.sExpandedTileSpecs.add(spec)
+                                        ControlCenterConfigHolder.sLargeTileSpecs.remove(spec)
+                                        ControlCenterConfigHolder.sVerticalTileSpecs.remove(spec)
+                                        ControlCenterConfigHolder.sCircularCardSpecs.remove(spec)
+                                    }
+                                    STATE_VERTICAL -> {
+                                        ControlCenterConfigHolder.sVerticalTileSpecs.add(spec)
+                                        ControlCenterConfigHolder.sExpandedTileSpecs.remove(spec)
+                                        ControlCenterConfigHolder.sLargeTileSpecs.remove(spec)
+                                        ControlCenterConfigHolder.sCircularCardSpecs.remove(spec)
+                                    }
+                                    STATE_LARGE -> {
+                                        ControlCenterConfigHolder.sLargeTileSpecs.add(spec)
+                                        ControlCenterConfigHolder.sExpandedTileSpecs.remove(spec)
+                                        ControlCenterConfigHolder.sVerticalTileSpecs.remove(spec)
+                                        ControlCenterConfigHolder.sCircularCardSpecs.remove(spec)
+                                    }
+                                    STATE_NORMAL -> {
+                                        ControlCenterConfigHolder.sExpandedTileSpecs.remove(spec)
+                                        ControlCenterConfigHolder.sVerticalTileSpecs.remove(spec)
+                                        ControlCenterConfigHolder.sLargeTileSpecs.remove(spec)
+                                        if ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) {
+                                            ControlCenterConfigHolder.sCircularCardSpecs.add(spec)
+                                        } else {
+                                            ControlCenterConfigHolder.sCircularCardSpecs.remove(spec)
+                                        }
+                                    }
+                                }
+                                ControlCenterConfigHolder.savePriorities(ctx)
+                                ControlCenterConfigHolder.refreshRecyclerView(tileView)
+                            }
 
                             if (md != null && rv != null) {
                                 val startRect = RectF(md.currentRect)
                                 val targetRect = RectF(finalTargetLeft, finalTargetTop, finalTargetLeft + finalW, finalTargetTop + finalH)
                                 val startRad = md.cornerRadius
 
+                                if (finalState != initialState) {
+                                    // Zero-flicker pre-draw listener:
+                                    // Ensures displaced tiles do NOT snap back to baseline before the new layout pass.
+                                    val preDrawListener = object : ViewTreeObserver.OnPreDrawListener {
+                                        override fun onPreDraw(): Boolean {
+                                            rv.viewTreeObserver.removeOnPreDrawListener(this)
+                                            for (i in 0 until rv.childCount) {
+                                                val child = rv.getChildAt(i) ?: continue
+                                                child.translationX = 0f
+                                                child.translationY = 0f
+                                            }
+                                            return true
+                                        }
+                                    }
+                                    rv.viewTreeObserver.addOnPreDrawListener(preDrawListener)
+                                } else {
+                                    // Cancelled resize / returned to initial: smoothly animate neighbours back to 0
+                                    for (i in 0 until rv.childCount) {
+                                        val child = rv.getChildAt(i) ?: continue
+                                        child.animate().translationX(0f).translationY(0f).setDuration(200).start()
+                                    }
+                                }
+
                                 val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-                                    duration = 240
-                                    interpolator = OvershootInterpolator(1.1f)
+                                    duration = 220
+                                    interpolator = OvershootInterpolator(1.05f)
                                     addUpdateListener { va ->
                                         val f = va.animatedFraction
                                         val r = RectF(
@@ -1125,23 +1187,9 @@ object FluidTileResizeHandler {
                                     }
                                     addListener(object : AnimatorListenerAdapter() {
                                         override fun onAnimationEnd(animation: Animator) {
-                                            for (i in 0 until rv.childCount) {
-                                                val child = rv.getChildAt(i) ?: continue
-                                                child.translationX = 0f
-                                                child.translationY = 0f
-                                            }
-                                            rv.overlay.clear()
-                                            tileView.alpha = 1.0f
-
-                                            if (finalState != initialState) {
-                                                when (finalState) {
-                                                    STATE_EXPANDED -> ControlCenterConfigHolder.setTileToExpanded(ctx, spec, tileView)
-                                                    STATE_VERTICAL -> ControlCenterConfigHolder.setTileToVertical(ctx, spec, tileView)
-                                                    STATE_LARGE -> ControlCenterConfigHolder.setTileToLarge(ctx, spec, tileView)
-                                                    STATE_NORMAL -> ControlCenterConfigHolder.setTileToNormal(ctx, spec, tileView)
-                                                }
-                                            } else {
-                                                ControlCenterConfigHolder.refreshRecyclerView(tileView)
+                                            rv.post {
+                                                rv.overlay.clear()
+                                                tileView.alpha = 1.0f
                                             }
                                         }
                                     })
