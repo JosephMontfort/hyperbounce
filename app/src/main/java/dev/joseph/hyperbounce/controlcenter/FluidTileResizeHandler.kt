@@ -1026,7 +1026,6 @@ object FluidTileResizeHandler {
                                     ControlCenterConfigHolder.sVolumeSliderWidth = finalCols
                                 }
                                 ControlCenterConfigHolder.savePriorities(ctx)
-                                ControlCenterConfigHolder.refreshRecyclerView(tileView)
                             }
 
                             val finalW = when (finalCols) {
@@ -1040,51 +1039,78 @@ object FluidTileResizeHandler {
                                 val targetRect = RectF(tileLeft, tileTop, tileLeft + finalW, tileTop + cardH)
 
                                 if (finalCols != initialCols) {
-                                    // Zero-flicker pre-draw: when RecyclerView completes the new layout pass,
-                                    // reset translation offsets without any visual jump or snap-back.
-                                    val preDrawListener = object : ViewTreeObserver.OnPreDrawListener {
-                                        override fun onPreDraw(): Boolean {
-                                            rv.viewTreeObserver.removeOnPreDrawListener(this)
-                                            for (i in 0 until rv.childCount) {
-                                                val child = rv.getChildAt(i) ?: continue
-                                                child.translationX = 0f
-                                                child.translationY = 0f
-                                            }
-                                            return true
+                                    var animationEnded = false
+                                    var layoutRefreshed = false
+
+                                    fun tryFinish() {
+                                        if (animationEnded && layoutRefreshed) {
+                                            rv.overlay.clear()
+                                            tileView.alpha = 1.0f
                                         }
                                     }
-                                    rv.viewTreeObserver.addOnPreDrawListener(preDrawListener)
+
+                                    ControlCenterConfigHolder.refreshRecyclerView(tileView) {
+                                        layoutRefreshed = true
+                                        // Layout with new spans is complete: reset translations with zero visual jump!
+                                        for (i in 0 until rv.childCount) {
+                                            val child = rv.getChildAt(i) ?: continue
+                                            child.translationX = 0f
+                                            child.translationY = 0f
+                                        }
+                                        tryFinish()
+                                    }
+
+                                    val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+                                        duration = 200
+                                        interpolator = OvershootInterpolator(1.05f)
+                                        addUpdateListener { va ->
+                                            val f = va.animatedFraction
+                                            val r = RectF(
+                                                lerp(startRect.left, targetRect.left, f),
+                                                lerp(startRect.top, targetRect.top, f),
+                                                lerp(startRect.right, targetRect.right, f),
+                                                lerp(startRect.bottom, targetRect.bottom, f)
+                                            )
+                                            md.updateMorph(r, sliderRadius, md.iconRect, false, LAYOUT_MODE_HORIZONTAL)
+                                            rv.invalidate()
+                                        }
+                                        addListener(object : AnimatorListenerAdapter() {
+                                            override fun onAnimationEnd(animation: Animator) {
+                                                animationEnded = true
+                                                tryFinish()
+                                            }
+                                        })
+                                    }
+                                    anim.start()
                                 } else {
                                     for (i in 0 until rv.childCount) {
                                         val child = rv.getChildAt(i) ?: continue
                                         child.animate().translationX(0f).translationY(0f).setDuration(200).start()
                                     }
-                                }
 
-                                val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-                                    duration = 220
-                                    interpolator = OvershootInterpolator(1.05f)
-                                    addUpdateListener { va ->
-                                        val f = va.animatedFraction
-                                        val r = RectF(
-                                            lerp(startRect.left, targetRect.left, f),
-                                            lerp(startRect.top, targetRect.top, f),
-                                            lerp(startRect.right, targetRect.right, f),
-                                            lerp(startRect.bottom, targetRect.bottom, f)
-                                        )
-                                        md.updateMorph(r, sliderRadius, md.iconRect, false, LAYOUT_MODE_HORIZONTAL)
-                                        rv.invalidate()
-                                    }
-                                    addListener(object : AnimatorListenerAdapter() {
-                                        override fun onAnimationEnd(animation: Animator) {
-                                            rv.post {
+                                    val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+                                        duration = 200
+                                        interpolator = OvershootInterpolator(1.05f)
+                                        addUpdateListener { va ->
+                                            val f = va.animatedFraction
+                                            val r = RectF(
+                                                lerp(startRect.left, targetRect.left, f),
+                                                lerp(startRect.top, targetRect.top, f),
+                                                lerp(startRect.right, targetRect.right, f),
+                                                lerp(startRect.bottom, targetRect.bottom, f)
+                                            )
+                                            md.updateMorph(r, sliderRadius, md.iconRect, false, LAYOUT_MODE_HORIZONTAL)
+                                            rv.invalidate()
+                                        }
+                                        addListener(object : AnimatorListenerAdapter() {
+                                            override fun onAnimationEnd(animation: Animator) {
                                                 rv.overlay.clear()
                                                 tileView.alpha = 1.0f
                                             }
-                                        }
-                                    })
+                                        })
+                                    }
+                                    anim.start()
                                 }
-                                anim.start()
                             } else {
                                 rv?.overlay?.clear()
                                 tileView.alpha = 1.0f
@@ -1139,7 +1165,6 @@ object FluidTileResizeHandler {
                                     }
                                 }
                                 ControlCenterConfigHolder.savePriorities(ctx)
-                                ControlCenterConfigHolder.refreshRecyclerView(tileView)
                             }
 
                             if (md != null && rv != null) {
@@ -1148,53 +1173,82 @@ object FluidTileResizeHandler {
                                 val startRad = md.cornerRadius
 
                                 if (finalState != initialState) {
-                                    // Zero-flicker pre-draw listener:
-                                    // Ensures displaced tiles do NOT snap back to baseline before the new layout pass.
-                                    val preDrawListener = object : ViewTreeObserver.OnPreDrawListener {
-                                        override fun onPreDraw(): Boolean {
-                                            rv.viewTreeObserver.removeOnPreDrawListener(this)
-                                            for (i in 0 until rv.childCount) {
-                                                val child = rv.getChildAt(i) ?: continue
-                                                child.translationX = 0f
-                                                child.translationY = 0f
-                                            }
-                                            return true
+                                    var animationEnded = false
+                                    var layoutRefreshed = false
+
+                                    fun tryFinish() {
+                                        if (animationEnded && layoutRefreshed) {
+                                            rv.overlay.clear()
+                                            tileView.alpha = 1.0f
                                         }
                                     }
-                                    rv.viewTreeObserver.addOnPreDrawListener(preDrawListener)
+
+                                    ControlCenterConfigHolder.refreshRecyclerView(tileView) {
+                                        layoutRefreshed = true
+                                        // The layout pass with the new spans has completed!
+                                        // Reset translations so views sit naturally at their new physical positions with ZERO visual movement!
+                                        for (i in 0 until rv.childCount) {
+                                            val child = rv.getChildAt(i) ?: continue
+                                            child.translationX = 0f
+                                            child.translationY = 0f
+                                        }
+                                        tryFinish()
+                                    }
+
+                                    val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+                                        duration = 200
+                                        interpolator = OvershootInterpolator(1.05f)
+                                        addUpdateListener { va ->
+                                            val f = va.animatedFraction
+                                            val r = RectF(
+                                                lerp(startRect.left, targetRect.left, f),
+                                                lerp(startRect.top, targetRect.top, f),
+                                                lerp(startRect.right, targetRect.right, f),
+                                                lerp(startRect.bottom, targetRect.bottom, f)
+                                            )
+                                            val rad = lerp(startRad, finalRadius, f)
+                                            md.updateMorph(r, rad, md.iconRect, false, md.layoutMode)
+                                            rv.invalidate()
+                                        }
+                                        addListener(object : AnimatorListenerAdapter() {
+                                            override fun onAnimationEnd(animation: Animator) {
+                                                animationEnded = true
+                                                tryFinish()
+                                            }
+                                        })
+                                    }
+                                    anim.start()
                                 } else {
-                                    // Cancelled resize / returned to initial: smoothly animate neighbours back to 0
+                                    // Returned to initial state: smoothly animate neighbours back to 0
                                     for (i in 0 until rv.childCount) {
                                         val child = rv.getChildAt(i) ?: continue
                                         child.animate().translationX(0f).translationY(0f).setDuration(200).start()
                                     }
-                                }
 
-                                val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-                                    duration = 220
-                                    interpolator = OvershootInterpolator(1.05f)
-                                    addUpdateListener { va ->
-                                        val f = va.animatedFraction
-                                        val r = RectF(
-                                            lerp(startRect.left, targetRect.left, f),
-                                            lerp(startRect.top, targetRect.top, f),
-                                            lerp(startRect.right, targetRect.right, f),
-                                            lerp(startRect.bottom, targetRect.bottom, f)
-                                        )
-                                        val rad = lerp(startRad, finalRadius, f)
-                                        md.updateMorph(r, rad, md.iconRect, false, md.layoutMode)
-                                        rv.invalidate()
-                                    }
-                                    addListener(object : AnimatorListenerAdapter() {
-                                        override fun onAnimationEnd(animation: Animator) {
-                                            rv.post {
+                                    val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+                                        duration = 200
+                                        interpolator = OvershootInterpolator(1.05f)
+                                        addUpdateListener { va ->
+                                            val f = va.animatedFraction
+                                            val r = RectF(
+                                                lerp(startRect.left, targetRect.left, f),
+                                                lerp(startRect.top, targetRect.top, f),
+                                                lerp(startRect.right, targetRect.right, f),
+                                                lerp(startRect.bottom, targetRect.bottom, f)
+                                            )
+                                            val rad = lerp(startRad, finalRadius, f)
+                                            md.updateMorph(r, rad, md.iconRect, false, md.layoutMode)
+                                            rv.invalidate()
+                                        }
+                                        addListener(object : AnimatorListenerAdapter() {
+                                            override fun onAnimationEnd(animation: Animator) {
                                                 rv.overlay.clear()
                                                 tileView.alpha = 1.0f
                                             }
-                                        }
-                                    })
+                                        })
+                                    }
+                                    anim.start()
                                 }
-                                anim.start()
                             } else {
                                 rv?.overlay?.clear()
                                 tileView.alpha = 1.0f

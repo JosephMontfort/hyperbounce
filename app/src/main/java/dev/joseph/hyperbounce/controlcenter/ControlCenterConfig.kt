@@ -1702,7 +1702,7 @@ object ControlCenterConfigHolder {
         }
     }
 
-    fun refreshRecyclerView(tileView: View?) {
+    fun refreshRecyclerView(tileView: View?, onRefreshed: (() -> Unit)? = null) {
         try {
             var parent: View? = tileView
             while (parent != null && !parent.javaClass.name.contains("RecyclerView")) {
@@ -1726,14 +1726,25 @@ object ControlCenterConfigHolder {
                             } catch (t: Throwable) {}
                             val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
                             notifyDataSetChangedMethod.invoke(adp)
+
+                            // Post on rv so onRefreshed runs immediately after the layout pass scheduled by notifyDataSetChanged
+                            rv.post {
+                                onRefreshed?.invoke()
+                            }
+                        } else {
+                            onRefreshed?.invoke()
                         }
                     } catch (t: Throwable) {
                         Log.e(TAG, "refreshRecyclerView notify error", t)
+                        onRefreshed?.invoke()
                     }
                 }
+            } else {
+                onRefreshed?.invoke()
             }
         } catch (t: Throwable) {
             Log.e(TAG, "refreshRecyclerView error", t)
+            onRefreshed?.invoke()
         }
     }
 
