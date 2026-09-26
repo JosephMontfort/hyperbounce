@@ -140,10 +140,8 @@ class SpannedGridLayoutManager : GridLayoutManager {
                 -1
             }
 
-            // 3484336 / 63342: MediaPlayer -> dynamic size (or 4x1 landscape)
+            // 3484336 / 63342: MediaPlayer -> dynamic size
             if (viewType == 3484336 || viewType == 63342) {
-                val isLandscape = mContext.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-                if (isLandscape) return intArrayOf(4, 1)
                 return when (ControlCenterConfigHolder.sMediaPlayerSize) {
                     "2x1" -> intArrayOf(2, 1)
                     "1x2" -> intArrayOf(1, 2)

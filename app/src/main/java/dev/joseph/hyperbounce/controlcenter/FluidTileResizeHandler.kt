@@ -9,6 +9,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
+import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
@@ -26,6 +27,7 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
@@ -64,25 +66,186 @@ object FluidTileResizeHandler {
         }
     }
 
+    fun resolveViewBackground(v: View?): Drawable? {
+        if (v == null) return null
+        if (v.background != null) return v.background
+        if (v is ViewGroup) {
+            for (i in 0 until v.childCount) {
+                val child = v.getChildAt(i)
+                if (child is ImageView || child is TextView) continue
+                val bg = resolveViewBackground(child)
+                if (bg != null) return bg
+            }
+        }
+        return null
+    }
+
     /**
-     * Custom morphing overlay drawable that renders the expanding or shrinking tile.
+     * Native View-based resize overlay added to targetContainer.overlay via ViewGroupOverlay.add(View).
+     * Connects directly to HyperOS HWUI native RenderNode blur shaders (MiBlurCompat) and Advanced Textures
+     * (MiuiColorBlendToken), strictly clipped by ViewOutlineProvider to cornerRadius.
+     * When blur is disabled, sets stock drawables without artificial acrylic or border painting.
+     */
+    class FluidResizeOverlayView(context: Context, val density: Float) : View(context) {
+        val morphDrawable = FluidTileMorphOverlayDrawable(density)
+        var currentCornerRadius: Float = 20f * density
+            set(value) {
+                field = value
+                morphDrawable.cornerRadius = value
+                invalidateOutline()
+            }
+        val currentRect = RectF()
+        var layoutMode: Int = LAYOUT_MODE_HORIZONTAL
+        var isNight: Boolean = true
+            set(value) {
+                field = value
+                morphDrawable.isNight = value
+            }
+
+        init {
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, currentCornerRadius)
+                }
+            }
+            clipToOutline = true
+        }
+
+        fun applyStockBackgroundOrBlur(
+            tileView: View,
+            classLoader: ClassLoader,
+            isActiveTile: Boolean,
+            isSlider: Boolean = false,
+            isMedia: Boolean = false
+        ) {
+            var blurApplied = false
+            try {
+                var blurEnabled = false
+                try {
+                    val ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader)
+                    val getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context::class.java)
+                    blurEnabled = getBlurM.invoke(null, context) as Boolean
+                } catch (t: Throwable) {}
+
+                if (blurEnabled) {
+                    val miBlurClass = findMiBlurClass(classLoader)
+                    val setModeMethod = miBlurClass?.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
+                    setModeMethod?.invoke(null, this, 1)
+
+                    val tokenClass = findMiuiColorBlendTokenClass(classLoader)
+                    val tokenInst = tokenClass?.getDeclaredField("INSTANCE")?.get(null)
+                    val tokenMethodName = if (isActiveTile && !isSlider && !isMedia) {
+                        "getCC_TILE_ON_BLEND_COLORS"
+                    } else {
+                        "getCC_TILE_DEFAULT_BLEND_COLORS"
+                    }
+                    val blendColors = tokenClass?.getMethod(tokenMethodName)?.invoke(tokenInst)
+                    if (blendColors != null && miBlurClass != null) {
+                        val setBlendMethod = miBlurClass.getMethod("setMiBackgroundBlendColors", View::class.java, blendColors.javaClass)
+                        setBlendMethod.invoke(null, this, blendColors)
+                        blurApplied = true
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "applyStockBackgroundOrBlur failed", t)
+            }
+
+            if (blurApplied) {
+                background = null
+            } else {
+                try {
+                    val miBlurClass = findMiBlurClass(classLoader)
+                    miBlurClass?.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)?.invoke(null, this, 0)
+                    miBlurClass?.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)?.invoke(null, this)
+                } catch (t: Throwable) {}
+                try {
+                    val commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
+                    val commonUtils = commonUtilsClass.getDeclaredField("INSTANCE").get(null)
+                    commonUtilsClass.getMethod("clearMiBlurBlendEffect", View::class.java).invoke(commonUtils, this)
+                } catch (t: Throwable) {}
+
+                val stockBg = (tileView.background ?: resolveViewBackground(tileView))?.constantState?.newDrawable()?.mutate()
+                if (stockBg != null) {
+                    background = stockBg
+                } else {
+                    val colorResId = if (isActiveTile) {
+                        context.resources.getIdentifier("qs_card_enabled_color", "color", context.packageName)
+                    } else {
+                        context.resources.getIdentifier("qs_card_disabled_color", "color", context.packageName)
+                    }
+                    val fallbackColor = if (colorResId != 0) {
+                        try { context.resources.getColor(colorResId, null) } catch (t: Throwable) { if (isActiveTile) 0xFF0088FF.toInt() else Color.parseColor("#4D000000") }
+                    } else {
+                        if (isActiveTile) 0xFF0088FF.toInt() else Color.parseColor("#4D000000")
+                    }
+                    background = GradientDrawable().apply {
+                        this.cornerRadius = currentCornerRadius
+                        setColor(fallbackColor)
+                    }
+                }
+            }
+            invalidateOutline()
+        }
+
+        fun updateMorph(
+            rect: RectF,
+            localRect: RectF,
+            radius: Float,
+            localIconBox: RectF,
+            snapping: Boolean,
+            mode: Int
+        ) {
+            currentRect.set(rect)
+            layoutMode = mode
+            currentCornerRadius = radius
+            morphDrawable.updateMorph(localRect, radius, localIconBox, snapping, mode)
+            val w = Math.max(1, (rect.right - rect.left).toInt())
+            val h = Math.max(1, (rect.bottom - rect.top).toInt())
+            measure(
+                MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY)
+            )
+            layout(rect.left.toInt(), rect.top.toInt(), rect.right.toInt(), rect.bottom.toInt())
+            invalidateOutline()
+            invalidate()
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            morphDrawable.draw(canvas)
+        }
+
+        companion object {
+            fun findMiBlurClass(classLoader: ClassLoader): Class<*>? {
+                return try {
+                    Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
+                } catch (e: Throwable) {
+                    try {
+                        Class.forName("com.miui.systemui.util.MiBlurCompat", false, classLoader)
+                    } catch (e2: Throwable) { null }
+                }
+            }
+
+            fun findMiuiColorBlendTokenClass(classLoader: ClassLoader): Class<*>? {
+                return try {
+                    Class.forName("miui.systemui.util.MiuiColorBlendToken", false, classLoader)
+                } catch (e: Throwable) {
+                    try {
+                        Class.forName("com.miui.systemui.util.MiuiColorBlendToken", false, classLoader)
+                    } catch (e2: Throwable) { null }
+                }
+            }
+        }
+    }
+
+    /**
+     * Custom morphing overlay drawable that renders foreground elements of the expanding or shrinking tile.
      * Preserves exact corner radius without stretching, keeps icons crisp and unstretched,
      * reveals full-scale stock text by clip mask as the tile expands, and draws the corner resize handle.
+     * Background blur and texture are handled natively by FluidResizeOverlayView.
      */
     class FluidTileMorphOverlayDrawable(private val density: Float) : Drawable() {
         var isNight: Boolean = true
-        private val baseAcrylicPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = Color.parseColor("#E6252528")
-        }
-        private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-        }
-        private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 1.0f * density
-            color = Color.parseColor("#26FFFFFF")
-        }
         private val sliderProgressPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
             color = Color.WHITE
@@ -134,7 +297,6 @@ object FluidTileResizeHandler {
             iconDrawable = icon
             titleText = title
             subtitleText = subtitle
-            bgPaint.color = bgColor
             isSlider = isSliderItem
             customBgDrawable = customBg
             sliderProgressFraction = sliderProgress
@@ -167,7 +329,6 @@ object FluidTileResizeHandler {
             nextDrawable = next
             titleText = title
             subtitleText = artist
-            bgPaint.color = bgColor
             customBgDrawable = customBg
             mediaProgressFraction = progress
 
@@ -223,41 +384,21 @@ object FluidTileResizeHandler {
         override fun draw(canvas: Canvas) {
             if (currentRect.isEmpty) return
 
-            // If slider, draw background track, progress fill (clipped to corner radius), border, icon, and handle
+            // If slider, draw progress fill (clipped to corner radius), icon, and handle
             if (isSlider) {
-                canvas.save()
-                clipPath.reset()
-                clipPath.addRoundRect(currentRect, cornerRadius, cornerRadius, Path.Direction.CW)
-                canvas.clipPath(clipPath)
-
-                // 1. Slider track background with solid acrylic substrate
-                baseAcrylicPaint.color = if (isNight) Color.parseColor("#E6252528") else Color.parseColor("#E6F0F0F3")
-                canvas.drawRect(currentRect, baseAcrylicPaint)
-
-                if (customBgDrawable != null) {
-                    customBgDrawable?.setBounds(
-                        currentRect.left.toInt(),
-                        currentRect.top.toInt(),
-                        currentRect.right.toInt(),
-                        currentRect.bottom.toInt()
-                    )
-                    customBgDrawable?.draw(canvas)
-                } else {
-                    canvas.drawRect(currentRect, bgPaint)
-                }
-
-                // 2. Slider progress fill (white pill clipped by the track's rounded boundary)
+                // 1. Slider progress fill (white pill clipped by the track's rounded boundary)
                 if (sliderProgressFraction > 0.01f) {
+                    canvas.save()
+                    clipPath.reset()
+                    clipPath.addRoundRect(currentRect, cornerRadius, cornerRadius, Path.Direction.CW)
+                    canvas.clipPath(clipPath)
                     val progressW = currentRect.width() * sliderProgressFraction
                     val progressRect = RectF(currentRect.left, currentRect.top, currentRect.left + progressW, currentRect.bottom)
                     canvas.drawRect(progressRect, sliderProgressPaint)
+                    canvas.restore()
                 }
-                canvas.restore()
 
-                // 3. Subtle border
-                canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, borderPaint)
-
-                // 4. Unstretched icon
+                // 2. Unstretched icon
                 iconDrawable?.let { ic ->
                     ic.setBounds(
                         iconRect.left.toInt(),
@@ -269,7 +410,7 @@ object FluidTileResizeHandler {
                     ic.draw(canvas)
                 }
 
-                // 5. Curved resize handle at bottom-right corner
+                // 3. Curved resize handle at bottom-right corner
                 val handleSize = 34f * density
                 val hLeft = currentRect.right - handleSize
                 val hTop = currentRect.bottom - handleSize
@@ -280,32 +421,6 @@ object FluidTileResizeHandler {
 
             // If media player, render album art, controls, and title/artist with strict corner radius and unstretched elements
             if (isMedia) {
-                canvas.save()
-                clipPath.reset()
-                clipPath.addRoundRect(currentRect, cornerRadius, cornerRadius, Path.Direction.CW)
-                canvas.clipPath(clipPath)
-
-                // Solid acrylic substrate matching stock control center card background
-                // Completely eliminates transparency while dragging/resizing
-                baseAcrylicPaint.color = if (isNight) Color.parseColor("#E6252528") else Color.parseColor("#E6F0F0F3")
-                canvas.drawRect(currentRect, baseAcrylicPaint)
-
-                if (customBgDrawable != null) {
-                    customBgDrawable?.setBounds(
-                        currentRect.left.toInt(),
-                        currentRect.top.toInt(),
-                        currentRect.right.toInt(),
-                        currentRect.bottom.toInt()
-                    )
-                    customBgDrawable?.draw(canvas)
-                } else {
-                    canvas.drawRect(currentRect, bgPaint)
-                }
-                canvas.restore()
-
-                // Subtle border
-                canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, borderPaint)
-
                 val w = currentRect.width()
                 val h = currentRect.height()
 
@@ -494,34 +609,7 @@ object FluidTileResizeHandler {
                 return
             }
 
-            // 1. Draw smooth background matching native cards/tiles with strictly preserved corner radius
-            canvas.save()
-            clipPath.reset()
-            clipPath.addRoundRect(currentRect, cornerRadius, cornerRadius, Path.Direction.CW)
-            canvas.clipPath(clipPath)
-
-            if (layoutMode == LAYOUT_MODE_HORIZONTAL || layoutMode == LAYOUT_MODE_LARGE) {
-                baseAcrylicPaint.color = if (isNight) Color.parseColor("#E6252528") else Color.parseColor("#E6F0F0F3")
-                canvas.drawRect(currentRect, baseAcrylicPaint)
-            }
-
-            if (customBgDrawable != null) {
-                customBgDrawable?.setBounds(
-                    currentRect.left.toInt(),
-                    currentRect.top.toInt(),
-                    currentRect.right.toInt(),
-                    currentRect.bottom.toInt()
-                )
-                customBgDrawable?.draw(canvas)
-            } else {
-                canvas.drawRect(currentRect, bgPaint)
-            }
-            canvas.restore()
-
-            // 2. Draw subtle border (Preserves clean stock look without blue frame)
-            canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, borderPaint)
-
-            // 3. Draw Unstretched Icon
+            // 1. Draw Unstretched Icon
             iconDrawable?.let { ic ->
                 ic.setBounds(
                     iconRect.left.toInt(),
@@ -615,13 +703,9 @@ object FluidTileResizeHandler {
             handleDrawable.draw(canvas)
         }
 
-        override fun setAlpha(alpha: Int) {
-            bgPaint.alpha = alpha
-        }
+        override fun setAlpha(alpha: Int) {}
 
-        override fun setColorFilter(colorFilter: ColorFilter?) {
-            bgPaint.colorFilter = colorFilter
-        }
+        override fun setColorFilter(colorFilter: ColorFilter?) {}
 
         override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
     }
@@ -660,7 +744,10 @@ object FluidTileResizeHandler {
         private var candidateTargetState = -1
 
         private var targetContainer: ViewGroup? = null
-        private var morphDrawable: FluidTileMorphOverlayDrawable? = null
+        private var overlayView: FluidResizeOverlayView? = null
+        private val morphDrawable: FluidTileMorphOverlayDrawable?
+            get() = overlayView?.morphDrawable
+        private val iconSize = 26f * density
 
         private var initialGridData: True2DGridEngine.AdapterGridData? = null
         private val childPosMap = mutableMapOf<View, Int>()
@@ -1017,9 +1104,10 @@ object FluidTileResizeHandler {
                                 else -> stockDisabledColor
                             }
 
-                            morphDrawable = FluidTileMorphOverlayDrawable(density).apply {
+                            val cl = tileView.javaClass.classLoader ?: ctx.classLoader
+                            overlayView = FluidResizeOverlayView(ctx, density).apply {
                                 this.isNight = isNight
-                                setup(
+                                morphDrawable.setup(
                                     icon = iconClone,
                                     title = null,
                                     subtitle = null,
@@ -1028,7 +1116,18 @@ object FluidTileResizeHandler {
                                     customBg = nativeBgDrawable,
                                     sliderProgress = sliderProgress
                                 )
-                                cornerRadius = fixedCornerRadius
+                                currentCornerRadius = fixedCornerRadius
+                                applyStockBackgroundOrBlur(
+                                    tileView = tileView,
+                                    classLoader = cl,
+                                    isActiveTile = false,
+                                    isSlider = true,
+                                    isMedia = false
+                                )
+                                val initRect = RectF(originLeft, originTop, originLeft + originWidth, originTop + originHeight)
+                                val initLocalRect = RectF(0f, 0f, originWidth, originHeight)
+                                val initLocalIconBox = RectF(16f * density, (originHeight - iconSize) / 2f, 16f * density + iconSize, (originHeight + iconSize) / 2f)
+                                updateMorph(initRect, initLocalRect, fixedCornerRadius, initLocalIconBox, false, LAYOUT_MODE_HORIZONTAL)
                             }
                         } else if (isMediaSpec) {
                             initialState = when (ControlCenterConfigHolder.sMediaPlayerSize) {
@@ -1193,9 +1292,10 @@ object FluidTileResizeHandler {
                                 else -> stockDisabledColor
                             }
 
-                            morphDrawable = FluidTileMorphOverlayDrawable(density).apply {
+                            val cl = tileView.javaClass.classLoader ?: ctx.classLoader
+                            overlayView = FluidResizeOverlayView(ctx, density).apply {
                                 this.isNight = isNight
-                                setupMedia(
+                                morphDrawable.setupMedia(
                                     cover = mediaCover,
                                     play = mediaPlay,
                                     prev = mediaPrev,
@@ -1212,7 +1312,18 @@ object FluidTileResizeHandler {
                                     artistTypeface = mediaArtistTypeface,
                                     artistColor = mediaArtistColor
                                 )
-                                cornerRadius = fixedCornerRadius
+                                currentCornerRadius = fixedCornerRadius
+                                applyStockBackgroundOrBlur(
+                                    tileView = tileView,
+                                    classLoader = cl,
+                                    isActiveTile = false,
+                                    isSlider = false,
+                                    isMedia = true
+                                )
+                                val initRect = RectF(originLeft, originTop, originLeft + originWidth, originTop + originHeight)
+                                val initLocalRect = RectF(0f, 0f, originWidth, originHeight)
+                                val initLocalIconBox = RectF(0f, 0f, 0f, 0f)
+                                updateMorph(initRect, initLocalRect, fixedCornerRadius, initLocalIconBox, false, LAYOUT_MODE_HORIZONTAL)
                             }
                         } else {
                             initialState = when {
@@ -1281,9 +1392,10 @@ object FluidTileResizeHandler {
                                 (resolveViewBackground(tileView) ?: tileView.background)?.constantState?.newDrawable()?.mutate()
                             } else null
 
-                            morphDrawable = FluidTileMorphOverlayDrawable(density).apply {
+                            val cl = tileView.javaClass.classLoader ?: ctx.classLoader
+                            overlayView = FluidResizeOverlayView(ctx, density).apply {
                                 this.isNight = isNight
-                                setup(
+                                morphDrawable.setup(
                                     icon = iconClone,
                                     title = title,
                                     subtitle = subtitle,
@@ -1292,27 +1404,49 @@ object FluidTileResizeHandler {
                                     customBg = nativeBgDrawable,
                                     sliderProgress = 0f
                                 )
-                                cornerRadius = fixedCornerRadius
+                                currentCornerRadius = fixedCornerRadius
 
                                 // Exact stock typography preservation
                                 if (titleTv != null && titleTv.textSize >= 14f * density) {
-                                    titlePaint.textSize = titleTv.textSize
-                                    titlePaint.typeface = titleTv.typeface ?: Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                                    titlePaint.color = titleTv.currentTextColor
+                                    morphDrawable.titlePaint.textSize = titleTv.textSize
+                                    morphDrawable.titlePaint.typeface = titleTv.typeface ?: Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                                    morphDrawable.titlePaint.color = titleTv.currentTextColor
                                 } else {
-                                    titlePaint.textSize = 15.5f * density
-                                    titlePaint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                                    titlePaint.color = Color.WHITE
+                                    morphDrawable.titlePaint.textSize = 15.5f * density
+                                    morphDrawable.titlePaint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                                    morphDrawable.titlePaint.color = Color.WHITE
                                 }
                                 if (subTv != null && subTv.textSize >= 12.5f * density) {
-                                    subtitlePaint.textSize = subTv.textSize
-                                    subtitlePaint.typeface = subTv.typeface ?: Typeface.create("sans-serif", Typeface.NORMAL)
-                                    subtitlePaint.color = subTv.currentTextColor
+                                    morphDrawable.subtitlePaint.textSize = subTv.textSize
+                                    morphDrawable.subtitlePaint.typeface = subTv.typeface ?: Typeface.create("sans-serif", Typeface.NORMAL)
+                                    morphDrawable.subtitlePaint.color = subTv.currentTextColor
                                 } else {
-                                    subtitlePaint.textSize = 13.5f * density
-                                    subtitlePaint.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-                                    subtitlePaint.color = Color.parseColor("#B3FFFFFF")
+                                    morphDrawable.subtitlePaint.textSize = 13.5f * density
+                                    morphDrawable.subtitlePaint.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+                                    morphDrawable.subtitlePaint.color = Color.parseColor("#B3FFFFFF")
                                 }
+
+                                applyStockBackgroundOrBlur(
+                                    tileView = tileView,
+                                    classLoader = cl,
+                                    isActiveTile = isActive,
+                                    isSlider = false,
+                                    isMedia = false
+                                )
+                                val initRect = RectF(originLeft, originTop, originLeft + originWidth, originTop + originHeight)
+                                val initLocalRect = RectF(0f, 0f, originWidth, originHeight)
+                                val initLocalIconBox = RectF(
+                                    iconFrameLeft - originLeft,
+                                    iconFrameTop - originTop,
+                                    iconFrameLeft - originLeft + iconFrameW,
+                                    iconFrameTop - originTop + iconFrameH
+                                )
+                                val initMode = when (initialState) {
+                                    STATE_LARGE -> LAYOUT_MODE_LARGE
+                                    STATE_VERTICAL -> LAYOUT_MODE_VERTICAL
+                                    else -> LAYOUT_MODE_HORIZONTAL
+                                }
+                                updateMorph(initRect, initLocalRect, fixedCornerRadius, initLocalIconBox, false, initMode)
                             }
                         }
                     }
@@ -1333,15 +1467,13 @@ object FluidTileResizeHandler {
                     if (dist > slop && !isDragging) {
                         isDragging = true
                         targetContainer?.overlay?.clear()
-                        morphDrawable?.let { md ->
-                            targetContainer?.overlay?.add(md)
+                        overlayView?.let { ov ->
+                            targetContainer?.overlay?.add(ov)
                         }
                         tileView.alpha = 0f
                     }
 
                     if (!isDragging) return true
-
-                    val iconSize = 26f * density
 
                     var curW = originWidth
                     var curH = originHeight
@@ -1367,7 +1499,9 @@ object FluidTileResizeHandler {
 
                         val drawRect = RectF(originLeft, originTop, originLeft + curW, originTop + curH)
                         val isSnapping = (candidateCols != initialCols)
-                        morphDrawable?.updateMorph(drawRect, fixedCornerRadius, iconBox, isSnapping, LAYOUT_MODE_HORIZONTAL)
+                        val localRect = RectF(0f, 0f, curW, curH)
+                        val localIconBox = RectF(16f * density, (curH - iconSize) / 2f, 16f * density + iconSize, (curH + iconSize) / 2f)
+                        overlayView?.updateMorph(drawRect, localRect, fixedCornerRadius, localIconBox, isSnapping, LAYOUT_MODE_HORIZONTAL)
                         targetContainer?.invalidate()
 
                         if (candidateCols != candidateTargetState) {
@@ -1472,7 +1606,9 @@ object FluidTileResizeHandler {
 
                         val drawRect = RectF(originLeft, originTop, originLeft + curW, originTop + curH)
                         val isSnapping = (targetState != initialState)
-                        morphDrawable?.updateMorph(drawRect, fixedCornerRadius, iconBox, isSnapping, LAYOUT_MODE_HORIZONTAL)
+                        val localRect = RectF(0f, 0f, curW, curH)
+                        val localIconBox = RectF(0f, 0f, 0f, 0f)
+                        overlayView?.updateMorph(drawRect, localRect, fixedCornerRadius, localIconBox, isSnapping, LAYOUT_MODE_HORIZONTAL)
                         targetContainer?.invalidate()
 
                         if (targetState != candidateTargetState) {
@@ -1661,7 +1797,9 @@ object FluidTileResizeHandler {
                     // Update morph overlay with strictly preserved corner radius
                     val drawRect = RectF(curLeft, curTop, curLeft + curW, curTop + curH)
                     val isSnapping = (targetState != initialState && targetState != -1)
-                    morphDrawable?.updateMorph(drawRect, curRadius, iconBox, isSnapping, layoutMode)
+                    val localRect = RectF(0f, 0f, curW, curH)
+                    val localIconBox = RectF(iconBox.left - curLeft, iconBox.top - curTop, iconBox.right - curLeft, iconBox.bottom - curTop)
+                    overlayView?.updateMorph(drawRect, localRect, curRadius, localIconBox, isSnapping, layoutMode)
                     targetContainer?.invalidate()
 
                     // Live neighbour displacement using True2DGridEngine
@@ -1687,7 +1825,6 @@ object FluidTileResizeHandler {
                     requestDisallowAll(v, false)
 
                     if (isDragging) {
-                        val md = morphDrawable
                         val rv = targetContainer
 
                         if (isSliderSpec) {
@@ -1709,8 +1846,9 @@ object FluidTileResizeHandler {
                                 else -> twoColW
                             }
 
-                            if (md != null && rv != null) {
-                                val startRect = RectF(md.currentRect)
+                            val ov = overlayView
+                            if (ov != null && rv != null) {
+                                val startRect = RectF(ov.currentRect)
                                 val targetRect = RectF(originLeft, originTop, originLeft + finalW, originTop + originHeight)
 
                                 if (finalCols != initialCols) {
@@ -1721,6 +1859,7 @@ object FluidTileResizeHandler {
                                         if (animationEnded && layoutRefreshed) {
                                             rv.overlay.clear()
                                             tileView.alpha = 1.0f
+                                            overlayView = null
                                         }
                                     }
 
@@ -1746,7 +1885,9 @@ object FluidTileResizeHandler {
                                                 lerp(startRect.right, targetRect.right, f),
                                                 lerp(startRect.bottom, targetRect.bottom, f)
                                             )
-                                            md.updateMorph(r, fixedCornerRadius, md.iconRect, false, LAYOUT_MODE_HORIZONTAL)
+                                            val lr = RectF(0f, 0f, r.width(), r.height())
+                                            val lib = RectF(16f * density, (r.height() - iconSize) / 2f, 16f * density + iconSize, (r.height() + iconSize) / 2f)
+                                            ov.updateMorph(r, lr, fixedCornerRadius, lib, false, LAYOUT_MODE_HORIZONTAL)
                                             rv.invalidate()
                                         }
                                         addListener(object : AnimatorListenerAdapter() {
@@ -1774,13 +1915,16 @@ object FluidTileResizeHandler {
                                                 lerp(startRect.right, targetRect.right, f),
                                                 lerp(startRect.bottom, targetRect.bottom, f)
                                             )
-                                            md.updateMorph(r, fixedCornerRadius, md.iconRect, false, LAYOUT_MODE_HORIZONTAL)
+                                            val lr = RectF(0f, 0f, r.width(), r.height())
+                                            val lib = RectF(16f * density, (r.height() - iconSize) / 2f, 16f * density + iconSize, (r.height() + iconSize) / 2f)
+                                            ov.updateMorph(r, lr, fixedCornerRadius, lib, false, LAYOUT_MODE_HORIZONTAL)
                                             rv.invalidate()
                                         }
                                         addListener(object : AnimatorListenerAdapter() {
                                             override fun onAnimationEnd(animation: Animator) {
                                                 rv.overlay.clear()
                                                 tileView.alpha = 1.0f
+                                                overlayView = null
                                             }
                                         })
                                     }
@@ -1789,6 +1933,7 @@ object FluidTileResizeHandler {
                             } else {
                                 rv?.overlay?.clear()
                                 tileView.alpha = 1.0f
+                                overlayView = null
                             }
                         } else if (isMediaSpec) {
                             val finalState = if (candidateTargetState != -1) candidateTargetState else initialState
@@ -1816,8 +1961,9 @@ object FluidTileResizeHandler {
                                 ControlCenterConfigHolder.savePriorities(ctx)
                             }
 
-                            if (md != null && rv != null) {
-                                val startRect = RectF(md.currentRect)
+                            val ov = overlayView
+                            if (ov != null && rv != null) {
+                                val startRect = RectF(ov.currentRect)
                                 val targetRect = RectF(originLeft, originTop, originLeft + targetW, originTop + targetH)
 
                                 if (finalState != initialState) {
@@ -1828,6 +1974,7 @@ object FluidTileResizeHandler {
                                         if (animationEnded && layoutRefreshed) {
                                             rv.overlay.clear()
                                             tileView.alpha = 1.0f
+                                            overlayView = null
                                         }
                                     }
 
@@ -1853,7 +2000,9 @@ object FluidTileResizeHandler {
                                                 lerp(startRect.right, targetRect.right, f),
                                                 lerp(startRect.bottom, targetRect.bottom, f)
                                             )
-                                            md.updateMorph(r, fixedCornerRadius, md.iconRect, false, md.layoutMode)
+                                            val lr = RectF(0f, 0f, r.width(), r.height())
+                                            val lib = RectF(0f, 0f, 0f, 0f)
+                                            ov.updateMorph(r, lr, fixedCornerRadius, lib, false, ov.layoutMode)
                                             rv.invalidate()
                                         }
                                         addListener(object : AnimatorListenerAdapter() {
@@ -1881,13 +2030,16 @@ object FluidTileResizeHandler {
                                                 lerp(startRect.right, targetRect.right, f),
                                                 lerp(startRect.bottom, targetRect.bottom, f)
                                             )
-                                            md.updateMorph(r, fixedCornerRadius, md.iconRect, false, md.layoutMode)
+                                            val lr = RectF(0f, 0f, r.width(), r.height())
+                                            val lib = RectF(0f, 0f, 0f, 0f)
+                                            ov.updateMorph(r, lr, fixedCornerRadius, lib, false, ov.layoutMode)
                                             rv.invalidate()
                                         }
                                         addListener(object : AnimatorListenerAdapter() {
                                             override fun onAnimationEnd(animation: Animator) {
                                                 rv.overlay.clear()
                                                 tileView.alpha = 1.0f
+                                                overlayView = null
                                             }
                                         })
                                     }
@@ -1896,6 +2048,7 @@ object FluidTileResizeHandler {
                             } else {
                                 rv?.overlay?.clear()
                                 tileView.alpha = 1.0f
+                                overlayView = null
                             }
                         } else {
                             val finalState = if (candidateTargetState != -1) candidateTargetState else initialState
@@ -1949,10 +2102,24 @@ object FluidTileResizeHandler {
                                 ControlCenterConfigHolder.savePriorities(ctx)
                             }
 
-                            if (md != null && rv != null) {
-                                val startRect = RectF(md.currentRect)
+                            val ov = overlayView
+                            if (ov != null && rv != null) {
+                                val startRect = RectF(ov.currentRect)
                                 val targetRect = RectF(finalTargetLeft, finalTargetTop, finalTargetLeft + finalW, finalTargetTop + finalH)
-                                val startRad = md.cornerRadius
+                                val startRad = ov.currentCornerRadius
+                                val startIconBox = RectF(ov.morphDrawable.iconRect)
+                                val targetIconBox = when (finalState) {
+                                    STATE_EXPANDED -> RectF(16f * density, (finalH - iconSize) / 2f, 16f * density + iconSize, (finalH + iconSize) / 2f)
+                                    STATE_VERTICAL -> RectF((finalW - iconSize) / 2f, 16f * density, (finalW + iconSize) / 2f, 16f * density + iconSize)
+                                    STATE_LARGE -> RectF((finalW - iconSize) / 2f, 24f * density, (finalW + iconSize) / 2f, 24f * density + iconSize)
+                                    else -> RectF((finalW - iconSize) / 2f, (finalH - iconSize) / 2f, (finalW + iconSize) / 2f, (finalH + iconSize) / 2f)
+                                }
+                                val finalLayoutMode = when (finalState) {
+                                    STATE_EXPANDED -> LAYOUT_MODE_HORIZONTAL
+                                    STATE_VERTICAL -> LAYOUT_MODE_VERTICAL
+                                    STATE_LARGE -> LAYOUT_MODE_LARGE
+                                    else -> ov.layoutMode
+                                }
 
                                 if (finalState != initialState) {
                                     var animationEnded = false
@@ -1962,6 +2129,7 @@ object FluidTileResizeHandler {
                                         if (animationEnded && layoutRefreshed) {
                                             rv.overlay.clear()
                                             tileView.alpha = 1.0f
+                                            overlayView = null
                                         }
                                     }
 
@@ -1989,7 +2157,14 @@ object FluidTileResizeHandler {
                                                 lerp(startRect.bottom, targetRect.bottom, f)
                                             )
                                             val rad = lerp(startRad, finalRadius, f)
-                                            md.updateMorph(r, rad, md.iconRect, false, md.layoutMode)
+                                            val lr = RectF(0f, 0f, r.width(), r.height())
+                                            val lib = RectF(
+                                                lerp(startIconBox.left, targetIconBox.left, f),
+                                                lerp(startIconBox.top, targetIconBox.top, f),
+                                                lerp(startIconBox.right, targetIconBox.right, f),
+                                                lerp(startIconBox.bottom, targetIconBox.bottom, f)
+                                            )
+                                            ov.updateMorph(r, lr, rad, lib, false, finalLayoutMode)
                                             rv.invalidate()
                                         }
                                         addListener(object : AnimatorListenerAdapter() {
@@ -2019,13 +2194,21 @@ object FluidTileResizeHandler {
                                                 lerp(startRect.bottom, targetRect.bottom, f)
                                             )
                                             val rad = lerp(startRad, finalRadius, f)
-                                            md.updateMorph(r, rad, md.iconRect, false, md.layoutMode)
+                                            val lr = RectF(0f, 0f, r.width(), r.height())
+                                            val lib = RectF(
+                                                lerp(startIconBox.left, targetIconBox.left, f),
+                                                lerp(startIconBox.top, targetIconBox.top, f),
+                                                lerp(startIconBox.right, targetIconBox.right, f),
+                                                lerp(startIconBox.bottom, targetIconBox.bottom, f)
+                                            )
+                                            ov.updateMorph(r, lr, rad, lib, false, finalLayoutMode)
                                             rv.invalidate()
                                         }
                                         addListener(object : AnimatorListenerAdapter() {
                                             override fun onAnimationEnd(animation: Animator) {
                                                 rv.overlay.clear()
                                                 tileView.alpha = 1.0f
+                                                overlayView = null
                                             }
                                         })
                                     }
@@ -2034,6 +2217,7 @@ object FluidTileResizeHandler {
                             } else {
                                 rv?.overlay?.clear()
                                 tileView.alpha = 1.0f
+                                overlayView = null
                             }
                         }
                     } else {
@@ -2066,6 +2250,7 @@ object FluidTileResizeHandler {
                             }
                         }
                         tileView.alpha = 1.0f
+                        overlayView = null
                     }
 
                     isDragging = false

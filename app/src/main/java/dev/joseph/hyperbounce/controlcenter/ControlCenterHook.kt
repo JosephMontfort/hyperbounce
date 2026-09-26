@@ -4037,8 +4037,7 @@ object ControlCenterHook {
             val res2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
             val tallH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId) else (157 * density).toInt()
 
-            val isLandscape = ctx.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-            var size = if (isLandscape) "4x1" else ControlCenterConfigHolder.sMediaPlayerSize
+            var size = ControlCenterConfigHolder.sMediaPlayerSize
             if (size == "1x1") size = "2x2"
 
             fun getView(name: String): View? {
@@ -5051,8 +5050,7 @@ object ControlCenterHook {
             val listenerTag = 0x7f099991
             if (itemView.getTag(listenerTag) == null) {
                 val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                    val isLand = ctx.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-                    val curSize = if (isLand) "4x1" else ControlCenterConfigHolder.sMediaPlayerSize
+                    val curSize = ControlCenterConfigHolder.sMediaPlayerSize
                     val metaNow = sLastMediaPlayerMetaData
                     var hasTrackNow = false
                     if (metaNow != null) {
