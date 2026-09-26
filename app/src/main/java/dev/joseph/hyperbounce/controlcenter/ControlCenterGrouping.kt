@@ -1055,12 +1055,25 @@ object ControlCenterGrouping {
                 clearEffect.invoke(commonUtils, childView)
             } catch (t: Throwable) {}
 
+            val resolvedState = curState ?: try {
+                val f = childView.javaClass.getDeclaredField("state").apply { isAccessible = true }
+                f.get(childView)
+            } catch (t: Throwable) {
+                try {
+                    val f = childView.javaClass.getField("state")
+                    f.get(childView)
+                } catch (t2: Throwable) { null }
+            }
+
             val stateInt = try {
-                val f = curState?.javaClass?.getField("state")
-                f?.getInt(curState) ?: 1
+                val f = resolvedState?.javaClass?.getField("state")
+                f?.getInt(resolvedState) ?: 1
             } catch (t: Throwable) { 1 }
 
-            val isCard = childView.javaClass.name.contains("QSCardItemView")
+            val isCard = childView.javaClass.name.contains("QSCardItemView") || (try {
+                val f = childView.javaClass.getDeclaredField("card").apply { isAccessible = true }
+                f.getBoolean(childView)
+            } catch (t: Throwable) { false })
             if (isCard) {
                 val enabledColorResId = ctx.resources.getIdentifier("qs_card_enabled_color", "color", ctx.packageName)
                 val disabledColorResId = ctx.resources.getIdentifier("qs_card_disabled_color", "color", ctx.packageName)

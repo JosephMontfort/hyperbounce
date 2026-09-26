@@ -500,8 +500,9 @@ object ControlCenterFullUnlock {
                 val orderedSlots = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
                 val (currentRightSlots, _) = calculateLandscapeRowSplit(orderedSlots, maxRightRows = maxRows)
 
-                // If the slot does NOT fit in currentRightSlots, shift it below the divider!
-                if (!currentRightSlots.any { it.id == slotId }) {
+                // Only reposition if the tile was PREVIOUSLY above the divider and now overflows
+                val wasAboveDivider = currentSlotIdx < currentRightSlots.size
+                if (wasAboveDivider && !currentRightSlots.any { it.id == slotId }) {
                     val remainingOrder = ArrayList(sUnifiedSlotOrder)
                     remainingOrder.remove(slotId)
 

@@ -2510,7 +2510,11 @@ object ControlCenterHook {
                                 null
                             } else if (itemView != null && isChildOfContainer(itemView)) {
                                 if (m.name == "updateBlurBlendBackground" || m.name == "updateBackground") {
-                                    ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, null, classLoader)
+                                    val state = try {
+                                        val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
+                                        f.get(itemView)
+                                    } catch (t: Throwable) { null }
+                                    ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
                                     null
                                 } else {
                                     chain.proceed()
@@ -2561,7 +2565,11 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             val iconView = chain.thisObject as? View
                             if (iconView != null && isChildOfContainer(iconView)) {
-                                ControlCenterGrouping.applyNonAdvancedStyleToChildTile(iconView, null, classLoader)
+                                val state = chain.args.getOrNull(0) ?: try {
+                                    val f = iconView.javaClass.getDeclaredField("state").apply { isAccessible = true }
+                                    f.get(iconView)
+                                } catch (t: Throwable) { null }
+                                ControlCenterGrouping.applyNonAdvancedStyleToChildTile(iconView, state, classLoader)
                                 null
                             } else {
                                 chain.proceed()
