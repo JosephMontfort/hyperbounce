@@ -500,7 +500,7 @@ object FluidTileResizeHandler {
             clipPath.addRoundRect(currentRect, cornerRadius, cornerRadius, Path.Direction.CW)
             canvas.clipPath(clipPath)
 
-            if (layoutMode == LAYOUT_MODE_EXPANDED || layoutMode == LAYOUT_MODE_LARGE) {
+            if (layoutMode == LAYOUT_MODE_HORIZONTAL || layoutMode == LAYOUT_MODE_LARGE) {
                 baseAcrylicPaint.color = if (isNight) Color.parseColor("#E6252528") else Color.parseColor("#E6F0F0F3")
                 canvas.drawRect(currentRect, baseAcrylicPaint)
             }
