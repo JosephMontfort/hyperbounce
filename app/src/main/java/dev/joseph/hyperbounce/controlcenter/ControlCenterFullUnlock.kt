@@ -185,14 +185,18 @@ object ControlCenterFullUnlock {
     class LandscapeSplitDividerView(context: Context) : FrameLayout(context) {
         init {
             val density = context.resources.displayMetrics.density
+            val h = (44 * density).toInt()
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, h)
+            minimumHeight = h
+
             val hPadding = (16 * density).toInt()
-            val vPadding = (8 * density).toInt()
+            val vPadding = (6 * density).toInt()
             setPadding(hPadding, vPadding, hPadding, vPadding)
 
             val container = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
             }
 
             // Left frosted line
@@ -232,6 +236,7 @@ object ControlCenterFullUnlock {
                 typeface = Typeface.DEFAULT_BOLD
                 letterSpacing = 0.08f
                 gravity = Gravity.CENTER
+                includeFontPadding = false
             }
             pill.addView(badgeText)
             container.addView(pill)
@@ -274,22 +279,8 @@ object ControlCenterFullUnlock {
                 setIgnoreAlpha.invoke(holder, true)
             } catch (t: Throwable) {}
             try {
-                val setHasLine = holder.javaClass.getMethod("setHasLine", Boolean::class.javaPrimitiveType)
-                setHasLine.invoke(holder, false)
-            } catch (t: Throwable) {}
-            try {
-                val bindingField = holder.javaClass.getDeclaredField("binding").apply { isAccessible = true }
-                val b = bindingField.get(holder)
-                if (b != null) {
-                    val getDivider = b.javaClass.getMethod("getDivider")
-                    val d = getDivider.invoke(b) as? View
-                    if (d != null) {
-                        d.visibility = View.GONE
-                        d.alpha = 0f
-                        d.layoutParams = ViewGroup.LayoutParams(0, 0)
-                        (d.parent as? ViewGroup)?.removeView(d)
-                    }
-                }
+                val setDraggable = holder.javaClass.getMethod("setDraggable", Boolean::class.javaPrimitiveType)
+                setDraggable.invoke(holder, false)
             } catch (t: Throwable) {}
         }
 
@@ -327,7 +318,8 @@ object ControlCenterFullUnlock {
                 }
                 "createViewHolder" -> {
                     val parent = args?.getOrNull(0) as? ViewGroup
-                    if (parent != null) {
+                    val vt = (args?.getOrNull(1) as? Int) ?: -1
+                    if (vt == VIEW_TYPE_LANDSCAPE_DIVIDER && parent != null) {
                         return createLandscapeDividerViewHolder(parent, classLoader)
                     }
                     return null
@@ -365,43 +357,12 @@ object ControlCenterFullUnlock {
         val ctx = parent.context
         val dividerView = LandscapeSplitDividerView(ctx)
 
-        // 1. Try QSListController$EditModeDividerHolder
+        // 1. Primary: FooterSpaceViewHolder(View view)
+        // Clean, direct View constructor with no stock divider bindings or forced height shrinkage.
         try {
-            val divBindingClass = Class.forName("miui.systemui.controlcenter.databinding.CustomizeDividerBinding", false, classLoader)
-            val inflateMethod = divBindingClass.getMethod("inflate", LayoutInflater::class.java, ViewGroup::class.java, Boolean::class.javaPrimitiveType)
-            val binding = inflateMethod.invoke(null, LayoutInflater.from(ctx), parent, false)
-
-            val getRootMethod = divBindingClass.getMethod("getRoot")
-            val root = getRootMethod.invoke(binding) as ViewGroup
-
-            // Completely eliminate stock full-width divider line
-            try {
-                val getDividerMethod = divBindingClass.getMethod("getDivider")
-                val stockDivider = getDividerMethod.invoke(binding) as? View
-                if (stockDivider != null) {
-                    stockDivider.visibility = View.GONE
-                    stockDivider.alpha = 0f
-                    stockDivider.layoutParams = ViewGroup.LayoutParams(0, 0)
-                    root.removeView(stockDivider)
-                }
-            } catch (t: Throwable) {}
-            root.removeAllViews()
-
-            val density = ctx.resources.displayMetrics.density
-            root.minimumHeight = (44 * density).toInt()
-
-            root.addView(dividerView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                gravity = Gravity.CENTER
-            })
-
-            val holderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSListController\$EditModeDividerHolder", false, classLoader)
-            val ctor = holderClass.getConstructor(divBindingClass)
-            val holder = ctor.newInstance(binding)
-
-            try {
-                val setHasLine = holder.javaClass.getMethod("setHasLine", Boolean::class.javaPrimitiveType)
-                setHasLine.invoke(holder, false)
-            } catch (t: Throwable) {}
+            val holderClass = Class.forName("miui.systemui.controlcenter.panel.main.footer.FooterSpaceController\$FooterSpaceViewHolder", false, classLoader)
+            val ctor = holderClass.getConstructor(View::class.java)
+            val holder = ctor.newInstance(dividerView)
             try {
                 val setIgnoreAlpha = holder.javaClass.getMethod("setIgnoreHolderAlpha", Boolean::class.javaPrimitiveType)
                 setIgnoreAlpha.invoke(holder, true)
@@ -410,10 +371,9 @@ object ControlCenterFullUnlock {
                 val setDraggable = holder.javaClass.getMethod("setDraggable", Boolean::class.javaPrimitiveType)
                 setDraggable.invoke(holder, false)
             } catch (t: Throwable) {}
-
             return holder
         } catch (t: Throwable) {
-            Log.w(TAG, "EditModeDividerHolder reflection failed for divider, trying EditButtonViewHolder", t)
+            Log.w(TAG, "FooterSpaceViewHolder reflection failed for divider, trying EditButtonViewHolder", t)
         }
 
         // 2. Fallback: EditButtonViewHolder
@@ -441,20 +401,6 @@ object ControlCenterFullUnlock {
                 setDraggable.invoke(holder, false)
             } catch (t: Throwable) {}
 
-            return holder
-        } catch (t: Throwable) {
-            Log.w(TAG, "EditButtonViewHolder reflection failed for divider, trying FooterSpaceViewHolder", t)
-        }
-
-        // 3. Fallback: FooterSpaceViewHolder
-        try {
-            val fHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.footer.FooterSpaceController\$FooterSpaceViewHolder", false, classLoader)
-            val ctor = fHolderClass.getConstructor(View::class.java)
-            val holder = ctor.newInstance(dividerView)
-            try {
-                val setIgnoreAlpha = holder.javaClass.getMethod("setIgnoreHolderAlpha", Boolean::class.javaPrimitiveType)
-                setIgnoreAlpha.invoke(holder, true)
-            } catch (t: Throwable) {}
             return holder
         } catch (t: Throwable) {
             Log.e(TAG, "createLandscapeDividerViewHolder failed", t)
@@ -1584,7 +1530,28 @@ object ControlCenterFullUnlock {
                 return false
             }
 
-            val oldDivPos = getDividerPositionInAdapter(adapter)
+            // Candidate capacity check: prevent visual disruption and divider overlap during drag
+            val candidateOrder = ArrayList(sUnifiedSlotOrder)
+            val candMoved = candidateOrder.removeAt(fromIdx)
+            candidateOrder.add(toIdx, candMoved)
+            val candidateSlots = candidateOrder.mapNotNull { sKnownSlots[it] }
+            val (candidateRightSlots, _) = calculateLandscapeRowSplit(candidateSlots, maxRightRows = maxRightRows)
+
+            val exceededCapacity = if (fromIdx >= currentSplitCount && toIdx < currentSplitCount) {
+                candidateRightSlots.size < currentSplitCount + 1
+            } else if (fromIdx < currentSplitCount && toIdx < currentSplitCount) {
+                candidateRightSlots.size < currentSplitCount
+            } else false
+
+            if (exceededCapacity) {
+                val ctx = try {
+                    val itemViewField = sourceVh?.javaClass?.getField("itemView")
+                    val v = itemViewField?.get(sourceVh) as? View
+                    v?.context
+                } catch (t: Throwable) { null } ?: ControlCenterConfigHolder.sLastKnownContext
+                showCapacityToast(ctx, maxRightRows)
+                return false
+            }
 
             val moved = sUnifiedSlotOrder.removeAt(fromIdx)
             sUnifiedSlotOrder.add(toIdx, moved)
@@ -1639,15 +1606,11 @@ object ControlCenterFullUnlock {
                     buildAndSetContentMap(otherAdapter, classLoader)
                 }
             }
-            val newDivPos = getDividerPositionInAdapter(adapter)
 
-            // Notify adapter of visual move
+            // Notify adapter of visual move - ItemTouchHelper already animates the moved item
+            // and RecyclerView automatically shifts all intermediate items (including the divider).
             val notifyItemMovedMethod = adapter.javaClass.getMethod("notifyItemMoved", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
             notifyItemMovedMethod.invoke(adapter, fromPos, toPos)
-
-            if (oldDivPos >= 0 && newDivPos >= 0 && oldDivPos != newDivPos) {
-                notifyItemMovedMethod.invoke(adapter, oldDivPos, newDivPos)
-            }
 
             return true
         } catch (t: Throwable) {
