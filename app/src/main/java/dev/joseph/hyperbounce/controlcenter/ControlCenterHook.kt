@@ -2148,71 +2148,51 @@ object ControlCenterHook {
                                                 val h = b - t
                                                 if (w > 0 && h > 0) {
                                                     val curIconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
-                                                    val curIsExp = ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)
-                                                    val curIsVert = ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)
-                                                    val curIsLarge = ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)
-                                                    val curIsCirc = ControlCenterConfigHolder.sCircularCardSpecs.contains(spec) || (!curIsExp && !curIsVert && !curIsLarge && !itemView.javaClass.name.contains("Card"))
+                                                    val curSpec = (itemView.getTag(0x7f099990) as? String) ?: ControlCenterConfigHolder.getOrResolveTileSpec(itemView)
+                                                    val curIsExp = if (curSpec != null) ControlCenterConfigHolder.sExpandedTileSpecs.contains(curSpec) else false
+                                                    val curIsVert = if (curSpec != null) ControlCenterConfigHolder.sVerticalTileSpecs.contains(curSpec) else false
+                                                    val curIsLarge = if (curSpec != null) ControlCenterConfigHolder.sLargeTileSpecs.contains(curSpec) else false
+                                                    val isCardClass = itemView.javaClass.name.contains("Card")
+                                                    val curIsCirc = if (curSpec != null && ControlCenterConfigHolder.sCircularCardSpecs.contains(curSpec)) {
+                                                        true
+                                                    } else {
+                                                        !curIsExp && !curIsVert && !curIsLarge && !isCardClass
+                                                    }
 
                                                     if (ControlCenterConfigHolder.sIsGroupSelectMode) {
                                                         if (curBadge != null && curBadge.visibility == View.VISIBLE) {
-                                                            val bw2 = (26 * density).toInt()
-                                                            val bh2 = (26 * density).toInt()
-                                                            if (curIsCirc && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
-                                                                val iLeft = curIconFrame.left
-                                                                val iTop = curIconFrame.top
-                                                                curBadge.layout(iLeft, iTop, iLeft + bw2, iTop + bh2)
-                                                            } else {
-                                                                val m = (8 * density).toInt()
-                                                                curBadge.layout(m, m, m + bw2, m + bh2)
-                                                            }
-                                                            curBadge.bringToFront()
-                                                        }
-                                                    } else if (curHandle != null) {
-                                                        if (!ControlCenterConfigHolder.sIsDisassembleMode) {
-                                                            curHandle.visibility = View.VISIBLE
-                                                        }
-                                                        if (curHandle.visibility == View.VISIBLE) {
-                                                            val bw = curHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
-                                                            val bh = curHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
-                                                            if (curIsCirc && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
-                                                                val iRight = curIconFrame.right
-                                                                val iBottom = curIconFrame.bottom
-                                                                curHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
-                                                            } else {
-                                                                curHandle.layout(w - bw, h - bh, w, h)
-                                                            }
-                                                            curHandle.bringToFront()
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        if (iconFrame != null && iconFrame.getTag(0x7f099991) == null) {
-                                            iconFrame.setTag(0x7f099991, true)
-                                            iconFrame.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                                                val curHandle = itemView.findViewById<ImageView>(resizeTag)
-                                                if (!ControlCenterConfigHolder.sIsEditMode) {
-                                                    if (curHandle != null) {
-                                                        curHandle.visibility = View.GONE
-                                                        curHandle.setOnTouchListener(null)
-                                                        curHandle.setOnClickListener(null)
-                                                        curHandle.isClickable = false
-                                                    }
-                                                    return@addOnLayoutChangeListener
-                                                }
-                                                if (curHandle != null && curHandle.visibility == View.VISIBLE) {
-                                                    val bw = curHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
-                                                    val bh = curHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
-                                                    val iRight = iconFrame.right
-                                                    val iBottom = iconFrame.bottom
-                                                    if (iRight > 0 && iBottom > 0) {
-                                                        curHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
-                                                        curHandle.bringToFront()
-                                                    }
-                                                }
-                                            }
-                                        }
+                                                             val bw2 = (26 * density).toInt()
+                                                             val bh2 = (26 * density).toInt()
+                                                             if (curIsCirc && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
+                                                                 val iLeft = curIconFrame.left
+                                                                 val iTop = curIconFrame.top
+                                                                 curBadge.layout(iLeft, iTop, iLeft + bw2, iTop + bh2)
+                                                             } else {
+                                                                 val m = (8 * density).toInt()
+                                                                 curBadge.layout(m, m, m + bw2, m + bh2)
+                                                             }
+                                                             curBadge.bringToFront()
+                                                         }
+                                                     } else if (curHandle != null) {
+                                                         if (!ControlCenterConfigHolder.sIsDisassembleMode) {
+                                                             curHandle.visibility = View.VISIBLE
+                                                         }
+                                                         if (curHandle.visibility == View.VISIBLE) {
+                                                             val bw = curHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
+                                                             val bh = curHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
+                                                             if (curIsCirc && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
+                                                                 val iRight = curIconFrame.right
+                                                                 val iBottom = curIconFrame.bottom
+                                                                 curHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
+                                                             } else {
+                                                                 curHandle.layout(w - bw, h - bh, w, h)
+                                                             }
+                                                             curHandle.bringToFront()
+                                                         }
+                                                     }
+                                                 }
+                                             }
+                                         }
 
                                         if (resizeHandle != null) {
                                             if (isEdit && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode) {
@@ -2391,10 +2371,16 @@ object ControlCenterHook {
                                                     val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
                                                     val iconFrameId = itemView.resources.getIdentifier("icon_frame", "id", itemView.context.packageName)
                                                     val curIconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
-                                                    val curIsExp = ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)
-                                                    val curIsVert = ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)
-                                                    val curIsLarge = ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)
-                                                    val curIsCirc = ControlCenterConfigHolder.sCircularCardSpecs.contains(spec) || (!curIsExp && !curIsVert && !curIsLarge && !itemView.javaClass.name.contains("Card") && (itemView.javaClass.name.contains("Tile") || itemView.javaClass.name.contains("QSTileItemView")))
+                                                    val curSpec = (itemView.getTag(0x7f099990) as? String) ?: spec
+                                                    val curIsExp = if (curSpec != null) ControlCenterConfigHolder.sExpandedTileSpecs.contains(curSpec) else false
+                                                    val curIsVert = if (curSpec != null) ControlCenterConfigHolder.sVerticalTileSpecs.contains(curSpec) else false
+                                                    val curIsLarge = if (curSpec != null) ControlCenterConfigHolder.sLargeTileSpecs.contains(curSpec) else false
+                                                    val isCardClass = itemView.javaClass.name.contains("Card")
+                                                    val curIsCirc = if (curSpec != null && ControlCenterConfigHolder.sCircularCardSpecs.contains(curSpec)) {
+                                                        true
+                                                    } else {
+                                                        !curIsExp && !curIsVert && !curIsLarge && !isCardClass
+                                                    }
 
                                                     fun applyHandleLayout() {
                                                         if (curIsCirc && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
@@ -5666,98 +5652,36 @@ class TileResizeDragTouchListener(
                     previewH = row1H
                     previewRadius = cardRadius
                 } else if (isMediaSpec) {
-                    val snapDistX = (oneColW + 10f * density) * 0.35f
-                    val snapDistY = (row1H + 10f * density) * 0.35f
+                    val rawW = (originWidth + dx).coerceIn(oneColW * 0.75f, fourColW * 1.05f)
+                    val rawH = (originHeight + dy).coerceIn(row1H * 0.75f, row4H * 1.05f)
 
-                    when (initialState) {
-                        STATE_LARGE -> { // 2x2
-                            if (dx > snapDistX) {
-                                targetState = if (dy < -snapDistY * 0.6f) STATE_WIDE_1 else STATE_WIDE_2
-                            } else if (dx < -snapDistX) {
-                                targetState = STATE_VERTICAL
-                            } else if (dy > snapDistY) {
-                                targetState = STATE_TALL_4
-                            } else if (dy < -snapDistY) {
-                                targetState = STATE_EXPANDED
-                            }
+                    val spanW = (fourColW - oneColW).coerceAtLeast(1f)
+                    val spanH = (row4H - row1H).coerceAtLeast(1f)
+
+                    val targets = listOf(
+                        Triple(STATE_VERTICAL, oneColW, row2H),     // 1x2
+                        Triple(STATE_EXPANDED, twoColW, row1H),     // 2x1
+                        Triple(STATE_LARGE, twoColW, row2H),        // 2x2
+                        Triple(STATE_TALL_4, twoColW, row4H),       // 2x4
+                        Triple(STATE_WIDE_1, fourColW, row1H),      // 4x1
+                        Triple(STATE_WIDE_2, fourColW, row2H)       // 4x2
+                    )
+
+                    var bestDist = Float.MAX_VALUE
+                    var bestState = candidateTargetState
+                    for (target in targets) {
+                        val nw = (rawW - target.second) / spanW
+                        val nh = (rawH - target.third) / spanH
+                        var distSq = nw * nw + nh * nh
+                        if (target.first == candidateTargetState) {
+                            distSq -= 0.035f
                         }
-                        STATE_EXPANDED -> { // 2x1
-                            if (dx > snapDistX) {
-                                targetState = if (dy > snapDistY * 0.6f) STATE_WIDE_2 else STATE_WIDE_1
-                            } else if (dy > snapDistY) {
-                                targetState = if (dy > snapDistY * 2.0f) STATE_TALL_4 else STATE_LARGE
-                            } else if (dx < -snapDistX && dy > snapDistY * 0.5f) {
-                                targetState = STATE_VERTICAL
-                            }
-                        }
-                        STATE_VERTICAL -> { // 1x2
-                            if (dx > snapDistX) {
-                                if (dx > snapDistX * 2.0f) {
-                                    targetState = if (dy < -snapDistY * 0.6f) STATE_WIDE_1 else STATE_WIDE_2
-                                } else {
-                                    targetState = if (dy < -snapDistY * 0.6f) STATE_EXPANDED else STATE_LARGE
-                                }
-                            } else if (dy > snapDistY) {
-                                targetState = STATE_TALL_4
-                            } else if (dy < -snapDistY && dx > snapDistX * 0.5f) {
-                                targetState = STATE_EXPANDED
-                            }
-                        }
-                        STATE_WIDE_1 -> { // 4x1
-                            if (dx < -snapDistX && dy > snapDistY * 1.2f) {
-                                targetState = STATE_TALL_4
-                            } else if (dy > snapDistY) {
-                                targetState = if (dx < -snapDistX * 1.5f) STATE_LARGE else STATE_WIDE_2
-                            } else if (dx < -snapDistX) {
-                                targetState = if (dy > snapDistY * 0.5f) STATE_LARGE else STATE_EXPANDED
-                            }
-                        }
-                        STATE_WIDE_2 -> { // 4x2
-                            if (dy < -snapDistY) {
-                                targetState = if (dx < -snapDistX) STATE_EXPANDED else STATE_WIDE_1
-                            } else if (dx < -snapDistX) {
-                                if (dy > snapDistY) {
-                                    targetState = STATE_TALL_4
-                                } else if (dy < -snapDistY) {
-                                    targetState = STATE_EXPANDED
-                                } else if (dx < -snapDistX * 2.2f) {
-                                    targetState = STATE_VERTICAL
-                                } else {
-                                    targetState = STATE_LARGE
-                                }
-                            } else if (dy > snapDistY && dx < -snapDistX * 0.5f) {
-                                targetState = STATE_TALL_4
-                            }
-                        }
-                        STATE_TALL_4 -> { // 2x4
-                            if (dx > snapDistX && dy < -snapDistY * 1.2f) {
-                                targetState = STATE_WIDE_1
-                            } else if (dy < -snapDistY) {
-                                if (dy < -snapDistY * 2.0f) {
-                                    targetState = if (dx > snapDistX) STATE_WIDE_1 else STATE_EXPANDED
-                                } else {
-                                    if (dx > snapDistX) {
-                                        targetState = STATE_WIDE_2
-                                    } else if (dx < -snapDistX) {
-                                        targetState = STATE_VERTICAL
-                                    } else {
-                                        targetState = STATE_LARGE
-                                    }
-                                }
-                            } else if (dx > snapDistX && dy < -snapDistY * 0.5f) {
-                                targetState = STATE_WIDE_2
-                            } else if (dx < -snapDistX && dy < -snapDistY * 0.5f) {
-                                targetState = STATE_VERTICAL
-                            } else if (dx > snapDistX) {
-                                targetState = STATE_WIDE_2
-                            } else if (dx < -snapDistX) {
-                                targetState = STATE_VERTICAL
-                            }
-                        }
-                        else -> {
-                            targetState = STATE_LARGE
+                        if (distSq < bestDist) {
+                            bestDist = distSq
+                            bestState = target.first
                         }
                     }
+                    targetState = bestState
 
                     val (targetW, targetH) = when (targetState) {
                         STATE_EXPANDED -> Pair(twoColW, row1H)     // 2x1
@@ -5769,11 +5693,8 @@ class TileResizeDragTouchListener(
                         else -> Pair(originWidth, originHeight)
                     }
 
-                    val rawW = (originWidth + dx).coerceIn(oneColW * 0.75f, fourColW * 1.05f)
-                    val rawH = (originHeight + dy).coerceIn(row1H * 0.75f, row4H * 1.05f)
-
                     if (targetState != initialState) {
-                        val snapFactor = 0.60f
+                        val snapFactor = 0.55f
                         previewW = lerp(rawW, targetW, snapFactor)
                         previewH = lerp(rawH, targetH, snapFactor)
                     } else {

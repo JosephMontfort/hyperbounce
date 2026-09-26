@@ -264,6 +264,10 @@ object FluidTileResizeHandler {
         private val handleDrawable = CurvedResizeHandleDrawable(density)
         private val clipPath = Path()
 
+        private fun lerp(start: Float, end: Float, fraction: Float): Float {
+            return start + (end - start) * fraction.coerceIn(0f, 1f)
+        }
+
         val currentRect = RectF()
         var cornerRadius = 20f * density
         var isSnapping = false
@@ -419,61 +423,52 @@ object FluidTileResizeHandler {
                 return
             }
 
-            // If media player, render album art, controls, and title/artist with strict corner radius and unstretched elements
+            // If media player, render album art, controls, and title/artist with smoothly scaling, moving, and cross-fading elements
             if (isMedia) {
                 val w = currentRect.width()
                 val h = currentRect.height()
 
-                val isTall4 = h > 220f * density
-                val isWide2 = w > 230f * density && h > 105f * density
-                val isWide1 = w > 230f * density && !isWide2
-                val isVert = w < 95f * density
-                val isExpanded2x1 = h < 95f * density && !isWide1
+                val colW = 85.5f * density
+                val twoColW = 178.5f * density
+                val fourColW = 364.5f * density
+                val cardH = 71.5f * density
+                val tallH = 157f * density
+                val fourRowsH = 328f * density
 
-                // 1. Draw Unstretched Album Art
-                val coverRect = RectF()
-                var coverRad = 12f * density
+                // Smooth continuous progress factors across 2D dimensions
+                val narrowProgress = ((twoColW - w) / (twoColW - colW)).coerceIn(0f, 1f) // 0 at 2-col, 1 at 1-col
+                val wideProgress = ((w - twoColW) / (fourColW - twoColW)).coerceIn(0f, 1f) // 0 at 2-col, 1 at 4-col
+                val row2Progress = ((h - cardH) / (tallH - cardH)).coerceIn(0f, 1f) // 0 at 1-row, 1 at 2-row
+                val tallProgress = ((h - tallH) / (fourRowsH - tallH)).coerceIn(0f, 1f) // 0 at 2-row, 1 at 4-row
 
-                if (isWide2) {
-                    val coverSize = (h - 28f * density).coerceAtLeast(48f * density)
-                    coverRad = 18f * density
-                    coverRect.set(
-                        currentRect.left + 14f * density,
-                        currentRect.top + 14f * density,
-                        currentRect.left + 14f * density + coverSize,
-                        currentRect.top + 14f * density + coverSize
-                    )
-                } else if (isTall4) {
-                    val coverSize = (w - 28f * density).coerceAtLeast(48f * density)
-                    coverRad = 18f * density
-                    coverRect.set(
-                        currentRect.left + 14f * density,
-                        currentRect.top + 14f * density,
-                        currentRect.left + 14f * density + coverSize,
-                        currentRect.top + 14f * density + coverSize
-                    )
-                } else if (isVert) {
-                    val coverSize = (w - 24f * density).coerceIn(40f * density, 52f * density)
-                    coverRect.set(
-                        currentRect.centerX() - coverSize / 2f,
-                        currentRect.top + 14f * density,
-                        currentRect.centerX() + coverSize / 2f,
-                        currentRect.top + 14f * density + coverSize
-                    )
-                } else {
-                    val coverSize = 48f * density
-                    val coverTop = if (isExpanded2x1 || isWide1) {
-                        currentRect.top + (h - coverSize) / 2f
-                    } else {
-                        currentRect.top + 14f * density
-                    }
-                    coverRect.set(
-                        currentRect.left + 14f * density,
-                        coverTop,
-                        currentRect.left + 14f * density + coverSize,
-                        coverTop + coverSize
-                    )
+                // 1. Draw Unstretched Album Art with smooth size & position interpolation
+                val baseSize = 48f * density
+                val wide2TargetSize = (h - 28f * density).coerceAtLeast(baseSize)
+                val tall4TargetSize = (w - 28f * density).coerceAtLeast(baseSize)
+                val narrowTargetSize = (w - 24f * density).coerceIn(40f * density, 52f * density)
+
+                var targetCoverSize = baseSize
+                if (wideProgress > 0f) {
+                    targetCoverSize = lerp(baseSize, wide2TargetSize, wideProgress * row2Progress)
                 }
+                if (tallProgress > 0f) {
+                    targetCoverSize = lerp(targetCoverSize, tall4TargetSize, tallProgress)
+                }
+                if (narrowProgress > 0f) {
+                    targetCoverSize = lerp(targetCoverSize, narrowTargetSize, narrowProgress)
+                }
+                val coverSize = targetCoverSize.coerceAtMost(Math.min(w - 16f * density, h - 16f * density)).coerceAtLeast(36f * density)
+
+                val normalCoverLeft = currentRect.left + 14f * density
+                val centeredCoverLeft = currentRect.centerX() - coverSize / 2f
+                val coverLeft = lerp(normalCoverLeft, centeredCoverLeft, narrowProgress)
+
+                val centerYTop = currentRect.top + (h - coverSize) / 2f
+                val topMarginY = currentRect.top + 14f * density
+                val coverTop = lerp(centerYTop, topMarginY, Math.max(row2Progress, tallProgress))
+
+                val coverRad = lerp(12f * density, 18f * density, Math.max(wideProgress * row2Progress, tallProgress))
+                val coverRect = RectF(coverLeft, coverTop, coverLeft + coverSize, coverTop + coverSize)
 
                 coverDrawable?.let { cov ->
                     canvas.save()
@@ -490,113 +485,113 @@ object FluidTileResizeHandler {
                     canvas.restore()
                 }
 
-                // 2. Draw Playback Controls
+                // 2. Draw Playback Controls (smoothly morphing between horizontal row and vertical stack)
                 val btnSize = 30f * density
                 val playSize = 36f * density
                 val spacing = 8f * density
 
-                if (isVert) {
-                    val remHeight = currentRect.bottom - coverRect.bottom
-                    val centerY = coverRect.bottom + remHeight / 2f
-                    val playTop = centerY - playSize / 2f
-                    val prevTop = playTop - spacing - btnSize
-                    val nextTop = playTop + playSize + spacing
+                // Vertical layout coordinates (1x2 narrow mode)
+                val remHeight = (currentRect.bottom - coverRect.bottom).coerceAtLeast(btnSize * 2f + playSize + spacing * 2f)
+                val centerYV = coverRect.bottom + remHeight / 2f
+                val playTopV = centerYV - playSize / 2f
+                val prevTopV = playTopV - spacing - btnSize
+                val nextTopV = playTopV + playSize + spacing
 
-                    val prevL = currentRect.centerX() - btnSize / 2f
-                    val playL = currentRect.centerX() - playSize / 2f
-                    val nextL = currentRect.centerX() - btnSize / 2f
+                val prevLV = currentRect.centerX() - btnSize / 2f
+                val playLV = currentRect.centerX() - playSize / 2f
+                val nextLV = currentRect.centerX() - btnSize / 2f
 
-                    prevDrawable?.setBounds(prevL.toInt(), prevTop.toInt(), (prevL + btnSize).toInt(), (prevTop + btnSize).toInt())
-                    prevDrawable?.draw(canvas)
+                // Horizontal layout coordinates
+                val row1CenterY = currentRect.centerY()
+                val row2CenterY = currentRect.bottom - 28f * density
+                val row4CenterY = currentRect.bottom - 36f * density
+                val baseCenterY = lerp(row1CenterY, row2CenterY, row2Progress)
+                val ctrlCenterYH = lerp(baseCenterY, row4CenterY, tallProgress)
 
-                    playDrawable?.setBounds(playL.toInt(), playTop.toInt(), (playL + playSize).toInt(), (playTop + playSize).toInt())
-                    playDrawable?.draw(canvas)
+                val nextRH = currentRect.right - 14f * density
+                val nextLH = nextRH - btnSize
+                val playRH = nextLH - spacing
+                val playLH = playRH - playSize
+                val prevRH = playLH - spacing
+                val prevLH = prevRH - btnSize
 
-                    nextDrawable?.setBounds(nextL.toInt(), nextTop.toInt(), (nextL + btnSize).toInt(), (nextTop + btnSize).toInt())
-                    nextDrawable?.draw(canvas)
-                } else {
-                    val ctrlCenterY = when {
-                        isExpanded2x1 || isWide1 -> currentRect.centerY()
-                        isWide2 -> currentRect.bottom - 28f * density
-                        isTall4 -> currentRect.bottom - 36f * density
-                        else -> currentRect.bottom - 28f * density
-                    }
+                val btnTopH = ctrlCenterYH - btnSize / 2f
+                val playTopH = ctrlCenterYH - playSize / 2f
 
-                    val ctrlRight = currentRect.right - 14f * density
-                    val nextR = ctrlRight
-                    val nextL = nextR - btnSize
-                    val playR = nextL - spacing
-                    val playL = playR - playSize
-                    val prevR = playL - spacing
-                    val prevL = prevR - btnSize
+                // Smoothly interpolate between horizontal row and vertical stack
+                val prevL = lerp(prevLH, prevLV, narrowProgress)
+                val prevTop = lerp(btnTopH, prevTopV, narrowProgress)
+                val playL = lerp(playLH, playLV, narrowProgress)
+                val playTop = lerp(playTopH, playTopV, narrowProgress)
+                val nextL = lerp(nextLH, nextLV, narrowProgress)
+                val nextTop = lerp(btnTopH, nextTopV, narrowProgress)
 
-                    val btnTop = ctrlCenterY - btnSize / 2f
-                    val playTop = ctrlCenterY - playSize / 2f
+                prevDrawable?.setBounds(prevL.toInt(), prevTop.toInt(), (prevL + btnSize).toInt(), (prevTop + btnSize).toInt())
+                prevDrawable?.draw(canvas)
 
-                    prevDrawable?.setBounds(prevL.toInt(), btnTop.toInt(), prevR.toInt(), (btnTop + btnSize).toInt())
-                    prevDrawable?.draw(canvas)
+                playDrawable?.setBounds(playL.toInt(), playTop.toInt(), (playL + playSize).toInt(), (playTop + playSize).toInt())
+                playDrawable?.draw(canvas)
 
-                    playDrawable?.setBounds(playL.toInt(), playTop.toInt(), playR.toInt(), (playTop + playSize).toInt())
-                    playDrawable?.draw(canvas)
+                nextDrawable?.setBounds(nextL.toInt(), nextTop.toInt(), (nextL + btnSize).toInt(), (nextTop + btnSize).toInt())
+                nextDrawable?.draw(canvas)
 
-                    nextDrawable?.setBounds(nextL.toInt(), btnTop.toInt(), nextR.toInt(), (btnTop + btnSize).toInt())
-                    nextDrawable?.draw(canvas)
-                }
+                // 3. Draw Song Title & Artist (revealed via smooth cross-fade, position interpolation, clipping and ellipsizing)
+                if (!titleText.isNullOrEmpty()) {
+                    val showInWide1 = wideProgress * (1f - row2Progress)
+                    val textVisFactor = ((1f - narrowProgress) * (row2Progress + showInWide1)).coerceIn(0f, 1f)
 
-                // 3. Draw Song Title & Artist (revealed via clipping and ellipsizing)
-                if (!titleText.isNullOrEmpty() && !isExpanded2x1 && !isVert) {
-                    val fontMetrics = titlePaint.fontMetrics
-                    val titleH = fontMetrics.descent - fontMetrics.ascent
-                    val gapBetween = 4f * density
+                    if (textVisFactor > 0.01f) {
+                        val origTitleAlpha = titlePaint.alpha
+                        val origSubAlpha = subtitlePaint.alpha
+                        titlePaint.alpha = (origTitleAlpha * textVisFactor).toInt()
+                        subtitlePaint.alpha = (origSubAlpha * textVisFactor).toInt()
 
-                    val textStartX: Float
-                    val textTopY: Float
-                    val clipRight: Float
+                        val fontMetrics = titlePaint.fontMetrics
+                        val titleH = fontMetrics.descent - fontMetrics.ascent
+                        val gapBetween = 4f * density
 
-                    when {
-                        isWide2 -> {
-                            textStartX = coverRect.right + 16f * density
-                            textTopY = currentRect.top + 24f * density
-                            clipRight = currentRect.right - 14f * density
+                        // Tall position (under cover in 2x4)
+                        val tallTextStartX = currentRect.left + 16f * density
+                        val tallTextTopY = coverRect.bottom + 16f * density
+
+                        // Horizontal position (to right of cover in 2x2, 4x2, 4x1)
+                        val horizTextStartX = coverRect.right + lerp(14f * density, 16f * density, wideProgress)
+                        val textMidY = currentRect.centerY() - titleH / 2f
+                        val textTopMarginY = currentRect.top + lerp(18f * density, 24f * density, wideProgress)
+                        val horizTextTopY = lerp(textMidY, textTopMarginY, row2Progress)
+
+                        val textStartX = lerp(horizTextStartX, tallTextStartX, tallProgress)
+                        val textTopY = lerp(horizTextTopY, tallTextTopY, tallProgress)
+
+                        // Clip right bound: avoid colliding with playback buttons
+                        val wide1ClipRight = (prevL - 10f * density).coerceAtLeast(textStartX)
+                        val multiRowClipRight = currentRect.right - 14f * density
+                        val clipRight = lerp(wide1ClipRight, multiRowClipRight, Math.max(row2Progress, tallProgress))
+
+                        if (clipRight > textStartX) {
+                            canvas.save()
+                            canvas.clipRect(textStartX, currentRect.top, clipRight, currentRect.bottom)
+                            val availW = clipRight - textStartX
+                            val displayTitle = if (availW > 10f) {
+                                TextUtils.ellipsize(titleText, titlePaint, availW, TextUtils.TruncateAt.END).toString()
+                            } else titleText!!
+
+                            val titleBaseline = textTopY - fontMetrics.ascent
+                            canvas.drawText(displayTitle, textStartX, titleBaseline, titlePaint)
+
+                            if (!subtitleText.isNullOrEmpty()) {
+                                val displayArtist = if (availW > 10f) {
+                                    TextUtils.ellipsize(subtitleText, subtitlePaint, availW, TextUtils.TruncateAt.END).toString()
+                                } else subtitleText!!
+
+                                val subBaseline = titleBaseline + fontMetrics.descent + gapBetween - subtitlePaint.fontMetrics.ascent
+                                canvas.drawText(displayArtist, textStartX, subBaseline, subtitlePaint)
+                            }
+                            canvas.restore()
                         }
-                        isTall4 -> {
-                            textStartX = currentRect.left + 16f * density
-                            textTopY = coverRect.bottom + 16f * density
-                            clipRight = currentRect.right - 14f * density
-                        }
-                        isWide1 -> {
-                            textStartX = coverRect.right + 14f * density
-                            val totalTextH = titleH + (if (!subtitleText.isNullOrEmpty()) (gapBetween + subtitlePaint.fontMetrics.descent - subtitlePaint.fontMetrics.ascent) else 0f)
-                            textTopY = currentRect.centerY() - totalTextH / 2f
-                            clipRight = currentRect.right - (btnSize * 2f + playSize + spacing * 2f + 28f * density)
-                        }
-                        else -> { // 2x2
-                            textStartX = coverRect.right + 14f * density
-                            textTopY = coverRect.top + 4f * density
-                            clipRight = currentRect.right - 14f * density
-                        }
-                    }
 
-                    if (clipRight > textStartX) {
-                        canvas.save()
-                        canvas.clipRect(textStartX, currentRect.top, clipRight, currentRect.bottom)
-                        val availW = clipRight - textStartX
-                        val displayTitle = if (availW > 10f) {
-                            TextUtils.ellipsize(titleText, titlePaint, availW, TextUtils.TruncateAt.END).toString()
-                        } else titleText!!
-
-                        val titleBaseline = textTopY - fontMetrics.ascent
-                        canvas.drawText(displayTitle, textStartX, titleBaseline, titlePaint)
-
-                        if (!subtitleText.isNullOrEmpty()) {
-                            val displayArtist = if (availW > 10f) {
-                                TextUtils.ellipsize(subtitleText, subtitlePaint, availW, TextUtils.TruncateAt.END).toString()
-                            } else subtitleText!!
-
-                            val subBaseline = titleBaseline + fontMetrics.descent + gapBetween - subtitlePaint.fontMetrics.ascent
-                            canvas.drawText(displayArtist, textStartX, subBaseline, subtitlePaint)
-                        }
-                        canvas.restore()
+                        titlePaint.alpha = origTitleAlpha
+                        subtitlePaint.alpha = origSubAlpha
                     }
                 }
 
@@ -1515,78 +1510,36 @@ object FluidTileResizeHandler {
                     }
 
                     if (isMediaSpec) {
-                        val snapDistX = (colW + gap) * 0.30f
-                        val snapDistY = cardH * 0.30f
+                        val rawW = (originWidth + dx).coerceIn(colW * 0.75f, fourColW * 1.05f)
+                        val rawH = (originHeight + dy).coerceIn(cardH * 0.75f, fourRowsH * 1.05f)
 
-                        var targetState = initialState
-                        when (initialState) {
-                            MEDIA_2X2 -> {
-                                when {
-                                    dx > snapDistX -> targetState = if (dy < -snapDistY * 0.6f) MEDIA_4X1 else MEDIA_4X2
-                                    dx < -snapDistX -> targetState = MEDIA_1X2
-                                    dy > snapDistY -> targetState = MEDIA_2X4
-                                    dy < -snapDistY -> targetState = MEDIA_2X1
-                                }
+                        val spanW = (fourColW - colW).coerceAtLeast(1f)
+                        val spanH = (fourRowsH - cardH).coerceAtLeast(1f)
+
+                        val targets = listOf(
+                            Triple(MEDIA_1X2, colW, tallH),
+                            Triple(MEDIA_2X1, twoColW, cardH),
+                            Triple(MEDIA_2X2, twoColW, tallH),
+                            Triple(MEDIA_2X4, twoColW, fourRowsH),
+                            Triple(MEDIA_4X1, fourColW, cardH),
+                            Triple(MEDIA_4X2, fourColW, tallH)
+                        )
+
+                        var bestDist = Float.MAX_VALUE
+                        var bestState = candidateTargetState
+                        for (target in targets) {
+                            val nw = (rawW - target.second) / spanW
+                            val nh = (rawH - target.third) / spanH
+                            var distSq = nw * nw + nh * nh
+                            if (target.first == candidateTargetState) {
+                                distSq -= 0.035f // Hysteresis bonus to stay in current candidate
                             }
-                            MEDIA_2X1 -> {
-                                when {
-                                    dx > snapDistX -> targetState = if (dy > snapDistY * 0.6f) MEDIA_4X2 else MEDIA_4X1
-                                    dy > snapDistY -> targetState = if (dy > snapDistY * 2.0f) MEDIA_2X4 else MEDIA_2X2
-                                    dx < -snapDistX && dy > snapDistY * 0.5f -> targetState = MEDIA_1X2
-                                }
-                            }
-                            MEDIA_1X2 -> {
-                                when {
-                                    dx > snapDistX -> {
-                                        targetState = if (dx > snapDistX * 2.0f) {
-                                            if (dy < -snapDistY * 0.6f) MEDIA_4X1 else MEDIA_4X2
-                                        } else {
-                                            if (dy < -snapDistY * 0.6f) MEDIA_2X1 else MEDIA_2X2
-                                        }
-                                    }
-                                    dy > snapDistY -> targetState = MEDIA_2X4
-                                    dy < -snapDistY && dx > snapDistX * 0.5f -> targetState = MEDIA_2X1
-                                }
-                            }
-                            MEDIA_4X1 -> {
-                                when {
-                                    dx < -snapDistX && dy > snapDistY * 1.2f -> targetState = MEDIA_2X4
-                                    dy > snapDistY -> targetState = if (dx < -snapDistX * 1.5f) MEDIA_2X2 else MEDIA_4X2
-                                    dx < -snapDistX -> targetState = if (dy > snapDistY * 0.5f) MEDIA_2X2 else MEDIA_2X1
-                                }
-                            }
-                            MEDIA_4X2 -> {
-                                when {
-                                    dy < -snapDistY -> targetState = if (dx < -snapDistX) MEDIA_2X1 else MEDIA_4X1
-                                    dx < -snapDistX -> {
-                                        targetState = if (dy > snapDistY) {
-                                            MEDIA_2X4
-                                        } else if (dy < -snapDistY) {
-                                            MEDIA_2X1
-                                        } else if (dx < -snapDistX * 2.0f) {
-                                            MEDIA_1X2
-                                        } else {
-                                            MEDIA_2X2
-                                        }
-                                    }
-                                    dy > snapDistY && dx < -snapDistX * 0.5f -> targetState = MEDIA_2X4
-                                }
-                            }
-                            MEDIA_2X4 -> {
-                                when {
-                                    dx > snapDistX && dy < -snapDistY * 1.2f -> targetState = MEDIA_4X1
-                                    dy < -snapDistY -> {
-                                        if (dy < -snapDistY * 2.0f) {
-                                            targetState = if (dx > snapDistX) MEDIA_4X1 else MEDIA_2X1
-                                        } else {
-                                            targetState = if (dx > snapDistX) MEDIA_4X2 else if (dx < -snapDistX) MEDIA_1X2 else MEDIA_2X2
-                                        }
-                                    }
-                                    dx > snapDistX -> targetState = MEDIA_4X2
-                                    dx < -snapDistX -> targetState = MEDIA_1X2
-                                }
+                            if (distSq < bestDist) {
+                                bestDist = distSq
+                                bestState = target.first
                             }
                         }
+                        val targetState = bestState
 
                         val (targetW, targetH) = when (targetState) {
                             MEDIA_2X1 -> Pair(twoColW, cardH)
@@ -1597,11 +1550,12 @@ object FluidTileResizeHandler {
                             else -> Pair(twoColW, tallH)
                         }
 
-                        curW = (originWidth + dx).coerceIn(colW * 0.85f, fourColW * 1.05f)
-                        curH = (originHeight + dy).coerceIn(cardH * 0.85f, fourRowsH * 1.05f)
                         if (targetState != initialState) {
-                            curW = lerp(curW, targetW, 0.45f)
-                            curH = lerp(curH, targetH, 0.45f)
+                            curW = lerp(rawW, targetW, 0.55f)
+                            curH = lerp(rawH, targetH, 0.55f)
+                        } else {
+                            curW = rawW
+                            curH = rawH
                         }
 
                         val drawRect = RectF(originLeft, originTop, originLeft + curW, originTop + curH)
