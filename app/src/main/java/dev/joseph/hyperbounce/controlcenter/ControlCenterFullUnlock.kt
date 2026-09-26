@@ -369,13 +369,27 @@ object ControlCenterFullUnlock {
     fun createLandscapeDividerViewHolder(parent: ViewGroup, classLoader: ClassLoader): Any? {
         val ctx = parent.context
         val dividerView = LandscapeSplitDividerView(ctx)
+        val density = ctx.resources.displayMetrics.density
+        val dividerHeight = (44 * density).toInt()
 
-        // 1. Primary: FooterSpaceViewHolder(View view)
-        // Clean, direct View constructor with no stock divider bindings or forced height shrinkage.
+        // 1. Primary: EditButtonViewHolder (clean container, no forced navigation bar insets)
         try {
-            val holderClass = Class.forName("miui.systemui.controlcenter.panel.main.footer.FooterSpaceController\$FooterSpaceViewHolder", false, classLoader)
-            val ctor = holderClass.getConstructor(View::class.java)
-            val holder = ctor.newInstance(dividerView)
+            val btnBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCustomizeButtonBinding", false, classLoader)
+            val inflateMethod = btnBindingClass.getMethod("inflate", LayoutInflater::class.java, ViewGroup::class.java, Boolean::class.javaPrimitiveType)
+            val binding = inflateMethod.invoke(null, LayoutInflater.from(ctx), parent, false)
+
+            val getRootMethod = btnBindingClass.getMethod("getRoot")
+            val root = getRootMethod.invoke(binding) as ViewGroup
+            root.removeAllViews()
+            root.layoutParams = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dividerHeight)
+            root.minimumHeight = dividerHeight
+
+            root.addView(dividerView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dividerHeight))
+
+            val holderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.EditButtonController\$EditButtonViewHolder", false, classLoader)
+            val ctor = holderClass.getConstructor(btnBindingClass)
+            val holder = ctor.newInstance(binding)
+
             try {
                 val setIgnoreAlpha = holder.javaClass.getMethod("setIgnoreHolderAlpha", Boolean::class.javaPrimitiveType)
                 setIgnoreAlpha.invoke(holder, true)
@@ -392,25 +406,28 @@ object ControlCenterFullUnlock {
                 val setDraggable = holder.javaClass.getMethod("setDraggable", Boolean::class.javaPrimitiveType)
                 setDraggable.invoke(holder, false)
             } catch (t: Throwable) {}
+
             return holder
         } catch (t: Throwable) {
-            Log.w(TAG, "FooterSpaceViewHolder reflection failed for divider, trying EditButtonViewHolder", t)
+            Log.w(TAG, "EditButtonViewHolder reflection failed for divider, trying WordlessModeViewHolder", t)
         }
 
-        // 2. Fallback: EditButtonViewHolder
+        // 2. Fallback: WordlessModeViewHolder
         try {
-            val btnBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCustomizeButtonBinding", false, classLoader)
-            val inflateMethod = btnBindingClass.getMethod("inflate", LayoutInflater::class.java, ViewGroup::class.java, Boolean::class.javaPrimitiveType)
+            val wordlessBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsEditWordlessModeLayoutBinding", false, classLoader)
+            val inflateMethod = wordlessBindingClass.getMethod("inflate", LayoutInflater::class.java, ViewGroup::class.java, Boolean::class.javaPrimitiveType)
             val binding = inflateMethod.invoke(null, LayoutInflater.from(ctx), parent, false)
 
-            val getRootMethod = btnBindingClass.getMethod("getRoot")
+            val getRootMethod = wordlessBindingClass.getMethod("getRoot")
             val root = getRootMethod.invoke(binding) as ViewGroup
             root.removeAllViews()
+            root.layoutParams = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dividerHeight)
+            root.minimumHeight = dividerHeight
 
-            root.addView(dividerView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            root.addView(dividerView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dividerHeight))
 
-            val holderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.EditButtonController\$EditButtonViewHolder", false, classLoader)
-            val ctor = holderClass.getConstructor(btnBindingClass)
+            val holderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.WordlessModeController\$WordlessModeViewHolder", false, classLoader)
+            val ctor = holderClass.getConstructor(wordlessBindingClass)
             val holder = ctor.newInstance(binding)
 
             try {
@@ -898,24 +915,16 @@ object ControlCenterFullUnlock {
     }
 
     /**
-     * Dynamic Landscape Row Split Simulation:
-     * Simulates 4-column bin-packing to place exactly maxRightRows rows
-     * on the right panel (or above the landscape split divider in portrait edit mode).
-     * Any overflowing items or items that cannot fit in the top split flow to the left panel (below the divider).
-     * If a slot was explicitly demoted (demotedSlotId), it is held in the bottom split and other candidate
-     * items from below are promoted in priority order to fill available gaps.
+     * Calculates the split index in orderedSlots that demarcates the boundary
+     * between the Landscape Right Panel (first N rows, maxRows) and the Landscape Left Panel.
+     * Evaluates slots sequentially: slots that fit within the 4-column, maxRows 2D grid
+     * are placed above the divider, and the first slot that exceeds the row limit marks the split boundary.
      */
-    fun calculateLandscapeRowSplit(
-        activeSlots: List<SlotItem>,
-        maxRightRows: Int = ControlCenterConfigHolder.landscapeRightMaxRows,
-        demotedSlotId: String? = null
-    ): Pair<List<SlotItem>, List<SlotItem>> {
-        val rightList = ArrayList<SlotItem>()
-        val leftList = ArrayList<SlotItem>()
-
-        val effectiveMaxRows = maxRightRows.coerceIn(1, 6)
-
-        // 4-column occupancy grid for exactly effectiveMaxRows rows
+    fun calculateSplitIndex(
+        orderedSlots: List<SlotItem>,
+        maxRows: Int = ControlCenterConfigHolder.landscapeRightMaxRows
+    ): Int {
+        val effectiveMaxRows = maxRows.coerceIn(1, 6)
         val grid = Array(effectiveMaxRows) { BooleanArray(4) { false } }
 
         fun canFit(startRow: Int, startCol: Int, w: Int, h: Int): Boolean {
@@ -948,28 +957,32 @@ object ControlCenterFullUnlock {
             return null
         }
 
-        for (slot in activeSlots) {
-            // An item whose height alone exceeds effectiveMaxRows can NEVER fit in the top split
-            if (slot.spanH > effectiveMaxRows || slot.spanW > 4) {
-                leftList.add(slot)
-                continue
-            }
-
-            // If this item was explicitly moved below the divider, keep it in the bottom split
-            if (demotedSlotId != null && slot.id == demotedSlotId) {
-                leftList.add(slot)
-                continue
-            }
-
+        var splitIndex = 0
+        for (slot in orderedSlots) {
+            if (slot.spanH > effectiveMaxRows || slot.spanW > 4) break
             val fit = findSlot(slot.spanW, slot.spanH)
             if (fit != null) {
                 markOccupied(fit.first, fit.second, slot.spanW, slot.spanH)
-                rightList.add(slot)
+                splitIndex++
             } else {
-                leftList.add(slot)
+                break
             }
         }
+        return splitIndex
+    }
 
+    /**
+     * Dynamic Landscape Row Split Simulation:
+     * Divides activeSlots into (rightList, leftList) using calculateSplitIndex.
+     */
+    fun calculateLandscapeRowSplit(
+        activeSlots: List<SlotItem>,
+        maxRightRows: Int = ControlCenterConfigHolder.landscapeRightMaxRows,
+        demotedSlotId: String? = null
+    ): Pair<List<SlotItem>, List<SlotItem>> {
+        val splitIndex = calculateSplitIndex(activeSlots, maxRightRows)
+        val rightList = activeSlots.take(splitIndex)
+        val leftList = activeSlots.drop(splitIndex)
         return Pair(rightList, leftList)
     }
 
@@ -1426,29 +1439,11 @@ object ControlCenterFullUnlock {
 
                 if (ControlCenterConfigHolder.sIsEditMode) {
                     val maxRows = ControlCenterConfigHolder.landscapeRightMaxRows
-
-                    val (rightSlots, leftSlots) = calculateLandscapeRowSplit(
-                        orderedSlots,
-                        maxRightRows = maxRows,
-                        demotedSlotId = sLastDemotedSlotId
-                    )
-
-                    val newUnifiedOrder = rightSlots.map { it.id } + leftSlots.map { it.id }
-                    if (newUnifiedOrder != sUnifiedSlotOrder) {
-                        sUnifiedSlotOrder.clear()
-                        sUnifiedSlotOrder.addAll(newUnifiedOrder)
-                        if (context != null) saveOrder(context)
-                    }
-
-                    orderedSlots.clear()
-                    orderedSlots.addAll(rightSlots)
-                    orderedSlots.addAll(leftSlots)
-
-                    val splitIndex = rightSlots.size
+                    val splitIndex = calculateSplitIndex(orderedSlots, maxRows = maxRows)
 
                     // 3a. Top Section (Landscape Right Panel items - exactly maxRows occupied)
                     for (i in 0 until splitIndex) {
-                        val slot = rightSlots[i]
+                        val slot = orderedSlots[i]
                         val proxy = getOrCreateProxy(slot, classLoader, priority = 10 + i * 2, isRight = true)
                         newContentMap[proxy] = listOf(slot.item)
                     }
@@ -1458,9 +1453,9 @@ object ControlCenterFullUnlock {
                     newContentMap[dividerProxy] = listOf(dividerProxy)
 
                     // 3c. Bottom Section (Landscape Left Panel items)
-                    for (i in leftSlots.indices) {
-                        val slot = leftSlots[i]
-                        val proxy = getOrCreateProxy(slot, classLoader, priority = 10 + (splitIndex + 1 + i) * 2, isRight = false)
+                    for (i in splitIndex until orderedSlots.size) {
+                        val slot = orderedSlots[i]
+                        val proxy = getOrCreateProxy(slot, classLoader, priority = 10 + (i + 1) * 2, isRight = false)
                         newContentMap[proxy] = listOf(slot.item)
                     }
                 } else {
@@ -1573,8 +1568,7 @@ object ControlCenterFullUnlock {
 
             // Current ordered slots before candidate move
             val currentOrderedSlots = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
-            val (currentRightSlots, _) = calculateLandscapeRowSplit(currentOrderedSlots, maxRightRows = maxRightRows)
-            val currentSplitCount = currentRightSlots.size
+            val currentSplitCount = calculateSplitIndex(currentOrderedSlots, maxRightRows)
 
             val sourceSlot = sKnownSlots[fromId]
             val sourceHeight = sourceSlot?.spanH ?: 1
@@ -1591,16 +1585,6 @@ object ControlCenterFullUnlock {
                 } catch (t: Throwable) { null } ?: ControlCenterConfigHolder.sLastKnownContext
                 showCapacityToast(ctx, maxRightRows)
                 return false
-            }
-
-            // Track demotion or promotion relative to the split boundary
-            val isDemoting = (fromIdx < currentSplitCount && toIdx >= currentSplitCount)
-            if (isDemoting) {
-                sLastDemotedSlotId = fromId
-            } else if (fromIdx >= currentSplitCount && toIdx < currentSplitCount) {
-                if (sLastDemotedSlotId == fromId) {
-                    sLastDemotedSlotId = null
-                }
             }
 
             val isCrossingDivider = (fromIdx < currentSplitCount && toIdx >= currentSplitCount) ||
@@ -1685,6 +1669,9 @@ object ControlCenterFullUnlock {
                 }
             } else {
                 notifyItemMovedMethod.invoke(adapter, fromPos, toPos)
+                if (oldDividerPos >= 0 && newDividerPos >= 0 && oldDividerPos != newDividerPos) {
+                    notifyItemMovedMethod.invoke(adapter, oldDividerPos, newDividerPos)
+                }
             }
 
             return true
