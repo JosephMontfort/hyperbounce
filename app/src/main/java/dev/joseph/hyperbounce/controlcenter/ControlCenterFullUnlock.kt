@@ -19,6 +19,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import io.github.libxposed.api.XposedModule
+import java.lang.ref.WeakReference
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -53,6 +54,12 @@ object ControlCenterFullUnlock {
     @Volatile var sLastDemotedSlotId: String? = null
     @Volatile var sLastMoveTime: Long = 0L
     @Volatile var sLastMovedPair: String = ""
+
+    // Multi-row drag stabilization and out-of-bounds scroll control
+    @Volatile var sCurrentDraggedVh: WeakReference<Any>? = null
+    @Volatile var sCurrentDraggedSlotId: String? = null
+    @Volatile var sDragHoverTargetId: String? = null
+    @Volatile var sDragHoverStartTime: Long = 0L
 
     // Cache of proxies keyed by slot ID
     private val sProxyCache = ConcurrentHashMap<String, Any>()
@@ -1645,22 +1652,34 @@ object ControlCenterFullUnlock {
             val toIdx = sUnifiedSlotOrder.indexOf(toId)
             if (fromIdx < 0 || toIdx < 0 || fromIdx == toIdx) return false
 
+            val sourceSlot = sKnownSlots[fromId]
+            val sourceHeight = sourceSlot?.spanH ?: 1
+
+            // Multi-row drag stabilization: prevent cascading thrash while spring animations are active
+            val rv = try {
+                val itemViewField = sourceVh?.javaClass?.getField("itemView")
+                val v = itemViewField?.get(sourceVh) as? View
+                v?.parent as? androidx.recyclerview.widget.RecyclerView
+            } catch (t: Throwable) { null }
+            if (sourceHeight > 1 && rv?.isAnimating == true) {
+                return false
+            }
+
             val now = SystemClock.uptimeMillis()
+            val minMoveInterval = if (sourceHeight > 1) 220L else 90L
+            if ((now - sLastMoveTime) < minMoveInterval) {
+                return false
+            }
             val movePair = if (fromId < toId) "$fromId:$toId" else "$toId:$fromId"
-            if (movePair == sLastMovedPair && (now - sLastMoveTime) < 80L) {
+            if (movePair == sLastMovedPair && (now - sLastMoveTime) < (minMoveInterval * 1.5).toLong()) {
                 return false
             }
             sLastMoveTime = now
             sLastMovedPair = movePair
+            sDragHoverTargetId = null
+            sDragHoverStartTime = 0L
 
             val maxRightRows = ControlCenterConfigHolder.landscapeRightMaxRows
-
-            // Current ordered slots before candidate move
-            val currentOrderedSlots = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
-            val currentSplitCount = calculateSplitIndex(currentOrderedSlots, maxRightRows)
-
-            val sourceSlot = sKnownSlots[fromId]
-            val sourceHeight = sourceSlot?.spanH ?: 1
 
             // Moving into top section (above the divider)
             val isMovingIntoTopSection = (toIdx < currentSplitCount)
@@ -1772,6 +1791,10 @@ object ControlCenterFullUnlock {
 
     fun onExitEditMode() {
         sLastDemotedSlotId = null
+        sDragHoverTargetId = null
+        sDragHoverStartTime = 0L
+        sCurrentDraggedVh = null
+        sCurrentDraggedSlotId = null
         sAdapterQsFooters.clear()
         sAdapterWordless.clear()
         cleanStaleSlots()
@@ -1927,12 +1950,32 @@ object ControlCenterFullUnlock {
             // 3. Hook ItemTouchHelper.Callback methods
             try {
                 val helperClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelAdapter\$itemTouchHelper\$2", false, classLoader)
-                for (m in helperClass.declaredMethods) {
+                val callbackClass = try {
+                    Class.forName("androidx.recyclerview.widget.ItemTouchHelper\$Callback", false, classLoader)
+                } catch (t: Throwable) {
+                    helperClass.superclass
+                }
+
+                // Collect all methods from both helperClass (which overrides getMovementFlags, onMove)
+                // and callbackClass (which defines chooseDropTarget, canDropOver, clearView, interpolateOutOfBoundsScroll, getMoveThreshold, onSelectedChanged)
+                val allTargetMethods = mutableListOf<Method>()
+                allTargetMethods.addAll(helperClass.declaredMethods)
+                if (callbackClass != null) {
+                    for (cm in callbackClass.declaredMethods) {
+                        if (allTargetMethods.none { it.name == cm.name && it.parameterTypes.contentEquals(cm.parameterTypes) }) {
+                            allTargetMethods.add(cm)
+                        }
+                    }
+                }
+
+                for (m in allTargetMethods) {
                     if (m.name == "getMovementFlags") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             try {
-                                if (ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
+                                val helperCallback = chain.thisObject
+                                val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
+                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
                                     val vh = chain.args.getOrNull(1)
                                     if (vh != null) {
                                         val getItemViewTypeMethod = vh.javaClass.getMethod("getItemViewType")
@@ -1962,11 +2005,86 @@ object ControlCenterFullUnlock {
                         }
                     }
 
+                    if (m.name == "onSelectedChanged") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            try {
+                                val helperCallback = chain.thisObject
+                                val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
+                                if (isOurHelper) {
+                                    val vh = chain.args.getOrNull(0)
+                                    val actionState = (chain.args.getOrNull(1) as? Int) ?: 0
+                                    if (actionState == 2 && vh != null) { // ACTION_STATE_DRAG
+                                        sCurrentDraggedVh = WeakReference(vh)
+                                        sCurrentDraggedSlotId = getSlotIdFromViewHolder(vh)
+                                        sDragHoverTargetId = null
+                                        sDragHoverStartTime = 0L
+                                        sLastMoveTime = SystemClock.uptimeMillis()
+                                    } else if (actionState == 0) { // ACTION_STATE_IDLE
+                                        sCurrentDraggedVh = null
+                                        sCurrentDraggedSlotId = null
+                                        sDragHoverTargetId = null
+                                        sDragHoverStartTime = 0L
+                                    }
+                                }
+                            } catch (t: Throwable) {}
+                            chain.proceed()
+                        }
+                    }
+
+                    if (m.name == "interpolateOutOfBoundsScroll") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            try {
+                                val helperCallback = chain.thisObject
+                                val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
+                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
+                                    val viewSize = (chain.args.getOrNull(1) as? Int) ?: 0
+                                    val viewSizeOutOfBounds = (chain.args.getOrNull(2) as? Int) ?: 0
+
+                                    val draggedSlot = sCurrentDraggedSlotId?.let { sKnownSlots[it] }
+                                    val isMultiRow = (draggedSlot?.spanH ?: 1) > 1 || viewSize > 250
+
+                                    // Inverted scroll prevention:
+                                    // If dragging a multi-row component (1x2, 2x2), viewSizeOutOfBounds > 0 means the bottom edge
+                                    // of the 157dp view extends below the viewport. If the user is dragging upward or in the upper/mid screen,
+                                    // Android's ItemTouchHelper would run away scrolling DOWN, fighting the user's drag.
+                                    // Suppress downward auto-scroll (return 0) so the screen never pulls downward away from the user!
+                                    if (isMultiRow && viewSizeOutOfBounds > 0) {
+                                        return@intercept 0
+                                    }
+                                }
+                            } catch (t: Throwable) {}
+                            chain.proceed()
+                        }
+                    }
+
+                    if (m.name == "getMoveThreshold") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            try {
+                                val helperCallback = chain.thisObject
+                                val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
+                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
+                                    val vh = chain.args.getOrNull(0)
+                                    val slotId = getSlotIdFromViewHolder(vh)
+                                    val slot = slotId?.let { sKnownSlots[it] }
+                                    if ((slot?.spanH ?: 1) > 1) {
+                                        return@intercept 0.65f // Require deliberate 65% penetration before initiating move
+                                    }
+                                }
+                            } catch (t: Throwable) {}
+                            chain.proceed()
+                        }
+                    }
+
                     if (m.name == "canDropOver") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             try {
-                                if (ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
+                                val helperCallback = chain.thisObject
+                                val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
+                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
                                     val targetVh = chain.args.getOrNull(2)
                                     if (targetVh != null) {
                                         val getItemViewTypeMethod = targetVh.javaClass.getMethod("getItemViewType")
@@ -1996,7 +2114,9 @@ object ControlCenterFullUnlock {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             try {
-                                if (ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
+                                val helperCallback = chain.thisObject
+                                val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
+                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
                                     val selected = chain.args.getOrNull(0)
                                     val dropTargets = chain.args.getOrNull(1) as? List<*>
                                     val curX = (chain.args.getOrNull(2) as? Int) ?: 0
@@ -2007,8 +2127,17 @@ object ControlCenterFullUnlock {
                                         val selView = selViewField?.get(selected) as? View
 
                                         if (selView != null) {
-                                            val selCenterX = curX + selView.width / 2
-                                            val selCenterY = curY + selView.height / 2
+                                            val fromId = getSlotIdFromViewHolder(selected)
+                                            val sourceSlot = fromId?.let { sKnownSlots[it] }
+                                            val isMultiRow = (sourceSlot?.spanH ?: 1) > 1 || selView.height > 250
+
+                                            // Target the primary top cell for tall items (~quarter down the 2-row view, where user's thumb and top icon are)
+                                            val selFocusX = curX + selView.width / 2
+                                            val selFocusY = if (isMultiRow) {
+                                                curY + (selView.height / 4)
+                                            } else {
+                                                curY + (selView.height / 2)
+                                            }
 
                                             var bestTarget: Any? = null
                                             var minDistanceSq = Long.MAX_VALUE
@@ -2028,8 +2157,8 @@ object ControlCenterFullUnlock {
                                                 val tgtCenterX = tgtView.left + tgtView.width / 2
                                                 val tgtCenterY = tgtView.top + tgtView.height / 2
 
-                                                val dx = (selCenterX - tgtCenterX).toLong()
-                                                val dy = (selCenterY - tgtCenterY).toLong()
+                                                val dx = (selFocusX - tgtCenterX).toLong()
+                                                val dy = (selFocusY - tgtCenterY).toLong()
                                                 val distSq = dx * dx + dy * dy
 
                                                 if (distSq < minDistanceSq) {
@@ -2039,6 +2168,26 @@ object ControlCenterFullUnlock {
                                             }
 
                                             if (bestTarget != null) {
+                                                if (isMultiRow) {
+                                                    val rv = selView.parent as? androidx.recyclerview.widget.RecyclerView
+                                                    if (rv?.isAnimating == true) {
+                                                        return@intercept null
+                                                    }
+                                                    val now = SystemClock.uptimeMillis()
+                                                    val targetId = getSlotIdFromViewHolder(bestTarget)
+                                                    if (targetId != null) {
+                                                        if (targetId != sDragHoverTargetId) {
+                                                            sDragHoverTargetId = targetId
+                                                            sDragHoverStartTime = now
+                                                            return@intercept null
+                                                        } else {
+                                                            val hoverDuration = now - sDragHoverStartTime
+                                                            if (hoverDuration < 140L) {
+                                                                return@intercept null
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                                 return@intercept bestTarget
                                             }
                                         }
@@ -2053,11 +2202,16 @@ object ControlCenterFullUnlock {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             try {
-                                if (ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
-                                    val helperCallback = chain.thisObject
-                                    val this0Field = helperClass.getDeclaredField("this$0")
-                                    this0Field.isAccessible = true
-                                    val adapter = this0Field.get(helperCallback)
+                                val helperCallback = chain.thisObject
+                                val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
+                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
+                                    val adapter = try {
+                                        val this0Field = helperClass.getDeclaredField("this$0")
+                                        this0Field.isAccessible = true
+                                        this0Field.get(helperCallback)
+                                    } catch (t: Throwable) {
+                                        ControlCenterConfigHolder.sMainPanelAdapter
+                                    }
 
                                     val sourceVh = chain.args.getOrNull(1)
                                     val targetVh = chain.args.getOrNull(2)
@@ -2090,41 +2244,52 @@ object ControlCenterFullUnlock {
                             val result = chain.proceed()
                             try {
                                 val helperCallback = chain.thisObject
-                                val this0Field = helperClass.getDeclaredField("this$0")
-                                this0Field.isAccessible = true
-                                val adapter = this0Field.get(helperCallback)
-                                sLastDemotedSlotId = null
-                                sLastMovedPair = ""
-                                sLastMoveTime = 0L
-                                if (adapter != null) {
-                                    val ctxField = adapter.javaClass.getDeclaredField("context")
-                                    ctxField.isAccessible = true
-                                    val ctx = ctxField.get(adapter) as? Context
-                                    saveOrder(ctx)
-                                    val cl = adapter.javaClass.classLoader
-                                    if (cl != null) {
-                                        buildAndSetContentMap(adapter, cl)
-                                        if (sDistributor != null) {
-                                            val otherAdapter = if (adapter === sRightAdapter) sLeftAdapter else if (adapter === sLeftAdapter) sRightAdapter else null
-                                            if (otherAdapter != null) {
-                                                buildAndSetContentMap(otherAdapter, cl)
+                                val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
+                                if (isOurHelper) {
+                                    sDragHoverTargetId = null
+                                    sDragHoverStartTime = 0L
+                                    sCurrentDraggedVh = null
+                                    sCurrentDraggedSlotId = null
+                                    sLastDemotedSlotId = null
+                                    sLastMovedPair = ""
+                                    sLastMoveTime = 0L
+                                    val adapter = try {
+                                        val this0Field = helperClass.getDeclaredField("this$0")
+                                        this0Field.isAccessible = true
+                                        this0Field.get(helperCallback)
+                                    } catch (t: Throwable) {
+                                        ControlCenterConfigHolder.sMainPanelAdapter
+                                    }
+                                    if (adapter != null) {
+                                        val ctxField = adapter.javaClass.getDeclaredField("context")
+                                        ctxField.isAccessible = true
+                                        val ctx = ctxField.get(adapter) as? Context
+                                        saveOrder(ctx)
+                                        val cl = adapter.javaClass.classLoader
+                                        if (cl != null) {
+                                            buildAndSetContentMap(adapter, cl)
+                                            if (sDistributor != null) {
+                                                val otherAdapter = if (adapter === sRightAdapter) sLeftAdapter else if (adapter === sLeftAdapter) sRightAdapter else null
+                                                if (otherAdapter != null) {
+                                                    buildAndSetContentMap(otherAdapter, cl)
+                                                }
                                             }
                                         }
-                                    }
-                                    True2DGridEngine.invalidateAll()
-                                    val notifyDataSetChangedM = adapter.javaClass.getMethod("notifyDataSetChanged")
-                                    try {
-                                        val rvField = adapter.javaClass.getDeclaredField("recyclerView")
-                                        rvField.isAccessible = true
-                                        val rv = rvField.get(adapter) as? ViewGroup
-                                        rv?.post {
-                                            try {
-                                                True2DGridEngine.invalidateAll()
-                                                notifyDataSetChangedM.invoke(adapter)
-                                            } catch (t: Throwable) {}
-                                        } ?: notifyDataSetChangedM.invoke(adapter)
-                                    } catch (t: Throwable) {
-                                        notifyDataSetChangedM.invoke(adapter)
+                                        True2DGridEngine.invalidateAll()
+                                        val notifyDataSetChangedM = adapter.javaClass.getMethod("notifyDataSetChanged")
+                                        try {
+                                            val rvField = adapter.javaClass.getDeclaredField("recyclerView")
+                                            rvField.isAccessible = true
+                                            val rv = rvField.get(adapter) as? ViewGroup
+                                            rv?.post {
+                                                try {
+                                                    True2DGridEngine.invalidateAll()
+                                                    notifyDataSetChangedM.invoke(adapter)
+                                                } catch (t: Throwable) {}
+                                            } ?: notifyDataSetChangedM.invoke(adapter)
+                                        } catch (t: Throwable) {
+                                            notifyDataSetChangedM.invoke(adapter)
+                                        }
                                     }
                                 }
                             } catch (t: Throwable) {}
