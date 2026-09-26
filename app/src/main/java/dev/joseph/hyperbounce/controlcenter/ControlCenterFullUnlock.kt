@@ -259,6 +259,22 @@ object ControlCenterFullUnlock {
     ) : InvocationHandler {
         private var holderRef: Any? = null
 
+        private fun makeHolderVisible(holder: Any?) {
+            if (holder == null) return
+            try {
+                val itemViewField = holder.javaClass.getField("itemView")
+                val v = itemViewField.get(holder) as? View
+                if (v != null) {
+                    v.visibility = View.VISIBLE
+                    v.alpha = 1.0f
+                }
+            } catch (t: Throwable) {}
+            try {
+                val setIgnoreAlpha = holder.javaClass.getMethod("setIgnoreHolderAlpha", Boolean::class.javaPrimitiveType)
+                setIgnoreAlpha.invoke(holder, true)
+            } catch (t: Throwable) {}
+        }
+
         override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? {
             when (method.name) {
                 "getType" -> return VIEW_TYPE_LANDSCAPE_DIVIDER
@@ -273,6 +289,22 @@ object ControlCenterFullUnlock {
                 "getHolder" -> return holderRef
                 "setHolder" -> {
                     holderRef = args?.getOrNull(0)
+                    makeHolderVisible(holderRef)
+                    return null
+                }
+                "onBindViewHolder" -> {
+                    val holder = holderRef ?: args?.getOrNull(0)
+                    makeHolderVisible(holder)
+                    return null
+                }
+                "updateMode" -> {
+                    val holder = holderRef ?: args?.getOrNull(0)
+                    makeHolderVisible(holder)
+                    return null
+                }
+                "updateConfiguration" -> {
+                    val holder = holderRef ?: args?.getOrNull(0)
+                    makeHolderVisible(holder)
                     return null
                 }
                 "createViewHolder" -> {
@@ -315,7 +347,45 @@ object ControlCenterFullUnlock {
         val ctx = parent.context
         val dividerView = LandscapeSplitDividerView(ctx)
 
-        // 1. Try EditButtonViewHolder
+        // 1. Try QSListController$EditModeDividerHolder
+        try {
+            val divBindingClass = Class.forName("miui.systemui.controlcenter.databinding.CustomizeDividerBinding", false, classLoader)
+            val inflateMethod = divBindingClass.getMethod("inflate", LayoutInflater::class.java, ViewGroup::class.java, Boolean::class.javaPrimitiveType)
+            val binding = inflateMethod.invoke(null, LayoutInflater.from(ctx), parent, false)
+
+            val getRootMethod = divBindingClass.getMethod("getRoot")
+            val root = getRootMethod.invoke(binding) as ViewGroup
+
+            // Hide the default thin line so our custom iOS 26 frosted badge is shown
+            try {
+                val getDividerMethod = divBindingClass.getMethod("getDivider")
+                val stockDivider = getDividerMethod.invoke(binding) as? View
+                stockDivider?.visibility = View.GONE
+            } catch (t: Throwable) {}
+
+            root.addView(dividerView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.CENTER
+            })
+
+            val holderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSListController\$EditModeDividerHolder", false, classLoader)
+            val ctor = holderClass.getConstructor(divBindingClass)
+            val holder = ctor.newInstance(binding)
+
+            try {
+                val setIgnoreAlpha = holder.javaClass.getMethod("setIgnoreHolderAlpha", Boolean::class.javaPrimitiveType)
+                setIgnoreAlpha.invoke(holder, true)
+            } catch (t: Throwable) {}
+            try {
+                val setDraggable = holder.javaClass.getMethod("setDraggable", Boolean::class.javaPrimitiveType)
+                setDraggable.invoke(holder, false)
+            } catch (t: Throwable) {}
+
+            return holder
+        } catch (t: Throwable) {
+            Log.w(TAG, "EditModeDividerHolder reflection failed for divider, trying EditButtonViewHolder", t)
+        }
+
+        // 2. Fallback: EditButtonViewHolder
         try {
             val btnBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCustomizeButtonBinding", false, classLoader)
             val inflateMethod = btnBindingClass.getMethod("inflate", LayoutInflater::class.java, ViewGroup::class.java, Boolean::class.javaPrimitiveType)
@@ -325,21 +395,36 @@ object ControlCenterFullUnlock {
             val root = getRootMethod.invoke(binding) as ViewGroup
             root.removeAllViews()
 
-            root.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            root.addView(dividerView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            root.addView(dividerView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
             val holderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.EditButtonController\$EditButtonViewHolder", false, classLoader)
             val ctor = holderClass.getConstructor(btnBindingClass)
-            return ctor.newInstance(binding)
+            val holder = ctor.newInstance(binding)
+
+            try {
+                val setIgnoreAlpha = holder.javaClass.getMethod("setIgnoreHolderAlpha", Boolean::class.javaPrimitiveType)
+                setIgnoreAlpha.invoke(holder, true)
+            } catch (t: Throwable) {}
+            try {
+                val setDraggable = holder.javaClass.getMethod("setDraggable", Boolean::class.javaPrimitiveType)
+                setDraggable.invoke(holder, false)
+            } catch (t: Throwable) {}
+
+            return holder
         } catch (t: Throwable) {
             Log.w(TAG, "EditButtonViewHolder reflection failed for divider, trying FooterSpaceViewHolder", t)
         }
 
-        // 2. Fallback: FooterSpaceViewHolder
+        // 3. Fallback: FooterSpaceViewHolder
         try {
             val fHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.footer.FooterSpaceController\$FooterSpaceViewHolder", false, classLoader)
             val ctor = fHolderClass.getConstructor(View::class.java)
-            return ctor.newInstance(dividerView)
+            val holder = ctor.newInstance(dividerView)
+            try {
+                val setIgnoreAlpha = holder.javaClass.getMethod("setIgnoreHolderAlpha", Boolean::class.javaPrimitiveType)
+                setIgnoreAlpha.invoke(holder, true)
+            } catch (t: Throwable) {}
+            return holder
         } catch (t: Throwable) {
             Log.e(TAG, "createLandscapeDividerViewHolder failed", t)
             return null
@@ -370,12 +455,13 @@ object ControlCenterFullUnlock {
             val maxRows = ControlCenterConfigHolder.landscapeRightMaxRows
 
             val slotId = when {
+                spec.startsWith("group:") -> spec
                 spec.equals("media", ignoreCase = true) -> "component:media"
                 spec.equals("brightness", ignoreCase = true) -> "component:brightness"
                 spec.equals("volume", ignoreCase = true) -> "component:volume"
                 spec == "wifi" || spec == "cell" -> "card:$spec"
                 else -> {
-                    val g = ControlCenterConfigHolder.isGroupAnchor(spec)
+                    val g = ControlCenterConfigHolder.findGroupForSpec(spec)
                     if (g != null) "group:${g.id}" else "tile:$spec"
                 }
             }
@@ -386,9 +472,24 @@ object ControlCenterFullUnlock {
             // Refresh spans for this slot
             val slot = sKnownSlots[slotId]
             if (slot != null) {
-                val currentSpans = getItemSpans(slot.item, slot.viewType, spec)
+                val currentSpans = getItemSpans(slot.item, slot.viewType, if (slotId.startsWith("group:")) slotId else spec)
                 slot.spanW = currentSpans.first
                 slot.spanH = currentSpans.second
+            } else if (slotId.startsWith("group:")) {
+                val gId = slotId.substring(6)
+                val group = ControlCenterConfigHolder.sTileGroups.find { it.id == gId }
+                if (group != null) {
+                    val spans = if (group.specs.size == 2) {
+                        if (group.isVertical) Pair(1, 2) else Pair(2, 1)
+                    } else {
+                        Pair(2, group.getEffectiveRowCount().coerceIn(1, 6))
+                    }
+                    val anchorSpec = group.specs.firstOrNull()
+                    val anchorSlot = if (anchorSpec != null) sKnownSlots["tile:$anchorSpec"] ?: sKnownSlots["card:$anchorSpec"] else null
+                    if (anchorSlot != null) {
+                        sKnownSlots[slotId] = SlotItem(slotId, anchorSlot.owner, anchorSlot.item, anchorSlot.viewType, spans.first, spans.second)
+                    }
+                }
             }
 
             // Current ordered slots
@@ -544,6 +645,9 @@ object ControlCenterFullUnlock {
     fun onGroupCreated(groupId: String, specs: List<String>, context: Context?) {
         try {
             val groupSlotId = "group:$groupId"
+            val anchorSpec = specs.firstOrNull()
+            val anchorSlot = if (anchorSpec != null) sKnownSlots["tile:$anchorSpec"] ?: sKnownSlots["card:$anchorSpec"] else null
+
             var insertIdx = -1
             for (spec in specs) {
                 val tileId = "tile:$spec"
@@ -570,8 +674,22 @@ object ControlCenterFullUnlock {
             } else {
                 sUnifiedSlotOrder.add(groupSlotId)
             }
+
+            if (anchorSlot != null) {
+                val group = ControlCenterConfigHolder.sTileGroups.find { it.id == groupId }
+                val spans = if (group != null) {
+                    if (group.specs.size == 2) {
+                        if (group.isVertical) Pair(1, 2) else Pair(2, 1)
+                    } else {
+                        Pair(2, group.getEffectiveRowCount().coerceIn(1, 6))
+                    }
+                } else Pair(2, 2)
+                sKnownSlots[groupSlotId] = SlotItem(groupSlotId, anchorSlot.owner, anchorSlot.item, anchorSlot.viewType, spans.first, spans.second)
+            }
+
             cleanStaleSlots()
             saveOrder(context)
+            ensureTileFitsLandscapeAfterResize(groupSlotId, context)
         } catch (t: Throwable) {
             Log.e(TAG, "onGroupCreated error", t)
         }
@@ -672,12 +790,24 @@ object ControlCenterFullUnlock {
         if (viewType == 338423 || viewType == 2668765) {
             return Pair(2, 1)
         }
-        // 4. Cards (Wi-Fi, Cell) & Circular tiles
+        // 4. Cards (Wi-Fi, Cell) & Circular tiles & Groups
         if (spec != null) {
-            val g = ControlCenterConfigHolder.isGroupAnchor(spec)
+            if (spec.startsWith("group:")) {
+                val gId = spec.substring(6)
+                val group = ControlCenterConfigHolder.sTileGroups.find { it.id == gId }
+                if (group != null) {
+                    if (group.specs.size == 2) {
+                        return if (group.isVertical) Pair(1, 2) else Pair(2, 1)
+                    }
+                    return Pair(2, group.getEffectiveRowCount().coerceIn(1, 6))
+                }
+            }
+            val g = ControlCenterConfigHolder.findGroupForSpec(spec)
             if (g != null) {
-                if (g.is2x2Group()) return Pair(2, 2)
-                if (g.specs.size == 2) return if (g.isVertical) Pair(1, 2) else Pair(2, 1)
+                if (g.specs.size == 2) {
+                    return if (g.isVertical) Pair(1, 2) else Pair(2, 1)
+                }
+                return Pair(2, g.getEffectiveRowCount().coerceIn(1, 6))
             }
             if (ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)) return Pair(2, 2)
             if (ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)) return Pair(1, 2)
@@ -891,7 +1021,7 @@ object ControlCenterFullUnlock {
                                 if (group != null) {
                                     if (ControlCenterConfigHolder.isGroupAnchor(spec) != null) {
                                         val id = "group:${group.id}"
-                                        val spans = getItemSpans(item, vt, spec)
+                                        val spans = getItemSpans(item, vt, id)
                                         sKnownSlots[id] = SlotItem(id, controller, item, vt, spans.first, spans.second)
                                     }
                                     sKnownSlots.remove("card:$spec")
@@ -973,7 +1103,7 @@ object ControlCenterFullUnlock {
                                     if (group != null) {
                                         if (ControlCenterConfigHolder.isGroupAnchor(spec) != null) {
                                             val id = "group:${group.id}"
-                                            val spans = getItemSpans(item, vt, spec)
+                                            val spans = getItemSpans(item, vt, id)
                                             sKnownSlots[id] = SlotItem(id, controller, item, vt, spans.first, spans.second)
                                         }
                                         sKnownSlots.remove("tile:$spec")
@@ -1158,6 +1288,7 @@ object ControlCenterFullUnlock {
                 val spec = when {
                     slotId.startsWith("tile:") -> slotId.substring(5)
                     slotId.startsWith("card:") -> slotId.substring(5)
+                    slotId.startsWith("group:") -> slotId
                     else -> null
                 }
                 val currentSpans = getItemSpans(slot.item, slot.viewType, spec)
@@ -1351,26 +1482,14 @@ object ControlCenterFullUnlock {
             val (currentRightSlots, _) = calculateLandscapeRowSplit(currentOrderedSlots, maxRightRows = maxRightRows)
             val currentSplitCount = currentRightSlots.size
 
-            // Candidate simulation
-            val candidateOrder = ArrayList(sUnifiedSlotOrder)
-            val candMoved = candidateOrder.removeAt(fromIdx)
-            candidateOrder.add(toIdx, candMoved)
+            val sourceSlot = sKnownSlots[fromId]
+            val sourceHeight = sourceSlot?.spanH ?: 1
 
-            val candidateSlots = candidateOrder.mapNotNull { sKnownSlots[it] }
-            val (candidateRightSlots, _) = calculateLandscapeRowSplit(candidateSlots, maxRightRows = maxRightRows)
+            // Moving into top section (above the divider)
+            val isMovingIntoTopSection = (toIdx < currentSplitCount)
 
-            // Did the candidate move exceed top section capacity?
-            val exceededCapacity = if (fromIdx >= currentSplitCount && toIdx < currentSplitCount) {
-                // Dragging from below divider into top section: must fit all previous items + new item
-                candidateRightSlots.size < currentSplitCount + 1
-            } else if (fromIdx < currentSplitCount && toIdx < currentSplitCount) {
-                // Dragging within top section: must still fit all top items
-                candidateRightSlots.size < currentSplitCount
-            } else {
-                false
-            }
-
-            if (exceededCapacity) {
+            // A component can only be placed above the divider if its vertical height does not exceed maxRightRows
+            if (isMovingIntoTopSection && sourceHeight > maxRightRows) {
                 val ctx = try {
                     val itemViewField = sourceVh?.javaClass?.getField("itemView")
                     val v = itemViewField?.get(sourceVh) as? View

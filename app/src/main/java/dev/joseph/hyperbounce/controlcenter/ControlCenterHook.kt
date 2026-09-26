@@ -1986,6 +1986,7 @@ object ControlCenterHook {
                                                             }
                                                         }
                                                         ControlCenterConfigHolder.savePriorities(ctx)
+                                                        ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize("group:${group.id}", ctx)
                                                         ControlCenterConfigHolder.refreshRecyclerView(itemView)
                                                         ControlCenterConfigHolder.updateAllVisibleTileBadges()
                                                         ControlCenterConfigHolder.refreshAdapter(itemView.rootView, ctx, true)

@@ -1259,6 +1259,7 @@ object ControlCenterConfigHolder {
                                             }
                                         }
                                         savePriorities(itemView.context)
+                                        ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize("group:${group.id}", itemView.context)
                                         refreshRecyclerView(itemView)
                                         updateAllVisibleTileBadges()
                                         refreshAdapter(itemView.rootView, itemView.context, true)
@@ -1582,12 +1583,12 @@ object ControlCenterConfigHolder {
         if (rv != null) {
             rv.post {
                 updateAllVisibleTileBadges()
-                refreshAdapter(rv, ctx, isStructuralChange = false)
+                refreshAdapter(rv, ctx, isStructuralChange = true)
             }
         } else if (rootView != null) {
             rootView.post {
                 updateAllVisibleTileBadges()
-                refreshAdapter(rootView, ctx, isStructuralChange = false)
+                refreshAdapter(rootView, ctx, isStructuralChange = true)
             }
         }
     }
