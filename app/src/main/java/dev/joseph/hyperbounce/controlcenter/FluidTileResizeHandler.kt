@@ -380,7 +380,7 @@ object FluidTileResizeHandler {
                         isWide1 -> {
                             textStartX = coverRect.right + 14f * density
                             textTopY = currentRect.centerY() - titleH / 2f - 4f * density
-                            clipRight = ctrlRight - btnSize * 2f - playSize - spacing * 2f - 14f * density
+                            clipRight = currentRect.right - (btnSize * 2f + playSize + spacing * 2f + 28f * density)
                         }
                         else -> { // 2x2
                             textStartX = coverRect.right + 12f * density
