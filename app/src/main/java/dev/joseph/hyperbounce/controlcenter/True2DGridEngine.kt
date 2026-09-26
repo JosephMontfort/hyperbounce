@@ -29,7 +29,8 @@ object True2DGridEngine {
         val spanW: Int,
         val spanH: Int,
         val isHeader: Boolean,
-        val isSystemItem: Boolean = false
+        val isSystemItem: Boolean = false,
+        val isLandscapeDivider: Boolean = false
     )
 
     class AdapterGridData(
@@ -38,6 +39,12 @@ object True2DGridEngine {
         val unitRowHeight: Int,
         val itemsCount: Int = 0
     ) {
+        fun isLandscapeDivider(pos: Int): Boolean {
+            if (pos in items.indices && items[pos] != null) {
+                return items[pos]!!.isLandscapeDivider
+            }
+            return false
+        }
         fun getItemRow(pos: Int, adapter: Any? = null): Int {
             if (pos in items.indices && items[pos] != null) {
                 return items[pos]!!.row
@@ -313,6 +320,32 @@ object True2DGridEngine {
                 getTypeMethod.invoke(item) as Int
             } catch (t: Throwable) { -1 }
 
+            val isLandscapeDivider = (vt == ControlCenterFullUnlock.VIEW_TYPE_LANDSCAPE_DIVIDER ||
+                (item != null && item.javaClass.name.contains("LandscapeSplitDivider")) ||
+                (item != null && item.toString().contains("LandscapeSplitDivider")))
+
+            if (isLandscapeDivider) {
+                val defRows = ControlCenterConfigHolder.landscapeRightMaxRows
+                val assignedRow = maxOf(defRows, maxStartRow)
+                val assignedCol = 0
+                markOccupied(assignedRow, assignedCol, SPAN_COUNT, 1)
+                maxStartRow = assignedRow + 1
+                if (assignedRow + 1 > highestOccupiedRow) {
+                    highestOccupiedRow = assignedRow + 1
+                }
+                itemsArray[p] = ItemLayout(
+                    position = p,
+                    col = assignedCol,
+                    row = assignedRow,
+                    spanW = SPAN_COUNT,
+                    spanH = 1,
+                    isHeader = true,
+                    isSystemItem = true,
+                    isLandscapeDivider = true
+                )
+                continue
+            }
+
             val isSystem = isFullWidthSystemItem(item, vt)
             val spec = if (!isSystem) ControlCenterConfigHolder.getRecordSpec(item) else null
             val isTargetOverride = (overrideSpec != null && (
@@ -520,7 +553,43 @@ object True2DGridEngine {
             val unitRowHeight = gridData.unitRowHeight
             val targetRow = gridData.getItemRow(currentPos, targetAdapter)
 
-            // System full-width items (Edit Button, WordlessMode strip, Dividers, Spaces):
+            // Landscape Split Divider: Measure and layout directly with exact 44dp height and full width,
+            // completely symmetric in forward and reverse scrolling!
+            if (gridData.isLandscapeDivider(currentPos)) {
+                val nextView = ReflectionCache.layoutStateNextMethod?.invoke(layoutState, recycler) as? View ?: return false
+                val isScrap = (ReflectionCache.layoutStateScrapListField?.get(layoutState) != null)
+                if (!isScrap) {
+                    if (isForward) {
+                        ReflectionCache.addViewMethod?.invoke(glm, nextView)
+                    } else {
+                        ReflectionCache.addViewAtMethod?.invoke(glm, nextView, 0)
+                    }
+                } else {
+                    if (isForward) {
+                        ReflectionCache.addDisappearingViewMethod?.invoke(glm, nextView)
+                    } else {
+                        ReflectionCache.addDisappearingViewAtMethod?.invoke(glm, nextView, 0)
+                    }
+                }
+
+                val paddingLeft = ReflectionCache.getPaddingLeftMethod?.invoke(glm) as? Int ?: 0
+                val width = ReflectionCache.getWidthMethod?.invoke(glm) as? Int ?: 0
+                val density = context?.resources?.displayMetrics?.density ?: 2.75f
+                val dividerHeight = (44 * density).toInt()
+
+                val widthSpec = View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY)
+                val heightSpec = View.MeasureSpec.makeMeasureSpec(dividerHeight, View.MeasureSpec.EXACTLY)
+                nextView.measure(widthSpec, heightSpec)
+
+                val chunkTop = if (isForward) offset else offset - dividerHeight
+                val chunkBottom = chunkTop + dividerHeight
+
+                ReflectionCache.layoutDecoratedWithMarginsMethod?.invoke(glm, nextView, paddingLeft, chunkTop, width, chunkBottom)
+                ReflectionCache.layoutChunkResultConsumedField?.setInt(layoutChunkResult, dividerHeight)
+                return true
+            }
+
+            // Other system full-width items (Edit Button, WordlessMode strip, Spaces):
             // Let stock GridLayoutManager layoutChunk handle them natively with full 4-column width,
             // center gravity, and natural wrap_content height!
             if (gridData.isSystemItem(currentPos, targetAdapter)) {

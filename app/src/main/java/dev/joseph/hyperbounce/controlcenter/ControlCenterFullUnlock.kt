@@ -50,6 +50,7 @@ object ControlCenterFullUnlock {
     // Unified slot order persisted across sessions
     val sUnifiedSlotOrder = CopyOnWriteArrayList<String>()
     @Volatile var sOrderLoaded = false
+    @Volatile var sLastDemotedSlotId: String? = null
 
     // Cache of proxies keyed by slot ID
     private val sProxyCache = ConcurrentHashMap<String, Any>()
@@ -272,11 +273,23 @@ object ControlCenterFullUnlock {
                 if (v != null) {
                     v.visibility = View.VISIBLE
                     v.alpha = 1.0f
+                    v.translationX = 0f
+                    v.translationY = 0f
+                    v.scaleX = 1.0f
+                    v.scaleY = 1.0f
                 }
             } catch (t: Throwable) {}
             try {
                 val setIgnoreAlpha = holder.javaClass.getMethod("setIgnoreHolderAlpha", Boolean::class.javaPrimitiveType)
                 setIgnoreAlpha.invoke(holder, true)
+            } catch (t: Throwable) {}
+            try {
+                val setIgnoreTrans = holder.javaClass.getMethod("setIgnoreHolderTranslation", Boolean::class.javaPrimitiveType)
+                setIgnoreTrans.invoke(holder, true)
+            } catch (t: Throwable) {}
+            try {
+                val setIgnoreScale = holder.javaClass.getMethod("setIgnoreHolderScale", Boolean::class.javaPrimitiveType)
+                setIgnoreScale.invoke(holder, true)
             } catch (t: Throwable) {}
             try {
                 val setDraggable = holder.javaClass.getMethod("setDraggable", Boolean::class.javaPrimitiveType)
@@ -368,6 +381,14 @@ object ControlCenterFullUnlock {
                 setIgnoreAlpha.invoke(holder, true)
             } catch (t: Throwable) {}
             try {
+                val setIgnoreTrans = holder.javaClass.getMethod("setIgnoreHolderTranslation", Boolean::class.javaPrimitiveType)
+                setIgnoreTrans.invoke(holder, true)
+            } catch (t: Throwable) {}
+            try {
+                val setIgnoreScale = holder.javaClass.getMethod("setIgnoreHolderScale", Boolean::class.javaPrimitiveType)
+                setIgnoreScale.invoke(holder, true)
+            } catch (t: Throwable) {}
+            try {
                 val setDraggable = holder.javaClass.getMethod("setDraggable", Boolean::class.javaPrimitiveType)
                 setDraggable.invoke(holder, false)
             } catch (t: Throwable) {}
@@ -395,6 +416,14 @@ object ControlCenterFullUnlock {
             try {
                 val setIgnoreAlpha = holder.javaClass.getMethod("setIgnoreHolderAlpha", Boolean::class.javaPrimitiveType)
                 setIgnoreAlpha.invoke(holder, true)
+            } catch (t: Throwable) {}
+            try {
+                val setIgnoreTrans = holder.javaClass.getMethod("setIgnoreHolderTranslation", Boolean::class.javaPrimitiveType)
+                setIgnoreTrans.invoke(holder, true)
+            } catch (t: Throwable) {}
+            try {
+                val setIgnoreScale = holder.javaClass.getMethod("setIgnoreHolderScale", Boolean::class.javaPrimitiveType)
+                setIgnoreScale.invoke(holder, true)
             } catch (t: Throwable) {}
             try {
                 val setDraggable = holder.javaClass.getMethod("setDraggable", Boolean::class.javaPrimitiveType)
@@ -870,22 +899,28 @@ object ControlCenterFullUnlock {
 
     /**
      * Dynamic Landscape Row Split Simulation:
-     * Simulates 4-column bin-packing to place the first N rows (up to maxRightRows = 5)
-     * on the right panel, and flows all overflowing items to the left panel.
+     * Simulates 4-column bin-packing to place exactly maxRightRows rows
+     * on the right panel (or above the landscape split divider in portrait edit mode).
+     * Any overflowing items or items that cannot fit in the top split flow to the left panel (below the divider).
+     * If a slot was explicitly demoted (demotedSlotId), it is held in the bottom split and other candidate
+     * items from below are promoted in priority order to fill available gaps.
      */
     fun calculateLandscapeRowSplit(
         activeSlots: List<SlotItem>,
-        maxRightRows: Int = MAX_LANDSCAPE_RIGHT_ROWS
+        maxRightRows: Int = ControlCenterConfigHolder.landscapeRightMaxRows,
+        demotedSlotId: String? = null
     ): Pair<List<SlotItem>, List<SlotItem>> {
         val rightList = ArrayList<SlotItem>()
         val leftList = ArrayList<SlotItem>()
 
-        // 4-column occupancy grid for up to 60 rows
-        val grid = Array(60) { BooleanArray(4) { false } }
+        val effectiveMaxRows = maxRightRows.coerceIn(1, 6)
+
+        // 4-column occupancy grid for exactly effectiveMaxRows rows
+        val grid = Array(effectiveMaxRows) { BooleanArray(4) { false } }
 
         fun canFit(startRow: Int, startCol: Int, w: Int, h: Int): Boolean {
             if (startCol + w > 4) return false
-            if (startRow + h > 60) return false
+            if (startRow + h > effectiveMaxRows) return false
             for (r in startRow until (startRow + h)) {
                 for (c in startCol until (startCol + w)) {
                     if (grid[r][c]) return false
@@ -896,58 +931,41 @@ object ControlCenterFullUnlock {
 
         fun markOccupied(startRow: Int, startCol: Int, w: Int, h: Int) {
             for (r in startRow until (startRow + h)) {
-                if (r < 60) {
-                    for (c in startCol until (startCol + w)) {
-                        grid[r][c] = true
-                    }
+                for (c in startCol until (startCol + w)) {
+                    grid[r][c] = true
                 }
             }
         }
 
-        fun findSlot(w: Int, h: Int, minRow: Int): Pair<Int, Int>? {
-            var r = minRow
-            while (r < 60) {
+        fun findSlot(w: Int, h: Int): Pair<Int, Int>? {
+            for (r in 0..(effectiveMaxRows - h)) {
                 for (c in 0..(4 - w)) {
                     if (canFit(r, c, w, h)) {
                         return Pair(r, c)
                     }
                 }
-                r++
             }
             return null
         }
 
-        var maxStartRow = 0
-        var overflowedToLeft = false
-
         for (slot in activeSlots) {
-            // An item whose height alone exceeds maxRightRows can NEVER fit in the right panel
-            if (slot.spanH > maxRightRows) {
+            // An item whose height alone exceeds effectiveMaxRows can NEVER fit in the top split
+            if (slot.spanH > effectiveMaxRows || slot.spanW > 4) {
                 leftList.add(slot)
                 continue
             }
 
-            if (overflowedToLeft) {
+            // If this item was explicitly moved below the divider, keep it in the bottom split
+            if (demotedSlotId != null && slot.id == demotedSlotId) {
                 leftList.add(slot)
                 continue
             }
 
-            val fit = findSlot(slot.spanW, slot.spanH, maxStartRow)
-            if (fit == null) {
-                overflowedToLeft = true
-                leftList.add(slot)
-                continue
-            }
-
-            val (row, col) = fit
-            val endRow = row + slot.spanH
-
-            if (endRow <= maxRightRows) {
-                markOccupied(row, col, slot.spanW, slot.spanH)
-                maxStartRow = row
+            val fit = findSlot(slot.spanW, slot.spanH)
+            if (fit != null) {
+                markOccupied(fit.first, fit.second, slot.spanW, slot.spanH)
                 rightList.add(slot)
             } else {
-                overflowedToLeft = true
                 leftList.add(slot)
             }
         }
@@ -1409,35 +1427,28 @@ object ControlCenterFullUnlock {
                 if (ControlCenterConfigHolder.sIsEditMode) {
                     val maxRows = ControlCenterConfigHolder.landscapeRightMaxRows
 
-                    // Safety check: ensure no oversized item (spanH > maxRows) is located before the divider
-                    val tempSlots = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
-                    val (tempRight, _) = calculateLandscapeRowSplit(tempSlots, maxRightRows = maxRows)
-                    val targetSplit = tempRight.size
-                    val oversizedAboveDivider = sUnifiedSlotOrder.take(targetSplit).filter { id ->
-                        val s = sKnownSlots[id]
-                        s != null && s.spanH > maxRows
-                    }
-                    if (oversizedAboveDivider.isNotEmpty()) {
-                        for (id in oversizedAboveDivider) {
-                            sUnifiedSlotOrder.remove(id)
-                        }
-                        val remSlots = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
-                        val (remRight, _) = calculateLandscapeRowSplit(remSlots, maxRightRows = maxRows)
-                        val insertPos = remRight.size
-                        for ((idx, id) in oversizedAboveDivider.withIndex()) {
-                            sUnifiedSlotOrder.add((insertPos + idx).coerceIn(0, sUnifiedSlotOrder.size), id)
-                        }
-                        orderedSlots.clear()
-                        orderedSlots.addAll(sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] })
+                    val (rightSlots, leftSlots) = calculateLandscapeRowSplit(
+                        orderedSlots,
+                        maxRightRows = maxRows,
+                        demotedSlotId = sLastDemotedSlotId
+                    )
+
+                    val newUnifiedOrder = rightSlots.map { it.id } + leftSlots.map { it.id }
+                    if (newUnifiedOrder != sUnifiedSlotOrder) {
+                        sUnifiedSlotOrder.clear()
+                        sUnifiedSlotOrder.addAll(newUnifiedOrder)
                         if (context != null) saveOrder(context)
                     }
 
-                    val (rightSlots, _) = calculateLandscapeRowSplit(orderedSlots, maxRightRows = maxRows)
+                    orderedSlots.clear()
+                    orderedSlots.addAll(rightSlots)
+                    orderedSlots.addAll(leftSlots)
+
                     val splitIndex = rightSlots.size
 
-                    // 3a. Top Section (Landscape Right Panel items)
+                    // 3a. Top Section (Landscape Right Panel items - exactly maxRows occupied)
                     for (i in 0 until splitIndex) {
-                        val slot = orderedSlots[i]
+                        val slot = rightSlots[i]
                         val proxy = getOrCreateProxy(slot, classLoader, priority = 10 + i * 2, isRight = true)
                         newContentMap[proxy] = listOf(slot.item)
                     }
@@ -1447,9 +1458,9 @@ object ControlCenterFullUnlock {
                     newContentMap[dividerProxy] = listOf(dividerProxy)
 
                     // 3c. Bottom Section (Landscape Left Panel items)
-                    for (i in splitIndex until orderedSlots.size) {
-                        val slot = orderedSlots[i]
-                        val proxy = getOrCreateProxy(slot, classLoader, priority = 10 + (i + 1) * 2, isRight = false)
+                    for (i in leftSlots.indices) {
+                        val slot = leftSlots[i]
+                        val proxy = getOrCreateProxy(slot, classLoader, priority = 10 + (splitIndex + 1 + i) * 2, isRight = false)
                         newContentMap[proxy] = listOf(slot.item)
                     }
                 } else {
@@ -1582,6 +1593,21 @@ object ControlCenterFullUnlock {
                 return false
             }
 
+            // Track demotion or promotion relative to the split boundary
+            val isDemoting = (fromIdx < currentSplitCount && toIdx >= currentSplitCount)
+            if (isDemoting) {
+                sLastDemotedSlotId = fromId
+            } else if (fromIdx >= currentSplitCount && toIdx < currentSplitCount) {
+                if (sLastDemotedSlotId == fromId) {
+                    sLastDemotedSlotId = null
+                }
+            }
+
+            val isCrossingDivider = (fromIdx < currentSplitCount && toIdx >= currentSplitCount) ||
+                                    (fromIdx >= currentSplitCount && toIdx < currentSplitCount)
+
+            val oldDividerPos = getDividerPositionInAdapter(adapter)
+
             val moved = sUnifiedSlotOrder.removeAt(fromIdx)
             sUnifiedSlotOrder.add(toIdx, moved)
 
@@ -1636,10 +1662,30 @@ object ControlCenterFullUnlock {
                 }
             }
 
-            // Notify adapter of visual move - ItemTouchHelper already animates the moved item
-            // and RecyclerView automatically shifts all intermediate items (including the divider).
+            val newDividerPos = getDividerPositionInAdapter(adapter)
+
+            // Boundary-safe adapter notification:
+            // When moving across the divider, notifyItemMoved(fromPos, toPos) causes RecyclerView
+            // to shift the divider. We immediately restore the divider to its true position newDividerPos
+            // so it never drifts under or gets displaced by tiles.
             val notifyItemMovedMethod = adapter.javaClass.getMethod("notifyItemMoved", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-            notifyItemMovedMethod.invoke(adapter, fromPos, toPos)
+
+            if (isCrossingDivider && oldDividerPos >= 0 && newDividerPos >= 0) {
+                notifyItemMovedMethod.invoke(adapter, fromPos, toPos)
+                if (fromPos < oldDividerPos && toPos > oldDividerPos) {
+                    val shiftedDividerPos = oldDividerPos - 1
+                    if (shiftedDividerPos != newDividerPos) {
+                        notifyItemMovedMethod.invoke(adapter, shiftedDividerPos, newDividerPos)
+                    }
+                } else if (fromPos > oldDividerPos && toPos < oldDividerPos) {
+                    val shiftedDividerPos = oldDividerPos + 1
+                    if (shiftedDividerPos != newDividerPos) {
+                        notifyItemMovedMethod.invoke(adapter, shiftedDividerPos, newDividerPos)
+                    }
+                }
+            } else {
+                notifyItemMovedMethod.invoke(adapter, fromPos, toPos)
+            }
 
             return true
         } catch (t: Throwable) {
@@ -1649,6 +1695,7 @@ object ControlCenterFullUnlock {
     }
 
     fun onExitEditMode() {
+        sLastDemotedSlotId = null
         sAdapterQsFooters.clear()
         sAdapterWordless.clear()
         cleanStaleSlots()
@@ -1913,6 +1960,7 @@ object ControlCenterFullUnlock {
                                 val this0Field = helperClass.getDeclaredField("this$0")
                                 this0Field.isAccessible = true
                                 val adapter = this0Field.get(helperCallback)
+                                sLastDemotedSlotId = null
                                 if (adapter != null) {
                                     val ctxField = adapter.javaClass.getDeclaredField("context")
                                     ctxField.isAccessible = true
