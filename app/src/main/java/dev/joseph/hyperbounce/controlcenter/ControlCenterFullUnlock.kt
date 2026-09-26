@@ -1530,29 +1530,6 @@ object ControlCenterFullUnlock {
                 return false
             }
 
-            // Candidate capacity check: prevent visual disruption and divider overlap during drag
-            val candidateOrder = ArrayList(sUnifiedSlotOrder)
-            val candMoved = candidateOrder.removeAt(fromIdx)
-            candidateOrder.add(toIdx, candMoved)
-            val candidateSlots = candidateOrder.mapNotNull { sKnownSlots[it] }
-            val (candidateRightSlots, _) = calculateLandscapeRowSplit(candidateSlots, maxRightRows = maxRightRows)
-
-            val exceededCapacity = if (fromIdx >= currentSplitCount && toIdx < currentSplitCount) {
-                candidateRightSlots.size < currentSplitCount + 1
-            } else if (fromIdx < currentSplitCount && toIdx < currentSplitCount) {
-                candidateRightSlots.size < currentSplitCount
-            } else false
-
-            if (exceededCapacity) {
-                val ctx = try {
-                    val itemViewField = sourceVh?.javaClass?.getField("itemView")
-                    val v = itemViewField?.get(sourceVh) as? View
-                    v?.context
-                } catch (t: Throwable) { null } ?: ControlCenterConfigHolder.sLastKnownContext
-                showCapacityToast(ctx, maxRightRows)
-                return false
-            }
-
             val moved = sUnifiedSlotOrder.removeAt(fromIdx)
             sUnifiedSlotOrder.add(toIdx, moved)
 
