@@ -206,8 +206,8 @@ class SpannedGridLayoutManager : GridLayoutManager {
             if (viewType == 366837) {
                 return intArrayOf(4, 1)
             }
-            // 8398 or 3484337 or 8397: Edit Mode Divider / Header / Security Footer -> 4x1
-            if (viewType == 8398 || viewType == 3484337 || viewType == 8397) {
+            // 8398 or 3484337 or 8397 or 8399: Edit Mode Divider / Header / Security Footer / Landscape Split Divider -> 4x1
+            if (viewType == 8398 || viewType == 3484337 || viewType == 8397 || viewType == 8399 || viewType == ControlCenterFullUnlock.VIEW_TYPE_LANDSCAPE_DIVIDER) {
                 return intArrayOf(4, 1)
             }
         }
@@ -262,7 +262,7 @@ class SpannedGridLayoutManager : GridLayoutManager {
                 try { adapter.getItemViewType(pos) } catch (t: Throwable) { -1 }
             } else -1
 
-            val isFullRowDivider = (wSpans == 4) && (vt == 8398 || vt == 3484337 || vt == 8397)
+            val isFullRowDivider = (wSpans == 4) && (vt == 8398 || vt == 3484337 || vt == 8397 || vt == 8399 || vt == ControlCenterFullUnlock.VIEW_TYPE_LANDSCAPE_DIVIDER)
 
             val searchStartRow = if (isFullRowDivider) {
                 var rCandidate = minRowForSection
@@ -332,7 +332,7 @@ class SpannedGridLayoutManager : GridLayoutManager {
             // Determine custom row heights for header/divider/footer
             if (vt == 432337 && assignedRow < MAX_ROWS) {
                 rowHeights[assignedRow] = headerHeight
-            } else if ((vt == 8398 || vt == 3484337 || vt == 8397) && assignedRow < MAX_ROWS) {
+            } else if ((vt == 8398 || vt == 3484337 || vt == 8397 || vt == 8399 || vt == ControlCenterFullUnlock.VIEW_TYPE_LANDSCAPE_DIVIDER) && assignedRow < MAX_ROWS) {
                 rowHeights[assignedRow] = dividerHeight
             } else if (vt == 366837 && assignedRow < MAX_ROWS) {
                 rowHeights[assignedRow] = footerHeight

@@ -1692,6 +1692,13 @@ object ControlCenterConfigHolder {
 
                     if (isStructuralChange) {
                         try {
+                            val cl = adp.javaClass.classLoader
+                            if (cl != null) {
+                                ControlCenterFullUnlock.buildAndSetContentMap(adp, cl)
+                            }
+                        } catch (t: Throwable) {}
+                        True2DGridEngine.invalidateAll()
+                        try {
                             val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
                             notifyDataSetChangedMethod.invoke(adp)
                         } catch (t: Throwable) {}
@@ -1732,6 +1739,13 @@ object ControlCenterConfigHolder {
                         val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
                         val adp = getAdapterMethod.invoke(rv)
                         if (adp != null) {
+                            try {
+                                val cl = adp.javaClass.classLoader
+                                if (cl != null) {
+                                    ControlCenterFullUnlock.buildAndSetContentMap(adp, cl)
+                                }
+                            } catch (t: Throwable) {}
+                            True2DGridEngine.invalidateAll()
                             try {
                                 val distMethod = adp.javaClass.getDeclaredMethod("distributeContent", Boolean::class.javaPrimitiveType)
                                 distMethod.isAccessible = true

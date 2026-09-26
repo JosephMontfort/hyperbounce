@@ -273,6 +273,24 @@ object ControlCenterFullUnlock {
                 val setIgnoreAlpha = holder.javaClass.getMethod("setIgnoreHolderAlpha", Boolean::class.javaPrimitiveType)
                 setIgnoreAlpha.invoke(holder, true)
             } catch (t: Throwable) {}
+            try {
+                val setHasLine = holder.javaClass.getMethod("setHasLine", Boolean::class.javaPrimitiveType)
+                setHasLine.invoke(holder, false)
+            } catch (t: Throwable) {}
+            try {
+                val bindingField = holder.javaClass.getDeclaredField("binding").apply { isAccessible = true }
+                val b = bindingField.get(holder)
+                if (b != null) {
+                    val getDivider = b.javaClass.getMethod("getDivider")
+                    val d = getDivider.invoke(b) as? View
+                    if (d != null) {
+                        d.visibility = View.GONE
+                        d.alpha = 0f
+                        d.layoutParams = ViewGroup.LayoutParams(0, 0)
+                        (d.parent as? ViewGroup)?.removeView(d)
+                    }
+                }
+            } catch (t: Throwable) {}
         }
 
         override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? {
@@ -356,12 +374,21 @@ object ControlCenterFullUnlock {
             val getRootMethod = divBindingClass.getMethod("getRoot")
             val root = getRootMethod.invoke(binding) as ViewGroup
 
-            // Hide the default thin line so our custom iOS 26 frosted badge is shown
+            // Completely eliminate stock full-width divider line
             try {
                 val getDividerMethod = divBindingClass.getMethod("getDivider")
                 val stockDivider = getDividerMethod.invoke(binding) as? View
-                stockDivider?.visibility = View.GONE
+                if (stockDivider != null) {
+                    stockDivider.visibility = View.GONE
+                    stockDivider.alpha = 0f
+                    stockDivider.layoutParams = ViewGroup.LayoutParams(0, 0)
+                    root.removeView(stockDivider)
+                }
             } catch (t: Throwable) {}
+            root.removeAllViews()
+
+            val density = ctx.resources.displayMetrics.density
+            root.minimumHeight = (44 * density).toInt()
 
             root.addView(dividerView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 gravity = Gravity.CENTER
@@ -371,6 +398,10 @@ object ControlCenterFullUnlock {
             val ctor = holderClass.getConstructor(divBindingClass)
             val holder = ctor.newInstance(binding)
 
+            try {
+                val setHasLine = holder.javaClass.getMethod("setHasLine", Boolean::class.javaPrimitiveType)
+                setHasLine.invoke(holder, false)
+            } catch (t: Throwable) {}
             try {
                 val setIgnoreAlpha = holder.javaClass.getMethod("setIgnoreHolderAlpha", Boolean::class.javaPrimitiveType)
                 setIgnoreAlpha.invoke(holder, true)
@@ -449,6 +480,34 @@ object ControlCenterFullUnlock {
         }
     }
 
+    fun getDividerPositionInAdapter(adapter: Any?): Int {
+        if (adapter == null) return -1
+        try {
+            val contentMapField = adapter.javaClass.getDeclaredField("contentMap")
+            contentMapField.isAccessible = true
+            val map = contentMapField.get(adapter) as? Map<*, *> ?: return -1
+            var idx = 0
+            for (entry in map.values) {
+                if (entry is List<*>) {
+                    for (item in entry) {
+                        if (item === sLandscapeDividerProxy || item?.toString()?.contains("LandscapeSplitDivider") == true) {
+                            return idx
+                        }
+                        val vt = try {
+                            val getTypeMethod = item?.javaClass?.getMethod("getType")
+                            getTypeMethod?.invoke(item) as? Int ?: -1
+                        } catch (t: Throwable) { -1 }
+                        if (vt == VIEW_TYPE_LANDSCAPE_DIVIDER) {
+                            return idx
+                        }
+                        idx++
+                    }
+                }
+            }
+        } catch (t: Throwable) {}
+        return -1
+    }
+
     fun ensureTileFitsLandscapeAfterResize(spec: String?, ctx: Context?) {
         if (spec == null) return
         try {
@@ -465,9 +524,6 @@ object ControlCenterFullUnlock {
                     if (g != null) "group:${g.id}" else "tile:$spec"
                 }
             }
-
-            val currentSlotIdx = sUnifiedSlotOrder.indexOf(slotId)
-            if (currentSlotIdx < 0) return
 
             // Refresh spans for this slot
             val slot = sKnownSlots[slotId]
@@ -492,35 +548,50 @@ object ControlCenterFullUnlock {
                 }
             }
 
-            // Current ordered slots
-            val orderedSlots = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
-            val (currentRightSlots, _) = calculateLandscapeRowSplit(orderedSlots, maxRightRows = maxRows)
+            val currentSlotIdx = sUnifiedSlotOrder.indexOf(slotId)
+            if (currentSlotIdx >= 0) {
+                // Current ordered slots
+                val orderedSlots = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
+                val (currentRightSlots, _) = calculateLandscapeRowSplit(orderedSlots, maxRightRows = maxRows)
 
-            // If the slot is in currentRightSlots, it fits above the divider! Nothing to move.
-            if (currentRightSlots.any { it.id == slotId }) {
-                return
+                // If the slot does NOT fit in currentRightSlots, shift it below the divider!
+                if (!currentRightSlots.any { it.id == slotId }) {
+                    val remainingOrder = ArrayList(sUnifiedSlotOrder)
+                    remainingOrder.remove(slotId)
+
+                    val remainingSlots = remainingOrder.mapNotNull { sKnownSlots[it] }
+                    val (remainingRightSlots, _) = calculateLandscapeRowSplit(remainingSlots, maxRightRows = maxRows)
+                    val newSplitIndex = remainingRightSlots.size
+
+                    // Insert slotId at newSplitIndex (first item below the divider)
+                    remainingOrder.add(newSplitIndex.coerceIn(0, remainingOrder.size), slotId)
+
+                    sUnifiedSlotOrder.clear()
+                    sUnifiedSlotOrder.addAll(remainingOrder)
+                    Log.i(TAG, "Tile $spec resized and shifted below landscape divider to index $newSplitIndex")
+                }
             }
-
-            // If it does NOT fit in currentRightSlots, shift it below the divider!
-            val remainingOrder = ArrayList(sUnifiedSlotOrder)
-            remainingOrder.remove(slotId)
-
-            val remainingSlots = remainingOrder.mapNotNull { sKnownSlots[it] }
-            val (remainingRightSlots, _) = calculateLandscapeRowSplit(remainingSlots, maxRightRows = maxRows)
-            val newSplitIndex = remainingRightSlots.size
-
-            // Insert slotId at newSplitIndex (first item below the divider)
-            remainingOrder.add(newSplitIndex.coerceIn(0, remainingOrder.size), slotId)
-
-            sUnifiedSlotOrder.clear()
-            sUnifiedSlotOrder.addAll(remainingOrder)
 
             val targetCtx = ctx ?: ControlCenterConfigHolder.sLastKnownContext
             if (targetCtx != null) {
                 saveOrder(targetCtx)
             }
+
+            // Immediately rebuild contentMap and invalidate grid engine on active adapters!
+            val adapter = ControlCenterConfigHolder.sMainPanelAdapter ?: sRightAdapter ?: sLeftAdapter
+            if (adapter != null) {
+                val cl = adapter.javaClass.classLoader
+                if (cl != null) {
+                    buildAndSetContentMap(adapter, cl)
+                    if (sDistributor != null) {
+                        val otherAdapter = if (adapter === sRightAdapter) sLeftAdapter else if (adapter === sLeftAdapter) sRightAdapter else null
+                        if (otherAdapter != null) {
+                            buildAndSetContentMap(otherAdapter, cl)
+                        }
+                    }
+                }
+            }
             True2DGridEngine.invalidateAll()
-            Log.i(TAG, "Tile $spec resized and shifted below landscape divider to index $newSplitIndex")
         } catch (t: Throwable) {
             Log.e(TAG, "ensureTileFitsLandscapeAfterResize error", t)
         }
@@ -718,6 +789,20 @@ object ControlCenterFullUnlock {
             }
             cleanStaleSlots()
             saveOrder(context)
+            val adapter = ControlCenterConfigHolder.sMainPanelAdapter ?: sRightAdapter ?: sLeftAdapter
+            if (adapter != null) {
+                val cl = adapter.javaClass.classLoader
+                if (cl != null) {
+                    buildAndSetContentMap(adapter, cl)
+                    if (sDistributor != null) {
+                        val otherAdapter = if (adapter === sRightAdapter) sLeftAdapter else if (adapter === sLeftAdapter) sRightAdapter else null
+                        if (otherAdapter != null) {
+                            buildAndSetContentMap(otherAdapter, cl)
+                        }
+                    }
+                }
+            }
+            True2DGridEngine.invalidateAll()
         } catch (t: Throwable) {
             Log.e(TAG, "onGroupsDisassembled error", t)
         }
@@ -1499,6 +1584,8 @@ object ControlCenterFullUnlock {
                 return false
             }
 
+            val oldDivPos = getDividerPositionInAdapter(adapter)
+
             val moved = sUnifiedSlotOrder.removeAt(fromIdx)
             sUnifiedSlotOrder.add(toIdx, moved)
 
@@ -1552,10 +1639,15 @@ object ControlCenterFullUnlock {
                     buildAndSetContentMap(otherAdapter, classLoader)
                 }
             }
+            val newDivPos = getDividerPositionInAdapter(adapter)
 
             // Notify adapter of visual move
             val notifyItemMovedMethod = adapter.javaClass.getMethod("notifyItemMoved", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
             notifyItemMovedMethod.invoke(adapter, fromPos, toPos)
+
+            if (oldDivPos >= 0 && newDivPos >= 0 && oldDivPos != newDivPos) {
+                notifyItemMovedMethod.invoke(adapter, oldDivPos, newDivPos)
+            }
 
             return true
         } catch (t: Throwable) {
@@ -1834,9 +1926,31 @@ object ControlCenterFullUnlock {
                                     ctxField.isAccessible = true
                                     val ctx = ctxField.get(adapter) as? Context
                                     saveOrder(ctx)
-                                    True2DGridEngine.invalidate(adapter)
+                                    val cl = adapter.javaClass.classLoader
+                                    if (cl != null) {
+                                        buildAndSetContentMap(adapter, cl)
+                                        if (sDistributor != null) {
+                                            val otherAdapter = if (adapter === sRightAdapter) sLeftAdapter else if (adapter === sLeftAdapter) sRightAdapter else null
+                                            if (otherAdapter != null) {
+                                                buildAndSetContentMap(otherAdapter, cl)
+                                            }
+                                        }
+                                    }
+                                    True2DGridEngine.invalidateAll()
                                     val notifyDataSetChangedM = adapter.javaClass.getMethod("notifyDataSetChanged")
-                                    notifyDataSetChangedM.invoke(adapter)
+                                    try {
+                                        val rvField = adapter.javaClass.getDeclaredField("recyclerView")
+                                        rvField.isAccessible = true
+                                        val rv = rvField.get(adapter) as? ViewGroup
+                                        rv?.post {
+                                            try {
+                                                True2DGridEngine.invalidateAll()
+                                                notifyDataSetChangedM.invoke(adapter)
+                                            } catch (t: Throwable) {}
+                                        } ?: notifyDataSetChangedM.invoke(adapter)
+                                    } catch (t: Throwable) {
+                                        notifyDataSetChangedM.invoke(adapter)
+                                    }
                                 }
                             } catch (t: Throwable) {}
                             result
