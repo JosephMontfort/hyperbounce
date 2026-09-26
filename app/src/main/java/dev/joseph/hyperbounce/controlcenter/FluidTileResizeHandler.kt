@@ -4,6 +4,8 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
+import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
@@ -15,7 +17,10 @@ import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.InsetDrawable
+import android.graphics.drawable.LayerDrawable
 import android.text.TextPaint
+import android.text.TextUtils
 import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -65,6 +70,11 @@ object FluidTileResizeHandler {
      * reveals full-scale stock text by clip mask as the tile expands, and draws the corner resize handle.
      */
     class FluidTileMorphOverlayDrawable(private val density: Float) : Drawable() {
+        var isNight: Boolean = true
+        private val baseAcrylicPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.parseColor("#E6252528")
+        }
         private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
         }
@@ -80,12 +90,12 @@ object FluidTileResizeHandler {
 
         val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
-            textSize = 15.5f * density
+            textSize = 19.5f * density
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         }
         val subtitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#B3FFFFFF")
-            textSize = 13.5f * density
+            textSize = 15f * density
             typeface = Typeface.create("sans-serif", Typeface.NORMAL)
         }
         private val handleDrawable = CurvedResizeHandleDrawable(density)
@@ -128,6 +138,8 @@ object FluidTileResizeHandler {
             isSlider = isSliderItem
             customBgDrawable = customBg
             sliderProgressFraction = sliderProgress
+            titlePaint.textSize = 15.5f * density
+            subtitlePaint.textSize = 13.5f * density
         }
 
         fun setupMedia(
@@ -139,7 +151,13 @@ object FluidTileResizeHandler {
             artist: String?,
             bgColor: Int,
             customBg: Drawable? = null,
-            progress: Float = 0f
+            progress: Float = 0f,
+            titleSize: Float? = null,
+            titleTypeface: Typeface? = null,
+            titleColor: Int? = null,
+            artistSize: Float? = null,
+            artistTypeface: Typeface? = null,
+            artistColor: Int? = null
         ) {
             isMedia = true
             isSlider = false
@@ -152,6 +170,38 @@ object FluidTileResizeHandler {
             bgPaint.color = bgColor
             customBgDrawable = customBg
             mediaProgressFraction = progress
+
+            if (titleSize != null && titleSize > 0f) {
+                titlePaint.textSize = titleSize
+            } else {
+                titlePaint.textSize = 19.5f * density
+            }
+            if (titleTypeface != null) {
+                titlePaint.typeface = titleTypeface
+            } else {
+                titlePaint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            }
+            if (titleColor != null && titleColor != 0) {
+                titlePaint.color = titleColor
+            } else {
+                titlePaint.color = Color.WHITE
+            }
+
+            if (artistSize != null && artistSize > 0f) {
+                subtitlePaint.textSize = artistSize
+            } else {
+                subtitlePaint.textSize = 15f * density
+            }
+            if (artistTypeface != null) {
+                subtitlePaint.typeface = artistTypeface
+            } else {
+                subtitlePaint.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+            }
+            if (artistColor != null && artistColor != 0) {
+                subtitlePaint.color = artistColor
+            } else {
+                subtitlePaint.color = Color.parseColor("#B3FFFFFF")
+            }
         }
 
         fun updateMorph(
@@ -180,8 +230,21 @@ object FluidTileResizeHandler {
                 clipPath.addRoundRect(currentRect, cornerRadius, cornerRadius, Path.Direction.CW)
                 canvas.clipPath(clipPath)
 
-                // 1. Slider track background
-                canvas.drawRect(currentRect, bgPaint)
+                // 1. Slider track background with solid acrylic substrate
+                baseAcrylicPaint.color = if (isNight) Color.parseColor("#E6252528") else Color.parseColor("#E6F0F0F3")
+                canvas.drawRect(currentRect, baseAcrylicPaint)
+
+                if (customBgDrawable != null) {
+                    customBgDrawable?.setBounds(
+                        currentRect.left.toInt(),
+                        currentRect.top.toInt(),
+                        currentRect.right.toInt(),
+                        currentRect.bottom.toInt()
+                    )
+                    customBgDrawable?.draw(canvas)
+                } else {
+                    canvas.drawRect(currentRect, bgPaint)
+                }
 
                 // 2. Slider progress fill (white pill clipped by the track's rounded boundary)
                 if (sliderProgressFraction > 0.01f) {
@@ -217,19 +280,28 @@ object FluidTileResizeHandler {
 
             // If media player, render album art, controls, and title/artist with strict corner radius and unstretched elements
             if (isMedia) {
-                if (customBgDrawable != null && customBgDrawable is GradientDrawable) {
-                    val gd = customBgDrawable as GradientDrawable
-                    gd.cornerRadius = cornerRadius
-                    gd.setBounds(
+                canvas.save()
+                clipPath.reset()
+                clipPath.addRoundRect(currentRect, cornerRadius, cornerRadius, Path.Direction.CW)
+                canvas.clipPath(clipPath)
+
+                // Solid acrylic substrate matching stock control center card background
+                // Completely eliminates transparency while dragging/resizing
+                baseAcrylicPaint.color = if (isNight) Color.parseColor("#E6252528") else Color.parseColor("#E6F0F0F3")
+                canvas.drawRect(currentRect, baseAcrylicPaint)
+
+                if (customBgDrawable != null) {
+                    customBgDrawable?.setBounds(
                         currentRect.left.toInt(),
                         currentRect.top.toInt(),
                         currentRect.right.toInt(),
                         currentRect.bottom.toInt()
                     )
-                    gd.draw(canvas)
+                    customBgDrawable?.draw(canvas)
                 } else {
-                    canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, bgPaint)
+                    canvas.drawRect(currentRect, bgPaint)
                 }
+                canvas.restore()
 
                 // Subtle border
                 canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, borderPaint)
@@ -356,11 +428,11 @@ object FluidTileResizeHandler {
                     nextDrawable?.draw(canvas)
                 }
 
-                // 3. Draw Song Title & Artist (revealed via clipping)
+                // 3. Draw Song Title & Artist (revealed via clipping and ellipsizing)
                 if (!titleText.isNullOrEmpty() && !isExpanded2x1 && !isVert) {
                     val fontMetrics = titlePaint.fontMetrics
                     val titleH = fontMetrics.descent - fontMetrics.ascent
-                    val gapBetween = 3f * density
+                    val gapBetween = 4f * density
 
                     val textStartX: Float
                     val textTopY: Float
@@ -379,25 +451,35 @@ object FluidTileResizeHandler {
                         }
                         isWide1 -> {
                             textStartX = coverRect.right + 14f * density
-                            textTopY = currentRect.centerY() - titleH / 2f - 4f * density
+                            val totalTextH = titleH + (if (!subtitleText.isNullOrEmpty()) (gapBetween + subtitlePaint.fontMetrics.descent - subtitlePaint.fontMetrics.ascent) else 0f)
+                            textTopY = currentRect.centerY() - totalTextH / 2f
                             clipRight = currentRect.right - (btnSize * 2f + playSize + spacing * 2f + 28f * density)
                         }
                         else -> { // 2x2
-                            textStartX = coverRect.right + 12f * density
-                            textTopY = coverRect.top + 2f * density
-                            clipRight = currentRect.right - 12f * density
+                            textStartX = coverRect.right + 14f * density
+                            textTopY = coverRect.top + 4f * density
+                            clipRight = currentRect.right - 14f * density
                         }
                     }
 
                     if (clipRight > textStartX) {
                         canvas.save()
                         canvas.clipRect(textStartX, currentRect.top, clipRight, currentRect.bottom)
+                        val availW = clipRight - textStartX
+                        val displayTitle = if (availW > 10f) {
+                            TextUtils.ellipsize(titleText, titlePaint, availW, TextUtils.TruncateAt.END).toString()
+                        } else titleText!!
+
                         val titleBaseline = textTopY - fontMetrics.ascent
-                        canvas.drawText(titleText!!, textStartX, titleBaseline, titlePaint)
+                        canvas.drawText(displayTitle, textStartX, titleBaseline, titlePaint)
 
                         if (!subtitleText.isNullOrEmpty()) {
+                            val displayArtist = if (availW > 10f) {
+                                TextUtils.ellipsize(subtitleText, subtitlePaint, availW, TextUtils.TruncateAt.END).toString()
+                            } else subtitleText!!
+
                             val subBaseline = titleBaseline + fontMetrics.descent + gapBetween - subtitlePaint.fontMetrics.ascent
-                            canvas.drawText(subtitleText!!, textStartX, subBaseline, subtitlePaint)
+                            canvas.drawText(displayArtist, textStartX, subBaseline, subtitlePaint)
                         }
                         canvas.restore()
                     }
@@ -413,19 +495,28 @@ object FluidTileResizeHandler {
             }
 
             // 1. Draw smooth background matching native cards/tiles with strictly preserved corner radius
-            if (customBgDrawable != null && customBgDrawable is GradientDrawable) {
-                val gd = customBgDrawable as GradientDrawable
-                gd.cornerRadius = cornerRadius
-                gd.setBounds(
+            canvas.save()
+            clipPath.reset()
+            clipPath.addRoundRect(currentRect, cornerRadius, cornerRadius, Path.Direction.CW)
+            canvas.clipPath(clipPath)
+
+            if (layoutMode == LAYOUT_MODE_EXPANDED || layoutMode == LAYOUT_MODE_LARGE) {
+                baseAcrylicPaint.color = if (isNight) Color.parseColor("#E6252528") else Color.parseColor("#E6F0F0F3")
+                canvas.drawRect(currentRect, baseAcrylicPaint)
+            }
+
+            if (customBgDrawable != null) {
+                customBgDrawable?.setBounds(
                     currentRect.left.toInt(),
                     currentRect.top.toInt(),
                     currentRect.right.toInt(),
                     currentRect.bottom.toInt()
                 )
-                gd.draw(canvas)
+                customBgDrawable?.draw(canvas)
             } else {
-                canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, bgPaint)
+                canvas.drawRect(currentRect, bgPaint)
             }
+            canvas.restore()
 
             // 2. Draw subtle border (Preserves clean stock look without blue frame)
             canvas.drawRoundRect(currentRect, cornerRadius, cornerRadius, borderPaint)
@@ -647,6 +738,20 @@ object FluidTileResizeHandler {
             return null
         }
 
+        private fun resolveViewBackground(v: View?): Drawable? {
+            if (v == null) return null
+            if (v.background != null) return v.background
+            if (v is ViewGroup) {
+                for (i in 0 until v.childCount) {
+                    val child = v.getChildAt(i)
+                    if (child is ImageView || child is TextView) continue
+                    val bg = resolveViewBackground(child)
+                    if (bg != null) return bg
+                }
+            }
+            return null
+        }
+
         private fun extractColorFromDrawable(d: Drawable?): Int? {
             if (d == null) return null
             if (d is ColorDrawable) {
@@ -660,6 +765,25 @@ object FluidTileResizeHandler {
                     }
                 } catch (t: Throwable) {}
             }
+            if (d is LayerDrawable) {
+                for (i in 0 until d.numberOfLayers) {
+                    val layer = d.getDrawable(i)
+                    val c = extractColorFromDrawable(layer)
+                    if (c != null && c != 0) return c
+                }
+            }
+            if (d is InsetDrawable) {
+                return extractColorFromDrawable(d.drawable)
+            }
+            try {
+                val bm = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+                val c = Canvas(bm)
+                d.setBounds(0, 0, 1, 1)
+                d.draw(c)
+                val pixel = bm.getPixel(0, 0)
+                bm.recycle()
+                if (pixel != 0) return pixel
+            } catch (t: Throwable) {}
             return null
         }
 
@@ -859,6 +983,8 @@ object FluidTileResizeHandler {
                         val cardRadiusResId = ctx.resources.getIdentifier("control_center_universal_corner_radius", "dimen", ctx.packageName)
                         stockCardRadius = if (cardRadiusResId != 0) ctx.resources.getDimension(cardRadiusResId) else (20f * density)
 
+                        val isNight = (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+
                         if (isSliderSpec) {
                             val w = if (isBrightnessSpec) ControlCenterConfigHolder.sBrightnessSliderWidth else ControlCenterConfigHolder.sVolumeSliderWidth
                             initialCols = w.coerceIn(2, 4)
@@ -884,21 +1010,22 @@ object FluidTileResizeHandler {
                                 seekBar.progress.toFloat() / seekBar.max.toFloat()
                             } else 0.5f
 
-                            val nativeBgDrawable = tileView.background?.constantState?.newDrawable()?.mutate()
-                            val currentBgColor = extractColorFromDrawable(tileView.background)
+                            val nativeBgDrawable = resolveViewBackground(tileView)?.constantState?.newDrawable()?.mutate()
+                            val currentBgColor = extractColorFromDrawable(nativeBgDrawable ?: tileView.background)
                             val resolvedBgColor = when {
                                 currentBgColor != null && currentBgColor != 0 -> currentBgColor
                                 else -> stockDisabledColor
                             }
 
                             morphDrawable = FluidTileMorphOverlayDrawable(density).apply {
+                                this.isNight = isNight
                                 setup(
                                     icon = iconClone,
                                     title = null,
                                     subtitle = null,
                                     bgColor = resolvedBgColor,
                                     isSliderItem = true,
-                                    customBg = if (nativeBgDrawable is GradientDrawable) nativeBgDrawable else null,
+                                    customBg = nativeBgDrawable,
                                     sliderProgress = sliderProgress
                                 )
                                 cornerRadius = fixedCornerRadius
@@ -936,6 +1063,12 @@ object FluidTileResizeHandler {
                             var mediaNext: Drawable? = null
                             var mediaTitle: String? = null
                             var mediaArtist: String? = null
+                            var mediaTitleSize: Float = 0f
+                            var mediaTitleTypeface: Typeface? = null
+                            var mediaTitleColor: Int = 0
+                            var mediaArtistSize: Float = 0f
+                            var mediaArtistTypeface: Typeface? = null
+                            var mediaArtistColor: Int = 0
 
                             val holder = ControlCenterHook.sMediaPlayerViewHolder?.get()
                             if (holder != null) {
@@ -961,9 +1094,31 @@ object FluidTileResizeHandler {
 
                                         val tView = getV("title") as? TextView
                                         mediaTitle = tView?.text?.toString()?.takeIf { it.isNotBlank() }
+                                        if (tView != null) {
+                                            mediaTitleSize = tView.textSize
+                                            mediaTitleTypeface = tView.typeface
+                                            mediaTitleColor = tView.currentTextColor
+                                        }
 
                                         val aView = getV("artist") as? TextView
                                         mediaArtist = aView?.text?.toString()?.takeIf { it.isNotBlank() }
+                                        if (aView != null) {
+                                            mediaArtistSize = aView.textSize
+                                            mediaArtistTypeface = aView.typeface
+                                            mediaArtistColor = aView.currentTextColor
+                                        }
+
+                                        if (mediaTitle == null) {
+                                            val emptyView = getV("emptyState") as? TextView
+                                            if (emptyView != null && emptyView.visibility == View.VISIBLE) {
+                                                mediaTitle = emptyView.text?.toString()?.takeIf { it.isNotBlank() }
+                                                if (emptyView.textSize > 0f) {
+                                                    mediaTitleSize = emptyView.textSize
+                                                    mediaTitleTypeface = emptyView.typeface
+                                                    mediaTitleColor = emptyView.currentTextColor
+                                                }
+                                            }
+                                        }
                                     }
                                 } catch (t: Throwable) {}
                             }
@@ -1012,21 +1167,34 @@ object FluidTileResizeHandler {
                                 val textViews = mutableListOf<TextView>()
                                 inspectTextViews(tileView, textViews)
                                 if (mediaTitle == null) {
-                                    mediaTitle = textViews.getOrNull(0)?.text?.toString()?.takeIf { it.isNotBlank() } ?: "Music"
+                                    val tv0 = textViews.getOrNull(0)
+                                    mediaTitle = tv0?.text?.toString()?.takeIf { it.isNotBlank() } ?: "Music"
+                                    if (tv0 != null && mediaTitleSize <= 0f) {
+                                        mediaTitleSize = tv0.textSize
+                                        mediaTitleTypeface = tv0.typeface
+                                        mediaTitleColor = tv0.currentTextColor
+                                    }
                                 }
                                 if (mediaArtist == null) {
-                                    mediaArtist = textViews.getOrNull(1)?.text?.toString()?.takeIf { it.isNotBlank() }
+                                    val tv1 = textViews.getOrNull(1)
+                                    mediaArtist = tv1?.text?.toString()?.takeIf { it.isNotBlank() }
+                                    if (tv1 != null && mediaArtistSize <= 0f) {
+                                        mediaArtistSize = tv1.textSize
+                                        mediaArtistTypeface = tv1.typeface
+                                        mediaArtistColor = tv1.currentTextColor
+                                    }
                                 }
                             }
 
-                            val nativeBgDrawable = tileView.background?.constantState?.newDrawable()?.mutate()
-                            val currentBgColor = extractColorFromDrawable(tileView.background)
+                            val nativeBgDrawable = resolveViewBackground(tileView)?.constantState?.newDrawable()?.mutate()
+                            val currentBgColor = extractColorFromDrawable(nativeBgDrawable ?: tileView.background)
                             val resolvedBgColor = when {
                                 currentBgColor != null && currentBgColor != 0 -> currentBgColor
                                 else -> stockDisabledColor
                             }
 
                             morphDrawable = FluidTileMorphOverlayDrawable(density).apply {
+                                this.isNight = isNight
                                 setupMedia(
                                     cover = mediaCover,
                                     play = mediaPlay,
@@ -1035,8 +1203,14 @@ object FluidTileResizeHandler {
                                     title = mediaTitle,
                                     artist = mediaArtist,
                                     bgColor = resolvedBgColor,
-                                    customBg = if (nativeBgDrawable is GradientDrawable) nativeBgDrawable else null,
-                                    progress = 0.35f
+                                    customBg = nativeBgDrawable,
+                                    progress = 0.35f,
+                                    titleSize = mediaTitleSize,
+                                    titleTypeface = mediaTitleTypeface,
+                                    titleColor = mediaTitleColor,
+                                    artistSize = mediaArtistSize,
+                                    artistTypeface = mediaArtistTypeface,
+                                    artistColor = mediaArtistColor
                                 )
                                 cornerRadius = fixedCornerRadius
                             }
@@ -1094,7 +1268,7 @@ object FluidTileResizeHandler {
                             val isActive = tileView.isActivated || tileView.isSelected || (iconFrame?.isActivated == true) || (iconFrame?.isSelected == true)
                             val isInsideContainer = ControlCenterHook.isChildOfContainer(tileView)
 
-                            val sourceBg = if (initialState == STATE_NORMAL && iconFrame?.background != null) iconFrame.background else tileView.background
+                            val sourceBg = if (initialState == STATE_NORMAL && iconFrame?.background != null) iconFrame.background else (resolveViewBackground(tileView) ?: tileView.background)
                             val currentBgColor = extractColorFromDrawable(sourceBg)
                             val resolvedBgColor = when {
                                 currentBgColor != null && currentBgColor != 0 -> currentBgColor
@@ -1103,18 +1277,19 @@ object FluidTileResizeHandler {
                                 else -> stockDisabledColor
                             }
 
-                            val nativeBgDrawable = if (initialState != STATE_NORMAL && tileView.background != null) {
-                                tileView.background?.constantState?.newDrawable()?.mutate()
+                            val nativeBgDrawable = if (initialState != STATE_NORMAL) {
+                                (resolveViewBackground(tileView) ?: tileView.background)?.constantState?.newDrawable()?.mutate()
                             } else null
 
                             morphDrawable = FluidTileMorphOverlayDrawable(density).apply {
+                                this.isNight = isNight
                                 setup(
                                     icon = iconClone,
                                     title = title,
                                     subtitle = subtitle,
                                     bgColor = resolvedBgColor,
                                     isSliderItem = false,
-                                    customBg = if (nativeBgDrawable is GradientDrawable) nativeBgDrawable else null,
+                                    customBg = nativeBgDrawable,
                                     sliderProgress = 0f
                                 )
                                 cornerRadius = fixedCornerRadius
