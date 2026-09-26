@@ -102,13 +102,14 @@ object True2DGridEngine {
     @Volatile private var sLastCalculatedGrid: AdapterGridData? = null
 
     fun isFullWidthSystemItem(item: Any?, vt: Int): Boolean {
-        if (vt == 3348 || vt == 334833) {
+        if (vt == 3348 || vt == 334833 || vt == 8399) {
             return true
         }
         if (item != null) {
             val className = item.javaClass.name
             if (className.contains("EditButton") ||
-                className.contains("WordlessMode")
+                className.contains("WordlessMode") ||
+                className.contains("LandscapeSplitDivider")
             ) {
                 return true
             }

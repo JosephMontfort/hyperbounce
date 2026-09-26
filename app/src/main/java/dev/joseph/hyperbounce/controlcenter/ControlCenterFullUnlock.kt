@@ -7,8 +7,17 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.SystemClock
+import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
@@ -36,6 +45,7 @@ object ControlCenterFullUnlock {
 
     // Maximum rows allowed on the right panel in landscape mode (dynamic 4 or 5 row capacity)
     const val MAX_LANDSCAPE_RIGHT_ROWS = 5
+    const val VIEW_TYPE_LANDSCAPE_DIVIDER = 8399
 
     // Unified slot order persisted across sessions
     val sUnifiedSlotOrder = CopyOnWriteArrayList<String>()
@@ -166,6 +176,253 @@ object ControlCenterFullUnlock {
         sProxyCache[slot.id] = proxy
         sProxyHandlers[slot.id] = handler
         return proxy
+    }
+
+    /**
+     * iOS 26 frosted glass visual divider indicating the boundary between
+     * Landscape Right Panel (above) and Landscape Left Panel (below).
+     */
+    class LandscapeSplitDividerView(context: Context) : FrameLayout(context) {
+        init {
+            val density = context.resources.displayMetrics.density
+            val hPadding = (16 * density).toInt()
+            val vPadding = (8 * density).toInt()
+            setPadding(hPadding, vPadding, hPadding, vPadding)
+
+            val container = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            }
+
+            // Left frosted line
+            val leftLine = View(context).apply {
+                val lp = LinearLayout.LayoutParams(0, (1.2f * density).toInt().coerceAtLeast(1), 1.0f)
+                lp.gravity = Gravity.CENTER_VERTICAL
+                layoutParams = lp
+                setBackgroundColor(0x30FFFFFF.toInt())
+            }
+            container.addView(leftLine)
+
+            // Frosted pill capsule badge
+            val pill = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                val marginH = (10 * density).toInt()
+                val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    setMargins(marginH, 0, marginH, 0)
+                }
+                layoutParams = lp
+                val padH = (14 * density).toInt()
+                val padV = (4.5f * density).toInt()
+                setPadding(padH, padV, padH, padV)
+
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = 14 * density
+                    setColor(0x33000000.toInt())
+                    setStroke((1 * density).toInt().coerceAtLeast(1), 0x38FFFFFF.toInt())
+                }
+            }
+
+            val badgeText = TextView(context).apply {
+                text = "LANDSCAPE SPLIT"
+                textSize = 10.5f
+                setTextColor(0xCCFFFFFF.toInt())
+                typeface = Typeface.DEFAULT_BOLD
+                letterSpacing = 0.08f
+                gravity = Gravity.CENTER
+            }
+            pill.addView(badgeText)
+            container.addView(pill)
+
+            // Right frosted line
+            val rightLine = View(context).apply {
+                val lp = LinearLayout.LayoutParams(0, (1.2f * density).toInt().coerceAtLeast(1), 1.0f)
+                lp.gravity = Gravity.CENTER_VERTICAL
+                layoutParams = lp
+                setBackgroundColor(0x30FFFFFF.toInt())
+            }
+            container.addView(rightLine)
+
+            addView(container)
+        }
+    }
+
+    /**
+     * Proxy InvocationHandler for the Landscape Split Divider implementing
+     * both MainPanelContent and MainPanelListItem.
+     */
+    class LandscapeDividerInvocationHandler(
+        @Volatile var priority: Int,
+        private val classLoader: ClassLoader
+    ) : InvocationHandler {
+        private var holderRef: Any? = null
+
+        override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? {
+            when (method.name) {
+                "getType" -> return VIEW_TYPE_LANDSCAPE_DIVIDER
+                "getSpanSize" -> return 4
+                "getPriority" -> return priority
+                "getRightOrLeft" -> return true
+                "available" -> {
+                    val isLandscape = (args?.getOrNull(0) as? Boolean) ?: false
+                    return !isLandscape && ControlCenterConfigHolder.sIsEditMode
+                }
+                "getListItems" -> return listOf(proxy)
+                "getHolder" -> return holderRef
+                "setHolder" -> {
+                    holderRef = args?.getOrNull(0)
+                    return null
+                }
+                "createViewHolder" -> {
+                    val parent = args?.getOrNull(0) as? ViewGroup
+                    if (parent != null) {
+                        return createLandscapeDividerViewHolder(parent, classLoader)
+                    }
+                    return null
+                }
+                "moveElement" -> return false
+                "equals" -> return proxy === args?.getOrNull(0)
+                "hashCode" -> return System.identityHashCode(proxy)
+                "toString" -> return "LandscapeSplitDividerController"
+            }
+            return null
+        }
+    }
+
+    private var sLandscapeDividerProxy: Any? = null
+
+    fun getOrCreateLandscapeDivider(classLoader: ClassLoader, priority: Int): Any {
+        val existing = sLandscapeDividerProxy
+        if (existing != null) {
+            val handler = Proxy.getInvocationHandler(existing) as? LandscapeDividerInvocationHandler
+            if (handler != null) {
+                handler.priority = priority
+            }
+            return existing
+        }
+
+        val contentInterface = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelContent", false, classLoader)
+        val listItemInterface = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelListItem", false, classLoader)
+        val handler = LandscapeDividerInvocationHandler(priority, classLoader)
+        val proxy = Proxy.newProxyInstance(classLoader, arrayOf(contentInterface, listItemInterface), handler)
+        sLandscapeDividerProxy = proxy
+        return proxy
+    }
+
+    fun createLandscapeDividerViewHolder(parent: ViewGroup, classLoader: ClassLoader): Any? {
+        val ctx = parent.context
+        val dividerView = LandscapeSplitDividerView(ctx)
+
+        // 1. Try EditButtonViewHolder
+        try {
+            val btnBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCustomizeButtonBinding", false, classLoader)
+            val inflateMethod = btnBindingClass.getMethod("inflate", LayoutInflater::class.java, ViewGroup::class.java, Boolean::class.javaPrimitiveType)
+            val binding = inflateMethod.invoke(null, LayoutInflater.from(ctx), parent, false)
+
+            val getRootMethod = btnBindingClass.getMethod("getRoot")
+            val root = getRootMethod.invoke(binding) as ViewGroup
+            root.removeAllViews()
+
+            root.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            root.addView(dividerView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
+            val holderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.EditButtonController\$EditButtonViewHolder", false, classLoader)
+            val ctor = holderClass.getConstructor(btnBindingClass)
+            return ctor.newInstance(binding)
+        } catch (t: Throwable) {
+            Log.w(TAG, "EditButtonViewHolder reflection failed for divider, trying FooterSpaceViewHolder", t)
+        }
+
+        // 2. Fallback: FooterSpaceViewHolder
+        try {
+            val fHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.footer.FooterSpaceController\$FooterSpaceViewHolder", false, classLoader)
+            val ctor = fHolderClass.getConstructor(View::class.java)
+            return ctor.newInstance(dividerView)
+        } catch (t: Throwable) {
+            Log.e(TAG, "createLandscapeDividerViewHolder failed", t)
+            return null
+        }
+    }
+
+    private var sLastToastTime: Long = 0L
+
+    fun showCapacityToast(context: Context?, maxRows: Int) {
+        val now = SystemClock.uptimeMillis()
+        if (now - sLastToastTime < 2000L) return
+        sLastToastTime = now
+        val targetCtx = context ?: ControlCenterConfigHolder.sLastKnownContext ?: return
+        Handler(Looper.getMainLooper()).post {
+            try {
+                Toast.makeText(
+                    targetCtx,
+                    "Arrangement not possible (maximum $maxRows rows on landscape right panel)",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (t: Throwable) {}
+        }
+    }
+
+    fun ensureTileFitsLandscapeAfterResize(spec: String?, ctx: Context?) {
+        if (spec == null) return
+        try {
+            val maxRows = ControlCenterConfigHolder.landscapeRightMaxRows
+
+            val slotId = when {
+                spec.equals("media", ignoreCase = true) -> "component:media"
+                spec.equals("brightness", ignoreCase = true) -> "component:brightness"
+                spec.equals("volume", ignoreCase = true) -> "component:volume"
+                spec == "wifi" || spec == "cell" -> "card:$spec"
+                else -> {
+                    val g = ControlCenterConfigHolder.isGroupAnchor(spec)
+                    if (g != null) "group:${g.id}" else "tile:$spec"
+                }
+            }
+
+            val currentSlotIdx = sUnifiedSlotOrder.indexOf(slotId)
+            if (currentSlotIdx < 0) return
+
+            // Refresh spans for this slot
+            val slot = sKnownSlots[slotId]
+            if (slot != null) {
+                val currentSpans = getItemSpans(slot.item, slot.viewType, spec)
+                slot.spanW = currentSpans.first
+                slot.spanH = currentSpans.second
+            }
+
+            // Current ordered slots
+            val orderedSlots = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
+            val (currentRightSlots, _) = calculateLandscapeRowSplit(orderedSlots, maxRightRows = maxRows)
+
+            // If the slot is in currentRightSlots, it fits above the divider! Nothing to move.
+            if (currentRightSlots.any { it.id == slotId }) {
+                return
+            }
+
+            // If it does NOT fit in currentRightSlots, shift it below the divider!
+            val remainingOrder = ArrayList(sUnifiedSlotOrder)
+            remainingOrder.remove(slotId)
+
+            val remainingSlots = remainingOrder.mapNotNull { sKnownSlots[it] }
+            val (remainingRightSlots, _) = calculateLandscapeRowSplit(remainingSlots, maxRightRows = maxRows)
+            val newSplitIndex = remainingRightSlots.size
+
+            // Insert slotId at newSplitIndex (first item below the divider)
+            remainingOrder.add(newSplitIndex.coerceIn(0, remainingOrder.size), slotId)
+
+            sUnifiedSlotOrder.clear()
+            sUnifiedSlotOrder.addAll(remainingOrder)
+
+            val targetCtx = ctx ?: ControlCenterConfigHolder.sLastKnownContext
+            if (targetCtx != null) {
+                saveOrder(targetCtx)
+            }
+            True2DGridEngine.invalidateAll()
+            Log.i(TAG, "Tile $spec resized and shifted below landscape divider to index $newSplitIndex")
+        } catch (t: Throwable) {
+            Log.e(TAG, "ensureTileFitsLandscapeAfterResize error", t)
+        }
     }
 
     /**
@@ -375,7 +632,8 @@ object ControlCenterFullUnlock {
     }
 
     fun isNonDraggableItem(vt: Int): Boolean {
-        return vt == 432337 || vt == 366837 || vt == 3348 || vt == 334833 ||
+        return vt == VIEW_TYPE_LANDSCAPE_DIVIDER ||
+               vt == 432337 || vt == 366837 || vt == 3348 || vt == 334833 ||
                vt == 8398 || vt == 8397 || vt == 3484337 || vt == 732873 ||
                True2DGridEngine.isFullWidthSystemItem(null, vt)
     }
@@ -385,7 +643,7 @@ object ControlCenterFullUnlock {
      */
     fun getItemSpans(item: Any, viewType: Int, spec: String?): Pair<Int, Int> {
         // 0. Full-width system items & spacers/dividers -> 4x1
-        if (viewType == 432337 || viewType == 366837 || viewType == 8398 || viewType == 8397 || viewType == 3484337 || viewType == 732873 ||
+        if (viewType == VIEW_TYPE_LANDSCAPE_DIVIDER || viewType == 432337 || viewType == 366837 || viewType == 8398 || viewType == 8397 || viewType == 3484337 || viewType == 732873 ||
             True2DGridEngine.isFullWidthSystemItem(item, viewType)) {
             return Pair(4, 1)
         }
@@ -958,11 +1216,35 @@ object ControlCenterFullUnlock {
                     }
                 }
 
-                // 3. All ordered active slots flow into this single adapter
-                for (i in orderedSlots.indices) {
-                    val slot = orderedSlots[i]
-                    val proxy = getOrCreateProxy(slot, classLoader, priority = 10 + i * 2, isRight = true)
-                    newContentMap[proxy] = listOf(slot.item)
+                if (ControlCenterConfigHolder.sIsEditMode) {
+                    val maxRows = ControlCenterConfigHolder.landscapeRightMaxRows
+                    val (rightSlots, _) = calculateLandscapeRowSplit(orderedSlots, maxRightRows = maxRows)
+                    val splitIndex = rightSlots.size
+
+                    // 3a. Top Section (Landscape Right Panel items)
+                    for (i in 0 until splitIndex) {
+                        val slot = orderedSlots[i]
+                        val proxy = getOrCreateProxy(slot, classLoader, priority = 10 + i * 2, isRight = true)
+                        newContentMap[proxy] = listOf(slot.item)
+                    }
+
+                    // 3b. Landscape Split Divider (Non-draggable visual boundary)
+                    val dividerProxy = getOrCreateLandscapeDivider(classLoader, priority = 10 + splitIndex * 2)
+                    newContentMap[dividerProxy] = listOf(dividerProxy)
+
+                    // 3c. Bottom Section (Landscape Left Panel items)
+                    for (i in splitIndex until orderedSlots.size) {
+                        val slot = orderedSlots[i]
+                        val proxy = getOrCreateProxy(slot, classLoader, priority = 10 + (i + 1) * 2, isRight = false)
+                        newContentMap[proxy] = listOf(slot.item)
+                    }
+                } else {
+                    // 3. Normal portrait mode: All ordered active slots flow into this single adapter
+                    for (i in orderedSlots.indices) {
+                        val slot = orderedSlots[i]
+                        val proxy = getOrCreateProxy(slot, classLoader, priority = 10 + i * 2, isRight = true)
+                        newContentMap[proxy] = listOf(slot.item)
+                    }
                 }
 
                 // 4. Edit Divider & Inactive Available tiles pool - ONLY in Edit Mode!
@@ -981,8 +1263,9 @@ object ControlCenterFullUnlock {
                     }
                 }
             } else {
-                // Landscape Mode: Dynamic Row Split Simulation (up to 5 rows on Right Side)
-                val (rightSlots, leftSlots) = calculateLandscapeRowSplit(orderedSlots, maxRightRows = MAX_LANDSCAPE_RIGHT_ROWS)
+                // Landscape Mode: Dynamic Row Split Simulation based on user configured maxRightRows
+                val maxRows = ControlCenterConfigHolder.landscapeRightMaxRows
+                val (rightSlots, leftSlots) = calculateLandscapeRowSplit(orderedSlots, maxRightRows = maxRows)
 
                 if (isRightPanel) {
                     // Right Panel: gets rightSlots (first N rows, max 5 rows)
@@ -1060,6 +1343,42 @@ object ControlCenterFullUnlock {
             val fromIdx = sUnifiedSlotOrder.indexOf(fromId)
             val toIdx = sUnifiedSlotOrder.indexOf(toId)
             if (fromIdx < 0 || toIdx < 0 || fromIdx == toIdx) return false
+
+            val maxRightRows = ControlCenterConfigHolder.landscapeRightMaxRows
+
+            // Current ordered slots before candidate move
+            val currentOrderedSlots = sUnifiedSlotOrder.mapNotNull { sKnownSlots[it] }
+            val (currentRightSlots, _) = calculateLandscapeRowSplit(currentOrderedSlots, maxRightRows = maxRightRows)
+            val currentSplitCount = currentRightSlots.size
+
+            // Candidate simulation
+            val candidateOrder = ArrayList(sUnifiedSlotOrder)
+            val candMoved = candidateOrder.removeAt(fromIdx)
+            candidateOrder.add(toIdx, candMoved)
+
+            val candidateSlots = candidateOrder.mapNotNull { sKnownSlots[it] }
+            val (candidateRightSlots, _) = calculateLandscapeRowSplit(candidateSlots, maxRightRows = maxRightRows)
+
+            // Did the candidate move exceed top section capacity?
+            val exceededCapacity = if (fromIdx >= currentSplitCount && toIdx < currentSplitCount) {
+                // Dragging from below divider into top section: must fit all previous items + new item
+                candidateRightSlots.size < currentSplitCount + 1
+            } else if (fromIdx < currentSplitCount && toIdx < currentSplitCount) {
+                // Dragging within top section: must still fit all top items
+                candidateRightSlots.size < currentSplitCount
+            } else {
+                false
+            }
+
+            if (exceededCapacity) {
+                val ctx = try {
+                    val itemViewField = sourceVh?.javaClass?.getField("itemView")
+                    val v = itemViewField?.get(sourceVh) as? View
+                    v?.context
+                } catch (t: Throwable) { null } ?: ControlCenterConfigHolder.sLastKnownContext
+                showCapacityToast(ctx, maxRightRows)
+                return false
+            }
 
             val moved = sUnifiedSlotOrder.removeAt(fromIdx)
             sUnifiedSlotOrder.add(toIdx, moved)

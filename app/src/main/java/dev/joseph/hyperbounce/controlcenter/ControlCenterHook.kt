@@ -1065,7 +1065,10 @@ object ControlCenterHook {
                             if (args != null && args.size >= 2) {
                                 val parent = args[0] as ViewGroup
                                 val vt = args[1] as Int
-                                if (vt == 8453) {
+                                if (vt == 8399) {
+                                    val holder = ControlCenterFullUnlock.createLandscapeDividerViewHolder(parent, classLoader)
+                                    if (holder != null) return@intercept holder
+                                } else if (vt == 8453) {
                                     val qsListCtrl = ControlCenterConfigHolder.sQSListController
                                     if (qsListCtrl != null) {
                                         try {
@@ -1334,6 +1337,10 @@ object ControlCenterHook {
                                         val parent = args[0] as ViewGroup
                                         val qsListCtrl = chain.thisObject
 
+                                        if (viewType == 8399) {
+                                            val holder = ControlCenterFullUnlock.createLandscapeDividerViewHolder(parent, classLoader)
+                                            if (holder != null) return@intercept holder
+                                        }
                                         if (viewType == 2274) {
                                             val holder = ControlCenterGrouping.createGroupedCardViewHolder(parent, qsListCtrl, classLoader)
                                             if (holder != null) return@intercept holder
@@ -1401,6 +1408,10 @@ object ControlCenterHook {
                             if (args != null && args.size >= 2) {
                                 val parent = args[0] as ViewGroup
                                 val vt = args[1] as Int
+                                if (vt == 8399) {
+                                    val holder = ControlCenterFullUnlock.createLandscapeDividerViewHolder(parent, classLoader)
+                                    if (holder != null) return@intercept holder
+                                }
                                 if (vt == 2274 || vt == 2275 || vt == 2276 || vt in 2281..2284 || vt in 2285..2290 || vt == 2273 || vt == 2277 || vt == 2278) {
                                     try {
                                         val adapterObj = chain.thisObject

@@ -1150,6 +1150,7 @@ class SettingsRepository(context: Context) {
         var flashlightMaxBrightness by prefsIntState("cc_flashlight_max_brightness", defaults.flashlightMaxBrightness); private set
         var true2dGridEnabled by prefsBooleanState("cc_true_2d_grid_enabled", defaults.true2dGridEnabled); private set
         var fluidResizeEnabled by prefsBooleanState("cc_fluid_resize_enabled", defaults.fluidResizeEnabled); private set
+        var landscapeRightMaxRows by prefsIntState("cc_landscape_right_max_rows", defaults.landscapeRightMaxRows); private set
 
         fun snapshot(): ControlCenterSettings = ControlCenterSettings(
             modularEditEnabled, restartOnEditExit, animEnabled, jellyEnabled, lowEndAnim,
@@ -1157,9 +1158,11 @@ class SettingsRepository(context: Context) {
             spreadRatio, spreadResponse, spreadDamping, spreadReleaseResponse, spreadReleaseDamping,
             tileShowResponse, tileShowDamping, tileHideResponse, tileHideDamping,
             tileShrinkResponse, tileShrinkDamping, tileDelayScale, blurResponse, blurDamping, frictionMultiplier,
-            lowEndFlashlightEnabled, flashlightMaxBrightness, true2dGridEnabled, fluidResizeEnabled
+            lowEndFlashlightEnabled, flashlightMaxBrightness, true2dGridEnabled, fluidResizeEnabled,
+            landscapeRightMaxRows
         )
 
+        @JvmName("setCcLandscapeRightMaxRowsPref") fun setLandscapeRightMaxRows(v: Int) { landscapeRightMaxRows = v.coerceIn(1, 6) }
         @JvmName("setCcTrue2dGridEnabledPref") fun setTrue2dGridEnabled(v: Boolean) { true2dGridEnabled = v }
         @JvmName("setCcFluidResizeEnabledPref") fun setFluidResizeEnabled(v: Boolean) { fluidResizeEnabled = v }
         @JvmName("setCcModularEditEnabledPref") fun setModularEditEnabled(v: Boolean) { modularEditEnabled = v }

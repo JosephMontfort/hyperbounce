@@ -51,7 +51,8 @@ data class ControlCenterConfig(
     var lowEndFlashlightEnabled: Boolean = false,
     var flashlightMaxBrightness: Int = 100,
     var true2dGridEnabled: Boolean = true,
-    var fluidResizeEnabled: Boolean = true
+    var fluidResizeEnabled: Boolean = true,
+    var landscapeRightMaxRows: Int = 4
 )
 
 /**
@@ -131,6 +132,8 @@ object ControlCenterConfigHolder {
     @Volatile var sVolumeSliderHorizontal: Boolean = false
     @Volatile var sBrightnessSliderWidth: Int = 2
     @Volatile var sVolumeSliderWidth: Int = 2
+    val landscapeRightMaxRows: Int
+        get() = config.landscapeRightMaxRows.coerceIn(1, 6)
     val sComponentPriorities = ConcurrentHashMap<String, Int>().apply {
         put("CompactQS", 0)
         put("CompactQSCard", 1)
@@ -201,7 +204,8 @@ object ControlCenterConfigHolder {
             lowEndFlashlightEnabled = prefs.getBoolean("cc_low_end_flashlight_enabled", false),
             flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", 100),
             true2dGridEnabled = prefs.getBoolean("cc_true_2d_grid_enabled", true),
-            fluidResizeEnabled = prefs.getBoolean("cc_fluid_resize_enabled", true)
+            fluidResizeEnabled = prefs.getBoolean("cc_fluid_resize_enabled", true),
+            landscapeRightMaxRows = prefs.getInt("cc_landscape_right_max_rows", 4)
         )
     }
 
@@ -299,6 +303,9 @@ object ControlCenterConfigHolder {
                     sVolumeSliderHorizontal = json.optBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
                     sBrightnessSliderWidth = json.optInt("brightness_slider_width", sBrightnessSliderWidth).coerceIn(2, 4)
                     sVolumeSliderWidth = json.optInt("volume_slider_width", sVolumeSliderWidth).coerceIn(2, 4)
+                    if (json.has("landscape_right_max_rows")) {
+                        config.landscapeRightMaxRows = json.optInt("landscape_right_max_rows", 4).coerceIn(1, 6)
+                    }
 
                     if (json.has("tile_groups_v2")) {
                         val grpV2 = json.optString("tile_groups_v2", "")
@@ -391,6 +398,9 @@ object ControlCenterConfigHolder {
                 sVolumeSliderHorizontal = prefs.getBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
                 sBrightnessSliderWidth = prefs.getInt("brightness_slider_width", sBrightnessSliderWidth).coerceIn(2, 4)
                 sVolumeSliderWidth = prefs.getInt("volume_slider_width", sVolumeSliderWidth).coerceIn(2, 4)
+                if (prefs.contains("landscape_right_max_rows")) {
+                    config.landscapeRightMaxRows = prefs.getInt("landscape_right_max_rows", 4).coerceIn(1, 6)
+                }
 
                 if (prefs.contains("tile_groups_v2")) {
                     val groupsStrV2 = prefs.getString("tile_groups_v2", "") ?: ""
@@ -470,6 +480,7 @@ object ControlCenterConfigHolder {
             json.put("volume_slider_horizontal", sVolumeSliderHorizontal)
             json.put("brightness_slider_width", sBrightnessSliderWidth)
             json.put("volume_slider_width", sVolumeSliderWidth)
+            json.put("landscape_right_max_rows", landscapeRightMaxRows)
 
             val groupsSb = StringBuilder()
             for (g in sTileGroups) {
@@ -521,6 +532,7 @@ object ControlCenterConfigHolder {
                 editor.putBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
                 editor.putInt("brightness_slider_width", sBrightnessSliderWidth)
                 editor.putInt("volume_slider_width", sVolumeSliderWidth)
+                editor.putInt("landscape_right_max_rows", landscapeRightMaxRows)
                 editor.putString("tile_groups_v2", groupsSb.toString())
                 editor.apply()
             }
@@ -1756,6 +1768,7 @@ object ControlCenterConfigHolder {
                 ControlCenterHook.applyMediaPlayerLayout(it)
             }
         } catch (t: Throwable) {}
+        ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize("media", ctx)
         refreshRecyclerView(tileView, onRefreshed)
     }
 
@@ -1770,6 +1783,7 @@ object ControlCenterConfigHolder {
         sLargeTileSpecs.remove(spec)
         sCircularCardSpecs.remove(spec)
         savePriorities(ctx)
+        ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize(spec, ctx)
         refreshRecyclerView(tileView, onRefreshed)
     }
 
@@ -1784,6 +1798,7 @@ object ControlCenterConfigHolder {
         sLargeTileSpecs.remove(spec)
         sCircularCardSpecs.remove(spec)
         savePriorities(ctx)
+        ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize(spec, ctx)
         refreshRecyclerView(tileView, onRefreshed)
     }
 
@@ -1798,6 +1813,7 @@ object ControlCenterConfigHolder {
         sVerticalTileSpecs.remove(spec)
         sCircularCardSpecs.remove(spec)
         savePriorities(ctx)
+        ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize(spec, ctx)
         refreshRecyclerView(tileView, onRefreshed)
     }
 
@@ -1816,6 +1832,7 @@ object ControlCenterConfigHolder {
             sCircularCardSpecs.remove(spec)
         }
         savePriorities(ctx)
+        ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize(spec, ctx)
         refreshRecyclerView(tileView, onRefreshed)
     }
 
@@ -1877,6 +1894,7 @@ object ControlCenterConfigHolder {
             }
         }
         savePriorities(ctx)
+        ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize(spec, ctx)
         refreshRecyclerView(tileView)
     }
 
@@ -1949,6 +1967,7 @@ object ControlCenterConfigHolder {
             }
         }
 
+        ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize(if (isBrightness) "brightness" else "volume", ctx)
         refreshRecyclerView(tileView)
         updateAllVisibleTileBadges()
         refreshAdapter(tileView?.rootView, ctx, true)
@@ -1971,6 +1990,7 @@ object ControlCenterConfigHolder {
             }
         }
         savePriorities(ctx)
+        ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize(if (isBrightness) "brightness" else "volume", ctx)
         refreshRecyclerView(tileView)
         tileView?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
     }
@@ -1983,6 +2003,7 @@ object ControlCenterConfigHolder {
             sVolumeSliderWidth = clamped
         }
         savePriorities(ctx)
+        ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize(if (isBrightness) "brightness" else "volume", ctx)
         refreshRecyclerView(tileView, onRefreshed)
     }
 

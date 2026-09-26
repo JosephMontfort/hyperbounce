@@ -71,6 +71,19 @@ fun ControlCenterScreen(
                     onCheckedChange = cc::setFluidResizeEnabled,
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Landscape Right Panel Rows",
+                    subtitle = "Maximum row height allocated to the right side in landscape mode (Divider position in Edit Mode)",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = cc.landscapeRightMaxRows.toFloat().coerceIn(1f, 6f),
+                    onValueChange = { cc.setLandscapeRightMaxRows(it.roundToInt()) },
+                    valueRange = 1f..6f,
+                    defaultValue = 4f,
+                    valueLabel = { "${it.roundToInt()} Rows" },
+                    allowCustomInput = false
+                )
 
                 RowDivider(colors.separator)
                 SettingsToggleRow(

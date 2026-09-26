@@ -2100,6 +2100,7 @@ object FluidTileResizeHandler {
                                     }
                                 }
                                 ControlCenterConfigHolder.savePriorities(ctx)
+                                ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize(spec, ctx)
                             }
 
                             val ov = overlayView
