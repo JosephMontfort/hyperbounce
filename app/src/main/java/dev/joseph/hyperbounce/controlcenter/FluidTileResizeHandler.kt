@@ -50,12 +50,82 @@ object FluidTileResizeHandler {
     const val STATE_VERTICAL = 2
     const val STATE_LARGE = 3
 
+    const val MEDIA_1X1 = 9
     const val MEDIA_2X1 = 10
     const val MEDIA_1X2 = 11
     const val MEDIA_2X2 = 12
     const val MEDIA_4X1 = 13
     const val MEDIA_4X2 = 14
     const val MEDIA_2X4 = 15
+    const val MEDIA_1X3 = 16
+    const val MEDIA_1X4 = 17
+    const val MEDIA_1X5 = 18
+    const val MEDIA_2X3 = 19
+    const val MEDIA_2X5 = 20
+    const val MEDIA_3X1 = 21
+    const val MEDIA_3X2 = 22
+    const val MEDIA_3X3 = 23
+    const val MEDIA_4X3 = 24
+
+    fun mediaSizeStringToState(size: String): Int = when (size) {
+        "1x1" -> MEDIA_1X1
+        "1x2" -> MEDIA_1X2
+        "1x3" -> MEDIA_1X3
+        "1x4" -> MEDIA_1X4
+        "1x5" -> MEDIA_1X5
+        "2x1" -> MEDIA_2X1
+        "2x2" -> MEDIA_2X2
+        "2x3" -> MEDIA_2X3
+        "2x4" -> MEDIA_2X4
+        "2x5" -> MEDIA_2X5
+        "3x1" -> MEDIA_3X1
+        "3x2" -> MEDIA_3X2
+        "3x3" -> MEDIA_3X3
+        "4x1" -> MEDIA_4X1
+        "4x2" -> MEDIA_4X2
+        "4x3" -> MEDIA_4X3
+        else -> MEDIA_2X2
+    }
+
+    fun mediaStateToSizeString(state: Int): String = when (state) {
+        MEDIA_1X1 -> "1x1"
+        MEDIA_1X2 -> "1x2"
+        MEDIA_1X3 -> "1x3"
+        MEDIA_1X4 -> "1x4"
+        MEDIA_1X5 -> "1x5"
+        MEDIA_2X1 -> "2x1"
+        MEDIA_2X2 -> "2x2"
+        MEDIA_2X3 -> "2x3"
+        MEDIA_2X4 -> "2x4"
+        MEDIA_2X5 -> "2x5"
+        MEDIA_3X1 -> "3x1"
+        MEDIA_3X2 -> "3x2"
+        MEDIA_3X3 -> "3x3"
+        MEDIA_4X1 -> "4x1"
+        MEDIA_4X2 -> "4x2"
+        MEDIA_4X3 -> "4x3"
+        else -> "2x2"
+    }
+
+    fun mediaStateToSpans(state: Int): Pair<Int, Int> = when (state) {
+        MEDIA_1X1 -> Pair(1, 1)
+        MEDIA_1X2 -> Pair(1, 2)
+        MEDIA_1X3 -> Pair(1, 3)
+        MEDIA_1X4 -> Pair(1, 4)
+        MEDIA_1X5 -> Pair(1, 5)
+        MEDIA_2X1 -> Pair(2, 1)
+        MEDIA_2X2 -> Pair(2, 2)
+        MEDIA_2X3 -> Pair(2, 3)
+        MEDIA_2X4 -> Pair(2, 4)
+        MEDIA_2X5 -> Pair(2, 5)
+        MEDIA_3X1 -> Pair(3, 1)
+        MEDIA_3X2 -> Pair(3, 2)
+        MEDIA_3X3 -> Pair(3, 3)
+        MEDIA_4X1 -> Pair(4, 1)
+        MEDIA_4X2 -> Pair(4, 2)
+        MEDIA_4X3 -> Pair(4, 3)
+        else -> Pair(2, 2)
+    }
 
     const val LAYOUT_MODE_HORIZONTAL = 0
     const val LAYOUT_MODE_VERTICAL = 1
@@ -330,40 +400,22 @@ object FluidTileResizeHandler {
             val textClipRight: Float,
             val titleAlpha: Float,
             val artistAlpha: Float,
-            val isCenterAligned: Boolean
+            val isCenterAligned: Boolean,
+            val controlsAlpha: Float = 1f,
+            val progressBarRect: RectF = RectF(),
+            val progressBarAlpha: Float = 0f
         )
 
         fun computeMediaLayout(state: Int, rect: RectF, hasTrack: Boolean): MediaStateLayout {
             return when (state) {
-                MEDIA_2X1 -> {
-                    val cSize = 44f * density
-                    val cLeft = rect.left + 14f * density
-                    val cTop = rect.centerY() - cSize / 2f
-                    val coverRect = RectF(cLeft, cTop, cLeft + cSize, cTop + cSize)
+                MEDIA_1X1 -> {
+                    val cSize = (Math.min(rect.width(), rect.height()) - 22f * density).coerceAtLeast(36f * density)
+                    val coverRect = RectF(rect.centerX() - cSize / 2f, rect.centerY() - cSize / 2f, rect.centerX() + cSize / 2f, rect.centerY() + cSize / 2f)
                     val coverRadius = cSize / 2f
 
-                    val diSize = 20f * density
-                    val deviceIconRect = RectF(rect.right - 14f * density - diSize, rect.centerY() - diSize / 2f, rect.right - 14f * density, rect.centerY() + diSize / 2f)
-                    val deviceIconAlpha = 0f
-
-                    val playSize = 28f * density
-                    val btnSize = 22f * density
-                    val spacing = 5f * density
-                    val ctrlCenterY = rect.centerY()
-                    val rightAvailableCenter = (coverRect.right + 8f * density + rect.right - 10f * density) / 2f
-                    val playCenterX = rightAvailableCenter
-                    val prevCenterX = playCenterX - playSize / 2f - spacing - btnSize / 2f
-                    val nextCenterX = playCenterX + playSize / 2f + spacing + btnSize / 2f
-
-                    val prevRect = RectF(prevCenterX - btnSize / 2f, ctrlCenterY - btnSize / 2f, prevCenterX + btnSize / 2f, ctrlCenterY + btnSize / 2f)
-                    val playRect = RectF(playCenterX - playSize / 2f, ctrlCenterY - playSize / 2f, playCenterX + playSize / 2f, ctrlCenterY + playSize / 2f)
-                    val nextRect = RectF(nextCenterX - btnSize / 2f, ctrlCenterY - btnSize / 2f, nextCenterX + btnSize / 2f, ctrlCenterY + btnSize / 2f)
-
-                    val textStartX = coverRect.right + 10f * density
-                    val textTopY = rect.centerY() - 10f * density
-                    val textClipRight = prevRect.left - 4f * density
-
-                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, deviceIconAlpha, textStartX, textTopY, textClipRight, 0f, 0f, false)
+                    val diRect = RectF(rect.centerX(), rect.centerY(), rect.centerX(), rect.centerY())
+                    val dummyBtn = RectF(rect.centerX(), rect.centerY(), rect.centerX(), rect.centerY())
+                    MediaStateLayout(coverRect, coverRadius, dummyBtn, dummyBtn, dummyBtn, diRect, 0f, rect.centerX(), rect.centerY(), rect.centerX(), 0f, 0f, false, controlsAlpha = 0f, progressBarRect = RectF(), progressBarAlpha = 0f)
                 }
 
                 MEDIA_1X2 -> {
@@ -375,10 +427,9 @@ object FluidTileResizeHandler {
 
                     val diSize = 20f * density
                     val deviceIconRect = RectF(rect.centerX() - diSize / 2f, rect.top + 14f * density, rect.centerX() + diSize / 2f, rect.top + 14f * density + diSize)
-                    val deviceIconAlpha = 0f
 
                     val playSize = 28f * density
-                    val btnSize = 22f * density
+                    val btnSize = 27f * density
                     val spacing = 6f * density
                     val ctrlCenterX = rect.centerX()
                     val bottomAvailableCenter = (coverRect.bottom + 8f * density + rect.bottom - 12f * density) / 2f
@@ -394,7 +445,102 @@ object FluidTileResizeHandler {
                     val textTopY = coverRect.bottom + 8f * density
                     val textClipRight = rect.right - 8f * density
 
-                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, deviceIconAlpha, textStartX, textTopY, textClipRight, 0f, 0f, false)
+                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, 0f, textStartX, textTopY, textClipRight, 0f, 0f, false, controlsAlpha = 1f)
+                }
+
+                MEDIA_1X3, MEDIA_1X4, MEDIA_1X5 -> {
+                    val cSize = if (state == MEDIA_1X3) 48f * density else 56f * density
+                    val cLeft = rect.centerX() - cSize / 2f
+                    val cTop = rect.top + 14f * density
+                    val coverRect = RectF(cLeft, cTop, cLeft + cSize, cTop + cSize)
+                    val coverRadius = cSize / 2f
+
+                    val diSize = 20f * density
+                    val deviceIconRect = RectF(rect.centerX() - diSize / 2f, rect.top + 14f * density, rect.centerX() + diSize / 2f, rect.top + 14f * density + diSize)
+
+                    val playSize = 28f * density
+                    val btnSize = 27f * density
+                    val spacing = 6f * density
+                    val ctrlCenterX = rect.centerX()
+                    val ctrlCenterY = rect.bottom - 56f * density
+                    val playCenterY = ctrlCenterY
+                    val prevCenterY = playCenterY - playSize / 2f - spacing - btnSize / 2f
+                    val nextCenterY = playCenterY + playSize / 2f + spacing + btnSize / 2f
+
+                    val prevRect = RectF(ctrlCenterX - btnSize / 2f, prevCenterY - btnSize / 2f, ctrlCenterX + btnSize / 2f, prevCenterY + btnSize / 2f)
+                    val playRect = RectF(ctrlCenterX - playSize / 2f, playCenterY - playSize / 2f, ctrlCenterX + playSize / 2f, playCenterY + playSize / 2f)
+                    val nextRect = RectF(ctrlCenterX - btnSize / 2f, nextCenterY - btnSize / 2f, ctrlCenterX + btnSize / 2f, nextCenterY + btnSize / 2f)
+
+                    val textStartX = rect.left + 6f * density
+                    val textTopY = coverRect.bottom + 12f * density
+                    val textClipRight = rect.right - 6f * density
+                    val artistAlpha = if (hasTrack) 1f else 0f
+
+                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, 0f, textStartX, textTopY, textClipRight, 1f, artistAlpha, true, controlsAlpha = 1f)
+                }
+
+                MEDIA_2X1 -> {
+                    val cSize = 44f * density
+                    val cLeft = rect.left + 14f * density
+                    val cTop = rect.centerY() - cSize / 2f
+                    val coverRect = RectF(cLeft, cTop, cLeft + cSize, cTop + cSize)
+                    val coverRadius = cSize / 2f
+
+                    val diSize = 20f * density
+                    val deviceIconRect = RectF(rect.right - 14f * density - diSize, rect.centerY() - diSize / 2f, rect.right - 14f * density, rect.centerY() + diSize / 2f)
+
+                    val playSize = 28f * density
+                    val btnSize = 27f * density
+                    val spacing = 5f * density
+                    val ctrlCenterY = rect.centerY()
+                    val rightAvailableCenter = (coverRect.right + 8f * density + rect.right - 10f * density) / 2f
+                    val playCenterX = rightAvailableCenter
+                    val prevCenterX = playCenterX - playSize / 2f - spacing - btnSize / 2f
+                    val nextCenterX = playCenterX + playSize / 2f + spacing + btnSize / 2f
+
+                    val prevRect = RectF(prevCenterX - btnSize / 2f, ctrlCenterY - btnSize / 2f, prevCenterX + btnSize / 2f, ctrlCenterY + btnSize / 2f)
+                    val playRect = RectF(playCenterX - playSize / 2f, ctrlCenterY - playSize / 2f, playCenterX + playSize / 2f, ctrlCenterY + playSize / 2f)
+                    val nextRect = RectF(nextCenterX - btnSize / 2f, ctrlCenterY - btnSize / 2f, nextCenterX + btnSize / 2f, ctrlCenterY + btnSize / 2f)
+
+                    val textStartX = coverRect.right + 10f * density
+                    val textTopY = rect.centerY() - 10f * density
+                    val textClipRight = prevRect.left - 4f * density
+
+                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, 0f, textStartX, textTopY, textClipRight, 0f, 0f, false, controlsAlpha = 1f)
+                }
+
+                MEDIA_3X1 -> {
+                    val cSize = 46f * density
+                    val cLeft = rect.left + 14f * density
+                    val cTop = rect.centerY() - cSize / 2f
+                    val coverRect = RectF(cLeft, cTop, cLeft + cSize, cTop + cSize)
+                    val coverRadius = cSize / 2f
+
+                    val diSize = 20f * density
+                    val deviceIconRect = RectF(rect.right - 14f * density - diSize, rect.centerY() - diSize / 2f, rect.right - 14f * density, rect.centerY() + diSize / 2f)
+
+                    val playSize = 28f * density
+                    val btnSize = 26f * density
+                    val spacing = 5f * density
+                    val ctrlCenterY = if (hasTrack) rect.centerY() - 6f * density else rect.centerY()
+                    val nextRight = rect.right - 12f * density
+                    val nextCenterX = nextRight - btnSize / 2f
+                    val playCenterX = nextCenterX - btnSize / 2f - spacing - playSize / 2f
+                    val prevCenterX = playCenterX - playSize / 2f - spacing - btnSize / 2f
+
+                    val prevRect = RectF(prevCenterX - btnSize / 2f, ctrlCenterY - btnSize / 2f, prevCenterX + btnSize / 2f, ctrlCenterY + btnSize / 2f)
+                    val playRect = RectF(playCenterX - playSize / 2f, ctrlCenterY - playSize / 2f, playCenterX + playSize / 2f, ctrlCenterY + playSize / 2f)
+                    val nextRect = RectF(nextCenterX - btnSize / 2f, ctrlCenterY - btnSize / 2f, nextCenterX + btnSize / 2f, ctrlCenterY + btnSize / 2f)
+
+                    val pbRect = RectF(prevCenterX - btnSize / 2f, rect.bottom - 12f * density, nextRight, rect.bottom - 6f * density)
+                    val pbAlpha = if (hasTrack) 1f else 0f
+
+                    val textStartX = coverRect.right + 10f * density
+                    val textTopY = rect.centerY() - 14f * density
+                    val textClipRight = prevRect.left - 6f * density
+                    val artistAlpha = if (hasTrack) 1f else 0f
+
+                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, 0f, textStartX, textTopY, textClipRight, 1f, artistAlpha, false, controlsAlpha = 1f, progressBarRect = pbRect, progressBarAlpha = pbAlpha)
                 }
 
                 MEDIA_4X1 -> {
@@ -406,12 +552,11 @@ object FluidTileResizeHandler {
 
                     val diSize = 20f * density
                     val deviceIconRect = RectF(rect.right - 14f * density - diSize, rect.centerY() - diSize / 2f, rect.right - 14f * density, rect.centerY() + diSize / 2f)
-                    val deviceIconAlpha = 0f
 
                     val playSize = 30f * density
-                    val btnSize = 24f * density
-                    val spacing = 8f * density
-                    val ctrlCenterY = rect.centerY()
+                    val btnSize = 26f * density
+                    val spacing = 6f * density
+                    val ctrlCenterY = if (hasTrack) rect.centerY() - 8f * density else rect.centerY()
                     val nextRight = rect.right - 14f * density
                     val nextCenterX = nextRight - btnSize / 2f
                     val playCenterX = nextCenterX - btnSize / 2f - spacing - playSize / 2f
@@ -421,38 +566,40 @@ object FluidTileResizeHandler {
                     val playRect = RectF(playCenterX - playSize / 2f, ctrlCenterY - playSize / 2f, playCenterX + playSize / 2f, ctrlCenterY + playSize / 2f)
                     val nextRect = RectF(nextCenterX - btnSize / 2f, ctrlCenterY - btnSize / 2f, nextCenterX + btnSize / 2f, ctrlCenterY + btnSize / 2f)
 
+                    val pbRect = RectF(prevCenterX - btnSize / 2f, rect.bottom - 12f * density, nextRight, rect.bottom - 6f * density)
+                    val pbAlpha = if (hasTrack) 1f else 0f
+
                     val textStartX = coverRect.right + 12f * density
                     val textTopY = if (hasTrack) rect.centerY() - 18f * density else rect.centerY() - 10f * density
                     val textClipRight = prevRect.left - 8f * density
                     val artistAlpha = if (hasTrack) 1f else 0f
 
-                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, deviceIconAlpha, textStartX, textTopY, textClipRight, 1f, artistAlpha, false)
+                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, 0f, textStartX, textTopY, textClipRight, 1f, artistAlpha, false, controlsAlpha = 1f, progressBarRect = pbRect, progressBarAlpha = pbAlpha)
                 }
 
-                MEDIA_4X2 -> {
-                    val cSize = (rect.height() - 28f * density).coerceAtLeast(48f * density)
+                MEDIA_2X3 -> {
+                    val cSize = 64f * density
                     val cLeft = rect.left + 14f * density
                     val cTop = rect.top + 14f * density
                     val coverRect = RectF(cLeft, cTop, cLeft + cSize, cTop + cSize)
-                    val coverRadius = 18f * density
+                    val coverRadius = 14f * density
 
                     val diSize = 24f * density
-                    val diRight = rect.right - 16f * density
-                    val diTop = rect.top + 16f * density
-                    val deviceIconRect = RectF(diRight - diSize, diTop, diRight, diTop + diSize)
-                    val deviceIconAlpha = 1f
+                    val deviceIconRect = RectF(rect.right - 38f * density, rect.top + 14f * density, rect.right - 14f * density, rect.top + 38f * density)
 
-                    val textStartX = coverRect.right + 16f * density
-                    val textTopY = rect.top + 26f * density
-                    val textClipRight = deviceIconRect.left - 8f * density
+                    val textStartX = rect.left + 14f * density
+                    val textTopY = coverRect.bottom + 12f * density
+                    val textClipRight = rect.right - 14f * density
                     val artistAlpha = if (hasTrack) 1f else 0f
 
-                    val playSize = 36f * density
-                    val btnSize = 30f * density
-                    val spacing = 16f * density
-                    val ctrlCenterY = rect.bottom - 32f * density
-                    val rightSectionCenter = (coverRect.right + rect.right) / 2f
-                    val playCenterX = rightSectionCenter
+                    val pbRect = RectF(rect.left + 16f * density, rect.bottom - 56f * density, rect.right - 16f * density, rect.bottom - 46f * density)
+                    val pbAlpha = if (hasTrack) 1f else 0f
+
+                    val playSize = 34f * density
+                    val btnSize = 28f * density
+                    val spacing = 14f * density
+                    val ctrlCenterY = rect.bottom - 22f * density
+                    val playCenterX = rect.centerX()
                     val prevCenterX = playCenterX - playSize / 2f - spacing - btnSize / 2f
                     val nextCenterX = playCenterX + playSize / 2f + spacing + btnSize / 2f
 
@@ -460,10 +607,10 @@ object FluidTileResizeHandler {
                     val playRect = RectF(playCenterX - playSize / 2f, ctrlCenterY - playSize / 2f, playCenterX + playSize / 2f, ctrlCenterY + playSize / 2f)
                     val nextRect = RectF(nextCenterX - btnSize / 2f, ctrlCenterY - btnSize / 2f, nextCenterX + btnSize / 2f, ctrlCenterY + btnSize / 2f)
 
-                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, deviceIconAlpha, textStartX, textTopY, textClipRight, 1f, artistAlpha, false)
+                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, 1f, textStartX, textTopY, textClipRight, 1f, artistAlpha, false, controlsAlpha = 1f, progressBarRect = pbRect, progressBarAlpha = pbAlpha)
                 }
 
-                MEDIA_2X4 -> {
+                MEDIA_2X4, MEDIA_2X5 -> {
                     val cSize = (rect.width() - 28f * density).coerceAtLeast(48f * density)
                     val cLeft = rect.left + 14f * density
                     val cTop = rect.top + 14f * density
@@ -474,17 +621,19 @@ object FluidTileResizeHandler {
                     val diRight = rect.right - 22f * density
                     val diTop = rect.top + 22f * density
                     val deviceIconRect = RectF(diRight - diSize, diTop, diRight, diTop + diSize)
-                    val deviceIconAlpha = 1f
 
                     val textStartX = rect.left + 14f * density
-                    val textTopY = coverRect.bottom + 20f * density
+                    val textTopY = coverRect.bottom + 16f * density
                     val textClipRight = rect.right - 14f * density
                     val artistAlpha = if (hasTrack) 1f else 0f
+
+                    val pbRect = RectF(rect.left + 18f * density, rect.bottom - 74f * density, rect.right - 18f * density, rect.bottom - 62f * density)
+                    val pbAlpha = if (hasTrack) 1f else 0f
 
                     val playSize = 38f * density
                     val btnSize = 32f * density
                     val spacing = 16f * density
-                    val ctrlCenterY = rect.bottom - 40f * density
+                    val ctrlCenterY = rect.bottom - 36f * density
                     val playCenterX = rect.centerX()
                     val prevCenterX = playCenterX - playSize / 2f - spacing - btnSize / 2f
                     val nextCenterX = playCenterX + playSize / 2f + spacing + btnSize / 2f
@@ -493,10 +642,82 @@ object FluidTileResizeHandler {
                     val playRect = RectF(playCenterX - playSize / 2f, ctrlCenterY - playSize / 2f, playCenterX + playSize / 2f, ctrlCenterY + playSize / 2f)
                     val nextRect = RectF(nextCenterX - btnSize / 2f, ctrlCenterY - btnSize / 2f, nextCenterX + btnSize / 2f, ctrlCenterY + btnSize / 2f)
 
-                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, deviceIconAlpha, textStartX, textTopY, textClipRight, 1f, artistAlpha, true)
+                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, 1f, textStartX, textTopY, textClipRight, 1f, artistAlpha, true, controlsAlpha = 1f, progressBarRect = pbRect, progressBarAlpha = pbAlpha)
                 }
 
-                else -> {
+                MEDIA_3X2, MEDIA_3X3 -> {
+                    val cSize = (rect.height() - 28f * density).coerceIn(48f * density, 130f * density)
+                    val cLeft = rect.left + 14f * density
+                    val cTop = rect.top + 14f * density
+                    val coverRect = RectF(cLeft, cTop, cLeft + cSize, cTop + cSize)
+                    val coverRadius = 16f * density
+
+                    val diSize = 24f * density
+                    val diRight = rect.right - 16f * density
+                    val diTop = rect.top + 16f * density
+                    val deviceIconRect = RectF(diRight - diSize, diTop, diRight, diTop + diSize)
+
+                    val textStartX = coverRect.right + 14f * density
+                    val textTopY = rect.top + 22f * density
+                    val textClipRight = deviceIconRect.left - 8f * density
+                    val artistAlpha = if (hasTrack) 1f else 0f
+
+                    val pbRect = RectF(coverRect.right + 14f * density, rect.bottom - 54f * density, rect.right - 14f * density, rect.bottom - 44f * density)
+                    val pbAlpha = if (hasTrack) 1f else 0f
+
+                    val playSize = 34f * density
+                    val btnSize = 28f * density
+                    val spacing = 12f * density
+                    val ctrlCenterY = rect.bottom - 22f * density
+                    val rightSectionCenter = (coverRect.right + rect.right) / 2f
+                    val playCenterX = rightSectionCenter
+                    val prevCenterX = playCenterX - playSize / 2f - spacing - btnSize / 2f
+                    val nextCenterX = playCenterX + playSize / 2f + spacing + btnSize / 2f
+
+                    val prevRect = RectF(prevCenterX - btnSize / 2f, ctrlCenterY - btnSize / 2f, prevCenterX + btnSize / 2f, ctrlCenterY + btnSize / 2f)
+                    val playRect = RectF(playCenterX - playSize / 2f, ctrlCenterY - playSize / 2f, playCenterX + playSize / 2f, ctrlCenterY + playSize / 2f)
+                    val nextRect = RectF(nextCenterX - btnSize / 2f, ctrlCenterY - btnSize / 2f, nextCenterX + btnSize / 2f, ctrlCenterY + btnSize / 2f)
+
+                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, 1f, textStartX, textTopY, textClipRight, 1f, artistAlpha, false, controlsAlpha = 1f, progressBarRect = pbRect, progressBarAlpha = pbAlpha)
+                }
+
+                MEDIA_4X2, MEDIA_4X3 -> {
+                    val cSize = (rect.height() - 28f * density).coerceIn(48f * density, 160f * density)
+                    val cLeft = rect.left + 14f * density
+                    val cTop = rect.top + 14f * density
+                    val coverRect = RectF(cLeft, cTop, cLeft + cSize, cTop + cSize)
+                    val coverRadius = 18f * density
+
+                    val diSize = 24f * density
+                    val diRight = rect.right - 16f * density
+                    val diTop = rect.top + 16f * density
+                    val deviceIconRect = RectF(diRight - diSize, diTop, diRight, diTop + diSize)
+
+                    val textStartX = coverRect.right + 16f * density
+                    val textTopY = rect.top + 26f * density
+                    val textClipRight = deviceIconRect.left - 8f * density
+                    val artistAlpha = if (hasTrack) 1f else 0f
+
+                    val pbRect = RectF(coverRect.right + 16f * density, rect.bottom - 58f * density, rect.right - 16f * density, rect.bottom - 46f * density)
+                    val pbAlpha = if (hasTrack) 1f else 0f
+
+                    val playSize = 36f * density
+                    val btnSize = 30f * density
+                    val spacing = 16f * density
+                    val ctrlCenterY = rect.bottom - 26f * density
+                    val rightSectionCenter = (coverRect.right + rect.right) / 2f
+                    val playCenterX = rightSectionCenter
+                    val prevCenterX = playCenterX - playSize / 2f - spacing - btnSize / 2f
+                    val nextCenterX = playCenterX + playSize / 2f + spacing + btnSize / 2f
+
+                    val prevRect = RectF(prevCenterX - btnSize / 2f, ctrlCenterY - btnSize / 2f, prevCenterX + btnSize / 2f, ctrlCenterY + btnSize / 2f)
+                    val playRect = RectF(playCenterX - playSize / 2f, ctrlCenterY - playSize / 2f, playCenterX + playSize / 2f, ctrlCenterY + playSize / 2f)
+                    val nextRect = RectF(nextCenterX - btnSize / 2f, ctrlCenterY - btnSize / 2f, nextCenterX + btnSize / 2f, ctrlCenterY + btnSize / 2f)
+
+                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, 1f, textStartX, textTopY, textClipRight, 1f, artistAlpha, false, controlsAlpha = 1f, progressBarRect = pbRect, progressBarAlpha = pbAlpha)
+                }
+
+                else -> { // MEDIA_2X2 Stock
                     val cSize = 48f * density
                     val cLeft = rect.left + 14f * density
                     val cTop = rect.top + 14f * density
@@ -507,7 +728,6 @@ object FluidTileResizeHandler {
                     val diRight = rect.right - 14f * density
                     val diTop = rect.top + 14f * density
                     val deviceIconRect = RectF(diRight - diSize, diTop, diRight, diTop + diSize)
-                    val deviceIconAlpha = 1f
 
                     val textStartX = rect.left + 14f * density
                     val textTopY = coverRect.bottom + 12f * density
@@ -525,7 +745,7 @@ object FluidTileResizeHandler {
                     val playRect = RectF(playCenterX - playSize / 2f, ctrlCenterY - playSize / 2f, playCenterX + playSize / 2f, ctrlCenterY + playSize / 2f)
                     val nextRect = RectF(nextCenterX - btnSize / 2f, ctrlCenterY - btnSize / 2f, nextCenterX + btnSize / 2f, ctrlCenterY + btnSize / 2f)
 
-                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, deviceIconAlpha, textStartX, textTopY, textClipRight, 1f, artistAlpha, false)
+                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, 1f, textStartX, textTopY, textClipRight, 1f, artistAlpha, false, controlsAlpha = 1f)
                 }
             }
         }
@@ -768,17 +988,54 @@ object FluidTileResizeHandler {
                 }
 
                 // 3. Draw Controls
-                prevDrawable?.let {
-                    it.setBounds(prevRect.left.toInt(), prevRect.top.toInt(), prevRect.right.toInt(), prevRect.bottom.toInt())
-                    it.draw(canvas)
+                val controlsAlpha = lerp(startLayout.controlsAlpha, targetLayout.controlsAlpha, p)
+                if (controlsAlpha > 0.01f) {
+                    prevDrawable?.let {
+                        val origAlpha = it.alpha
+                        it.alpha = (255 * controlsAlpha).toInt().coerceIn(0, 255)
+                        it.setBounds(prevRect.left.toInt(), prevRect.top.toInt(), prevRect.right.toInt(), prevRect.bottom.toInt())
+                        it.draw(canvas)
+                        it.alpha = origAlpha
+                    }
+                    playDrawable?.let {
+                        val origAlpha = it.alpha
+                        it.alpha = (255 * controlsAlpha).toInt().coerceIn(0, 255)
+                        it.setBounds(playRect.left.toInt(), playRect.top.toInt(), playRect.right.toInt(), playRect.bottom.toInt())
+                        it.draw(canvas)
+                        it.alpha = origAlpha
+                    }
+                    nextDrawable?.let {
+                        val origAlpha = it.alpha
+                        it.alpha = (255 * controlsAlpha).toInt().coerceIn(0, 255)
+                        it.setBounds(nextRect.left.toInt(), nextRect.top.toInt(), nextRect.right.toInt(), nextRect.bottom.toInt())
+                        it.draw(canvas)
+                        it.alpha = origAlpha
+                    }
                 }
-                playDrawable?.let {
-                    it.setBounds(playRect.left.toInt(), playRect.top.toInt(), playRect.right.toInt(), playRect.bottom.toInt())
-                    it.draw(canvas)
-                }
-                nextDrawable?.let {
-                    it.setBounds(nextRect.left.toInt(), nextRect.top.toInt(), nextRect.right.toInt(), nextRect.bottom.toInt())
-                    it.draw(canvas)
+
+                // 3.5. Draw Collapsed Progress Bar
+                val pbRect = RectF(
+                    lerp(startLayout.progressBarRect.left, targetLayout.progressBarRect.left, p),
+                    lerp(startLayout.progressBarRect.top, targetLayout.progressBarRect.top, p),
+                    lerp(startLayout.progressBarRect.right, targetLayout.progressBarRect.right, p),
+                    lerp(startLayout.progressBarRect.bottom, targetLayout.progressBarRect.bottom, p)
+                )
+                val pbAlpha = lerp(startLayout.progressBarAlpha, targetLayout.progressBarAlpha, p)
+                if (pbAlpha > 0.01f && pbRect.width() > 10f) {
+                    val pbTrackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.parseColor("#4DFFFFFF")
+                        alpha = (255 * 0.35f * pbAlpha).toInt()
+                    }
+                    val pbFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.WHITE
+                        alpha = (255 * 0.95f * pbAlpha).toInt()
+                    }
+                    val pbRadius = pbRect.height() / 2f
+                    canvas.drawRoundRect(pbRect, pbRadius, pbRadius, pbTrackPaint)
+                    val progFrac = if (mediaProgressFraction > 0.01f) mediaProgressFraction.coerceIn(0f, 1f) else 0.35f
+                    val fillWidth = pbRect.width() * progFrac
+                    val fillRect = RectF(pbRect.left, pbRect.top, pbRect.left + fillWidth, pbRect.bottom)
+                    canvas.drawRoundRect(fillRect, pbRadius, pbRadius, pbFillPaint)
                 }
 
                 // 4. Draw Song Title & Artist
@@ -997,8 +1254,30 @@ object FluidTileResizeHandler {
         private var fourColW = 0f
         private var cardH = 0f
         private var tallH = 0f
+        private var threeRowsH = 0f
         private var fourRowsH = 0f
+        private var fiveRowsH = 0f
         private var gap = 0f
+
+        private fun getTargetDims(st: Int): Pair<Float, Float> {
+            val (cols, rows) = mediaStateToSpans(st)
+            val w = when (cols) {
+                1 -> colW
+                2 -> twoColW
+                3 -> threeColW
+                4 -> fourColW
+                else -> twoColW
+            }
+            val h = when (rows) {
+                1 -> cardH
+                2 -> tallH
+                3 -> threeRowsH
+                4 -> fourRowsH
+                5 -> fiveRowsH
+                else -> tallH
+            }
+            return Pair(w, h)
+        }
 
         private var fixedCornerRadius = 20f * density
         private var stockCardRadius = 20f * density
@@ -1265,7 +1544,9 @@ object FluidTileResizeHandler {
                         tallH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId).toFloat() else (157f * density)
                         val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
                         gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId).toFloat() else (10f * density)
+                        threeRowsH = 3f * cardH + 2f * gap
                         fourRowsH = 4f * cardH + 3f * gap
+                        fiveRowsH = 5f * cardH + 4f * gap
 
                         val rvContentW = (rv.width - rv.paddingLeft - rv.paddingRight).toFloat()
                         colW = if (rvContentW > 100f * density) {
@@ -1358,28 +1639,14 @@ object FluidTileResizeHandler {
                                 updateMorph(initRect, initLocalRect, fixedCornerRadius, initLocalIconBox, false, LAYOUT_MODE_HORIZONTAL)
                             }
                         } else if (isMediaSpec) {
-                            initialState = when (ControlCenterConfigHolder.sMediaPlayerSize) {
-                                "2x1" -> MEDIA_2X1
-                                "1x2" -> MEDIA_1X2
-                                "4x1" -> MEDIA_4X1
-                                "4x2" -> MEDIA_4X2
-                                "2x4" -> MEDIA_2X4
-                                else -> MEDIA_2X2
-                            }
+                            initialState = mediaSizeStringToState(ControlCenterConfigHolder.sMediaPlayerSize)
                             candidateTargetState = initialState
 
                             originLeft = tileLeft
                             originTop = tileTop
-                            originWidth = if (tileView.width > 0) tileView.width.toFloat() else when (initialState) {
-                                MEDIA_1X2 -> colW
-                                MEDIA_4X1, MEDIA_4X2 -> fourColW
-                                else -> twoColW
-                            }
-                            originHeight = if (tileView.height > 0) tileView.height.toFloat() else when (initialState) {
-                                MEDIA_2X1, MEDIA_4X1 -> cardH
-                                MEDIA_2X4 -> fourRowsH
-                                else -> tallH
-                            }
+                            val (initTargetW, initTargetH) = getTargetDims(initialState)
+                            originWidth = if (tileView.width > 0) tileView.width.toFloat() else initTargetW
+                            originHeight = if (tileView.height > 0) tileView.height.toFloat() else initTargetH
 
                             fixedCornerRadius = stockCardRadius
 
@@ -1794,62 +2061,110 @@ object FluidTileResizeHandler {
 
                     if (isMediaSpec) {
                         val rawW = (originWidth + dx).coerceIn(colW * 0.75f, fourColW * 1.05f)
-                        val rawH = (originHeight + dy).coerceIn(cardH * 0.75f, fourRowsH * 1.05f)
+                        val rawH = (originHeight + dy).coerceIn(cardH * 0.75f, fiveRowsH * 1.05f)
 
-                        val spanW = (fourColW - colW).coerceAtLeast(1f)
-                        val spanH = (fourRowsH - cardH).coerceAtLeast(1f)
+                        val (initCols, initRows) = mediaStateToSpans(initialState)
 
-                        val targets = listOf(
-                            Triple(MEDIA_1X2, colW, tallH),
-                            Triple(MEDIA_2X1, twoColW, cardH),
-                            Triple(MEDIA_2X2, twoColW, tallH),
-                            Triple(MEDIA_2X4, twoColW, fourRowsH),
-                            Triple(MEDIA_4X1, fourColW, cardH),
-                            Triple(MEDIA_4X2, fourColW, tallH)
-                        )
+                        // Directional intent analysis
+                        val absDx = Math.abs(dx)
+                        val absDy = Math.abs(dy)
+                        val minMovement = 14f * density
 
-                        var bestDist = Float.MAX_VALUE
-                        var bestState = candidateTargetState
-                        for (target in targets) {
-                            val nw = (rawW - target.second) / spanW
-                            val nh = (rawH - target.third) / spanH
-                            var distSq = nw * nw + nh * nh
-                            if (target.first == candidateTargetState) {
-                                distSq -= 0.035f // Hysteresis bonus to stay in current candidate
+                        var targetState = candidateTargetState.takeIf { it != -1 } ?: initialState
+
+                        if (absDx > minMovement || absDy > minMovement) {
+                            val desiredCols = when {
+                                rawW < (colW + twoColW) / 2f -> 1
+                                rawW < (twoColW + threeColW) / 2f -> 2
+                                rawW < (threeColW + fourColW) / 2f -> 3
+                                else -> 4
                             }
-                            if (distSq < bestDist) {
-                                bestDist = distSq
-                                bestState = target.first
+                            val desiredRows = when {
+                                rawH < (cardH + tallH) / 2f -> 1
+                                rawH < (tallH + threeRowsH) / 2f -> 2
+                                rawH < (threeRowsH + fourRowsH) / 2f -> 3
+                                rawH < (fourRowsH + fiveRowsH) / 2f -> 4
+                                else -> 5
+                            }
+
+                            // If pulling predominantly horizontally from a tall component (e.g. 2x4 -> 4x2)
+                            val isPredominantlyHorizontal = absDx > absDy * 1.25f
+                            // If pulling predominantly vertically from a wide component (e.g. 4x2 -> 2x4)
+                            val isPredominantlyVertical = absDy > absDx * 1.25f
+
+                            targetState = when {
+                                isPredominantlyHorizontal && initRows >= 4 && dx > 0 -> {
+                                    // 2x4 (or 1x4/2x5) pulled right -> switch directly to opposite 4x2 (or 3x2)
+                                    when (desiredCols) {
+                                        4 -> MEDIA_4X2
+                                        3 -> MEDIA_3X2
+                                        else -> MEDIA_2X4
+                                    }
+                                }
+                                isPredominantlyVertical && initCols >= 4 && dy > 0 -> {
+                                    // 4x2 (or 4x1) pulled down -> switch directly to opposite 2x4 (or 2x3/2x5)
+                                    when (desiredRows) {
+                                        5 -> MEDIA_2X5
+                                        4 -> MEDIA_2X4
+                                        3 -> if (desiredCols >= 3) MEDIA_4X3 else MEDIA_2X3
+                                        else -> MEDIA_4X2
+                                    }
+                                }
+                                isPredominantlyHorizontal && initRows == 2 && dx < 0 && desiredCols == 1 -> {
+                                    MEDIA_1X2
+                                }
+                                isPredominantlyVertical && initCols == 2 && dy < 0 && desiredRows == 1 -> {
+                                    MEDIA_2X1
+                                }
+                                else -> {
+                                    // General mapping for (desiredCols, desiredRows)
+                                    when (desiredCols) {
+                                        1 -> when (desiredRows) {
+                                            1 -> MEDIA_1X1
+                                            2 -> MEDIA_1X2
+                                            3 -> MEDIA_1X3
+                                            4 -> MEDIA_1X4
+                                            else -> MEDIA_1X5
+                                        }
+                                        2 -> when (desiredRows) {
+                                            1 -> MEDIA_2X1
+                                            2 -> MEDIA_2X2
+                                            3 -> MEDIA_2X3
+                                            4 -> MEDIA_2X4
+                                            else -> MEDIA_2X5
+                                        }
+                                        3 -> when (desiredRows) {
+                                            1 -> MEDIA_3X1
+                                            2 -> MEDIA_3X2
+                                            else -> MEDIA_3X3 // 3 columns max 3 rows
+                                        }
+                                        else -> when (desiredRows) {
+                                            1 -> MEDIA_4X1
+                                            2 -> MEDIA_4X2
+                                            else -> MEDIA_4X3 // 4 columns max 3 rows, no 4x4!
+                                        }
+                                    }
+                                }
                             }
                         }
-                        val targetState = bestState
 
-                        val (targetW, targetH) = when (targetState) {
-                            MEDIA_2X1 -> Pair(twoColW, cardH)
-                            MEDIA_1X2 -> Pair(colW, tallH)
-                            MEDIA_4X1 -> Pair(fourColW, cardH)
-                            MEDIA_4X2 -> Pair(fourColW, tallH)
-                            MEDIA_2X4 -> Pair(twoColW, fourRowsH)
-                            else -> Pair(twoColW, tallH)
-                        }
-
-                        if (targetState != initialState) {
-                            curW = lerp(rawW, targetW, 0.55f)
-                            curH = lerp(rawH, targetH, 0.55f)
-                        } else {
-                            curW = rawW
-                            curH = rawH
-                        }
-
+                        val (targetW, targetH) = getTargetDims(targetState)
                         val dW = targetW - originWidth
                         val dH = targetH - originHeight
                         val distSq = dW * dW + dH * dH
+
                         val progress = if (targetState != initialState && distSq > 1f) {
-                            val curDW = curW - originWidth
-                            val curDH = curH - originHeight
-                            val proj = (curDW * dW + curDH * dH) / distSq
+                            val proj = (dx * dW + dy * dH) / distSq
                             proj.coerceIn(0f, 1f)
                         } else 0f
+
+                        if (targetState != initialState) {
+                            curW = originWidth + progress * dW
+                            curH = originHeight + progress * dH
+                        } else {
+                            curW = (originWidth + dx * 0.25f).coerceIn(originWidth - 12f * density, originWidth + 12f * density)
+                            curH = (originHeight + dy * 0.25f).coerceIn(originHeight - 12f * density, originHeight + 12f * density)
+                        }
 
                         val drawRect = RectF(originLeft, originTop, originLeft + curW, originTop + curH)
                         val localRect = RectF(0f, 0f, curW, curH)
@@ -1867,16 +2182,9 @@ object FluidTileResizeHandler {
                         if (targetState != candidateTargetState) {
                             candidateTargetState = targetState
                             v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                            val targetSpans = when (targetState) {
-                                MEDIA_2X1 -> Pair(2, 1)
-                                MEDIA_1X2 -> Pair(1, 2)
-                                MEDIA_4X1 -> Pair(4, 1)
-                                MEDIA_4X2 -> Pair(4, 2)
-                                MEDIA_2X4 -> Pair(2, 4)
-                                else -> Pair(2, 2)
-                            }
+                            val (spanW, spanH) = mediaStateToSpans(targetState)
                             targetContainer?.let { rv ->
-                                updateNeighbourDisplacements(rv, targetSpans.first, targetSpans.second)
+                                updateNeighbourDisplacements(rv, spanW, spanH)
                             }
                         }
                         return true
@@ -2192,22 +2500,8 @@ object FluidTileResizeHandler {
                             val finalState = if (candidateTargetState != -1) candidateTargetState else initialState
                             v.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
 
-                            val targetSize = when (finalState) {
-                                MEDIA_2X1 -> "2x1"
-                                MEDIA_1X2 -> "1x2"
-                                MEDIA_4X1 -> "4x1"
-                                MEDIA_4X2 -> "4x2"
-                                MEDIA_2X4 -> "2x4"
-                                else -> "2x2"
-                            }
-                            val (targetW, targetH) = when (finalState) {
-                                MEDIA_2X1 -> Pair(twoColW, cardH)
-                                MEDIA_1X2 -> Pair(colW, tallH)
-                                MEDIA_4X1 -> Pair(fourColW, cardH)
-                                MEDIA_4X2 -> Pair(fourColW, tallH)
-                                MEDIA_2X4 -> Pair(twoColW, fourRowsH)
-                                else -> Pair(twoColW, tallH)
-                            }
+                            val targetSize = mediaStateToSizeString(finalState)
+                            val (targetW, targetH) = getTargetDims(finalState)
 
                             if (finalState != initialState) {
                                 ControlCenterConfigHolder.sMediaPlayerSize = targetSize

@@ -930,14 +930,15 @@ object ControlCenterFullUnlock {
         }
         // 1. Media Player -> dynamic size
         if (viewType == 3484336 || item.javaClass.name.contains("MediaPlayer")) {
-            return when (ControlCenterConfigHolder.sMediaPlayerSize) {
-                "2x1" -> Pair(2, 1)
-                "1x2" -> Pair(1, 2)
-                "4x1" -> Pair(4, 1)
-                "4x2" -> Pair(4, 2)
-                "2x4" -> Pair(2, 4)
-                else -> Pair(2, 2)
+            val parts = ControlCenterConfigHolder.sMediaPlayerSize.split("x")
+            if (parts.size == 2) {
+                val w = parts[0].toIntOrNull()
+                val h = parts[1].toIntOrNull()
+                if (w != null && h != null && w in 1..4 && h in 1..5) {
+                    return Pair(w, h)
+                }
             }
+            return Pair(2, 2)
         }
         // 2. Sliders -> 1x2 vertical or 2..4x1 horizontal
         if (viewType == 3484338 || item.javaClass.name.contains("Brightness")) {

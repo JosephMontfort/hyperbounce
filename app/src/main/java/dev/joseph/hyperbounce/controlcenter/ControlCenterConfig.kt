@@ -298,7 +298,6 @@ object ControlCenterConfigHolder {
                         }
                     }
                     sMediaPlayerSize = json.optString("media_player_size", sMediaPlayerSize)
-                    if (sMediaPlayerSize == "1x1") sMediaPlayerSize = "2x2"
                     sBrightnessSliderHorizontal = json.optBoolean("brightness_slider_horizontal", sBrightnessSliderHorizontal)
                     sVolumeSliderHorizontal = json.optBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
                     sBrightnessSliderWidth = json.optInt("brightness_slider_width", sBrightnessSliderWidth).coerceIn(2, 4)
@@ -1917,11 +1916,21 @@ object ControlCenterConfigHolder {
     fun cycleMediaPlayerSize(ctx: Context, tileView: View?) {
         val nextSize = when (sMediaPlayerSize) {
             "2x2" -> "2x1"
-            "2x1" -> "1x2"
-            "1x2" -> "4x1"
+            "2x1" -> "1x1"
+            "1x1" -> "1x2"
+            "1x2" -> "1x3"
+            "1x3" -> "1x4"
+            "1x4" -> "1x5"
+            "1x5" -> "2x3"
+            "2x3" -> "2x4"
+            "2x4" -> "2x5"
+            "2x5" -> "3x1"
+            "3x1" -> "3x2"
+            "3x2" -> "3x3"
+            "3x3" -> "4x1"
             "4x1" -> "4x2"
-            "4x2" -> "2x4"
-            "2x4" -> "2x2"
+            "4x2" -> "4x3"
+            "4x3" -> "2x2"
             else -> "2x2"
         }
         setMediaSize(ctx, nextSize, tileView)

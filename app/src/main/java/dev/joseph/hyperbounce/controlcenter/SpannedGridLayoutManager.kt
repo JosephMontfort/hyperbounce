@@ -142,15 +142,15 @@ class SpannedGridLayoutManager : GridLayoutManager {
 
             // 3484336 / 63342: MediaPlayer -> dynamic size
             if (viewType == 3484336 || viewType == 63342) {
-                return when (ControlCenterConfigHolder.sMediaPlayerSize) {
-                    "2x1" -> intArrayOf(2, 1)
-                    "1x2" -> intArrayOf(1, 2)
-                    "1x1" -> intArrayOf(1, 1)
-                    "4x1" -> intArrayOf(4, 1)
-                    "4x2" -> intArrayOf(4, 2)
-                    "2x4" -> intArrayOf(2, 4)
-                    else -> intArrayOf(2, 2)
+                val parts = ControlCenterConfigHolder.sMediaPlayerSize.split("x")
+                if (parts.size == 2) {
+                    val w = parts[0].toIntOrNull()
+                    val h = parts[1].toIntOrNull()
+                    if (w != null && h != null && w in 1..4 && h in 1..5) {
+                        return intArrayOf(w, h)
+                    }
                 }
+                return intArrayOf(2, 2)
             }
             // 3484338 / 274442: Brightness Slider -> 1x2 vertical or 2..4x1 horizontal
             if (viewType == 3484338 || viewType == 274442) {

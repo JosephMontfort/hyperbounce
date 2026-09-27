@@ -994,10 +994,9 @@ object ControlCenterHook {
                                 when (simpleName) {
                                     "BrightnessSliderController" -> if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) ControlCenterConfigHolder.sBrightnessSliderWidth else 1
                                     "VolumeSliderController" -> if (ControlCenterConfigHolder.sVolumeSliderHorizontal) ControlCenterConfigHolder.sVolumeSliderWidth else 1
-                                    "MediaPlayerController" -> when (ControlCenterConfigHolder.sMediaPlayerSize) {
-                                        "1x2", "1x1" -> 1
-                                        "4x1", "4x2" -> 4
-                                        else -> 2
+                                    "MediaPlayerController" -> {
+                                        val parts = ControlCenterConfigHolder.sMediaPlayerSize.split("x")
+                                        parts.firstOrNull()?.toIntOrNull()?.coerceIn(1, 4) ?: 2
                                     }
                                     else -> chain.proceed()
                                 }
@@ -3874,7 +3873,9 @@ object ControlCenterHook {
             // 2. Progress container (Seek Bar)
             val progView = getCtrlView("getProgressContainerView")
             val toProg = getAnimVal("getToProgressContainer")
-            val hasCollapsedProgress = (currentTileSize == "4x1" || currentTileSize == "4x2" || currentTileSize == "2x4")
+            val pCols = currentTileSize.split("x").firstOrNull()?.toIntOrNull() ?: 2
+            val pRows = currentTileSize.split("x").getOrNull(1)?.toIntOrNull() ?: 2
+            val hasCollapsedProgress = (pCols > 1 && (pCols >= 3 || pRows >= 3))
             if (progView != null && toProg != null) {
                 val toTop = toProg.javaClass.getMethod("getTop").invoke(toProg) as Int
                 if (!hasCollapsedProgress) {
@@ -4049,7 +4050,8 @@ object ControlCenterHook {
             val tallH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId) else (157 * density).toInt()
 
             var size = ControlCenterConfigHolder.sMediaPlayerSize
-            if (size == "1x1") size = "2x2"
+            val mediaCols = size.split("x").firstOrNull()?.toIntOrNull()?.coerceIn(1, 4) ?: 2
+            val mediaRows = size.split("x").getOrNull(1)?.toIntOrNull()?.coerceIn(1, 5) ?: 2
 
             fun getView(name: String): View? {
                 return try {
@@ -4082,9 +4084,28 @@ object ControlCenterHook {
                 itemView.addView(progressBar)
             }
 
+            val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
+            val gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId) else (14 * density).toInt()
+            val threeRowsH = 3 * cardH + 2 * gap
+            val fourRowsH = 4 * cardH + 3 * gap
+            val fiveRowsH = 5 * cardH + 4 * gap
+
+            val rowHeight = when (mediaRows) {
+                1 -> cardH
+                2 -> tallH
+                3 -> threeRowsH
+                4 -> fourRowsH
+                5 -> fiveRowsH
+                else -> tallH
+            }
+
             val curLp = itemView.layoutParams
             if (curLp != null) {
                 curLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                if (curLp.height != rowHeight) {
+                    curLp.height = rowHeight
+                    itemView.layoutParams = curLp
+                }
             }
             fun ensureId(v: View?): Int {
                 if (v == null) return View.NO_ID
@@ -4104,10 +4125,6 @@ object ControlCenterHook {
             val emptyStateId = ensureId(emptyState)
             val audioContainerId = ensureId(audioContainer)
             val progressBarId = ensureId(progressBar)
-
-            val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin", "dimen", ctx.packageName)
-            val gap = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId) else (14 * density).toInt()
-            val fourRowsH = 4 * cardH + 3 * gap
 
             val meta = sLastMediaPlayerMetaData
             var hasTrack = false
@@ -4142,8 +4159,8 @@ object ControlCenterHook {
             }
 
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP && cover != null) {
-                val isCircular = (size == "1x2" || size == "2x1" || size == "4x1")
-                val rad = if (size == "4x2" || size == "2x4") 18f * density else 12f * density
+                val isCircular = (mediaCols == 1 || mediaRows == 1)
+                val rad = if (mediaCols >= 4 && mediaRows >= 2) 18f * density else 14f * density
                 cover.outlineProvider = object : ViewOutlineProvider() {
                     override fun getOutline(v: View, o: Outline) {
                         if (isCircular) {
@@ -4168,11 +4185,24 @@ object ControlCenterHook {
                 v?.translationY = 0f
             }
 
-            cover?.visibility = View.VISIBLE
-            prev?.visibility = View.VISIBLE
-            play?.visibility = View.VISIBLE
-            next?.visibility = View.VISIBLE
-            audioContainer?.visibility = View.VISIBLE
+            if (size == "1x1") {
+                cover?.visibility = View.VISIBLE
+                prev?.visibility = View.GONE
+                play?.visibility = View.GONE
+                next?.visibility = View.GONE
+                audioContainer?.visibility = View.GONE
+                title?.visibility = View.GONE
+                artist?.visibility = View.GONE
+                emptyState?.visibility = View.GONE
+                deviceIcon?.visibility = View.GONE
+                progressBar?.visibility = View.GONE
+            } else {
+                cover?.visibility = View.VISIBLE
+                prev?.visibility = View.VISIBLE
+                play?.visibility = View.VISIBLE
+                next?.visibility = View.VISIBLE
+                audioContainer?.visibility = View.VISIBLE
+            }
 
             if (ControlCenterConfigHolder.isConstraintLayout(itemView)) {
                 try {
@@ -4213,11 +4243,31 @@ object ControlCenterHook {
                     val diLp = deviceIcon?.layoutParams
 
                     when (size) {
-                        "2x1" -> {
-                            if (curLp != null && curLp.height != cardH) {
-                                curLp.height = cardH
-                                itemView.layoutParams = curLp
+                        "1x1" -> {
+                            title?.visibility = View.GONE
+                            artist?.visibility = View.GONE
+                            emptyState?.visibility = View.GONE
+                            deviceIcon?.visibility = View.GONE
+                            progressBar?.visibility = View.GONE
+                            audioContainer?.visibility = View.GONE
+                            prev?.visibility = View.GONE
+                            play?.visibility = View.GONE
+                            next?.visibility = View.GONE
+
+                            if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(cLp)
+                                val cSize = (48 * density).toInt()
+                                cLp.width = cSize
+                                cLp.height = cSize
+                                setField(cLp, "startToStart", pId)
+                                setField(cLp, "endToEnd", pId)
+                                setField(cLp, "topToTop", pId)
+                                setField(cLp, "bottomToBottom", pId)
+                                cover.layoutParams = cLp
                             }
+                        }
+
+                        "2x1" -> {
                             title?.visibility = View.GONE
                             artist?.visibility = View.GONE
                             emptyState?.visibility = View.GONE
@@ -4253,7 +4303,7 @@ object ControlCenterHook {
                                 audioContainer.layoutParams = acLp
                             }
 
-                            val btnSize = (22 * density).toInt()
+                            val btnSize = (27 * density).toInt()
                             val playSize = (28 * density).toInt()
                             if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
                                 resetConstraints(prevLp)
@@ -4295,10 +4345,6 @@ object ControlCenterHook {
                         }
 
                         "1x2" -> {
-                            if (curLp != null && curLp.height != tallH) {
-                                curLp.height = tallH
-                                itemView.layoutParams = curLp
-                            }
                             title?.visibility = View.GONE
                             artist?.visibility = View.GONE
                             emptyState?.visibility = View.GONE
@@ -4334,7 +4380,7 @@ object ControlCenterHook {
                                 audioContainer.layoutParams = acLp
                             }
 
-                            val btnSize = (22 * density).toInt()
+                            val btnSize = (27 * density).toInt()
                             val playSize = (28 * density).toInt()
                             if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
                                 resetConstraints(prevLp)
@@ -4372,6 +4418,317 @@ object ControlCenterHook {
                                     nextLp.topMargin = (6 * density).toInt()
                                 }
                                 next.layoutParams = nextLp
+                            }
+                        }
+
+                        "1x3", "1x4", "1x5" -> {
+                            deviceIcon?.visibility = View.GONE
+                            progressBar?.visibility = View.GONE
+                            if (hasTrack) {
+                                title?.visibility = View.VISIBLE
+                                artist?.visibility = View.VISIBLE
+                                emptyState?.visibility = View.GONE
+                            } else {
+                                title?.visibility = View.GONE
+                                artist?.visibility = View.GONE
+                                emptyState?.visibility = View.VISIBLE
+                            }
+
+                            if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(cLp)
+                                val cSize = (48 * density).toInt()
+                                cLp.width = cSize
+                                cLp.height = cSize
+                                setField(cLp, "startToStart", pId)
+                                setField(cLp, "endToEnd", pId)
+                                setField(cLp, "topToTop", pId)
+                                if (cLp is ViewGroup.MarginLayoutParams) {
+                                    cLp.topMargin = (14 * density).toInt()
+                                }
+                                cover.layoutParams = cLp
+                            }
+
+                            if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(acLp)
+                                acLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                                acLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                setField(acLp, "startToStart", pId)
+                                setField(acLp, "endToEnd", pId)
+                                setField(acLp, "bottomToBottom", pId)
+                                if (acLp is ViewGroup.MarginLayoutParams) {
+                                    acLp.bottomMargin = (14 * density).toInt()
+                                }
+                                audioContainer.layoutParams = acLp
+                            }
+
+                            val btnSize = (27 * density).toInt()
+                            val playSize = (28 * density).toInt()
+                            if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(prevLp)
+                                prevLp.width = btnSize
+                                prevLp.height = btnSize
+                                setField(prevLp, "startToStart", pId)
+                                setField(prevLp, "endToEnd", pId)
+                                setField(prevLp, "topToTop", pId)
+                                setField(prevLp, "bottomToTop", playId)
+                                setField(prevLp, "verticalChainStyle", 2)
+                                if (prevLp is ViewGroup.MarginLayoutParams) {
+                                    prevLp.bottomMargin = (6 * density).toInt()
+                                }
+                                prev.layoutParams = prevLp
+                            }
+                            if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(playLp)
+                                playLp.width = playSize
+                                playLp.height = playSize
+                                setField(playLp, "startToStart", pId)
+                                setField(playLp, "endToEnd", pId)
+                                setField(playLp, "topToBottom", prevId)
+                                setField(playLp, "bottomToTop", nextId)
+                                play.layoutParams = playLp
+                            }
+                            if (nextLp != null && nextLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(nextLp)
+                                nextLp.width = btnSize
+                                nextLp.height = btnSize
+                                setField(nextLp, "startToStart", pId)
+                                setField(nextLp, "endToEnd", pId)
+                                setField(nextLp, "topToBottom", playId)
+                                setField(nextLp, "bottomToBottom", pId)
+                                if (nextLp is ViewGroup.MarginLayoutParams) {
+                                    nextLp.topMargin = (6 * density).toInt()
+                                }
+                                next.layoutParams = nextLp
+                            }
+
+                            if (hasTrack) {
+                                if (tLp != null && tLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(tLp)
+                                    tLp.width = 0
+                                    tLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(tLp, "startToStart", pId)
+                                    setField(tLp, "endToEnd", pId)
+                                    setField(tLp, "topToBottom", coverId)
+                                    setField(tLp, "bottomToTop", artistId)
+                                    setField(tLp, "verticalChainStyle", 2)
+                                    if (tLp is ViewGroup.MarginLayoutParams) {
+                                        tLp.marginStart = (6 * density).toInt()
+                                        tLp.marginEnd = (6 * density).toInt()
+                                        tLp.topMargin = (10 * density).toInt()
+                                    }
+                                    if (title is TextView) {
+                                        title.textAlignment = View.TEXT_ALIGNMENT_CENTER
+                                        title.gravity = Gravity.CENTER
+                                        title.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        title.maxLines = 1
+                                    }
+                                    title.layoutParams = tLp
+                                }
+                                if (aLp != null && aLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(aLp)
+                                    aLp.width = 0
+                                    aLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(aLp, "startToStart", pId)
+                                    setField(aLp, "endToEnd", pId)
+                                    setField(aLp, "topToBottom", titleId)
+                                    setField(aLp, "bottomToTop", audioContainerId)
+                                    if (aLp is ViewGroup.MarginLayoutParams) {
+                                        aLp.marginStart = (6 * density).toInt()
+                                        aLp.marginEnd = (6 * density).toInt()
+                                        aLp.topMargin = (2 * density).toInt()
+                                    }
+                                    if (artist is TextView) {
+                                        artist.textAlignment = View.TEXT_ALIGNMENT_CENTER
+                                        artist.gravity = Gravity.CENTER
+                                        artist.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        artist.maxLines = 1
+                                    }
+                                    artist.layoutParams = aLp
+                                }
+                            } else {
+                                if (eLp != null && eLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(eLp)
+                                    eLp.width = 0
+                                    eLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(eLp, "startToStart", pId)
+                                    setField(eLp, "endToEnd", pId)
+                                    setField(eLp, "topToBottom", coverId)
+                                    setField(eLp, "bottomToTop", audioContainerId)
+                                    if (eLp is ViewGroup.MarginLayoutParams) {
+                                        eLp.marginStart = (6 * density).toInt()
+                                        eLp.marginEnd = (6 * density).toInt()
+                                        eLp.topMargin = (10 * density).toInt()
+                                    }
+                                    if (emptyState is TextView) {
+                                        emptyState.textAlignment = View.TEXT_ALIGNMENT_CENTER
+                                        emptyState.gravity = Gravity.CENTER
+                                        emptyState.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        emptyState.maxLines = 1
+                                    }
+                                    emptyState.layoutParams = eLp
+                                }
+                            }
+                        }
+
+                        "3x1" -> {
+                            deviceIcon?.visibility = View.GONE
+                            if (hasTrack) {
+                                title?.visibility = View.VISIBLE
+                                artist?.visibility = View.VISIBLE
+                                emptyState?.visibility = View.GONE
+                                progressBar?.visibility = View.VISIBLE
+                            } else {
+                                title?.visibility = View.GONE
+                                artist?.visibility = View.GONE
+                                emptyState?.visibility = View.VISIBLE
+                                progressBar?.visibility = View.GONE
+                            }
+
+                            if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(cLp)
+                                val cSize = (46 * density).toInt()
+                                cLp.width = cSize
+                                cLp.height = cSize
+                                setField(cLp, "startToStart", pId)
+                                setField(cLp, "topToTop", pId)
+                                setField(cLp, "bottomToBottom", pId)
+                                if (cLp is ViewGroup.MarginLayoutParams) {
+                                    cLp.marginStart = (14 * density).toInt()
+                                }
+                                cover.layoutParams = cLp
+                            }
+
+                            val btnSize = (26 * density).toInt()
+                            val playSize = (28 * density).toInt()
+
+                            if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(acLp)
+                                acLp.width = ViewGroup.LayoutParams.WRAP_CONTENT
+                                acLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                setField(acLp, "endToEnd", pId)
+                                setField(acLp, "topToTop", pId)
+                                if (hasTrack) {
+                                    setField(acLp, "bottomToTop", progressBarId)
+                                    setField(acLp, "verticalChainStyle", 2)
+                                } else {
+                                    setField(acLp, "bottomToBottom", pId)
+                                }
+                                if (acLp is ViewGroup.MarginLayoutParams) {
+                                    acLp.marginEnd = (12 * density).toInt()
+                                    acLp.topMargin = if (hasTrack) (6 * density).toInt() else 0
+                                }
+                                audioContainer.layoutParams = acLp
+                            }
+
+                            if (pbLp != null && pbLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(pbLp)
+                                pbLp.width = 0
+                                pbLp.height = (12 * density).toInt()
+                                setField(pbLp, "startToStart", audioContainerId)
+                                setField(pbLp, "endToEnd", audioContainerId)
+                                setField(pbLp, "topToBottom", audioContainerId)
+                                setField(pbLp, "bottomToBottom", pId)
+                                if (pbLp is ViewGroup.MarginLayoutParams) {
+                                    pbLp.bottomMargin = (6 * density).toInt()
+                                }
+                                progressBar.layoutParams = pbLp
+                            }
+
+                            if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(prevLp)
+                                prevLp.width = btnSize
+                                prevLp.height = btnSize
+                                setField(prevLp, "startToStart", pId)
+                                setField(prevLp, "endToStart", playId)
+                                setField(prevLp, "topToTop", pId)
+                                setField(prevLp, "bottomToBottom", pId)
+                                setField(prevLp, "horizontalChainStyle", 2)
+                                if (prevLp is ViewGroup.MarginLayoutParams) {
+                                    prevLp.marginEnd = (4 * density).toInt()
+                                }
+                                prev.layoutParams = prevLp
+                            }
+                            if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(playLp)
+                                playLp.width = playSize
+                                playLp.height = playSize
+                                setField(playLp, "startToEnd", prevId)
+                                setField(playLp, "endToStart", nextId)
+                                setField(playLp, "topToTop", pId)
+                                setField(playLp, "bottomToBottom", pId)
+                                play.layoutParams = playLp
+                            }
+                            if (nextLp != null && nextLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(nextLp)
+                                nextLp.width = btnSize
+                                nextLp.height = btnSize
+                                setField(nextLp, "startToEnd", playId)
+                                setField(nextLp, "endToEnd", pId)
+                                setField(nextLp, "topToTop", pId)
+                                setField(nextLp, "bottomToBottom", pId)
+                                if (nextLp is ViewGroup.MarginLayoutParams) {
+                                    nextLp.marginStart = (4 * density).toInt()
+                                }
+                                next.layoutParams = nextLp
+                            }
+
+                            if (hasTrack) {
+                                if (tLp != null && tLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(tLp)
+                                    tLp.width = 0
+                                    tLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(tLp, "startToEnd", coverId)
+                                    setField(tLp, "endToStart", audioContainerId)
+                                    setField(tLp, "topToTop", pId)
+                                    setField(tLp, "bottomToTop", artistId)
+                                    setField(tLp, "verticalChainStyle", 2)
+                                    if (tLp is ViewGroup.MarginLayoutParams) {
+                                        tLp.marginStart = (10 * density).toInt()
+                                        tLp.marginEnd = (8 * density).toInt()
+                                    }
+                                    if (title is TextView) {
+                                        title.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        title.maxLines = 1
+                                    }
+                                    title.layoutParams = tLp
+                                }
+                                if (aLp != null && aLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(aLp)
+                                    aLp.width = 0
+                                    aLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(aLp, "startToEnd", coverId)
+                                    setField(aLp, "endToStart", audioContainerId)
+                                    setField(aLp, "topToBottom", titleId)
+                                    setField(aLp, "bottomToBottom", pId)
+                                    if (aLp is ViewGroup.MarginLayoutParams) {
+                                        aLp.marginStart = (10 * density).toInt()
+                                        aLp.marginEnd = (8 * density).toInt()
+                                    }
+                                    if (artist is TextView) {
+                                        artist.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        artist.maxLines = 1
+                                    }
+                                    artist.layoutParams = aLp
+                                }
+                            } else {
+                                if (eLp != null && eLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(eLp)
+                                    eLp.width = 0
+                                    eLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(eLp, "startToEnd", coverId)
+                                    setField(eLp, "endToStart", audioContainerId)
+                                    setField(eLp, "topToTop", pId)
+                                    setField(eLp, "bottomToBottom", pId)
+                                    if (eLp is ViewGroup.MarginLayoutParams) {
+                                        eLp.marginStart = (10 * density).toInt()
+                                        eLp.marginEnd = (8 * density).toInt()
+                                    }
+                                    if (emptyState is TextView) {
+                                        emptyState.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        emptyState.maxLines = 1
+                                    }
+                                    emptyState.layoutParams = eLp
+                                }
                             }
                         }
 
@@ -4541,11 +4898,7 @@ object ControlCenterHook {
                             }
                         }
 
-                        "4x2" -> {
-                            if (curLp != null && curLp.height != tallH) {
-                                curLp.height = tallH
-                                itemView.layoutParams = curLp
-                            }
+                        "2x3" -> {
                             deviceIcon?.visibility = View.VISIBLE
                             if (hasTrack) {
                                 title?.visibility = View.VISIBLE
@@ -4559,7 +4912,167 @@ object ControlCenterHook {
                                 progressBar?.visibility = View.GONE
                             }
 
-                            val coverSize = (129 * density).toInt()
+                            val coverSize = (64 * density).toInt()
+                            if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(cLp)
+                                cLp.width = coverSize
+                                cLp.height = coverSize
+                                setField(cLp, "startToStart", pId)
+                                setField(cLp, "topToTop", pId)
+                                if (cLp is ViewGroup.MarginLayoutParams) {
+                                    cLp.marginStart = (14 * density).toInt()
+                                    cLp.topMargin = (14 * density).toInt()
+                                }
+                                cover.layoutParams = cLp
+                            }
+
+                            if (diLp != null && diLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(diLp)
+                                diLp.width = (24 * density).toInt()
+                                diLp.height = (24 * density).toInt()
+                                setField(diLp, "topToTop", pId)
+                                setField(diLp, "endToEnd", pId)
+                                if (diLp is ViewGroup.MarginLayoutParams) {
+                                    diLp.topMargin = (14 * density).toInt()
+                                    diLp.marginEnd = (14 * density).toInt()
+                                }
+                                deviceIcon.layoutParams = diLp
+                            }
+
+                            if (hasTrack) {
+                                if (tLp != null && tLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(tLp)
+                                    tLp.width = 0
+                                    tLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(tLp, "startToStart", pId)
+                                    setField(tLp, "endToEnd", pId)
+                                    setField(tLp, "topToBottom", coverId)
+                                    setField(tLp, "bottomToTop", artistId)
+                                    setField(tLp, "verticalChainStyle", 2)
+                                    if (tLp is ViewGroup.MarginLayoutParams) {
+                                        tLp.marginStart = (14 * density).toInt()
+                                        tLp.marginEnd = (14 * density).toInt()
+                                        tLp.topMargin = (12 * density).toInt()
+                                    }
+                                    title.layoutParams = tLp
+                                }
+                                if (aLp != null && aLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(aLp)
+                                    aLp.width = 0
+                                    aLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(aLp, "startToStart", pId)
+                                    setField(aLp, "endToEnd", pId)
+                                    setField(aLp, "topToBottom", titleId)
+                                    setField(aLp, "bottomToTop", progressBarId)
+                                    if (aLp is ViewGroup.MarginLayoutParams) {
+                                        aLp.marginStart = (14 * density).toInt()
+                                        aLp.marginEnd = (14 * density).toInt()
+                                        aLp.topMargin = (2 * density).toInt()
+                                    }
+                                    artist.layoutParams = aLp
+                                }
+                            } else {
+                                if (eLp != null && eLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(eLp)
+                                    eLp.width = 0
+                                    eLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(eLp, "startToStart", pId)
+                                    setField(eLp, "endToEnd", pId)
+                                    setField(eLp, "topToBottom", coverId)
+                                    setField(eLp, "bottomToTop", audioContainerId)
+                                    if (eLp is ViewGroup.MarginLayoutParams) {
+                                        eLp.marginStart = (14 * density).toInt()
+                                        eLp.marginEnd = (14 * density).toInt()
+                                        eLp.topMargin = (14 * density).toInt()
+                                    }
+                                    emptyState.layoutParams = eLp
+                                }
+                            }
+
+                            if (pbLp != null && pbLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(pbLp)
+                                pbLp.width = 0
+                                pbLp.height = (12 * density).toInt()
+                                setField(pbLp, "startToStart", pId)
+                                setField(pbLp, "endToEnd", pId)
+                                setField(pbLp, "bottomToTop", audioContainerId)
+                                if (pbLp is ViewGroup.MarginLayoutParams) {
+                                    pbLp.marginStart = (16 * density).toInt()
+                                    pbLp.marginEnd = (16 * density).toInt()
+                                    pbLp.bottomMargin = (6 * density).toInt()
+                                }
+                                progressBar.layoutParams = pbLp
+                            }
+
+                            if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(acLp)
+                                acLp.width = ViewGroup.LayoutParams.WRAP_CONTENT
+                                acLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                setField(acLp, "startToStart", pId)
+                                setField(acLp, "endToEnd", pId)
+                                setField(acLp, "bottomToBottom", pId)
+                                if (acLp is ViewGroup.MarginLayoutParams) {
+                                    acLp.bottomMargin = (12 * density).toInt()
+                                }
+                                audioContainer.layoutParams = acLp
+                            }
+
+                            val btnSize = (28 * density).toInt()
+                            val playSize = (34 * density).toInt()
+                            if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(prevLp)
+                                prevLp.width = btnSize
+                                prevLp.height = btnSize
+                                setField(prevLp, "startToStart", pId)
+                                setField(prevLp, "endToStart", playId)
+                                setField(prevLp, "topToTop", pId)
+                                setField(prevLp, "bottomToBottom", pId)
+                                setField(prevLp, "horizontalChainStyle", 2)
+                                if (prevLp is ViewGroup.MarginLayoutParams) {
+                                    prevLp.marginEnd = (10 * density).toInt()
+                                }
+                                prev.layoutParams = prevLp
+                            }
+                            if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(playLp)
+                                playLp.width = playSize
+                                playLp.height = playSize
+                                setField(playLp, "startToEnd", prevId)
+                                setField(playLp, "endToStart", nextId)
+                                setField(playLp, "topToTop", pId)
+                                setField(playLp, "bottomToBottom", pId)
+                                play.layoutParams = playLp
+                            }
+                            if (nextLp != null && nextLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(nextLp)
+                                nextLp.width = btnSize
+                                nextLp.height = btnSize
+                                setField(nextLp, "startToEnd", playId)
+                                setField(nextLp, "endToEnd", pId)
+                                setField(nextLp, "topToTop", pId)
+                                setField(nextLp, "bottomToBottom", pId)
+                                if (nextLp is ViewGroup.MarginLayoutParams) {
+                                    nextLp.marginStart = (10 * density).toInt()
+                                }
+                                next.layoutParams = nextLp
+                            }
+                        }
+
+                        "3x2", "3x3", "4x2", "4x3" -> {
+                            deviceIcon?.visibility = View.VISIBLE
+                            if (hasTrack) {
+                                title?.visibility = View.VISIBLE
+                                artist?.visibility = View.VISIBLE
+                                emptyState?.visibility = View.GONE
+                                progressBar?.visibility = View.VISIBLE
+                            } else {
+                                title?.visibility = View.GONE
+                                artist?.visibility = View.GONE
+                                emptyState?.visibility = View.VISIBLE
+                                progressBar?.visibility = View.GONE
+                            }
+
+                            val coverSize = if (mediaCols >= 4) (129 * density).toInt() else (100 * density).toInt()
                             if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
                                 resetConstraints(cLp)
                                 cLp.width = coverSize
@@ -4724,11 +5237,7 @@ object ControlCenterHook {
                             }
                         }
 
-                        "2x4" -> {
-                            if (curLp != null && curLp.height != fourRowsH) {
-                                curLp.height = fourRowsH
-                                itemView.layoutParams = curLp
-                            }
+                        "2x4", "2x5" -> {
                             deviceIcon?.visibility = View.VISIBLE
                             if (hasTrack) {
                                 title?.visibility = View.VISIBLE
@@ -5082,6 +5591,9 @@ object ControlCenterHook {
             if (itemView.getTag(listenerTag) == null) {
                 val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
                     val curSize = ControlCenterConfigHolder.sMediaPlayerSize
+                    val curCols = curSize.split("x").firstOrNull()?.toIntOrNull()?.coerceIn(1, 4) ?: 2
+                    val curRows = curSize.split("x").getOrNull(1)?.toIntOrNull()?.coerceIn(1, 5) ?: 2
+
                     val metaNow = sLastMediaPlayerMetaData
                     var hasTrackNow = false
                     if (metaNow != null) {
@@ -5095,7 +5607,19 @@ object ControlCenterHook {
                     }
 
                     val pb = itemView.findViewById<View>(progressTag)
-                    if (curSize == "2x1" || curSize == "1x2") {
+                    val hasCollapsedProgress = (curCols > 1 && (curCols >= 3 || curRows >= 3))
+
+                    if (curCols == 1 && curRows == 1) { // 1x1
+                        if (title?.visibility != View.GONE) title?.visibility = View.GONE
+                        if (artist?.visibility != View.GONE) artist?.visibility = View.GONE
+                        if (emptyState?.visibility != View.GONE) emptyState?.visibility = View.GONE
+                        if (deviceIcon?.visibility != View.GONE) deviceIcon?.visibility = View.GONE
+                        if (pb?.visibility != View.GONE) pb?.visibility = View.GONE
+                        if (prev?.visibility != View.GONE) prev?.visibility = View.GONE
+                        if (play?.visibility != View.GONE) play?.visibility = View.GONE
+                        if (next?.visibility != View.GONE) next?.visibility = View.GONE
+                        if (audioContainer?.visibility != View.GONE) audioContainer?.visibility = View.GONE
+                    } else if (curSize == "2x1" || curSize == "1x2") {
                         if (title?.visibility != View.GONE) title?.visibility = View.GONE
                         if (artist?.visibility != View.GONE) artist?.visibility = View.GONE
                         if (emptyState?.visibility != View.GONE) emptyState?.visibility = View.GONE
@@ -5104,43 +5628,43 @@ object ControlCenterHook {
                         }
                         if (deviceIcon?.visibility != View.GONE) deviceIcon?.visibility = View.GONE
                         if (pb?.visibility != View.GONE) pb?.visibility = View.GONE
-                    } else if (curSize == "4x1" || curSize == "4x2" || curSize == "2x4") {
+                        if (prev?.visibility != View.VISIBLE) prev?.visibility = View.VISIBLE
+                        if (play?.visibility != View.VISIBLE) play?.visibility = View.VISIBLE
+                        if (next?.visibility != View.VISIBLE) next?.visibility = View.VISIBLE
+                        if (audioContainer?.visibility != View.VISIBLE) audioContainer?.visibility = View.VISIBLE
+                    } else {
                         if (hasTrackNow) {
                             if (title?.visibility != View.VISIBLE) title?.visibility = View.VISIBLE
                             if (artist?.visibility != View.VISIBLE) artist?.visibility = View.VISIBLE
                             if (emptyState?.visibility != View.GONE) emptyState?.visibility = View.GONE
+                        } else {
+                            if (title?.visibility != View.GONE) title?.visibility = View.GONE
+                            if (artist?.visibility != View.GONE) artist?.visibility = View.GONE
+                            if (emptyState?.visibility != View.VISIBLE) emptyState?.visibility = View.VISIBLE
+                        }
+                        if (hasCollapsedProgress && hasTrackNow) {
                             if (pb?.visibility != View.VISIBLE) {
                                 pb?.visibility = View.VISIBLE
                                 (pb as? CollapsedMediaSeekBar)?.updateProgressFromSystem()
                             }
                         } else {
-                            if (title?.visibility != View.GONE) title?.visibility = View.GONE
-                            if (artist?.visibility != View.GONE) artist?.visibility = View.GONE
-                            if (emptyState?.visibility != View.VISIBLE) emptyState?.visibility = View.VISIBLE
                             if (pb?.visibility != View.GONE) pb?.visibility = View.GONE
                         }
-                        if (curSize != "4x1" && deviceIcon?.visibility != View.VISIBLE) {
-                            deviceIcon?.visibility = View.VISIBLE
-                        }
-                    } else { // 2x2 stock
-                        if (hasTrackNow) {
-                            if (title?.visibility != View.VISIBLE) title?.visibility = View.VISIBLE
-                            if (artist?.visibility != View.VISIBLE) artist?.visibility = View.VISIBLE
-                            if (emptyState?.visibility != View.GONE) emptyState?.visibility = View.GONE
+
+                        val showDeviceIcon = (curCols >= 2 && curRows >= 2)
+                        if (showDeviceIcon) {
+                            if (deviceIcon?.visibility != View.VISIBLE) deviceIcon?.visibility = View.VISIBLE
                         } else {
-                            if (title?.visibility != View.GONE) title?.visibility = View.GONE
-                            if (artist?.visibility != View.GONE) artist?.visibility = View.GONE
-                            if (emptyState?.visibility != View.VISIBLE) emptyState?.visibility = View.VISIBLE
+                            if (deviceIcon?.visibility != View.GONE) deviceIcon?.visibility = View.GONE
                         }
-                        if (deviceIcon?.visibility != View.VISIBLE) {
-                            deviceIcon?.visibility = View.VISIBLE
-                        }
-                        if (pb?.visibility != View.GONE) pb?.visibility = View.GONE
+
+                        if (prev?.visibility != View.VISIBLE) prev?.visibility = View.VISIBLE
+                        if (play?.visibility != View.VISIBLE) play?.visibility = View.VISIBLE
+                        if (next?.visibility != View.VISIBLE) next?.visibility = View.VISIBLE
+                        if (audioContainer?.visibility != View.VISIBLE) audioContainer?.visibility = View.VISIBLE
                     }
+
                     if (cover?.visibility != View.VISIBLE) cover?.visibility = View.VISIBLE
-                    if (prev?.visibility != View.VISIBLE) prev?.visibility = View.VISIBLE
-                    if (play?.visibility != View.VISIBLE) play?.visibility = View.VISIBLE
-                    if (next?.visibility != View.VISIBLE) next?.visibility = View.VISIBLE
                     if (cover is ImageView && cover.drawable == null) {
                         val defCoverId = ctx.resources.getIdentifier("miplay_cover_default", "drawable", ctx.packageName)
                         if (defCoverId != 0) cover.setImageResource(defCoverId)
@@ -5465,7 +5989,9 @@ class TileResizeDragTouchListener(
     private var fourColW = 0f
     private var row1H = 0f
     private var row2H = 0f
+    private var threeRowsH = 0f
     private var row4H = 0f
+    private var fiveRowsH = 0f
 
     private fun lerp(start: Float, end: Float, fraction: Float): Float {
         return start + (end - start) * fraction.coerceIn(0f, 1f)
@@ -5523,15 +6049,7 @@ class TileResizeDragTouchListener(
                         val w = if (isBrightnessSpec) ControlCenterConfigHolder.sBrightnessSliderWidth else ControlCenterConfigHolder.sVolumeSliderWidth
                         w.coerceIn(2, 4)
                     }
-                    isMediaSpec -> when (ControlCenterConfigHolder.sMediaPlayerSize) {
-                        "2x2" -> STATE_LARGE
-                        "2x1" -> STATE_EXPANDED
-                        "1x2" -> STATE_VERTICAL
-                        "4x1" -> STATE_WIDE_1
-                        "4x2" -> STATE_WIDE_2
-                        "2x4" -> STATE_TALL_4
-                        else -> STATE_LARGE
-                    }
+                    isMediaSpec -> FluidTileResizeHandler.mediaSizeStringToState(ControlCenterConfigHolder.sMediaPlayerSize)
                     ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) -> STATE_LARGE
                     ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) -> STATE_EXPANDED
                     ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) -> STATE_VERTICAL
@@ -5578,7 +6096,9 @@ class TileResizeDragTouchListener(
                     fourColW = if (rvContentW > 100f * density) rvContentW else (colW * 4f + 3f * gap)
                     row1H = cardH
                     row2H = tallH
+                    threeRowsH = 3f * cardH + 2f * gap
                     row4H = 4f * cardH + 3f * gap
+                    fiveRowsH = 5f * cardH + 4f * gap
 
                     if (isSliderSpec) {
                         originWidth = when (initialState) {
@@ -5587,6 +6107,28 @@ class TileResizeDragTouchListener(
                             else -> twoColW
                         }
                         originHeight = row1H
+                    } else if (isMediaSpec) {
+                        val (sW, sH) = when (initialState) {
+                            FluidTileResizeHandler.MEDIA_1X1 -> Pair(oneColW, row1H)
+                            FluidTileResizeHandler.MEDIA_1X2 -> Pair(oneColW, row2H)
+                            FluidTileResizeHandler.MEDIA_1X3 -> Pair(oneColW, threeRowsH)
+                            FluidTileResizeHandler.MEDIA_1X4 -> Pair(oneColW, row4H)
+                            FluidTileResizeHandler.MEDIA_1X5 -> Pair(oneColW, fiveRowsH)
+                            FluidTileResizeHandler.MEDIA_2X1 -> Pair(twoColW, row1H)
+                            FluidTileResizeHandler.MEDIA_2X2 -> Pair(twoColW, row2H)
+                            FluidTileResizeHandler.MEDIA_2X3 -> Pair(twoColW, threeRowsH)
+                            FluidTileResizeHandler.MEDIA_2X4 -> Pair(twoColW, row4H)
+                            FluidTileResizeHandler.MEDIA_2X5 -> Pair(twoColW, fiveRowsH)
+                            FluidTileResizeHandler.MEDIA_3X1 -> Pair(threeColW, row1H)
+                            FluidTileResizeHandler.MEDIA_3X2 -> Pair(threeColW, row2H)
+                            FluidTileResizeHandler.MEDIA_3X3 -> Pair(threeColW, threeRowsH)
+                            FluidTileResizeHandler.MEDIA_4X1 -> Pair(fourColW, row1H)
+                            FluidTileResizeHandler.MEDIA_4X2 -> Pair(fourColW, row2H)
+                            FluidTileResizeHandler.MEDIA_4X3 -> Pair(fourColW, threeRowsH)
+                            else -> Pair(twoColW, row2H)
+                        }
+                        originWidth = sW
+                        originHeight = sH
                     } else {
                         when (initialState) {
                             STATE_NORMAL -> {
@@ -5678,53 +6220,118 @@ class TileResizeDragTouchListener(
                     previewRadius = cardRadius
                 } else if (isMediaSpec) {
                     val rawW = (originWidth + dx).coerceIn(oneColW * 0.75f, fourColW * 1.05f)
-                    val rawH = (originHeight + dy).coerceIn(row1H * 0.75f, row4H * 1.05f)
+                    val rawH = (originHeight + dy).coerceIn(row1H * 0.75f, fiveRowsH * 1.05f)
 
-                    val spanW = (fourColW - oneColW).coerceAtLeast(1f)
-                    val spanH = (row4H - row1H).coerceAtLeast(1f)
+                    val (initCols, initRows) = FluidTileResizeHandler.mediaStateToSpans(initialState)
+                    val absDx = Math.abs(dx)
+                    val absDy = Math.abs(dy)
 
-                    val targets = listOf(
-                        Triple(STATE_VERTICAL, oneColW, row2H),     // 1x2
-                        Triple(STATE_EXPANDED, twoColW, row1H),     // 2x1
-                        Triple(STATE_LARGE, twoColW, row2H),        // 2x2
-                        Triple(STATE_TALL_4, twoColW, row4H),       // 2x4
-                        Triple(STATE_WIDE_1, fourColW, row1H),      // 4x1
-                        Triple(STATE_WIDE_2, fourColW, row2H)       // 4x2
-                    )
+                    val desiredCols = when {
+                        rawW < (oneColW + twoColW) / 2f -> 1
+                        rawW < (twoColW + threeColW) / 2f -> 2
+                        rawW < (threeColW + fourColW) / 2f -> 3
+                        else -> 4
+                    }
+                    val desiredRows = when {
+                        rawH < (row1H + row2H) / 2f -> 1
+                        rawH < (row2H + threeRowsH) / 2f -> 2
+                        rawH < (threeRowsH + row4H) / 2f -> 3
+                        rawH < (row4H + fiveRowsH) / 2f -> 4
+                        else -> 5
+                    }
 
-                    var bestDist = Float.MAX_VALUE
-                    var bestState = candidateTargetState
-                    for (target in targets) {
-                        val nw = (rawW - target.second) / spanW
-                        val nh = (rawH - target.third) / spanH
-                        var distSq = nw * nw + nh * nh
-                        if (target.first == candidateTargetState) {
-                            distSq -= 0.035f
+                    // If pulling predominantly horizontally from a tall component (e.g. 2x4 -> 4x2)
+                    val isPredominantlyHorizontal = absDx > absDy * 1.25f
+                    // If pulling predominantly vertically from a wide component (e.g. 4x2 -> 2x4)
+                    val isPredominantlyVertical = absDy > absDx * 1.25f
+
+                    targetState = when {
+                        isPredominantlyHorizontal && initRows >= 4 && dx > 0 -> {
+                            when (desiredCols) {
+                                4 -> FluidTileResizeHandler.MEDIA_4X2
+                                3 -> FluidTileResizeHandler.MEDIA_3X2
+                                else -> FluidTileResizeHandler.MEDIA_2X4
+                            }
                         }
-                        if (distSq < bestDist) {
-                            bestDist = distSq
-                            bestState = target.first
+                        isPredominantlyVertical && initCols >= 4 && dy > 0 -> {
+                            when (desiredRows) {
+                                5 -> FluidTileResizeHandler.MEDIA_2X5
+                                4 -> FluidTileResizeHandler.MEDIA_2X4
+                                3 -> if (desiredCols >= 3) FluidTileResizeHandler.MEDIA_4X3 else FluidTileResizeHandler.MEDIA_2X3
+                                else -> FluidTileResizeHandler.MEDIA_4X2
+                            }
+                        }
+                        isPredominantlyHorizontal && initRows == 2 && dx < 0 && desiredCols == 1 -> {
+                            FluidTileResizeHandler.MEDIA_1X2
+                        }
+                        isPredominantlyVertical && initCols == 2 && dy < 0 && desiredRows == 1 -> {
+                            FluidTileResizeHandler.MEDIA_2X1
+                        }
+                        else -> {
+                            when (desiredCols) {
+                                1 -> when (desiredRows) {
+                                    1 -> FluidTileResizeHandler.MEDIA_1X1
+                                    2 -> FluidTileResizeHandler.MEDIA_1X2
+                                    3 -> FluidTileResizeHandler.MEDIA_1X3
+                                    4 -> FluidTileResizeHandler.MEDIA_1X4
+                                    else -> FluidTileResizeHandler.MEDIA_1X5
+                                }
+                                2 -> when (desiredRows) {
+                                    1 -> FluidTileResizeHandler.MEDIA_2X1
+                                    2 -> FluidTileResizeHandler.MEDIA_2X2
+                                    3 -> FluidTileResizeHandler.MEDIA_2X3
+                                    4 -> FluidTileResizeHandler.MEDIA_2X4
+                                    else -> FluidTileResizeHandler.MEDIA_2X5
+                                }
+                                3 -> when (desiredRows) {
+                                    1 -> FluidTileResizeHandler.MEDIA_3X1
+                                    2 -> FluidTileResizeHandler.MEDIA_3X2
+                                    else -> FluidTileResizeHandler.MEDIA_3X3
+                                }
+                                else -> when (desiredRows) {
+                                    1 -> FluidTileResizeHandler.MEDIA_4X1
+                                    2 -> FluidTileResizeHandler.MEDIA_4X2
+                                    else -> FluidTileResizeHandler.MEDIA_4X3
+                                }
+                            }
                         }
                     }
-                    targetState = bestState
 
                     val (targetW, targetH) = when (targetState) {
-                        STATE_EXPANDED -> Pair(twoColW, row1H)     // 2x1
-                        STATE_VERTICAL -> Pair(oneColW, row2H)     // 1x2
-                        STATE_LARGE -> Pair(twoColW, row2H)        // 2x2
-                        STATE_WIDE_1 -> Pair(fourColW, row1H)      // 4x1
-                        STATE_WIDE_2 -> Pair(fourColW, row2H)      // 4x2
-                        STATE_TALL_4 -> Pair(twoColW, row4H)       // 2x4
-                        else -> Pair(originWidth, originHeight)
+                        FluidTileResizeHandler.MEDIA_1X1 -> Pair(oneColW, row1H)
+                        FluidTileResizeHandler.MEDIA_1X2 -> Pair(oneColW, row2H)
+                        FluidTileResizeHandler.MEDIA_1X3 -> Pair(oneColW, threeRowsH)
+                        FluidTileResizeHandler.MEDIA_1X4 -> Pair(oneColW, row4H)
+                        FluidTileResizeHandler.MEDIA_1X5 -> Pair(oneColW, fiveRowsH)
+                        FluidTileResizeHandler.MEDIA_2X1 -> Pair(twoColW, row1H)
+                        FluidTileResizeHandler.MEDIA_2X2 -> Pair(twoColW, row2H)
+                        FluidTileResizeHandler.MEDIA_2X3 -> Pair(twoColW, threeRowsH)
+                        FluidTileResizeHandler.MEDIA_2X4 -> Pair(twoColW, row4H)
+                        FluidTileResizeHandler.MEDIA_2X5 -> Pair(twoColW, fiveRowsH)
+                        FluidTileResizeHandler.MEDIA_3X1 -> Pair(threeColW, row1H)
+                        FluidTileResizeHandler.MEDIA_3X2 -> Pair(threeColW, row2H)
+                        FluidTileResizeHandler.MEDIA_3X3 -> Pair(threeColW, threeRowsH)
+                        FluidTileResizeHandler.MEDIA_4X1 -> Pair(fourColW, row1H)
+                        FluidTileResizeHandler.MEDIA_4X2 -> Pair(fourColW, row2H)
+                        FluidTileResizeHandler.MEDIA_4X3 -> Pair(fourColW, threeRowsH)
+                        else -> Pair(twoColW, row2H)
                     }
 
+                    val dW = targetW - originWidth
+                    val dH = targetH - originHeight
+                    val distSq = dW * dW + dH * dH
+
+                    val progress = if (targetState != initialState && distSq > 1f) {
+                        val proj = (dx * dW + dy * dH) / distSq
+                        proj.coerceIn(0f, 1f)
+                    } else 0f
+
                     if (targetState != initialState) {
-                        val snapFactor = 0.55f
-                        previewW = lerp(rawW, targetW, snapFactor)
-                        previewH = lerp(rawH, targetH, snapFactor)
+                        previewW = originWidth + progress * dW
+                        previewH = originHeight + progress * dH
                     } else {
-                        previewW = rawW
-                        previewH = rawH
+                        previewW = (originWidth + dx * 0.25f).coerceIn(originWidth - 12f * density, originWidth + 12f * density)
+                        previewH = (originHeight + dy * 0.25f).coerceIn(originHeight - 12f * density, originHeight + 12f * density)
                     }
                     previewRadius = cardRadius
                 } else {
@@ -5916,15 +6523,7 @@ class TileResizeDragTouchListener(
                         if (isSliderSpec) {
                             ControlCenterConfigHolder.setSliderWidth(ctx, isBrightnessSpec, candidateTargetState, tileView)
                         } else if (isMediaSpec) {
-                            val targetMediaSize = when (candidateTargetState) {
-                                STATE_EXPANDED -> "2x1"
-                                STATE_VERTICAL -> "1x2"
-                                STATE_LARGE -> "2x2"
-                                STATE_WIDE_1 -> "4x1"
-                                STATE_WIDE_2 -> "4x2"
-                                STATE_TALL_4 -> "2x4"
-                                else -> "2x2"
-                            }
+                            val targetMediaSize = FluidTileResizeHandler.mediaStateToSizeString(candidateTargetState)
                             ControlCenterConfigHolder.setMediaSize(ctx, targetMediaSize, tileView)
                         } else {
                             when (candidateTargetState) {
