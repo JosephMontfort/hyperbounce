@@ -3885,7 +3885,7 @@ object ControlCenterHook {
                 } else {
                     val holder = sMediaPlayerViewHolder?.get()
                     val itemView = holder?.let { getHolderItemView(it) }
-                    val collapsedSeek = itemView?.findViewById<View>(0x7f099992)
+                    val collapsedSeek = itemView?.findViewById<View>(0x7f099988)
                     if (collapsedSeek != null && collapsedSeek.visibility == View.VISIBLE && collapsedSeek.width > 0) {
                         val locC = IntArray(2)
                         collapsedSeek.getLocationInWindow(locC)
@@ -4073,7 +4073,7 @@ object ControlCenterHook {
             val emptyState = getView("emptyState")
             val audioContainer = getView("audioContainer")
 
-            val progressTag = 0x7f099992
+            val progressTag = 0x7f099988
             var progressBar = itemView.findViewById<View>(progressTag)
             if (progressBar == null && itemView is ViewGroup) {
                 progressBar = CollapsedMediaSeekBar(ctx).apply {

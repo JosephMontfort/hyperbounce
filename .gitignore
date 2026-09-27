@@ -9,3 +9,6 @@
 # Added by code-review-graph
 .code-review-graph/
 hyperbounce-diagnostics/
+build-download/
+re_vivo/
+vivo_ota_tracker/

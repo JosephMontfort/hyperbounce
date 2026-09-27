@@ -1046,9 +1046,9 @@ object ControlCenterConfigHolder {
                     val resizeTag = 0x7f099999
                     val selectTag = 0x7f099998
                     val rotateTag = 0x7f099992
-                    var resizeHandle = itemView.findViewById<ImageView>(resizeTag)
-                    var selectBadge = itemView.findViewById<ImageView>(selectTag)
-                    var rotateBtn = itemView.findViewById<ImageView>(rotateTag)
+                    var resizeHandle = itemView.findViewById<View>(resizeTag) as? ImageView
+                    var selectBadge = itemView.findViewById<View>(selectTag) as? ImageView
+                    var rotateBtn = itemView.findViewById<View>(rotateTag) as? ImageView
 
                     if (!sIsEditMode) {
                         ControlCenterHook.hideAllCustomBadges(itemView)
