@@ -448,8 +448,8 @@ object FluidTileResizeHandler {
                     MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, 0f, textStartX, textTopY, textClipRight, 0f, 0f, false, controlsAlpha = 1f)
                 }
 
-                MEDIA_1X3, MEDIA_1X4, MEDIA_1X5 -> {
-                    val cSize = if (state == MEDIA_1X3) 48f * density else 56f * density
+                MEDIA_1X3 -> {
+                    val cSize = 48f * density
                     val cLeft = rect.centerX() - cSize / 2f
                     val cTop = rect.top + 14f * density
                     val coverRect = RectF(cLeft, cTop, cLeft + cSize, cTop + cSize)
@@ -477,6 +477,46 @@ object FluidTileResizeHandler {
                     val artistAlpha = if (hasTrack) 1f else 0f
 
                     MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, 0f, textStartX, textTopY, textClipRight, 1f, artistAlpha, true, controlsAlpha = 1f)
+                }
+
+                MEDIA_1X4, MEDIA_1X5 -> {
+                    val cSize = 48f * density
+                    val cLeft = rect.centerX() - cSize / 2f
+                    val cTop = rect.top + 14f * density
+                    val coverRect = RectF(cLeft, cTop, cLeft + cSize, cTop + cSize)
+                    val coverRadius = cSize / 2f
+
+                    val diSize = 20f * density
+                    val deviceIconRect = RectF(rect.centerX() - diSize / 2f, rect.top + 14f * density, rect.centerX() + diSize / 2f, rect.top + 14f * density + diSize)
+
+                    val playSize = 28f * density
+                    val btnSize = 27f * density
+                    val spacing = 6f * density
+                    val ctrlCenterX = rect.centerX()
+                    val ctrlCenterY = rect.bottom - 56f * density
+                    val playCenterY = ctrlCenterY
+                    val prevCenterY = playCenterY - playSize / 2f - spacing - btnSize / 2f
+                    val nextCenterY = playCenterY + playSize / 2f + spacing + btnSize / 2f
+
+                    val prevRect = RectF(ctrlCenterX - btnSize / 2f, prevCenterY - btnSize / 2f, ctrlCenterX + btnSize / 2f, prevCenterY + btnSize / 2f)
+                    val playRect = RectF(ctrlCenterX - playSize / 2f, playCenterY - playSize / 2f, ctrlCenterX + playSize / 2f, playCenterY + playSize / 2f)
+                    val nextRect = RectF(ctrlCenterX - btnSize / 2f, nextCenterY - btnSize / 2f, ctrlCenterX + btnSize / 2f, nextCenterY + btnSize / 2f)
+
+                    val textStartX = rect.left + 6f * density
+                    val textTopY = coverRect.bottom + 8f * density
+                    val textClipRight = rect.right - 6f * density
+                    val artistAlpha = if (hasTrack) 1f else 0f
+
+                    val pbW = 3.5f * density
+                    val pbH = if (state == MEDIA_1X5) 90f * density else 56f * density
+                    val textEstBottom = textTopY + 30f * density
+                    val midSpaceCenterY = (textEstBottom + prevRect.top) / 2f
+                    val pbLeft = rect.centerX() - pbW / 2f
+                    val pbTop = midSpaceCenterY - pbH / 2f
+                    val pbRect = RectF(pbLeft, pbTop, pbLeft + pbW, pbTop + pbH)
+                    val pbAlpha = if (hasTrack) 1f else 0f
+
+                    MediaStateLayout(coverRect, coverRadius, prevRect, playRect, nextRect, deviceIconRect, 0f, textStartX, textTopY, textClipRight, 1f, artistAlpha, true, controlsAlpha = 1f, progressBarRect = pbRect, progressBarAlpha = pbAlpha)
                 }
 
                 MEDIA_2X1 -> {
@@ -1021,7 +1061,7 @@ object FluidTileResizeHandler {
                     lerp(startLayout.progressBarRect.bottom, targetLayout.progressBarRect.bottom, p)
                 )
                 val pbAlpha = lerp(startLayout.progressBarAlpha, targetLayout.progressBarAlpha, p)
-                if (pbAlpha > 0.01f && pbRect.width() > 10f) {
+                if (pbAlpha > 0.01f && (pbRect.width() > 2f || pbRect.height() > 2f)) {
                     val pbTrackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         color = Color.parseColor("#4DFFFFFF")
                         alpha = (255 * 0.35f * pbAlpha).toInt()
@@ -1030,12 +1070,19 @@ object FluidTileResizeHandler {
                         color = Color.WHITE
                         alpha = (255 * 0.95f * pbAlpha).toInt()
                     }
-                    val pbRadius = pbRect.height() / 2f
+                    val isVerticalBar = pbRect.height() > pbRect.width()
+                    val pbRadius = if (isVerticalBar) pbRect.width() / 2f else pbRect.height() / 2f
                     canvas.drawRoundRect(pbRect, pbRadius, pbRadius, pbTrackPaint)
                     val progFrac = if (mediaProgressFraction > 0.01f) mediaProgressFraction.coerceIn(0f, 1f) else 0.35f
-                    val fillWidth = pbRect.width() * progFrac
-                    val fillRect = RectF(pbRect.left, pbRect.top, pbRect.left + fillWidth, pbRect.bottom)
-                    canvas.drawRoundRect(fillRect, pbRadius, pbRadius, pbFillPaint)
+                    if (isVerticalBar) {
+                        val fillHeight = pbRect.height() * progFrac
+                        val fillRect = RectF(pbRect.left, pbRect.bottom - fillHeight, pbRect.right, pbRect.bottom)
+                        canvas.drawRoundRect(fillRect, pbRadius, pbRadius, pbFillPaint)
+                    } else {
+                        val fillWidth = pbRect.width() * progFrac
+                        val fillRect = RectF(pbRect.left, pbRect.top, pbRect.left + fillWidth, pbRect.bottom)
+                        canvas.drawRoundRect(fillRect, pbRadius, pbRadius, pbFillPaint)
+                    }
                 }
 
                 // 4. Draw Song Title & Artist
@@ -2525,14 +2572,13 @@ object FluidTileResizeHandler {
                                         }
                                     }
 
+                                    for (i in 0 until rv.childCount) {
+                                        val child = rv.getChildAt(i) ?: continue
+                                        child.animate().cancel()
+                                    }
+
                                     ControlCenterConfigHolder.setMediaSize(ctx, targetSize, tileView) {
                                         layoutRefreshed = true
-                                        // Layout pass with new media size complete: reset translations
-                                        for (i in 0 until rv.childCount) {
-                                            val child = rv.getChildAt(i) ?: continue
-                                            child.translationX = 0f
-                                            child.translationY = 0f
-                                        }
                                         tryFinish()
                                     }
 
@@ -2683,15 +2729,13 @@ object FluidTileResizeHandler {
                                         }
                                     }
 
+                                    for (i in 0 until rv.childCount) {
+                                        val child = rv.getChildAt(i) ?: continue
+                                        child.animate().cancel()
+                                    }
+
                                     ControlCenterConfigHolder.refreshRecyclerView(tileView) {
                                         layoutRefreshed = true
-                                        // The layout pass with the new spans has completed!
-                                        // Reset translations so views sit naturally at their new physical positions with ZERO visual movement!
-                                        for (i in 0 until rv.childCount) {
-                                            val child = rv.getChildAt(i) ?: continue
-                                            child.translationX = 0f
-                                            child.translationY = 0f
-                                        }
                                         tryFinish()
                                     }
 

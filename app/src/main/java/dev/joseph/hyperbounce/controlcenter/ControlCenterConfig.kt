@@ -10,6 +10,8 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
+import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import dev.joseph.hyperbounce.prefs.PREFS_GROUP
@@ -1729,7 +1731,7 @@ object ControlCenterConfigHolder {
                 parent = if (parent.parent is View) parent.parent as View else break
             }
             // Safely reference View without triggering NoClassDefFoundError for androidx.recyclerview
-            val rv = parent ?: sRecyclerView?.get()
+            val rv = (parent ?: sRecyclerView?.get()) as? ViewGroup
             if (rv != null) {
                 if (sRecyclerView?.get() != rv) {
                     sRecyclerView = WeakReference(rv)
@@ -1751,13 +1753,90 @@ object ControlCenterConfigHolder {
                                 distMethod.isAccessible = true
                                 distMethod.invoke(adp, true)
                             } catch (t: Throwable) {}
+
+                            // Record current visual positions of all children before notifyDataSetChanged
+                            val visualPositions = mutableMapOf<Int, Pair<Float, Float>>()
+                            val viewVisualPositions = java.util.IdentityHashMap<View, Pair<Float, Float>>()
+                            for (i in 0 until rv.childCount) {
+                                val child = rv.getChildAt(i) ?: continue
+                                val vx = child.left + child.translationX
+                                val vy = child.top + child.translationY
+                                viewVisualPositions[child] = Pair(vx, vy)
+                                try {
+                                    val m = rv.javaClass.getMethod("getChildAdapterPosition", View::class.java)
+                                    val pos = m.invoke(rv, child) as? Int
+                                    if (pos != null && pos >= 0) {
+                                        visualPositions[pos] = Pair(vx, vy)
+                                    }
+                                } catch (t: Throwable) {}
+                            }
+
+                            var hasHandedOff = false
+                            val handoff = {
+                                if (!hasHandedOff) {
+                                    hasHandedOff = true
+                                    for (i in 0 until rv.childCount) {
+                                        val child = rv.getChildAt(i) ?: continue
+                                        child.animate().cancel()
+                                        var prevVisual = viewVisualPositions[child]
+                                        if (prevVisual == null) {
+                                            try {
+                                                val m = rv.javaClass.getMethod("getChildAdapterPosition", View::class.java)
+                                                val pos = m.invoke(rv, child) as? Int
+                                                if (pos != null && pos >= 0) {
+                                                    prevVisual = visualPositions[pos]
+                                                }
+                                            } catch (t: Throwable) {}
+                                        }
+
+                                        if (prevVisual != null) {
+                                            val neededTx = prevVisual.first - child.left
+                                            val neededTy = prevVisual.second - child.top
+                                            child.translationX = neededTx
+                                            child.translationY = neededTy
+                                            if (Math.abs(neededTx) > 1.5f || Math.abs(neededTy) > 1.5f) {
+                                                child.animate()
+                                                    .translationX(0f)
+                                                    .translationY(0f)
+                                                    .setDuration(160)
+                                                    .setInterpolator(DecelerateInterpolator())
+                                                    .start()
+                                            } else {
+                                                child.translationX = 0f
+                                                child.translationY = 0f
+                                            }
+                                        } else {
+                                            child.translationX = 0f
+                                            child.translationY = 0f
+                                        }
+                                    }
+                                    onRefreshed?.invoke()
+                                }
+                            }
+
+                            val vto = rv.viewTreeObserver
+                            val preDrawListener = object : ViewTreeObserver.OnPreDrawListener {
+                                override fun onPreDraw(): Boolean {
+                                    try {
+                                        if (vto.isAlive) {
+                                            vto.removeOnPreDrawListener(this)
+                                        } else {
+                                            rv.viewTreeObserver.removeOnPreDrawListener(this)
+                                        }
+                                    } catch (t: Throwable) {}
+                                    handoff()
+                                    return true
+                                }
+                            }
+                            vto.addOnPreDrawListener(preDrawListener)
+
                             val notifyDataSetChangedMethod = adp.javaClass.getMethod("notifyDataSetChanged")
                             notifyDataSetChangedMethod.invoke(adp)
 
-                            // Post on rv so onRefreshed runs immediately after the layout pass scheduled by notifyDataSetChanged
-                            rv.post {
-                                onRefreshed?.invoke()
-                            }
+                            // Fallback in case onPreDraw is delayed or skipped
+                            rv.postDelayed({
+                                handoff()
+                            }, 250)
                         } else {
                             onRefreshed?.invoke()
                         }

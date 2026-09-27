@@ -3555,6 +3555,7 @@ object ControlCenterHook {
     ) : View(context, attrs, defStyleAttr) {
 
         private val density = context.resources.displayMetrics.density
+        var isVertical = false
         private var progressRatio = 0f
         private var isDragging = false
         private var dragProgress = 0f
@@ -3645,26 +3646,51 @@ object ControlCenterHook {
             val h = height.toFloat()
             if (w <= 0 || h <= 0) return
 
-            val barH = if (isDragging) 5f * density else 3.5f * density
-            val top = (h - barH) / 2f
-            val bottom = top + barH
-            val corner = barH / 2f
+            if (isVertical) {
+                val barW = if (isDragging) 5f * density else 3.5f * density
+                val left = (w - barW) / 2f
+                val right = left + barW
+                val corner = barW / 2f
 
-            bgRect.set(0f, top, w, bottom)
-            canvas.drawRoundRect(bgRect, corner, corner, bgPaint)
+                bgRect.set(left, 0f, right, h)
+                canvas.drawRoundRect(bgRect, corner, corner, bgPaint)
 
-            val active = if (isDragging) dragProgress else progressRatio
-            val fillW = (w * active).coerceIn(0f, w)
-            if (fillW > 0f) {
-                progressRect.set(0f, top, fillW, bottom)
-                canvas.drawRoundRect(progressRect, corner, corner, progressPaint)
-            }
+                val active = if (isDragging) dragProgress else progressRatio
+                val fillH = (h * active).coerceIn(0f, h)
+                val fillTop = h - fillH
+                if (fillH > 0f) {
+                    progressRect.set(left, fillTop, right, h)
+                    canvas.drawRoundRect(progressRect, corner, corner, progressPaint)
+                }
 
-            if (isDragging) {
-                val thumbRadius = 4.5f * density
-                val thumbX = fillW.coerceIn(thumbRadius, w - thumbRadius)
-                val thumbY = h / 2f
-                canvas.drawCircle(thumbX, thumbY, thumbRadius, thumbPaint)
+                if (isDragging) {
+                    val thumbRadius = 4.5f * density
+                    val thumbX = w / 2f
+                    val thumbY = fillTop.coerceIn(thumbRadius, h - thumbRadius)
+                    canvas.drawCircle(thumbX, thumbY, thumbRadius, thumbPaint)
+                }
+            } else {
+                val barH = if (isDragging) 5f * density else 3.5f * density
+                val top = (h - barH) / 2f
+                val bottom = top + barH
+                val corner = barH / 2f
+
+                bgRect.set(0f, top, w, bottom)
+                canvas.drawRoundRect(bgRect, corner, corner, bgPaint)
+
+                val active = if (isDragging) dragProgress else progressRatio
+                val fillW = (w * active).coerceIn(0f, w)
+                if (fillW > 0f) {
+                    progressRect.set(0f, top, fillW, bottom)
+                    canvas.drawRoundRect(progressRect, corner, corner, progressPaint)
+                }
+
+                if (isDragging) {
+                    val thumbRadius = 4.5f * density
+                    val thumbX = fillW.coerceIn(thumbRadius, w - thumbRadius)
+                    val thumbY = h / 2f
+                    canvas.drawCircle(thumbX, thumbY, thumbRadius, thumbPaint)
+                }
             }
         }
 
@@ -3684,23 +3710,28 @@ object ControlCenterHook {
         }
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
+            val progressFromTouch = if (isVertical) {
+                (1f - (event.y / height.toFloat())).coerceIn(0f, 1f)
+            } else {
+                (event.x / width.toFloat()).coerceIn(0f, 1f)
+            }
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     requestDisallowAll(true)
                     isDragging = true
-                    dragProgress = (event.x / width.toFloat()).coerceIn(0f, 1f)
+                    dragProgress = progressFromTouch
                     invalidate()
                     return true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     requestDisallowAll(true)
-                    dragProgress = (event.x / width.toFloat()).coerceIn(0f, 1f)
+                    dragProgress = progressFromTouch
                     invalidate()
                     return true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     if (isDragging) {
-                        val finalRatio = (event.x / width.toFloat()).coerceIn(0f, 1f)
+                        val finalRatio = progressFromTouch
                         progressRatio = finalRatio
                         isDragging = false
                         invalidate()
@@ -4242,6 +4273,10 @@ object ControlCenterHook {
                     val eLp = emptyState?.layoutParams
                     val diLp = deviceIcon?.layoutParams
 
+                    if (size != "1x4" && size != "1x5") {
+                        (progressBar as? CollapsedMediaSeekBar)?.isVertical = false
+                    }
+
                     when (size) {
                         "1x1" -> {
                             title?.visibility = View.GONE
@@ -4421,7 +4456,7 @@ object ControlCenterHook {
                             }
                         }
 
-                        "1x3", "1x4", "1x5" -> {
+                        "1x3" -> {
                             deviceIcon?.visibility = View.GONE
                             progressBar?.visibility = View.GONE
                             if (hasTrack) {
@@ -4544,6 +4579,173 @@ object ControlCenterHook {
                                         artist.maxLines = 1
                                     }
                                     artist.layoutParams = aLp
+                                }
+                            } else {
+                                if (eLp != null && eLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(eLp)
+                                    eLp.width = 0
+                                    eLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(eLp, "startToStart", pId)
+                                    setField(eLp, "endToEnd", pId)
+                                    setField(eLp, "topToBottom", coverId)
+                                    setField(eLp, "bottomToTop", audioContainerId)
+                                    if (eLp is ViewGroup.MarginLayoutParams) {
+                                        eLp.marginStart = (6 * density).toInt()
+                                        eLp.marginEnd = (6 * density).toInt()
+                                        eLp.topMargin = (10 * density).toInt()
+                                    }
+                                    if (emptyState is TextView) {
+                                        emptyState.textAlignment = View.TEXT_ALIGNMENT_CENTER
+                                        emptyState.gravity = Gravity.CENTER
+                                        emptyState.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        emptyState.maxLines = 1
+                                    }
+                                    emptyState.layoutParams = eLp
+                                }
+                            }
+                        }
+
+                        "1x4", "1x5" -> {
+                            deviceIcon?.visibility = View.GONE
+                            (progressBar as? CollapsedMediaSeekBar)?.isVertical = true
+                            if (hasTrack) {
+                                title?.visibility = View.VISIBLE
+                                artist?.visibility = View.VISIBLE
+                                emptyState?.visibility = View.GONE
+                                progressBar?.visibility = View.VISIBLE
+                                (progressBar as? CollapsedMediaSeekBar)?.updateProgressFromSystem()
+                            } else {
+                                title?.visibility = View.GONE
+                                artist?.visibility = View.GONE
+                                emptyState?.visibility = View.VISIBLE
+                                progressBar?.visibility = View.GONE
+                            }
+
+                            if (cLp != null && cLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(cLp)
+                                val cSize = (48 * density).toInt()
+                                cLp.width = cSize
+                                cLp.height = cSize
+                                setField(cLp, "startToStart", pId)
+                                setField(cLp, "endToEnd", pId)
+                                setField(cLp, "topToTop", pId)
+                                if (cLp is ViewGroup.MarginLayoutParams) {
+                                    cLp.topMargin = (14 * density).toInt()
+                                }
+                                cover.layoutParams = cLp
+                            }
+
+                            if (acLp != null && acLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(acLp)
+                                acLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                                acLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                setField(acLp, "startToStart", pId)
+                                setField(acLp, "endToEnd", pId)
+                                setField(acLp, "bottomToBottom", pId)
+                                if (acLp is ViewGroup.MarginLayoutParams) {
+                                    acLp.bottomMargin = (14 * density).toInt()
+                                }
+                                audioContainer.layoutParams = acLp
+                            }
+
+                            val btnSize = (27 * density).toInt()
+                            val playSize = (28 * density).toInt()
+                            if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(prevLp)
+                                prevLp.width = btnSize
+                                prevLp.height = btnSize
+                                setField(prevLp, "startToStart", pId)
+                                setField(prevLp, "endToEnd", pId)
+                                setField(prevLp, "topToTop", pId)
+                                setField(prevLp, "bottomToTop", playId)
+                                setField(prevLp, "verticalChainStyle", 2)
+                                if (prevLp is ViewGroup.MarginLayoutParams) {
+                                    prevLp.bottomMargin = (6 * density).toInt()
+                                }
+                                prev.layoutParams = prevLp
+                            }
+                            if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(playLp)
+                                playLp.width = playSize
+                                playLp.height = playSize
+                                setField(playLp, "startToStart", pId)
+                                setField(playLp, "endToEnd", pId)
+                                setField(playLp, "topToBottom", prevId)
+                                setField(playLp, "bottomToTop", nextId)
+                                play.layoutParams = playLp
+                            }
+                            if (nextLp != null && nextLp.javaClass.name.contains("ConstraintLayout")) {
+                                resetConstraints(nextLp)
+                                nextLp.width = btnSize
+                                nextLp.height = btnSize
+                                setField(nextLp, "startToStart", pId)
+                                setField(nextLp, "endToEnd", pId)
+                                setField(nextLp, "topToBottom", playId)
+                                setField(nextLp, "bottomToBottom", pId)
+                                if (nextLp is ViewGroup.MarginLayoutParams) {
+                                    nextLp.topMargin = (6 * density).toInt()
+                                }
+                                next.layoutParams = nextLp
+                            }
+
+                            if (hasTrack) {
+                                if (tLp != null && tLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(tLp)
+                                    tLp.width = 0
+                                    tLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(tLp, "startToStart", pId)
+                                    setField(tLp, "endToEnd", pId)
+                                    setField(tLp, "topToBottom", coverId)
+                                    setField(tLp, "bottomToTop", artistId)
+                                    setField(tLp, "verticalChainStyle", 2)
+                                    if (tLp is ViewGroup.MarginLayoutParams) {
+                                        tLp.marginStart = (6 * density).toInt()
+                                        tLp.marginEnd = (6 * density).toInt()
+                                        tLp.topMargin = (8 * density).toInt()
+                                    }
+                                    if (title is TextView) {
+                                        title.textAlignment = View.TEXT_ALIGNMENT_CENTER
+                                        title.gravity = Gravity.CENTER
+                                        title.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        title.maxLines = 1
+                                    }
+                                    title.layoutParams = tLp
+                                }
+                                if (aLp != null && aLp.javaClass.name.contains("ConstraintLayout")) {
+                                    resetConstraints(aLp)
+                                    aLp.width = 0
+                                    aLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    setField(aLp, "startToStart", pId)
+                                    setField(aLp, "endToEnd", pId)
+                                    setField(aLp, "topToBottom", titleId)
+                                    setField(aLp, "bottomToTop", progressBarId)
+                                    if (aLp is ViewGroup.MarginLayoutParams) {
+                                        aLp.marginStart = (6 * density).toInt()
+                                        aLp.marginEnd = (6 * density).toInt()
+                                        aLp.topMargin = (2 * density).toInt()
+                                    }
+                                    if (artist is TextView) {
+                                        artist.textAlignment = View.TEXT_ALIGNMENT_CENTER
+                                        artist.gravity = Gravity.CENTER
+                                        artist.ellipsize = android.text.TextUtils.TruncateAt.END
+                                        artist.maxLines = 1
+                                    }
+                                    artist.layoutParams = aLp
+                                }
+                                if (pbLp != null && pbLp.javaClass.name.contains("ConstraintLayout") && progressBar != null) {
+                                    resetConstraints(pbLp)
+                                    pbLp.width = (32 * density).toInt()
+                                    val pbH = if (size == "1x5") (90 * density).toInt() else (56 * density).toInt()
+                                    pbLp.height = pbH
+                                    setField(pbLp, "startToStart", pId)
+                                    setField(pbLp, "endToEnd", pId)
+                                    setField(pbLp, "topToBottom", artistId)
+                                    setField(pbLp, "bottomToTop", audioContainerId)
+                                    if (pbLp is ViewGroup.MarginLayoutParams) {
+                                        pbLp.topMargin = (6 * density).toInt()
+                                        pbLp.bottomMargin = (6 * density).toInt()
+                                    }
+                                    progressBar.layoutParams = pbLp
                                 }
                             } else {
                                 if (eLp != null && eLp.javaClass.name.contains("ConstraintLayout")) {
@@ -5607,7 +5809,8 @@ object ControlCenterHook {
                     }
 
                     val pb = itemView.findViewById<View>(progressTag)
-                    val hasCollapsedProgress = (curCols > 1 && (curCols >= 3 || curRows >= 3))
+                    val isVerticalProgress = (curCols == 1 && (curRows == 4 || curRows == 5))
+                    val hasCollapsedProgress = (curCols > 1 && (curCols >= 3 || curRows >= 3)) || isVerticalProgress
 
                     if (curCols == 1 && curRows == 1) { // 1x1
                         if (title?.visibility != View.GONE) title?.visibility = View.GONE
@@ -5645,8 +5848,9 @@ object ControlCenterHook {
                         if (hasCollapsedProgress && hasTrackNow) {
                             if (pb?.visibility != View.VISIBLE) {
                                 pb?.visibility = View.VISIBLE
-                                (pb as? CollapsedMediaSeekBar)?.updateProgressFromSystem()
                             }
+                            (pb as? CollapsedMediaSeekBar)?.isVertical = isVerticalProgress
+                            (pb as? CollapsedMediaSeekBar)?.updateProgressFromSystem()
                         } else {
                             if (pb?.visibility != View.GONE) pb?.visibility = View.GONE
                         }
