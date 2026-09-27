@@ -675,13 +675,6 @@ class SettingsRepository(context: Context) {
         var col1Offset by prefsFloatState("pin_col1_offset", defaults.col1Offset); private set
         var col3Offset by prefsFloatState("pin_col3_offset", defaults.col3Offset); private set
 
-        var entryTranslationY by prefsFloatState("pin_entry_translation_y", defaults.entryTranslationY); private set
-        var entryInitialScale by prefsFloatState("pin_entry_initial_scale", defaults.entryInitialScale); private set
-        var entryDuration by prefsFloatState("pin_entry_duration", defaults.entryDuration); private set
-        var rowDelayStep by prefsFloatState("pin_row_delay_step", defaults.rowDelayStep); private set
-        var colDelayStep by prefsFloatState("pin_col_delay_step", defaults.colDelayStep); private set
-        var entryOvershoot by prefsFloatState("pin_entry_overshoot", defaults.entryOvershoot); private set
-
         var delayKey1 by prefsFloatState("pin_delay_key1", defaults.delayKey1); private set
         var delayKey2 by prefsFloatState("pin_delay_key2", defaults.delayKey2); private set
         var delayKey3 by prefsFloatState("pin_delay_key3", defaults.delayKey3); private set
@@ -703,13 +696,8 @@ class SettingsRepository(context: Context) {
         var releaseDuration by prefsFloatState("pin_release_duration", defaults.releaseDuration); private set
         var releaseSquishAmp by prefsFloatState("pin_release_squish_amp", defaults.releaseSquishAmp); private set
         var releaseOvershoot by prefsFloatState("pin_release_overshoot", defaults.releaseOvershoot); private set
-        var cascadeFlightElongation by prefsFloatState("pin_cascade_flight_elongation", defaults.cascadeFlightElongation); private set
-        var cascadeLandingSquish by prefsFloatState("pin_cascade_landing_squish", defaults.cascadeLandingSquish); private set
-        var cascadeInertiaCoupling by prefsFloatState("pin_cascade_inertia_coupling", defaults.cascadeInertiaCoupling); private set
-        var cascadeViscousDamping by prefsFloatState("pin_cascade_viscous_damping", defaults.cascadeViscousDamping); private set
 
         // iOS 26 Liquid Bloom
-        var entryAnimationType by prefsStringState("pin_entry_anim_type", defaults.entryAnimationType); private set
         var iosBloomDuration by prefsFloatState("pin_ios_bloom_duration", defaults.iosBloomDuration); private set
         var iosBloomClusterFactor by prefsFloatState("pin_ios_bloom_cluster_factor", defaults.iosBloomClusterFactor); private set
         var iosBloomOvershoot by prefsFloatState("pin_ios_bloom_overshoot", defaults.iosBloomOvershoot); private set
@@ -724,13 +712,11 @@ class SettingsRepository(context: Context) {
             enabled, buttonRefraction, buttonBevel, buttonDispersion, buttonSpecular, buttonInnerShadow,
             buttonBlur, buttonSaturation, circleDiameter, digitTextSize, showKlondike, pressLiquidScale,
             pressLiquidAmp, pinpadLift, row0Offset, rowSpacing, columnSpacing, row1Offset, row2Offset,
-            row3Offset, col1Offset, col3Offset, entryTranslationY, entryInitialScale, entryDuration,
-            rowDelayStep, colDelayStep, entryOvershoot, delayKey1, delayKey2, delayKey3, delayKey4,
+            row3Offset, col1Offset, col3Offset, delayKey1, delayKey2, delayKey3, delayKey4,
             delayKey5, delayKey6, delayKey7, delayKey8, delayKey9, delayKey0, delayEmergency, delayCancel,
             dragMaxThreshold, dragInitialStiffness, dragResistancePower, dragVolumeStretch, releaseDuration,
-            releaseSquishAmp, releaseOvershoot, cascadeFlightElongation, cascadeLandingSquish,
-            cascadeInertiaCoupling, cascadeViscousDamping,
-            entryAnimationType, iosBloomDuration, iosBloomClusterFactor, iosBloomOvershoot,
+            releaseSquishAmp, releaseOvershoot,
+            iosBloomDuration, iosBloomClusterFactor, iosBloomOvershoot,
             iosBloomDamping, iosBloomStiffness, iosBloomRadialSquish, iosBloomVelocityStretch,
             iosBloomWaveStagger, iosBloomDecoupleText
         )
@@ -757,12 +743,6 @@ class SettingsRepository(context: Context) {
         @JvmName("setRow3OffsetPref") fun setRow3Offset(v: Float) { row3Offset = v }
         @JvmName("setCol1OffsetPref") fun setCol1Offset(v: Float) { col1Offset = v }
         @JvmName("setCol3OffsetPref") fun setCol3Offset(v: Float) { col3Offset = v }
-        @JvmName("setEntryTranslationYPref") fun setEntryTranslationY(v: Float) { entryTranslationY = v }
-        @JvmName("setEntryInitialScalePref") fun setEntryInitialScale(v: Float) { entryInitialScale = v }
-        @JvmName("setEntryDurationPref") fun setEntryDuration(v: Float) { entryDuration = v }
-        @JvmName("setRowDelayStepPref") fun setRowDelayStep(v: Float) { rowDelayStep = v }
-        @JvmName("setColDelayStepPref") fun setColDelayStep(v: Float) { colDelayStep = v }
-        @JvmName("setEntryOvershootPref") fun setEntryOvershoot(v: Float) { entryOvershoot = v }
 
         @JvmName("setDelayKey1Pref") fun setDelayKey1(v: Float) { delayKey1 = v }
         @JvmName("setDelayKey2Pref") fun setDelayKey2(v: Float) { delayKey2 = v }
@@ -784,12 +764,7 @@ class SettingsRepository(context: Context) {
         @JvmName("setReleaseDurationPref") fun setReleaseDuration(v: Float) { releaseDuration = v }
         @JvmName("setReleaseSquishAmpPref") fun setReleaseSquishAmp(v: Float) { releaseSquishAmp = v }
         @JvmName("setReleaseOvershootPref") fun setReleaseOvershoot(v: Float) { releaseOvershoot = v }
-        @JvmName("setCascadeFlightElongationPref") fun setCascadeFlightElongation(v: Float) { cascadeFlightElongation = v }
-        @JvmName("setCascadeLandingSquishPref") fun setCascadeLandingSquish(v: Float) { cascadeLandingSquish = v }
-        @JvmName("setCascadeInertiaCouplingPref") fun setCascadeInertiaCoupling(v: Float) { cascadeInertiaCoupling = v }
-        @JvmName("setCascadeViscousDampingPref") fun setCascadeViscousDamping(v: Float) { cascadeViscousDamping = v }
 
-        @JvmName("setEntryAnimationTypePref") fun setEntryAnimationType(v: String) { entryAnimationType = v }
         @JvmName("setIosBloomDurationPref") fun setIosBloomDuration(v: Float) { iosBloomDuration = v }
         @JvmName("setIosBloomClusterFactorPref") fun setIosBloomClusterFactor(v: Float) { iosBloomClusterFactor = v }
         @JvmName("setIosBloomOvershootPref") fun setIosBloomOvershoot(v: Float) { iosBloomOvershoot = v }
@@ -823,12 +798,6 @@ class SettingsRepository(context: Context) {
             row3Offset = defaults.row3Offset
             col1Offset = defaults.col1Offset
             col3Offset = defaults.col3Offset
-            entryTranslationY = defaults.entryTranslationY
-            entryInitialScale = defaults.entryInitialScale
-            entryDuration = defaults.entryDuration
-            rowDelayStep = defaults.rowDelayStep
-            colDelayStep = defaults.colDelayStep
-            entryOvershoot = defaults.entryOvershoot
             delayKey1 = defaults.delayKey1
             delayKey2 = defaults.delayKey2
             delayKey3 = defaults.delayKey3
@@ -848,11 +817,6 @@ class SettingsRepository(context: Context) {
             releaseDuration = defaults.releaseDuration
             releaseSquishAmp = defaults.releaseSquishAmp
             releaseOvershoot = defaults.releaseOvershoot
-            cascadeFlightElongation = defaults.cascadeFlightElongation
-            cascadeLandingSquish = defaults.cascadeLandingSquish
-            cascadeInertiaCoupling = defaults.cascadeInertiaCoupling
-            cascadeViscousDamping = defaults.cascadeViscousDamping
-            entryAnimationType = defaults.entryAnimationType
             iosBloomDuration = defaults.iosBloomDuration
             iosBloomClusterFactor = defaults.iosBloomClusterFactor
             iosBloomOvershoot = defaults.iosBloomOvershoot

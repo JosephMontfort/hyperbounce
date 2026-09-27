@@ -3,18 +3,22 @@ package dev.joseph.hyperbounce.ui.screens
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
-import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
-import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import java.util.Locale
+import kotlin.math.hypot
+
+private fun defaultBloomDelay(row: Int, col: Int, waveStagger: Float): Float {
+    val relCol = (col - 1).toDouble()
+    val relRow = (row - 1).toDouble()
+    return (hypot(relCol, relRow).toFloat() * waveStagger)
+}
 
 @Composable
 fun KeypadDelaysScreen(
@@ -25,10 +29,11 @@ fun KeypadDelaysScreen(
 ) {
     val keypad = repository.lockScreenKeypad
     val context = androidx.compose.ui.platform.LocalContext.current
+    val stagger = keypad.iosBloomWaveStagger
 
     ScreenScaffold(
         title = "Per-Key Delay Tuning",
-        subtitle = "Custom sequential entry timing offsets",
+        subtitle = "Radial shockwave timing offsets from central Key 5",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
@@ -58,7 +63,7 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 1",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey1 >= 0f) keypad.delayKey1 else (0 * keypad.rowDelayStep + 0 * keypad.colDelayStep),
+                    value = if (keypad.delayKey1 >= 0f) keypad.delayKey1 else defaultBloomDelay(0, 0, stagger),
                     onValueChange = keypad::setDelayKey1,
                     valueRange = 0.0f..500.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
@@ -70,7 +75,7 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 2",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey2 >= 0f) keypad.delayKey2 else (0 * keypad.rowDelayStep + 1 * keypad.colDelayStep),
+                    value = if (keypad.delayKey2 >= 0f) keypad.delayKey2 else defaultBloomDelay(0, 1, stagger),
                     onValueChange = keypad::setDelayKey2,
                     valueRange = 0.0f..500.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
@@ -82,7 +87,7 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 3",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey3 >= 0f) keypad.delayKey3 else (0 * keypad.rowDelayStep + 2 * keypad.colDelayStep),
+                    value = if (keypad.delayKey3 >= 0f) keypad.delayKey3 else defaultBloomDelay(0, 2, stagger),
                     onValueChange = keypad::setDelayKey3,
                     valueRange = 0.0f..500.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
@@ -99,7 +104,7 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 4",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey4 >= 0f) keypad.delayKey4 else (1 * keypad.rowDelayStep + 0 * keypad.colDelayStep),
+                    value = if (keypad.delayKey4 >= 0f) keypad.delayKey4 else defaultBloomDelay(1, 0, stagger),
                     onValueChange = keypad::setDelayKey4,
                     valueRange = 0.0f..500.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
@@ -107,11 +112,11 @@ fun KeypadDelaysScreen(
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
-                    title = "Key 5 Delay",
-                    subtitle = "Entrance delay for Key 5",
+                    title = "Key 5 Delay (Center)",
+                    subtitle = "Entrance delay for center Key 5 (Cluster Origin)",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey5 >= 0f) keypad.delayKey5 else (1 * keypad.rowDelayStep + 1 * keypad.colDelayStep),
+                    value = if (keypad.delayKey5 >= 0f) keypad.delayKey5 else defaultBloomDelay(1, 1, stagger),
                     onValueChange = keypad::setDelayKey5,
                     valueRange = 0.0f..500.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
@@ -123,7 +128,7 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 6",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey6 >= 0f) keypad.delayKey6 else (1 * keypad.rowDelayStep + 2 * keypad.colDelayStep),
+                    value = if (keypad.delayKey6 >= 0f) keypad.delayKey6 else defaultBloomDelay(1, 2, stagger),
                     onValueChange = keypad::setDelayKey6,
                     valueRange = 0.0f..500.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
@@ -140,7 +145,7 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 7",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey7 >= 0f) keypad.delayKey7 else (2 * keypad.rowDelayStep + 0 * keypad.colDelayStep),
+                    value = if (keypad.delayKey7 >= 0f) keypad.delayKey7 else defaultBloomDelay(2, 0, stagger),
                     onValueChange = keypad::setDelayKey7,
                     valueRange = 0.0f..500.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
@@ -152,7 +157,7 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 8",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey8 >= 0f) keypad.delayKey8 else (2 * keypad.rowDelayStep + 1 * keypad.colDelayStep),
+                    value = if (keypad.delayKey8 >= 0f) keypad.delayKey8 else defaultBloomDelay(2, 1, stagger),
                     onValueChange = keypad::setDelayKey8,
                     valueRange = 0.0f..500.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
@@ -164,7 +169,7 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 9",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey9 >= 0f) keypad.delayKey9 else (2 * keypad.rowDelayStep + 2 * keypad.colDelayStep),
+                    value = if (keypad.delayKey9 >= 0f) keypad.delayKey9 else defaultBloomDelay(2, 2, stagger),
                     onValueChange = keypad::setDelayKey9,
                     valueRange = 0.0f..500.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
@@ -181,7 +186,7 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 0",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey0 >= 0f) keypad.delayKey0 else (3 * keypad.rowDelayStep + 1 * keypad.colDelayStep),
+                    value = if (keypad.delayKey0 >= 0f) keypad.delayKey0 else defaultBloomDelay(3, 1, stagger),
                     onValueChange = keypad::setDelayKey0,
                     valueRange = 0.0f..500.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
@@ -193,7 +198,7 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Cancel / Delete action",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayCancel >= 0f) keypad.delayCancel else (3 * keypad.rowDelayStep + 2 * keypad.colDelayStep),
+                    value = if (keypad.delayCancel >= 0f) keypad.delayCancel else defaultBloomDelay(3, 2, stagger),
                     onValueChange = keypad::setDelayCancel,
                     valueRange = 0.0f..500.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
@@ -205,7 +210,7 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Emergency Call button",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayEmergency >= 0f) keypad.delayEmergency else (keypad.rowDelayStep * 4),
+                    value = if (keypad.delayEmergency >= 0f) keypad.delayEmergency else defaultBloomDelay(3, 0, stagger),
                     onValueChange = keypad::setDelayEmergency,
                     valueRange = 0.0f..500.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },

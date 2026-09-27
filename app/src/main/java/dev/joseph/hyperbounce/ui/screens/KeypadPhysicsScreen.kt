@@ -31,12 +31,11 @@ fun KeypadPhysicsScreen(
 
     ScreenScaffold(
         title = "PIN Pad Liquid Dynamics",
-        subtitle = "Inertial mass transfer, non-linear drag & release physics",
+        subtitle = "iOS 26 radial bloom, non-linear drag & release snapback",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            keypad.setEntryAnimationType("ios26")
             keypad.setIosBloomDuration(520.0f)
             keypad.setIosBloomClusterFactor(0.70f)
             keypad.setIosBloomOvershoot(0.16f)
@@ -53,45 +52,26 @@ fun KeypadPhysicsScreen(
             keypad.setReleaseDuration(320.0f)
             keypad.setReleaseSquishAmp(0.35f)
             keypad.setReleaseOvershoot(2.0f)
-            keypad.setCascadeFlightElongation(0.22f)
-            keypad.setCascadeLandingSquish(0.24f)
-            keypad.setCascadeInertiaCoupling(1.0f)
-            keypad.setCascadeViscousDamping(0.75f)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
         onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartSystemUI(context) }
     ) { _ ->
         item {
-            SectionHeader("Entrance Animation Engine", colors)
+            SectionHeader("Animation Pipeline", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                val isIos26 = keypad.entryAnimationType == "ios26"
                 dev.joseph.hyperbounce.ui.components.SettingsClickableRow(
-                    title = "iOS 26 Liquid Bloom",
-                    subtitle = "Radial bloom from center with decoupled liquid lenses & 2D squish",
+                    title = "iOS 26 Liquid Bloom Engine",
+                    subtitle = "Unified single pipeline: radial bloom with decoupled lenses & 2D squish",
                     colors = colors,
                     iconTint = colors.accentBlue,
-                    onClick = { keypad.setEntryAnimationType("ios26") },
-                    trailing = if (isIos26) {
-                        { dev.joseph.hyperbounce.ui.components.CheckmarkIcon(color = colors.accentBlue, size = 16.dp) }
-                    } else null,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
-                )
-                RowDivider(colors.separator)
-                dev.joseph.hyperbounce.ui.components.SettingsClickableRow(
-                    title = "Cascade Flight",
-                    subtitle = "Sequential upward cascade glide with vertical deceleration squish",
-                    colors = colors,
-                    iconTint = colors.accentOrange,
-                    onClick = { keypad.setEntryAnimationType("cascade") },
-                    trailing = if (!isIos26) {
-                        { dev.joseph.hyperbounce.ui.components.CheckmarkIcon(color = colors.accentOrange, size = 16.dp) }
-                    } else null,
+                    onClick = { onNavigate(Destination.KeypadIosBloomPhysics) },
+                    trailing = { dev.joseph.hyperbounce.ui.components.CheckmarkIcon(color = colors.accentBlue, size = 16.dp) },
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
             }
             SectionFooter(
-                "Select the physical entrance model. iOS 26 Liquid Bloom accurately matches the native radial spring explosion with liquid inertia mass transfer.",
+                "Exclusive iOS 26 Liquid Bloom engine. Accurately simulates radial fluid burst from center with harmonic spring settling and volume preservation.",
                 colors
             )
         }
@@ -100,8 +80,8 @@ fun KeypadPhysicsScreen(
             SectionHeader("Physics Subpages", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsNavRow(
-                    title = "iOS 26 Radial Bloom Physics",
-                    subtitle = "Cluster origin, radial spring damping, 2D squish & decoupled lenses",
+                    title = "iOS 26 Radial Bloom Kinetics",
+                    subtitle = "Cluster origin, radial spring damping, 2D squish & shockwave stagger",
                     colors = colors,
                     iconTint = colors.accentBlue,
                     onClick = { onNavigate(Destination.KeypadIosBloomPhysics) },
@@ -127,11 +107,11 @@ fun KeypadPhysicsScreen(
                 )
                 RowDivider(colors.separator)
                 SettingsNavRow(
-                    title = "Cascade Entrance Inertia",
-                    subtitle = "Y-axis motion mass transfer, impact squish & liquid rebound",
+                    title = "Per-Key Delay Tuning",
+                    subtitle = "Custom radial arrival timing offsets for numeric keys",
                     colors = colors,
                     iconTint = colors.accentOrange,
-                    onClick = { onNavigate(Destination.KeypadCascadePhysics) },
+                    onClick = { onNavigate(Destination.KeypadDelays) },
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
             }
@@ -171,6 +151,19 @@ fun KeypadPhysicsScreen(
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
+                    title = "Anisotropic Volume Stretch",
+                    subtitle = "Longitudinal bubble elongation along drag vector",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = keypad.dragVolumeStretch,
+                    onValueChange = keypad::setDragVolumeStretch,
+                    valueRange = 0.05f..0.50f,
+                    defaultValue = 0.22f,
+                    valueLabel = { String.format(Locale.US, "%.2f x", it) },
+                    enabled = keypad.enabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
                     title = "Release Inertia Squish",
                     subtitle = "Directional liquid compression on snapback arrival",
                     colors = colors,
@@ -184,15 +177,15 @@ fun KeypadPhysicsScreen(
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
-                    title = "Cascade Landing Squish",
-                    subtitle = "Impact horizontal squish intensity upon arrival",
+                    title = "Bloom Damping Ratio (ζ)",
+                    subtitle = "Harmonic damping rate during radial explosion",
                     colors = colors,
                     backdrop = backdrop,
-                    value = keypad.cascadeLandingSquish,
-                    onValueChange = keypad::setCascadeLandingSquish,
-                    valueRange = 0.05f..0.50f,
-                    defaultValue = 0.24f,
-                    valueLabel = { String.format(Locale.US, "%.2f x", it) },
+                    value = keypad.iosBloomDamping,
+                    onValueChange = keypad::setIosBloomDamping,
+                    valueRange = 0.30f..0.85f,
+                    defaultValue = 0.54f,
+                    valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = keypad.enabled
                 )
             }

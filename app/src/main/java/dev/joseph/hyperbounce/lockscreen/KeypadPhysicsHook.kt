@@ -74,50 +74,6 @@ object KeypadPhysicsHook {
         }
     }
 
-    /**
-     * Physically coupled vertical inertial mass transfer simulation for cascade entrance.
-     * The internal fluid mass response deltaY is directly driven by the button's Y-axis trajectory:
-     * - Phase 1 (Flight u in [0, 0.42]): rapid upward rise from transY towards 0.
-     *   Fluid momentum lags behind, causing dynamic elongation deltaY > 0 along the vertical motion path.
-     * - Phase 2 (Landing Braking u in [0.42, 0.70]): button approaches 0 and undergoes strong deceleration braking.
-     *   Upward fluid inertia slams forward into the top boundary, squishing vertically (deltaY < 0)
-     *   and bulging horizontally (volume preservation) WHILE BRAKING.
-     * - Phase 3 (Rebound & Damped Settle u in [0.70, 1.0]): subtle surface tension rebound dies down to equilibrium.
-     */
-    private fun computeCascadePhysics(
-        u: Float,
-        transY: Float,
-        cfg: LockScreenKeypadConfig
-    ): Pair<Float, Float> {
-        val flightElong = cfg.cascadeFlightElongation.coerceIn(0.05f, 0.45f)
-        val landingSquish = cfg.cascadeLandingSquish.coerceIn(0.05f, 0.50f) * cfg.cascadeInertiaCoupling.coerceIn(0f, 1.5f)
-        val damping = cfg.cascadeViscousDamping.coerceIn(0.30f, 1.00f)
-
-        val currentY: Float
-        val deltaY: Float
-
-        if (u < 0.42f) {
-            val p = u / 0.42f
-            val s = p * p * (3f - 2f * p)
-            currentY = transY * (1f - s * 0.85f)
-            deltaY = flightElong * sin((p * Math.PI).toDouble()).toFloat()
-        } else if (u < 0.70f) {
-            val p = (u - 0.42f) / 0.28f
-            val yOvershoot = -0.05f * transY * sin((p * Math.PI).toDouble()).toFloat()
-            val yProg = 0.15f * (1f - p)
-            currentY = transY * yProg + yOvershoot
-            deltaY = -landingSquish * sin((p * Math.PI).toDouble()).toFloat()
-        } else {
-            val p = ((u - 0.70f) / 0.30f).coerceIn(0f, 1f)
-            currentY = 0f
-            val reboundAmp = landingSquish * 0.32f * (1f - damping * 0.5f)
-            val decay = (1f - p)
-            deltaY = reboundAmp * sin((p * 2.0 * Math.PI).toDouble()).toFloat() * decay
-        }
-
-        return Pair(currentY, deltaY)
-    }
-
     private var cachedDigitField: Field? = null
     private var cachedKlondikeField: Field? = null
     private var hasCachedFields = false
@@ -131,111 +87,6 @@ object KeypadPhysicsHook {
         try {
             cachedKlondikeField = keyClass.getDeclaredField("mKlondikeText").apply { isAccessible = true }
         } catch (_: Throwable) {}
-    }
-
-    private fun startCascadeAnimation(
-        pinView: View,
-        cfg: LockScreenKeypadConfig,
-        density: Float
-    ) {
-        val ctx = pinView.context
-        val keys = arrayOf(
-            arrayOf("key1", "key2", "key3"),
-            arrayOf("key4", "key5", "key6"),
-            arrayOf("key7", "key8", "key9"),
-            arrayOf("emergency_call_button", "key0", "delete_button")
-        )
-
-        val animDuration = cfg.entryDuration.toLong().coerceAtLeast(150L)
-        val transY = cfg.entryTranslationY * density
-        val initialScale = cfg.entryInitialScale.coerceIn(0.1f, 1.0f)
-        val col1TransX = -cfg.col1Offset * density
-        val col3TransX = cfg.col3Offset * density
-        val entranceDuration = (animDuration + 60L).coerceAtLeast(460L)
-
-        for (row in keys.indices) {
-            for (col in keys[row].indices) {
-                val name = keys[row][col]
-                var id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
-                if (id == 0 && name == "delete_button") {
-                    val fallbackNames = arrayOf("cancel_button", "zero_delete_button", "zero_cancel_button")
-                    for (fb in fallbackNames) {
-                        val fbId = ctx.resources.getIdentifier(fb, "id", "com.android.systemui")
-                        if (fbId != 0) {
-                            id = fbId
-                            break
-                        }
-                    }
-                }
-                if (id == 0) continue
-
-                val keyView = pinView.findViewById<View>(id) ?: continue
-                val delay = cfg.getKeyDelay(name, row, col).coerceAtLeast(0L)
-
-                val optDrawable = keyView.background as? LiquidGlassKeyOptimizedDrawable
-                optDrawable?.startLiveTracking()
-
-                val targetTransX = when (col) {
-                    0 -> col1TransX
-                    2 -> col3TransX
-                    else -> 0f
-                }
-
-                appearAnimators.remove(keyView)?.cancel()
-                keyView.animate().cancel()
-                keyView.alpha = 0f
-                keyView.translationY = transY
-                keyView.translationX = targetTransX
-                keyView.scaleX = initialScale
-                keyView.scaleY = initialScale
-
-                val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-                    duration = entranceDuration
-                    startDelay = delay
-                    interpolator = LinearInterpolator()
-
-                    addUpdateListener { va ->
-                        val u = va.animatedFraction
-
-                        val (currY, deltaY) = computeCascadePhysics(u, transY, cfg)
-                        val squishY = (1.0f + deltaY).coerceAtLeast(0.4f)
-                        val squishX = 1.0f / squishY
-
-                        val scaleProg = (u / 0.18f).coerceIn(0f, 1f)
-                        val smoothBaseProg = scaleProg * scaleProg * (3f - 2f * scaleProg)
-                        val baseScale = initialScale + (1.0f - initialScale) * smoothBaseProg
-
-                        keyView.alpha = (u / 0.15f).coerceIn(0f, 1f)
-                        keyView.translationY = currY
-                        keyView.translationX = targetTransX
-                        keyView.scaleX = baseScale * squishX
-                        keyView.scaleY = baseScale * squishY
-                        keyView.invalidate()
-                    }
-
-                    addListener(object : AnimatorListenerAdapter() {
-                        private var isCancelled = false
-                        override fun onAnimationCancel(animation: Animator) {
-                            isCancelled = true
-                            appearAnimators.remove(keyView)
-                        }
-                        override fun onAnimationEnd(animation: Animator) {
-                            if (!isCancelled) {
-                                keyView.alpha = 1f
-                                keyView.translationY = 0f
-                                keyView.translationX = targetTransX
-                                keyView.scaleX = 1f
-                                keyView.scaleY = 1f
-                                keyView.invalidate()
-                            }
-                            appearAnimators.remove(keyView)
-                        }
-                    })
-                }
-                appearAnimators[keyView] = animator
-                animator.start()
-            }
-        }
     }
 
     private fun startIos26RadialBloomAnimation(
@@ -563,9 +414,7 @@ object KeypadPhysicsHook {
                                                 dirX = dx / dist
                                                 dirY = dy / dist
 
-                                                // Non-linear increasing resistance model:
-                                                // k0 gives tactile initial firmness (no zero-resistance floatiness).
-                                                // Power p ramps up resistance with pull distance.
+                                                // iOS 26 Non-linear rubberband resistance model:
                                                 val k0 = cfg.dragInitialStiffness.coerceIn(0.15f, 0.85f).toDouble()
                                                 val p = cfg.dragResistancePower.coerceIn(1.0f, 3.5f).toDouble()
                                                 val xNorm = (dist / maxOffset).coerceAtLeast(0f).toDouble()
@@ -600,6 +449,20 @@ object KeypadPhysicsHook {
                                             view.translationY = jellyTy
                                             view.scaleX = liquidScaleX.coerceIn(0.60f, 1.45f)
                                             view.scaleY = liquidScaleY.coerceIn(0.60f, 1.45f)
+
+                                            // Decoupled internal digit text inertia parallax lag
+                                            ensureCachedKeyFields(view.javaClass)
+                                            val digitText = if (cfg.iosBloomDecoupleText) {
+                                                try { cachedDigitField?.get(view) as? View } catch (_: Throwable) { null }
+                                            } else null
+                                            val klondikeText = if (cfg.iosBloomDecoupleText) {
+                                                try { cachedKlondikeField?.get(view) as? View } catch (_: Throwable) { null }
+                                            } else null
+
+                                            digitText?.translationX = -jellyTx * 0.20f
+                                            digitText?.translationY = -jellyTy * 0.20f
+                                            klondikeText?.translationX = -jellyTx * 0.20f
+                                            klondikeText?.translationY = -jellyTy * 0.20f
                                         }
 
                                         liquidDrawable?.onTouchMove(event.x, event.y)
@@ -612,6 +475,14 @@ object KeypadPhysicsHook {
 
                                         view.animate().cancel()
                                         releaseAnimators.remove(view)?.cancel()
+
+                                        ensureCachedKeyFields(view.javaClass)
+                                        val digitText = if (cfg.iosBloomDecoupleText) {
+                                            try { cachedDigitField?.get(view) as? View } catch (_: Throwable) { null }
+                                        } else null
+                                        val klondikeText = if (cfg.iosBloomDecoupleText) {
+                                            try { cachedKlondikeField?.get(view) as? View } catch (_: Throwable) { null }
+                                        } else null
 
                                         val rowParent = view.parent as? View
                                         val currTx = view.translationX - baseTransX
@@ -628,44 +499,57 @@ object KeypadPhysicsHook {
                                                 .translationZ(0f)
                                                 .scaleX(1.0f)
                                                 .scaleY(1.0f)
-                                                .setDuration(180L)
+                                                .setDuration(160L)
                                                 .setInterpolator(DecelerateInterpolator(1.8f))
                                                 .withEndAction {
                                                     view.translationZ = 0f
                                                     rowParent?.translationZ = 0f
+                                                    digitText?.translationX = 0f
+                                                    digitText?.translationY = 0f
+                                                    klondikeText?.translationX = 0f
+                                                    klondikeText?.translationY = 0f
                                                 }
                                                 .start()
-                                            rowParent?.animate()?.translationZ(0f)?.setDuration(180L)?.start()
+                                            digitText?.animate()?.translationX(0f)?.translationY(0f)?.setDuration(160L)?.start()
+                                            klondikeText?.animate()?.translationX(0f)?.translationY(0f)?.setDuration(160L)?.start()
+                                            rowParent?.animate()?.translationZ(0f)?.setDuration(160L)?.start()
                                         } else {
-                                            // Directional Inertia Release Snapback Engine
+                                            // Directional Inertia Release Snapback Engine (Analytical Damped Harmonic Spring)
                                             val uX = currTx / releaseDist
                                             val uY = currTy / releaseDist
                                             val durationMs = cfg.releaseDuration.toLong().coerceIn(150L, 600L)
                                             val squishAmp = cfg.releaseSquishAmp.coerceIn(0.0f, 0.70f)
                                             val overshootTension = cfg.releaseOvershoot.coerceIn(1.0f, 3.5f)
 
+                                            // Physical harmonic spring parameters with zero-jerk initial velocity (x_dot(0) = 0)
+                                            val zeta = 0.52
+                                            val omega0 = 2.0 * Math.PI * (overshootTension * 1.5)
+                                            val sqrtTerm = Math.sqrt(Math.max(0.01, 1.0 - zeta * zeta))
+                                            val omegaD = omega0 * sqrtTerm
+                                            val T = durationMs / 1000.0
+
                                             val releaseAnim = ValueAnimator.ofFloat(0f, 1f).apply {
                                                 duration = durationMs
                                                 interpolator = LinearInterpolator()
 
                                                 addUpdateListener { va ->
-                                                    val t = va.animatedFraction
+                                                    val u = va.animatedFraction
+                                                    val t = u * T
+                                                    val decay = Math.exp(-zeta * omega0 * t)
+                                                    val cosW = Math.cos(omegaD * t)
+                                                    val sinW = Math.sin(omegaD * t)
 
-                                                    // 1. Directional position snapback along vector (uX, uY)
-                                                    val omega = (Math.PI * overshootTension).toDouble()
-                                                    val dampingCoeff = 3.8
-                                                    val decay = Math.exp(-dampingCoeff * t)
-                                                    val posRatio = (decay * Math.cos(omega * t)).toFloat()
+                                                    // True physical damped harmonic position ratio: p(0) = 1, p_dot(0) = 0
+                                                    val posRatio = (decay * (cosW + (zeta / sqrtTerm) * sinW)).toFloat()
 
                                                     val currentTx = baseTransX + uX * releaseDist * posRatio
                                                     val currentTy = uY * releaseDist * posRatio
 
-                                                    // 2. Directional Liquid Inertia Mass Transfer Squish along (uX, uY)
-                                                    val squishFreq = omega * 1.05
-                                                    val squishDecay = Math.exp(-3.5 * t)
-                                                    val deltaParallel = (releaseNorm * squishAmp * squishDecay * Math.cos(squishFreq * t)).toFloat()
+                                                    // Directional Liquid Inertia Mass Transfer Squish along (uX, uY)
+                                                    val accelRatio = (decay * (-cosW + (zeta / sqrtTerm) * sinW)).toFloat()
+                                                    val deltaParallel = releaseNorm * squishAmp * accelRatio
 
-                                                    val lambdaParallel = (1.0f + deltaParallel).coerceIn(0.55f, 1.65f)
+                                                    val lambdaParallel = (1.0f + deltaParallel).coerceIn(0.60f, 1.55f)
                                                     val lambdaPerp = 1.0f / lambdaParallel
 
                                                     val diffParallel = lambdaParallel - 1.0f
@@ -680,6 +564,12 @@ object KeypadPhysicsHook {
                                                     view.translationY = currentTy
                                                     view.scaleX = scaleX.coerceIn(0.60f, 1.50f)
                                                     view.scaleY = scaleY.coerceIn(0.60f, 1.50f)
+
+                                                    digitText?.translationX = -uX * releaseDist * posRatio * 0.20f
+                                                    digitText?.translationY = -uY * releaseDist * posRatio * 0.20f
+                                                    klondikeText?.translationX = -uX * releaseDist * posRatio * 0.20f
+                                                    klondikeText?.translationY = -uY * releaseDist * posRatio * 0.20f
+
                                                     view.invalidate()
                                                 }
 
@@ -696,6 +586,10 @@ object KeypadPhysicsHook {
                                                             view.translationZ = 0f
                                                             view.scaleX = 1f
                                                             view.scaleY = 1f
+                                                            digitText?.translationX = 0f
+                                                            digitText?.translationY = 0f
+                                                            klondikeText?.translationX = 0f
+                                                            klondikeText?.translationY = 0f
                                                             rowParent?.translationZ = 0f
                                                             view.invalidate()
                                                         }
@@ -1013,7 +907,7 @@ object KeypadPhysicsHook {
                         }
                     })
                 } else if (m.name == "startAppearAnimation") {
-                    // Custom Cascade Glide & Staggered Sequential Entrance Animation Engine
+                    // iOS 26 Liquid Bloom Radial Explosion & Staggered Entrance Animation Engine
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val pinViewObj = chain.thisObject
@@ -1037,11 +931,7 @@ object KeypadPhysicsHook {
                                 }
                             } catch (_: Throwable) {}
 
-                            if (cfg.entryAnimationType == "ios26") {
-                                startIos26RadialBloomAnimation(pinView, cfg, density)
-                            } else {
-                                startCascadeAnimation(pinView, cfg, density)
-                            }
+                            startIos26RadialBloomAnimation(pinView, cfg, density)
 
                             val row0Id = ctx.resources.getIdentifier("row0", "id", "com.android.systemui")
                             if (row0Id != 0) {

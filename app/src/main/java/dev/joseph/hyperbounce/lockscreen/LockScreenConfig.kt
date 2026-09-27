@@ -55,14 +55,7 @@ data class LockScreenKeypadConfig(
     var row3Offset: Float = -30.0f,
     var col1Offset: Float = 0.0f,
     var col3Offset: Float = 0.0f,
-    // Sequential Glide Entry
-    var entryTranslationY: Float = 90.0f,
-    var entryInitialScale: Float = 0.50f,
-    var entryDuration: Float = 420.0f,
-    var rowDelayStep: Float = 55.0f,
-    var colDelayStep: Float = 25.0f,
-    var entryOvershoot: Float = 1.8f,
-    // Per-Key Custom Delays (ms) - negative means use staggered formula
+    // Per-Key Custom Delays (ms) - negative means use radial wave stagger
     var delayKey1: Float = -1f,
     var delayKey2: Float = -1f,
     var delayKey3: Float = -1f,
@@ -83,12 +76,7 @@ data class LockScreenKeypadConfig(
     var releaseDuration: Float = 320.0f,
     var releaseSquishAmp: Float = 0.35f,
     var releaseOvershoot: Float = 2.0f,
-    var cascadeFlightElongation: Float = 0.22f,
-    var cascadeLandingSquish: Float = 0.24f,
-    var cascadeInertiaCoupling: Float = 1.0f,
-    var cascadeViscousDamping: Float = 0.75f,
-    // Entry Animation Mode: "ios26" (Radial Bloom) or "cascade" (Vertical Flight)
-    var entryAnimationType: String = "ios26",
+    // iOS 26 Liquid Bloom Kinetics
     var iosBloomDuration: Float = 520.0f,
     var iosBloomClusterFactor: Float = 0.70f,
     var iosBloomOvershoot: Float = 0.16f,
@@ -115,7 +103,11 @@ data class LockScreenKeypadConfig(
             "delete_button", "cancel_button" -> delayCancel
             else -> -1f
         }
-        return if (custom >= 0f) custom.toLong() else ((row * rowDelayStep) + (col * colDelayStep)).toLong()
+        if (custom >= 0f) return custom.toLong()
+        val relCol = (col - 1).toDouble()
+        val relRow = (row - 1).toDouble()
+        val distUnits = kotlin.math.hypot(relCol, relRow).toFloat()
+        return (distUnits * iosBloomWaveStagger).toLong().coerceAtLeast(0L)
     }
 }
 
@@ -173,13 +165,6 @@ object LockScreenConfigHolder {
         keypad.col1Offset = prefs.getFloat("pin_col1_offset", 0.0f)
         keypad.col3Offset = prefs.getFloat("pin_col3_offset", 0.0f)
 
-        keypad.entryTranslationY = prefs.getFloat("pin_entry_translation_y", 90.0f)
-        keypad.entryInitialScale = prefs.getFloat("pin_entry_initial_scale", 0.50f)
-        keypad.entryDuration = prefs.getFloat("pin_entry_duration", 420.0f)
-        keypad.rowDelayStep = prefs.getFloat("pin_row_delay_step", 55.0f)
-        keypad.colDelayStep = prefs.getFloat("pin_col_delay_step", 25.0f)
-        keypad.entryOvershoot = prefs.getFloat("pin_entry_overshoot", 1.8f)
-
         keypad.delayKey1 = prefs.getFloat("pin_delay_key1", -1f)
         keypad.delayKey2 = prefs.getFloat("pin_delay_key2", -1f)
         keypad.delayKey3 = prefs.getFloat("pin_delay_key3", -1f)
@@ -201,13 +186,8 @@ object LockScreenConfigHolder {
         keypad.releaseDuration = prefs.getFloat("pin_release_duration", 320.0f)
         keypad.releaseSquishAmp = prefs.getFloat("pin_release_squish_amp", 0.35f)
         keypad.releaseOvershoot = prefs.getFloat("pin_release_overshoot", 2.0f)
-        keypad.cascadeFlightElongation = prefs.getFloat("pin_cascade_flight_elongation", 0.22f)
-        keypad.cascadeLandingSquish = prefs.getFloat("pin_cascade_landing_squish", 0.24f)
-        keypad.cascadeInertiaCoupling = prefs.getFloat("pin_cascade_inertia_coupling", 1.0f)
-        keypad.cascadeViscousDamping = prefs.getFloat("pin_cascade_viscous_damping", 0.75f)
 
         // iOS 26 Liquid Bloom
-        keypad.entryAnimationType = prefs.getString("pin_entry_anim_type", "ios26") ?: "ios26"
         keypad.iosBloomDuration = prefs.getFloat("pin_ios_bloom_duration", 520.0f)
         keypad.iosBloomClusterFactor = prefs.getFloat("pin_ios_bloom_cluster_factor", 0.70f)
         keypad.iosBloomOvershoot = prefs.getFloat("pin_ios_bloom_overshoot", 0.16f)
