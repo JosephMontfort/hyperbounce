@@ -4142,10 +4142,18 @@ object ControlCenterHook {
             }
 
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP && cover != null) {
+                val isCircular = (size == "1x2" || size == "2x1" || size == "4x1")
                 val rad = if (size == "4x2" || size == "2x4") 18f * density else 12f * density
                 cover.outlineProvider = object : ViewOutlineProvider() {
                     override fun getOutline(v: View, o: Outline) {
-                        o.setRoundRect(0, 0, v.width, v.height, rad)
+                        if (isCircular) {
+                            val minDim = Math.min(v.width, v.height)
+                            val left = (v.width - minDim) / 2
+                            val top = (v.height - minDim) / 2
+                            o.setRoundRect(left, top, left + minDim, top + minDim, minDim / 2f)
+                        } else {
+                            o.setRoundRect(0, 0, v.width, v.height, rad)
+                        }
                     }
                 }
                 cover.clipToOutline = true
@@ -4245,8 +4253,8 @@ object ControlCenterHook {
                                 audioContainer.layoutParams = acLp
                             }
 
-                            val btnSize = (34 * density).toInt()
-                            val playSize = (38 * density).toInt()
+                            val btnSize = (22 * density).toInt()
+                            val playSize = (28 * density).toInt()
                             if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
                                 resetConstraints(prevLp)
                                 prevLp.width = btnSize
@@ -4255,7 +4263,10 @@ object ControlCenterHook {
                                 setField(prevLp, "endToStart", playId)
                                 setField(prevLp, "topToTop", pId)
                                 setField(prevLp, "bottomToBottom", pId)
-                                setField(prevLp, "horizontalChainStyle", 0)
+                                setField(prevLp, "horizontalChainStyle", 2)
+                                if (prevLp is ViewGroup.MarginLayoutParams) {
+                                    prevLp.marginEnd = (5 * density).toInt()
+                                }
                                 prev.layoutParams = prevLp
                             }
                             if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
@@ -4276,6 +4287,9 @@ object ControlCenterHook {
                                 setField(nextLp, "endToEnd", pId)
                                 setField(nextLp, "topToTop", pId)
                                 setField(nextLp, "bottomToBottom", pId)
+                                if (nextLp is ViewGroup.MarginLayoutParams) {
+                                    nextLp.marginStart = (5 * density).toInt()
+                                }
                                 next.layoutParams = nextLp
                             }
                         }
@@ -4320,8 +4334,8 @@ object ControlCenterHook {
                                 audioContainer.layoutParams = acLp
                             }
 
-                            val btnSize = (32 * density).toInt()
-                            val playSize = (38 * density).toInt()
+                            val btnSize = (22 * density).toInt()
+                            val playSize = (28 * density).toInt()
                             if (prevLp != null && prevLp.javaClass.name.contains("ConstraintLayout")) {
                                 resetConstraints(prevLp)
                                 prevLp.width = btnSize
@@ -4330,7 +4344,10 @@ object ControlCenterHook {
                                 setField(prevLp, "endToEnd", pId)
                                 setField(prevLp, "topToTop", pId)
                                 setField(prevLp, "bottomToTop", playId)
-                                setField(prevLp, "verticalChainStyle", 0)
+                                setField(prevLp, "verticalChainStyle", 2)
+                                if (prevLp is ViewGroup.MarginLayoutParams) {
+                                    prevLp.bottomMargin = (6 * density).toInt()
+                                }
                                 prev.layoutParams = prevLp
                             }
                             if (playLp != null && playLp.javaClass.name.contains("ConstraintLayout")) {
@@ -4351,6 +4368,9 @@ object ControlCenterHook {
                                 setField(nextLp, "endToEnd", pId)
                                 setField(nextLp, "topToBottom", playId)
                                 setField(nextLp, "bottomToBottom", pId)
+                                if (nextLp is ViewGroup.MarginLayoutParams) {
+                                    nextLp.topMargin = (6 * density).toInt()
+                                }
                                 next.layoutParams = nextLp
                             }
                         }
