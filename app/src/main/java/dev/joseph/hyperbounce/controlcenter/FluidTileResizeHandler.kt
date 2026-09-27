@@ -2463,12 +2463,17 @@ object FluidTileResizeHandler {
                                     var animationEnded = false
                                     var layoutRefreshed = false
 
-                                    fun tryFinish() {
+                                     fun tryFinish() {
                                         if (animationEnded && layoutRefreshed) {
                                             rv.overlay.clear()
                                             tileView.alpha = 1.0f
                                             overlayView = null
                                         }
+                                    }
+
+                                    for (i in 0 until rv.childCount) {
+                                        val child = rv.getChildAt(i) ?: continue
+                                        child.animate().cancel()
                                     }
 
                                     ControlCenterConfigHolder.setSliderWidth(ctx, isBrightnessSpec, finalCols, tileView) {

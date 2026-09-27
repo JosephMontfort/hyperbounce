@@ -1736,7 +1736,8 @@ object ControlCenterConfigHolder {
                 if (sRecyclerView?.get() != rv) {
                     sRecyclerView = WeakReference(rv)
                 }
-                rv.post {
+
+                val doRefresh = {
                     try {
                         val getAdapterMethod = rv.javaClass.getMethod("getAdapter")
                         val adp = getAdapterMethod.invoke(rv)
@@ -1754,61 +1755,40 @@ object ControlCenterConfigHolder {
                                 distMethod.invoke(adp, true)
                             } catch (t: Throwable) {}
 
-                            // Record current visual positions of all children before notifyDataSetChanged
-                            val visualPositions = mutableMapOf<Int, Pair<Float, Float>>()
-                            val viewVisualPositions = java.util.IdentityHashMap<View, Pair<Float, Float>>()
+                            // 1. Cancel animators and zero all translations on current views
+                            // before notifyDataSetChanged so scrap views never carry dirty offsets into recycled slots
                             for (i in 0 until rv.childCount) {
                                 val child = rv.getChildAt(i) ?: continue
-                                val vx = child.left + child.translationX
-                                val vy = child.top + child.translationY
-                                viewVisualPositions[child] = Pair(vx, vy)
-                                try {
-                                    val m = rv.javaClass.getMethod("getChildAdapterPosition", View::class.java)
-                                    val pos = m.invoke(rv, child) as? Int
-                                    if (pos != null && pos >= 0) {
-                                        visualPositions[pos] = Pair(vx, vy)
-                                    }
-                                } catch (t: Throwable) {}
+                                child.animate().cancel()
+                                child.translationX = 0f
+                                child.translationY = 0f
                             }
+
+                            // 2. Temporarily disable ItemAnimator during the layout pass to prevent any item flicker or default shift animations
+                            val getItemAnimatorMethod = try { rv.javaClass.getMethod("getItemAnimator") } catch (t: Throwable) { null }
+                            val savedItemAnimator = try { getItemAnimatorMethod?.invoke(rv) } catch (t: Throwable) { null }
+                            try {
+                                val setItemAnimatorMethod = rv.javaClass.methods.firstOrNull { it.name == "setItemAnimator" && it.parameterTypes.size == 1 }
+                                setItemAnimatorMethod?.invoke(rv, null)
+                            } catch (t: Throwable) {}
 
                             var hasHandedOff = false
                             val handoff = {
                                 if (!hasHandedOff) {
                                     hasHandedOff = true
+                                    // Enforce 0 translation on all attached views after layout, before drawing
                                     for (i in 0 until rv.childCount) {
                                         val child = rv.getChildAt(i) ?: continue
                                         child.animate().cancel()
-                                        var prevVisual = viewVisualPositions[child]
-                                        if (prevVisual == null) {
-                                            try {
-                                                val m = rv.javaClass.getMethod("getChildAdapterPosition", View::class.java)
-                                                val pos = m.invoke(rv, child) as? Int
-                                                if (pos != null && pos >= 0) {
-                                                    prevVisual = visualPositions[pos]
-                                                }
-                                            } catch (t: Throwable) {}
-                                        }
-
-                                        if (prevVisual != null) {
-                                            val neededTx = prevVisual.first - child.left
-                                            val neededTy = prevVisual.second - child.top
-                                            child.translationX = neededTx
-                                            child.translationY = neededTy
-                                            if (Math.abs(neededTx) > 1.5f || Math.abs(neededTy) > 1.5f) {
-                                                child.animate()
-                                                    .translationX(0f)
-                                                    .translationY(0f)
-                                                    .setDuration(160)
-                                                    .setInterpolator(DecelerateInterpolator())
-                                                    .start()
-                                            } else {
-                                                child.translationX = 0f
-                                                child.translationY = 0f
-                                            }
-                                        } else {
-                                            child.translationX = 0f
-                                            child.translationY = 0f
-                                        }
+                                        child.translationX = 0f
+                                        child.translationY = 0f
+                                    }
+                                    // Restore saved ItemAnimator
+                                    if (savedItemAnimator != null) {
+                                        try {
+                                            val setItemAnimatorMethod = rv.javaClass.methods.firstOrNull { it.name == "setItemAnimator" && it.parameterTypes.size == 1 }
+                                            setItemAnimatorMethod?.invoke(rv, savedItemAnimator)
+                                        } catch (t: Throwable) {}
                                     }
                                     onRefreshed?.invoke()
                                 }
@@ -1836,7 +1816,7 @@ object ControlCenterConfigHolder {
                             // Fallback in case onPreDraw is delayed or skipped
                             rv.postDelayed({
                                 handoff()
-                            }, 250)
+                            }, 200)
                         } else {
                             onRefreshed?.invoke()
                         }
@@ -1844,6 +1824,17 @@ object ControlCenterConfigHolder {
                         Log.e(TAG, "refreshRecyclerView notify error", t)
                         onRefreshed?.invoke()
                     }
+                }
+
+                val isComputing = try {
+                    val m = rv.javaClass.getMethod("isComputingLayout")
+                    m.invoke(rv) as? Boolean ?: false
+                } catch (t: Throwable) { false }
+
+                if (isComputing) {
+                    rv.post { doRefresh() }
+                } else {
+                    doRefresh()
                 }
             } else {
                 onRefreshed?.invoke()
