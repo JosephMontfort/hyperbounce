@@ -285,37 +285,19 @@ object ControlCenterHook {
                 return
             }
             val ctx = itemView.context
-            var shouldShow = true
-            var resolved = false
+            val isWordless = try {
+                android.provider.Settings.Secure.getInt(ctx.contentResolver, "wordless_mode", 0) != 0
+            } catch (t: Throwable) { false }
 
-            // 1. Try getShowLabel via reflection (private method on QSTileItemView)
+            // If feature is turned off (wordless_mode != 0), labels are NEVER shown
+            // If feature is turned on (wordless_mode == 0), labels are shown unless hidden by visible == false
+            val shouldShow = visible && !isWordless
+
+            // 1. Keep QSTileItemView internal textMode in sync
             try {
-                val m = itemView.javaClass.getDeclaredMethod("getShowLabel")
-                m.isAccessible = true
-                shouldShow = m.invoke(itemView) as Boolean
-                resolved = true
-            } catch (t: Throwable) {
-                try {
-                    val m = itemView.javaClass.getMethod("getShowLabel")
-                    shouldShow = m.invoke(itemView) as Boolean
-                    resolved = true
-                } catch (t2: Throwable) {}
-            }
-
-            // 2. Fallback: query Settings.Secure "wordless_mode" (0 = show labels, 1 = hide labels)
-            if (!resolved) {
-                val isWordless = try {
-                    android.provider.Settings.Secure.getInt(ctx.contentResolver, "wordless_mode", 0) != 0
-                } catch (t: Throwable) { false }
-                shouldShow = if (ControlCenterConfigHolder.sIsEditMode) true else !isWordless
-            }
-
-            // 3. Keep QSTileItemView internal textMode in sync
-            try {
-                val isWordless = android.provider.Settings.Secure.getInt(ctx.contentResolver, "wordless_mode", 0) != 0
                 val textModeEnumClass = itemView.javaClass.classLoader?.loadClass("miui.systemui.controlcenter.panel.main.qs.QSListController\$TextMode")
                 if (textModeEnumClass != null) {
-                    val targetModeName = if (isWordless) "NO_TEXT" else "TEXT"
+                    val targetModeName = if (shouldShow) "TEXT" else "NO_TEXT"
                     val targetMode = java.lang.Enum.valueOf(textModeEnumClass as Class<out Enum<*>>, targetModeName)
                     val onTextModeChangedM = itemView.javaClass.methods.firstOrNull { it.name == "onTextModeChanged" }
                     onTextModeChangedM?.invoke(itemView, targetMode, false)
@@ -323,11 +305,24 @@ object ControlCenterHook {
             } catch (t: Throwable) {}
 
             val iconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
+            val tileLabelId = ctx.resources.getIdentifier("tile_label", "id", ctx.packageName)
+            val tileLabel = if (tileLabelId != 0) itemView.findViewById<View>(tileLabelId) else null
+            if (tileLabel != null) {
+                tileLabel.visibility = if (shouldShow) View.VISIBLE else View.GONE
+                tileLabel.alpha = if (shouldShow) 1.0f else 0.0f
+                if (shouldShow) {
+                    tileLabel.translationY = 0.0f
+                }
+            }
+
             fun process(v: View) {
                 if (iconFrameId != 0 && v.id == iconFrameId) return
                 if (v is TextView) {
                     v.visibility = if (shouldShow) View.VISIBLE else View.GONE
                     v.alpha = if (shouldShow) 1.0f else 0.0f
+                    if (shouldShow) {
+                        v.translationY = 0.0f
+                    }
                 } else if (v is ViewGroup) {
                     for (i in 0 until v.childCount) {
                         process(v.getChildAt(i))
@@ -1015,7 +1010,12 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
                             try {
+                                True2DGridEngine.invalidateAll()
                                 ControlCenterConfigHolder.updateAllVisibleTileBadges()
+                                val rv = ControlCenterConfigHolder.sRecyclerView?.get()
+                                rv?.post {
+                                    rv.requestLayout()
+                                }
                             } catch (t: Throwable) {}
                             result
                         }

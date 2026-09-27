@@ -37,8 +37,16 @@ object True2DGridEngine {
         val items: Array<ItemLayout?>,
         val maxRows: Int,
         val unitRowHeight: Int,
-        val itemsCount: Int = 0
+        val itemsCount: Int = 0,
+        val rowHeights: IntArray? = null
     ) {
+        fun getRowHeight(r: Int): Int {
+            if (rowHeights != null && r in rowHeights.indices) {
+                return rowHeights[r]
+            }
+            return unitRowHeight
+        }
+
         fun isLandscapeDivider(pos: Int): Boolean {
             if (pos in items.indices && items[pos] != null) {
                 return items[pos]!!.isLandscapeDivider
@@ -138,6 +146,31 @@ object True2DGridEngine {
         sLastCalculatedGrid = null
     }
 
+    private var lastWordlessState: Boolean? = null
+
+    fun isCircularTileLabelsEnabled(context: Context?): Boolean {
+        val ctx = context ?: ControlCenterConfigHolder.sLastKnownContext ?: return false
+        return try {
+            android.provider.Settings.Secure.getInt(ctx.contentResolver, "wordless_mode", 0) == 0
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    fun getLabelHeight(context: Context?): Int {
+        if (context != null) {
+            try {
+                val resId = context.resources.getIdentifier("qs_tile_item_label_height", "dimen", context.packageName)
+                if (resId != 0) {
+                    val h = context.resources.getDimensionPixelSize(resId)
+                    if (h > 0) return h
+                }
+                return (32.0f * context.resources.displayMetrics.density + 0.5f).toInt()
+            } catch (t: Throwable) {}
+        }
+        return 80
+    }
+
     fun getUnitRowHeight(context: Context?): Int {
         if (context != null) {
             try {
@@ -153,6 +186,12 @@ object True2DGridEngine {
     }
 
     fun getGridData(adapter: Any?, context: Context?): AdapterGridData {
+        val currentWordless = isCircularTileLabelsEnabled(context)
+        if (lastWordlessState != null && lastWordlessState != currentWordless) {
+            invalidateAll()
+        }
+        lastWordlessState = currentWordless
+
         if (adapter == null) {
             return sLastCalculatedGrid ?: calculateLayout(null, context)
         }
@@ -226,6 +265,9 @@ object True2DGridEngine {
         overrideSpanH: Int = 1
     ): AdapterGridData {
         val unitRowHeight = getUnitRowHeight(context)
+        val isLabelEnabled = isCircularTileLabelsEnabled(context)
+        val labelHeight = if (isLabelEnabled) getLabelHeight(context) else 0
+        val rowHeights = IntArray(MAX_GRID_ROWS) { unitRowHeight }
         val flatList = ArrayList<Any>()
 
         if (adapter != null) {
@@ -250,7 +292,7 @@ object True2DGridEngine {
         val itemCount = flatList.size
         if (itemCount == 0) {
             val emptyItems = arrayOfNulls<ItemLayout>(64)
-            val fallback = AdapterGridData(emptyItems, 16, unitRowHeight, 0)
+            val fallback = AdapterGridData(emptyItems, 16, unitRowHeight, 0, rowHeights)
             if (overrideSpec == null) {
                 sLastCalculatedGrid = fallback
             }
@@ -388,9 +430,21 @@ object True2DGridEngine {
                 isHeader = isHeader,
                 isSystemItem = isSystem
             )
+
+            val isCircular = !isSystem && spanW == 1 && spanH == 1 && (
+                vt == 8453 ||
+                (item != null && item.javaClass.name.contains("QSTileItemView")) ||
+                (spec != null && !ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) &&
+                 !ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) &&
+                 !ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) &&
+                 spec != "wifi" && spec != "cell" && !spec.startsWith("group:"))
+            )
+            if (isCircular && isLabelEnabled && assignedRow in rowHeights.indices) {
+                rowHeights[assignedRow] = unitRowHeight + labelHeight
+            }
         }
 
-        val gridData = AdapterGridData(itemsArray, highestOccupiedRow, unitRowHeight, itemCount)
+        val gridData = AdapterGridData(itemsArray, highestOccupiedRow, unitRowHeight, itemCount, rowHeights)
         if (overrideSpec == null) {
             sLastCalculatedGrid = gridData
         }
@@ -685,10 +739,23 @@ object True2DGridEngine {
                 val targetDecoratedWidth = rightBorder - leftBorder
                 val targetContentWidth = (targetDecoratedWidth - horizMargin).coerceAtLeast(0)
 
+                val isLabelEnabled = isCircularTileLabelsEnabled(context)
+                val labelHeight = if (isLabelEnabled) getLabelHeight(context) else 0
+
+                val tileLabelId = context?.resources?.getIdentifier("tile_label", "id", context.packageName) ?: 0
+                val isCircularTile = spanW == 1 && spanH == 1 && !isHeader && (
+                    view.javaClass.name.contains("QSTileItemView") ||
+                    (tileLabelId != 0 && view.findViewById<View?>(tileLabelId) != null)
+                ) && view.getTag(0x7f099994) == null
+
                 val targetDecoratedHeight = if (isHeader) {
                     if (lp.height > 0) lp.height + vertMargin else unitRowHeight
+                } else if (isCircularTile && isLabelEnabled) {
+                    unitRowHeight + labelHeight
+                } else if (spanH == 1) {
+                    unitRowHeight
                 } else {
-                    spanH * unitRowHeight
+                    (targetRow until (targetRow + spanH)).sumOf { gridData.getRowHeight(it) }
                 }
                 val targetContentHeight = (targetDecoratedHeight - vertMargin).coerceAtLeast(0)
 
@@ -720,7 +787,11 @@ object True2DGridEngine {
                     targetRow + (maxViewHeight / unitRowHeight).coerceAtLeast(1)
                 }
                 val deltaRows = (nextRow - targetRow).coerceAtLeast(1)
-                consumed = deltaRows * unitRowHeight
+                consumed = if (isCircularTileLabelsEnabled(context)) {
+                    (targetRow until (targetRow + deltaRows)).sumOf { gridData.getRowHeight(it) }
+                } else {
+                    deltaRows * unitRowHeight
+                }
                 chunkTop = offset
             } else {
                 val maxPosInChunk = positionsInChunk.maxOrNull() ?: currentPos
@@ -731,7 +802,11 @@ object True2DGridEngine {
                     targetRow + (maxViewHeight / unitRowHeight).coerceAtLeast(1)
                 }
                 val deltaRows = (belowRow - targetRow).coerceAtLeast(1)
-                consumed = deltaRows * unitRowHeight
+                consumed = if (isCircularTileLabelsEnabled(context)) {
+                    (targetRow until (targetRow + deltaRows)).sumOf { gridData.getRowHeight(it) }
+                } else {
+                    deltaRows * unitRowHeight
+                }
                 chunkTop = offset - consumed
             }
 
@@ -745,7 +820,8 @@ object True2DGridEngine {
                 ReflectionCache.layoutDecoratedWithMarginsMethod?.invoke(glm, view, left, top, right, bottom)
             }
 
-            ReflectionCache.layoutChunkResultConsumedField?.setInt(layoutChunkResult, consumed.coerceAtLeast(unitRowHeight))
+            val minConsumed = if (isCircularTileLabelsEnabled(context)) gridData.getRowHeight(targetRow) else unitRowHeight
+            ReflectionCache.layoutChunkResultConsumedField?.setInt(layoutChunkResult, consumed.coerceAtLeast(minConsumed))
 
             for (v in viewsInChunk) {
                 if (v.hasFocusable()) {

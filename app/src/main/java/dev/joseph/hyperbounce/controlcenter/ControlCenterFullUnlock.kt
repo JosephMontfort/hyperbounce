@@ -543,11 +543,7 @@ object ControlCenterFullUnlock {
                     val gId = slotId.substring(6)
                     val group = ControlCenterConfigHolder.sTileGroups.find { it.id == gId }
                     if (group != null) {
-                        val spans = if (group.specs.size == 2) {
-                            if (group.isVertical) Pair(1, 2) else Pair(2, 1)
-                        } else {
-                            Pair(2, group.getEffectiveRowCount().coerceIn(1, 6))
-                        }
+                        val spans = group.getSpan()
                         val anchorSpec = group.specs.firstOrNull()
                         val anchorSlot = if (anchorSpec != null) sKnownSlots["tile:$anchorSpec"] ?: sKnownSlots["card:$anchorSpec"] else null
                         if (anchorSlot != null) {
@@ -765,13 +761,7 @@ object ControlCenterFullUnlock {
 
             if (anchorSlot != null) {
                 val group = ControlCenterConfigHolder.sTileGroups.find { it.id == groupId }
-                val spans = if (group != null) {
-                    if (group.specs.size == 2) {
-                        if (group.isVertical) Pair(1, 2) else Pair(2, 1)
-                    } else {
-                        Pair(2, group.getEffectiveRowCount().coerceIn(1, 6))
-                    }
-                } else Pair(2, 2)
+                val spans = group?.getSpan() ?: Pair(2, 2)
                 sKnownSlots[groupSlotId] = SlotItem(groupSlotId, anchorSlot.owner, anchorSlot.item, anchorSlot.viewType, spans.first, spans.second)
             }
 
@@ -960,18 +950,12 @@ object ControlCenterFullUnlock {
                 val gId = spec.substring(6)
                 val group = ControlCenterConfigHolder.sTileGroups.find { it.id == gId }
                 if (group != null) {
-                    if (group.specs.size == 2) {
-                        return if (group.isVertical) Pair(1, 2) else Pair(2, 1)
-                    }
-                    return Pair(2, group.getEffectiveRowCount().coerceIn(1, 6))
+                    return group.getSpan()
                 }
             }
             val g = ControlCenterConfigHolder.findGroupForSpec(spec)
             if (g != null) {
-                if (g.specs.size == 2) {
-                    return if (g.isVertical) Pair(1, 2) else Pair(2, 1)
-                }
-                return Pair(2, g.getEffectiveRowCount().coerceIn(1, 6))
+                return g.getSpan()
             }
             if (ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)) return Pair(2, 2)
             if (ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)) return Pair(1, 2)

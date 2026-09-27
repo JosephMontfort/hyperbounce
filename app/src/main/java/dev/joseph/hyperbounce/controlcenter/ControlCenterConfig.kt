@@ -82,11 +82,36 @@ data class TileGroup(
 
     fun getEffectiveLayoutType(): String {
         if (layoutType.isNotEmpty()) return layoutType
+        if (tileSizes.isNotEmpty()) {
+            val sizes = tileSizes.split(",")
+            if (sizes.size == 2) {
+                if (sizes.all { it == "E" }) return "2_EXPANDED"
+                if (sizes.all { it == "V" }) return "2_VERTICAL"
+                if (sizes.all { it == "C" }) return if (isVertical) "2_CIRCULAR_VERT" else "2_CIRCULAR_HORIZ"
+            }
+        }
         return when {
             specs.size == 4 -> "4_CIRCULAR"
-            specs.size == 2 -> if (isVertical) "2_CIRCULAR_VERT" else "2_CIRCULAR_HORIZ"
+            specs.size == 2 -> {
+                val isExp = specs.all { s -> ControlCenterConfigHolder.sExpandedTileSpecs.contains(s) }
+                val isVert = specs.all { s -> ControlCenterConfigHolder.sVerticalTileSpecs.contains(s) }
+                if (isExp) "2_EXPANDED"
+                else if (isVert) "2_VERTICAL"
+                else if (isVertical) "2_CIRCULAR_VERT" else "2_CIRCULAR_HORIZ"
+            }
             specs.size == 3 -> "1_EXP_2_CIRC"
             else -> "DYNAMIC_${getEffectiveRowCount()}R"
+        }
+    }
+
+    fun getSpan(): Pair<Int, Int> {
+        val type = getEffectiveLayoutType()
+        return when (type) {
+            "2_CIRCULAR_VERT" -> Pair(1, 2)
+            "2_CIRCULAR_HORIZ" -> Pair(2, 1)
+            "2_EXPANDED" -> Pair(2, 2)
+            "2_VERTICAL" -> Pair(2, 2)
+            else -> Pair(2, getEffectiveRowCount().coerceIn(1, 6))
         }
     }
 
