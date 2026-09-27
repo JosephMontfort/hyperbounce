@@ -387,7 +387,7 @@ object FluidTileResizeHandler {
                     val nextCenterY = playCenterY + playSize / 2f + spacing + btnSize / 2f
 
                     val prevRect = RectF(ctrlCenterX - btnSize / 2f, prevCenterY - btnSize / 2f, ctrlCenterX + btnSize / 2f, prevCenterY + btnSize / 2f)
-                    val playRect = RectF(ctrlCenterX - playSize / 2f, playCenterY - playSize / 2f, playCenterX + playSize / 2f, playCenterY + playSize / 2f)
+                    val playRect = RectF(ctrlCenterX - playSize / 2f, playCenterY - playSize / 2f, ctrlCenterX + playSize / 2f, playCenterY + playSize / 2f)
                     val nextRect = RectF(ctrlCenterX - btnSize / 2f, nextCenterY - btnSize / 2f, ctrlCenterX + btnSize / 2f, nextCenterY + btnSize / 2f)
 
                     val textStartX = rect.left + 8f * density
