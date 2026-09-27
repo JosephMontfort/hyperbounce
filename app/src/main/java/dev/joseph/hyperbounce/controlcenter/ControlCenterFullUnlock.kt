@@ -1666,7 +1666,7 @@ object ControlCenterFullUnlock {
             }
 
             val now = SystemClock.uptimeMillis()
-            val minMoveInterval = if (sourceHeight > 1) 220L else 90L
+            val minMoveInterval = if (sourceHeight > 1) 300L else 90L
             if ((now - sLastMoveTime) < minMoveInterval) {
                 return false
             }
@@ -1960,11 +1960,18 @@ object ControlCenterFullUnlock {
                     helperClass.superclass
                 }
 
-                // Collect all methods from both helperClass (which overrides getMovementFlags, onMove)
-                // and callbackClass (which defines chooseDropTarget, canDropOver, clearView, interpolateOutOfBoundsScroll, getMoveThreshold, onSelectedChanged)
+                // Collect all methods from helperClass and its superclasses (including ItemTouchHelper.Callback)
                 val allTargetMethods = mutableListOf<Method>()
-                allTargetMethods.addAll(helperClass.declaredMethods)
-                if (callbackClass != null) {
+                var currCls: Class<*>? = helperClass
+                while (currCls != null && currCls != Any::class.java) {
+                    for (m in currCls.declaredMethods) {
+                        if (allTargetMethods.none { it.name == m.name && it.parameterTypes.contentEquals(m.parameterTypes) }) {
+                            allTargetMethods.add(m)
+                        }
+                    }
+                    currCls = currCls.superclass
+                }
+                if (callbackClass != null && !allTargetMethods.any { it.declaringClass == callbackClass }) {
                     for (cm in callbackClass.declaredMethods) {
                         if (allTargetMethods.none { it.name == cm.name && it.parameterTypes.contentEquals(cm.parameterTypes) }) {
                             allTargetMethods.add(cm)
@@ -1973,10 +1980,25 @@ object ControlCenterFullUnlock {
                 }
 
                 for (m in allTargetMethods) {
+                    if (m.name == "isLongPressDragEnabled") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            try {
+                                if (ControlCenterConfigHolder.sIsDraggingResizeHandle) {
+                                    return@intercept false
+                                }
+                            } catch (t: Throwable) {}
+                            chain.proceed()
+                        }
+                    }
+
                     if (m.name == "getMovementFlags") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             try {
+                                if (ControlCenterConfigHolder.sIsDraggingResizeHandle) {
+                                    return@intercept 0
+                                }
                                 val helperCallback = chain.thisObject
                                 val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
                                 if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
@@ -2043,19 +2065,35 @@ object ControlCenterFullUnlock {
                                 val helperCallback = chain.thisObject
                                 val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
                                 if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
+                                    val rv = chain.args.getOrNull(0) as? androidx.recyclerview.widget.RecyclerView
                                     val viewSize = (chain.args.getOrNull(1) as? Int) ?: 0
                                     val viewSizeOutOfBounds = (chain.args.getOrNull(2) as? Int) ?: 0
 
                                     val draggedSlot = sCurrentDraggedSlotId?.let { sKnownSlots[it] }
                                     val isMultiRow = (draggedSlot?.spanH ?: 1) > 1 || viewSize > 250
 
-                                    // Inverted scroll prevention:
-                                    // If dragging a multi-row component (1x2, 2x2), viewSizeOutOfBounds > 0 means the bottom edge
-                                    // of the 157dp view extends below the viewport. If the user is dragging upward or in the upper/mid screen,
-                                    // Android's ItemTouchHelper would run away scrolling DOWN, fighting the user's drag.
-                                    // Suppress downward auto-scroll (return 0) so the screen never pulls downward away from the user!
-                                    if (isMultiRow && viewSizeOutOfBounds > 0) {
+                                    // If RecyclerView cannot scroll vertically in the requested direction, completely suppress auto-scroll!
+                                    // viewSizeOutOfBounds < 0 means dragging upwards / scrolling up. If canScrollVertically(-1) is false,
+                                    // we are already at the top and auto-scrolling would fight Xiaomi's Spring overscroll bounce!
+                                    if (viewSizeOutOfBounds < 0 && rv?.canScrollVertically(-1) == false) {
                                         return@intercept 0
+                                    }
+                                    // viewSizeOutOfBounds > 0 means dragging downwards / scrolling down.
+                                    if (viewSizeOutOfBounds > 0 && rv?.canScrollVertically(1) == false) {
+                                        return@intercept 0
+                                    }
+
+                                    if (isMultiRow) {
+                                        // Inverted scroll prevention:
+                                        // Suppress runaway downward auto-scroll when user is pulling in the mid or upper screen
+                                        if (viewSizeOutOfBounds > 0) {
+                                            return@intercept 0
+                                        }
+                                        // For upward drag: clamp/dampen auto-scroll step to avoid violent jumping
+                                        if (viewSizeOutOfBounds < 0) {
+                                            val originalScroll = chain.proceed() as? Int ?: 0
+                                            return@intercept originalScroll.coerceIn(-8, 0)
+                                        }
                                     }
                                 }
                             } catch (t: Throwable) {}
@@ -2074,7 +2112,7 @@ object ControlCenterFullUnlock {
                                     val slotId = getSlotIdFromViewHolder(vh)
                                     val slot = slotId?.let { sKnownSlots[it] }
                                     if ((slot?.spanH ?: 1) > 1) {
-                                        return@intercept 0.65f // Require deliberate 65% penetration before initiating move
+                                        return@intercept 0.75f // Require deliberate 75% penetration before initiating move
                                     }
                                 }
                             } catch (t: Throwable) {}
@@ -2163,6 +2201,15 @@ object ControlCenterFullUnlock {
 
                                                 val dx = (selFocusX - tgtCenterX).toLong()
                                                 val dy = (selFocusY - tgtCenterY).toLong()
+
+                                                // For multi-row items (1x2 vertical tiles, 2x2):
+                                                // Only consider targets where focus point is reasonably aligned with the target tile's column and row
+                                                if (isMultiRow) {
+                                                    if (Math.abs(dx) > tgtView.width * 0.65f || Math.abs(dy) > tgtView.height * 0.75f) {
+                                                        continue
+                                                    }
+                                                }
+
                                                 val distSq = dx * dx + dy * dy
 
                                                 if (distSq < minDistanceSq) {
@@ -2186,7 +2233,7 @@ object ControlCenterFullUnlock {
                                                             return@intercept null
                                                         } else {
                                                             val hoverDuration = now - sDragHoverStartTime
-                                                            if (hoverDuration < 140L) {
+                                                            if (hoverDuration < 240L) {
                                                                 return@intercept null
                                                             }
                                                         }

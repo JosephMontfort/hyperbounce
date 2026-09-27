@@ -3037,21 +3037,26 @@ object ControlCenterHook {
             try {
                 val rvClasses = arrayOf(
                     "miui.systemui.controlcenter.widget.MainPanelRecyclerView",
-                    "miui.systemui.controlcenter.widget.ClickableRecyclerView"
+                    "miui.systemui.controlcenter.widget.ClickableRecyclerView",
+                    "androidx.recyclerview.widget.RecyclerView"
                 )
                 for (clsName in rvClasses) {
                     try {
                         val rvCls = Class.forName(clsName, false, classLoader)
-                        for (m in rvCls.declaredMethods) {
-                            if (m.name == "onInterceptTouchEvent") {
-                                m.isAccessible = true
-                                module.hook(m).intercept { chain ->
-                                    if (ControlCenterConfigHolder.sIsDraggingResizeHandle) {
-                                        return@intercept false
+                        var curCls: Class<*>? = rvCls
+                        while (curCls != null && curCls != Any::class.java) {
+                            for (m in curCls.declaredMethods) {
+                                if (m.name == "onInterceptTouchEvent") {
+                                    m.isAccessible = true
+                                    module.hook(m).intercept { chain ->
+                                        if (ControlCenterConfigHolder.sIsDraggingResizeHandle) {
+                                            return@intercept false
+                                        }
+                                        chain.proceed()
                                     }
-                                    chain.proceed()
                                 }
                             }
+                            curCls = curCls.superclass
                         }
                     } catch (t: Throwable) {}
                 }
