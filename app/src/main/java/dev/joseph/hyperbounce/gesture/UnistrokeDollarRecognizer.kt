@@ -217,7 +217,7 @@ class UnistrokeDollarRecognizer {
 
         // Topological check: Loop closure for 'O'
         val startEndDist = hypot(resampleX[0] - resampleX[NUM_POINTS - 1], resampleY[0] - resampleY[NUM_POINTS - 1])
-        val isClosedLoop = startEndDist < (REFERENCE_SIZE * 0.35f)
+        val isClosedLoop = startEndDist < (REFERENCE_SIZE * 0.45f)
 
         var bestMatch = "UNKNOWN"
         var bestScore = 0.0f
