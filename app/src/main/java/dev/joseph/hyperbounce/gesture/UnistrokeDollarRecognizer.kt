@@ -33,25 +33,29 @@ class UnistrokeDollarRecognizer {
         }
 
         private fun loadTemplates() {
-            // 1. 'O' Clockwise
-            val oClockwiseX = FloatArray(65)
-            val oClockwiseY = FloatArray(65)
-            for (i in 0..64) {
-                val theta = (i * 2.0 * PI / 64.0).toFloat()
-                oClockwiseX[i] = sin(theta) * 100.0f
-                oClockwiseY[i] = -cos(theta) * 100.0f
-            }
-            addTemplate("O", oClockwiseX, oClockwiseY, 65)
+            // 1. 'O' Circle templates with multiple starting phases (Top, Right, Bottom, Left)
+            val phases = doubleArrayOf(0.0, PI / 2.0, PI, 3.0 * PI / 2.0)
+            for (phase in phases) {
+                // Clockwise
+                val cwX = FloatArray(65)
+                val cwY = FloatArray(65)
+                for (i in 0..64) {
+                    val theta = phase + (i * 2.0 * PI / 64.0)
+                    cwX[i] = (sin(theta) * 100.0).toFloat()
+                    cwY[i] = (-cos(theta) * 100.0).toFloat()
+                }
+                addTemplate("O", cwX, cwY, 65)
 
-            // 2. 'O' Counter-Clockwise
-            val oCounterX = FloatArray(65)
-            val oCounterY = FloatArray(65)
-            for (i in 0..64) {
-                val theta = (i * 2.0 * PI / 64.0).toFloat()
-                oCounterX[i] = -sin(theta) * 100.0f
-                oCounterY[i] = -cos(theta) * 100.0f
+                // Counter-Clockwise
+                val ccwX = FloatArray(65)
+                val ccwY = FloatArray(65)
+                for (i in 0..64) {
+                    val theta = phase - (i * 2.0 * PI / 64.0)
+                    ccwX[i] = (sin(theta) * 100.0).toFloat()
+                    ccwY[i] = (-cos(theta) * 100.0).toFloat()
+                }
+                addTemplate("O", ccwX, ccwY, 65)
             }
-            addTemplate("O", oCounterX, oCounterY, 65)
 
             // 3. 'V' Single Apex Unistroke (down left-to-bottom, up bottom-to-right)
             val vX = FloatArray(65)

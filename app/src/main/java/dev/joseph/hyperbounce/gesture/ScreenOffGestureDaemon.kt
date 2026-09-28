@@ -111,14 +111,70 @@ class ScreenOffGestureDaemon(
         } catch (_: Throwable) {}
     }
 
+    private var lastScreenStateCheck = 0L
+    private var cachedScreenOff = false
+
+    private fun isScreenOff(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - lastScreenStateCheck < 250L) {
+            return cachedScreenOff
+        }
+        lastScreenStateCheck = now
+
+        try {
+            val dpms = File("/sys/class/drm/card0-DSI-1/dpms")
+            if (dpms.exists()) {
+                val state = dpms.readText().trim()
+                if (state.equals("Off", ignoreCase = true)) {
+                    cachedScreenOff = true
+                    return true
+                }
+                if (state.equals("On", ignoreCase = true)) {
+                    cachedScreenOff = false
+                    return false
+                }
+            }
+        } catch (_: Throwable) {}
+
+        try {
+            val bl = File("/sys/class/backlight/panel0-backlight/brightness")
+            if (bl.exists()) {
+                val b = bl.readText().trim().toIntOrNull() ?: -1
+                if (b == 0) {
+                    cachedScreenOff = true
+                    return true
+                } else if (b > 0) {
+                    cachedScreenOff = false
+                    return false
+                }
+            }
+        } catch (_: Throwable) {}
+
+        cachedScreenOff = false
+        return false
+    }
+
     private fun ensureFocaltechGestureMode() {
+        // 1. Enable Xiaomi Touch Mode 14 via xiaomi_touch_ctl
+        try {
+            val ctl = File("/data/local/tmp/xiaomi_touch_ctl")
+            if (ctl.exists()) {
+                Runtime.getRuntime().exec(arrayOf("/data/local/tmp/xiaomi_touch_ctl", "14", "1")).waitFor()
+                log("Configured /dev/xiaomi-touch mode 14 = 1 via xiaomi_touch_ctl")
+            }
+        } catch (t: Throwable) {
+            log("Error calling xiaomi_touch_ctl: ${t.message}")
+        }
+
+        // 2. Configure FocalTech sysfs nodes
         val paths = arrayOf(
             "/sys/devices/platform/soc/a8c000.spi/spi_master/spi1/spi1.0/fts_gesture_mode",
+            "/sys/devices/platform/soc/a8c000.spi/spi_master/spi1/spi1.0/fts_gesture_bm",
             "/sys/class/touch/touch_dev/suspend_state"
         )
         for (path in paths) {
             val f = File(path)
-            if (f.exists() && f.canWrite()) {
+            if (f.exists()) {
                 try {
                     f.writeText("1\n")
                     log("Configured $path = 1")
@@ -184,6 +240,16 @@ class ScreenOffGestureDaemon(
     }
 
     private fun processEvent(event: MutableInputEvent) {
+        // STRICT SCREEN-OFF ENFORCEMENT: Never detect or trigger when the screen is ON
+        if (!isScreenOff()) {
+            if (inStroke) {
+                inStroke = false
+                strokeCount = 0
+                releaseWakeLock()
+            }
+            return
+        }
+
         when (event.type) {
             InputEventConstants.EV_KEY -> {
                 // 1. Direct Hardware LPWG Gestures from FocalTech MCU Firmware
@@ -406,24 +472,37 @@ class ScreenOffGestureDaemon(
     private fun toggleFlashlight() {
         val torch0 = File("/sys/class/leds/led:torch_0/brightness")
         val torch1 = File("/sys/class/leds/led:torch_1/brightness")
-        if (torch0.exists() && torch0.canWrite()) {
-            try {
-                val curr = torch0.readText().trim().toIntOrNull() ?: 0
-                val target = if (curr > 0) 0 else 200
-                torch0.writeText("$target\n")
-                if (torch1.exists() && torch1.canWrite()) {
-                    torch1.writeText("$target\n")
-                }
-                log("Flashlight toggled to brightness: $target")
-                return
-            } catch (t: Throwable) {
-                log("Error toggling sysfs torch: ${t.message}")
+        val switch0 = File("/sys/class/leds/led:switch_0/brightness")
+        val switch1 = File("/sys/class/leds/led:switch_1/brightness")
+
+        try {
+            val currSwitch = if (switch0.exists()) switch0.readText().trim().toIntOrNull() ?: 0 else 0
+            val currTorch = if (torch0.exists()) torch0.readText().trim().toIntOrNull() ?: 0 else 0
+            val isCurrentlyOn = currSwitch > 0 || currTorch > 0
+
+            if (!isCurrentlyOn) {
+                // Turn ON
+                if (torch0.exists()) torch0.writeText("200\n")
+                if (torch1.exists()) torch1.writeText("200\n")
+                if (switch0.exists()) switch0.writeText("1\n")
+                if (switch1.exists()) switch1.writeText("1\n")
+                log("Flashlight toggled ON via Qualcomm PMIC sysfs")
+            } else {
+                // Turn OFF
+                if (switch0.exists()) switch0.writeText("0\n")
+                if (switch1.exists()) switch1.writeText("0\n")
+                if (torch0.exists()) torch0.writeText("0\n")
+                if (torch1.exists()) torch1.writeText("0\n")
+                log("Flashlight toggled OFF via Qualcomm PMIC sysfs")
             }
+        } catch (t: Throwable) {
+            log("Error toggling sysfs torch: ${t.message}")
         }
 
-        // Fallback via cmd statusbar
+        // Also broadcast MIUI / HyperOS torch toggle for SystemUI synchronization
         try {
-            Runtime.getRuntime().exec(arrayOf("cmd", "statusbar", "toggle-flashlight"))
+            Runtime.getRuntime().exec(arrayOf("am", "broadcast", "-a", "miui.intent.action.TOGGLE_TORCH"))
+            Runtime.getRuntime().exec(arrayOf("am", "broadcast", "-a", "miui.systemui.action.ACTION_OPERATE_FLASHLIGHT", "-p", "com.android.systemui"))
         } catch (_: Throwable) {}
     }
 }

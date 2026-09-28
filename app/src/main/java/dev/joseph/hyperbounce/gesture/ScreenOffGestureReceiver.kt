@@ -58,10 +58,14 @@ class ScreenOffGestureReceiver : BroadcastReceiver() {
     }
 
     private fun handleGestureV() {
-        val script = "curr=\$(cat /sys/class/leds/led:torch_0/brightness 2>/dev/null || echo 0); " +
-                "if [ \"\$curr\" -gt 0 ]; then target=0; else target=200; fi; " +
+        val script = "curr=\$(cat /sys/class/leds/led:switch_0/brightness 2>/dev/null || cat /sys/class/leds/led:torch_0/brightness 2>/dev/null || echo 0); " +
+                "if [ \"\$curr\" -gt 0 ]; then target=0; sw=0; else target=200; sw=1; fi; " +
                 "echo \$target > /sys/class/leds/led:torch_0/brightness 2>/dev/null; " +
-                "echo \$target > /sys/class/leds/led:torch_1/brightness 2>/dev/null"
+                "echo \$target > /sys/class/leds/led:torch_1/brightness 2>/dev/null; " +
+                "echo \$sw > /sys/class/leds/led:switch_0/brightness 2>/dev/null; " +
+                "echo \$sw > /sys/class/leds/led:switch_1/brightness 2>/dev/null; " +
+                "am broadcast -a miui.intent.action.TOGGLE_TORCH 2>/dev/null; " +
+                "am broadcast -a miui.systemui.action.ACTION_OPERATE_FLASHLIGHT -p com.android.systemui 2>/dev/null"
         runRootCommand(script)
     }
 
