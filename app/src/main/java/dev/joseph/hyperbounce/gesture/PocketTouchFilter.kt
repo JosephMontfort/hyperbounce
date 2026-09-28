@@ -15,16 +15,16 @@ import kotlin.math.min
 object PocketTouchFilter {
 
     // Thresholds tuned for FocalTech digitizers (X: 0..19520, Y: 0..43392, Major: 0..255)
-    private const val MAX_PERMISSIBLE_TOUCH_MAJOR = 165
-    private const val MAX_AVERAGE_TOUCH_MAJOR = 145.0f
+    private const val MAX_PERMISSIBLE_TOUCH_MAJOR = 190
+    private const val MAX_AVERAGE_TOUCH_MAJOR = 170.0f
 
-    private const val MIN_DURATION_MS = 130L
-    private const val MAX_DURATION_MS = 3000L
+    private const val MIN_DURATION_MS = 25L
+    private const val MAX_DURATION_MS = 4000L
 
-    private const val MIN_BOUNDING_WIDTH = 1200.0f
-    private const val MIN_BOUNDING_HEIGHT = 1200.0f
-    private const val MIN_TOTAL_PATH_LENGTH = 2000.0f
-    private const val MIN_SAMPLE_COUNT = 7
+    private const val MIN_BOUNDING_WIDTH = 250.0f
+    private const val MIN_BOUNDING_HEIGHT = 250.0f
+    private const val MIN_TOTAL_PATH_LENGTH = 400.0f
+    private const val MIN_SAMPLE_COUNT = 3
 
     private const val EDGE_MARGIN_X = 350.0f
     private const val EDGE_MARGIN_Y = 500.0f

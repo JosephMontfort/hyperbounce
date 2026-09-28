@@ -188,7 +188,7 @@ class HyperBouncePrefs(module: XposedInterface) {
         get() = prefs.getBoolean("gesture_daemon_enabled", true)
 
     val gestureConfidenceThreshold: Float
-        get() = prefs.getFloat("gesture_confidence_threshold", 0.80f)
+        get() = prefs.getFloat("gesture_confidence_threshold", 0.50f)
 
     val gestureOAction: String
         get() = prefs.getString("gesture_o_action", "wake_screen") ?: "wake_screen"

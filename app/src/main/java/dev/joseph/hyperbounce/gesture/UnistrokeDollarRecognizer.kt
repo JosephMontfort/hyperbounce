@@ -217,17 +217,10 @@ class UnistrokeDollarRecognizer {
 
         // Topological check: Loop closure for 'O'
         val startEndDist = hypot(resampleX[0] - resampleX[NUM_POINTS - 1], resampleY[0] - resampleY[NUM_POINTS - 1])
-        val isClosedLoop = startEndDist < (REFERENCE_SIZE * 0.45f)
-
         var bestMatch = "UNKNOWN"
         var bestScore = 0.0f
 
         for (template in TEMPLATES) {
-            // If the template is 'O', but stroke start and end points are widely separated, skip
-            if (template.name == "O" && !isClosedLoop) {
-                continue
-            }
-
             val minDistance = distanceAtBestAngle(template.pointsX, template.pointsY)
             val score = 1.0f - (minDistance / HALF_DIAGONAL)
 

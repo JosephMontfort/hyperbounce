@@ -20,7 +20,7 @@ import java.nio.ByteOrder
  *    (EV_ABS), coordinates are resampled and matched against mathematical templates.
  */
 class ScreenOffGestureDaemon(
-    private val confidenceThreshold: Float = 0.80f
+    private val confidenceThreshold: Float = 0.50f
 ) {
 
     companion object {
@@ -40,7 +40,7 @@ class ScreenOffGestureDaemon(
         @JvmStatic
         fun main(args: Array<String>) {
             log("Starting HyperBounce Screen-Off Gesture Daemon...")
-            var threshold = 0.80f
+            var threshold = 0.50f
 
             for (i in args.indices) {
                 if (args[i] == "--threshold" && i + 1 < args.size) {
@@ -383,18 +383,21 @@ class ScreenOffGestureDaemon(
                 toggleFlashlight()
             }
             "E" -> {
-                // Launch Camera
+                // Launch Camera: Wake screen first so activity displays immediately on lockscreen
+                try {
+                    Runtime.getRuntime().exec(arrayOf("input", "keyevent", "224"))
+                } catch (_: Throwable) {}
+                try {
+                    Runtime.getRuntime().exec(arrayOf("input", "keyevent", "27")) // KEYCODE_CAMERA
+                } catch (_: Throwable) {}
                 try {
                     Runtime.getRuntime().exec(arrayOf(
                         "am", "start",
+                        "-n", "com.android.camera/com.android.camera.Camera",
                         "-a", "android.media.action.STILL_IMAGE_CAMERA_SECURE",
                         "--ez", "android.intent.extra.CAMERA_OPEN_ONLY", "true"
                     ))
-                } catch (_: Throwable) {
-                    try {
-                        Runtime.getRuntime().exec(arrayOf("input", "keyevent", "27")) // KEYCODE_CAMERA
-                    } catch (_: Throwable) {}
-                }
+                } catch (_: Throwable) {}
             }
         }
     }
@@ -405,7 +408,7 @@ class ScreenOffGestureDaemon(
         if (torch0.exists() && torch0.canWrite()) {
             try {
                 val curr = torch0.readText().trim().toIntOrNull() ?: 0
-                val target = if (curr > 0) 0 else 100
+                val target = if (curr > 0) 0 else 200
                 torch0.writeText("$target\n")
                 if (torch1.exists() && torch1.canWrite()) {
                     torch1.writeText("$target\n")

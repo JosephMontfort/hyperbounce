@@ -1479,7 +1479,7 @@ class SettingsRepository(context: Context) {
 
     inner class ScreenOffGestureHolder {
         var daemonEnabled by prefsBooleanState("gesture_daemon_enabled", true)
-        var confidenceThreshold by prefsFloatState("gesture_confidence_threshold", 0.80f)
+        var confidenceThreshold by prefsFloatState("gesture_confidence_threshold", 0.50f)
         var oAction by prefsStringState("gesture_o_action", "wake_screen")
         var vAction by prefsStringState("gesture_v_action", "toggle_flashlight")
         var eAction by prefsStringState("gesture_e_action", "launch_camera")

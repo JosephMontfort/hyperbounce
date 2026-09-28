@@ -294,8 +294,8 @@ fun ScreenOffGestureScreen(
                     backdrop = backdrop,
                     value = gesturePrefs.confidenceThreshold,
                     onValueChange = gesturePrefs::setConfidenceThresholdPref,
-                    valueRange = 0.70f..0.95f,
-                    defaultValue = 0.80f,
+                    valueRange = 0.30f..0.90f,
+                    defaultValue = 0.50f,
                     valueLabel = { "${(it * 100).roundToInt()}%" },
                     enabled = gesturePrefs.daemonEnabled
                 )
