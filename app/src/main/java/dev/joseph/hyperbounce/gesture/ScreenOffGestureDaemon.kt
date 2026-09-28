@@ -1,5 +1,6 @@
 package dev.joseph.hyperbounce.gesture
 
+import android.util.Log
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -12,18 +13,14 @@ import java.nio.ByteOrder
  * Runs via root shell:
  * `CLASSPATH=$(pm path dev.joseph.hyperbounce | cut -d: -f2 | head -n 1) app_process /system/bin --nice-name=hb_gesture_daemon dev.joseph.hyperbounce.gesture.ScreenOffGestureDaemon`
  *
- * Key Architectural Highlights:
- * 1. Dynamic FocalTech event node resolution (no hardcoding).
- * 2. Zero-allocation event loop with a direct 24-byte little-endian NIO buffer.
- * 3. Zero idle CPU wake-locks: blocking POSIX read() lets CPU enter deep sleep.
- * 4. Micro-wake-lock held ONLY during active drawing (max 2 seconds) via /sys/power/wake_lock.
- * 5. Touch-geometry pocket touch filter (no hardware proximity sensor needed).
- * 6. Mathematical $1 Unistroke algorithm recognizing 'O', 'V', and 'E' (>80% confidence).
- * 7. Broadcasts `dev.joseph.hyperbounce.GESTURE_DETECTED` with gesture name & confidence.
+ * Dual-Engine Architecture:
+ * 1. Hardware LPWG Gesture Engine: The FocalTech digitizer MCU detects unistroke gestures
+ *    in sleep and reports EV_KEY events (KEY_O, KEY_V, KEY_E, KEY_W, KEY_M, KEY_C, KEY_Z, KEY_S, etc.).
+ * 2. Raw Coordinate $1 Unistroke Engine: In case raw multi-touch coordinates are streamed
+ *    (EV_ABS), coordinates are resampled and matched against mathematical templates.
  */
 class ScreenOffGestureDaemon(
-    private val confidenceThreshold: Float = 0.80f,
-    private val onlyScreenOff: Boolean = true
+    private val confidenceThreshold: Float = 0.80f
 ) {
 
     companion object {
@@ -33,21 +30,25 @@ class ScreenOffGestureDaemon(
         private const val BUFFER_SIZE = InputEventConstants.STRUCT_SIZE * BUFFER_EVENTS
         private const val MAX_STROKE_POINTS = 4096
 
+        private fun log(msg: String) {
+            println("[$TAG] $msg")
+            try {
+                Log.i(TAG, msg)
+            } catch (_: Throwable) {}
+        }
+
         @JvmStatic
         fun main(args: Array<String>) {
-            println("[$TAG] Starting HyperBounce Screen-Off Gesture Daemon...")
+            log("Starting HyperBounce Screen-Off Gesture Daemon...")
             var threshold = 0.80f
-            var screenOffOnly = true
 
             for (i in args.indices) {
                 if (args[i] == "--threshold" && i + 1 < args.size) {
                     threshold = args[i + 1].toFloatOrNull() ?: 0.80f
-                } else if (args[i] == "--all-screen") {
-                    screenOffOnly = false
                 }
             }
 
-            val daemon = ScreenOffGestureDaemon(threshold, screenOffOnly)
+            val daemon = ScreenOffGestureDaemon(threshold)
             daemon.runLoop()
         }
     }
@@ -88,59 +89,56 @@ class ScreenOffGestureDaemon(
                 wakeUnlockFile = FileOutputStream(wul)
             }
         } catch (t: Throwable) {
-            println("[$TAG] Warning: Unable to open /sys/power/wake_lock directly: ${t.message}")
+            log("Warning: Unable to open /sys/power/wake_lock directly: ${t.message}")
         }
     }
 
     private fun acquireWakeLock() {
         try {
-            val stream = wakeLockFile
-            if (stream != null) {
-                stream.write("$WAKE_LOCK_TAG\n".toByteArray(Charsets.US_ASCII))
-                stream.flush()
+            wakeLockFile?.apply {
+                write("$WAKE_LOCK_TAG\n".toByteArray(Charsets.US_ASCII))
+                flush()
             }
         } catch (_: Throwable) {}
     }
 
     private fun releaseWakeLock() {
         try {
-            val stream = wakeUnlockFile
-            if (stream != null) {
-                stream.write("$WAKE_LOCK_TAG\n".toByteArray(Charsets.US_ASCII))
-                stream.flush()
+            wakeUnlockFile?.apply {
+                write("$WAKE_LOCK_TAG\n".toByteArray(Charsets.US_ASCII))
+                flush()
             }
         } catch (_: Throwable) {}
     }
 
-    private fun isScreenAsleep(): Boolean {
-        try {
-            val proc = Runtime.getRuntime().exec(arrayOf("dumpsys", "power"))
-            val reader = proc.inputStream.bufferedReader()
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                val l = line ?: break
-                if (l.contains("mWakefulness=Awake")) {
-                    proc.destroy()
-                    return false
-                }
-                if (l.contains("mWakefulness=Asleep") || l.contains("mWakefulness=Dozing")) {
-                    proc.destroy()
-                    return true
+    private fun ensureFocaltechGestureMode() {
+        val paths = arrayOf(
+            "/sys/devices/platform/soc/a8c000.spi/spi_master/spi1/spi1.0/fts_gesture_mode",
+            "/sys/class/touch/touch_dev/suspend_state"
+        )
+        for (path in paths) {
+            val f = File(path)
+            if (f.exists() && f.canWrite()) {
+                try {
+                    f.writeText("1\n")
+                    log("Configured $path = 1")
+                } catch (t: Throwable) {
+                    log("Failed to write to $path: ${t.message}")
                 }
             }
-            proc.waitFor()
-        } catch (_: Throwable) {}
-        return true
+        }
     }
 
     fun runLoop() {
+        ensureFocaltechGestureMode()
+
         while (true) {
             val nodePath = FocaltechNodeFinder.findNode()
-            println("[$TAG] Resolved FocalTech event node: $nodePath")
+            log("Resolved FocalTech event node: $nodePath")
 
             val nodeFile = File(nodePath)
             if (!nodeFile.exists() || !nodeFile.canRead()) {
-                println("[$TAG] Error: Cannot read $nodePath. Retrying in 3 seconds...")
+                log("Error: Cannot read $nodePath. Retrying in 3 seconds...")
                 try {
                     Thread.sleep(3000)
                 } catch (_: InterruptedException) {}
@@ -152,16 +150,13 @@ class ScreenOffGestureDaemon(
                 fis = FileInputStream(nodeFile)
                 val rawBytes = ByteArray(BUFFER_SIZE)
                 val byteBuffer = ByteBuffer.wrap(rawBytes).order(ByteOrder.LITTLE_ENDIAN)
-
                 val event = MutableInputEvent()
 
-                println("[$TAG] Daemon listening on $nodePath (blocking I/O, 0% CPU idle)...")
+                log("Daemon listening on $nodePath (blocking I/O, 0% CPU idle)...")
 
                 while (true) {
                     val bytesRead = fis.read(rawBytes)
-                    if (bytesRead <= 0) {
-                        break
-                    }
+                    if (bytesRead <= 0) break
 
                     byteBuffer.position(0)
                     byteBuffer.limit(bytesRead)
@@ -174,7 +169,7 @@ class ScreenOffGestureDaemon(
                     }
                 }
             } catch (t: Throwable) {
-                println("[$TAG] Event stream disconnected ($nodePath): ${t.message}. Reconnecting...")
+                log("Event stream disconnected ($nodePath): ${t.message}. Reconnecting...")
             } finally {
                 try {
                     fis?.close()
@@ -190,6 +185,46 @@ class ScreenOffGestureDaemon(
 
     private fun processEvent(event: MutableInputEvent) {
         when (event.type) {
+            InputEventConstants.EV_KEY -> {
+                // 1. Direct Hardware LPWG Gestures from FocalTech MCU Firmware
+                if (event.value == 1) { // Key down event
+                    val hwGesture = when (event.code) {
+                        InputEventConstants.KEY_O -> "O"
+                        InputEventConstants.KEY_V -> "V"
+                        InputEventConstants.KEY_E -> "E"
+                        InputEventConstants.KEY_W -> "W"
+                        InputEventConstants.KEY_M -> "M"
+                        InputEventConstants.KEY_C -> "C"
+                        InputEventConstants.KEY_Z -> "Z"
+                        InputEventConstants.KEY_S -> "S"
+                        InputEventConstants.KEY_UP -> "SWIPE_UP"
+                        InputEventConstants.KEY_DOWN -> "SWIPE_DOWN"
+                        InputEventConstants.KEY_LEFT -> "SWIPE_LEFT"
+                        InputEventConstants.KEY_RIGHT -> "SWIPE_RIGHT"
+                        InputEventConstants.KEY_WAKEUP -> "DOUBLE_TAP"
+                        else -> null
+                    }
+                    if (hwGesture != null) {
+                        log("Hardware LPWG gesture detected: $hwGesture (key code ${event.code})")
+                        acquireWakeLock()
+                        try {
+                            dispatchGesture(hwGesture, 1.0f)
+                        } finally {
+                            releaseWakeLock()
+                        }
+                    }
+                }
+
+                // 2. Track raw touch stream (BTN_TOUCH down / up)
+                if (event.code == InputEventConstants.BTN_TOUCH) {
+                    if (event.value == 1 && !inStroke) {
+                        startStroke()
+                    } else if (event.value == 0 && inStroke) {
+                        finishStroke()
+                    }
+                }
+            }
+
             InputEventConstants.EV_ABS -> {
                 when (event.code) {
                     InputEventConstants.ABS_MT_SLOT -> {
@@ -200,12 +235,10 @@ class ScreenOffGestureDaemon(
                     }
                     InputEventConstants.ABS_MT_TRACKING_ID -> {
                         if (event.value >= 0) {
-                            // Touch down
                             if (currentSlot == 0 && !inStroke) {
                                 startStroke()
                             }
                         } else {
-                            // Touch up for this slot (-1)
                             if (currentSlot == 0 && inStroke) {
                                 finishStroke()
                             }
@@ -236,21 +269,10 @@ class ScreenOffGestureDaemon(
                 }
             }
 
-            InputEventConstants.EV_KEY -> {
-                if (event.code == InputEventConstants.BTN_TOUCH) {
-                    if (event.value == 1 && !inStroke) {
-                        startStroke()
-                    } else if (event.value == 0 && inStroke) {
-                        finishStroke()
-                    }
-                }
-            }
-
             InputEventConstants.EV_SYN -> {
                 if (event.code == InputEventConstants.SYN_REPORT) {
                     if (inStroke && currentSlot == 0 && hasNewCoordinates) {
                         if (currentX >= 0f && currentY >= 0f) {
-                            // Only append if moved to reduce jitter
                             if (strokeCount == 0 ||
                                 strokeX[strokeCount - 1] != currentX ||
                                 strokeY[strokeCount - 1] != currentY
@@ -291,16 +313,11 @@ class ScreenOffGestureDaemon(
 
         try {
             if (count >= 2) {
-                // If onlyScreenOff is enabled, check screen state before parsing
-                if (onlyScreenOff && !isScreenAsleep()) {
-                    return
-                }
-
                 val avgTouchMajor = if (touchMajorSamples > 0) {
                     sumTouchMajor.toFloat() / touchMajorSamples
                 } else 0.0f
 
-                // 1. Run Pocket Touch Prevention Filter
+                // 1. Run Touch-Geometry Pocket Prevention Filter
                 val filterResult = PocketTouchFilter.evaluateStroke(
                     xPoints = strokeX,
                     yPoints = strokeY,
@@ -312,7 +329,7 @@ class ScreenOffGestureDaemon(
                 )
 
                 if (!filterResult.accepted) {
-                    println("[$TAG] Pocket Filter: ${filterResult.reason}")
+                    log("Pocket Filter: ${filterResult.reason}")
                     return
                 }
 
@@ -320,7 +337,7 @@ class ScreenOffGestureDaemon(
                 val match = recognizer.recognize(strokeX, strokeY, count)
                 val confidencePct = (match.confidence * 100).toInt()
 
-                println("[$TAG] Recognized gesture '${match.name}' with confidence $confidencePct% (threshold: ${(confidenceThreshold * 100).toInt()}%)")
+                log("Recognized raw stroke '${match.name}' with confidence $confidencePct% (threshold: ${(confidenceThreshold * 100).toInt()}%)")
 
                 if (match.confidence >= confidenceThreshold && match.name != "UNKNOWN") {
                     dispatchGesture(match.name, match.confidence)
@@ -333,9 +350,9 @@ class ScreenOffGestureDaemon(
     }
 
     private fun dispatchGesture(gesture: String, confidence: Float) {
-        println("[$TAG] >>> GESTURE TRIGGERED: $gesture (Confidence: ${(confidence * 100).toInt()}%) <<<")
+        log(">>> GESTURE TRIGGERED: $gesture (Confidence: ${(confidence * 100).toInt()}%) <<<")
 
-        // 1. Broadcast Intent via Android am tool
+        // 1. Broadcast Intent
         try {
             val cmd = arrayOf(
                 "am", "broadcast",
@@ -346,19 +363,23 @@ class ScreenOffGestureDaemon(
             )
             Runtime.getRuntime().exec(cmd)
         } catch (t: Throwable) {
-            println("[$TAG] Error broadcasting intent: ${t.message}")
+            log("Error broadcasting intent: ${t.message}")
         }
 
-        // 2. Direct hardware / system actions for instant responsiveness
+        // 2. Direct Hardware Actions
         when (gesture) {
-            "O" -> {
+            "O", "DOUBLE_TAP" -> {
                 // Wake screen
                 try {
                     Runtime.getRuntime().exec(arrayOf("input", "keyevent", "224")) // KEYCODE_WAKEUP
-                } catch (_: Throwable) {}
+                } catch (_: Throwable) {
+                    try {
+                        Runtime.getRuntime().exec(arrayOf("input", "keyevent", "26")) // KEYCODE_POWER
+                    } catch (_: Throwable) {}
+                }
             }
             "V" -> {
-                // Toggle flashlight
+                // Toggle Flashlight directly via sysfs
                 toggleFlashlight()
             }
             "E" -> {
@@ -366,39 +387,39 @@ class ScreenOffGestureDaemon(
                 try {
                     Runtime.getRuntime().exec(arrayOf(
                         "am", "start",
-                        "-a", "android.media.action.STILL_IMAGE_CAMERA",
+                        "-a", "android.media.action.STILL_IMAGE_CAMERA_SECURE",
                         "--ez", "android.intent.extra.CAMERA_OPEN_ONLY", "true"
                     ))
-                } catch (_: Throwable) {}
+                } catch (_: Throwable) {
+                    try {
+                        Runtime.getRuntime().exec(arrayOf("input", "keyevent", "27")) // KEYCODE_CAMERA
+                    } catch (_: Throwable) {}
+                }
             }
         }
     }
 
     private fun toggleFlashlight() {
-        // Method 1: Check sysfs torch leds
-        val torchNodes = arrayOf(
-            "/sys/class/leds/led:torch_0/brightness",
-            "/sys/class/leds/torch-light0/brightness",
-            "/sys/class/leds/torch/brightness"
-        )
-        for (node in torchNodes) {
-            val f = File(node)
-            if (f.exists() && f.canWrite()) {
-                try {
-                    val curr = f.readText().trim().toIntOrNull() ?: 0
-                    val next = if (curr > 0) 0 else 200
-                    f.writeText("$next\n")
-                    return
-                } catch (_: Throwable) {}
+        val torch0 = File("/sys/class/leds/led:torch_0/brightness")
+        val torch1 = File("/sys/class/leds/led:torch_1/brightness")
+        if (torch0.exists() && torch0.canWrite()) {
+            try {
+                val curr = torch0.readText().trim().toIntOrNull() ?: 0
+                val target = if (curr > 0) 0 else 100
+                torch0.writeText("$target\n")
+                if (torch1.exists() && torch1.canWrite()) {
+                    torch1.writeText("$target\n")
+                }
+                log("Flashlight toggled to brightness: $target")
+                return
+            } catch (t: Throwable) {
+                log("Error toggling sysfs torch: ${t.message}")
             }
         }
 
-        // Method 2: Fallback via broadcast
+        // Fallback via cmd statusbar
         try {
-            Runtime.getRuntime().exec(arrayOf(
-                "am", "broadcast",
-                "-a", "dev.joseph.hyperbounce.TOGGLE_FLASHLIGHT"
-            ))
+            Runtime.getRuntime().exec(arrayOf("cmd", "statusbar", "toggle-flashlight"))
         } catch (_: Throwable) {}
     }
 }

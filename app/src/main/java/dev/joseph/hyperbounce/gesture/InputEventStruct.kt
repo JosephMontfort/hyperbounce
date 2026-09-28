@@ -29,6 +29,22 @@ object InputEventConstants {
     // Key Codes
     const val BTN_TOUCH = 0x014a // 330
 
+    // FocalTech LPWG Hardware Gesture Keys (emitted directly in sleep mode)
+    const val KEY_W = 17
+    const val KEY_E = 18
+    const val KEY_O = 24
+    const val KEY_S = 31
+    const val KEY_Z = 44
+    const val KEY_C = 46
+    const val KEY_V = 47
+    const val KEY_M = 50
+    const val KEY_UP = 103
+    const val KEY_LEFT = 105
+    const val KEY_RIGHT = 106
+    const val KEY_DOWN = 108
+    const val KEY_WAKEUP = 143
+    const val KEY_GOTO = 0x152 // 338
+
     // Absolute Axis Codes
     const val ABS_MT_SLOT = 0x002f        // 47
     const val ABS_MT_TOUCH_MAJOR = 0x0030 // 48

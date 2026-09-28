@@ -3,9 +3,9 @@ package dev.joseph.hyperbounce.gesture
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.hardware.camera2.CameraManager
 import android.os.PowerManager
 import android.util.Log
+import java.io.File
 
 /**
  * Receives `dev.joseph.hyperbounce.GESTURE_DETECTED` broadcasts from the screen-off gesture daemon
@@ -26,10 +26,10 @@ class ScreenOffGestureReceiver : BroadcastReceiver() {
 
         val gesture = intent.getStringExtra(EXTRA_GESTURE) ?: return
         val confidence = intent.getFloatExtra(EXTRA_CONFIDENCE, 0.0f)
-        Log.d(TAG, "Screen-off gesture received: $gesture (confidence=$confidence)")
+        Log.i(TAG, "Screen-off gesture received: $gesture (confidence=$confidence)")
 
         when (gesture) {
-            "O" -> handleGestureO(context)
+            "O", "DOUBLE_TAP" -> handleGestureO(context)
             "V" -> handleGestureV(context)
             "E" -> handleGestureE(context)
         }
@@ -52,26 +52,41 @@ class ScreenOffGestureReceiver : BroadcastReceiver() {
     }
 
     private fun handleGestureV(context: Context) {
-        // Toggle Flashlight
-        try {
-            val cm = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
-            if (cm != null) {
-                val cameraId = cm.cameraIdList.firstOrNull()
-                if (cameraId != null) {
-                    // Toggle via shell command or direct torch
-                    Runtime.getRuntime().exec(arrayOf("su", "-c", "cmd statusbar toggle-flashlight 2>/dev/null || input keyevent 26"))
+        // Direct Hardware Torch Toggle via Sysfs
+        val torch0 = File("/sys/class/leds/led:torch_0/brightness")
+        val torch1 = File("/sys/class/leds/led:torch_1/brightness")
+        if (torch0.exists() && torch0.canWrite()) {
+            try {
+                val curr = torch0.readText().trim().toIntOrNull() ?: 0
+                val target = if (curr > 0) 0 else 100
+                torch0.writeText("$target\n")
+                if (torch1.exists() && torch1.canWrite()) {
+                    torch1.writeText("$target\n")
                 }
-            }
+                return
+            } catch (_: Throwable) {}
+        }
+
+        // Fallback via shell
+        try {
+            Runtime.getRuntime().exec(arrayOf("cmd", "statusbar", "toggle-flashlight"))
         } catch (_: Throwable) {}
     }
 
     private fun handleGestureE(context: Context) {
-        // Launch Camera
+        // Launch Camera securely
         try {
-            val cameraIntent = Intent("android.media.action.STILL_IMAGE_CAMERA").apply {
+            val cameraIntent = Intent("android.media.action.STILL_IMAGE_CAMERA_SECURE").apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(cameraIntent)
-        } catch (_: Throwable) {}
+        } catch (_: Throwable) {
+            try {
+                val normalCamera = Intent("android.media.action.STILL_IMAGE_CAMERA").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(normalCamera)
+            } catch (_: Throwable) {}
+        }
     }
 }

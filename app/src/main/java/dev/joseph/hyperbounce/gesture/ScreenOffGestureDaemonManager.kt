@@ -33,24 +33,20 @@ object ScreenOffGestureDaemonManager {
         Thread {
             var success = false
             try {
-                // If already running, don't spawn duplicate
-                if (isDaemonRunning()) {
-                    success = true
-                } else {
-                    val script = """
-                        APK_PATH=${'$'}(pm path dev.joseph.hyperbounce | cut -d: -f2 | head -n 1)
-                        if [ -n "${'$'}APK_PATH" ]; then
-                            nohup sh -c "CLASSPATH=${'$'}APK_PATH app_process /system/bin --nice-name=$DAEMON_PROCESS_NAME dev.joseph.hyperbounce.gesture.ScreenOffGestureDaemon --threshold $threshold" >/dev/null 2>&1 &
-                        fi
-                    """.trimIndent()
+                // Terminate any previous instance to avoid duplicates
+                Runtime.getRuntime().exec(arrayOf("su", "-c", "pkill -9 -f $DAEMON_PROCESS_NAME")).waitFor()
+                Thread.sleep(300)
 
-                    val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", script))
-                    proc.waitFor()
+                val cmd = "APK_PATH=$(pm path dev.joseph.hyperbounce | cut -d: -f2 | head -n 1) && " +
+                        "export CLASSPATH=\$APK_PATH && " +
+                        "nohup app_process /system/bin --nice-name=$DAEMON_PROCESS_NAME dev.joseph.hyperbounce.gesture.ScreenOffGestureDaemon --threshold $threshold </dev/null >/data/local/tmp/hb_gesture.log 2>&1 &"
 
-                    // Verify it spawned
-                    Thread.sleep(600)
-                    success = isDaemonRunning()
-                }
+                val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
+                proc.waitFor()
+
+                // Wait and verify spawn
+                Thread.sleep(800)
+                success = isDaemonRunning()
             } catch (_: Throwable) {
                 success = false
             }
@@ -65,7 +61,7 @@ object ScreenOffGestureDaemonManager {
             try {
                 val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", "pkill -9 -f $DAEMON_PROCESS_NAME"))
                 proc.waitFor()
-                Thread.sleep(300)
+                Thread.sleep(400)
                 success = !isDaemonRunning()
             } catch (_: Throwable) {
                 success = false
@@ -77,6 +73,7 @@ object ScreenOffGestureDaemonManager {
 
     fun restartDaemon(context: Context, threshold: Float = 0.80f, onComplete: ((Boolean) -> Unit)? = null) {
         stopDaemon {
+            Thread.sleep(200)
             startDaemon(context, threshold, onComplete)
         }
     }

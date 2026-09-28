@@ -389,18 +389,78 @@ fun ScreenOffGestureScreen(
                             Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(colors.accentPurple.copy(alpha = 0.2f))
+                                .clickable {
+                                    scope.launch(Dispatchers.IO) {
+                                        try {
+                                            Runtime.getRuntime().exec(arrayOf("am", "broadcast", "-a", "dev.joseph.hyperbounce.GESTURE_DETECTED", "--es", "gesture", "E", "--ef", "confidence", "1.0"))
+                                        } catch (_: Throwable) {}
+                                    }
+                                }
                                 .padding(horizontal = 10.dp, vertical = 5.dp)
                         ) {
                             BasicText(
-                                text = "Camera",
+                                text = "Test Camera",
                                 style = HyperBounceType.caption.copy(color = colors.accentPurple, fontWeight = FontWeight.SemiBold)
                             )
                         }
                     }
                 }
             }
+
+            SectionHeader("Quick Hardware Test", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.accentOrange.copy(alpha = 0.2f))
+                            .clickable {
+                                scope.launch(Dispatchers.IO) {
+                                    try {
+                                        Runtime.getRuntime().exec(arrayOf("am", "broadcast", "-a", "dev.joseph.hyperbounce.GESTURE_DETECTED", "--es", "gesture", "V", "--ef", "confidence", "1.0"))
+                                    } catch (_: Throwable) {}
+                                }
+                            }
+                            .padding(vertical = 9.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        BasicText(
+                            text = "Test Torch (V)",
+                            style = HyperBounceType.caption.copy(color = colors.accentOrange, fontWeight = FontWeight.SemiBold)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.accentBlue.copy(alpha = 0.2f))
+                            .clickable {
+                                scope.launch(Dispatchers.IO) {
+                                    try {
+                                        Runtime.getRuntime().exec(arrayOf("am", "broadcast", "-a", "dev.joseph.hyperbounce.GESTURE_DETECTED", "--es", "gesture", "O", "--ef", "confidence", "1.0"))
+                                    } catch (_: Throwable) {}
+                                }
+                            }
+                            .padding(vertical = 9.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        BasicText(
+                            text = "Test Wake (O)",
+                            style = HyperBounceType.caption.copy(color = colors.accentBlue, fontWeight = FontWeight.SemiBold)
+                        )
+                    }
+                }
+            }
+
             SectionFooter(
-                "Broadcast Intent: dev.joseph.hyperbounce.GESTURE_DETECTED with extras 'gesture' and 'confidence'",
+                "Broadcast Intent: dev.joseph.hyperbounce.GESTURE_DETECTED (extras: gesture, confidence)",
                 colors
             )
             Spacer(Modifier.height(30.dp))
