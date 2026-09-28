@@ -26,67 +26,49 @@ class ScreenOffGestureReceiver : BroadcastReceiver() {
 
         val gesture = intent.getStringExtra(EXTRA_GESTURE) ?: return
         val confidence = intent.getFloatExtra(EXTRA_CONFIDENCE, 0.0f)
-        Log.i(TAG, "Screen-off gesture received: $gesture (confidence=$confidence)")
+        val source = intent.getStringExtra("source") ?: "external"
+        Log.i(TAG, "Screen-off gesture received: $gesture (confidence=$confidence, source=$source)")
 
+        // If the gesture originated directly from the root daemon, it already executed the hardware action
+        if (source == "daemon") {
+            Log.d(TAG, "Hardware action already executed by root daemon for $gesture")
+            return
+        }
+
+        // External or UI test trigger: execute via root shell
         when (gesture) {
-            "O", "DOUBLE_TAP" -> handleGestureO(context)
-            "V" -> handleGestureV(context)
-            "E" -> handleGestureE(context)
+            "O", "DOUBLE_TAP" -> handleGestureO()
+            "V" -> handleGestureV()
+            "E" -> handleGestureE()
         }
     }
 
-    private fun handleGestureO(context: Context) {
-        // Wake device screen
-        try {
-            val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
-            val wakeLock = pm?.newWakeLock(
-                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
-                "HyperBounce:GestureWake"
-            )
-            wakeLock?.acquire(3000L)
-        } catch (_: Throwable) {
+    private fun runRootCommand(command: String) {
+        Thread {
             try {
-                Runtime.getRuntime().exec(arrayOf("input", "keyevent", "224"))
-            } catch (_: Throwable) {}
-        }
-    }
-
-    private fun handleGestureV(context: Context) {
-        // Direct Hardware Torch Toggle via Sysfs
-        val torch0 = File("/sys/class/leds/led:torch_0/brightness")
-        val torch1 = File("/sys/class/leds/led:torch_1/brightness")
-        if (torch0.exists() && torch0.canWrite()) {
-            try {
-                val curr = torch0.readText().trim().toIntOrNull() ?: 0
-                val target = if (curr > 0) 0 else 100
-                torch0.writeText("$target\n")
-                if (torch1.exists() && torch1.canWrite()) {
-                    torch1.writeText("$target\n")
-                }
-                return
-            } catch (_: Throwable) {}
-        }
-
-        // Fallback via shell
-        try {
-            Runtime.getRuntime().exec(arrayOf("cmd", "statusbar", "toggle-flashlight"))
-        } catch (_: Throwable) {}
-    }
-
-    private fun handleGestureE(context: Context) {
-        // Launch Camera securely
-        try {
-            val cameraIntent = Intent("android.media.action.STILL_IMAGE_CAMERA_SECURE").apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                Runtime.getRuntime().exec(arrayOf("su", "-c", command)).waitFor()
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to run root command: $command", t)
             }
-            context.startActivity(cameraIntent)
-        } catch (_: Throwable) {
-            try {
-                val normalCamera = Intent("android.media.action.STILL_IMAGE_CAMERA").apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(normalCamera)
-            } catch (_: Throwable) {}
-        }
+        }.start()
+    }
+
+    private fun handleGestureO() {
+        runRootCommand("input keyevent 224")
+    }
+
+    private fun handleGestureV() {
+        val script = "curr=\$(cat /sys/class/leds/led:torch_0/brightness 2>/dev/null || echo 0); " +
+                "if [ \"\$curr\" -gt 0 ]; then target=0; else target=200; fi; " +
+                "echo \$target > /sys/class/leds/led:torch_0/brightness 2>/dev/null; " +
+                "echo \$target > /sys/class/leds/led:torch_1/brightness 2>/dev/null"
+        runRootCommand(script)
+    }
+
+    private fun handleGestureE() {
+        val script = "input keyevent 224 && " +
+                "am start -n com.android.camera/com.android.camera.Camera -a android.media.action.STILL_IMAGE_CAMERA_SECURE --ez android.intent.extra.CAMERA_OPEN_ONLY true"
+        runRootCommand(script)
     }
 }
+

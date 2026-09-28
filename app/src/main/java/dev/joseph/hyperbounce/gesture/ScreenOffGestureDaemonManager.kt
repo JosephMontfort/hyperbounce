@@ -29,7 +29,7 @@ object ScreenOffGestureDaemonManager {
         return null
     }
 
-    fun startDaemon(context: Context, threshold: Float = 0.80f, onComplete: ((Boolean) -> Unit)? = null) {
+    fun startDaemon(context: Context, threshold: Float = 0.50f, onComplete: ((Boolean) -> Unit)? = null) {
         Thread {
             var success = false
             try {
@@ -37,9 +37,9 @@ object ScreenOffGestureDaemonManager {
                 Runtime.getRuntime().exec(arrayOf("su", "-c", "pkill -9 -f $DAEMON_PROCESS_NAME")).waitFor()
                 Thread.sleep(300)
 
-                val cmd = "APK_PATH=$(pm path dev.joseph.hyperbounce | cut -d: -f2 | head -n 1) && " +
+                val cmd = "APK_PATH=\$(pm path dev.joseph.hyperbounce | cut -d: -f2 | head -n 1) && " +
                         "export CLASSPATH=\$APK_PATH && " +
-                        "nohup app_process /system/bin --nice-name=$DAEMON_PROCESS_NAME dev.joseph.hyperbounce.gesture.ScreenOffGestureDaemon --threshold $threshold </dev/null >/data/local/tmp/hb_gesture.log 2>&1 &"
+                        "/system/bin/setsid /system/bin/app_process /system/bin --nice-name=$DAEMON_PROCESS_NAME dev.joseph.hyperbounce.gesture.ScreenOffGestureDaemon --threshold $threshold </dev/null >/data/local/tmp/hb_gesture.log 2>&1 &"
 
                 val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
                 proc.waitFor()
@@ -71,7 +71,7 @@ object ScreenOffGestureDaemonManager {
         }.start()
     }
 
-    fun restartDaemon(context: Context, threshold: Float = 0.80f, onComplete: ((Boolean) -> Unit)? = null) {
+    fun restartDaemon(context: Context, threshold: Float = 0.50f, onComplete: ((Boolean) -> Unit)? = null) {
         stopDaemon {
             Thread.sleep(200)
             startDaemon(context, threshold, onComplete)

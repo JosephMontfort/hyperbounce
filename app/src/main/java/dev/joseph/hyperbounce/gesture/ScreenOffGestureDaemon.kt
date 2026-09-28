@@ -359,6 +359,7 @@ class ScreenOffGestureDaemon(
                 "-a", "dev.joseph.hyperbounce.GESTURE_DETECTED",
                 "--es", "gesture", gesture,
                 "--ef", "confidence", confidence.toString(),
+                "--es", "source", "daemon",
                 "--el", "timestamp", System.currentTimeMillis().toString()
             )
             Runtime.getRuntime().exec(cmd)
