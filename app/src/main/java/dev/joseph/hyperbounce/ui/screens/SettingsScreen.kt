@@ -139,6 +139,19 @@ fun SettingsScreen(
             )
         }
 
+        SectionHeader("Gestures & Hardware", colors)
+        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+            val gestureRunning = repository.screenOffGesture.daemonEnabled
+            SettingsNavRow(
+                title = "Screen-Off Gestures",
+                subtitle = if (gestureRunning) "FocalTech LPWG daemon active (O, V, E)" else "Hardware gesture engine disabled",
+                colors = colors,
+                iconTint = colors.accentPurple.copy(alpha = 0.85f),
+                onClick = { onNavigate(Destination.ScreenOffGesture) },
+                icon = { SlidersIcon(color = Color.White, size = 14.dp) }
+            )
+        }
+
         SectionHeader("System & Safety", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             val activeCount = repository.safeMode.getCrashingAliases().size

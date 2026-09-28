@@ -46,5 +46,13 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <receiver
+            android:name=".gesture.ScreenOffGestureReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dev.joseph.hyperbounce.GESTURE_DETECTED" />
+            </intent-filter>
+        </receiver>
+
     </application>
 </manifest>

@@ -135,6 +135,7 @@ class SettingsRepository(context: Context) {
     val dialerRecents = DialerRecentsHolder()
     val safeMode = SafeModeHolder()
     val audioHaptics = AudioHapticsHolder()
+    val screenOffGesture = ScreenOffGestureHolder()
 
     @JvmName("setModuleEnabledPref")
     fun setModuleEnabled(value: Boolean) {
@@ -1474,6 +1475,20 @@ class SettingsRepository(context: Context) {
         fun setRefractoryMsPref(v: Long) { refractoryMs = v }
         fun setActivePipelinePref(v: String) { activePipeline = v }
         fun setResonantFrequencyHzPref(v: Float) { resonantFrequencyHz = v }
+    }
+
+    inner class ScreenOffGestureHolder {
+        var daemonEnabled by prefsBooleanState("gesture_daemon_enabled", true)
+        var confidenceThreshold by prefsFloatState("gesture_confidence_threshold", 0.80f)
+        var oAction by prefsStringState("gesture_o_action", "wake_screen")
+        var vAction by prefsStringState("gesture_v_action", "toggle_flashlight")
+        var eAction by prefsStringState("gesture_e_action", "launch_camera")
+
+        fun setDaemonEnabledPref(v: Boolean) { daemonEnabled = v }
+        fun setConfidenceThresholdPref(v: Float) { confidenceThreshold = v }
+        fun setOActionPref(v: String) { oAction = v }
+        fun setVActionPref(v: String) { vAction = v }
+        fun setEActionPref(v: String) { eAction = v }
     }
 
     // --- small property-delegate helpers over SharedPreferences --------------------------
