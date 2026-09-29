@@ -356,6 +356,13 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                             onBack = pop
                         )
 
+                        Destination.ScreenOffGestures -> dev.joseph.hyperbounce.ui.screens.ScreenOffGesturesScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
                         Destination.About -> AboutScreen(
                             colors = colors,
                             backdrop = backdrop,

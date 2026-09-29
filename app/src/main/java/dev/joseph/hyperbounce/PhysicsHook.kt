@@ -134,6 +134,17 @@ class PhysicsHook : XposedModule() {
                 param.packageName == "com.android.server.telecom" ||
                 param.packageName == "android" ||
                 param.packageName == "system" -> {
+                    if (prefs != null) {
+                        try {
+                            dev.joseph.hyperbounce.gestures.ScreenOffGestureConfigHolder.updateFromPrefs(prefs)
+                            prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                                dev.joseph.hyperbounce.gestures.ScreenOffGestureConfigHolder.updateFromPrefs(prefs)
+                            }
+                        } catch (t: Throwable) {
+                            Log.e("HyperBounce", "Failed to bind gesture prefs in system_server", t)
+                        }
+                    }
+                    dev.joseph.hyperbounce.gestures.ScreenOffGestureHook.init(this, param.classLoader)
                     dev.joseph.hyperbounce.haptics.ringtone.TelecomRingtoneHapticHook.init(this, param.classLoader)
                     dev.joseph.hyperbounce.haptics.ringtone.XiaomiRingtoneHapticHook.init(this, param.classLoader)
                 }
@@ -163,11 +174,27 @@ class PhysicsHook : XposedModule() {
     override fun onSystemServerStarting(param: XposedModuleInterface.SystemServerStartingParam) {
         super.onSystemServerStarting(param)
         try {
-            Log.d("HyperBounce", "onSystemServerStarting: initializing Telecom and Xiaomi ringtone haptic hooks")
+            Log.d("HyperBounce", "onSystemServerStarting: initializing Telecom, Xiaomi ringtone, and Screen-Off gesture hooks")
+            val prefs = try {
+                getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
+            } catch (t: Throwable) {
+                null
+            }
+            if (prefs != null) {
+                try {
+                    dev.joseph.hyperbounce.gestures.ScreenOffGestureConfigHolder.updateFromPrefs(prefs)
+                    prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                        dev.joseph.hyperbounce.gestures.ScreenOffGestureConfigHolder.updateFromPrefs(prefs)
+                    }
+                } catch (t: Throwable) {
+                    Log.e("HyperBounce", "Failed to bind gesture prefs in onSystemServerStarting", t)
+                }
+            }
+            dev.joseph.hyperbounce.gestures.ScreenOffGestureHook.init(this, param.classLoader)
             dev.joseph.hyperbounce.haptics.ringtone.TelecomRingtoneHapticHook.init(this, param.classLoader)
             dev.joseph.hyperbounce.haptics.ringtone.XiaomiRingtoneHapticHook.init(this, param.classLoader)
         } catch (t: Throwable) {
-            Log.e("HyperBounce", "Failed to init ringtone hooks in onSystemServerStarting", t)
+            Log.e("HyperBounce", "Failed to init hooks in onSystemServerStarting", t)
         }
     }
 }

@@ -354,4 +354,17 @@ data class SafeModeSettings(
     val crashingAliases: Set<String> = emptySet()
 )
 
+/** Screen-Off Gestures Settings (Hardware FocalTech TDDI Gesture Engine) */
+data class ScreenOffGestureSettings(
+    val enabled: Boolean = true,
+    val hapticFeedback: Boolean = true,
+    val gestureOEnabled: Boolean = true, // Flashlight toggle
+    val gestureCEnabled: Boolean = true, // Camera launch
+    val gestureVEnabled: Boolean = true, // Flashlight toggle
+    val gestureMEnabled: Boolean = true, // Play / Pause music
+    val gestureWEnabled: Boolean = true, // Next track
+    val gestureSwipesEnabled: Boolean = true // Swipe track & volume
+)
+
+
 

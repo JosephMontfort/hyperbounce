@@ -563,3 +563,73 @@ fun PhoneIcon(
         drawPath(path, color = color, style = Stroke(s, cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
+
+@Composable
+fun FlashlightIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 16.dp,
+    strokeWidth: Dp = 1.8.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val s = strokeWidth.toPx()
+        val path = Path().apply {
+            // Flashlight body
+            moveTo(w * 0.32f, h * 0.12f)
+            lineTo(w * 0.68f, h * 0.12f)
+            lineTo(w * 0.62f, h * 0.40f)
+            lineTo(w * 0.58f, h * 0.88f)
+            lineTo(w * 0.42f, h * 0.88f)
+            lineTo(w * 0.38f, h * 0.40f)
+            close()
+        }
+        drawPath(path, color = color, style = Stroke(s, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        // Power button dot
+        drawCircle(
+            color = color,
+            radius = s * 0.8f,
+            center = Offset(w * 0.50f, h * 0.55f)
+        )
+    }
+}
+
+@Composable
+fun CameraIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 16.dp,
+    strokeWidth: Dp = 1.8.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val s = strokeWidth.toPx()
+        val bodyPath = Path().apply {
+            moveTo(w * 0.15f, h * 0.32f)
+            lineTo(w * 0.35f, h * 0.32f)
+            lineTo(w * 0.42f, h * 0.20f)
+            lineTo(w * 0.58f, h * 0.20f)
+            lineTo(w * 0.65f, h * 0.32f)
+            lineTo(w * 0.85f, h * 0.32f)
+            cubicTo(w * 0.90f, h * 0.32f, w * 0.92f, h * 0.35f, w * 0.92f, h * 0.40f)
+            lineTo(w * 0.92f, h * 0.80f)
+            cubicTo(w * 0.92f, h * 0.85f, w * 0.90f, h * 0.88f, w * 0.85f, h * 0.88f)
+            lineTo(w * 0.15f, h * 0.88f)
+            cubicTo(w * 0.10f, h * 0.88f, w * 0.08f, h * 0.85f, w * 0.08f, h * 0.80f)
+            lineTo(w * 0.08f, h * 0.40f)
+            cubicTo(w * 0.08f, h * 0.35f, w * 0.10f, h * 0.32f, w * 0.15f, h * 0.32f)
+            close()
+        }
+        drawPath(bodyPath, color = color, style = Stroke(s, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        // Center lens circle
+        drawCircle(
+            color = color,
+            radius = w * 0.18f,
+            center = Offset(w * 0.50f, h * 0.60f),
+            style = Stroke(s, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+    }
+}
+

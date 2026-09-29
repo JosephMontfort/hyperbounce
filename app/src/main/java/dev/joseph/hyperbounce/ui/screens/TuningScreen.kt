@@ -139,6 +139,15 @@ fun TuningScreen(
                 onClick = { onNavigate(Destination.HapticStudio) },
                 icon = { dev.joseph.hyperbounce.ui.components.SlidersIcon(color = Color.White, size = 15.dp) }
             )
+            RowDivider(colors.separator)
+            SettingsNavRow(
+                title = "Screen-Off Gestures",
+                subtitle = if (repository.screenOffGestures.enabled) "O: Torch · C: Camera · 0% Battery Drain" else "Off",
+                colors = colors,
+                iconTint = colors.accentPink,
+                onClick = { onNavigate(Destination.ScreenOffGestures) },
+                icon = { dev.joseph.hyperbounce.ui.components.PowerIcon(color = Color.White, size = 15.dp) }
+            )
         }
     }
 }

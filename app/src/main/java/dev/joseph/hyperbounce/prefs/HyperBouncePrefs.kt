@@ -182,6 +182,31 @@ class HyperBouncePrefs(module: XposedInterface) {
 
     val toggleGlassFeel: GlassFeelValues get() = glassFeel("toggle_glass")
     val sliderGlassFeel: GlassFeelValues get() = glassFeel("slider_glass")
+
+    // --- Screen-Off Gestures ----------------------------------------------------------------
+    val screenOffGesturesEnabled: Boolean
+        get() = prefs.getBoolean("screen_off_gestures_enabled", true)
+
+    val screenOffGestureHaptic: Boolean
+        get() = prefs.getBoolean("screen_off_gestures_haptic", true)
+
+    val screenOffGestureOEnabled: Boolean
+        get() = prefs.getBoolean("screen_off_gesture_o_enabled", true)
+
+    val screenOffGestureCEnabled: Boolean
+        get() = prefs.getBoolean("screen_off_gesture_c_enabled", true)
+
+    val screenOffGestureVEnabled: Boolean
+        get() = prefs.getBoolean("screen_off_gesture_v_enabled", true)
+
+    val screenOffGestureMEnabled: Boolean
+        get() = prefs.getBoolean("screen_off_gesture_m_enabled", true)
+
+    val screenOffGestureWEnabled: Boolean
+        get() = prefs.getBoolean("screen_off_gesture_w_enabled", true)
+
+    val screenOffGestureSwipesEnabled: Boolean
+        get() = prefs.getBoolean("screen_off_gesture_swipes_enabled", true)
 }
 
 data class GlassFeelValues(
