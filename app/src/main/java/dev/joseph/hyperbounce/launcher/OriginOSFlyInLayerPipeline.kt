@@ -244,13 +244,13 @@ object OriginOSFlyInLayerPipeline {
                         override fun onAnimationEnd(animation: Animator) {
                             Log.d(TAG, "OriginOS Fly in by layer animation completed successfully")
                             cleanup(targets, dockViews)
-                            isRunning = false
+                            OriginOSFlyInLayerPipeline.isRunning = false
                             finishStateMachine(launcher, userPresentCompat)
                         }
 
                         override fun onAnimationCancel(animation: Animator) {
                             cleanup(targets, dockViews)
-                            isRunning = false
+                            OriginOSFlyInLayerPipeline.isRunning = false
                         }
                     })
                 }
