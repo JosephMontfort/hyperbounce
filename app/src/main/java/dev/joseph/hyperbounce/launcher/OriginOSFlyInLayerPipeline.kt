@@ -217,8 +217,8 @@ object OriginOSFlyInLayerPipeline {
                         this.interpolator = LinearInterpolator()
                         addUpdateListener { va ->
                             val currentMs = (va.animatedFraction * dockTotal).toLong()
-                            val ty: Float
-                            val alpha: Float
+                            var ty: Float = 0.0f
+                            var alpha: Float = 1.0f
                             if (currentMs <= dockP1) {
                                 val frac = (currentMs.toFloat() / dockP1).coerceIn(0.0f, 1.0f)
                                 val spline = phase1FlightInterpolator.getInterpolation(frac)
