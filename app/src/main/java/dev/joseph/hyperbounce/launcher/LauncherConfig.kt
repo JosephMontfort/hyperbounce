@@ -66,6 +66,11 @@ data class ScreenUnlockConfig(
     val kineticDockResponse: Float = 0.55f,
     val kineticDockZDepth: Float = 800.0f,
 
+    // Mode 2: OriginOS 7 Fly in by Layer
+    val originosDepthScale: Float = 6.0f,
+    val originosUpperRowDelay: Float = 35.0f,
+    val originosLowerRowDelay: Float = 15.0f,
+
     // Row-by-row dynamics (r0_z..r6_z, r0_center_bounce..r6_center_bounce, etc.)
     val dyn: Map<String, Float> = emptyMap()
 ) {
@@ -151,6 +156,9 @@ object LauncherConfigHolder {
             kineticDockDamping = prefs.getFloat("unlock_kinetic_dock_damping", 1.00f),
             kineticDockResponse = prefs.getFloat("unlock_kinetic_dock_response", 0.55f),
             kineticDockZDepth = prefs.getFloat("unlock_kinetic_dock_z_depth", 800.0f),
+            originosDepthScale = prefs.getFloat("unlock_originos_depth_scale", 6.0f),
+            originosUpperRowDelay = prefs.getFloat("unlock_originos_upper_row_delay", 35.0f),
+            originosLowerRowDelay = prefs.getFloat("unlock_originos_lower_row_delay", 15.0f),
             dyn = dynMap
         )
 

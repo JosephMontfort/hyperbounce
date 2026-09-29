@@ -435,35 +435,73 @@ fun ScreenUnlockScreen(
             }
         } else {
             item {
+                SectionHeader("ORIGINOS 7 FLY IN DYNAMICS", colors)
+                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                    SettingsSliderRow(
+                        title = "Starting Depth (Z-Scale)",
+                        subtitle = "Controls how far above and out of screen the icons start along Z",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = unlock.originosDepthScale,
+                        onValueChange = unlock::setOriginosDepthScale,
+                        valueRange = 2.0f..10.0f,
+                        defaultValue = 6.0f,
+                        valueLabel = { String.format(Locale.US, "%.1fx", it) },
+                        enabled = unlock.enabled
+                    )
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Upper Rows Delay Step",
+                        subtitle = "Delay increase per row above center (higher = more staggered upper rows)",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = unlock.originosUpperRowDelay,
+                        onValueChange = unlock::setOriginosUpperRowDelay,
+                        valueRange = 0f..150f,
+                        defaultValue = 35.0f,
+                        valueLabel = { String.format(Locale.US, "%.0f ms/row", it) },
+                        enabled = unlock.enabled
+                    )
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Lower Rows Delay Step",
+                        subtitle = "Delay increase per row below center (lower = less staggered bottom rows)",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = unlock.originosLowerRowDelay,
+                        onValueChange = unlock::setOriginosLowerRowDelay,
+                        valueRange = 0f..100f,
+                        defaultValue = 15.0f,
+                        valueLabel = { String.format(Locale.US, "%.0f ms/row", it) },
+                        enabled = unlock.enabled
+                    )
+                }
+            }
+
+            item {
                 SectionHeader("ORIGINOS 7 FLAGSHIP PIPELINE (逐层飞入)", colors)
                 GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                     InfoRow(
-                        title = "1:1 Native Pipeline Replacement",
-                        subtitle = "Completely bypasses HyperOS spring physics and replaces it with OriginOS 7's flagship 2-phase unlock animation.",
-                        colors = colors
-                    )
-                    RowDivider(colors.separator)
-                    InfoRow(
-                        title = "Concentric Shell Stagger",
-                        subtitle = "Home screen icons are grouped into 6 concentric rings radiating outward with a 56ms shell stagger delay.",
+                        title = "Native Center-Pivoted Stagger",
+                        subtitle = "Center row runs stock timing while upper and lower rows stagger independently with fluid, non-blocking 2-phase flight.",
                         colors = colors
                     )
                     RowDivider(colors.separator)
                     InfoRow(
                         title = "Phase 1: Radial Camera Zoom",
-                        subtitle = "Icons scale 6.0x -> ring undershoot (0.975 - 0.990) over 550ms with PathInterpolator(0, 1, 0.5, 1) and 300ms alpha fade.",
+                        subtitle = "Icons scale from Starting Depth -> undershoot over 550ms with PathInterpolator(0, 1, 0.5, 1) and 300ms alpha fade.",
                         colors = colors
                     )
                     RowDivider(colors.separator)
                     InfoRow(
                         title = "Phase 1: Hotseat Launch",
-                        subtitle = "Dock & indicator elements fly upward from +900px to -15px overshoot (200ms delay, 400ms duration).",
+                        subtitle = "Dock & indicator elements fly upward from +900px to -15px overshoot (400ms duration).",
                         colors = colors
                     )
                     RowDivider(colors.separator)
                     InfoRow(
                         title = "Phase 2: Elastic Rebound",
-                        subtitle = "Icons settle from undershoot to 1.000x resting scale (400ms) and dock settles from -15px to 0px (450ms) using PathInterpolator(0.3, 0, 0.4, 1).",
+                        subtitle = "Each row immediately rebounds from undershoot to 1.000x resting scale (400ms) with zero freeze or delay.",
                         colors = colors
                     )
                     RowDivider(colors.separator)

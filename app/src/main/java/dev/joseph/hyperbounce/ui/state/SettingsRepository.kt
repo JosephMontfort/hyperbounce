@@ -896,6 +896,10 @@ class SettingsRepository(context: Context) {
         var kineticDockResponse by prefsFloatState("unlock_kinetic_dock_response", defaults.kineticDockResponse); private set
         var kineticDockZDepth by prefsFloatState("unlock_kinetic_dock_z_depth", defaults.kineticDockZDepth); private set
 
+        var originosDepthScale by prefsFloatState("unlock_originos_depth_scale", defaults.originosDepthScale); private set
+        var originosUpperRowDelay by prefsFloatState("unlock_originos_upper_row_delay", defaults.originosUpperRowDelay); private set
+        var originosLowerRowDelay by prefsFloatState("unlock_originos_lower_row_delay", defaults.originosLowerRowDelay); private set
+
         private val rowZStates = mutableStateMapOf<Int, Float>()
         private val rowCenterBounceStates = mutableStateMapOf<Int, Float>()
         private val rowOuterBounceStates = mutableStateMapOf<Int, Float>()
@@ -976,7 +980,8 @@ class SettingsRepository(context: Context) {
             enabled, animMode, gridColumns, gridRows, dockDamping, dockResponse,
             centerResponse, centerDamping, edgeResponseDelay, edgeDampingDrop, zDepthMultiplier,
             minResponse, maxResponse, minDamping, maxDamping, durationScale, velocityInfluence,
-            maxVelocity, cascadeDamping, kineticDockDamping, kineticDockResponse, kineticDockZDepth
+            maxVelocity, cascadeDamping, kineticDockDamping, kineticDockResponse, kineticDockZDepth,
+            originosDepthScale, originosUpperRowDelay, originosLowerRowDelay
         )
 
         @JvmName("setUnlockEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
@@ -1001,6 +1006,9 @@ class SettingsRepository(context: Context) {
         @JvmName("setUnlockKineticDockDampingPref") fun setKineticDockDamping(v: Float) { kineticDockDamping = v }
         @JvmName("setUnlockKineticDockResponsePref") fun setKineticDockResponse(v: Float) { kineticDockResponse = v }
         @JvmName("setUnlockKineticDockZDepthPref") fun setKineticDockZDepth(v: Float) { kineticDockZDepth = v }
+        @JvmName("setUnlockOriginosDepthScalePref") fun setOriginosDepthScale(v: Float) { originosDepthScale = v }
+        @JvmName("setUnlockOriginosUpperRowDelayPref") fun setOriginosUpperRowDelay(v: Float) { originosUpperRowDelay = v }
+        @JvmName("setUnlockOriginosLowerRowDelayPref") fun setOriginosLowerRowDelay(v: Float) { originosLowerRowDelay = v }
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
@@ -1025,6 +1033,9 @@ class SettingsRepository(context: Context) {
             kineticDockDamping = defaults.kineticDockDamping
             kineticDockResponse = defaults.kineticDockResponse
             kineticDockZDepth = defaults.kineticDockZDepth
+            originosDepthScale = defaults.originosDepthScale
+            originosUpperRowDelay = defaults.originosUpperRowDelay
+            originosLowerRowDelay = defaults.originosLowerRowDelay
 
             rowZStates.clear()
             rowCenterBounceStates.clear()
