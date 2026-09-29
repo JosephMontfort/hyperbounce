@@ -323,7 +323,17 @@ object ScreenOffGestureHook {
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
             }
-            context.startActivity(intent)
+            try {
+                val userHandleCurrent = Class.forName("android.os.UserHandle").getField("CURRENT").get(null)
+                val startActivityAsUser = context.javaClass.getMethod(
+                    "startActivityAsUser",
+                    Intent::class.java,
+                    Class.forName("android.os.UserHandle")
+                )
+                startActivityAsUser.invoke(context, intent, userHandleCurrent)
+            } catch (_: Throwable) {
+                context.startActivity(intent)
+            }
             Log.i(TAG, "Camera activity launched successfully")
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to launch secure camera, attempting standard camera", t)
@@ -366,11 +376,21 @@ object ScreenOffGestureHook {
     private fun vibrateHaptic(context: Context, durationMs: Long) {
         if (!ScreenOffGestureConfigHolder.hapticFeedback) return
         try {
-            val vib = vibrator ?: (context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)?.also { vibrator = it }
+            val vib = vibrator ?: (context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)?.also { vibrator = it } ?: return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vib?.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
+                val effect = VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    try {
+                        val attrs = android.os.VibrationAttributes.Builder()
+                            .setUsage(android.os.VibrationAttributes.USAGE_HARDWARE_FEEDBACK)
+                            .build()
+                        vib.vibrate(effect, attrs)
+                        return
+                    } catch (_: Throwable) {}
+                }
+                vib.vibrate(effect)
             } else {
-                vib?.vibrate(durationMs)
+                vib.vibrate(durationMs)
             }
         } catch (_: Throwable) {}
     }
@@ -378,12 +398,19 @@ object ScreenOffGestureHook {
     private fun enableHardwareGestureNode() {
         Thread {
             try {
-                val node = File("/sys/devices/platform/soc/a8c000.spi/spi_master/spi1/spi1.0/fts_gesture_mode")
-                if (node.exists() && node.canWrite()) {
-                    node.writeText("1")
+                val bmNode = File("/sys/devices/platform/soc/a8c000.spi/spi_master/spi1/spi1.0/fts_gesture_bm")
+                if (bmNode.exists() && bmNode.canWrite()) {
+                    bmNode.writeText("0\n")
+                    Log.i(TAG, "fts_gesture_bm set to 0 in sysfs")
+                }
+                val modeNode = File("/sys/devices/platform/soc/a8c000.spi/spi_master/spi1/spi1.0/fts_gesture_mode")
+                if (modeNode.exists() && modeNode.canWrite()) {
+                    modeNode.writeText("1\n")
                     Log.i(TAG, "fts_gesture_mode set to 1 in sysfs")
                 }
-            } catch (_: Throwable) {}
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to configure gesture sysfs nodes", t)
+            }
         }.start()
     }
 }
