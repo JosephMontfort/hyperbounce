@@ -15,31 +15,25 @@ import kotlin.math.floor
 import kotlin.math.max
 
 /**
- * 1:1 Precision Implementation of OriginOS 7 "Fly in by layer" (逐层飞入) / iOS 26 Screen Unlock Animation.
- * Extracted and ported directly from OriginOS 7 Launcher (il.j, il.k, il.f, il.c, jj.a).
+ * 1:1 Precision Implementation of iOS 26 / OriginOS 7 Z-Axis Radial Zoom Unlock Animation.
  *
  * Visual Characteristics:
- * 1. Bottom-Up Ascending Stagger Wave:
- *    Rows travel from bottom upward with progressive delay:
- *    Row at the very bottom (Row 6) arrives first, then row 5, row 4, row 3, row 2, row 1,
- *    and row 0 (top row) arrives latest with the most pronounced vertical bounce!
- * 2. Transverse Ripple (Inner vs Outer Stagger at the top):
- *    Within the top rows, inner columns settle cleanly first, while the outer corner columns
- *    arrive with an extra delay (~40-60ms) and deeper elastic overshoot, settling last.
- * 3. Smooth Two-Phase Flight & Elastic Rebound:
- *    - Phase 1: Upward travel from +160..+300px into negative overshoot (-6..-32px)
- *      with PathInterpolator(0.0f, 1.0f, 0.45f, 1.0f) + alpha fade.
- *    - Phase 2: Elastic rebound settling from overshoot back to resting 0px
- *      using PathInterpolator(0.3f, 0.0f, 0.4f, 1.0f) (inner) and PathInterpolator(0.25f, 0.08f, 0.2f, 1.0f) (outer).
- * 4. Perspective Camera Zoom:
- *    Dynamic pivot shift to screen focal center (W/2, W/2) for genuine 3D perspective zoom.
- * 5. Zero-Drop 120Hz Hardware Layer Acceleration:
- *    Uses hardware layers during motion and transitions smoothly without any single-sheet snapping.
+ * 1. 100% Pure Z-Axis Camera Flight (Zero Y Translation on Desktop Icons):
+ *    Icons fly in from outside the screen along the Z-axis (scale 4.5x - 6.0x -> 1.0x)
+ *    with dynamic pivot shifted to screen center (W/2, W/2). No vertical sheet/blanket motion.
+ * 2. Bottom-Up Ascending Stagger Wave:
+ *    Lower rows arrive and settle on screen first; rows ascend in a rolling cascade up to row 0.
+ * 3. Transverse Ripple (Top Inner Settles First, Top Outer Corners Delay):
+ *    Within the top rows, inner center icons settle cleanly first, while outer corner icons
+ *    arrive with an extra delay (~50ms) and deeper elastic bounce along Z, settling last.
+ * 4. Dock Launch:
+ *    Hotseat flies upward from bottom (+900px -> -15px overshoot -> 0px resting).
+ * 5. Zero-Drop 120Hz Hardware Layer Acceleration.
  */
 object OriginOSFlyInLayerPipeline {
-    private const val TAG = "HyperBounce_OriginOS"
+    private const val TAG = "HyperBounce_ScreenUnlock"
 
-    // OriginOS 7 PathInterpolators (il.k, il.h, jj.a)
+    // Authentic PathInterpolators (OriginOS 7 jj.a / il.k / il.h)
     private val alphaInterpolator = PathInterpolator(0.33f, 0.0f, 0.67f, 1.0f)
     private val phase1FlightInterpolator = PathInterpolator(0.0f, 1.0f, 0.45f, 1.0f)
     private val phase2InnerReboundInterpolator = PathInterpolator(0.30f, 0.0f, 0.40f, 1.0f)
@@ -55,8 +49,6 @@ object OriginOSFlyInLayerPipeline {
         val startDelay: Long,
         val p1Duration: Long,
         val p2Duration: Long,
-        val initialTY: Float,
-        val overshootTY: Float,
         val startScale: Float,
         val undershootScale: Float,
         var pivotX: Float = 0.0f,
@@ -96,15 +88,16 @@ object OriginOSFlyInLayerPipeline {
 
                     v.pivotX = pX
                     v.pivotY = pY
-                    v.translationY = target.initialTY
                     v.scaleX = target.startScale
                     v.scaleY = target.startScale
+                    v.translationX = 0.0f
+                    v.translationY = 0.0f
                     v.alpha = 0.0f
                 }
 
                 val dockViews = collectDockViews(launcher)
                 for (d in dockViews) {
-                    d.translationY = 450.0f
+                    d.translationY = 900.0f
                     d.alpha = 0.0f
                 }
 
@@ -112,7 +105,7 @@ object OriginOSFlyInLayerPipeline {
                 activeTargets.addAll(targets)
                 activeDockViews.clear()
                 activeDockViews.addAll(dockViews)
-                Log.d(TAG, "Prepared OriginOS Fly in by layer: ${targets.size} icons staggered bottom-up, ${dockViews.size} dock elements")
+                Log.d(TAG, "Prepared Z-Axis Radial Zoom: ${targets.size} icons staggered bottom-up, ${dockViews.size} dock elements")
             } catch (t: Throwable) {
                 Log.e(TAG, "Error in prepare", t)
             }
@@ -120,7 +113,7 @@ object OriginOSFlyInLayerPipeline {
     }
 
     /**
-     * Executes the true bottom-up + inner-to-outer staggered unlock animation pipeline.
+     * Executes the true Z-axis bottom-up + top inner/outer staggered unlock animation.
      */
     fun start(launcher: Activity, userPresentCompat: Any? = null) {
         launcher.runOnUiThread {
@@ -134,7 +127,7 @@ object OriginOSFlyInLayerPipeline {
                     prepare(launcher)
                 }
                 if (activeTargets.isEmpty()) {
-                    Log.w(TAG, "No active targets found for OriginOS animation")
+                    Log.w(TAG, "No active targets found for unlock animation")
                     isRunning = false
                     finishStateMachine(launcher, userPresentCompat)
                     return@runOnUiThread
@@ -153,7 +146,7 @@ object OriginOSFlyInLayerPipeline {
 
                 val animators = mutableListOf<Animator>()
 
-                // Build independent animator for each icon
+                // Build independent Z-axis animator for each icon
                 for (item in targets) {
                     val v = item.view
                     val totalDuration = item.p1Duration + item.p2Duration
@@ -171,11 +164,10 @@ object OriginOSFlyInLayerPipeline {
                             val currentMs = (va.animatedFraction * totalDuration).toLong()
                             val p1Dur = item.p1Duration
 
-                            // Translation Y & Scale
+                            // Scale along Z-axis (camera zoom with screen center pivot)
                             if (currentMs <= p1Dur) {
                                 val frac = (currentMs.toFloat() / p1Dur).coerceIn(0.0f, 1.0f)
                                 val spline = phase1FlightInterpolator.getInterpolation(frac)
-                                v.translationY = item.initialTY + ((item.overshootTY - item.initialTY) * spline)
                                 val s = item.startScale + ((item.undershootScale - item.startScale) * spline)
                                 v.scaleX = s
                                 v.scaleY = s
@@ -183,14 +175,17 @@ object OriginOSFlyInLayerPipeline {
                                 val p2Dur = item.p2Duration
                                 val frac = ((currentMs - p1Dur).toFloat() / p2Dur).coerceIn(0.0f, 1.0f)
                                 val spline = p2Interp.getInterpolation(frac)
-                                v.translationY = item.overshootTY + ((0.0f - item.overshootTY) * spline)
                                 val s = item.undershootScale + ((1.0f - item.undershootScale) * spline)
                                 v.scaleX = s
                                 v.scaleY = s
                             }
 
-                            // Alpha Fade In (250ms from start of this item's movement)
-                            val alphaDur = 250L
+                            // Desktop icons strictly have translationY = 0.0f
+                            v.translationY = 0.0f
+                            v.translationX = 0.0f
+
+                            // Alpha Fade In (280ms from start of this item's movement)
+                            val alphaDur = 280L
                             if (currentMs <= alphaDur) {
                                 val aFrac = (currentMs.toFloat() / alphaDur).coerceIn(0.0f, 1.0f)
                                 v.alpha = alphaInterpolator.getInterpolation(aFrac)
@@ -202,17 +197,17 @@ object OriginOSFlyInLayerPipeline {
                     animators.add(anim)
                 }
 
-                // Dock / Hotseat: Launches from bottom at t=0
+                // Dock / Hotseat: OriginOS 7 +900px -> -15px overshoot -> 0px settle
                 if (dockViews.isNotEmpty()) {
-                    val dockP1 = 200L
-                    val dockP2 = 280L
+                    val dockP1 = 400L
+                    val dockP2 = 450L
                     val dockTotal = dockP1 + dockP2
-                    val dockInitTY = 450.0f
-                    val dockOverTY = -12.0f
+                    val dockInitTY = 900.0f
+                    val dockOverTY = -15.0f
 
                     val dockAnim = ValueAnimator.ofFloat(0.0f, 1.0f).apply {
                         this.duration = dockTotal
-                        this.startDelay = 0L
+                        this.startDelay = 120L
                         this.interpolator = LinearInterpolator()
                         addUpdateListener { va ->
                             val currentMs = (va.animatedFraction * dockTotal).toLong()
@@ -242,7 +237,7 @@ object OriginOSFlyInLayerPipeline {
                     playTogether(animators)
                     addListener(object : AnimatorListenerAdapter() {
                         override fun onAnimationEnd(animation: Animator) {
-                            Log.d(TAG, "OriginOS Fly in by layer animation completed successfully")
+                            Log.d(TAG, "Z-Axis Radial Zoom animation completed successfully")
                             cleanup(targets, dockViews)
                             OriginOSFlyInLayerPipeline.isRunning = false
                             finishStateMachine(launcher, userPresentCompat)
@@ -257,9 +252,9 @@ object OriginOSFlyInLayerPipeline {
 
                 masterAnimSet = masterSet
                 masterSet.start()
-                Log.d(TAG, "Started OriginOS Fly in by layer staggered animation: ${targets.size} icons")
+                Log.d(TAG, "Started Z-Axis Radial Zoom staggered animation: ${targets.size} icons")
             } catch (t: Throwable) {
-                Log.e(TAG, "Error starting OriginOS animation", t)
+                Log.e(TAG, "Error starting animation", t)
                 isRunning = false
                 resetInternal()
             }
@@ -334,7 +329,7 @@ object OriginOSFlyInLayerPipeline {
 
     /**
      * Traverses the current active CellLayout, extracts exact positions, and calculates
-     * staggered bottom-up delays and inner-to-outer top row settling timings.
+     * staggered bottom-up Z-scale delays and inner-to-outer top row settling timings.
      */
     private fun collectTargets(launcher: Activity): List<StaggerTarget> {
         val list = mutableListOf<StaggerTarget>()
@@ -378,35 +373,31 @@ object OriginOSFlyInLayerPipeline {
                 val isOuter = (cellX == 0 || cellX == cols - 1 || normDistFromCenter > 0.65f)
 
                 // 1. Bottom-up wave delay: lower rows start first, top row starts latest
-                val rowDelay = bottomUpRank * 42L
+                val rowDelay = bottomUpRank * 40L
 
-                // 2. Transverse delay: within the top rows, inner columns start & settle first,
-                //    outer corner columns receive an extra delay so they arrive and bounce later
-                val colDelay = if (isOuter) {
-                    (28L + (topFactor * 32L)).toLong()
+                // 2. Transverse delay: within top rows, inner columns settle first,
+                //    outer corner columns receive extra delay so they arrive and bounce later
+                val colDelay = if (isOuter && topFactor > 0.30f) {
+                    (28L + (topFactor * 26L)).toLong()
                 } else {
                     0L
                 }
 
                 val startDelay = rowDelay + colDelay
 
-                // Physical trajectories:
-                // Initial translation Y: higher rows travel from further below
-                val initialTY = 160.0f + (topFactor * 110.0f) + (if (isOuter) 25.0f * topFactor else 0.0f)
+                // Phase 1 flight duration: bottom rows travel faster (300ms), top rows zoom longer (370ms)
+                val p1Duration = 300L + (topFactor * 70L).toLong()
 
-                // Overshoot: bottom rows barely overshoot (-6px), top rows overshoot deeper (-22px inner, -32px outer)
-                val overshootTY = - (6.0f + (topFactor * 16.0f) + (if (isOuter) 10.0f * topFactor else 0.0f))
+                // Phase 2 rebound duration: bottom rows settle quickly (240ms), top inner (320ms),
+                // top outer corners float and settle last (410ms)
+                val p2Duration = 240L + (topFactor * 80L).toLong() + (if (isOuter) (topFactor * 90L).toLong() else 0L)
 
-                // Phase 1 flight duration (220ms - 270ms)
-                val p1Duration = 220L + (topFactor * 50L).toLong()
-
-                // Phase 2 rebound duration: bottom rows settle fast (240ms), top inner (330ms),
-                // top outer corners float and settle last (420ms)
-                val p2Duration = 240L + (topFactor * 90L).toLong() + (if (isOuter) (topFactor * 90L).toLong() else 0L)
-
-                // Scale: starts enlarged (1.22x - 1.38x), undershoots to 0.975x, settles to 1.000x
-                val startScale = 1.22f + (topFactor * 0.16f)
-                val undershootScale = 0.975f + (0.015f * (1.0f - topFactor))
+                // Pure Z-axis Scale:
+                // Starts zoomed-in from outside the screen (4.5x - 6.0x)
+                val startScale = 4.5f + (topFactor * 1.5f)
+                // Undershoot along Z before settling to 1.000x:
+                // Bottom rows: 0.985x, Top inner: 0.965x, Top outer: 0.950x (deepest bounce)
+                val undershootScale = 0.985f - (topFactor * 0.020f) - (if (isOuter) 0.015f * topFactor else 0.0f)
 
                 list.add(
                     StaggerTarget(
@@ -419,8 +410,6 @@ object OriginOSFlyInLayerPipeline {
                         startDelay = startDelay,
                         p1Duration = p1Duration,
                         p2Duration = p2Duration,
-                        initialTY = initialTY,
-                        overshootTY = overshootTY,
                         startScale = startScale,
                         undershootScale = undershootScale
                     )
