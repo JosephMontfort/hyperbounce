@@ -299,11 +299,23 @@ object ScreenOffGestureHook {
             vibrateHaptic(context, 45L)
 
             // Wake screen with gesture reason so lockscreen / display turns on immediately
-            powerManager?.wakeUp(
-                SystemClock.uptimeMillis(),
-                PowerManager.WAKE_REASON_GESTURE,
-                "HyperBounce:ScreenOffGesture"
-            )
+            try {
+                val wakeUpMethod = powerManager?.javaClass?.getMethod(
+                    "wakeUp",
+                    Long::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    String::class.java
+                )
+                wakeUpMethod?.invoke(powerManager, SystemClock.uptimeMillis(), 4 /* WAKE_REASON_GESTURE */, "HyperBounce:ScreenOffGesture")
+            } catch (_: Throwable) {
+                @Suppress("DEPRECATION")
+                val wl = powerManager?.newWakeLock(
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                    "HyperBounce:GestureWake"
+                )
+                wl?.acquire(3000)
+                wl?.release()
+            }
 
             // Launch secure camera above keyguard with zero delay
             val intent = Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA_SECURE).apply {

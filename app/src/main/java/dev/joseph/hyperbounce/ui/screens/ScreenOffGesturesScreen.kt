@@ -85,7 +85,7 @@ fun ScreenOffGesturesScreen(
                     title = "Draw 'V' for Flashlight",
                     subtitle = "Alternative shape toggle for flashlight",
                     colors = colors,
-                    iconTint = colors.accentYellow,
+                    iconTint = colors.accentOrange,
                     backdrop = backdrop,
                     checked = gestures.gestureVEnabled,
                     onCheckedChange = gestures::setGestureVEnabled,
@@ -157,16 +157,14 @@ fun ScreenOffGesturesScreen(
                 Column(Modifier.fillMaxWidth().padding(16.dp)) {
                     BasicText(
                         text = "FocalTech FT5672 TDDI Hardware Gestures",
-                        style = HyperBounceType.bodyMedium.copy(
-                            color = colors.textPrimary,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                        style = HyperBounceType.headline.copy(
+                            color = colors.label
                         )
                     )
                     BasicText(
                         text = "\n• Recognition occurs on-chip in the touch controller's low-power scan DSP while the CPU is in deep sleep.\n• IRQ 304 wakes system_server only when a gesture matches, triggering the action with zero latency.\n• Idle CPU drain: 0.00% · Battery drain: Identical to Double-Tap-to-Wake (0.00% extra).",
-                        style = HyperBounceType.bodySmall.copy(
-                            color = colors.textSecondary,
-                            lineHeight = androidx.compose.ui.unit.sp(18)
+                        style = HyperBounceType.footnote.copy(
+                            color = colors.secondaryLabel
                         )
                     )
                 }
