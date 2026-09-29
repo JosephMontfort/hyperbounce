@@ -40,7 +40,7 @@ object ScreenUnlockDefaults {
 
 data class ScreenUnlockConfig(
     val enabled: Boolean = true,
-    val animMode: Int = 1, // 0 = iOS Radial Dispersion, 1 = Kinetic Y-Axis Cascade
+    val animMode: Int = 1, // 0 = iOS Radial Dispersion, 1 = Kinetic Y-Axis Cascade, 2 = OriginOS 7 Fly in by Layer
     val gridColumns: Int = 4,
     val gridRows: Int = 7,
 

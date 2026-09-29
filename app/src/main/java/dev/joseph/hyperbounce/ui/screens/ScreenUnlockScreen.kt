@@ -70,27 +70,40 @@ fun ScreenUnlockScreen(
         item {
             SectionHeader("ANIMATION MODE", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ModeSegment(
+                            title = "Mode 0: iOS Radial",
+                            subtitle = "Outward dispersion",
+                            selected = unlock.animMode == 0,
+                            colors = colors,
+                            modifier = Modifier.weight(1f),
+                            onClick = { unlock.setAnimMode(0) }
+                        )
+                        ModeSegment(
+                            title = "Mode 1: Y-axis Cascade",
+                            subtitle = "Velocity kinetics",
+                            selected = unlock.animMode == 1,
+                            colors = colors,
+                            modifier = Modifier.weight(1f),
+                            onClick = { unlock.setAnimMode(1) }
+                        )
+                    }
                     ModeSegment(
-                        title = "Mode 0: iOS Radial",
-                        subtitle = "Outward dispersion",
-                        selected = unlock.animMode == 0,
+                        title = "Mode 2: OriginOS 7 Fly in by Layer (逐层飞入)",
+                        subtitle = "6-ring radial zoom (6.0x) + concentric ripple & rebound",
+                        selected = unlock.animMode == 2,
                         colors = colors,
-                        modifier = Modifier.weight(1f),
-                        onClick = { unlock.setAnimMode(0) }
-                    )
-                    ModeSegment(
-                        title = "Mode 1: Y-axis Cascade",
-                        subtitle = "Velocity kinetics",
-                        selected = unlock.animMode == 1,
-                        colors = colors,
-                        modifier = Modifier.weight(1f),
-                        onClick = { unlock.setAnimMode(1) }
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { unlock.setAnimMode(2) }
                     )
                 }
                 RowDivider(colors.separator)
@@ -218,7 +231,7 @@ fun ScreenUnlockScreen(
                     )
                 }
             }
-        } else {
+        } else if (unlock.animMode == 1) {
             item {
                 SectionHeader("KINETIC Y-AXIS UNLOCK GLOBALS", colors)
                 GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -420,7 +433,64 @@ fun ScreenUnlockScreen(
                     }
                 }
             }
+        } else {
+            item {
+                SectionHeader("ORIGINOS 7 FLAGSHIP PIPELINE (逐层飞入)", colors)
+                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                    InfoRow(
+                        title = "1:1 Native Pipeline Replacement",
+                        subtitle = "Completely bypasses HyperOS spring physics and replaces it with OriginOS 7's flagship 2-phase unlock animation.",
+                        colors = colors
+                    )
+                    RowDivider(colors.separator)
+                    InfoRow(
+                        title = "Concentric Shell Stagger",
+                        subtitle = "Home screen icons are grouped into 6 concentric rings radiating outward with a 56ms shell stagger delay.",
+                        colors = colors
+                    )
+                    RowDivider(colors.separator)
+                    InfoRow(
+                        title = "Phase 1: Radial Camera Zoom",
+                        subtitle = "Icons scale 6.0x -> ring undershoot (0.975 - 0.990) over 550ms with PathInterpolator(0, 1, 0.5, 1) and 300ms alpha fade.",
+                        colors = colors
+                    )
+                    RowDivider(colors.separator)
+                    InfoRow(
+                        title = "Phase 1: Hotseat Launch",
+                        subtitle = "Dock & indicator elements fly upward from +900px to -15px overshoot (200ms delay, 400ms duration).",
+                        colors = colors
+                    )
+                    RowDivider(colors.separator)
+                    InfoRow(
+                        title = "Phase 2: Elastic Rebound",
+                        subtitle = "Icons settle from undershoot to 1.000x resting scale (400ms) and dock settles from -15px to 0px (450ms) using PathInterpolator(0.3, 0, 0.4, 1).",
+                        colors = colors
+                    )
+                    RowDivider(colors.separator)
+                    InfoRow(
+                        title = "Dynamic Focal Center Pivot",
+                        subtitle = "Icon transformation pivots dynamically shift to the screen center (W/2, W/2) for realistic 3D perspective zoom.",
+                        colors = colors
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun InfoRow(title: String, subtitle: String, colors: HyperBounceColors) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        BasicText(title, style = HyperBounceType.body.copy(color = colors.label))
+        BasicText(
+            subtitle,
+            modifier = Modifier.padding(top = 4.dp),
+            style = HyperBounceType.footnote.copy(color = colors.secondaryLabel)
+        )
     }
 }
 
