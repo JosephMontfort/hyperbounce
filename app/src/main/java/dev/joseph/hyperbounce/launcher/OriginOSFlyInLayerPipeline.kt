@@ -69,7 +69,6 @@ object OriginOSFlyInLayerPipeline {
 
     @Volatile
     var isRunning = false
-        private set
 
     /**
      * Prepares views for unlock (called on screen off or keyguard preparation).
