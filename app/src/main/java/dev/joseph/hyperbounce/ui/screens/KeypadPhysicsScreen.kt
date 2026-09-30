@@ -45,8 +45,8 @@ fun KeypadPhysicsScreen(
             keypad.setIosBloomVelocityStretch(0.16f)
             keypad.setIosBloomWaveStagger(22.0f)
             keypad.setIosBloomDecoupleText(true)
-            keypad.setDragMaxThreshold(0.28f)
-            keypad.setDragInitialStiffness(0.45f)
+            keypad.setDragMaxThreshold(0.16f)
+            keypad.setDragInitialStiffness(0.22f)
             keypad.setDragResistancePower(1.8f)
             keypad.setDragVolumeStretch(0.22f)
             keypad.setReleaseDuration(320.0f)
@@ -103,8 +103,8 @@ fun KeypadPhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.dragMaxThreshold,
                     onValueChange = keypad::setDragMaxThreshold,
-                    valueRange = 0.15f..0.50f,
-                    defaultValue = 0.28f,
+                    valueRange = 0.10f..0.35f,
+                    defaultValue = 0.16f,
                     valueLabel = { String.format(Locale.US, "%.0f %%", it * 100f) },
                     enabled = keypad.enabled
                 )
@@ -116,8 +116,8 @@ fun KeypadPhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.dragInitialStiffness,
                     onValueChange = keypad::setDragInitialStiffness,
-                    valueRange = 0.15f..0.85f,
-                    defaultValue = 0.45f,
+                    valueRange = 0.10f..0.50f,
+                    defaultValue = 0.22f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = keypad.enabled
                 )

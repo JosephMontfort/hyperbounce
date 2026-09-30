@@ -3,7 +3,12 @@ package dev.joseph.hyperbounce.lockscreen
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Typeface
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -61,6 +66,31 @@ object KeypadPhysicsHook {
     private val touchStates = WeakHashMap<View, KeypadTouchState>()
     private val appearAnimators = WeakHashMap<View, ValueAnimator>()
     private val releaseAnimators = WeakHashMap<View, ValueAnimator>()
+
+    private var isSettingsReceiverRegistered = false
+
+    fun registerSettingsReceiver(context: Context) {
+        if (isSettingsReceiverRegistered) return
+        try {
+            val filter = IntentFilter("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED")
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(c: Context?, intent: Intent?) {
+                    val key = intent?.getStringExtra("key") ?: return
+                    LockScreenConfigHolder.updateKey(key, intent)
+                }
+            }
+            val appContext = context.applicationContext ?: context
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                appContext.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                appContext.registerReceiver(receiver, filter)
+            }
+            isSettingsReceiverRegistered = true
+            Log.d(TAG, "Registered ACTION_SETTINGS_CHANGED receiver for Keypad physics")
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to register Keypad settings receiver", t)
+        }
+    }
 
     private fun getBaseTranslationX(view: View, cfg: LockScreenKeypadConfig, density: Float): Float {
         val entryName = try {
@@ -346,6 +376,7 @@ object KeypadPhysicsHook {
 
                                 when (event.actionMasked) {
                                     MotionEvent.ACTION_DOWN -> {
+                                        registerSettingsReceiver(view.context)
                                         appearAnimators.remove(view)?.cancel()
                                         releaseAnimators.remove(view)?.cancel()
                                         view.animate().cancel()
@@ -403,7 +434,7 @@ object KeypadPhysicsHook {
                                             val minDim = min(w, h)
 
                                             // Configurable, authentic iOS rubber-band stretch threshold
-                                            val maxOffset = minDim * cfg.dragMaxThreshold.coerceIn(0.15f, 0.50f)
+                                            val maxOffset = minDim * cfg.dragMaxThreshold.coerceIn(0.10f, 0.40f)
                                             val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
 
                                             val jellyTx: Float
@@ -416,10 +447,15 @@ object KeypadPhysicsHook {
                                                 dirX = dx / dist
                                                 dirY = dy / dist
 
-                                                // Authentic iOS Asymptotic Rubber-Band Model:
-                                                // High initial firmness starting on pixel 1, smoothly stiffening without loose float
-                                                val kStiff = cfg.dragInitialStiffness.coerceIn(0.10f, 0.60f).toDouble()
-                                                val disp = (maxOffset * tanh((kStiff * dist) / maxOffset)).toFloat().coerceAtMost(maxOffset)
+                                                // Authentic iOS Non-Linear Rubber-Band Model:
+                                                // k0 directly controls tactile stiffness on pixel 1 (~20% of finger displacement).
+                                                // p governs the non-linear curvature / progressive resistance ramp.
+                                                // The displacement smoothly and asymptotically approaches maxOffset without peaking too fast.
+                                                val k0 = cfg.dragInitialStiffness.coerceIn(0.10f, 0.60f).toDouble()
+                                                val p = cfg.dragResistancePower.coerceIn(1.0f, 3.5f).toDouble()
+                                                val xNorm = (k0 * dist.toDouble()) / maxOffset.toDouble()
+                                                val denom = Math.pow(1.0 + Math.pow(xNorm, p), 1.0 / p)
+                                                val disp = (maxOffset * (xNorm / denom)).toFloat().coerceAtMost(maxOffset)
 
                                                 jellyTx = dirX * disp
                                                 jellyTy = dirY * disp
@@ -466,7 +502,7 @@ object KeypadPhysicsHook {
                                         val currTy = view.translationY
                                         val releaseDist = hypot(currTx.toDouble(), currTy.toDouble()).toFloat()
                                         val minDim = min(view.width.toFloat().coerceAtLeast(1f), view.height.toFloat().coerceAtLeast(1f))
-                                        val maxOffset = minDim * cfg.dragMaxThreshold.coerceIn(0.15f, 0.50f)
+                                        val maxOffset = minDim * cfg.dragMaxThreshold.coerceIn(0.10f, 0.40f)
                                         val releaseNorm = (releaseDist / maxOffset).coerceIn(0f, 1f)
 
                                         if (releaseDist < 1.5f * density) {
@@ -501,7 +537,7 @@ object KeypadPhysicsHook {
 
                                                     // 1. Directional position snapback along vector (uX, uY)
                                                     val omega = (Math.PI * overshootTension).toDouble()
-                                                    val dampingCoeff = 3.8
+                                                    val dampingCoeff = 4.2
                                                     val decay = Math.exp(-dampingCoeff * t)
                                                     val posRatio = (decay * Math.cos(omega * t)).toFloat()
 

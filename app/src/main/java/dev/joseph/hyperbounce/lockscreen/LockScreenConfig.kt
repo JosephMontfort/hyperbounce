@@ -1,5 +1,6 @@
 package dev.joseph.hyperbounce.lockscreen
 
+import android.content.Intent
 import android.content.SharedPreferences
 
 data class LockScreenSheetConfig(
@@ -76,8 +77,8 @@ data class LockScreenKeypadConfig(
     var delayEmergency: Float = -1f,
     var delayCancel: Float = -1f,
     // Liquid Dynamics & Physics Tuning
-    var dragMaxThreshold: Float = 0.28f,
-    var dragInitialStiffness: Float = 0.30f,
+    var dragMaxThreshold: Float = 0.16f,
+    var dragInitialStiffness: Float = 0.22f,
     var dragResistancePower: Float = 1.8f,
     var dragVolumeStretch: Float = 0.22f,
     var releaseDuration: Float = 320.0f,
@@ -188,8 +189,8 @@ object LockScreenConfigHolder {
         keypad.delayCancel = prefs.getFloat("pin_delay_cancel", -1f)
 
         // Liquid Dynamics & Physics Tuning
-        keypad.dragMaxThreshold = prefs.getFloat("pin_drag_max_threshold", 0.28f)
-        keypad.dragInitialStiffness = prefs.getFloat("pin_drag_initial_stiffness", 0.30f)
+        keypad.dragMaxThreshold = prefs.getFloat("pin_drag_max_threshold", 0.16f)
+        keypad.dragInitialStiffness = prefs.getFloat("pin_drag_initial_stiffness", 0.22f)
         keypad.dragResistancePower = prefs.getFloat("pin_drag_resistance_power", 1.8f)
         keypad.dragVolumeStretch = prefs.getFloat("pin_drag_volume_stretch", 0.22f)
         keypad.releaseDuration = prefs.getFloat("pin_release_duration", 320.0f)
@@ -204,5 +205,45 @@ object LockScreenConfigHolder {
         keypad.iosBloomVelocityStretch = prefs.getFloat("pin_ios_bloom_velocity_stretch", 0.16f)
         keypad.iosBloomWaveStagger = prefs.getFloat("pin_ios_bloom_wave_stagger", 22.0f)
         keypad.iosBloomDecoupleText = prefs.getBoolean("pin_ios_bloom_decouple_text", true)
+    }
+
+    fun updateKey(key: String, intent: Intent) {
+        when (key) {
+            "engine_keypad_enabled" -> keypad.enabled = intent.getBooleanExtra("value_boolean", keypad.enabled)
+            "pin_btn_refraction" -> keypad.buttonRefraction = intent.getFloatExtra("value_float", keypad.buttonRefraction)
+            "pin_btn_bevel" -> keypad.buttonBevel = intent.getFloatExtra("value_float", keypad.buttonBevel)
+            "pin_btn_dispersion" -> keypad.buttonDispersion = intent.getFloatExtra("value_float", keypad.buttonDispersion)
+            "pin_btn_specular" -> keypad.buttonSpecular = intent.getFloatExtra("value_float", keypad.buttonSpecular)
+            "pin_btn_inner_shadow" -> keypad.buttonInnerShadow = intent.getFloatExtra("value_float", keypad.buttonInnerShadow)
+            "pin_btn_blur" -> keypad.buttonBlur = intent.getFloatExtra("value_float", keypad.buttonBlur)
+            "pin_btn_saturation" -> keypad.buttonSaturation = intent.getFloatExtra("value_float", keypad.buttonSaturation)
+            "pin_circle_diameter" -> keypad.circleDiameter = intent.getFloatExtra("value_float", keypad.circleDiameter)
+            "pin_digit_text_size" -> keypad.digitTextSize = intent.getFloatExtra("value_float", keypad.digitTextSize)
+            "pin_show_klondike" -> keypad.showKlondike = intent.getBooleanExtra("value_boolean", keypad.showKlondike)
+            "pin_press_liquid_scale" -> keypad.pressLiquidScale = intent.getFloatExtra("value_float", keypad.pressLiquidScale)
+            "pin_press_liquid_amp" -> keypad.pressLiquidAmp = intent.getFloatExtra("value_float", keypad.pressLiquidAmp)
+            "pin_drag_max_threshold" -> keypad.dragMaxThreshold = intent.getFloatExtra("value_float", keypad.dragMaxThreshold)
+            "pin_drag_initial_stiffness" -> keypad.dragInitialStiffness = intent.getFloatExtra("value_float", keypad.dragInitialStiffness)
+            "pin_drag_resistance_power" -> keypad.dragResistancePower = intent.getFloatExtra("value_float", keypad.dragResistancePower)
+            "pin_drag_volume_stretch" -> keypad.dragVolumeStretch = intent.getFloatExtra("value_float", keypad.dragVolumeStretch)
+            "pin_release_duration" -> keypad.releaseDuration = intent.getFloatExtra("value_float", keypad.releaseDuration)
+            "pin_release_squish_amp" -> keypad.releaseSquishAmp = intent.getFloatExtra("value_float", keypad.releaseSquishAmp)
+            "pin_release_overshoot" -> keypad.releaseOvershoot = intent.getFloatExtra("value_float", keypad.releaseOvershoot)
+            "pin_pad_lift" -> keypad.pinpadLift = intent.getFloatExtra("value_float", keypad.pinpadLift)
+            "pin_row_spacing" -> keypad.rowSpacing = intent.getFloatExtra("value_float", keypad.rowSpacing)
+            "pin_col_spacing" -> keypad.columnSpacing = intent.getFloatExtra("value_float", keypad.columnSpacing)
+            "pin_entry_translation_y" -> keypad.entryTranslationY = intent.getFloatExtra("value_float", keypad.entryTranslationY)
+            "pin_entry_initial_scale" -> keypad.entryInitialScale = intent.getFloatExtra("value_float", keypad.entryInitialScale)
+            "pin_entry_duration" -> keypad.entryDuration = intent.getFloatExtra("value_float", keypad.entryDuration)
+            "pin_ios_bloom_duration" -> keypad.iosBloomDuration = intent.getFloatExtra("value_float", keypad.iosBloomDuration)
+            "pin_ios_bloom_cluster_factor" -> keypad.iosBloomClusterFactor = intent.getFloatExtra("value_float", keypad.iosBloomClusterFactor)
+            "pin_ios_bloom_overshoot" -> keypad.iosBloomOvershoot = intent.getFloatExtra("value_float", keypad.iosBloomOvershoot)
+            "pin_ios_bloom_damping" -> keypad.iosBloomDamping = intent.getFloatExtra("value_float", keypad.iosBloomDamping)
+            "pin_ios_bloom_stiffness" -> keypad.iosBloomStiffness = intent.getFloatExtra("value_float", keypad.iosBloomStiffness)
+            "pin_ios_bloom_radial_squish" -> keypad.iosBloomRadialSquish = intent.getFloatExtra("value_float", keypad.iosBloomRadialSquish)
+            "pin_ios_bloom_velocity_stretch" -> keypad.iosBloomVelocityStretch = intent.getFloatExtra("value_float", keypad.iosBloomVelocityStretch)
+            "pin_ios_bloom_wave_stagger" -> keypad.iosBloomWaveStagger = intent.getFloatExtra("value_float", keypad.iosBloomWaveStagger)
+            "pin_ios_bloom_decouple_text" -> keypad.iosBloomDecoupleText = intent.getBooleanExtra("value_boolean", keypad.iosBloomDecoupleText)
+        }
     }
 }

@@ -226,8 +226,8 @@ data class LockScreenKeypadSettings(
     val delayEmergency: Float = -1f,
     val delayCancel: Float = -1f,
     // Liquid Dynamics & Physics Tuning
-    val dragMaxThreshold: Float = 0.28f,
-    val dragInitialStiffness: Float = 0.30f,
+    val dragMaxThreshold: Float = 0.16f,
+    val dragInitialStiffness: Float = 0.22f,
     val dragResistancePower: Float = 1.8f,
     val dragVolumeStretch: Float = 0.22f,
     val releaseDuration: Float = 320.0f,
