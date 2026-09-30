@@ -174,14 +174,17 @@ fun AppTransitionsScreen(
                 )
                 if (trans.workbenchRecentsEnabled) {
                     RowDivider(colors.separator)
-                    SettingsClickableRow(
-                        title = "Default Dock Layout",
-                        subtitle = if (trans.workbenchLayoutStyle == 0) "Left Shelf (Side Dock - Maximized Viewport)" else "Top Shelf (Top Dock - Full Width)",
+                    SettingsToggleRow(
+                        title = "Top Shelf Layout Style",
+                        subtitle = if (trans.workbenchLayoutStyle == 1) "Top Shelf (Top Dock) active" else "Side Shelf (Left Dock - Maximized Viewport) active",
                         colors = colors,
                         iconTint = colors.accentPurple,
-                        onClick = {
-                            trans.setWorkbenchLayoutStyle(if (trans.workbenchLayoutStyle == 0) 1 else 0)
+                        backdrop = backdrop,
+                        checked = trans.workbenchLayoutStyle == 1,
+                        onCheckedChange = { isTop ->
+                            trans.setWorkbenchLayoutStyle(if (isTop) 1 else 0)
                         },
+                        enabled = trans.enabled && trans.workbenchRecentsEnabled,
                         icon = { AppsIcon(color = Color.White, size = 15.dp) }
                     )
                     RowDivider(colors.separator)
