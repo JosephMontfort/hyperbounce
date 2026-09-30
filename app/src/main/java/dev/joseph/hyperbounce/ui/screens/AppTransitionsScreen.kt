@@ -157,7 +157,79 @@ fun AppTransitionsScreen(
             }
         }
 
-        // 4. TACTILE HAPTICS
+        // 4. ORIGIN WORKBENCH RECENTS (ORIGINOS 7 ATOMIC WORKBENCH)
+        item {
+            SectionHeader("ORIGIN WORKBENCH RECENTS", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "Origin Workbench Recents",
+                    subtitle = "5-task workspace with 1 live running foreground Hero app and a 4-card interactive shelf dock",
+                    colors = colors,
+                    iconTint = colors.accentPurple,
+                    backdrop = backdrop,
+                    checked = trans.workbenchRecentsEnabled,
+                    onCheckedChange = trans::setWorkbenchRecentsEnabled,
+                    enabled = trans.enabled,
+                    icon = { AppsIcon(color = Color.White, size = 15.dp) }
+                )
+                if (trans.workbenchRecentsEnabled) {
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Hero Stage Proportions",
+                        subtitle = "Scale size of the primary running app viewport",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = trans.workbenchHeroScale,
+                        onValueChange = trans::setWorkbenchHeroScale,
+                        valueRange = 0.60f..0.85f,
+                        defaultValue = 0.72f,
+                        valueLabel = { String.format(Locale.US, "%.0f%%", it * 100f) },
+                        enabled = trans.enabled && trans.workbenchRecentsEnabled
+                    )
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Shelf Card Scale",
+                        subtitle = "Proportional scale of the 4 parked tasks in the shelf dock",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = trans.workbenchShelfScale,
+                        onValueChange = trans::setWorkbenchShelfScale,
+                        valueRange = 0.16f..0.30f,
+                        defaultValue = 0.22f,
+                        valueLabel = { String.format(Locale.US, "%.0f%%", it * 100f) },
+                        enabled = trans.enabled && trans.workbenchRecentsEnabled
+                    )
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Folme Spring Damping",
+                        subtitle = "Settling elasticity for Xiaomi Folme card swap physics",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = trans.workbenchFolmeDamping,
+                        onValueChange = trans::setWorkbenchFolmeDamping,
+                        valueRange = 0.60f..1.10f,
+                        defaultValue = 0.85f,
+                        valueLabel = { String.format(Locale.US, "%.2f", it) },
+                        enabled = trans.enabled && trans.workbenchRecentsEnabled
+                    )
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Folme Spring Response",
+                        subtitle = "Frequency response for Xiaomi Folme card transitions",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = trans.workbenchFolmeResponse,
+                        onValueChange = trans::setWorkbenchFolmeResponse,
+                        valueRange = 0.30f..0.70f,
+                        defaultValue = 0.45f,
+                        valueLabel = { String.format(Locale.US, "%.2fs", it) },
+                        enabled = trans.enabled && trans.workbenchRecentsEnabled
+                    )
+                }
+            }
+        }
+
+        // 5. TACTILE HAPTICS
         item {
             SectionHeader("TACTILE HAPTICS", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {

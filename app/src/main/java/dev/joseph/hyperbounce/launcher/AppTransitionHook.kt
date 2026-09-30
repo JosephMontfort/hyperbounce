@@ -124,6 +124,7 @@ object AppTransitionHook {
         hookHomeLayerScaling(module, classLoader)
         hookWallpaperDynamics(module, classLoader)
         hookDeviceLevelUtils(module, classLoader)
+        OriginWorkbenchRecentsHook.init(module, classLoader)
     }
 
     /**

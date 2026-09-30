@@ -1081,6 +1081,11 @@ class SettingsRepository(context: Context) {
         var landscapeGameOpt by prefsBooleanState("ios_anim_landscape_game_opt", defaults.landscapeGameOpt); private set
         var refinedHaptics by prefsBooleanState("ios_anim_refined_haptics", defaults.refinedHaptics); private set
         var stackRecentsHaptics by prefsBooleanState("ios_anim_stack_recents_haptics", defaults.stackRecentsHaptics); private set
+        var workbenchRecentsEnabled by prefsBooleanState("ios_workbench_recents_enabled", defaults.workbenchRecentsEnabled); private set
+        var workbenchHeroScale by prefsFloatState("ios_workbench_hero_scale", defaults.workbenchHeroScale); private set
+        var workbenchShelfScale by prefsFloatState("ios_workbench_shelf_scale", defaults.workbenchShelfScale); private set
+        var workbenchFolmeDamping by prefsFloatState("ios_workbench_folme_damping", defaults.workbenchFolmeDamping); private set
+        var workbenchFolmeResponse by prefsFloatState("ios_workbench_folme_response", defaults.workbenchFolmeResponse); private set
 
         fun snapshot(): IOSTransitionSettings = IOSTransitionSettings(
             enabled = enabled,
@@ -1095,7 +1100,12 @@ class SettingsRepository(context: Context) {
             zeroFrictionDrag = zeroFrictionDrag,
             landscapeGameOpt = landscapeGameOpt,
             refinedHaptics = refinedHaptics,
-            stackRecentsHaptics = stackRecentsHaptics
+            stackRecentsHaptics = stackRecentsHaptics,
+            workbenchRecentsEnabled = workbenchRecentsEnabled,
+            workbenchHeroScale = workbenchHeroScale,
+            workbenchShelfScale = workbenchShelfScale,
+            workbenchFolmeDamping = workbenchFolmeDamping,
+            workbenchFolmeResponse = workbenchFolmeResponse
         )
 
         @JvmName("setIOSTransitionsEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
@@ -1111,6 +1121,11 @@ class SettingsRepository(context: Context) {
         @JvmName("setLandscapeGameOptPref") fun setLandscapeGameOpt(v: Boolean) { landscapeGameOpt = v }
         @JvmName("setRefinedHapticsPref") fun setRefinedHaptics(v: Boolean) { refinedHaptics = v }
         @JvmName("setStackRecentsHapticsPref") fun setStackRecentsHaptics(v: Boolean) { stackRecentsHaptics = v }
+        @JvmName("setWorkbenchRecentsEnabledPref") fun setWorkbenchRecentsEnabled(v: Boolean) { workbenchRecentsEnabled = v }
+        @JvmName("setWorkbenchHeroScalePref") fun setWorkbenchHeroScale(v: Float) { workbenchHeroScale = v }
+        @JvmName("setWorkbenchShelfScalePref") fun setWorkbenchShelfScale(v: Float) { workbenchShelfScale = v }
+        @JvmName("setWorkbenchFolmeDampingPref") fun setWorkbenchFolmeDamping(v: Float) { workbenchFolmeDamping = v }
+        @JvmName("setWorkbenchFolmeResponsePref") fun setWorkbenchFolmeResponse(v: Float) { workbenchFolmeResponse = v }
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
@@ -1126,6 +1141,11 @@ class SettingsRepository(context: Context) {
             landscapeGameOpt = defaults.landscapeGameOpt
             refinedHaptics = defaults.refinedHaptics
             stackRecentsHaptics = defaults.stackRecentsHaptics
+            workbenchRecentsEnabled = defaults.workbenchRecentsEnabled
+            workbenchHeroScale = defaults.workbenchHeroScale
+            workbenchShelfScale = defaults.workbenchShelfScale
+            workbenchFolmeDamping = defaults.workbenchFolmeDamping
+            workbenchFolmeResponse = defaults.workbenchFolmeResponse
         }
     }
 

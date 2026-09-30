@@ -293,7 +293,12 @@ data class IOSTransitionSettings(
     val zeroFrictionDrag: Boolean = true,
     val landscapeGameOpt: Boolean = true,
     val refinedHaptics: Boolean = true,
-    val stackRecentsHaptics: Boolean = true
+    val stackRecentsHaptics: Boolean = true,
+    val workbenchRecentsEnabled: Boolean = false,
+    val workbenchHeroScale: Float = 0.72f,
+    val workbenchShelfScale: Float = 0.22f,
+    val workbenchFolmeDamping: Float = 0.85f,
+    val workbenchFolmeResponse: Float = 0.45f
 )
 
 
