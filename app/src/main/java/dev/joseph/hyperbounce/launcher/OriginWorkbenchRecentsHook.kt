@@ -44,6 +44,7 @@ object OriginWorkbenchRecentsHook {
         hookRecentsView(module, classLoader)
         hookClearContainerSuppression(module, classLoader)
         hookTaskStackViewHeroTarget(module, classLoader)
+        hookSmallWindowStateHelper(module, classLoader)
     }
 
     /**
@@ -361,6 +362,37 @@ object OriginWorkbenchRecentsHook {
     }
 
     /**
+     * Hook 6: Suppresses SmallWindowStateHelper.dismissRecent so that entering freeform mode
+     * for the Hero app does NOT dismiss the recents screen.
+     */
+    private fun hookSmallWindowStateHelper(module: XposedInterface, classLoader: ClassLoader) {
+        val classNames = arrayOf(
+            "com.miui.home.smallwindow.SmallWindowStateHelperUseManager",
+            "com.miui.home.smallwindow.SmallWindowStateHelper"
+        )
+        for (cn in classNames) {
+            try {
+                val helperClass = Class.forName(cn, false, classLoader)
+                for (m in helperClass.declaredMethods) {
+                    if (m.name == "dismissRecent") {
+                        m.isAccessible = true
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val cfg = LauncherConfigHolder.iosAnimConfig
+                                if (cfg.enabled && cfg.workbenchRecentsEnabled && isWorkbenchActive) {
+                                    Log.i(TAG, "Suppressed $cn.dismissRecent while Workbench is active")
+                                    return null
+                                }
+                                return chain.proceed()
+                            }
+                        })
+                    }
+                }
+            } catch (_: Throwable) {}
+        }
+    }
+
+    /**
      * Attaches [OriginWorkbenchContainerView] as an overlay inside [RecentsContainer].
      */
     private fun ensureWorkbenchViewAttached(container: ViewGroup, classLoader: ClassLoader): OriginWorkbenchContainerView? {
@@ -398,6 +430,10 @@ object OriginWorkbenchRecentsHook {
         isWorkbenchActive = true
         lastEnterTimestamp = now
 
+        try {
+            android.provider.Settings.System.putInt(container.context.contentResolver, "hb_workbench_active", 1)
+        } catch (_: Throwable) {}
+
         val workbenchView = ensureWorkbenchViewAttached(container, classLoader) ?: return
 
         // 1. Hide stock RecentsView and its TaskStackView
@@ -423,6 +459,13 @@ object OriginWorkbenchRecentsHook {
      */
     private fun handleWorkbenchExit(container: ViewGroup) {
         isWorkbenchActive = false
+        try {
+            android.provider.Settings.System.putInt(container.context.contentResolver, "hb_workbench_active", 0)
+        } catch (_: Throwable) {}
+
+        val workbenchView = container.findViewWithTag<OriginWorkbenchContainerView>(OriginWorkbenchContainerView.WORKBENCH_VIEW_TAG)
+            ?: sWorkbenchViewRef?.get()
+        workbenchView?.onCloseWorkbench()
         hideWorkbenchView(container)
         restoreStockViews(container)
     }

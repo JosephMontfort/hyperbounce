@@ -65,10 +65,27 @@ object FolmePhysicsHelper {
     }
 
     /**
+     * Cleans up all running Folme physics engines and hardware animators on the view.
+     */
+    fun cleanView(view: View) {
+        try {
+            if (isFolmeInitialized) {
+                val folmeClass = Class.forName("miuix.animation.Folme", false, view.context.classLoader)
+                val cleanMethod = folmeClass.getMethod("clean", Array<View>::class.java)
+                cleanMethod.invoke(null, arrayOf(view))
+            }
+        } catch (_: Throwable) {}
+        try {
+            view.animate().cancel()
+        } catch (_: Throwable) {}
+    }
+
+    /**
      * Executes an authentic two-way physical spring swap:
      * - The tapped shelf card expands from shelfStartRect into heroStartRect on the TOP LAYER.
      * - The current Hero card simultaneously animates in exact reverse, shrinking into shelfStartRect on the UNDERLYING LAYER.
      * - Both cards dynamically scale scaleX / scaleY and translate to center positions.
+     * - Calls onUpdateProgress each frame to smoothly morph corner radii and header visibility.
      */
     fun animateSwap(
         shelfView: View,
@@ -77,9 +94,12 @@ object FolmePhysicsHelper {
         heroStartRect: RectF,
         damping: Float = 0.82f,
         response: Float = 0.38f,
+        onUpdateProgress: ((Float) -> Unit)? = null,
         onComplete: (() -> Unit)? = null
     ) {
-        val mainHandler = Handler(Looper.getMainLooper())
+        // Clean any active animations first
+        cleanView(shelfView)
+        cleanView(heroView)
 
         // 1. Z-layer ordering:
         // User requirement: Shelf card expanding to Hero MUST be at TOP LAYER.
@@ -110,78 +130,34 @@ object FolmePhysicsHelper {
         val heroTargetTransX = shelfCenterX - heroCenterX
         val heroTargetTransY = shelfCenterY - heroCenterY
 
-        val animDuration = ((response * 650f).toLong()).coerceIn(280L, 420L)
+        val animDuration = ((response * 680f).toLong()).coerceIn(280L, 380L)
 
-        // Try Xiaomi Folme Proprietary Physics Engine
-        var usedFolme = false
-        try {
-            if (isFolmeInitialized && animConfigClass != null) {
-                val config = animConfigClass!!.getDeclaredConstructor().newInstance()
-                setEaseMethod?.invoke(config, -2, damping, response)
+        val animator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = animDuration
+            interpolator = android.view.animation.PathInterpolator(0.25f, 1.0f, 0.45f, 1.0f)
+            addUpdateListener { va ->
+                val p = va.animatedValue as Float
+                shelfView.translationX = shelfTargetTransX * p
+                shelfView.translationY = shelfTargetTransY * p
+                shelfView.scaleX = 1f + (shelfScaleX - 1f) * p
+                shelfView.scaleY = 1f + (shelfScaleY - 1f) * p
 
-                val folmeShelf = folmeUseAtMethod?.invoke(null, arrayOf(shelfView))
-                val stateShelf = folmeShelf?.javaClass?.getMethod("state")?.invoke(folmeShelf)
-                val toMethodShelf = stateShelf?.javaClass?.getMethod("to", Array<Any>::class.java)
+                heroView.translationX = heroTargetTransX * p
+                heroView.translationY = heroTargetTransY * p
+                heroView.scaleX = 1f + (heroScaleX - 1f) * p
+                heroView.scaleY = 1f + (heroScaleY - 1f) * p
 
-                val folmeHero = folmeUseAtMethod?.invoke(null, arrayOf(heroView))
-                val stateHero = folmeHero?.javaClass?.getMethod("state")?.invoke(folmeHero)
-                val toMethodHero = stateHero?.javaClass?.getMethod("to", Array<Any>::class.java)
-
-                val viewPropTransX = viewPropertyClass?.getField("TRANSLATION_X")?.get(null) ?: viewPropertyX
-                val viewPropTransY = viewPropertyClass?.getField("TRANSLATION_Y")?.get(null) ?: viewPropertyY
-
-                if (toMethodShelf != null && toMethodHero != null && viewPropTransX != null && viewPropertyScaleX != null) {
-                    val shelfArgs = arrayOf(
-                        viewPropTransX, shelfTargetTransX,
-                        viewPropTransY, shelfTargetTransY,
-                        viewPropertyScaleX!!, shelfScaleX,
-                        viewPropertyScaleY!!, shelfScaleY,
-                        config
-                    )
-                    toMethodShelf.invoke(stateShelf, shelfArgs)
-
-                    val heroArgs = arrayOf(
-                        viewPropTransX, heroTargetTransX,
-                        viewPropTransY, heroTargetTransY,
-                        viewPropertyScaleX!!, heroScaleX,
-                        viewPropertyScaleY!!, heroScaleY,
-                        config
-                    )
-                    toMethodHero.invoke(stateHero, heroArgs)
-
-                    usedFolme = true
-                }
+                onUpdateProgress?.invoke(p)
             }
-        } catch (t: Throwable) {
-            Log.w(TAG, "Folme swap failed, falling back to hardware animator", t)
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    cleanView(shelfView)
+                    cleanView(heroView)
+                    onComplete?.invoke()
+                }
+            })
         }
-
-        if (!usedFolme) {
-            shelfView.animate().cancel()
-            heroView.animate().cancel()
-
-            shelfView.animate()
-                .translationX(shelfTargetTransX)
-                .translationY(shelfTargetTransY)
-                .scaleX(shelfScaleX)
-                .scaleY(shelfScaleY)
-                .setDuration(animDuration)
-                .setInterpolator(android.view.animation.PathInterpolator(0.25f, 1f, 0.5f, 1f))
-                .start()
-
-            heroView.animate()
-                .translationX(heroTargetTransX)
-                .translationY(heroTargetTransY)
-                .scaleX(heroScaleX)
-                .scaleY(heroScaleY)
-                .setDuration(animDuration)
-                .setInterpolator(android.view.animation.PathInterpolator(0.25f, 1f, 0.5f, 1f))
-                .start()
-        }
-
-        mainHandler.postDelayed({
-            onComplete?.invoke()
-        }, animDuration)
+        animator.start()
     }
 
     /**

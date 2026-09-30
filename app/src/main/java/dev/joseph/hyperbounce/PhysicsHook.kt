@@ -65,6 +65,7 @@ class PhysicsHook : XposedModule() {
                     dev.joseph.hyperbounce.controlcenter.ControlCenterHook.initSystemUIHooks(this, param.classLoader)
                     dev.joseph.hyperbounce.notification.NotificationSheetHook.init(this, param.classLoader)
                     dev.joseph.hyperbounce.notification.IosHunAnimationHook.init(this, param.classLoader)
+                    dev.joseph.hyperbounce.launcher.OriginWorkbenchSystemUIHook.init(this, param.classLoader)
                 }
 
                 param.packageName == "miui.systemui.plugin" -> {
