@@ -1,32 +1,25 @@
 package dev.joseph.hyperbounce.launcher
 
 import android.content.Context
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
-import android.view.MotionEvent
 import io.github.libxposed.api.XposedInterface
 
 /**
  * Origin Workbench SystemUI Hook (Xiaomi Freeform Customization & Tuning)
  *
- * Implements the user's explicit architectural requirement:
- * "implement xiaomi's floating window for the hero app. but the floating window cannot be moved.
- *  examine the architecture of floating windows in ciaomi. implement that but heavily customize
- *  amd tune it for our use case. it should'nt be resizeable and it shouldnt move by pulling the
- *  three dots at top centre. basically use xiaomi's floating windows but strip off the tgree dots
- *  and resize handles and nav bar pill at bottom centre of floating window. so it shoes the app
- *  content in real time. if a reel is playing in hero aoo then it will play in workbench.
- *  but the hero app cont be resized or closed or moved. implement this."
- *
- * Intercepts SystemUI Multitasking & Freeform subsystems:
- * 1. [MiuiDecorationDot.needCaption]: Strips off the 3 dots at top center.
- * 2. [MiuiDecorationBottom.needCaption]: Strips off the bottom navigation bar pill / handle.
- * 3. [MiuiFreeformModeGestureHandler.isGestureControlled]: Prevents gesture recognition.
- * 4. [MiuiFreeformModeGestureHandler.handleMotionEvents]: Skips touch events for freeform gestures.
- * 5. [MiuiFreeformModeMoveHandler.handleMotionEvents]: Blocks window moving by dragging.
- * 6. [MiuiFreeformModeMoveHandler.onBottomCaptionHandleMotionEvents]: Blocks bottom handle swipe gestures.
- * 7. [MiuiFreeformModeResizeHandler.handleResize]: Blocks window resizing.
- * 8. [MultiTaskingCornerTipAndStrokeController]: Suppresses corner resize indicators and strokes.
+ * Implements the user's explicit architectural requirements:
+ * 1. Strips off top-center 3 dots (MiuiDecorationDot).
+ * 2. Strips off bottom navigation bar pill / handle (MiuiDecorationBottom).
+ * 3. Strips off corner resize handles & border strokes (MultiTaskingCornerTipAndStrokeController).
+ * 4. Locks Hero window firmly in place: blocks moving, resizing, and swipe gestures.
+ * 5. Suppresses allFreeformFromFreeformToMini & fromFreeformToMini so the Hero window stays
+ *    in normal freeform mode at its calibrated hero position and never flies to the corner as a mini-window.
+ * 6. Automatically cleans up and exits the freeform task when Workbench deactivates.
+ * 7. Fixes the NPE crash by NOT returning null from handleMotionEvents.
  */
 object OriginWorkbenchSystemUIHook {
     private const val TAG = "OriginWorkbenchSysUI"
@@ -36,6 +29,9 @@ object OriginWorkbenchSystemUIHook {
 
     @Volatile
     private var isHooked = false
+
+    @Volatile
+    private var isObserverRegistered = false
 
     fun isWorkbenchActive(context: Context?): Boolean {
         if (context == null) return false
@@ -55,11 +51,45 @@ object OriginWorkbenchSystemUIHook {
         }
     }
 
+    private fun ensureObserverRegistered(context: Context, classLoader: ClassLoader) {
+        if (isObserverRegistered) return
+        isObserverRegistered = true
+        try {
+            val uri = Settings.System.getUriFor(SETTINGS_WORKBENCH_ACTIVE)
+            context.contentResolver.registerContentObserver(uri, false, object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    val active = isWorkbenchActive(context)
+                    if (!active) {
+                        try {
+                            val heroId = getHeroTaskId(context)
+                            val controllerStubClass = Class.forName("com.android.wm.shell.dagger.MultiTaskingControllerStub", false, classLoader)
+                            val getInstanceMethod = controllerStubClass.getMethod("getInstance")
+                            val stub = getInstanceMethod.invoke(null)
+                            val getControllerMethod = stub.javaClass.getMethod("getMiuiFreeformModeController")
+                            val controller = getControllerMethod.invoke(stub)
+                            if (controller != null && heroId != -1) {
+                                val exitMethod = controller.javaClass.getMethod("exitFreeformTask", Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+                                exitMethod.invoke(controller, heroId, false)
+                                Log.i(TAG, "Exited freeform task $heroId because Workbench deactivated")
+                            }
+                        } catch (t: Throwable) {
+                            Log.w(TAG, "Failed cleaning freeform on exit", t)
+                        }
+                    }
+                }
+            })
+            Log.i(TAG, "Registered Workbench exit observer in SystemUI")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to register observer", t)
+        }
+    }
+
     fun init(module: XposedInterface, classLoader: ClassLoader) {
         if (isHooked) return
         isHooked = true
 
         hookWindowDecorations(module, classLoader)
+        hookFreeformModeController(module, classLoader)
         hookGestureAndMoveHandlers(module, classLoader)
         hookResizeAndCornerHandlers(module, classLoader)
     }
@@ -86,9 +116,12 @@ object OriginWorkbenchSystemUIHook {
                             f.get(decor) as? Context
                         }.getOrNull()
 
+                        if (context != null) {
+                            ensureObserverRegistered(context, classLoader)
+                        }
+
                         if (isWorkbenchActive(context)) {
-                            // Strip off top 3 dots!
-                            return false
+                            return false // Strip off top 3 dots!
                         }
                         return chain.proceed()
                     }
@@ -117,9 +150,12 @@ object OriginWorkbenchSystemUIHook {
                             f.get(decor) as? Context
                         }.getOrNull()
 
+                        if (context != null) {
+                            ensureObserverRegistered(context, classLoader)
+                        }
+
                         if (isWorkbenchActive(context)) {
-                            // Strip off bottom nav pill!
-                            return false
+                            return false // Strip off bottom nav pill!
                         }
                         return chain.proceed()
                     }
@@ -132,14 +168,51 @@ object OriginWorkbenchSystemUIHook {
     }
 
     /**
-     * Hook 2: Prevent window moving and freeform gestures.
+     * Hook 2: Suppress converting the Hero freeform window into a mini-window when recents opens.
+     */
+    private fun hookFreeformModeController(module: XposedInterface, classLoader: ClassLoader) {
+        try {
+            val controllerClass = Class.forName("com.android.wm.shell.multitasking.miuifreeform.MiuiFreeformModeController", false, classLoader)
+            for (m in controllerClass.declaredMethods) {
+                if (m.name == "allFreeformFromFreeformToMini" || m.name == "fromFreeformToMini") {
+                    m.isAccessible = true
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val ctrl = chain.thisObject
+                            val context = runCatching {
+                                val f = ctrl.javaClass.getDeclaredField("mContext")
+                                f.isAccessible = true
+                                f.get(ctrl) as? Context
+                            }.getOrNull()
+
+                            if (context != null) {
+                                ensureObserverRegistered(context, classLoader)
+                            }
+
+                            if (isWorkbenchActive(context)) {
+                                Log.i(TAG, "Suppressed ${m.name} to preserve normal Hero Freeform window")
+                                return null // Prevent converting Hero freeform window into mini window!
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                }
+            }
+            Log.i(TAG, "Successfully hooked MiuiFreeformModeController (Suppressed mini-window conversion)")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed hooking MiuiFreeformModeController", t)
+        }
+    }
+
+    /**
+     * Hook 3: Prevent window moving and gesture hijacking.
+     * Note: We intentionally do NOT hook handleMotionEvents directly to prevent NPE in MulWinSwitchEventHandler.
      */
     private fun hookGestureAndMoveHandlers(module: XposedInterface, classLoader: ClassLoader) {
-        // Hook MiuiFreeformModeGestureHandler
+        // Hook MiuiFreeformModeGestureHandler.isGestureControlled
         try {
             val gestureHandlerClass = Class.forName("com.android.wm.shell.multitasking.miuifreeform.MiuiFreeformModeGestureHandler", false, classLoader)
 
-            // isGestureControlled(MiuiFreeformModeTaskInfo)
             val isGestureControlledMethod = gestureHandlerClass.declaredMethods.firstOrNull {
                 it.name == "isGestureControlled" && it.parameterTypes.size == 1
             }
@@ -154,46 +227,26 @@ object OriginWorkbenchSystemUIHook {
                             f.get(handler) as? Context
                         }.getOrNull()
 
+                        if (context != null) {
+                            ensureObserverRegistered(context, classLoader)
+                        }
+
                         if (isWorkbenchActive(context)) {
-                            return false // Not gesture controlled when workbench is active!
+                            return false // Hero window is NOT gesture controlled
                         }
                         return chain.proceed()
                     }
                 })
+                Log.i(TAG, "Successfully hooked MiuiFreeformModeGestureHandler.isGestureControlled")
             }
-
-            // handleMotionEvents(MotionEvent, InputMonitor)
-            val handleMotionMethod = gestureHandlerClass.declaredMethods.firstOrNull {
-                it.name == "handleMotionEvents" && it.parameterTypes.size == 2
-            }
-            if (handleMotionMethod != null) {
-                handleMotionMethod.isAccessible = true
-                module.hook(handleMotionMethod).intercept(object : XposedInterface.Hooker {
-                    override fun intercept(chain: XposedInterface.Chain): Any? {
-                        val handler = chain.thisObject
-                        val context = runCatching {
-                            val f = handler.javaClass.getDeclaredField("mContext")
-                            f.isAccessible = true
-                            f.get(handler) as? Context
-                        }.getOrNull()
-
-                        if (isWorkbenchActive(context)) {
-                            return null // Do not handle gestures!
-                        }
-                        return chain.proceed()
-                    }
-                })
-            }
-            Log.i(TAG, "Successfully hooked MiuiFreeformModeGestureHandler (Blocked gesture hijacking)")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed hooking MiuiFreeformModeGestureHandler", t)
         }
 
-        // Hook MiuiFreeformModeMoveHandler
+        // Hook MiuiFreeformModeMoveHandler (void return types)
         try {
             val moveHandlerClass = Class.forName("com.android.wm.shell.multitasking.miuifreeform.MiuiFreeformModeMoveHandler", false, classLoader)
 
-            // handleMotionEvents
             for (m in moveHandlerClass.declaredMethods) {
                 if (m.name == "handleMotionEvents" || m.name == "onBottomCaptionHandleMotionEvents") {
                     m.isAccessible = true
@@ -205,6 +258,10 @@ object OriginWorkbenchSystemUIHook {
                                 f.isAccessible = true
                                 f.get(handler) as? Context
                             }.getOrNull()
+
+                            if (context != null) {
+                                ensureObserverRegistered(context, classLoader)
+                            }
 
                             if (isWorkbenchActive(context)) {
                                 return null // Prevent window moving and bottom caption swipe actions!
@@ -221,10 +278,10 @@ object OriginWorkbenchSystemUIHook {
     }
 
     /**
-     * Hook 3: Prevent resizing and suppress corner resize handles/strokes.
+     * Hook 4: Prevent resizing and suppress corner resize handles/strokes.
      */
     private fun hookResizeAndCornerHandlers(module: XposedInterface, classLoader: ClassLoader) {
-        // Hook MiuiFreeformModeResizeHandler.handleResize
+        // Hook MiuiFreeformModeResizeHandler.handleResize (void return type)
         try {
             val resizeHandlerClass = Class.forName("com.android.wm.shell.multitasking.miuifreeform.MiuiFreeformModeResizeHandler", false, classLoader)
             for (m in resizeHandlerClass.declaredMethods) {
@@ -238,6 +295,10 @@ object OriginWorkbenchSystemUIHook {
                                 f.isAccessible = true
                                 f.get(handler) as? Context
                             }.getOrNull()
+
+                            if (context != null) {
+                                ensureObserverRegistered(context, classLoader)
+                            }
 
                             if (isWorkbenchActive(context)) {
                                 return null // Block resize!
@@ -266,6 +327,10 @@ object OriginWorkbenchSystemUIHook {
                                 f.isAccessible = true
                                 f.get(controller) as? Context
                             }.getOrNull()
+
+                            if (context != null) {
+                                ensureObserverRegistered(context, classLoader)
+                            }
 
                             if (isWorkbenchActive(context)) {
                                 return null // Strip off corner resize handles & animations!

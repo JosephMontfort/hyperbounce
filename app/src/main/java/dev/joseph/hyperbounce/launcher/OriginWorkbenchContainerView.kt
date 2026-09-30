@@ -612,6 +612,12 @@ class OriginWorkbenchContainerView(
         if (taskId == -1) return
 
         try {
+            if (currentHeroBounds.isEmpty) {
+                val screenW = context.resources.displayMetrics.widthPixels
+                val screenH = context.resources.displayMetrics.heightPixels
+                calculateHeroBounds(context, currentStyle, screenW, screenH, currentHeroBounds)
+            }
+
             // Notify SystemUI to strip 3 dots, strip bottom pill, and disable moving/resizing
             Settings.System.putInt(context.contentResolver, "hb_workbench_hero_task_id", taskId)
             Settings.System.putInt(context.contentResolver, "hb_workbench_active", 1)
@@ -619,37 +625,23 @@ class OriginWorkbenchContainerView(
             val heroBoundsRect = Rect(currentHeroBounds)
             Log.i(TAG, "Launching live Freeform Hero window for task $taskId at bounds $heroBoundsRect")
 
-            val multiWindowUtilsClass = Class.forName("android.util.MiuiMultiWindowUtils")
-
-            // 1. Try startSmallFreeformForRecent(taskId, 2, heroBoundsRect)
-            val methodRecent = multiWindowUtilsClass.declaredMethods.firstOrNull {
-                it.name == "startSmallFreeformForRecent" && it.parameterTypes.size == 3
-            }
-            if (methodRecent != null) {
-                methodRecent.isAccessible = true
-                methodRecent.invoke(null, taskId, 2, heroBoundsRect)
-                Log.i(TAG, "Successfully started live Hero Freeform via startSmallFreeformForRecent")
-                return
-            }
-
-            // 2. Try startSmallFreeform(context, heroBoundsRect, taskId)
-            val methodContext = multiWindowUtilsClass.declaredMethods.firstOrNull {
-                it.name == "startSmallFreeform" && it.parameterTypes.size == 3
-            }
-            if (methodContext != null) {
-                methodContext.isAccessible = true
-                methodContext.invoke(null, context, heroBoundsRect, taskId)
-                Log.i(TAG, "Successfully started live Hero Freeform via startSmallFreeform")
-                return
-            }
-
-            // 3. Fallback: ActivityManagerWrapper.startActivityFromRecents with WINDOWING_MODE_FREEFORM
             val amwClass = Class.forName("com.android.systemui.shared.recents.system.ActivityManagerWrapper", false, classLoader)
             val amwInstance = amwClass.getMethod("getInstance").invoke(null)
             val options = ActivityOptions.makeBasic()
             val setLaunchWindowingModeMethod = ActivityOptions::class.java.getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType)
             setLaunchWindowingModeMethod.invoke(options, 5) // WINDOWING_MODE_FREEFORM = 5
             options.setLaunchBounds(heroBoundsRect)
+
+            runCatching {
+                val setMiuiConfigFlagMethod = ActivityOptions::class.java.getMethod("setMiuiConfigFlag", Int::class.javaPrimitiveType)
+                setMiuiConfigFlagMethod.invoke(options, 2)
+            }
+            runCatching {
+                val getInjectorMethod = options.javaClass.getMethod("getActivityOptionsInjector")
+                val injector = getInjectorMethod.invoke(options)
+                val setNormalMethod = injector.javaClass.getMethod("setNormalFreeForm", Boolean::class.javaPrimitiveType)
+                setNormalMethod.invoke(injector, true)
+            }
 
             val taskKey = runCatching { task.javaClass.getField("key").get(task) }.getOrNull()
             if (taskKey != null) {
