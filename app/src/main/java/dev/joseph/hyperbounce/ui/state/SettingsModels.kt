@@ -295,6 +295,7 @@ data class IOSTransitionSettings(
     val refinedHaptics: Boolean = true,
     val stackRecentsHaptics: Boolean = true,
     val workbenchRecentsEnabled: Boolean = false,
+    val workbenchLayoutStyle: Int = 0,
     val workbenchHeroScale: Float = 0.72f,
     val workbenchShelfScale: Float = 0.22f,
     val workbenchFolmeDamping: Float = 0.85f,

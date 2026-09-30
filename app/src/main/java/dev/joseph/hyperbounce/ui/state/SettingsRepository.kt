@@ -1082,6 +1082,7 @@ class SettingsRepository(context: Context) {
         var refinedHaptics by prefsBooleanState("ios_anim_refined_haptics", defaults.refinedHaptics); private set
         var stackRecentsHaptics by prefsBooleanState("ios_anim_stack_recents_haptics", defaults.stackRecentsHaptics); private set
         var workbenchRecentsEnabled by prefsBooleanState("ios_workbench_recents_enabled", defaults.workbenchRecentsEnabled); private set
+        var workbenchLayoutStyle by prefsIntState("ios_workbench_layout_style", defaults.workbenchLayoutStyle); private set
         var workbenchHeroScale by prefsFloatState("ios_workbench_hero_scale", defaults.workbenchHeroScale); private set
         var workbenchShelfScale by prefsFloatState("ios_workbench_shelf_scale", defaults.workbenchShelfScale); private set
         var workbenchFolmeDamping by prefsFloatState("ios_workbench_folme_damping", defaults.workbenchFolmeDamping); private set
@@ -1102,6 +1103,7 @@ class SettingsRepository(context: Context) {
             refinedHaptics = refinedHaptics,
             stackRecentsHaptics = stackRecentsHaptics,
             workbenchRecentsEnabled = workbenchRecentsEnabled,
+            workbenchLayoutStyle = workbenchLayoutStyle,
             workbenchHeroScale = workbenchHeroScale,
             workbenchShelfScale = workbenchShelfScale,
             workbenchFolmeDamping = workbenchFolmeDamping,
@@ -1122,6 +1124,7 @@ class SettingsRepository(context: Context) {
         @JvmName("setRefinedHapticsPref") fun setRefinedHaptics(v: Boolean) { refinedHaptics = v }
         @JvmName("setStackRecentsHapticsPref") fun setStackRecentsHaptics(v: Boolean) { stackRecentsHaptics = v }
         @JvmName("setWorkbenchRecentsEnabledPref") fun setWorkbenchRecentsEnabled(v: Boolean) { workbenchRecentsEnabled = v }
+        @JvmName("setWorkbenchLayoutStylePref") fun setWorkbenchLayoutStyle(v: Int) { workbenchLayoutStyle = v }
         @JvmName("setWorkbenchHeroScalePref") fun setWorkbenchHeroScale(v: Float) { workbenchHeroScale = v }
         @JvmName("setWorkbenchShelfScalePref") fun setWorkbenchShelfScale(v: Float) { workbenchShelfScale = v }
         @JvmName("setWorkbenchFolmeDampingPref") fun setWorkbenchFolmeDamping(v: Float) { workbenchFolmeDamping = v }
@@ -1142,6 +1145,7 @@ class SettingsRepository(context: Context) {
             refinedHaptics = defaults.refinedHaptics
             stackRecentsHaptics = defaults.stackRecentsHaptics
             workbenchRecentsEnabled = defaults.workbenchRecentsEnabled
+            workbenchLayoutStyle = defaults.workbenchLayoutStyle
             workbenchHeroScale = defaults.workbenchHeroScale
             workbenchShelfScale = defaults.workbenchShelfScale
             workbenchFolmeDamping = defaults.workbenchFolmeDamping

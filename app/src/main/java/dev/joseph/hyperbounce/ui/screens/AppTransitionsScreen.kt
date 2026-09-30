@@ -174,6 +174,17 @@ fun AppTransitionsScreen(
                 )
                 if (trans.workbenchRecentsEnabled) {
                     RowDivider(colors.separator)
+                    SettingsClickableRow(
+                        title = "Default Dock Layout",
+                        subtitle = if (trans.workbenchLayoutStyle == 0) "Left Shelf (Side Dock - Maximized Viewport)" else "Top Shelf (Top Dock - Full Width)",
+                        colors = colors,
+                        iconTint = colors.accentPurple,
+                        onClick = {
+                            trans.setWorkbenchLayoutStyle(if (trans.workbenchLayoutStyle == 0) 1 else 0)
+                        },
+                        icon = { AppsIcon(color = Color.White, size = 15.dp) }
+                    )
+                    RowDivider(colors.separator)
                     SettingsSliderRow(
                         title = "Hero Stage Proportions",
                         subtitle = "Scale size of the primary running app viewport",
