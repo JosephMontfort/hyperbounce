@@ -613,9 +613,7 @@ class OriginWorkbenchContainerView(
 
         try {
             if (currentHeroBounds.isEmpty) {
-                val screenW = context.resources.displayMetrics.widthPixels
-                val screenH = context.resources.displayMetrics.heightPixels
-                calculateHeroBounds(context, currentStyle, screenW, screenH, currentHeroBounds)
+                currentHeroBounds.set(calculateHeroBounds(context, currentStyle))
             }
 
             // Notify SystemUI to strip 3 dots, strip bottom pill, and disable moving/resizing
