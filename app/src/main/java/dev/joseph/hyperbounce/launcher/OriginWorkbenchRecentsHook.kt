@@ -207,13 +207,14 @@ object OriginWorkbenchRecentsHook {
         try {
             val recentsViewClass = Class.forName("com.miui.home.recents.views.RecentsView", false, classLoader)
 
-            // 1. setVisibility
+            // 1. setVisibility: Block stock RecentsView from becoming VISIBLE when Workbench is active
             val setVisibilityMethod = recentsViewClass.getMethod("setVisibility", Int::class.javaPrimitiveType)
             module.hook(setVisibilityMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (cfg.enabled && cfg.workbenchRecentsEnabled && isWorkbenchActive) {
-                        chain.args[0] = View.INVISIBLE
+                    val vis = chain.args[0] as? Int ?: 0
+                    if (cfg.enabled && cfg.workbenchRecentsEnabled && isWorkbenchActive && vis == View.VISIBLE) {
+                        return null // Suppress becoming visible!
                     }
                     return chain.proceed()
                 }
