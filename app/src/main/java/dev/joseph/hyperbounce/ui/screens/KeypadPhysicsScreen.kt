@@ -53,49 +53,11 @@ fun KeypadPhysicsScreen(
             keypad.setReleaseDuration(320.0f)
             keypad.setReleaseSquishAmp(0.35f)
             keypad.setReleaseOvershoot(2.0f)
-            keypad.setCascadeFlightElongation(0.22f)
-            keypad.setCascadeLandingSquish(0.24f)
-            keypad.setCascadeInertiaCoupling(1.0f)
-            keypad.setCascadeViscousDamping(0.75f)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
         onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartSystemUI(context) }
     ) { _ ->
-        item {
-            SectionHeader("Entrance Animation Engine", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                val isIos26 = keypad.entryAnimationType == "ios26"
-                dev.joseph.hyperbounce.ui.components.SettingsClickableRow(
-                    title = "iOS 26 Liquid Bloom",
-                    subtitle = "Radial bloom from center with decoupled liquid lenses & 2D squish",
-                    colors = colors,
-                    iconTint = colors.accentBlue,
-                    onClick = { keypad.setEntryAnimationType("ios26") },
-                    trailing = if (isIos26) {
-                        { dev.joseph.hyperbounce.ui.components.CheckmarkIcon(color = colors.accentBlue, size = 16.dp) }
-                    } else null,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
-                )
-                RowDivider(colors.separator)
-                dev.joseph.hyperbounce.ui.components.SettingsClickableRow(
-                    title = "Cascade Flight",
-                    subtitle = "Sequential upward cascade glide with vertical deceleration squish",
-                    colors = colors,
-                    iconTint = colors.accentOrange,
-                    onClick = { keypad.setEntryAnimationType("cascade") },
-                    trailing = if (!isIos26) {
-                        { dev.joseph.hyperbounce.ui.components.CheckmarkIcon(color = colors.accentOrange, size = 16.dp) }
-                    } else null,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
-                )
-            }
-            SectionFooter(
-                "Select the physical entrance model. iOS 26 Liquid Bloom accurately matches the native radial spring explosion with liquid inertia mass transfer.",
-                colors
-            )
-        }
-
         item {
             SectionHeader("Physics Subpages", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -123,15 +85,6 @@ fun KeypadPhysicsScreen(
                     colors = colors,
                     iconTint = colors.accentPurple,
                     onClick = { onNavigate(Destination.KeypadReleasePhysics) },
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
-                )
-                RowDivider(colors.separator)
-                SettingsNavRow(
-                    title = "Cascade Entrance Inertia",
-                    subtitle = "Y-axis motion mass transfer, impact squish & liquid rebound",
-                    colors = colors,
-                    iconTint = colors.accentOrange,
-                    onClick = { onNavigate(Destination.KeypadCascadePhysics) },
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
             }
@@ -179,19 +132,6 @@ fun KeypadPhysicsScreen(
                     onValueChange = keypad::setReleaseSquishAmp,
                     valueRange = 0.0f..0.70f,
                     defaultValue = 0.35f,
-                    valueLabel = { String.format(Locale.US, "%.2f x", it) },
-                    enabled = keypad.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Cascade Landing Squish",
-                    subtitle = "Impact horizontal squish intensity upon arrival",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = keypad.cascadeLandingSquish,
-                    onValueChange = keypad::setCascadeLandingSquish,
-                    valueRange = 0.05f..0.50f,
-                    defaultValue = 0.24f,
                     valueLabel = { String.format(Locale.US, "%.2f x", it) },
                     enabled = keypad.enabled
                 )

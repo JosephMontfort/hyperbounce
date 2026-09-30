@@ -83,12 +83,6 @@ data class LockScreenKeypadConfig(
     var releaseDuration: Float = 320.0f,
     var releaseSquishAmp: Float = 0.35f,
     var releaseOvershoot: Float = 2.0f,
-    var cascadeFlightElongation: Float = 0.22f,
-    var cascadeLandingSquish: Float = 0.24f,
-    var cascadeInertiaCoupling: Float = 1.0f,
-    var cascadeViscousDamping: Float = 0.75f,
-    // Entry Animation Mode: "ios26" (Radial Bloom) or "cascade" (Vertical Flight)
-    var entryAnimationType: String = "ios26",
     var iosBloomDuration: Float = 520.0f,
     var iosBloomClusterFactor: Float = 0.70f,
     var iosBloomOvershoot: Float = 0.16f,
@@ -201,13 +195,6 @@ object LockScreenConfigHolder {
         keypad.releaseDuration = prefs.getFloat("pin_release_duration", 320.0f)
         keypad.releaseSquishAmp = prefs.getFloat("pin_release_squish_amp", 0.35f)
         keypad.releaseOvershoot = prefs.getFloat("pin_release_overshoot", 2.0f)
-        keypad.cascadeFlightElongation = prefs.getFloat("pin_cascade_flight_elongation", 0.22f)
-        keypad.cascadeLandingSquish = prefs.getFloat("pin_cascade_landing_squish", 0.24f)
-        keypad.cascadeInertiaCoupling = prefs.getFloat("pin_cascade_inertia_coupling", 1.0f)
-        keypad.cascadeViscousDamping = prefs.getFloat("pin_cascade_viscous_damping", 0.75f)
-
-        // iOS 26 Liquid Bloom
-        keypad.entryAnimationType = prefs.getString("pin_entry_anim_type", "ios26") ?: "ios26"
         keypad.iosBloomDuration = prefs.getFloat("pin_ios_bloom_duration", 520.0f)
         keypad.iosBloomClusterFactor = prefs.getFloat("pin_ios_bloom_cluster_factor", 0.70f)
         keypad.iosBloomOvershoot = prefs.getFloat("pin_ios_bloom_overshoot", 0.16f)

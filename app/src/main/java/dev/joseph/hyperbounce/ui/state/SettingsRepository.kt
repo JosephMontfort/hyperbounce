@@ -703,14 +703,7 @@ class SettingsRepository(context: Context) {
         var dragVolumeStretch by prefsFloatState("pin_drag_volume_stretch", defaults.dragVolumeStretch); private set
         var releaseDuration by prefsFloatState("pin_release_duration", defaults.releaseDuration); private set
         var releaseSquishAmp by prefsFloatState("pin_release_squish_amp", defaults.releaseSquishAmp); private set
-        var releaseOvershoot by prefsFloatState("pin_release_overshoot", defaults.releaseOvershoot); private set
-        var cascadeFlightElongation by prefsFloatState("pin_cascade_flight_elongation", defaults.cascadeFlightElongation); private set
-        var cascadeLandingSquish by prefsFloatState("pin_cascade_landing_squish", defaults.cascadeLandingSquish); private set
-        var cascadeInertiaCoupling by prefsFloatState("pin_cascade_inertia_coupling", defaults.cascadeInertiaCoupling); private set
-        var cascadeViscousDamping by prefsFloatState("pin_cascade_viscous_damping", defaults.cascadeViscousDamping); private set
-
         // iOS 26 Liquid Bloom
-        var entryAnimationType by prefsStringState("pin_entry_anim_type", defaults.entryAnimationType); private set
         var iosBloomDuration by prefsFloatState("pin_ios_bloom_duration", defaults.iosBloomDuration); private set
         var iosBloomClusterFactor by prefsFloatState("pin_ios_bloom_cluster_factor", defaults.iosBloomClusterFactor); private set
         var iosBloomOvershoot by prefsFloatState("pin_ios_bloom_overshoot", defaults.iosBloomOvershoot); private set
@@ -729,9 +722,8 @@ class SettingsRepository(context: Context) {
             rowDelayStep, colDelayStep, entryOvershoot, delayKey1, delayKey2, delayKey3, delayKey4,
             delayKey5, delayKey6, delayKey7, delayKey8, delayKey9, delayKey0, delayEmergency, delayCancel,
             dragMaxThreshold, dragInitialStiffness, dragResistancePower, dragVolumeStretch, releaseDuration,
-            releaseSquishAmp, releaseOvershoot, cascadeFlightElongation, cascadeLandingSquish,
-            cascadeInertiaCoupling, cascadeViscousDamping,
-            entryAnimationType, iosBloomDuration, iosBloomClusterFactor, iosBloomOvershoot,
+            releaseSquishAmp, releaseOvershoot,
+            iosBloomDuration, iosBloomClusterFactor, iosBloomOvershoot,
             iosBloomDamping, iosBloomStiffness, iosBloomRadialSquish, iosBloomVelocityStretch,
             iosBloomWaveStagger, iosBloomDecoupleText
         )
@@ -785,12 +777,6 @@ class SettingsRepository(context: Context) {
         @JvmName("setReleaseDurationPref") fun setReleaseDuration(v: Float) { releaseDuration = v }
         @JvmName("setReleaseSquishAmpPref") fun setReleaseSquishAmp(v: Float) { releaseSquishAmp = v }
         @JvmName("setReleaseOvershootPref") fun setReleaseOvershoot(v: Float) { releaseOvershoot = v }
-        @JvmName("setCascadeFlightElongationPref") fun setCascadeFlightElongation(v: Float) { cascadeFlightElongation = v }
-        @JvmName("setCascadeLandingSquishPref") fun setCascadeLandingSquish(v: Float) { cascadeLandingSquish = v }
-        @JvmName("setCascadeInertiaCouplingPref") fun setCascadeInertiaCoupling(v: Float) { cascadeInertiaCoupling = v }
-        @JvmName("setCascadeViscousDampingPref") fun setCascadeViscousDamping(v: Float) { cascadeViscousDamping = v }
-
-        @JvmName("setEntryAnimationTypePref") fun setEntryAnimationType(v: String) { entryAnimationType = v }
         @JvmName("setIosBloomDurationPref") fun setIosBloomDuration(v: Float) { iosBloomDuration = v }
         @JvmName("setIosBloomClusterFactorPref") fun setIosBloomClusterFactor(v: Float) { iosBloomClusterFactor = v }
         @JvmName("setIosBloomOvershootPref") fun setIosBloomOvershoot(v: Float) { iosBloomOvershoot = v }
@@ -849,11 +835,6 @@ class SettingsRepository(context: Context) {
             releaseDuration = defaults.releaseDuration
             releaseSquishAmp = defaults.releaseSquishAmp
             releaseOvershoot = defaults.releaseOvershoot
-            cascadeFlightElongation = defaults.cascadeFlightElongation
-            cascadeLandingSquish = defaults.cascadeLandingSquish
-            cascadeInertiaCoupling = defaults.cascadeInertiaCoupling
-            cascadeViscousDamping = defaults.cascadeViscousDamping
-            entryAnimationType = defaults.entryAnimationType
             iosBloomDuration = defaults.iosBloomDuration
             iosBloomClusterFactor = defaults.iosBloomClusterFactor
             iosBloomOvershoot = defaults.iosBloomOvershoot

@@ -233,12 +233,7 @@ data class LockScreenKeypadSettings(
     val releaseDuration: Float = 320.0f,
     val releaseSquishAmp: Float = 0.35f,
     val releaseOvershoot: Float = 2.0f,
-    val cascadeFlightElongation: Float = 0.22f,
-    val cascadeLandingSquish: Float = 0.24f,
-    val cascadeInertiaCoupling: Float = 1.0f,
-    val cascadeViscousDamping: Float = 0.75f,
     // iOS 26 Liquid Bloom
-    val entryAnimationType: String = "ios26",
     val iosBloomDuration: Float = 520.0f,
     val iosBloomClusterFactor: Float = 0.70f,
     val iosBloomOvershoot: Float = 0.16f,
