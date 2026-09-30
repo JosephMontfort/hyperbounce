@@ -30,6 +30,12 @@ object OriginWorkbenchRecentsHook {
     @Volatile
     private var sWorkbenchViewRef: WeakReference<OriginWorkbenchContainerView>? = null
 
+    @Volatile
+    private var isWorkbenchActive = false
+
+    @Volatile
+    private var lastEnterTimestamp = 0L
+
     fun init(module: XposedInterface, classLoader: ClassLoader) {
         FolmePhysicsHelper.init(classLoader)
 
@@ -37,6 +43,7 @@ object OriginWorkbenchRecentsHook {
         hookRecentsContainer(module, classLoader)
         hookRecentsView(module, classLoader)
         hookClearContainerSuppression(module, classLoader)
+        hookTaskStackViewHeroTarget(module, classLoader)
     }
 
     /**
@@ -194,31 +201,68 @@ object OriginWorkbenchRecentsHook {
 
     /**
      * Hook 3: RecentsView suppression
-     * Ensures RecentsView remains invisible when Workbench is active.
+     * Ensures RecentsView remains invisible, does not draw cards/tasks, and does not intercept touches when Workbench is active.
      */
     private fun hookRecentsView(module: XposedInterface, classLoader: ClassLoader) {
         try {
             val recentsViewClass = Class.forName("com.miui.home.recents.views.RecentsView", false, classLoader)
 
+            // 1. setVisibility
             val setVisibilityMethod = recentsViewClass.getMethod("setVisibility", Int::class.javaPrimitiveType)
             module.hook(setVisibilityMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (cfg.enabled && cfg.workbenchRecentsEnabled) {
+                    if (cfg.enabled && cfg.workbenchRecentsEnabled && isWorkbenchActive) {
                         chain.args[0] = View.INVISIBLE
                     }
                     return chain.proceed()
                 }
             })
 
-            Log.i(TAG, "Successfully hooked RecentsView suppression")
+            // 2. dispatchDraw: Completely suppress drawing stock cards/tasks while Workbench is active
+            val dispatchDrawMethod = recentsViewClass.declaredMethods.firstOrNull {
+                it.name == "dispatchDraw" && it.parameterTypes.size == 1 &&
+                        it.parameterTypes[0] == android.graphics.Canvas::class.java
+            }
+            if (dispatchDrawMethod != null) {
+                dispatchDrawMethod.isAccessible = true
+                module.hook(dispatchDrawMethod).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        val cfg = LauncherConfigHolder.iosAnimConfig
+                        if (cfg.enabled && cfg.workbenchRecentsEnabled && isWorkbenchActive) {
+                            return null // Suppress drawing stock recents view and task cards completely!
+                        }
+                        return chain.proceed()
+                    }
+                })
+            }
+
+            // 3. onInterceptTouchEvent: Prevent stock recents view from stealing touch events
+            val onInterceptTouchEventMethod = recentsViewClass.declaredMethods.firstOrNull {
+                it.name == "onInterceptTouchEvent" && it.parameterTypes.size == 1 &&
+                        it.parameterTypes[0] == android.view.MotionEvent::class.java
+            }
+            if (onInterceptTouchEventMethod != null) {
+                onInterceptTouchEventMethod.isAccessible = true
+                module.hook(onInterceptTouchEventMethod).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        val cfg = LauncherConfigHolder.iosAnimConfig
+                        if (cfg.enabled && cfg.workbenchRecentsEnabled && isWorkbenchActive) {
+                            return false
+                        }
+                        return chain.proceed()
+                    }
+                })
+            }
+
+            Log.i(TAG, "Successfully hooked RecentsView suppression & touch handling")
         } catch (t: Throwable) {
             Log.e(TAG, "Failed hooking RecentsView", t)
         }
     }
 
     /**
-     * Hook 4: Suppresses the stock Clear All button in RecentsContainer when Workbench is active.
+     * Hook 4: Suppresses the stock Clear All button and RAM text in RecentsContainer when Workbench is active.
      */
     private fun hookClearContainerSuppression(module: XposedInterface, classLoader: ClassLoader) {
         try {
@@ -240,6 +284,22 @@ object OriginWorkbenchRecentsHook {
                 })
             }
 
+            // Suppress RAM / memory info text
+            for (m in recentsContainerClass.declaredMethods) {
+                if (m.name.contains("canTxtMemInfoShow")) {
+                    m.isAccessible = true
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val cfg = LauncherConfigHolder.iosAnimConfig
+                            if (cfg.enabled && cfg.workbenchRecentsEnabled && isWorkbenchActive) {
+                                return false
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                }
+            }
+
             val setupVisibleMethod = recentsContainerClass.declaredMethods.firstOrNull {
                 it.name == "setupVisible" && it.parameterTypes.isEmpty()
             }
@@ -258,9 +318,44 @@ object OriginWorkbenchRecentsHook {
                 })
             }
 
-            Log.i(TAG, "Successfully hooked Clear All button suppression for Workbench")
+            Log.i(TAG, "Successfully hooked Clear All button & RAM text suppression for Workbench")
         } catch (t: Throwable) {
             Log.e(TAG, "Failed hooking Clear All button suppression", t)
+        }
+    }
+
+    /**
+     * Hook 5: Full-screen gesture visual continuity.
+     * Hooks TaskStackView.getTaskViewWithoutHeaderRectF to return the exact Hero Stage bounds,
+     * ensuring the foreground app window surface animates smoothly and directly into the Hero Stage!
+     */
+    private fun hookTaskStackViewHeroTarget(module: XposedInterface, classLoader: ClassLoader) {
+        try {
+            val taskStackViewClass = Class.forName("com.miui.home.recents.views.TaskStackView", false, classLoader)
+            for (m in taskStackViewClass.declaredMethods) {
+                if (m.name == "getTaskViewWithoutHeaderRectF") {
+                    m.isAccessible = true
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val cfg = LauncherConfigHolder.iosAnimConfig
+                            if (cfg.enabled && cfg.workbenchRecentsEnabled) {
+                                val tsv = chain.thisObject as? View
+                                val context = tsv?.context
+                                if (context != null) {
+                                    return OriginWorkbenchContainerView.calculateHeroBounds(
+                                        context,
+                                        cfg.workbenchLayoutStyle
+                                    )
+                                }
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                }
+            }
+            Log.i(TAG, "Successfully hooked TaskStackView.getTaskViewWithoutHeaderRectF for gesture visual continuity")
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed hooking TaskStackView.getTaskViewWithoutHeaderRectF", t)
         }
     }
 
@@ -295,12 +390,19 @@ object OriginWorkbenchRecentsHook {
      * Called when Recents opens with Origin Workbench enabled.
      */
     private fun handleWorkbenchEnter(container: ViewGroup, classLoader: ClassLoader) {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (isWorkbenchActive && now - lastEnterTimestamp < 500L) {
+            return // Debounce rapid multi-hook triggers
+        }
+        isWorkbenchActive = true
+        lastEnterTimestamp = now
+
         val workbenchView = ensureWorkbenchViewAttached(container, classLoader) ?: return
 
         // 1. Hide stock RecentsView and its TaskStackView
         hideStockRecentsView(container)
 
-        // 2. Hide stock Clear All container
+        // 2. Hide stock Clear All container and RAM text
         hideStockClearContainer(container)
 
         // 3. Show Origin Workbench view
@@ -319,6 +421,7 @@ object OriginWorkbenchRecentsHook {
      * Called when Recents exits.
      */
     private fun handleWorkbenchExit(container: ViewGroup) {
+        isWorkbenchActive = false
         hideWorkbenchView(container)
         restoreStockViews(container)
     }
@@ -347,6 +450,10 @@ object OriginWorkbenchRecentsHook {
             val clearAnimViewId = container.resources.getIdentifier("clearAnimView", "id", container.context.packageName)
             val clearAnimView = if (clearAnimViewId != 0) container.findViewById<View>(clearAnimViewId) else null
             clearAnimView?.visibility = View.GONE
+
+            val txtMemId = container.resources.getIdentifier("txtMemoryContainer", "id", container.context.packageName)
+            val txtMem = if (txtMemId != 0) container.findViewById<View>(txtMemId) else null
+            txtMem?.visibility = View.GONE
         } catch (_: Throwable) {}
     }
 
@@ -360,6 +467,10 @@ object OriginWorkbenchRecentsHook {
             val clearContainerId = container.resources.getIdentifier("memoryAndClearContainer", "id", container.context.packageName)
             val clearContainer = if (clearContainerId != 0) container.findViewById<View>(clearContainerId) else null
             clearContainer?.visibility = View.VISIBLE
+
+            val txtMemId = container.resources.getIdentifier("txtMemoryContainer", "id", container.context.packageName)
+            val txtMem = if (txtMemId != 0) container.findViewById<View>(txtMemId) else null
+            txtMem?.visibility = View.VISIBLE
         } catch (_: Throwable) {}
     }
 

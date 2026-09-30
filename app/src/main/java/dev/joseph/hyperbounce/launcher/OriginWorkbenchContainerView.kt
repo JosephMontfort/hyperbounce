@@ -60,6 +60,41 @@ class OriginWorkbenchContainerView(
         const val STYLE_SIDE_SHELF = 0
         const val STYLE_TOP_SHELF = 1
         private const val MAX_SHELF_CARDS = 4
+
+        /**
+         * Calculates the exact spatial bounds of the Hero Stage for seamless visual continuity
+         * during full-screen gesture enter transitions (TaskStackView.getTaskViewWithoutHeaderRectF).
+         */
+        fun calculateHeroBounds(context: Context, style: Int): RectF {
+            val dm = context.resources.displayMetrics
+            val totalW = dm.widthPixels
+            val totalH = dm.heightPixels
+
+            val statusBarResId = context.resources.getIdentifier("status_bar_height", "dimen", "android")
+            val statusBarH = if (statusBarResId > 0) context.resources.getDimensionPixelSize(statusBarResId) else (32 * dm.density).toInt()
+            val navBarH = (24 * dm.density).toInt()
+            val headerH = (48 * dm.density).toInt()
+            val headerTop = statusBarH + (4 * dm.density).toInt()
+
+            val contentTop = headerTop + headerH + (6 * dm.density).toInt()
+            val contentBottom = totalH - navBarH - (12 * dm.density).toInt()
+            val contentHeight = contentBottom - contentTop
+
+            return if (style == STYLE_SIDE_SHELF) {
+                val shelfW = (totalW * 0.22f).toInt()
+                val shelfLeft = (totalW * 0.03f).toInt()
+                val heroLeft = shelfLeft + shelfW + (totalW * 0.03f).toInt()
+                val heroRight = (totalW * 0.97f).toInt()
+                RectF(heroLeft.toFloat(), contentTop.toFloat(), heroRight.toFloat(), (contentTop + contentHeight).toFloat())
+            } else {
+                val shelfH = (136 * dm.density).toInt().coerceAtMost((contentHeight * 0.22f).toInt())
+                val shelfLeft = (totalW * 0.04f).toInt()
+                val shelfRight = (totalW * 0.96f).toInt()
+                val heroTop = contentTop + shelfH + (10 * dm.density).toInt()
+                val heroH = contentBottom - heroTop
+                RectF(shelfLeft.toFloat(), heroTop.toFloat(), shelfRight.toFloat(), (heroTop + heroH).toFloat())
+            }
+        }
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -89,7 +124,6 @@ class OriginWorkbenchContainerView(
     private val heroAppIconBadge: ImageView
     private val heroAppTitleText: TextView
 
-    private val shelfDockLayout: FrameLayout
     private val shelfCardViews = ArrayList<ShelfCardView>()
 
     private var isAnimatingSwap = false
@@ -106,9 +140,8 @@ class OriginWorkbenchContainerView(
             dismissRecentsToHome()
         }
 
-        // Read saved layout style preference
-        val prefs = context.getSharedPreferences("hyperbounce_prefs", Context.MODE_PRIVATE)
-        currentStyle = prefs.getInt("ios_workbench_layout_style", STYLE_SIDE_SHELF)
+        // Read saved layout style preference from module config holder
+        currentStyle = LauncherConfigHolder.iosAnimConfig.workbenchLayoutStyle
 
         // 1. Header Layout (Controls Bar)
         headerLayout = LinearLayout(context).apply {
@@ -272,12 +305,7 @@ class OriginWorkbenchContainerView(
 
         addView(heroCardContainer)
 
-        // 3. Shelf Dock Container & Cards
-        shelfDockLayout = FrameLayout(context).apply {
-            clipChildren = false
-            clipToPadding = false
-        }
-
+        // 3. 4 Shelf Cards (Direct children of OriginWorkbenchContainerView)
         for (i in 0 until MAX_SHELF_CARDS) {
             val card = ShelfCardView(context, i).apply {
                 onCardClickListener = { slotIdx, task ->
@@ -288,10 +316,8 @@ class OriginWorkbenchContainerView(
                 }
             }
             shelfCardViews.add(card)
-            shelfDockLayout.addView(card)
+            addView(card)
         }
-
-        addView(shelfDockLayout)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -309,8 +335,14 @@ class OriginWorkbenchContainerView(
         modeSwitcherBtn.text = if (currentStyle == STYLE_SIDE_SHELF) "◫ Side Dock" else "▥ Top Dock"
 
         // Persist setting
-        val prefs = context.getSharedPreferences("hyperbounce_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putInt("ios_workbench_layout_style", currentStyle).apply()
+        try {
+            val prefs = context.getSharedPreferences("hyperbounce_settings", Context.MODE_PRIVATE)
+            prefs.edit().putInt("ios_workbench_layout_style", currentStyle).apply()
+        } catch (_: Throwable) {}
+        try {
+            val legacyPrefs = context.getSharedPreferences("hyperbounce_prefs", Context.MODE_PRIVATE)
+            legacyPrefs.edit().putInt("ios_workbench_layout_style", currentStyle).apply()
+        } catch (_: Throwable) {}
 
         // Recalculate and smoothly animate layout bounds
         applyLayoutPositions(animate = true)
@@ -337,11 +369,13 @@ class OriginWorkbenchContainerView(
             width = LayoutParams.MATCH_PARENT
             height = headerH
             topMargin = headerTop
+            leftMargin = 0
         }
 
         val contentTop = headerTop + headerH + dpToPx(6f)
         val contentBottom = totalH - navBarH - dpToPx(12f)
         val contentHeight = contentBottom - contentTop
+        val gap = dpToPx(8f)
 
         if (currentStyle == STYLE_SIDE_SHELF) {
             // ==========================================
@@ -349,32 +383,23 @@ class OriginWorkbenchContainerView(
             // ==========================================
             val shelfW = (totalW * 0.22f).toInt()
             val shelfLeft = (totalW * 0.03f).toInt()
-            val gap = dpToPx(8f)
-
-            // Shelf Dock bounds
-            shelfDockLayout.layoutParams = (shelfDockLayout.layoutParams as LayoutParams).apply {
-                width = shelfW
-                height = contentHeight
-                leftMargin = shelfLeft
-                topMargin = contentTop
-            }
-
-            // 4 Shelf Cards vertically stacked
             val cardH = (contentHeight - (MAX_SHELF_CARDS - 1) * gap) / MAX_SHELF_CARDS
+
             for (i in 0 until MAX_SHELF_CARDS) {
-                val cardY = i * (cardH + gap)
-                val targetRectF = RectF(shelfLeft.toFloat(), (contentTop + cardY).toFloat(), (shelfLeft + shelfW).toFloat(), (contentTop + cardY + cardH).toFloat())
-                currentShelfRects[i].set(targetRectF)
+                val cardY = contentTop + i * (cardH + gap)
+                currentShelfRects[i].set(shelfLeft.toFloat(), cardY.toFloat(), (shelfLeft + shelfW).toFloat(), (cardY + cardH).toFloat())
 
                 val cardView = shelfCardViews[i]
                 if (animate) {
-                    FolmePhysicsHelper.animateBounds(cardView, 0f, cardY.toFloat(), shelfW, cardH, damping, response)
+                    FolmePhysicsHelper.animateBounds(cardView, shelfLeft.toFloat(), cardY.toFloat(), shelfW, cardH, damping, response)
                 } else {
-                    cardView.x = 0f
+                    cardView.x = shelfLeft.toFloat()
                     cardView.y = cardY.toFloat()
-                    val lp = cardView.layoutParams ?: LayoutParams(shelfW, cardH)
+                    val lp = cardView.layoutParams as? LayoutParams ?: LayoutParams(shelfW, cardH)
                     lp.width = shelfW
                     lp.height = cardH
+                    lp.leftMargin = shelfLeft
+                    lp.topMargin = cardY
                     cardView.layoutParams = lp
                 }
             }
@@ -393,9 +418,11 @@ class OriginWorkbenchContainerView(
             } else {
                 heroCardContainer.x = heroLeft.toFloat()
                 heroCardContainer.y = contentTop.toFloat()
-                val lp = heroCardContainer.layoutParams ?: LayoutParams(heroW, heroH)
+                val lp = heroCardContainer.layoutParams as? LayoutParams ?: LayoutParams(heroW, heroH)
                 lp.width = heroW
                 lp.height = heroH
+                lp.leftMargin = heroLeft
+                lp.topMargin = contentTop
                 heroCardContainer.layoutParams = lp
             }
 
@@ -407,32 +434,23 @@ class OriginWorkbenchContainerView(
             val shelfLeft = (totalW * 0.04f).toInt()
             val shelfRight = (totalW * 0.96f).toInt()
             val shelfW = shelfRight - shelfLeft
-            val gap = dpToPx(8f)
-
-            // Shelf Dock bounds
-            shelfDockLayout.layoutParams = (shelfDockLayout.layoutParams as LayoutParams).apply {
-                width = shelfW
-                height = shelfH
-                leftMargin = shelfLeft
-                topMargin = contentTop
-            }
-
-            // 4 Shelf Cards horizontally arranged
             val cardW = (shelfW - (MAX_SHELF_CARDS - 1) * gap) / MAX_SHELF_CARDS
+
             for (i in 0 until MAX_SHELF_CARDS) {
-                val cardX = i * (cardW + gap)
-                val targetRectF = RectF((shelfLeft + cardX).toFloat(), contentTop.toFloat(), (shelfLeft + cardX + cardW).toFloat(), (contentTop + shelfH).toFloat())
-                currentShelfRects[i].set(targetRectF)
+                val cardX = shelfLeft + i * (cardW + gap)
+                currentShelfRects[i].set(cardX.toFloat(), contentTop.toFloat(), (cardX + cardW).toFloat(), (contentTop + shelfH).toFloat())
 
                 val cardView = shelfCardViews[i]
                 if (animate) {
-                    FolmePhysicsHelper.animateBounds(cardView, cardX.toFloat(), 0f, cardW, shelfH, damping, response)
+                    FolmePhysicsHelper.animateBounds(cardView, cardX.toFloat(), contentTop.toFloat(), cardW, shelfH, damping, response)
                 } else {
                     cardView.x = cardX.toFloat()
-                    cardView.y = 0f
-                    val lp = cardView.layoutParams ?: LayoutParams(cardW, shelfH)
+                    cardView.y = contentTop.toFloat()
+                    val lp = cardView.layoutParams as? LayoutParams ?: LayoutParams(cardW, shelfH)
                     lp.width = cardW
                     lp.height = shelfH
+                    lp.leftMargin = cardX
+                    lp.topMargin = contentTop
                     cardView.layoutParams = lp
                 }
             }
@@ -450,9 +468,11 @@ class OriginWorkbenchContainerView(
             } else {
                 heroCardContainer.x = shelfLeft.toFloat()
                 heroCardContainer.y = heroTop.toFloat()
-                val lp = heroCardContainer.layoutParams ?: LayoutParams(heroW, heroH)
+                val lp = heroCardContainer.layoutParams as? LayoutParams ?: LayoutParams(heroW, heroH)
                 lp.width = heroW
                 lp.height = heroH
+                lp.leftMargin = shelfLeft
+                lp.topMargin = heroTop
                 heroCardContainer.layoutParams = lp
             }
         }
@@ -488,15 +508,18 @@ class OriginWorkbenchContainerView(
             // Bind Hero Stage
             bindHeroStage(currentHeroTask)
 
-            // Hero Stage entrance animation
-            heroCardContainer.alpha = 0f
-            heroCardContainer.scaleX = 0.94f
-            heroCardContainer.scaleY = 0.94f
+            // Hero Stage entrance animation: subtle smooth spring pop
+            heroCardContainer.alpha = 0.4f
+            heroCardContainer.scaleX = 0.96f
+            heroCardContainer.scaleY = 0.96f
+            heroCardContainer.translationX = 0f
+            heroCardContainer.translationY = 0f
             heroCardContainer.animate()
                 .alpha(1f)
                 .scaleX(1f)
                 .scaleY(1f)
-                .setDuration(280L)
+                .setDuration(240L)
+                .setInterpolator(android.view.animation.PathInterpolator(0.2f, 1f, 0.4f, 1f))
                 .start()
 
             // Bind and trigger staggered cascade entrance for shelf cards
@@ -508,18 +531,14 @@ class OriginWorkbenchContainerView(
                     cardView.bindTask(task)
                     cardView.visibility = View.VISIBLE
 
-                    val targetX = cardView.x
-                    val targetY = cardView.y
-                    val startX = if (currentStyle == STYLE_SIDE_SHELF) -cardView.width.toFloat() else targetX
-                    val startY = if (currentStyle == STYLE_TOP_SHELF) -cardView.height.toFloat() else targetY
-                    val delay = i * 40L
+                    val startTransX = if (currentStyle == STYLE_SIDE_SHELF) -dpToPx(160f).toFloat() else 0f
+                    val startTransY = if (currentStyle == STYLE_TOP_SHELF) -dpToPx(140f).toFloat() else 0f
+                    val delay = i * 45L
 
                     FolmePhysicsHelper.animateFlyIn(
                         view = cardView,
-                        startX = startX,
-                        startY = startY,
-                        targetX = targetX,
-                        targetY = targetY,
+                        startTransX = startTransX,
+                        startTransY = startTransY,
                         delayMs = delay,
                         damping = cfg.workbenchFolmeDamping,
                         response = cfg.workbenchFolmeResponse
@@ -554,6 +573,7 @@ class OriginWorkbenchContainerView(
 
     /**
      * Handles tapping a shelf card: Executes two-way reverse Folme swap with the Hero card.
+     * Shelf card expands on the TOP LAYER, while Hero card shrinks on the UNDERLYING LAYER.
      */
     private fun onShelfCardTapped(slotIndex: Int, tappedTask: Any) {
         if (isAnimatingSwap || slotIndex !in 0 until shelfTasks.size) return
@@ -568,35 +588,43 @@ class OriginWorkbenchContainerView(
         val cfg = LauncherConfigHolder.iosAnimConfig
 
         // 1. Two-Way Reverse Physical Spring Swap Animation
+        // Shelf card expands to Hero on TOP LAYER; Hero shrinks to Shelf on UNDERLYING LAYER
         FolmePhysicsHelper.animateSwap(
             shelfView = cardView,
             heroView = heroCardContainer,
-            targetHeroBounds = targetHeroRect,
-            targetShelfBounds = targetShelfRect,
-            targetHeroScale = 1.0f,
-            targetShelfScale = 1.0f,
+            shelfStartRect = targetShelfRect,
+            heroStartRect = targetHeroRect,
             damping = cfg.workbenchFolmeDamping,
             response = cfg.workbenchFolmeResponse,
             onComplete = {
+                // 2. Data model swap: tapped task becomes Hero, old Hero moves into this shelf slot
+                currentHeroTask = tappedTask
+                if (oldHeroTask != null) {
+                    shelfTasks[slotIndex] = oldHeroTask
+                }
+
+                // 3. Update stage views
+                bindHeroStage(currentHeroTask)
+                if (slotIndex < shelfTasks.size) {
+                    cardView.bindTask(shelfTasks[slotIndex])
+                }
+
+                // 4. Reset transforms & elevations
+                cardView.translationX = 0f
+                cardView.translationY = 0f
+                cardView.scaleX = 1f
+                cardView.scaleY = 1f
+                cardView.elevation = dpToPx(5f).toFloat()
+
+                heroCardContainer.translationX = 0f
+                heroCardContainer.translationY = 0f
+                heroCardContainer.scaleX = 1f
+                heroCardContainer.scaleY = 1f
+                heroCardContainer.elevation = dpToPx(8f).toFloat()
+
                 isAnimatingSwap = false
             }
         )
-
-        // 2. Data model swap: tapped task becomes Hero, old Hero moves into this shelf slot
-        currentHeroTask = tappedTask
-        if (oldHeroTask != null) {
-            shelfTasks[slotIndex] = oldHeroTask
-        }
-
-        // 3. Update stage views
-        mainHandler.postDelayed({
-            bindHeroStage(currentHeroTask)
-            if (slotIndex < shelfTasks.size) {
-                cardView.bindTask(shelfTasks[slotIndex])
-            }
-            // Reset transforms
-            applyLayoutPositions(animate = false)
-        }, 320L)
     }
 
     /**
