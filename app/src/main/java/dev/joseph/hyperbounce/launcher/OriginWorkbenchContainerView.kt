@@ -720,12 +720,6 @@ class OriginWorkbenchContainerView(
                 runCatching { options.launchBounds = bounds }
             }
 
-            runCatching {
-                val setFreeze = ActivityOptions::class.java.getDeclaredMethod("setFreezeRecentTasksReordering")
-                setFreeze.isAccessible = true
-                setFreeze.invoke(options)
-            }
-
             val amwClass = Class.forName("com.android.systemui.shared.recents.system.ActivityManagerWrapper", false, classLoader)
             val amwInstance = amwClass.getMethod("getInstance").invoke(null)
 
