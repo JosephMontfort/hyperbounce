@@ -32,10 +32,10 @@ fun KeypadStretchPhysicsScreen(
         onBack = onBack,
         onResetPage = {
             keypad.setDragMaxThreshold(0.28f)
-            keypad.setDragInitialStiffness(0.45f)
+            keypad.setDragInitialStiffness(0.30f)
             keypad.setDragResistancePower(1.8f)
             keypad.setDragVolumeStretch(0.22f)
-            keypad.setPressLiquidScale(0.88f)
+            keypad.setPressLiquidScale(1.15f)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
@@ -65,7 +65,7 @@ fun KeypadStretchPhysicsScreen(
                     value = keypad.dragInitialStiffness,
                     onValueChange = keypad::setDragInitialStiffness,
                     valueRange = 0.15f..0.85f,
-                    defaultValue = 0.45f,
+                    defaultValue = 0.30f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = keypad.enabled
                 )
@@ -107,13 +107,13 @@ fun KeypadStretchPhysicsScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Tactile Press Scale",
-                    subtitle = "Baseline tactile button compression on finger touch down",
+                    subtitle = "Baseline tactile button expansion on finger touch down",
                     colors = colors,
                     backdrop = backdrop,
                     value = keypad.pressLiquidScale,
                     onValueChange = keypad::setPressLiquidScale,
-                    valueRange = 0.70f..1.00f,
-                    defaultValue = 0.88f,
+                    valueRange = 0.80f..1.50f,
+                    defaultValue = 1.15f,
                     valueLabel = { String.format(Locale.US, "%.2f x", it) },
                     enabled = keypad.enabled
                 )

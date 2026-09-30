@@ -16,6 +16,7 @@ import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
 import android.view.animation.OvershootInterpolator
+import android.view.animation.PathInterpolator
 import android.widget.ImageView
 import android.widget.TextView
 import dev.joseph.hyperbounce.lockscreen.glass.LiquidGlassKeyOptimizedDrawable
@@ -364,12 +365,12 @@ object KeypadPhysicsHook {
                                         view.translationZ = 120f * density
                                         (view.parent as? View)?.translationZ = 120f * density
 
-                                        // Zero-lag iOS-calibrated tactile compression (60ms decelerate curve)
+                                        // Zero-lag iOS-calibrated tactile expansion (150ms smooth curve)
                                         view.animate()
                                             .scaleX(cfg.pressLiquidScale)
                                             .scaleY(cfg.pressLiquidScale)
-                                            .setDuration(60L)
-                                            .setInterpolator(DecelerateInterpolator(2.2f))
+                                            .setDuration(150L)
+                                            .setInterpolator(PathInterpolator(0.2f, 0.0f, 0.0f, 1.0f))
                                             .setUpdateListener { view.invalidate() }
                                             .start()
 
@@ -401,7 +402,7 @@ object KeypadPhysicsHook {
                                             val h = view.height.toFloat().coerceAtLeast(1f)
                                             val minDim = min(w, h)
 
-                                            // Configurable, reduced allowed stretch threshold
+                                            // Configurable, authentic iOS rubber-band stretch threshold
                                             val maxOffset = minDim * cfg.dragMaxThreshold.coerceIn(0.15f, 0.50f)
                                             val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
 
@@ -415,15 +416,10 @@ object KeypadPhysicsHook {
                                                 dirX = dx / dist
                                                 dirY = dy / dist
 
-                                                // Non-linear increasing resistance model:
-                                                // k0 gives tactile initial firmness (no zero-resistance floatiness).
-                                                // Power p ramps up resistance with pull distance.
-                                                val k0 = cfg.dragInitialStiffness.coerceIn(0.15f, 0.85f).toDouble()
-                                                val p = cfg.dragResistancePower.coerceIn(1.0f, 3.5f).toDouble()
-                                                val xNorm = (dist / maxOffset).coerceAtLeast(0f).toDouble()
-                                                val kx = k0 * xNorm
-                                                val denom = Math.pow(1.0 + Math.pow(kx, p), 1.0 / p)
-                                                val disp = (maxOffset * (kx / denom)).toFloat().coerceAtMost(maxOffset)
+                                                // Authentic iOS Asymptotic Rubber-Band Model:
+                                                // High initial firmness starting on pixel 1, smoothly stiffening without loose float
+                                                val kStiff = cfg.dragInitialStiffness.coerceIn(0.10f, 0.60f).toDouble()
+                                                val disp = (maxOffset * tanh((kStiff * dist) / maxOffset)).toFloat().coerceAtMost(maxOffset)
 
                                                 jellyTx = dirX * disp
                                                 jellyTy = dirY * disp
@@ -439,9 +435,9 @@ object KeypadPhysicsHook {
                                             // Physical Volume-Preserved Liquid Bubble Stretch along drag angle
                                             val stretchFactor = cfg.dragVolumeStretch.coerceIn(0.05f, 0.50f)
                                             val stretchAmount = stretchRatio * stretchFactor
-                                            val compAmount = 1f - (1f / (1f + stretchAmount))
+                                            val compAmount = stretchAmount / (1f + stretchAmount)
 
-                                            val baseScale = cfg.pressLiquidScale + (1.0f - cfg.pressLiquidScale) * (stretchRatio * 0.40f)
+                                            val baseScale = cfg.pressLiquidScale
 
                                             val dirX2 = dirX * dirX
                                             val dirY2 = dirY * dirY
@@ -450,8 +446,8 @@ object KeypadPhysicsHook {
 
                                             view.translationX = baseTransX + jellyTx
                                             view.translationY = jellyTy
-                                            view.scaleX = liquidScaleX.coerceIn(0.60f, 1.45f)
-                                            view.scaleY = liquidScaleY.coerceIn(0.60f, 1.45f)
+                                            view.scaleX = liquidScaleX.coerceIn(0.60f, 1.80f)
+                                            view.scaleY = liquidScaleY.coerceIn(0.60f, 1.80f)
                                         }
 
                                         liquidDrawable?.onTouchMove(event.x, event.y)
@@ -481,7 +477,7 @@ object KeypadPhysicsHook {
                                                 .scaleX(1.0f)
                                                 .scaleY(1.0f)
                                                 .setDuration(180L)
-                                                .setInterpolator(DecelerateInterpolator(1.8f))
+                                                .setInterpolator(PathInterpolator(0.2f, 0.0f, 0.0f, 1.0f))
                                                 .withEndAction {
                                                     view.translationZ = 0f
                                                     rowParent?.translationZ = 0f
@@ -525,13 +521,14 @@ object KeypadPhysicsHook {
 
                                                     val uX2 = uX * uX
                                                     val uY2 = uY * uY
-                                                    val scaleX = 1.0f + diffParallel * uX2 - diffPerp * uY2
-                                                    val scaleY = 1.0f + diffParallel * uY2 - diffPerp * uX2
+                                                    val scaleBase = 1.0f + (cfg.pressLiquidScale - 1.0f) * Math.exp(-4.0 * t).toFloat()
+                                                    val scaleX = scaleBase * (1.0f + diffParallel * uX2 - diffPerp * uY2)
+                                                    val scaleY = scaleBase * (1.0f + diffParallel * uY2 - diffPerp * uX2)
 
                                                     view.translationX = currentTx
                                                     view.translationY = currentTy
-                                                    view.scaleX = scaleX.coerceIn(0.60f, 1.50f)
-                                                    view.scaleY = scaleY.coerceIn(0.60f, 1.50f)
+                                                    view.scaleX = scaleX.coerceIn(0.60f, 1.80f)
+                                                    view.scaleY = scaleY.coerceIn(0.60f, 1.80f)
                                                     view.invalidate()
                                                 }
 

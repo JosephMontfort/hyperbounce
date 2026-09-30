@@ -184,8 +184,8 @@ fun KeypadScreen(
                     backdrop = backdrop,
                     value = keypad.pressLiquidScale,
                     onValueChange = keypad::setPressLiquidScale,
-                    valueRange = 0.75f..1.00f,
-                    defaultValue = 0.88f,
+                    valueRange = 0.80f..1.50f,
+                    defaultValue = 1.15f,
                     valueLabel = { String.format(Locale.US, "%.2f x", it) },
                     enabled = keypad.enabled
                 )

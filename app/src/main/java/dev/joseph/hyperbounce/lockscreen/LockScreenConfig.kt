@@ -42,7 +42,7 @@ data class LockScreenKeypadConfig(
     var circleDiameter: Float = 82.0f,
     var digitTextSize: Float = 36.0f,
     var showKlondike: Boolean = false,
-    var pressLiquidScale: Float = 0.88f,
+    var pressLiquidScale: Float = 1.15f,
     var pressLiquidAmp: Float = 0.60f,
     // PIN Pad Grid Layout & Spacing
     var pinpadLift: Float = 0.0f,
@@ -77,7 +77,7 @@ data class LockScreenKeypadConfig(
     var delayCancel: Float = -1f,
     // Liquid Dynamics & Physics Tuning
     var dragMaxThreshold: Float = 0.28f,
-    var dragInitialStiffness: Float = 0.45f,
+    var dragInitialStiffness: Float = 0.30f,
     var dragResistancePower: Float = 1.8f,
     var dragVolumeStretch: Float = 0.22f,
     var releaseDuration: Float = 320.0f,
@@ -154,7 +154,7 @@ object LockScreenConfigHolder {
         keypad.circleDiameter = prefs.getFloat("pin_circle_diameter", 82.0f)
         keypad.digitTextSize = prefs.getFloat("pin_digit_text_size", 36.0f)
         keypad.showKlondike = prefs.getBoolean("pin_show_klondike", false)
-        keypad.pressLiquidScale = prefs.getFloat("pin_press_liquid_scale", 0.88f)
+        keypad.pressLiquidScale = prefs.getFloat("pin_press_liquid_scale", 1.15f)
         keypad.pressLiquidAmp = prefs.getFloat("pin_press_liquid_amp", 0.60f)
 
         keypad.pinpadLift = prefs.getFloat("pin_pad_lift", 0.0f)
@@ -189,7 +189,7 @@ object LockScreenConfigHolder {
 
         // Liquid Dynamics & Physics Tuning
         keypad.dragMaxThreshold = prefs.getFloat("pin_drag_max_threshold", 0.28f)
-        keypad.dragInitialStiffness = prefs.getFloat("pin_drag_initial_stiffness", 0.45f)
+        keypad.dragInitialStiffness = prefs.getFloat("pin_drag_initial_stiffness", 0.30f)
         keypad.dragResistancePower = prefs.getFloat("pin_drag_resistance_power", 1.8f)
         keypad.dragVolumeStretch = prefs.getFloat("pin_drag_volume_stretch", 0.22f)
         keypad.releaseDuration = prefs.getFloat("pin_release_duration", 320.0f)

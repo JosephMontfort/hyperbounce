@@ -196,7 +196,7 @@ data class LockScreenKeypadSettings(
     val circleDiameter: Float = 82.0f,
     val digitTextSize: Float = 36.0f,
     val showKlondike: Boolean = false,
-    val pressLiquidScale: Float = 0.88f,
+    val pressLiquidScale: Float = 1.15f,
     val pressLiquidAmp: Float = 0.60f,
     val pinpadLift: Float = 0.0f,
     val row0Offset: Float = -115.0f,
@@ -227,7 +227,7 @@ data class LockScreenKeypadSettings(
     val delayCancel: Float = -1f,
     // Liquid Dynamics & Physics Tuning
     val dragMaxThreshold: Float = 0.28f,
-    val dragInitialStiffness: Float = 0.45f,
+    val dragInitialStiffness: Float = 0.30f,
     val dragResistancePower: Float = 1.8f,
     val dragVolumeStretch: Float = 0.22f,
     val releaseDuration: Float = 320.0f,
