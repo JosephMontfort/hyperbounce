@@ -1,20 +1,12 @@
 package dev.joseph.hyperbounce.launcher
 
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
 import android.annotation.SuppressLint
-import android.app.ActivityManager
 import android.app.ActivityOptions
-import android.content.ComponentName
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Outline
-import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
-import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
@@ -30,27 +22,29 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import java.util.Locale
 
 /**
  * Origin Workbench Recents Container (Vivo OriginOS 7 "原子工作台" Architecture)
  *
- * A complete, standalone replacement of the Recents screen for Xiaomi HyperOS:
- * - Live Hero App: Runs live in the foreground as a Freeform window (WINDOWING_MODE_FREEFORM = 5)
- *   at designated Hero Stage bounds.
- * - Shelf Dock: An interactive dock holding up to 4 parked recents tasks.
- * - Two Layout Modes:
- *     Style 0 (Side / Left Shelf): 4-card vertical shelf on the left (~22% width), Hero stage
- *     on the right taking ~72% width and full height to maximize space.
- *     Style 1 (Top Shelf): 4-card horizontal shelf on the top (~140dp height), Hero stage
- *     below taking ~92% width and ~75% height.
- * - Mode Switcher: Dedicated pill button in header to toggle styles dynamically with Folme animations.
- * - Hero Close 'X' Button: Distinctive MIUI-style close button. Terminates the Hero task and
- *   immediately promotes the next shelf task to Hero position.
- * - Two-Way Reverse Folme Swap: Tapping a shelf card executes a synchronized physical spring
- *   swap where the shelf card expands into Hero stage and the previous Hero shrinks in exact
- *   reverse into that shelf slot.
+ * A 100% custom recents screen layout replacing the stock Xiaomi recents view:
+ * - Pure recents UI rendered directly inside RecentsContainer over the wallpaper blur.
+ * - NO stock freeform floating windows.
+ * - 1 Primary Hero Card: Large high-resolution card showing the latest active app snapshot.
+ *   Tapping it smoothly launches that app fullscreen into the foreground.
+ * - 4-Card Interactive Shelf Dock: Up to 4 parked recent apps with thumbnails, icons, and titles.
+ * - Two-Way Reverse Folme Swap: Tapping any shelf card triggers Xiaomi's Folme physical spring
+ *   animation to swap positions with the Hero card in real time.
+ * - Dual Layout Styles:
+ *     Style 0 (Side / Left Shelf): 4-card vertical dock on the left (~22% width), Hero Stage
+ *     on the mid-right (~72% width, full height) maximizing usable space.
+ *     Style 1 (Top Shelf): 4-card horizontal dock on top (~136dp), Hero Stage below (~92% width).
+ * - Header Controls:
+ *     - Layout Switcher button: Toggles between Side Dock and Top Dock with animated bound morphing.
+ *     - Hero Close ('X') button: MIUI-style circular close button that terminates the Hero task
+ *       and immediately promotes the next shelf app into the Hero position.
+ *     - Fullscreen button (⛶): Opens the Hero app fullscreen.
  * - Swipe-to-Dismiss: Shelf cards can be swiped away to terminate tasks with smooth reflow.
+ * - Tap empty space: Dismisses recents to home desktop.
  */
 @SuppressLint("ViewConstructor")
 class OriginWorkbenchContainerView(
@@ -71,7 +65,6 @@ class OriginWorkbenchContainerView(
     private val mainHandler = Handler(Looper.getMainLooper())
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
 
-    // Current layout mode (0 = Side Shelf, 1 = Top Shelf)
     var currentStyle: Int = STYLE_SIDE_SHELF
         private set
 
@@ -218,9 +211,10 @@ class OriginWorkbenchContainerView(
             }
             elevation = dpToPx(8f).toFloat()
 
-            // Clicking hero container when live window is pending launches it fullscreen
+            // Tapping Hero card launches that app into fullscreen
             setOnClickListener {
                 currentHeroTask?.let { task ->
+                    Log.d(TAG, "Hero card clicked -> Launch task fullscreen: ${TaskDataHelper.getTaskTitle(context, task)}")
                     launchTaskFullscreen(task)
                 }
             }
@@ -234,12 +228,12 @@ class OriginWorkbenchContainerView(
 
         // Gradient overlay for Hero Header
         val heroHeaderGradient = View(context).apply {
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dpToPx(48f)).apply {
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dpToPx(56f)).apply {
                 gravity = Gravity.TOP
             }
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(Color.parseColor("#80000000"), Color.TRANSPARENT)
+                intArrayOf(Color.parseColor("#90000000"), Color.TRANSPARENT)
             )
         }
         heroCardContainer.addView(heroHeaderGradient)
@@ -320,11 +314,6 @@ class OriginWorkbenchContainerView(
 
         // Recalculate and smoothly animate layout bounds
         applyLayoutPositions(animate = true)
-
-        // Update live Hero Freeform window bounds
-        currentHeroTask?.let { task ->
-            launchTaskInHeroFreeform(task, currentHeroBounds)
-        }
     }
 
     /**
@@ -339,11 +328,9 @@ class OriginWorkbenchContainerView(
         val damping = cfg.workbenchFolmeDamping
         val response = cfg.workbenchFolmeResponse
 
-        // Status bar & Nav bar insets estimation
         val statusBarH = getStatusBarHeight()
         val navBarH = dpToPx(24f)
 
-        // Header position
         val headerH = dpToPx(48f)
         val headerTop = statusBarH + dpToPx(4f)
         headerLayout.layoutParams = (headerLayout.layoutParams as LayoutParams).apply {
@@ -501,11 +488,6 @@ class OriginWorkbenchContainerView(
             // Bind Hero Stage
             bindHeroStage(currentHeroTask)
 
-            // Launch Hero task in Freeform mode at Hero bounds
-            currentHeroTask?.let { heroTask ->
-                launchTaskInHeroFreeform(heroTask, currentHeroBounds)
-            }
-
             // Hero Stage entrance animation
             heroCardContainer.alpha = 0f
             heroCardContainer.scaleX = 0.94f
@@ -571,8 +553,7 @@ class OriginWorkbenchContainerView(
     }
 
     /**
-     * Handles tapping a shelf card: Executes two-way reverse Folme swap and launches
-     * the tapped task into Freeform mode at Hero bounds without fullscreen expansion.
+     * Handles tapping a shelf card: Executes two-way reverse Folme swap with the Hero card.
      */
     private fun onShelfCardTapped(slotIndex: Int, tappedTask: Any) {
         if (isAnimatingSwap || slotIndex !in 0 until shelfTasks.size) return
@@ -607,10 +588,7 @@ class OriginWorkbenchContainerView(
             shelfTasks[slotIndex] = oldHeroTask
         }
 
-        // 3. Launch new Hero task in Freeform mode at Hero Stage bounds
-        launchTaskInHeroFreeform(tappedTask, currentHeroBounds)
-
-        // 4. Update stage views
+        // 3. Update stage views
         mainHandler.postDelayed({
             bindHeroStage(currentHeroTask)
             if (slotIndex < shelfTasks.size) {
@@ -640,7 +618,6 @@ class OriginWorkbenchContainerView(
 
             currentHeroTask = promotedTask
             bindHeroStage(currentHeroTask)
-            launchTaskInHeroFreeform(promotedTask, currentHeroBounds)
 
             // Rebind shelf cards
             for (i in 0 until MAX_SHELF_CARDS) {
@@ -702,50 +679,7 @@ class OriginWorkbenchContainerView(
     }
 
     /**
-     * Launches the task in Freeform mode at `bounds`.
-     */
-    private fun launchTaskInHeroFreeform(task: Any, bounds: Rect) {
-        try {
-            val taskKey = task.javaClass.getField("key").get(task)
-            val taskId = TaskDataHelper.getTaskId(task)
-            val options = ActivityOptions.makeBasic()
-
-            // WINDOWING_MODE_FREEFORM = 5
-            runCatching {
-                val setModeMethod = ActivityOptions::class.java.getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType)
-                setModeMethod.invoke(options, 5)
-            }
-
-            if (!bounds.isEmpty) {
-                runCatching { options.launchBounds = bounds }
-            }
-
-            val amwClass = Class.forName("com.android.systemui.shared.recents.system.ActivityManagerWrapper", false, classLoader)
-            val amwInstance = amwClass.getMethod("getInstance").invoke(null)
-
-            val startMethodTaskKey = amwClass.declaredMethods.firstOrNull {
-                it.name == "startActivityFromRecents" && it.parameterTypes.size == 2 &&
-                        !it.parameterTypes[0].isPrimitive
-            }
-            val startMethodInt = amwClass.declaredMethods.firstOrNull {
-                it.name == "startActivityFromRecents" && it.parameterTypes.size == 2 &&
-                        it.parameterTypes[0] == Int::class.javaPrimitiveType
-            }
-
-            if (startMethodTaskKey != null) {
-                startMethodTaskKey.invoke(amwInstance, taskKey, options)
-                Log.i(TAG, "Launched Freeform task (TaskKey) into Hero bounds: $bounds")
-            } else if (startMethodInt != null && taskId != -1) {
-                startMethodInt.invoke(amwInstance, taskId, options)
-                Log.i(TAG, "Launched Freeform task (id=$taskId) into Hero bounds: $bounds")
-            }
-        } catch (t: Throwable) {
-            Log.w(TAG, "Failed to launch task in Freeform mode", t)
-        }
-    }
-
-    /**
-     * Launches the task in standard fullscreen mode (leaving recents).
+     * Launches the task in standard fullscreen mode (opening the app from recents).
      */
     private fun launchTaskFullscreen(task: Any) {
         try {
@@ -753,12 +687,6 @@ class OriginWorkbenchContainerView(
             val taskId = TaskDataHelper.getTaskId(task)
             val options = ActivityOptions.makeBasic()
 
-            // WINDOWING_MODE_FULLSCREEN = 1
-            runCatching {
-                val setModeMethod = ActivityOptions::class.java.getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType)
-                setModeMethod.invoke(options, 1)
-            }
-
             val amwClass = Class.forName("com.android.systemui.shared.recents.system.ActivityManagerWrapper", false, classLoader)
             val amwInstance = amwClass.getMethod("getInstance").invoke(null)
 
@@ -773,8 +701,10 @@ class OriginWorkbenchContainerView(
 
             if (startMethodTaskKey != null) {
                 startMethodTaskKey.invoke(amwInstance, taskKey, options)
+                Log.i(TAG, "Launched task (TaskKey) fullscreen")
             } else if (startMethodInt != null && taskId != -1) {
                 startMethodInt.invoke(amwInstance, taskId, options)
+                Log.i(TAG, "Launched task (id=$taskId) fullscreen")
             }
         } catch (t: Throwable) {
             Log.w(TAG, "Failed launching fullscreen task", t)
