@@ -36,7 +36,6 @@ fun KeypadPhysicsScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            keypad.setEntryAnimationType("ios26")
             keypad.setIosBloomDuration(520.0f)
             keypad.setIosBloomClusterFactor(0.70f)
             keypad.setIosBloomOvershoot(0.16f)

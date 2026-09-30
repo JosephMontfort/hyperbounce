@@ -703,6 +703,7 @@ class SettingsRepository(context: Context) {
         var dragVolumeStretch by prefsFloatState("pin_drag_volume_stretch", defaults.dragVolumeStretch); private set
         var releaseDuration by prefsFloatState("pin_release_duration", defaults.releaseDuration); private set
         var releaseSquishAmp by prefsFloatState("pin_release_squish_amp", defaults.releaseSquishAmp); private set
+        var releaseOvershoot by prefsFloatState("pin_release_overshoot", defaults.releaseOvershoot); private set
         // iOS 26 Liquid Bloom
         var iosBloomDuration by prefsFloatState("pin_ios_bloom_duration", defaults.iosBloomDuration); private set
         var iosBloomClusterFactor by prefsFloatState("pin_ios_bloom_cluster_factor", defaults.iosBloomClusterFactor); private set
