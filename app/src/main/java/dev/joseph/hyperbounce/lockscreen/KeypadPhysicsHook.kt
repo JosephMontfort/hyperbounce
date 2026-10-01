@@ -210,8 +210,7 @@ object KeypadPhysicsHook {
                 val dirX = if (distUnits > 0.001f) Math.cos(angleRad).toFloat() else 0f
                 val dirY = if (distUnits > 0.001f) Math.sin(angleRad).toFloat() else 0f
 
-                val customDelay = cfg.getKeyDelay(name, row, col)
-                val delay = if (customDelay >= 0L) customDelay else (distUnits * cfg.iosBloomWaveStagger).toLong().coerceAtLeast(0L)
+                val delay = cfg.getKeyDelay(name)
 
                 appearAnimators.remove(keyView)?.cancel()
                 keyView.animate().cancel()

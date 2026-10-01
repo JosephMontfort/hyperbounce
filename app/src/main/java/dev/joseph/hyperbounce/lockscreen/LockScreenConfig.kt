@@ -56,26 +56,21 @@ data class LockScreenKeypadConfig(
     var row3Offset: Float = -30.0f,
     var col1Offset: Float = 0.0f,
     var col3Offset: Float = 0.0f,
-    // Sequential Glide Entry
-    var entryTranslationY: Float = 90.0f,
-    var entryInitialScale: Float = 0.50f,
-    var entryDuration: Float = 420.0f,
-    var rowDelayStep: Float = 55.0f,
-    var colDelayStep: Float = 25.0f,
-    var entryOvershoot: Float = 1.8f,
-    // Per-Key Custom Delays (ms) - negative means use staggered formula
-    var delayKey1: Float = -1f,
-    var delayKey2: Float = -1f,
-    var delayKey3: Float = -1f,
-    var delayKey4: Float = -1f,
-    var delayKey5: Float = -1f,
-    var delayKey6: Float = -1f,
-    var delayKey7: Float = -1f,
-    var delayKey8: Float = -1f,
-    var delayKey9: Float = -1f,
-    var delayKey0: Float = -1f,
-    var delayEmergency: Float = -1f,
-    var delayCancel: Float = -1f,
+    // Per-Key Custom Delays (ms) - Calibrated values from user profile (preserved in backend)
+    // Key 1: 0ms, Key 2: 25ms, Key 3: 50ms, Key 4: 55ms, Key 5: 80ms, Key 6: 105ms
+    // Key 7: 110ms, Key 8: 135ms, Key 9: 160ms, Key 0: 215ms, Emergency/Cancel: 270ms
+    var delayKey1: Float = 0f,
+    var delayKey2: Float = 25f,
+    var delayKey3: Float = 50f,
+    var delayKey4: Float = 55f,
+    var delayKey5: Float = 80f,
+    var delayKey6: Float = 105f,
+    var delayKey7: Float = 110f,
+    var delayKey8: Float = 135f,
+    var delayKey9: Float = 160f,
+    var delayKey0: Float = 215f,
+    var delayEmergency: Float = 270f,
+    var delayCancel: Float = 270f,
     // Liquid Dynamics & Physics Tuning
     var dragMaxThreshold: Float = 0.16f,
     var dragInitialStiffness: Float = 0.22f,
@@ -94,8 +89,8 @@ data class LockScreenKeypadConfig(
     var iosBloomWaveStagger: Float = 22.0f,
     var iosBloomDecoupleText: Boolean = true
 ) {
-    fun getKeyDelay(keyName: String, row: Int, col: Int): Long {
-        val custom = when (keyName) {
+    fun getKeyDelay(keyName: String): Long {
+        val delay = when (keyName) {
             "key1" -> delayKey1
             "key2" -> delayKey2
             "key3" -> delayKey3
@@ -107,10 +102,10 @@ data class LockScreenKeypadConfig(
             "key9" -> delayKey9
             "key0" -> delayKey0
             "emergency_call_button" -> delayEmergency
-            "delete_button", "cancel_button" -> delayCancel
-            else -> -1f
+            "delete_button", "cancel_button", "delete_container", "zero_delete_button", "zero_cancel_button" -> delayCancel
+            else -> 0f
         }
-        return if (custom >= 0f) custom.toLong() else ((row * rowDelayStep) + (col * colDelayStep)).toLong()
+        return delay.toLong().coerceAtLeast(0L)
     }
 }
 
@@ -168,25 +163,19 @@ object LockScreenConfigHolder {
         keypad.col1Offset = prefs.getFloat("pin_col1_offset", 0.0f)
         keypad.col3Offset = prefs.getFloat("pin_col3_offset", 0.0f)
 
-        keypad.entryTranslationY = prefs.getFloat("pin_entry_translation_y", 90.0f)
-        keypad.entryInitialScale = prefs.getFloat("pin_entry_initial_scale", 0.50f)
-        keypad.entryDuration = prefs.getFloat("pin_entry_duration", 420.0f)
-        keypad.rowDelayStep = prefs.getFloat("pin_row_delay_step", 55.0f)
-        keypad.colDelayStep = prefs.getFloat("pin_col_delay_step", 25.0f)
-        keypad.entryOvershoot = prefs.getFloat("pin_entry_overshoot", 1.8f)
-
-        keypad.delayKey1 = prefs.getFloat("pin_delay_key1", -1f)
-        keypad.delayKey2 = prefs.getFloat("pin_delay_key2", -1f)
-        keypad.delayKey3 = prefs.getFloat("pin_delay_key3", -1f)
-        keypad.delayKey4 = prefs.getFloat("pin_delay_key4", -1f)
-        keypad.delayKey5 = prefs.getFloat("pin_delay_key5", -1f)
-        keypad.delayKey6 = prefs.getFloat("pin_delay_key6", -1f)
-        keypad.delayKey7 = prefs.getFloat("pin_delay_key7", -1f)
-        keypad.delayKey8 = prefs.getFloat("pin_delay_key8", -1f)
-        keypad.delayKey9 = prefs.getFloat("pin_delay_key9", -1f)
-        keypad.delayKey0 = prefs.getFloat("pin_delay_key0", -1f)
-        keypad.delayEmergency = prefs.getFloat("pin_delay_emergency", -1f)
-        keypad.delayCancel = prefs.getFloat("pin_delay_cancel", -1f)
+        // Per-Key Custom Entrance Delays (ms) - Calibrated values from user profile
+        keypad.delayKey1 = prefs.getFloat("pin_delay_key1", 0f)
+        keypad.delayKey2 = prefs.getFloat("pin_delay_key2", 25f)
+        keypad.delayKey3 = prefs.getFloat("pin_delay_key3", 50f)
+        keypad.delayKey4 = prefs.getFloat("pin_delay_key4", 55f)
+        keypad.delayKey5 = prefs.getFloat("pin_delay_key5", 80f)
+        keypad.delayKey6 = prefs.getFloat("pin_delay_key6", 105f)
+        keypad.delayKey7 = prefs.getFloat("pin_delay_key7", 110f)
+        keypad.delayKey8 = prefs.getFloat("pin_delay_key8", 135f)
+        keypad.delayKey9 = prefs.getFloat("pin_delay_key9", 160f)
+        keypad.delayKey0 = prefs.getFloat("pin_delay_key0", 215f)
+        keypad.delayEmergency = prefs.getFloat("pin_delay_emergency", 270f)
+        keypad.delayCancel = prefs.getFloat("pin_delay_cancel", 270f)
 
         // Liquid Dynamics & Physics Tuning
         keypad.dragMaxThreshold = prefs.getFloat("pin_drag_max_threshold", 0.16f)
@@ -232,9 +221,6 @@ object LockScreenConfigHolder {
             "pin_pad_lift" -> keypad.pinpadLift = intent.getFloatExtra("value_float", keypad.pinpadLift)
             "pin_row_spacing" -> keypad.rowSpacing = intent.getFloatExtra("value_float", keypad.rowSpacing)
             "pin_col_spacing" -> keypad.columnSpacing = intent.getFloatExtra("value_float", keypad.columnSpacing)
-            "pin_entry_translation_y" -> keypad.entryTranslationY = intent.getFloatExtra("value_float", keypad.entryTranslationY)
-            "pin_entry_initial_scale" -> keypad.entryInitialScale = intent.getFloatExtra("value_float", keypad.entryInitialScale)
-            "pin_entry_duration" -> keypad.entryDuration = intent.getFloatExtra("value_float", keypad.entryDuration)
             "pin_ios_bloom_duration" -> keypad.iosBloomDuration = intent.getFloatExtra("value_float", keypad.iosBloomDuration)
             "pin_ios_bloom_cluster_factor" -> keypad.iosBloomClusterFactor = intent.getFloatExtra("value_float", keypad.iosBloomClusterFactor)
             "pin_ios_bloom_overshoot" -> keypad.iosBloomOvershoot = intent.getFloatExtra("value_float", keypad.iosBloomOvershoot)
@@ -244,6 +230,20 @@ object LockScreenConfigHolder {
             "pin_ios_bloom_velocity_stretch" -> keypad.iosBloomVelocityStretch = intent.getFloatExtra("value_float", keypad.iosBloomVelocityStretch)
             "pin_ios_bloom_wave_stagger" -> keypad.iosBloomWaveStagger = intent.getFloatExtra("value_float", keypad.iosBloomWaveStagger)
             "pin_ios_bloom_decouple_text" -> keypad.iosBloomDecoupleText = intent.getBooleanExtra("value_boolean", keypad.iosBloomDecoupleText)
+
+            // Per-Key Entrance Delays (ms) - Preserved in backend. If UI is restored, dynamic broadcast updates work out of the box.
+            "pin_delay_key1" -> keypad.delayKey1 = intent.getFloatExtra("value_float", keypad.delayKey1)
+            "pin_delay_key2" -> keypad.delayKey2 = intent.getFloatExtra("value_float", keypad.delayKey2)
+            "pin_delay_key3" -> keypad.delayKey3 = intent.getFloatExtra("value_float", keypad.delayKey3)
+            "pin_delay_key4" -> keypad.delayKey4 = intent.getFloatExtra("value_float", keypad.delayKey4)
+            "pin_delay_key5" -> keypad.delayKey5 = intent.getFloatExtra("value_float", keypad.delayKey5)
+            "pin_delay_key6" -> keypad.delayKey6 = intent.getFloatExtra("value_float", keypad.delayKey6)
+            "pin_delay_key7" -> keypad.delayKey7 = intent.getFloatExtra("value_float", keypad.delayKey7)
+            "pin_delay_key8" -> keypad.delayKey8 = intent.getFloatExtra("value_float", keypad.delayKey8)
+            "pin_delay_key9" -> keypad.delayKey9 = intent.getFloatExtra("value_float", keypad.delayKey9)
+            "pin_delay_key0" -> keypad.delayKey0 = intent.getFloatExtra("value_float", keypad.delayKey0)
+            "pin_delay_emergency" -> keypad.delayEmergency = intent.getFloatExtra("value_float", keypad.delayEmergency)
+            "pin_delay_cancel" -> keypad.delayCancel = intent.getFloatExtra("value_float", keypad.delayCancel)
         }
     }
 }

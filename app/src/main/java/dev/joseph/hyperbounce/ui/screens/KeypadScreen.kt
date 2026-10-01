@@ -45,7 +45,7 @@ fun KeypadScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Liquid Glass PIN Pad",
-                    subtitle = if (keypad.enabled) "Liquid Glass 2.0 lens buttons & staggered entrance active" else "Disabled (Stock)",
+                    subtitle = if (keypad.enabled) "Liquid Glass 2.0 lens buttons & layout physics" else "Disabled (Stock)",
                     colors = colors,
                     iconTint = colors.accentBlue,
                     backdrop = backdrop,
@@ -271,102 +271,6 @@ fun KeypadScreen(
                     enabled = keypad.enabled
                 )
             }
-        }
-
-        item {
-            SectionHeader("Sequential Glide Entrance", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsSliderRow(
-                    title = "Entry Y-Drop Distance",
-                    subtitle = "Starting vertical offset for slide entrance",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = keypad.entryTranslationY,
-                    onValueChange = keypad::setEntryTranslationY,
-                    valueRange = 0.0f..200.0f,
-                    defaultValue = 90.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = keypad.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Initial Entry Scale",
-                    subtitle = "Starting scale factor before spring expansion",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = keypad.entryInitialScale,
-                    onValueChange = keypad::setEntryInitialScale,
-                    valueRange = 0.0f..1.0f,
-                    defaultValue = 0.50f,
-                    valueLabel = { String.format(Locale.US, "%.2f x", it) },
-                    enabled = keypad.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Animation Duration",
-                    subtitle = "Time taken for key entrance spring",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = keypad.entryDuration,
-                    onValueChange = keypad::setEntryDuration,
-                    valueRange = 100.0f..1000.0f,
-                    defaultValue = 420.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f ms", it) },
-                    enabled = keypad.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Row Delay Step",
-                    subtitle = "Stagger delay between successive rows",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = keypad.rowDelayStep,
-                    onValueChange = keypad::setRowDelayStep,
-                    valueRange = 0.0f..150.0f,
-                    defaultValue = 55.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f ms", it) },
-                    enabled = keypad.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Column Delay Step",
-                    subtitle = "Stagger delay between successive columns",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = keypad.colDelayStep,
-                    onValueChange = keypad::setColDelayStep,
-                    valueRange = 0.0f..80.0f,
-                    defaultValue = 25.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f ms", it) },
-                    enabled = keypad.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Spring Overshoot",
-                    subtitle = "Elastic overshoot tension at end of entrance",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = keypad.entryOvershoot,
-                    onValueChange = keypad::setEntryOvershoot,
-                    valueRange = 0.5f..3.5f,
-                    defaultValue = 1.8f,
-                    valueLabel = { String.format(Locale.US, "%.1f", it) },
-                    enabled = keypad.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsNavRow(
-                    title = "Custom Key Delays",
-                    subtitle = "Fine-tune individual start delays for keys 0-9",
-                    colors = colors,
-                    iconTint = colors.accentOrange,
-                    onClick = { onNavigate(Destination.KeypadDelays) },
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
-                )
-            }
-            SectionFooter(
-                "When entering PIN pad, numeric keys cascade down with a staggered spring glide. Liquid Glass 2.0 lenses refract and respond to touches in real-time.",
-                colors
-            )
         }
     }
 }

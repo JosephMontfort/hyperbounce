@@ -675,14 +675,7 @@ class SettingsRepository(context: Context) {
         var row3Offset by prefsFloatState("pin_row3_offset", defaults.row3Offset); private set
         var col1Offset by prefsFloatState("pin_col1_offset", defaults.col1Offset); private set
         var col3Offset by prefsFloatState("pin_col3_offset", defaults.col3Offset); private set
-
-        var entryTranslationY by prefsFloatState("pin_entry_translation_y", defaults.entryTranslationY); private set
-        var entryInitialScale by prefsFloatState("pin_entry_initial_scale", defaults.entryInitialScale); private set
-        var entryDuration by prefsFloatState("pin_entry_duration", defaults.entryDuration); private set
-        var rowDelayStep by prefsFloatState("pin_row_delay_step", defaults.rowDelayStep); private set
-        var colDelayStep by prefsFloatState("pin_col_delay_step", defaults.colDelayStep); private set
-        var entryOvershoot by prefsFloatState("pin_entry_overshoot", defaults.entryOvershoot); private set
-
+        // Per-Key Entrance Delays (ms) - Preserved in backend
         var delayKey1 by prefsFloatState("pin_delay_key1", defaults.delayKey1); private set
         var delayKey2 by prefsFloatState("pin_delay_key2", defaults.delayKey2); private set
         var delayKey3 by prefsFloatState("pin_delay_key3", defaults.delayKey3); private set
@@ -719,8 +712,7 @@ class SettingsRepository(context: Context) {
             enabled, buttonRefraction, buttonBevel, buttonDispersion, buttonSpecular, buttonInnerShadow,
             buttonBlur, buttonSaturation, circleDiameter, digitTextSize, showKlondike, pressLiquidScale,
             pressLiquidAmp, pinpadLift, row0Offset, rowSpacing, columnSpacing, row1Offset, row2Offset,
-            row3Offset, col1Offset, col3Offset, entryTranslationY, entryInitialScale, entryDuration,
-            rowDelayStep, colDelayStep, entryOvershoot, delayKey1, delayKey2, delayKey3, delayKey4,
+            row3Offset, col1Offset, col3Offset, delayKey1, delayKey2, delayKey3, delayKey4,
             delayKey5, delayKey6, delayKey7, delayKey8, delayKey9, delayKey0, delayEmergency, delayCancel,
             dragMaxThreshold, dragInitialStiffness, dragResistancePower, dragVolumeStretch, releaseDuration,
             releaseSquishAmp, releaseOvershoot,
@@ -751,12 +743,6 @@ class SettingsRepository(context: Context) {
         @JvmName("setRow3OffsetPref") fun setRow3Offset(v: Float) { row3Offset = v }
         @JvmName("setCol1OffsetPref") fun setCol1Offset(v: Float) { col1Offset = v }
         @JvmName("setCol3OffsetPref") fun setCol3Offset(v: Float) { col3Offset = v }
-        @JvmName("setEntryTranslationYPref") fun setEntryTranslationY(v: Float) { entryTranslationY = v }
-        @JvmName("setEntryInitialScalePref") fun setEntryInitialScale(v: Float) { entryInitialScale = v }
-        @JvmName("setEntryDurationPref") fun setEntryDuration(v: Float) { entryDuration = v }
-        @JvmName("setRowDelayStepPref") fun setRowDelayStep(v: Float) { rowDelayStep = v }
-        @JvmName("setColDelayStepPref") fun setColDelayStep(v: Float) { colDelayStep = v }
-        @JvmName("setEntryOvershootPref") fun setEntryOvershoot(v: Float) { entryOvershoot = v }
 
         @JvmName("setDelayKey1Pref") fun setDelayKey1(v: Float) { delayKey1 = v }
         @JvmName("setDelayKey2Pref") fun setDelayKey2(v: Float) { delayKey2 = v }
@@ -811,12 +797,6 @@ class SettingsRepository(context: Context) {
             row3Offset = defaults.row3Offset
             col1Offset = defaults.col1Offset
             col3Offset = defaults.col3Offset
-            entryTranslationY = defaults.entryTranslationY
-            entryInitialScale = defaults.entryInitialScale
-            entryDuration = defaults.entryDuration
-            rowDelayStep = defaults.rowDelayStep
-            colDelayStep = defaults.colDelayStep
-            entryOvershoot = defaults.entryOvershoot
             delayKey1 = defaults.delayKey1
             delayKey2 = defaults.delayKey2
             delayKey3 = defaults.delayKey3

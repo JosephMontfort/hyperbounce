@@ -8,14 +8,32 @@ import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
-import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
-import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import java.util.Locale
 
+/**
+ * KeypadDelaysScreen: Fine-tune individual start delays for keys 0-9 and action buttons.
+ *
+ * NOTE FOR FUTURE AGENTS / DEVELOPERS:
+ * This screen and its backend preferences (`pin_delay_key1` .. `pin_delay_cancel`) are fully preserved.
+ * The navigation link from KeypadScreen was removed to declutter the UI per user request, while
+ * the calibrated delays (Key 1: 0ms, Key 2: 25ms, ..., Cancel/Emergency: 270ms) are enforced as defaults.
+ *
+ * If you ever need to re-expose this screen in the UI, simply re-add a SettingsNavRow to KeypadScreen.kt:
+ * ```kotlin
+ * SettingsNavRow(
+ *     title = "Custom Key Delays",
+ *     subtitle = "Fine-tune individual start delays for keys 0-9",
+ *     colors = colors,
+ *     iconTint = colors.accentOrange,
+ *     onClick = { onNavigate(Destination.KeypadDelays) },
+ *     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+ * )
+ * ```
+ */
 @Composable
 fun KeypadDelaysScreen(
     repository: SettingsRepository,
@@ -33,18 +51,18 @@ fun KeypadDelaysScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            keypad.setDelayKey1(-1f)
-            keypad.setDelayKey2(-1f)
-            keypad.setDelayKey3(-1f)
-            keypad.setDelayKey4(-1f)
-            keypad.setDelayKey5(-1f)
-            keypad.setDelayKey6(-1f)
-            keypad.setDelayKey7(-1f)
-            keypad.setDelayKey8(-1f)
-            keypad.setDelayKey9(-1f)
-            keypad.setDelayKey0(-1f)
-            keypad.setDelayEmergency(-1f)
-            keypad.setDelayCancel(-1f)
+            keypad.setDelayKey1(0f)
+            keypad.setDelayKey2(25f)
+            keypad.setDelayKey3(50f)
+            keypad.setDelayKey4(55f)
+            keypad.setDelayKey5(80f)
+            keypad.setDelayKey6(105f)
+            keypad.setDelayKey7(110f)
+            keypad.setDelayKey8(135f)
+            keypad.setDelayKey9(160f)
+            keypad.setDelayKey0(215f)
+            keypad.setDelayEmergency(270f)
+            keypad.setDelayCancel(270f)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
@@ -58,9 +76,10 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 1",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey1 >= 0f) keypad.delayKey1 else (0 * keypad.rowDelayStep + 0 * keypad.colDelayStep),
+                    value = keypad.delayKey1,
                     onValueChange = keypad::setDelayKey1,
                     valueRange = 0.0f..500.0f,
+                    defaultValue = 0.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -70,9 +89,10 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 2",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey2 >= 0f) keypad.delayKey2 else (0 * keypad.rowDelayStep + 1 * keypad.colDelayStep),
+                    value = keypad.delayKey2,
                     onValueChange = keypad::setDelayKey2,
                     valueRange = 0.0f..500.0f,
+                    defaultValue = 25.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -82,9 +102,10 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 3",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey3 >= 0f) keypad.delayKey3 else (0 * keypad.rowDelayStep + 2 * keypad.colDelayStep),
+                    value = keypad.delayKey3,
                     onValueChange = keypad::setDelayKey3,
                     valueRange = 0.0f..500.0f,
+                    defaultValue = 50.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -99,9 +120,10 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 4",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey4 >= 0f) keypad.delayKey4 else (1 * keypad.rowDelayStep + 0 * keypad.colDelayStep),
+                    value = keypad.delayKey4,
                     onValueChange = keypad::setDelayKey4,
                     valueRange = 0.0f..500.0f,
+                    defaultValue = 55.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -111,9 +133,10 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 5",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey5 >= 0f) keypad.delayKey5 else (1 * keypad.rowDelayStep + 1 * keypad.colDelayStep),
+                    value = keypad.delayKey5,
                     onValueChange = keypad::setDelayKey5,
                     valueRange = 0.0f..500.0f,
+                    defaultValue = 80.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -123,9 +146,10 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 6",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey6 >= 0f) keypad.delayKey6 else (1 * keypad.rowDelayStep + 2 * keypad.colDelayStep),
+                    value = keypad.delayKey6,
                     onValueChange = keypad::setDelayKey6,
                     valueRange = 0.0f..500.0f,
+                    defaultValue = 105.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -140,9 +164,10 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 7",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey7 >= 0f) keypad.delayKey7 else (2 * keypad.rowDelayStep + 0 * keypad.colDelayStep),
+                    value = keypad.delayKey7,
                     onValueChange = keypad::setDelayKey7,
                     valueRange = 0.0f..500.0f,
+                    defaultValue = 110.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -152,9 +177,10 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 8",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey8 >= 0f) keypad.delayKey8 else (2 * keypad.rowDelayStep + 1 * keypad.colDelayStep),
+                    value = keypad.delayKey8,
                     onValueChange = keypad::setDelayKey8,
                     valueRange = 0.0f..500.0f,
+                    defaultValue = 135.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -164,9 +190,10 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 9",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey9 >= 0f) keypad.delayKey9 else (2 * keypad.rowDelayStep + 2 * keypad.colDelayStep),
+                    value = keypad.delayKey9,
                     onValueChange = keypad::setDelayKey9,
                     valueRange = 0.0f..500.0f,
+                    defaultValue = 160.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -181,9 +208,10 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Key 0",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayKey0 >= 0f) keypad.delayKey0 else (3 * keypad.rowDelayStep + 1 * keypad.colDelayStep),
+                    value = keypad.delayKey0,
                     onValueChange = keypad::setDelayKey0,
                     valueRange = 0.0f..500.0f,
+                    defaultValue = 215.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -193,9 +221,10 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Cancel / Delete action",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayCancel >= 0f) keypad.delayCancel else (3 * keypad.rowDelayStep + 2 * keypad.colDelayStep),
+                    value = keypad.delayCancel,
                     onValueChange = keypad::setDelayCancel,
                     valueRange = 0.0f..500.0f,
+                    defaultValue = 270.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -205,9 +234,10 @@ fun KeypadDelaysScreen(
                     subtitle = "Entrance delay for Emergency Call button",
                     colors = colors,
                     backdrop = backdrop,
-                    value = if (keypad.delayEmergency >= 0f) keypad.delayEmergency else (keypad.rowDelayStep * 4),
+                    value = keypad.delayEmergency,
                     onValueChange = keypad::setDelayEmergency,
                     valueRange = 0.0f..500.0f,
+                    defaultValue = 270.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
