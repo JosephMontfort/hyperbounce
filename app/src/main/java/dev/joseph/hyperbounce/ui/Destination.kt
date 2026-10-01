@@ -24,6 +24,9 @@ sealed interface Destination {
     data object KeypadStretchPhysics : Destination
     data object KeypadReleasePhysics : Destination
     data object KeypadIosBloomPhysics : Destination
+    data object KeypadGlassTuning : Destination
+    data object KeypadButtonsLayout : Destination
+    data object KeypadPadLayout : Destination
     data object ScreenUnlock : Destination
     data object AppTransitions : Destination
     data object ControlCenter : Destination

@@ -75,19 +75,19 @@ data class LockScreenKeypadConfig(
     var dragMaxThreshold: Float = 0.16f,
     var dragInitialStiffness: Float = 0.22f,
     var dragResistancePower: Float = 1.8f,
-    var dragVolumeStretch: Float = 0.22f,
-    var releaseDuration: Float = 320.0f,
+    var dragVolumeStretch: Float = 0.11f,
+    var releaseDuration: Float = 600.0f,
     var releaseSquishAmp: Float = 0.35f,
     var releaseOvershoot: Float = 2.0f,
-    var iosBloomDuration: Float = 520.0f,
-    var iosBloomClusterFactor: Float = 0.70f,
+    var iosBloomDuration: Float = 900.0f,
+    var iosBloomClusterFactor: Float = 0.60f,
     var iosBloomOvershoot: Float = 0.16f,
-    var iosBloomDamping: Float = 0.54f,
-    var iosBloomStiffness: Float = 13.5f,
+    var iosBloomDamping: Float = 0.40f,
+    var iosBloomStiffness: Float = 18.0f,
     var iosBloomRadialSquish: Float = 0.28f,
     var iosBloomVelocityStretch: Float = 0.16f,
     var iosBloomWaveStagger: Float = 22.0f,
-    var iosBloomDecoupleText: Boolean = true
+    var iosBloomDecoupleText: Boolean = false
 ) {
     fun getKeyDelay(keyName: String): Long {
         val delay = when (keyName) {
@@ -181,19 +181,19 @@ object LockScreenConfigHolder {
         keypad.dragMaxThreshold = prefs.getFloat("pin_drag_max_threshold", 0.16f)
         keypad.dragInitialStiffness = prefs.getFloat("pin_drag_initial_stiffness", 0.22f)
         keypad.dragResistancePower = prefs.getFloat("pin_drag_resistance_power", 1.8f)
-        keypad.dragVolumeStretch = prefs.getFloat("pin_drag_volume_stretch", 0.22f)
-        keypad.releaseDuration = prefs.getFloat("pin_release_duration", 320.0f)
+        keypad.dragVolumeStretch = prefs.getFloat("pin_drag_volume_stretch", 0.11f)
+        keypad.releaseDuration = prefs.getFloat("pin_release_duration", 600.0f)
         keypad.releaseSquishAmp = prefs.getFloat("pin_release_squish_amp", 0.35f)
         keypad.releaseOvershoot = prefs.getFloat("pin_release_overshoot", 2.0f)
-        keypad.iosBloomDuration = prefs.getFloat("pin_ios_bloom_duration", 520.0f)
-        keypad.iosBloomClusterFactor = prefs.getFloat("pin_ios_bloom_cluster_factor", 0.70f)
+        keypad.iosBloomDuration = prefs.getFloat("pin_ios_bloom_duration", 900.0f)
+        keypad.iosBloomClusterFactor = prefs.getFloat("pin_ios_bloom_cluster_factor", 0.60f)
         keypad.iosBloomOvershoot = prefs.getFloat("pin_ios_bloom_overshoot", 0.16f)
-        keypad.iosBloomDamping = prefs.getFloat("pin_ios_bloom_damping", 0.54f)
-        keypad.iosBloomStiffness = prefs.getFloat("pin_ios_bloom_stiffness", 13.5f)
+        keypad.iosBloomDamping = prefs.getFloat("pin_ios_bloom_damping", 0.40f)
+        keypad.iosBloomStiffness = prefs.getFloat("pin_ios_bloom_stiffness", 18.0f)
         keypad.iosBloomRadialSquish = prefs.getFloat("pin_ios_bloom_radial_squish", 0.28f)
         keypad.iosBloomVelocityStretch = prefs.getFloat("pin_ios_bloom_velocity_stretch", 0.16f)
         keypad.iosBloomWaveStagger = prefs.getFloat("pin_ios_bloom_wave_stagger", 22.0f)
-        keypad.iosBloomDecoupleText = prefs.getBoolean("pin_ios_bloom_decouple_text", true)
+        keypad.iosBloomDecoupleText = prefs.getBoolean("pin_ios_bloom_decouple_text", false)
     }
 
     fun updateKey(key: String, intent: Intent) {

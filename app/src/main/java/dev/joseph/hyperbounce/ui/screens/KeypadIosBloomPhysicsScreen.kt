@@ -5,18 +5,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
-import androidx.compose.ui.graphics.Color
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
-import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
-import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import java.util.Locale
 
+/**
+ * KeypadIosBloomPhysicsScreen: Controls for the iOS 26 Radial Bloom entrance kinetics.
+ *
+ * NOTE FOR FUTURE AGENTS / DEVELOPERS:
+ * Per user request, the Inertia Squish & Velocity Stretch controls (radial squish, velocity stretch,
+ * wave stagger) and the Decouple Digit Labels toggle have been removed from the UI alone to keep the
+ * interface clean and focused. Their corresponding backend preferences and defaults
+ * (squish: 0.28, stretch: 0.16, stagger: 22ms, decouple: false) remain fully active in the backend hook.
+ */
 @Composable
 fun KeypadIosBloomPhysicsScreen(
     repository: SettingsRepository,
@@ -34,15 +40,15 @@ fun KeypadIosBloomPhysicsScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            keypad.setIosBloomDuration(520.0f)
-            keypad.setIosBloomClusterFactor(0.70f)
+            keypad.setIosBloomDuration(900.0f)
+            keypad.setIosBloomClusterFactor(0.60f)
             keypad.setIosBloomOvershoot(0.16f)
-            keypad.setIosBloomDamping(0.54f)
-            keypad.setIosBloomStiffness(13.5f)
+            keypad.setIosBloomDamping(0.40f)
+            keypad.setIosBloomStiffness(18.0f)
             keypad.setIosBloomRadialSquish(0.28f)
             keypad.setIosBloomVelocityStretch(0.16f)
             keypad.setIosBloomWaveStagger(22.0f)
-            keypad.setIosBloomDecoupleText(true)
+            keypad.setIosBloomDecoupleText(false)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
@@ -58,8 +64,8 @@ fun KeypadIosBloomPhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.iosBloomDuration,
                     onValueChange = keypad::setIosBloomDuration,
-                    valueRange = 300.0f..900.0f,
-                    defaultValue = 520.0f,
+                    valueRange = 300.0f..1200.0f,
+                    defaultValue = 900.0f,
                     valueLabel = { "${it.toInt()} ms" },
                     enabled = keypad.enabled
                 )
@@ -72,7 +78,7 @@ fun KeypadIosBloomPhysicsScreen(
                     value = keypad.iosBloomClusterFactor,
                     onValueChange = keypad::setIosBloomClusterFactor,
                     valueRange = 0.30f..0.95f,
-                    defaultValue = 0.70f,
+                    defaultValue = 0.60f,
                     valueLabel = { String.format(Locale.US, "%.0f%%", it * 100f) },
                     enabled = keypad.enabled
                 )
@@ -84,8 +90,8 @@ fun KeypadIosBloomPhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.iosBloomDamping,
                     onValueChange = keypad::setIosBloomDamping,
-                    valueRange = 0.30f..0.85f,
-                    defaultValue = 0.54f,
+                    valueRange = 0.20f..0.85f,
+                    defaultValue = 0.40f,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = keypad.enabled
                 )
@@ -97,83 +103,14 @@ fun KeypadIosBloomPhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.iosBloomStiffness,
                     onValueChange = keypad::setIosBloomStiffness,
-                    valueRange = 8.0f..22.0f,
-                    defaultValue = 13.5f,
+                    valueRange = 8.0f..25.0f,
+                    defaultValue = 18.0f,
                     valueLabel = { String.format(Locale.US, "%.1f rad/s", it) },
                     enabled = keypad.enabled
                 )
             }
             SectionFooter(
                 "Buttons originate in an organic cluster behind Key 5 and shoot outward radially into their final grid coordinates.",
-                colors
-            )
-        }
-
-        item {
-            SectionHeader("Inertia Squish & Velocity Stretch", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsSliderRow(
-                    title = "Radial Braking Squish",
-                    subtitle = "Compressive mass deformation when outer buttons hit peak overshoot",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = keypad.iosBloomRadialSquish,
-                    onValueChange = keypad::setIosBloomRadialSquish,
-                    valueRange = 0.05f..0.60f,
-                    defaultValue = 0.28f,
-                    valueLabel = { String.format(Locale.US, "%.0f%%", it * 100f) },
-                    enabled = keypad.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "In-Flight Velocity Stretch",
-                    subtitle = "Dynamic elongation along radial travel vector during outward burst",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = keypad.iosBloomVelocityStretch,
-                    onValueChange = keypad::setIosBloomVelocityStretch,
-                    valueRange = 0.02f..0.40f,
-                    defaultValue = 0.16f,
-                    valueLabel = { String.format(Locale.US, "%.0f%%", it * 100f) },
-                    enabled = keypad.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Radial Shockwave Delay",
-                    subtitle = "Stagger propagation delay per grid distance unit from center",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = keypad.iosBloomWaveStagger,
-                    onValueChange = keypad::setIosBloomWaveStagger,
-                    valueRange = 0.0f..50.0f,
-                    defaultValue = 22.0f,
-                    valueLabel = { "${it.toInt()} ms" },
-                    enabled = keypad.enabled
-                )
-            }
-            SectionFooter(
-                "Volume (2D area) is strictly preserved: radial compression automatically causes transverse bulge, reproducing iOS 26 fluid mechanics.",
-                colors
-            )
-        }
-
-        item {
-            SectionHeader("Layer Architecture", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsToggleRow(
-                    title = "Decouple Digit Labels",
-                    subtitle = "Lock numbers & letters stationary while liquid glass blooms underneath",
-                    colors = colors,
-                    iconTint = colors.accentBlue,
-                    backdrop = backdrop,
-                    checked = keypad.iosBloomDecoupleText,
-                    onCheckedChange = keypad::setIosBloomDecoupleText,
-                    enabled = keypad.enabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
-                )
-            }
-            SectionFooter(
-                "In iOS 26, digit labels fade in directly at their destination while the liquid glass lenses explode and bounce underneath.",
                 colors
             )
         }

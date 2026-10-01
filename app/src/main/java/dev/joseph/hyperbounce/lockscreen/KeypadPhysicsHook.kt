@@ -523,7 +523,7 @@ object KeypadPhysicsHook {
                                             // Directional Inertia Release Snapback Engine
                                             val uX = currTx / releaseDist
                                             val uY = currTy / releaseDist
-                                            val durationMs = cfg.releaseDuration.toLong().coerceIn(150L, 600L)
+                                            val durationMs = cfg.releaseDuration.toLong().coerceIn(150L, 800L)
                                             val squishAmp = cfg.releaseSquishAmp.coerceIn(0.0f, 0.70f)
                                             val overshootTension = cfg.releaseOvershoot.coerceIn(1.0f, 3.5f)
 

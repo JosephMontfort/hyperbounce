@@ -51,8 +51,11 @@ import dev.joseph.hyperbounce.ui.screens.AppDetailScreen
 import dev.joseph.hyperbounce.ui.screens.AppTransitionsScreen
 import dev.joseph.hyperbounce.ui.screens.ControlCenterScreen
 import dev.joseph.hyperbounce.ui.screens.EngineScreen
+import dev.joseph.hyperbounce.ui.screens.KeypadButtonsLayoutScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadDelaysScreen
+import dev.joseph.hyperbounce.ui.screens.KeypadGlassTuningScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadIosBloomPhysicsScreen
+import dev.joseph.hyperbounce.ui.screens.KeypadPadLayoutScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadPhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadReleasePhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadScreen
@@ -285,6 +288,27 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                         )
 
                         Destination.KeypadIosBloomPhysics -> KeypadIosBloomPhysicsScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.KeypadGlassTuning -> KeypadGlassTuningScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.KeypadButtonsLayout -> KeypadButtonsLayoutScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.KeypadPadLayout -> KeypadPadLayoutScreen(
                             repository = repository,
                             colors = colors,
                             backdrop = backdrop,

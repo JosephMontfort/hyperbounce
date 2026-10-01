@@ -227,20 +227,20 @@ data class LockScreenKeypadSettings(
     val dragMaxThreshold: Float = 0.16f,
     val dragInitialStiffness: Float = 0.22f,
     val dragResistancePower: Float = 1.8f,
-    val dragVolumeStretch: Float = 0.22f,
-    val releaseDuration: Float = 320.0f,
+    val dragVolumeStretch: Float = 0.11f,
+    val releaseDuration: Float = 600.0f,
     val releaseSquishAmp: Float = 0.35f,
     val releaseOvershoot: Float = 2.0f,
     // iOS 26 Liquid Bloom
-    val iosBloomDuration: Float = 520.0f,
-    val iosBloomClusterFactor: Float = 0.70f,
+    val iosBloomDuration: Float = 900.0f,
+    val iosBloomClusterFactor: Float = 0.60f,
     val iosBloomOvershoot: Float = 0.16f,
-    val iosBloomDamping: Float = 0.54f,
-    val iosBloomStiffness: Float = 13.5f,
+    val iosBloomDamping: Float = 0.40f,
+    val iosBloomStiffness: Float = 18.0f,
     val iosBloomRadialSquish: Float = 0.28f,
     val iosBloomVelocityStretch: Float = 0.16f,
     val iosBloomWaveStagger: Float = 22.0f,
-    val iosBloomDecoupleText: Boolean = true
+    val iosBloomDecoupleText: Boolean = false
 )
 
 /** Feature 3: Screen Unlock Velocity Kinetics Settings */

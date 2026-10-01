@@ -34,7 +34,7 @@ fun KeypadStretchPhysicsScreen(
             keypad.setDragMaxThreshold(0.16f)
             keypad.setDragInitialStiffness(0.22f)
             keypad.setDragResistancePower(1.8f)
-            keypad.setDragVolumeStretch(0.22f)
+            keypad.setDragVolumeStretch(0.11f)
             keypad.setPressLiquidScale(1.15f)
         },
         restartAppTitle = "Restart System UI",
@@ -100,7 +100,7 @@ fun KeypadStretchPhysicsScreen(
                     value = keypad.dragVolumeStretch,
                     onValueChange = keypad::setDragVolumeStretch,
                     valueRange = 0.05f..0.50f,
-                    defaultValue = 0.22f,
+                    defaultValue = 0.11f,
                     valueLabel = { String.format(Locale.US, "%.2f x", it) },
                     enabled = keypad.enabled
                 )

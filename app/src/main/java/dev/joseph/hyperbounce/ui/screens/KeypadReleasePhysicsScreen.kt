@@ -31,7 +31,7 @@ fun KeypadReleasePhysicsScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            keypad.setReleaseDuration(320.0f)
+            keypad.setReleaseDuration(600.0f)
             keypad.setReleaseSquishAmp(0.35f)
             keypad.setReleaseOvershoot(2.0f)
         },
@@ -62,8 +62,8 @@ fun KeypadReleasePhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.releaseDuration,
                     onValueChange = keypad::setReleaseDuration,
-                    valueRange = 150.0f..600.0f,
-                    defaultValue = 320.0f,
+                    valueRange = 150.0f..800.0f,
+                    defaultValue = 600.0f,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
