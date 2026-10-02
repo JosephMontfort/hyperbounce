@@ -51,7 +51,7 @@ fun ControlCenterScreen(
 
     ScreenScaffold(
         title = "Control Center",
-        subtitle = "Unbound canvas, tile grouping & jelly physics",
+        subtitle = "Tile grouping, customizer & jelly physics",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
@@ -64,8 +64,8 @@ fun ControlCenterScreen(
             SectionHeader("MASTER SWITCHES", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
-                    title = "Unbound Canvas Architecture",
-                    subtitle = "Unlocks major cards and enables cross-component reordering with unconstrained canvas layout",
+                    title = "Unlock Control Center Edit Page",
+                    subtitle = "Unlocks all control center tiles to be resized and grouped dynamically",
                     colors = colors,
                     iconTint = colors.accentBlue,
                     backdrop = backdrop,
@@ -111,7 +111,7 @@ fun ControlCenterScreen(
                     Row(
                         Modifier
                             .weight(1f)
-                            .padding(end = 12.dp),
+                            .padding(end = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -123,21 +123,21 @@ fun ControlCenterScreen(
                             SlidersIcon(color = Color.White, size = 15.dp)
                         }
                         Spacer(Modifier.width(12.dp))
-                        Column {
+                        Column(Modifier.weight(1f)) {
                             BasicText(
                                 "Animation Engine",
                                 style = HyperBounceType.body.copy(color = colors.label)
                             )
                             Spacer(Modifier.height(2.dp))
-                            val detectedText = if (DevicePipelineDetector.isNativeLowEnd()) "Hardware default: Low-End" else "Hardware default: High-End"
+                            val detectedText = if (DevicePipelineDetector.isNativeLowEnd()) "Default: Low-End" else "Default: High-End"
                             BasicText(
-                                "Control Center & Notification Shade motion pipeline ($detectedText)",
+                                "Control center & shade motion ($detectedText)",
                                 style = HyperBounceType.subhead.copy(color = colors.secondaryLabel)
                             )
                         }
                     }
                     DropdownPicker(
-                        options = listOf("High-End Animation Engine", "Low-End Animation Engine"),
+                        options = listOf("High-End", "Low-End"),
                         selectedIndex = cc.animEngineMode.coerceIn(0, 1),
                         onSelect = { cc.setAnimEngineMode(it) },
                         backdrop = backdrop
