@@ -118,18 +118,14 @@ fun EngineScreen(
                     title = "Toggles Appearance",
                     subtitle = "Accent color & Liquid Glass optics",
                     colors = colors,
-                    iconTint = colors.accentGreen,
-                    onClick = { onNavigate(Destination.ToggleAppearance) },
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onClick = { onNavigate(Destination.ToggleAppearance) }
                 )
-                RowDivider(colors.separator, insetStart = 16.dp)
+                RowDivider(colors.separator)
                 SettingsNavRow(
                     title = "Toggles Drag Physics",
                     subtitle = "Touch tracking & spring bounce dynamics",
                     colors = colors,
-                    iconTint = colors.accentPurple,
-                    onClick = { onNavigate(Destination.TogglePhysics) },
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onClick = { onNavigate(Destination.TogglePhysics) }
                 )
             }
         }
@@ -141,18 +137,14 @@ fun EngineScreen(
                     title = "Sliders Appearance",
                     subtitle = "Track accent & Liquid Glass optics",
                     colors = colors,
-                    iconTint = colors.accentBlue,
-                    onClick = { onNavigate(Destination.SliderAppearance) },
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onClick = { onNavigate(Destination.SliderAppearance) }
                 )
-                RowDivider(colors.separator, insetStart = 16.dp)
+                RowDivider(colors.separator)
                 SettingsNavRow(
                     title = "Sliders Drag Physics",
                     subtitle = "Touch tracking & spring bounce dynamics",
                     colors = colors,
-                    iconTint = colors.accentPurple,
-                    onClick = { onNavigate(Destination.SliderPhysics) },
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onClick = { onNavigate(Destination.SliderPhysics) }
                 )
             }
         }
@@ -164,7 +156,6 @@ fun EngineScreen(
                     title = "MIUIX App Hooking",
                     subtitle = "Auto-detect and replace toggles and sliders in third-party apps",
                     colors = colors,
-                    iconTint = colors.accentBlue,
                     backdrop = backdrop,
                     checked = repository.miuixAppsHookingEnabled,
                     onCheckedChange = { enabled ->
@@ -178,9 +169,7 @@ fun EngineScreen(
                             ).show()
                         }
                     }
-                ) {
-                    AppsIcon(color = Color.White, size = 18.dp)
-                }
+                )
             }
         }
     }
