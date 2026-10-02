@@ -105,7 +105,7 @@ fun TuningScreen(
             )
             RowDivider(colors.separator)
             SettingsNavRow(
-                title = "iOS App Transitions",
+                title = "App Transitions",
                 subtitle = if (repository.appTransition.enabled) "Weightless Physics & Row Flight Arcs" else "Off",
                 colors = colors,
                 iconTint = colors.accentGreen,

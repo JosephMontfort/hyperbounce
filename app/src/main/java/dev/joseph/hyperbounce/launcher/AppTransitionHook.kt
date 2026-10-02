@@ -124,7 +124,6 @@ object AppTransitionHook {
         hookHomeLayerScaling(module, classLoader)
         hookWallpaperDynamics(module, classLoader)
         hookDeviceLevelUtils(module, classLoader)
-        OriginWorkbenchRecentsHook.init(module, classLoader)
     }
 
     /**
@@ -260,33 +259,6 @@ object AppTransitionHook {
                     }
 
                     return chain.proceed()
-                }
-            })
-
-            // 3. Hook calculateTaskX(float f, float f2, float f3, float f4)
-            // Ensures horizontal bounds stay completely inside the screen when pulled to corners
-            val calcXMethod = algoClass.getDeclaredMethod(
-                "calculateTaskX",
-                Float::class.javaPrimitiveType,
-                Float::class.javaPrimitiveType,
-                Float::class.javaPrimitiveType,
-                Float::class.javaPrimitiveType
-            )
-
-            module.hook(calcXMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val result = (chain.proceed() as? Number)?.toFloat() ?: return chain.proceed()
-                    val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.zeroFrictionDrag) {
-                        return result
-                    }
-                    val screenW = (chain.args[2] as? Number)?.toFloat() ?: return result
-                    val taskW = (chain.args[3] as? Number)?.toFloat() ?: return result
-
-                    // Keep the card cleanly inside display boundaries [12dp, screenW - taskW - 12dp]
-                    val margin = screenW * 0.025f
-                    val maxX = (screenW - taskW - margin).coerceAtLeast(margin)
-                    return result.coerceIn(margin, maxX)
                 }
             })
 
@@ -514,7 +486,7 @@ object AppTransitionHook {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val result = chain.proceed()
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (!cfg.enabled || !cfg.refinedHaptics || !cfg.stackRecentsHaptics) {
+                        if (!cfg.enabled || !cfg.stackRecentsHaptics) {
                             return result
                         }
 

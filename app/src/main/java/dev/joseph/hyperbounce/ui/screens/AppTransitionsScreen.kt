@@ -8,7 +8,6 @@ import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.components.AppGridIcon
 import dev.joseph.hyperbounce.ui.components.AppsIcon
-import dev.joseph.hyperbounce.ui.components.GearIcon
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.PowerIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
@@ -46,7 +45,7 @@ fun AppTransitionsScreen(
             SectionHeader("MASTER SWITCH", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
-                    title = "Enable iOS Animation Engine",
+                    title = "Enable App Transitions Engine",
                     subtitle = "Master switch for custom transition physics and ballistic flight curves",
                     colors = colors,
                     iconTint = colors.accentGreen,
@@ -142,108 +141,10 @@ fun AppTransitionsScreen(
                     enabled = trans.enabled,
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "Game Mode Landscape Recents",
-                    subtitle = "Removes gesture touch-drop delay in games and landscape apps",
-                    colors = colors,
-                    iconTint = colors.accentPink,
-                    backdrop = backdrop,
-                    checked = trans.landscapeGameOpt,
-                    onCheckedChange = trans::setLandscapeGameOpt,
-                    enabled = trans.enabled,
-                    icon = { GearIcon(color = Color.White, size = 15.dp) }
-                )
             }
         }
 
-        // 4. ORIGIN WORKBENCH RECENTS (ORIGINOS 7 ATOMIC WORKBENCH)
-        item {
-            SectionHeader("ORIGIN WORKBENCH RECENTS", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsToggleRow(
-                    title = "Origin Workbench Recents",
-                    subtitle = "5-task workspace with 1 live running foreground Hero app and a 4-card interactive shelf dock",
-                    colors = colors,
-                    iconTint = colors.accentPurple,
-                    backdrop = backdrop,
-                    checked = trans.workbenchRecentsEnabled,
-                    onCheckedChange = trans::setWorkbenchRecentsEnabled,
-                    enabled = trans.enabled,
-                    icon = { AppsIcon(color = Color.White, size = 15.dp) }
-                )
-                if (trans.workbenchRecentsEnabled) {
-                    RowDivider(colors.separator)
-                    SettingsToggleRow(
-                        title = "Top Shelf Layout Style",
-                        subtitle = if (trans.workbenchLayoutStyle == 1) "Top Shelf (Top Dock) active" else "Side Shelf (Left Dock - Maximized Viewport) active",
-                        colors = colors,
-                        iconTint = colors.accentPurple,
-                        backdrop = backdrop,
-                        checked = trans.workbenchLayoutStyle == 1,
-                        onCheckedChange = { isTop ->
-                            trans.setWorkbenchLayoutStyle(if (isTop) 1 else 0)
-                        },
-                        enabled = trans.enabled && trans.workbenchRecentsEnabled,
-                        icon = { AppsIcon(color = Color.White, size = 15.dp) }
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Hero Stage Proportions",
-                        subtitle = "Scale size of the primary running app viewport",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = trans.workbenchHeroScale,
-                        onValueChange = trans::setWorkbenchHeroScale,
-                        valueRange = 0.60f..0.85f,
-                        defaultValue = 0.72f,
-                        valueLabel = { String.format(Locale.US, "%.0f%%", it * 100f) },
-                        enabled = trans.enabled && trans.workbenchRecentsEnabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Shelf Card Scale",
-                        subtitle = "Proportional scale of the 4 parked tasks in the shelf dock",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = trans.workbenchShelfScale,
-                        onValueChange = trans::setWorkbenchShelfScale,
-                        valueRange = 0.16f..0.30f,
-                        defaultValue = 0.22f,
-                        valueLabel = { String.format(Locale.US, "%.0f%%", it * 100f) },
-                        enabled = trans.enabled && trans.workbenchRecentsEnabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Folme Spring Damping",
-                        subtitle = "Settling elasticity for Xiaomi Folme card swap physics",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = trans.workbenchFolmeDamping,
-                        onValueChange = trans::setWorkbenchFolmeDamping,
-                        valueRange = 0.60f..1.10f,
-                        defaultValue = 0.85f,
-                        valueLabel = { String.format(Locale.US, "%.2f", it) },
-                        enabled = trans.enabled && trans.workbenchRecentsEnabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Folme Spring Response",
-                        subtitle = "Frequency response for Xiaomi Folme card transitions",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = trans.workbenchFolmeResponse,
-                        onValueChange = trans::setWorkbenchFolmeResponse,
-                        valueRange = 0.30f..0.70f,
-                        defaultValue = 0.45f,
-                        valueLabel = { String.format(Locale.US, "%.2fs", it) },
-                        enabled = trans.enabled && trans.workbenchRecentsEnabled
-                    )
-                }
-            }
-        }
-
-        // 5. TACTILE HAPTICS
+        // 4. TACTILE HAPTICS
         item {
             SectionHeader("TACTILE HAPTICS", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -260,14 +161,14 @@ fun AppTransitionsScreen(
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
-                    title = "Stack Recents Crossing Tick",
+                    title = "Haptics for Sliding Cards",
                     subtitle = "Light mechanical clock tick as each app card crosses the screen center line in Stack recents",
                     colors = colors,
                     iconTint = colors.accentBlue,
                     backdrop = backdrop,
                     checked = trans.stackRecentsHaptics,
                     onCheckedChange = trans::setStackRecentsHaptics,
-                    enabled = trans.enabled && trans.refinedHaptics,
+                    enabled = trans.enabled,
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
             }

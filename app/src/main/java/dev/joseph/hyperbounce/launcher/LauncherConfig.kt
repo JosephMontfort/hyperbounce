@@ -85,13 +85,7 @@ data class IOSTransitionConfig(
     val zeroFrictionDrag: Boolean = true,
     val landscapeGameOpt: Boolean = true,
     val refinedHaptics: Boolean = true,
-    val stackRecentsHaptics: Boolean = true,
-    val workbenchRecentsEnabled: Boolean = false,
-    val workbenchLayoutStyle: Int = 0,
-    val workbenchHeroScale: Float = 0.72f,
-    val workbenchShelfScale: Float = 0.22f,
-    val workbenchFolmeDamping: Float = 0.85f,
-    val workbenchFolmeResponse: Float = 0.45f
+    val stackRecentsHaptics: Boolean = true
 )
 
 object LauncherConfigHolder {
@@ -173,13 +167,7 @@ object LauncherConfigHolder {
             zeroFrictionDrag = prefs.getBoolean("ios_anim_zero_friction_drag", true),
             landscapeGameOpt = prefs.getBoolean("ios_anim_landscape_game_opt", true),
             refinedHaptics = prefs.getBoolean("ios_anim_refined_haptics", true),
-            stackRecentsHaptics = prefs.getBoolean("ios_anim_stack_recents_haptics", true),
-            workbenchRecentsEnabled = prefs.getBoolean("ios_workbench_recents_enabled", false),
-            workbenchLayoutStyle = prefs.getInt("ios_workbench_layout_style", 0),
-            workbenchHeroScale = prefs.getFloat("ios_workbench_hero_scale", 0.72f),
-            workbenchShelfScale = prefs.getFloat("ios_workbench_shelf_scale", 0.22f),
-            workbenchFolmeDamping = prefs.getFloat("ios_workbench_folme_damping", 0.85f),
-            workbenchFolmeResponse = prefs.getFloat("ios_workbench_folme_response", 0.45f)
+            stackRecentsHaptics = prefs.getBoolean("ios_anim_stack_recents_haptics", true)
         )
     }
 }

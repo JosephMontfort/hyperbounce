@@ -269,7 +269,7 @@ data class ScreenUnlockSettings(
     val kineticDockZDepth: Float = 800.0f
 )
 
-/** Feature 4: iOS App Transition & Physics Settings */
+/** Feature 4: App Transition & Physics Settings */
 data class IOSTransitionSettings(
     val enabled: Boolean = true,
     val arcApexLift: Float = 1.0f,
@@ -283,13 +283,7 @@ data class IOSTransitionSettings(
     val zeroFrictionDrag: Boolean = true,
     val landscapeGameOpt: Boolean = true,
     val refinedHaptics: Boolean = true,
-    val stackRecentsHaptics: Boolean = true,
-    val workbenchRecentsEnabled: Boolean = false,
-    val workbenchLayoutStyle: Int = 0,
-    val workbenchHeroScale: Float = 0.72f,
-    val workbenchShelfScale: Float = 0.22f,
-    val workbenchFolmeDamping: Float = 0.85f,
-    val workbenchFolmeResponse: Float = 0.45f
+    val stackRecentsHaptics: Boolean = true
 )
 
 
