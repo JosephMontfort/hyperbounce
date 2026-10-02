@@ -47,7 +47,9 @@ import dev.joseph.hyperbounce.ui.glass.LiquidBottomTab
 import dev.joseph.hyperbounce.ui.glass.LiquidBottomTabs
 import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
 import dev.joseph.hyperbounce.ui.screens.AboutScreen
+import dev.joseph.hyperbounce.ui.screens.AppAppearanceScreen
 import dev.joseph.hyperbounce.ui.screens.AppDetailScreen
+import dev.joseph.hyperbounce.ui.screens.AppLayoutScreen
 import dev.joseph.hyperbounce.ui.screens.AppTransitionsScreen
 import dev.joseph.hyperbounce.ui.screens.ControlCenterScreen
 import dev.joseph.hyperbounce.ui.screens.EngineScreen
@@ -200,6 +202,23 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                         )
                         
                         is Destination.AppDetail -> AppDetailScreen(
+                            app = destination.app,
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop,
+                            onNavigate = push
+                        )
+
+                        is Destination.AppAppearance -> AppAppearanceScreen(
+                            app = destination.app,
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        is Destination.AppLayout -> AppLayoutScreen(
                             app = destination.app,
                             repository = repository,
                             colors = colors,

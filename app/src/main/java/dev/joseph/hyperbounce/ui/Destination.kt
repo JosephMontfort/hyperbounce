@@ -11,6 +11,8 @@ import dev.joseph.hyperbounce.ui.state.NavApp
 sealed interface Destination {
     data object AppsList : Destination
     data class AppDetail(val app: NavApp) : Destination
+    data class AppAppearance(val app: NavApp) : Destination
+    data class AppLayout(val app: NavApp) : Destination
     data object Engine : Destination
     data object ToggleAppearance : Destination
     data object TogglePhysics : Destination

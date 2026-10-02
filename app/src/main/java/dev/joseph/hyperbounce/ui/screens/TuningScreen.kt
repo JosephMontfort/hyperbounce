@@ -52,7 +52,6 @@ fun TuningScreen(
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsNavRow(
                 title = "Floating Navigation Bar",
-                subtitle = "App-specific glass overrides",
                 colors = colors,
                 iconTint = colors.accentBlue,
                 onClick = { onNavigate(Destination.AppsList) },
@@ -61,7 +60,6 @@ fun TuningScreen(
             RowDivider(colors.separator)
             SettingsNavRow(
                 title = "Toggles & Sliders",
-                subtitle = engineSummary(repository),
                 colors = colors,
                 iconTint = colors.accentOrange,
                 onClick = { onNavigate(Destination.Engine) },
@@ -70,7 +68,6 @@ fun TuningScreen(
             RowDivider(colors.separator)
             SettingsNavRow(
                 title = "Lock Screen Sheet",
-                subtitle = if (repository.lockScreenSheet.enabled) "4-Sided AGSL Refraction" else "Off",
                 colors = colors,
                 iconTint = colors.accentPink,
                 onClick = { onNavigate(Destination.LockScreenSheet) },
@@ -79,7 +76,6 @@ fun TuningScreen(
             RowDivider(colors.separator)
             SettingsNavRow(
                 title = "Notification Center",
-                subtitle = if (repository.notificationSheet.enabled) "iOS Glass Sheet & Static Flow" else "Off",
                 colors = colors,
                 iconTint = colors.accentPurple,
                 onClick = { onNavigate(Destination.NotificationCenterSheet) },
@@ -88,7 +84,6 @@ fun TuningScreen(
             RowDivider(colors.separator)
             SettingsNavRow(
                 title = "PIN Pad Physics",
-                subtitle = if (repository.lockScreenKeypad.enabled) "Fluid iOS Geometry & Jelly Squish" else "Off",
                 colors = colors,
                 iconTint = colors.accentBlue,
                 onClick = { onNavigate(Destination.Keypad) },
@@ -97,7 +92,6 @@ fun TuningScreen(
             RowDivider(colors.separator)
             SettingsNavRow(
                 title = "Screen Unlock",
-                subtitle = if (repository.screenUnlock.enabled) "Velocity Kinetics & Dispersion" else "Off",
                 colors = colors,
                 iconTint = colors.accentPurple,
                 onClick = { onNavigate(Destination.ScreenUnlock) },
@@ -106,7 +100,6 @@ fun TuningScreen(
             RowDivider(colors.separator)
             SettingsNavRow(
                 title = "App Transitions",
-                subtitle = if (repository.appTransition.enabled) "Weightless Physics & Row Flight Arcs" else "Off",
                 colors = colors,
                 iconTint = colors.accentGreen,
                 onClick = { onNavigate(Destination.AppTransitions) },
@@ -115,7 +108,6 @@ fun TuningScreen(
             RowDivider(colors.separator)
             SettingsNavRow(
                 title = "Control Center",
-                subtitle = if (repository.controlCenter.modularEditEnabled || repository.controlCenter.animEnabled) "Modular Layout & Jelly Physics" else "Off",
                 colors = colors,
                 iconTint = colors.accentBlue,
                 onClick = { onNavigate(Destination.ControlCenter) },
@@ -124,7 +116,6 @@ fun TuningScreen(
             RowDivider(colors.separator)
             SettingsNavRow(
                 title = "iOS Caller Screen",
-                subtitle = if (repository.callerScreen.enabled) "Full-screen dual sliders & fluid morph" else "Off",
                 colors = colors,
                 iconTint = colors.accentGreen,
                 onClick = { onNavigate(Destination.CallerScreen) },
@@ -133,7 +124,6 @@ fun TuningScreen(
             RowDivider(colors.separator)
             SettingsNavRow(
                 title = "Ringtones & Haptics",
-                subtitle = "Custom synced ringtones, trimming & 5-pipeline synthesis",
                 colors = colors,
                 iconTint = colors.accentOrange,
                 onClick = { onNavigate(Destination.HapticStudio) },
@@ -143,8 +133,3 @@ fun TuningScreen(
     }
 }
 
-private fun engineSummary(repository: SettingsRepository): String {
-    val t = if (repository.toggleEngine == dev.joseph.hyperbounce.ui.state.RenderEngine.LiquidGlass) "Liquid Glass" else "Native Canvas"
-    val sl = if (repository.sliderEngine == dev.joseph.hyperbounce.ui.state.RenderEngine.LiquidGlass) "Liquid Glass" else "Native Canvas"
-    return "Toggles: $t · Sliders: $sl"
-}

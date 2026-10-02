@@ -3,6 +3,7 @@ package dev.joseph.hyperbounce.ui.screens
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -136,20 +137,14 @@ fun HapticStudioScreen(
     var moduleDialogTargetPresetId by remember { mutableStateOf<String?>(null) }
     var presetToRename by remember { mutableStateOf<SavedHapticPreset?>(null) }
     var isRenamePresetDialogOpen by remember { mutableStateOf(false) }
-    var statusFeedback by remember { mutableStateOf<String?>(null) }
+    var presetToDelete by remember { mutableStateOf<SavedHapticPreset?>(null) }
+    var isDeletePresetDialogOpen by remember { mutableStateOf(false) }
 
     // Saved Library Presets
     var savedPresets by remember { mutableStateOf<List<SavedHapticPreset>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         savedPresets = HapticPresetStorage.listPresets(context)
-    }
-
-    LaunchedEffect(statusFeedback) {
-        if (statusFeedback != null) {
-            kotlinx.coroutines.delay(2500)
-            statusFeedback = null
-        }
     }
 
     // DSP Re-Creation Parameters
@@ -189,7 +184,7 @@ fun HapticStudioScreen(
                     synthesizedHaptics = results
                     selectedPipelineIndex = 0
                 } catch (e: Exception) {
-                    statusFeedback = "Error: ${e.message}"
+                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                 } finally {
                     isProcessing = false
                 }
@@ -578,7 +573,7 @@ fun HapticStudioScreen(
                                     onClick = {
                                         val audio = decodedAudio
                                         if (audio == null || synthesizedHaptics.isEmpty()) {
-                                            statusFeedback = "No synthesized audio to save"
+                                            Toast.makeText(context, "No synthesized audio to save", Toast.LENGTH_SHORT).show()
                                             return@LiquidButton
                                         }
                                         val title = audioFileName?.substringBeforeLast('.') ?: "Custom Preset"
@@ -596,7 +591,7 @@ fun HapticStudioScreen(
                                             intensityMode = intensityMode
                                         )
                                         savedPresets = HapticPresetStorage.listPresets(context)
-                                        statusFeedback = "Saved \"$title\" to Library"
+                                        Toast.makeText(context, "Saved \"$title\" to Library", Toast.LENGTH_SHORT).show()
                                     },
                                     backdrop = backdrop,
                                     tint = colors.accentGreen,
@@ -635,7 +630,7 @@ fun HapticStudioScreen(
                             LiquidButton(
                                 onClick = {
                                     exportRtpBinary(context, currentHaptic, audioFileName ?: "effect") { msg ->
-                                        statusFeedback = msg
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 backdrop = backdrop,
@@ -778,9 +773,8 @@ fun HapticStudioScreen(
                                             // Delete Circular Liquid Glass Button
                                             LiquidButton(
                                                 onClick = {
-                                                    HapticPresetStorage.deletePreset(context, preset.id)
-                                                    savedPresets = HapticPresetStorage.listPresets(context)
-                                                    statusFeedback = "Deleted \"${preset.title}\""
+                                                    presetToDelete = preset
+                                                    isDeletePresetDialogOpen = true
                                                 },
                                                 backdrop = backdrop,
                                                 tint = colors.accentRed,
@@ -862,9 +856,9 @@ fun HapticStudioScreen(
                                                     totalDurationMs = loaded.decodedAudio.durationMs.toInt()
                                                     playbackProgressMs = preset.trimStartMs
                                                     isTrimMode = true
-                                                    statusFeedback = "Loaded \"${preset.title}\""
+                                                    Toast.makeText(context, "Loaded \"${preset.title}\"", Toast.LENGTH_SHORT).show()
                                                 } else {
-                                                    statusFeedback = "Failed to load preset"
+                                                    Toast.makeText(context, "Failed to load preset", Toast.LENGTH_SHORT).show()
                                                 }
                                             },
                                             backdrop = backdrop,
@@ -907,34 +901,6 @@ fun HapticStudioScreen(
             }
         }
 
-        // Floating iOS feedback pill
-        AnimatedVisibility(
-            visible = statusFeedback != null,
-            enter = fadeIn() + slideInVertically { it / 2 },
-            exit = fadeOut() + slideOutVertically { it / 2 },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 36.dp)
-        ) {
-            statusFeedback?.let { msg ->
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(Color(0xE61C1C1E))
-                        .border(0.5.dp, Color(0x33FFFFFF), RoundedCornerShape(22.dp))
-                        .padding(horizontal = 20.dp, vertical = 10.dp)
-                ) {
-                    BasicText(
-                        text = msg,
-                        style = HyperBounceType.subhead.copy(
-                            color = Color.White,
-                            fontWeight = FontWeight.Medium
-                        )
-                    )
-                }
-            }
-        }
-
         // Magisk / KernelSU Ringtone Module Packaging Modal
         RingtoneModuleBuilderDialog(
             isOpen = isModuleDialogOpen,
@@ -964,13 +930,39 @@ fun HapticStudioScreen(
                     val success = HapticPresetStorage.renamePreset(context, target.id, newTitle)
                     if (success) {
                         savedPresets = HapticPresetStorage.listPresets(context)
-                        statusFeedback = "Renamed preset to \"$newTitle\""
+                        Toast.makeText(context, "Renamed preset to \"$newTitle\"", Toast.LENGTH_SHORT).show()
                     } else {
-                        statusFeedback = "Failed to rename preset"
+                        Toast.makeText(context, "Failed to rename preset", Toast.LENGTH_SHORT).show()
                     }
                 }
                 isRenamePresetDialogOpen = false
                 presetToRename = null
+            }
+        )
+
+        // Delete Saved Preset Confirmation Modal
+        DeletePresetDialog(
+            isOpen = isDeletePresetDialogOpen,
+            preset = presetToDelete,
+            colors = colors,
+            backdrop = backdrop,
+            onDismiss = {
+                isDeletePresetDialogOpen = false
+                presetToDelete = null
+            },
+            onConfirm = {
+                val target = presetToDelete
+                if (target != null) {
+                    val success = HapticPresetStorage.deletePreset(context, target.id)
+                    if (success) {
+                        savedPresets = HapticPresetStorage.listPresets(context)
+                        Toast.makeText(context, "Deleted \"${target.title}\"", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Failed to delete preset", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                isDeletePresetDialogOpen = false
+                presetToDelete = null
             }
         )
     }
@@ -1407,3 +1399,97 @@ private fun RenamePresetDialog(
         }
     }
 }
+
+@Composable
+private fun DeletePresetDialog(
+    isOpen: Boolean,
+    preset: SavedHapticPreset?,
+    colors: HyperBounceColors,
+    backdrop: Backdrop,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    if (!isOpen || preset == null) return
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.68f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        GlassCard(
+            backdrop = backdrop,
+            modifier = Modifier
+                .fillMaxWidth(0.88f)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {}
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                BasicText(
+                    text = "Delete Preset",
+                    style = HyperBounceType.headline.copy(
+                        color = colors.label,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                )
+                Spacer(Modifier.height(6.dp))
+                BasicText(
+                    text = "Are you sure you want to delete \"${preset.title}\"? This action cannot be undone.",
+                    style = HyperBounceType.body.copy(
+                        color = colors.secondaryLabel,
+                        fontSize = 13.sp
+                    )
+                )
+
+                Spacer(Modifier.height(20.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    LiquidButton(
+                        onClick = onDismiss,
+                        backdrop = backdrop,
+                        tint = colors.separator.copy(alpha = 0.5f),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        BasicText(
+                            text = "Cancel",
+                            style = HyperBounceType.body.copy(
+                                color = colors.label,
+                                fontWeight = FontWeight.Medium
+                            )
+                        )
+                    }
+
+                    LiquidButton(
+                        onClick = onConfirm,
+                        backdrop = backdrop,
+                        tint = colors.accentRed,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        BasicText(
+                            text = "Delete",
+                            style = HyperBounceType.body.copy(
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
