@@ -27,35 +27,34 @@ import java.util.concurrent.CopyOnWriteArrayList
  */
 data class ControlCenterConfig(
     var modularEditEnabled: Boolean = true,
-    var restartOnEditExit: Boolean = true,
     var animEnabled: Boolean = true,
     var jellyEnabled: Boolean = true,
-    var lowEndAnim: Boolean = false,
-    var entryInitialScale: Float = 0.50f,
-    var entryTranslationY: Float = 120.0f,
+    var animEngineMode: Int = DevicePipelineDetector.getDefaultAnimEngineMode(),
+    var entryInitialScale: Float = 0.10f,
+    var entryTranslationY: Float = 0.0f,
     var waterfallEnabled: Boolean = true,
     var waterfallDelayStep: Float = 0.04f,
     var spreadRatio: Float = 0.02f,
-    var spreadResponse: Float = 0.85f,
-    var spreadDamping: Float = 0.85f,
-    var spreadReleaseResponse: Float = 0.70f,
-    var spreadReleaseDamping: Float = 0.90f,
-    var tileShowResponse: Float = 0.85f,
-    var tileShowDamping: Float = 0.85f,
-    var tileHideResponse: Float = 0.80f,
-    var tileHideDamping: Float = 0.90f,
+    var spreadResponse: Float = 0.20f,
+    var spreadDamping: Float = 0.10f,
+    var spreadReleaseResponse: Float = 0.20f,
+    var spreadReleaseDamping: Float = 1.50f,
+    var tileShowResponse: Float = 0.20f,
+    var tileShowDamping: Float = 0.10f,
+    var tileHideResponse: Float = 0.20f,
+    var tileHideDamping: Float = 0.30f,
     var tileShrinkResponse: Float = 0.85f,
     var tileShrinkDamping: Float = 0.85f,
     var tileDelayScale: Float = 60.0f,
-    var blurResponse: Float = 0.90f,
-    var blurDamping: Float = 0.88f,
     var frictionMultiplier: Float = 0.40f,
     var lowEndFlashlightEnabled: Boolean = false,
     var flashlightMaxBrightness: Int = 100,
     var true2dGridEnabled: Boolean = true,
     var fluidResizeEnabled: Boolean = true,
     var landscapeRightMaxRows: Int = 3
-)
+) {
+    fun isLowEndAnim(): Boolean = animEngineMode == 1
+}
 
 /**
  * Represents a grouped multi-tile container (dynamic 2-column container up to 6 rows).
@@ -203,30 +202,35 @@ object ControlCenterConfigHolder {
     }
 
     fun updateFromPrefs(prefs: SharedPreferences) {
+        val defaultMode = DevicePipelineDetector.getDefaultAnimEngineMode()
+        val engineMode = if (prefs.contains("cc_anim_engine_mode")) {
+            prefs.getInt("cc_anim_engine_mode", defaultMode)
+        } else if (prefs.contains("cc_low_end_anim")) {
+            if (prefs.getBoolean("cc_low_end_anim", false)) 1 else 0
+        } else {
+            defaultMode
+        }
         config = ControlCenterConfig(
             modularEditEnabled = prefs.getBoolean("cc_modular_edit_enabled", true),
-            restartOnEditExit = prefs.getBoolean("cc_restart_on_edit_exit", true),
             animEnabled = prefs.getBoolean("cc_anim_enabled", true),
             jellyEnabled = prefs.getBoolean("cc_jelly_enabled", true),
-            lowEndAnim = prefs.getBoolean("cc_low_end_anim", false),
-            entryInitialScale = prefs.getFloat("cc_entry_initial_scale", 0.50f),
-            entryTranslationY = prefs.getFloat("cc_entry_translation_y", 120.0f),
+            animEngineMode = engineMode,
+            entryInitialScale = prefs.getFloat("cc_entry_initial_scale", 0.10f),
+            entryTranslationY = prefs.getFloat("cc_entry_translation_y", 0.0f),
             waterfallEnabled = prefs.getBoolean("cc_waterfall_enabled", true),
             waterfallDelayStep = prefs.getFloat("cc_waterfall_delay_step", 0.04f),
             spreadRatio = prefs.getFloat("cc_spread_ratio", 0.02f),
-            spreadResponse = prefs.getFloat("cc_spread_response", 0.85f),
-            spreadDamping = prefs.getFloat("cc_spread_damping", 0.85f),
-            spreadReleaseResponse = prefs.getFloat("cc_spread_release_response", 0.70f),
-            spreadReleaseDamping = prefs.getFloat("cc_spread_release_damping", 0.90f),
-            tileShowResponse = prefs.getFloat("cc_tile_show_response", 0.85f),
-            tileShowDamping = prefs.getFloat("cc_tile_show_damping", 0.85f),
-            tileHideResponse = prefs.getFloat("cc_tile_hide_response", 0.80f),
-            tileHideDamping = prefs.getFloat("cc_tile_hide_damping", 0.90f),
+            spreadResponse = prefs.getFloat("cc_spread_response", 0.20f),
+            spreadDamping = prefs.getFloat("cc_spread_damping", 0.10f),
+            spreadReleaseResponse = prefs.getFloat("cc_spread_release_response", 0.20f),
+            spreadReleaseDamping = prefs.getFloat("cc_spread_release_damping", 1.50f),
+            tileShowResponse = prefs.getFloat("cc_tile_show_response", 0.20f),
+            tileShowDamping = prefs.getFloat("cc_tile_show_damping", 0.10f),
+            tileHideResponse = prefs.getFloat("cc_tile_hide_response", 0.20f),
+            tileHideDamping = prefs.getFloat("cc_tile_hide_damping", 0.30f),
             tileShrinkResponse = prefs.getFloat("cc_tile_shrink_response", 0.85f),
             tileShrinkDamping = prefs.getFloat("cc_tile_shrink_damping", 0.85f),
             tileDelayScale = prefs.getFloat("cc_tile_delay_scale", 60.0f),
-            blurResponse = prefs.getFloat("cc_blur_response", 0.90f),
-            blurDamping = prefs.getFloat("cc_blur_damping", 0.88f),
             frictionMultiplier = prefs.getFloat("cc_friction_multiplier", 0.40f),
             lowEndFlashlightEnabled = prefs.getBoolean("cc_low_end_flashlight_enabled", false),
             flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", 100),

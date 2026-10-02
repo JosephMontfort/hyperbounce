@@ -138,18 +138,6 @@ object ControlCenterHook {
             } catch (t: Throwable) {}
 
             try {
-                val miuiConfigsClass = Class.forName("com.miui.utils.configs.MiuiConfigs", false, classLoader)
-                for (m in miuiConfigsClass.declaredMethods) {
-                    if (m.name == "isLowEndDevice" || m.name == "isLiteOrLowDevice") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            if (ControlCenterConfigHolder.config.lowEndAnim) true else chain.proceed()
-                        }
-                    }
-                }
-            } catch (t: Throwable) {}
-
-            try {
                 val shadeInteractorClass = Class.forName("com.miui.systemui.shade.MiuiShadeInteractor", false, classLoader)
                 for (c in shadeInteractorClass.declaredConstructors) {
                     c.isAccessible = true
@@ -172,11 +160,9 @@ object ControlCenterHook {
                     if (m.name == "getValue") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            if (ControlCenterConfigHolder.config.lowEndAnim) {
-                                val target = chain.thisObject
-                                if (target == ControlCenterConfigHolder.sShadeLowEndAnimFlow || (ControlCenterConfigHolder.sShadeLowEndAnimFlow == null && chain.proceed() is Boolean)) {
-                                    return@intercept java.lang.Boolean.TRUE
-                                }
+                            val target = chain.thisObject
+                            if (target == ControlCenterConfigHolder.sShadeLowEndAnimFlow) {
+                                return@intercept java.lang.Boolean.valueOf(ControlCenterConfigHolder.config.isLowEndAnim())
                             }
                             chain.proceed()
                         }
@@ -385,19 +371,7 @@ object ControlCenterHook {
                     if (m.name == "getLowEndAnim") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            if (ControlCenterConfigHolder.config.lowEndAnim) true else chain.proceed()
-                        }
-                    }
-                }
-            } catch (t: Throwable) {}
-
-            try {
-                val deviceUtilsClass = Class.forName("miui.systemui.util.DeviceUtils", false, classLoader)
-                for (m in deviceUtilsClass.declaredMethods) {
-                    if (m.name == "isLowEndDevice") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            if (ControlCenterConfigHolder.config.lowEndAnim) true else chain.proceed()
+                            ControlCenterConfigHolder.config.isLowEndAnim()
                         }
                     }
                 }
@@ -749,7 +723,7 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val result = try { chain.proceed() } catch (t: Throwable) { null }
-                            if (ControlCenterConfigHolder.config.lowEndAnim || !ControlCenterConfigHolder.config.animEnabled) return@intercept result
+                            if (ControlCenterConfigHolder.config.isLowEndAnim() || !ControlCenterConfigHolder.config.animEnabled) return@intercept result
 
                             try {
                                 val holder = chain.thisObject
@@ -803,7 +777,7 @@ object ControlCenterHook {
                                 releaseTransYEaseField.isAccessible = true
                                 releaseTransYEaseField.set(holder, bounceEase)
 
-                                if (!ControlCenterConfigHolder.config.lowEndAnim && ControlCenterConfigHolder.config.animEnabled) {
+                                if (!ControlCenterConfigHolder.config.isLowEndAnim() && ControlCenterConfigHolder.config.animEnabled) {
                                     val showEaseField = holderClass.getDeclaredField("showEase")
                                     showEaseField.isAccessible = true
                                     val showEase = showEaseField.get(holder)
@@ -2974,34 +2948,6 @@ object ControlCenterHook {
                 Log.e(TAG, "Failed to initialize ControlCenterFullUnlock", t)
             }
 
-            // 17b. Hook BlurController
-            try {
-                val blurClass = Class.forName("miui.systemui.controlcenter.windowview.BlurController", false, classLoader)
-                for (m in blurClass.declaredMethods) {
-                    if (m.name == "onCreate") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            val result = chain.proceed()
-                            if (ControlCenterConfigHolder.config.lowEndAnim || !ControlCenterConfigHolder.config.animEnabled) return@intercept result
-                            try {
-                                val blurController = chain.thisObject
-                                val animConfigField = blurClass.getDeclaredField("animConfig")
-                                animConfigField.isAccessible = true
-                                val animConfig = animConfigField.get(blurController)
-                                if (animConfig != null) {
-                                    val easeManagerClass = Class.forName("miuix.animation.utils.EaseManager", false, classLoader)
-                                    val getStyleMethod = easeManagerClass.getMethod("getStyle", Int::class.javaPrimitiveType, FloatArray::class.java)
-                                    val customEase = getStyleMethod.invoke(null, -2, floatArrayOf(ControlCenterConfigHolder.config.blurDamping, ControlCenterConfigHolder.config.blurResponse))
-                                    val setEaseMethod = animConfig.javaClass.getMethod("setEase", easeManagerClass.declaredClasses[0])
-                                    setEaseMethod.isAccessible = true
-                                    setEaseMethod.invoke(animConfig, customEase)
-                                }
-                            } catch (t: Throwable) {}
-                            result
-                        }
-                    }
-                }
-            } catch (t: Throwable) {}
 
             // 18. Inject "Group / Select" Button in CustomizeHeaderController
             try {

@@ -1086,10 +1086,9 @@ class SettingsRepository(context: Context) {
         private val defaults = ControlCenterSettings()
 
         var modularEditEnabled by prefsBooleanState("cc_modular_edit_enabled", defaults.modularEditEnabled); private set
-        var restartOnEditExit by prefsBooleanState("cc_restart_on_edit_exit", defaults.restartOnEditExit); private set
         var animEnabled by prefsBooleanState("cc_anim_enabled", defaults.animEnabled); private set
         var jellyEnabled by prefsBooleanState("cc_jelly_enabled", defaults.jellyEnabled); private set
-        var lowEndAnim by prefsBooleanState("cc_low_end_anim", defaults.lowEndAnim); private set
+        var animEngineMode by prefsIntState("cc_anim_engine_mode", defaults.animEngineMode); private set
         var entryInitialScale by prefsFloatState("cc_entry_initial_scale", defaults.entryInitialScale); private set
         var entryTranslationY by prefsFloatState("cc_entry_translation_y", defaults.entryTranslationY); private set
         var waterfallEnabled by prefsBooleanState("cc_waterfall_enabled", defaults.waterfallEnabled); private set
@@ -1106,8 +1105,6 @@ class SettingsRepository(context: Context) {
         var tileShrinkResponse by prefsFloatState("cc_tile_shrink_response", defaults.tileShrinkResponse); private set
         var tileShrinkDamping by prefsFloatState("cc_tile_shrink_damping", defaults.tileShrinkDamping); private set
         var tileDelayScale by prefsFloatState("cc_tile_delay_scale", defaults.tileDelayScale); private set
-        var blurResponse by prefsFloatState("cc_blur_response", defaults.blurResponse); private set
-        var blurDamping by prefsFloatState("cc_blur_damping", defaults.blurDamping); private set
         var frictionMultiplier by prefsFloatState("cc_friction_multiplier", defaults.frictionMultiplier); private set
         var lowEndFlashlightEnabled by prefsBooleanState("cc_low_end_flashlight_enabled", defaults.lowEndFlashlightEnabled); private set
         var flashlightMaxBrightness by prefsIntState("cc_flashlight_max_brightness", defaults.flashlightMaxBrightness); private set
@@ -1116,11 +1113,11 @@ class SettingsRepository(context: Context) {
         var landscapeRightMaxRows by prefsIntState("cc_landscape_right_max_rows", defaults.landscapeRightMaxRows); private set
 
         fun snapshot(): ControlCenterSettings = ControlCenterSettings(
-            modularEditEnabled, restartOnEditExit, animEnabled, jellyEnabled, lowEndAnim,
+            modularEditEnabled, animEnabled, jellyEnabled, animEngineMode,
             entryInitialScale, entryTranslationY, waterfallEnabled, waterfallDelayStep,
             spreadRatio, spreadResponse, spreadDamping, spreadReleaseResponse, spreadReleaseDamping,
             tileShowResponse, tileShowDamping, tileHideResponse, tileHideDamping,
-            tileShrinkResponse, tileShrinkDamping, tileDelayScale, blurResponse, blurDamping, frictionMultiplier,
+            tileShrinkResponse, tileShrinkDamping, tileDelayScale, frictionMultiplier,
             lowEndFlashlightEnabled, flashlightMaxBrightness, true2dGridEnabled, fluidResizeEnabled,
             landscapeRightMaxRows
         )
@@ -1129,10 +1126,9 @@ class SettingsRepository(context: Context) {
         @JvmName("setCcTrue2dGridEnabledPref") fun setTrue2dGridEnabled(v: Boolean) { true2dGridEnabled = v }
         @JvmName("setCcFluidResizeEnabledPref") fun setFluidResizeEnabled(v: Boolean) { fluidResizeEnabled = v }
         @JvmName("setCcModularEditEnabledPref") fun setModularEditEnabled(v: Boolean) { modularEditEnabled = v }
-        @JvmName("setCcRestartOnEditExitPref") fun setRestartOnEditExit(v: Boolean) { restartOnEditExit = v }
         @JvmName("setCcAnimEnabledPref") fun setAnimEnabled(v: Boolean) { animEnabled = v }
         @JvmName("setCcJellyEnabledPref") fun setJellyEnabled(v: Boolean) { jellyEnabled = v }
-        @JvmName("setCcLowEndAnimPref") fun setLowEndAnim(v: Boolean) { lowEndAnim = v }
+        @JvmName("setCcAnimEngineModePref") fun setAnimEngineMode(v: Int) { animEngineMode = v }
         @JvmName("setCcLowEndFlashlightEnabledPref") fun setLowEndFlashlightEnabled(v: Boolean) { lowEndFlashlightEnabled = v }
         @JvmName("setCcFlashlightMaxBrightnessPref") fun setFlashlightMaxBrightness(v: Int) { flashlightMaxBrightness = v }
         @JvmName("setCcEntryInitialScalePref") fun setEntryInitialScale(v: Float) { entryInitialScale = v }
@@ -1151,18 +1147,15 @@ class SettingsRepository(context: Context) {
         @JvmName("setCcTileShrinkResponsePref") fun setTileShrinkResponse(v: Float) { tileShrinkResponse = v }
         @JvmName("setCcTileShrinkDampingPref") fun setTileShrinkDamping(v: Float) { tileShrinkDamping = v }
         @JvmName("setCcTileDelayScalePref") fun setTileDelayScale(v: Float) { tileDelayScale = v }
-        @JvmName("setCcBlurResponsePref") fun setBlurResponse(v: Float) { blurResponse = v }
-        @JvmName("setCcBlurDampingPref") fun setBlurDamping(v: Float) { blurDamping = v }
         @JvmName("setCcFrictionMultiplierPref") fun setFrictionMultiplier(v: Float) { frictionMultiplier = v }
 
         fun reloadFromDefaults() {
             modularEditEnabled = defaults.modularEditEnabled
             true2dGridEnabled = defaults.true2dGridEnabled
             fluidResizeEnabled = defaults.fluidResizeEnabled
-            restartOnEditExit = defaults.restartOnEditExit
             animEnabled = defaults.animEnabled
             jellyEnabled = defaults.jellyEnabled
-            lowEndAnim = defaults.lowEndAnim
+            animEngineMode = defaults.animEngineMode
             lowEndFlashlightEnabled = defaults.lowEndFlashlightEnabled
             flashlightMaxBrightness = defaults.flashlightMaxBrightness
             entryInitialScale = defaults.entryInitialScale
@@ -1181,8 +1174,6 @@ class SettingsRepository(context: Context) {
             tileShrinkResponse = defaults.tileShrinkResponse
             tileShrinkDamping = defaults.tileShrinkDamping
             tileDelayScale = defaults.tileDelayScale
-            blurResponse = defaults.blurResponse
-            blurDamping = defaults.blurDamping
             frictionMultiplier = defaults.frictionMultiplier
         }
     }

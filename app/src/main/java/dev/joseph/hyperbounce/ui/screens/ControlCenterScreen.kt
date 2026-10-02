@@ -1,20 +1,33 @@
 package dev.joseph.hyperbounce.ui.screens
 
-import android.app.AlertDialog
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.joseph.hyperbounce.controlcenter.DevicePipelineDetector
+import dev.joseph.hyperbounce.ui.components.DropdownPicker
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.ResetArrowIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
-import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsClickableRow
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
@@ -22,7 +35,7 @@ import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
 import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
-import java.util.Locale
+import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlin.math.roundToInt
 
 @Composable
@@ -38,7 +51,7 @@ fun ControlCenterScreen(
 
     ScreenScaffold(
         title = "Control Center",
-        subtitle = "Modular customizer, tile grouping & iOS 26 jelly physics",
+        subtitle = "Unbound canvas, tile grouping & jelly physics",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
@@ -51,8 +64,8 @@ fun ControlCenterScreen(
             SectionHeader("MASTER SWITCHES", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
-                    title = "Modular Customizer (iOS Edit Mode)",
-                    subtitle = "Unlocks major cards and enables cross-component reordering",
+                    title = "Unbound Canvas Architecture",
+                    subtitle = "Unlocks major cards and enables cross-component reordering with unconstrained canvas layout",
                     colors = colors,
                     iconTint = colors.accentBlue,
                     backdrop = backdrop,
@@ -60,30 +73,76 @@ fun ControlCenterScreen(
                     onCheckedChange = cc::setModularEditEnabled,
                     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                 )
+                if (cc.modularEditEnabled) {
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Landscape Right Panel Rows",
+                        subtitle = "Maximum row height allocated to the right side in landscape mode (Divider position in Edit Mode)",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = cc.landscapeRightMaxRows.toFloat().coerceIn(1f, 6f),
+                        onValueChange = { cc.setLandscapeRightMaxRows(it.roundToInt()) },
+                        valueRange = 1f..6f,
+                        defaultValue = 3f,
+                        valueLabel = { "${it.roundToInt()} Rows" },
+                        allowCustomInput = false
+                    )
+                    RowDivider(colors.separator)
+                    SettingsToggleRow(
+                        title = "Enhanced Tile Resize Handling",
+                        subtitle = "Real-time tile expansion with dynamic neighbour displacement during resize drag",
+                        colors = colors,
+                        iconTint = colors.accentPurple,
+                        backdrop = backdrop,
+                        checked = cc.fluidResizeEnabled,
+                        onCheckedChange = cc::setFluidResizeEnabled,
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    )
+                }
+
                 RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "Fluid Tile Resizing",
-                    subtitle = "Real-time tile expansion with dynamic neighbour displacement during resize drag",
-                    colors = colors,
-                    iconTint = colors.accentPurple,
-                    backdrop = backdrop,
-                    checked = cc.fluidResizeEnabled,
-                    onCheckedChange = cc::setFluidResizeEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Landscape Right Panel Rows",
-                    subtitle = "Maximum row height allocated to the right side in landscape mode (Divider position in Edit Mode)",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = cc.landscapeRightMaxRows.toFloat().coerceIn(1f, 6f),
-                    onValueChange = { cc.setLandscapeRightMaxRows(it.roundToInt()) },
-                    valueRange = 1f..6f,
-                    defaultValue = 3f,
-                    valueLabel = { "${it.roundToInt()} Rows" },
-                    allowCustomInput = false
-                )
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        Modifier
+                            .weight(1f)
+                            .padding(end = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .background(colors.accentPurple, RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            SlidersIcon(color = Color.White, size = 15.dp)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            BasicText(
+                                "Animation Engine",
+                                style = HyperBounceType.body.copy(color = colors.label)
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            val detectedText = if (DevicePipelineDetector.isNativeLowEnd()) "Hardware default: Low-End" else "Hardware default: High-End"
+                            BasicText(
+                                "Control Center & Notification Shade motion pipeline ($detectedText)",
+                                style = HyperBounceType.subhead.copy(color = colors.secondaryLabel)
+                            )
+                        }
+                    }
+                    DropdownPicker(
+                        options = listOf("High-End Animation Engine", "Low-End Animation Engine"),
+                        selectedIndex = cc.animEngineMode.coerceIn(0, 1),
+                        onSelect = { cc.setAnimEngineMode(it) },
+                        backdrop = backdrop
+                    )
+                }
 
                 RowDivider(colors.separator)
                 SettingsToggleRow(
@@ -98,7 +157,7 @@ fun ControlCenterScreen(
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
-                    title = "iOS 26 Jelly Physics Engine",
+                    title = "Jelly Physics Engine",
                     subtitle = "Velocity-coupled Poisson lateral squish & top-anchored stretch",
                     colors = colors,
                     iconTint = colors.accentOrange,
@@ -109,19 +168,8 @@ fun ControlCenterScreen(
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
-                    title = "Xiaomi Native Low-End Engine",
-                    subtitle = "Enables stock low-end rendering switch for ultra smoothness",
-                    colors = colors,
-                    iconTint = colors.accentPurple,
-                    backdrop = backdrop,
-                    checked = cc.lowEndAnim,
-                    onCheckedChange = cc::setLowEndAnim,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
-                )
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "Low-End Flashlight Brightness Control",
-                    subtitle = "Hardware sysfs brightness unlock (0–100% slider) for low-end devices",
+                    title = "Unlock Flashlight Brightness Control",
+                    subtitle = "Unlocks flashlight brightness control for low-end devices",
                     colors = colors,
                     iconTint = colors.accentOrange,
                     backdrop = backdrop,
@@ -134,7 +182,7 @@ fun ControlCenterScreen(
                     RowDivider(colors.separator)
                     SettingsSliderRow(
                         title = "Maximum Brightness Limit",
-                        subtitle = "Caps maximum brightness across the slider (Hardware max: $hwMax)",
+                        subtitle = "Caps maximum brightness across the slider",
                         colors = colors,
                         backdrop = backdrop,
                         value = cc.flashlightMaxBrightness.toFloat().coerceIn(100f, hwMax.toFloat()),
@@ -145,17 +193,6 @@ fun ControlCenterScreen(
                         allowCustomInput = false
                     )
                 }
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "Auto-Restart System UI on Edit Exit",
-                    subtitle = "Rebinds 100% clean touch targets after saving new tile groups",
-                    colors = colors,
-                    iconTint = colors.accentGreen,
-                    backdrop = backdrop,
-                    checked = cc.restartOnEditExit,
-                    onCheckedChange = cc::setRestartOnEditExit,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
-                )
             }
         }
 
@@ -190,182 +227,6 @@ fun ControlCenterScreen(
                         )
                     },
                     icon = { ResetArrowIcon(color = Color.White, size = 15.dp) }
-                )
-            }
-        }
-
-        item {
-            SectionHeader("ENTRY DYNAMICS & SCALE", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsSliderRow(
-                    title = "Entry Initial Scale",
-                    subtitle = "Initial scale of cards when pulled down from top",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = cc.entryInitialScale,
-                    onValueChange = cc::setEntryInitialScale,
-                    valueRange = 0.10f..1.00f,
-                    defaultValue = 0.50f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = cc.animEnabled && !cc.lowEndAnim
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Entry Translation Y",
-                    subtitle = "Vertical emergence offset when starting shade drag",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = cc.entryTranslationY,
-                    onValueChange = cc::setEntryTranslationY,
-                    valueRange = 0.0f..300.0f,
-                    defaultValue = 75.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = cc.animEnabled && !cc.lowEndAnim
-                )
-            }
-        }
-
-        item {
-            SectionHeader("SPREAD & ROW SPRING PHYSICS", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsSliderRow(
-                    title = "Spread Spring Damping",
-                    subtitle = "Lower = more row bounce on drag, Higher = stiffer row settling",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = cc.spreadDamping,
-                    onValueChange = cc::setSpreadDamping,
-                    valueRange = 0.30f..1.50f,
-                    defaultValue = 0.85f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = cc.animEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Spread Spring Response",
-                    subtitle = "Lower = rows snap faster, Higher = rows float into position",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = cc.spreadResponse,
-                    onValueChange = cc::setSpreadResponse,
-                    valueRange = 0.20f..1.50f,
-                    defaultValue = 0.55f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = cc.animEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Spread Release Bounce Damping",
-                    subtitle = "Lower = lively overshoot rebound, Higher = stiff rebound settling",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = cc.spreadReleaseDamping,
-                    onValueChange = cc::setSpreadReleaseDamping,
-                    valueRange = 0.30f..1.50f,
-                    defaultValue = 0.78f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = cc.animEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Spread Release Bounce Response",
-                    subtitle = "Lower = rapid bounce frequency, Higher = slower rebound motion",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = cc.spreadReleaseResponse,
-                    onValueChange = cc::setSpreadReleaseResponse,
-                    valueRange = 0.20f..1.50f,
-                    defaultValue = 0.48f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = cc.animEnabled
-                )
-            }
-        }
-
-        item {
-            SectionHeader("TILE SHOW & HIDE SPRINGS", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsSliderRow(
-                    title = "Tile Show Damping",
-                    subtitle = "Lower = more tile entrance bounce, Higher = rigid tile settling",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = cc.tileShowDamping,
-                    onValueChange = cc::setTileShowDamping,
-                    valueRange = 0.30f..1.50f,
-                    defaultValue = 0.80f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = cc.animEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Tile Show Response",
-                    subtitle = "Lower = tiles pop in faster, Higher = tiles float in smoothly",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = cc.tileShowResponse,
-                    onValueChange = cc::setTileShowResponse,
-                    valueRange = 0.20f..1.50f,
-                    defaultValue = 0.50f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = cc.animEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Tile Hide Damping",
-                    subtitle = "Lower = bouncy tile exit, Higher = quick rigid dismissal",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = cc.tileHideDamping,
-                    onValueChange = cc::setTileHideDamping,
-                    valueRange = 0.30f..1.50f,
-                    defaultValue = 0.90f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = cc.animEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Tile Hide Response",
-                    subtitle = "Lower = tiles dismiss instantly, Higher = tiles fade out smoothly",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = cc.tileHideResponse,
-                    onValueChange = cc::setTileHideResponse,
-                    valueRange = 0.20f..1.50f,
-                    defaultValue = 0.35f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = cc.animEnabled
-                )
-            }
-        }
-
-        item {
-            SectionHeader("BLUR & SHADE RESPONSE", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsSliderRow(
-                    title = "Window Blur Damping",
-                    subtitle = "Lower = bouncy blur settling, Higher = smooth critical blur fade",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = cc.blurDamping,
-                    onValueChange = cc::setBlurDamping,
-                    valueRange = 0.30f..1.50f,
-                    defaultValue = 0.80f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = cc.animEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Window Blur Response",
-                    subtitle = "Lower = blur appears instantly, Higher = blur fades in smoothly",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = cc.blurResponse,
-                    onValueChange = cc::setBlurResponse,
-                    valueRange = 0.20f..1.50f,
-                    defaultValue = 0.45f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = cc.animEnabled
                 )
             }
         }
