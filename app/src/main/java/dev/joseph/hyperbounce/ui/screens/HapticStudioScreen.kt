@@ -1144,10 +1144,10 @@ private fun WaveformVisualizer(
                             top = 0f,
                             right = startX + handleW,
                             bottom = height,
-                            topLeft = CornerRadius(cornerR, cornerR),
-                            bottomLeft = CornerRadius(cornerR, cornerR),
-                            topRight = CornerRadius.Zero,
-                            bottomRight = CornerRadius.Zero
+                            topLeftCornerRadius = CornerRadius(cornerR, cornerR),
+                            bottomLeftCornerRadius = CornerRadius(cornerR, cornerR),
+                            topRightCornerRadius = CornerRadius.Zero,
+                            bottomRightCornerRadius = CornerRadius.Zero
                         )
                     )
                 }
@@ -1171,10 +1171,10 @@ private fun WaveformVisualizer(
                             top = 0f,
                             right = endX,
                             bottom = height,
-                            topLeft = CornerRadius.Zero,
-                            bottomLeft = CornerRadius.Zero,
-                            topRight = CornerRadius(cornerR, cornerR),
-                            bottomRight = CornerRadius(cornerR, cornerR)
+                            topLeftCornerRadius = CornerRadius.Zero,
+                            bottomLeftCornerRadius = CornerRadius.Zero,
+                            topRightCornerRadius = CornerRadius(cornerR, cornerR),
+                            bottomRightCornerRadius = CornerRadius(cornerR, cornerR)
                         )
                     )
                 }
