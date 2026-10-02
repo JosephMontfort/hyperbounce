@@ -17,14 +17,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.joseph.hyperbounce.ui.Destination
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.LockIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
+import dev.joseph.hyperbounce.ui.components.SettingsNavRow
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
-import dev.joseph.hyperbounce.launcher.ScreenUnlockDefaults
+import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
@@ -35,7 +37,8 @@ fun ScreenUnlockScreen(
     repository: SettingsRepository,
     colors: HyperBounceColors,
     backdrop: Backdrop,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onNavigate: (Destination) -> Unit
 ) {
     val unlock = repository.screenUnlock
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -97,14 +100,6 @@ fun ScreenUnlockScreen(
                             onClick = { unlock.setAnimMode(1) }
                         )
                     }
-                    ModeSegment(
-                        title = "Mode 2: OriginOS 7 Fly in by Layer (逐层飞入)",
-                        subtitle = "6-ring radial zoom (6.0x) + concentric ripple & rebound",
-                        selected = unlock.animMode == 2,
-                        colors = colors,
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = { unlock.setAnimMode(2) }
-                    )
                 }
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -133,402 +128,94 @@ fun ScreenUnlockScreen(
                     enabled = unlock.enabled
                 )
             }
+            SectionFooter(
+                "Select between Mode 0 (iOS-style radial bloom) and Mode 1 (kinetic Y-axis velocity cascade).",
+                colors
+            )
         }
 
         if (unlock.animMode == 0) {
             item {
-                SectionHeader("CLASSIC RADIAL UNLOCK", colors)
+                SectionHeader("MODE 0: IOS RADIAL SUBPAGES", colors)
                 GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                    SettingsSliderRow(
-                        title = "Center Damping",
-                        subtitle = "Lower = more bounce on release, Higher = stiffer settling",
+                    SettingsNavRow(
+                        title = "Radial Spring Kinetics",
+                        subtitle = "Center damping, edge delay & 3D perspective",
                         colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.centerDamping,
-                        onValueChange = unlock::setCenterDamping,
-                        valueRange = 0.1f..1.0f,
-                        defaultValue = 0.58f,
-                        valueLabel = { String.format(Locale.US, "%.2f", it) },
-                        enabled = unlock.enabled
+                        iconTint = colors.accentBlue,
+                        onClick = { onNavigate(Destination.ScreenUnlockRadialKinetics) },
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                     )
                     RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Center Response",
-                        subtitle = "Lower = snaps faster to position, Higher = slower float",
+                    SettingsNavRow(
+                        title = "Radial Dock Settling",
+                        subtitle = "Dock icons bounce & arrival settling",
                         colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.centerResponse,
-                        onValueChange = unlock::setCenterResponse,
-                        valueRange = 0.1f..1.5f,
-                        defaultValue = 0.48f,
-                        valueLabel = { String.format(Locale.US, "%.2f", it) },
-                        enabled = unlock.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Edge Damping Drop",
-                        subtitle = "Lower = uniform bounce across screen, Higher = looser edges",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.edgeDampingDrop,
-                        onValueChange = unlock::setEdgeDampingDrop,
-                        valueRange = 0.0f..0.5f,
-                        defaultValue = 0.10f,
-                        valueLabel = { String.format(Locale.US, "%.2f", it) },
-                        enabled = unlock.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Edge Response Delay",
-                        subtitle = "Lower = simultaneous expansion, Higher = edges lag behind",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.edgeResponseDelay,
-                        onValueChange = unlock::setEdgeResponseDelay,
-                        valueRange = 0.0f..1.0f,
-                        defaultValue = 0.22f,
-                        valueLabel = { String.format(Locale.US, "%.2f", it) },
-                        enabled = unlock.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Z-Depth Scale",
-                        subtitle = "Multiplies initial 3D depth perspective",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.zDepthMultiplier,
-                        onValueChange = unlock::setZDepthMultiplier,
-                        valueRange = 1.0f..4.0f,
-                        defaultValue = 1.60f,
-                        valueLabel = { String.format(Locale.US, "%.2fx", it) },
-                        enabled = unlock.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Dock Damping",
-                        subtitle = "Lower = bouncier dock icons, Higher = stiffer dock settling",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.dockDamping,
-                        onValueChange = unlock::setDockDamping,
-                        valueRange = 0.1f..1.0f,
-                        defaultValue = 0.70f,
-                        valueLabel = { String.format(Locale.US, "%.2f", it) },
-                        enabled = unlock.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Dock Response",
-                        subtitle = "Lower = snaps dock faster, Higher = slower dock arrival",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.dockResponse,
-                        onValueChange = unlock::setDockResponse,
-                        valueRange = 0.1f..1.5f,
-                        defaultValue = 0.40f,
-                        valueLabel = { String.format(Locale.US, "%.2f", it) },
-                        enabled = unlock.enabled
+                        iconTint = colors.accentPurple,
+                        onClick = { onNavigate(Destination.ScreenUnlockRadialDock) },
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                     )
                 }
-            }
-        } else if (unlock.animMode == 1) {
-            item {
-                SectionHeader("KINETIC Y-AXIS UNLOCK GLOBALS", colors)
-                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                    SettingsSliderRow(
-                        title = "Global Anim Duration",
-                        subtitle = "Lower = faster overall animation, Higher = slower motion",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.durationScale,
-                        onValueChange = unlock::setDurationScale,
-                        valueRange = 0.1f..3.0f,
-                        defaultValue = 1.0f,
-                        valueLabel = { String.format(Locale.US, "%.2fx", it) },
-                        enabled = unlock.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Velocity Impact",
-                        subtitle = "Lower = subtle speed scaling, Higher = strong speed scaling",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.velocityInfluence,
-                        onValueChange = unlock::setVelocityInfluence,
-                        valueRange = 0.0f..5.0f,
-                        defaultValue = 2.00f,
-                        valueLabel = { String.format(Locale.US, "%.2f", it) },
-                        enabled = unlock.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Max Swipe Normalizer",
-                        subtitle = "Ceiling velocity for maximum kinetic bounce",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.maxVelocity,
-                        onValueChange = unlock::setMaxVelocity,
-                        valueRange = 1000f..25000f,
-                        defaultValue = 8288.0f,
-                        valueLabel = { String.format(Locale.US, "%.0f px/s", it) },
-                        enabled = unlock.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Resting Damping",
-                        subtitle = "Lower = bouncy settling curve, Higher = smooth critical damping",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.cascadeDamping,
-                        onValueChange = unlock::setCascadeDamping,
-                        valueRange = 0.5f..1.0f,
-                        defaultValue = 0.86f,
-                        valueLabel = { String.format(Locale.US, "%.2f", it) },
-                        enabled = unlock.enabled
-                    )
-                }
-            }
-
-            item {
-                SectionHeader("DOCK ISOLATION", colors)
-                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                    SettingsSliderRow(
-                        title = "Dock Damping",
-                        subtitle = "Lower = bouncier dock icons, Higher = stiffer dock settling",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.kineticDockDamping,
-                        onValueChange = unlock::setKineticDockDamping,
-                        valueRange = 0.1f..1.0f,
-                        defaultValue = 1.00f,
-                        valueLabel = { String.format(Locale.US, "%.2f", it) },
-                        enabled = unlock.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Dock Response",
-                        subtitle = "Lower = snaps dock faster, Higher = slower dock arrival",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.kineticDockResponse,
-                        onValueChange = unlock::setKineticDockResponse,
-                        valueRange = 0.1f..1.5f,
-                        defaultValue = 0.55f,
-                        valueLabel = { String.format(Locale.US, "%.2f", it) },
-                        enabled = unlock.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Dock Z-Depth",
-                        subtitle = "Starting 3D perspective depth for bottom dock",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.kineticDockZDepth,
-                        onValueChange = unlock::setKineticDockZDepth,
-                        valueRange = 0f..4000f,
-                        defaultValue = 800.0f,
-                        valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                        enabled = unlock.enabled
-                    )
-                }
-            }
-
-            val rows = unlock.gridRows.coerceIn(1, 12)
-
-            item {
-                SectionHeader("ROW-BY-ROW 3D PERSPECTIVE (Z-DEPTH)", colors)
-                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                    for (r in 0 until rows) {
-                        if (r > 0) RowDivider(colors.separator)
-                        val currentZ = unlock.getRowZ(r)
-                        val defZ = ScreenUnlockDefaults.rowZ(r, rows)
-                        SettingsSliderRow(
-                            title = "Row $r Z-Depth",
-                            subtitle = "Starting 3D perspective depth for row $r",
-                            colors = colors,
-                            backdrop = backdrop,
-                            value = currentZ,
-                            onValueChange = { unlock.setRowZ(r, it) },
-                            valueRange = 100f..4000f,
-                            defaultValue = defZ,
-                            valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                            enabled = unlock.enabled
-                        )
-                    }
-                }
-            }
-
-            item {
-                SectionHeader("DYNAMIC VELOCITY BOUNCE (CENTER VS OUTER)", colors)
-                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                    for (r in 0 until rows) {
-                        if (r > 0) RowDivider(colors.separator)
-                        val cBounce = unlock.getRowCenterBounce(r)
-                        val oBounce = unlock.getRowOuterBounce(r)
-                        val defCBounce = ScreenUnlockDefaults.rowBounce(r, rows, false)
-                        val defOBounce = ScreenUnlockDefaults.rowBounce(r, rows, true)
-                        SettingsSliderRow(
-                            title = "Row $r Center Bounce",
-                            subtitle = "Lower = subtle overshoot, Higher = pronounced center bounce",
-                            colors = colors,
-                            backdrop = backdrop,
-                            value = cBounce,
-                            onValueChange = { unlock.setRowCenterBounce(r, it) },
-                            valueRange = 0.0f..1.0f,
-                            defaultValue = defCBounce,
-                            valueLabel = { String.format(Locale.US, "%.2f", it) },
-                            enabled = unlock.enabled
-                        )
-                        RowDivider(colors.separator)
-                        SettingsSliderRow(
-                            title = "Row $r Outer Bounce",
-                            subtitle = "Lower = subtle overshoot, Higher = pronounced outer bounce",
-                            colors = colors,
-                            backdrop = backdrop,
-                            value = oBounce,
-                            onValueChange = { unlock.setRowOuterBounce(r, it) },
-                            valueRange = 0.0f..1.0f,
-                            defaultValue = defOBounce,
-                            valueLabel = { String.format(Locale.US, "%.2f", it) },
-                            enabled = unlock.enabled
-                        )
-                    }
-                }
-            }
-
-            item {
-                SectionHeader("DYNAMIC SETTLING TIME (CENTER VS OUTER)", colors)
-                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                    for (r in 0 until rows) {
-                        if (r > 0) RowDivider(colors.separator)
-                        val cSettle = unlock.getRowCenterSettle(r)
-                        val oSettle = unlock.getRowOuterSettle(r)
-                        val defCSettle = ScreenUnlockDefaults.rowSettle(r, rows, false)
-                        val defOSettle = ScreenUnlockDefaults.rowSettle(r, rows, true)
-                        SettingsSliderRow(
-                            title = "Row $r Center Settling",
-                            subtitle = "Lower = rapid center arrival, Higher = delayed float",
-                            colors = colors,
-                            backdrop = backdrop,
-                            value = cSettle,
-                            onValueChange = { unlock.setRowCenterSettle(r, it) },
-                            valueRange = 0.1f..1.5f,
-                            defaultValue = defCSettle,
-                            valueLabel = { String.format(Locale.US, "%.2f", it) },
-                            enabled = unlock.enabled
-                        )
-                        RowDivider(colors.separator)
-                        SettingsSliderRow(
-                            title = "Row $r Outer Settling",
-                            subtitle = "Lower = rapid edge arrival, Higher = delayed float",
-                            colors = colors,
-                            backdrop = backdrop,
-                            value = oSettle,
-                            onValueChange = { unlock.setRowOuterSettle(r, it) },
-                            valueRange = 0.1f..1.5f,
-                            defaultValue = defOSettle,
-                            valueLabel = { String.format(Locale.US, "%.2f", it) },
-                            enabled = unlock.enabled
-                        )
-                    }
-                }
+                SectionFooter(
+                    "Mode 0 applies an iOS-style radial bloom dispersion radiating outward from the lock screen touch point.",
+                    colors
+                )
             }
         } else {
             item {
-                SectionHeader("ORIGINOS 7 FLY IN DYNAMICS", colors)
+                SectionHeader("MODE 1: Y-AXIS CASCADE SUBPAGES", colors)
                 GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                    SettingsSliderRow(
-                        title = "Starting Depth (Z-Scale)",
-                        subtitle = "Controls how far above and out of screen the icons start along Z",
+                    SettingsNavRow(
+                        title = "Global Kinetics & Velocity",
+                        subtitle = "Duration scale, velocity influence & resting damping",
                         colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.originosDepthScale,
-                        onValueChange = unlock::setOriginosDepthScale,
-                        valueRange = 2.0f..10.0f,
-                        defaultValue = 6.0f,
-                        valueLabel = { String.format(Locale.US, "%.1fx", it) },
-                        enabled = unlock.enabled
+                        iconTint = colors.accentBlue,
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeGlobals) },
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                     )
                     RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Upper Rows Delay Step",
-                        subtitle = "Delay increase per row above center (higher = more staggered upper rows)",
+                    SettingsNavRow(
+                        title = "Kinetic Dock Isolation",
+                        subtitle = "Dock damping, arrival response & 3D depth",
                         colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.originosUpperRowDelay,
-                        onValueChange = unlock::setOriginosUpperRowDelay,
-                        valueRange = 0f..150f,
-                        defaultValue = 35.0f,
-                        valueLabel = { String.format(Locale.US, "%.0f ms/row", it) },
-                        enabled = unlock.enabled
+                        iconTint = colors.accentPurple,
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeDock) },
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                     )
                     RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Lower Rows Delay Step",
-                        subtitle = "Delay increase per row below center (lower = less staggered bottom rows)",
+                    SettingsNavRow(
+                        title = "Row 3D Perspective (Z-Depth)",
+                        subtitle = "Row-by-row Z-axis camera elevation",
                         colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.originosLowerRowDelay,
-                        onValueChange = unlock::setOriginosLowerRowDelay,
-                        valueRange = 0f..100f,
-                        defaultValue = 15.0f,
-                        valueLabel = { String.format(Locale.US, "%.0f ms/row", it) },
-                        enabled = unlock.enabled
+                        iconTint = colors.accentOrange,
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeZDepth) },
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    )
+                    RowDivider(colors.separator)
+                    SettingsNavRow(
+                        title = "Row Velocity Bounce",
+                        subtitle = "Center vs outer dynamic overshoot ratios",
+                        colors = colors,
+                        iconTint = colors.accentGreen,
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeBounce) },
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    )
+                    RowDivider(colors.separator)
+                    SettingsNavRow(
+                        title = "Row Settling Dynamics",
+                        subtitle = "Center vs outer dynamic deceleration timing",
+                        colors = colors,
+                        iconTint = colors.accentBlue,
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeSettle) },
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                     )
                 }
-            }
-
-            item {
-                SectionHeader("ORIGINOS 7 FLAGSHIP PIPELINE (逐层飞入)", colors)
-                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                    InfoRow(
-                        title = "Native Center-Pivoted Stagger",
-                        subtitle = "Center row runs stock timing while upper and lower rows stagger independently with fluid, non-blocking 2-phase flight.",
-                        colors = colors
-                    )
-                    RowDivider(colors.separator)
-                    InfoRow(
-                        title = "Phase 1: Radial Camera Zoom",
-                        subtitle = "Icons scale from Starting Depth -> undershoot over 550ms with PathInterpolator(0, 1, 0.5, 1) and 300ms alpha fade.",
-                        colors = colors
-                    )
-                    RowDivider(colors.separator)
-                    InfoRow(
-                        title = "Phase 1: Hotseat Launch",
-                        subtitle = "Dock & indicator elements fly upward from +900px to -15px overshoot (400ms duration).",
-                        colors = colors
-                    )
-                    RowDivider(colors.separator)
-                    InfoRow(
-                        title = "Phase 2: Elastic Rebound",
-                        subtitle = "Each row immediately rebounds from undershoot to 1.000x resting scale (400ms) with zero freeze or delay.",
-                        colors = colors
-                    )
-                    RowDivider(colors.separator)
-                    InfoRow(
-                        title = "Dynamic Focal Center Pivot",
-                        subtitle = "Icon transformation pivots dynamically shift to the screen center (W/2, W/2) for realistic 3D perspective zoom.",
-                        colors = colors
-                    )
-                }
+                SectionFooter(
+                    "Mode 1 cascades rows downwards along the Y-axis with velocity-coupled spring dynamics and 3D depth perspective.",
+                    colors
+                )
             }
         }
-    }
-}
-
-@Composable
-private fun InfoRow(title: String, subtitle: String, colors: HyperBounceColors) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        BasicText(title, style = HyperBounceType.body.copy(color = colors.label))
-        BasicText(
-            subtitle,
-            modifier = Modifier.padding(top = 4.dp),
-            style = HyperBounceType.footnote.copy(color = colors.secondaryLabel)
-        )
     }
 }
 

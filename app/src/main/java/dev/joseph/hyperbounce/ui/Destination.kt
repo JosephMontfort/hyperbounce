@@ -28,6 +28,13 @@ sealed interface Destination {
     data object KeypadButtonsLayout : Destination
     data object KeypadPadLayout : Destination
     data object ScreenUnlock : Destination
+    data object ScreenUnlockRadialKinetics : Destination
+    data object ScreenUnlockRadialDock : Destination
+    data object ScreenUnlockCascadeGlobals : Destination
+    data object ScreenUnlockCascadeDock : Destination
+    data object ScreenUnlockCascadeZDepth : Destination
+    data object ScreenUnlockCascadeBounce : Destination
+    data object ScreenUnlockCascadeSettle : Destination
     data object AppTransitions : Destination
     data object ControlCenter : Destination
     data object MorphPhysics : Destination

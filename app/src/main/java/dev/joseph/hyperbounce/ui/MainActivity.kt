@@ -63,6 +63,13 @@ import dev.joseph.hyperbounce.ui.screens.KeypadStretchPhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.LockScreenSheetScreen
 import dev.joseph.hyperbounce.ui.screens.NotificationCenterSheetScreen
 import dev.joseph.hyperbounce.ui.screens.ScreenUnlockScreen
+import dev.joseph.hyperbounce.ui.screens.ScreenUnlockRadialKineticsScreen
+import dev.joseph.hyperbounce.ui.screens.ScreenUnlockRadialDockScreen
+import dev.joseph.hyperbounce.ui.screens.ScreenUnlockCascadeGlobalsScreen
+import dev.joseph.hyperbounce.ui.screens.ScreenUnlockCascadeDockScreen
+import dev.joseph.hyperbounce.ui.screens.ScreenUnlockCascadeZDepthScreen
+import dev.joseph.hyperbounce.ui.screens.ScreenUnlockCascadeBounceScreen
+import dev.joseph.hyperbounce.ui.screens.ScreenUnlockCascadeSettleScreen
 import dev.joseph.hyperbounce.ui.screens.SettingsScreen
 import dev.joseph.hyperbounce.ui.screens.SliderAppearanceScreen
 import dev.joseph.hyperbounce.ui.screens.SliderPhysicsScreen
@@ -316,6 +323,56 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                         )
 
                         Destination.ScreenUnlock -> ScreenUnlockScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop,
+                            onNavigate = push
+                        )
+
+                        Destination.ScreenUnlockRadialKinetics -> ScreenUnlockRadialKineticsScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.ScreenUnlockRadialDock -> ScreenUnlockRadialDockScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.ScreenUnlockCascadeGlobals -> ScreenUnlockCascadeGlobalsScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.ScreenUnlockCascadeDock -> ScreenUnlockCascadeDockScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.ScreenUnlockCascadeZDepth -> ScreenUnlockCascadeZDepthScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.ScreenUnlockCascadeBounce -> ScreenUnlockCascadeBounceScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop
+                        )
+
+                        Destination.ScreenUnlockCascadeSettle -> ScreenUnlockCascadeSettleScreen(
                             repository = repository,
                             colors = colors,
                             backdrop = backdrop,

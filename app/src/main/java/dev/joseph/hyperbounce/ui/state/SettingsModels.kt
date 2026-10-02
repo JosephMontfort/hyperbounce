@@ -266,10 +266,7 @@ data class ScreenUnlockSettings(
     val cascadeDamping: Float = 0.86f,
     val kineticDockDamping: Float = 1.00f,
     val kineticDockResponse: Float = 0.55f,
-    val kineticDockZDepth: Float = 800.0f,
-    val originosDepthScale: Float = 6.0f,
-    val originosUpperRowDelay: Float = 35.0f,
-    val originosLowerRowDelay: Float = 15.0f
+    val kineticDockZDepth: Float = 800.0f
 )
 
 /** Feature 4: iOS App Transition & Physics Settings */

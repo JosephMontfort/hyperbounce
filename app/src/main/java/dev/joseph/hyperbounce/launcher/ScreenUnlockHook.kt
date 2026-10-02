@@ -182,25 +182,6 @@ object ScreenUnlockHook {
                 classLoader
             )
 
-            // Hook showAnimation on UserPresentAnimationCompatPhone for Mode 2
-            for (m in userPresentClass.declaredMethods) {
-                if (m.name == "showAnimation" && m.parameterTypes.isEmpty()) {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
-                            val cfg = LauncherConfigHolder.unlockConfig
-                            if (cfg.enabled && cfg.animMode == 2) {
-                                val launcher = findLauncher(chain.thisObject)
-                                if (launcher != null) {
-                                    OriginOSFlyInLayerPipeline.start(launcher, chain.thisObject)
-                                }
-                                return null
-                            }
-                            return chain.proceed()
-                        }
-                    })
-                }
-            }
-
             // Hook showUserPresentAnimation(View, int, boolean)
             val showMethod: Method = userPresentClass.getDeclaredMethod(
                 "showUserPresentAnimation",
@@ -217,7 +198,6 @@ object ScreenUnlockHook {
                     val cfg = LauncherConfigHolder.unlockConfig
 
                     if (!cfg.enabled) return chain.proceed()
-                    if (cfg.animMode == 2) return null
 
                     if (view != null) {
                         try {
@@ -460,43 +440,9 @@ object ScreenUnlockHook {
             try {
                 val complexClass = Class.forName("com.miui.home.launcher.compat.UserPresentAnimationCompatComplex", false, classLoader)
                 for (m in complexClass.declaredMethods) {
-                    if (m.name == "prepareAnimation" && m.parameterTypes.isEmpty()) {
+                    if (m.name == "resetAnimation" && m.parameterTypes.isEmpty()) {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val cfg = LauncherConfigHolder.unlockConfig
-                                if (cfg.enabled && cfg.animMode == 2) {
-                                    val launcher = findLauncher(chain.thisObject)
-                                    if (launcher != null) {
-                                        OriginOSFlyInLayerPipeline.prepare(launcher)
-                                    }
-                                    return null
-                                }
-                                return chain.proceed()
-                            }
-                        })
-                    } else if (m.name == "showAnimation" && m.parameterTypes.isEmpty()) {
-                        module.hook(m).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val cfg = LauncherConfigHolder.unlockConfig
-                                if (cfg.enabled && cfg.animMode == 2) {
-                                    val launcher = findLauncher(chain.thisObject)
-                                    if (launcher != null) {
-                                        OriginOSFlyInLayerPipeline.start(launcher, chain.thisObject)
-                                    }
-                                    return null
-                                }
-                                return chain.proceed()
-                            }
-                        })
-                    } else if (m.name == "resetAnimation" && m.parameterTypes.isEmpty()) {
-                        module.hook(m).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val cfg = LauncherConfigHolder.unlockConfig
-                                if (cfg.enabled && cfg.animMode == 2) {
-                                    val launcher = findLauncher(chain.thisObject)
-                                    OriginOSFlyInLayerPipeline.reset(launcher)
-                                    return null
-                                }
                                 val res = chain.proceed()
                                 try {
                                     fun resetZ(v: View?) {
@@ -640,30 +586,7 @@ object ScreenUnlockHook {
             Log.d(TAG, "triggerUnlockAnimationOnLauncher: executing on $launcher (time=$now)")
 
             val cfg = LauncherConfigHolder.unlockConfig
-            if (cfg.enabled && cfg.animMode == 2) {
-                // Engage CPU/RenderThread boost
-                try {
-                    val showPresentMethod = launcher.javaClass.getMethod("showPresent")
-                    showPresentMethod.invoke(launcher)
-                } catch (_: Throwable) {}
-
-                OriginOSFlyInLayerPipeline.prepare(launcher)
-                OriginOSFlyInLayerPipeline.start(launcher)
-
-                // Neutralize state machine
-                try {
-                    val fStateMachine = launcher.javaClass.getDeclaredField("mUnlockAnimationStateMachine").apply { isAccessible = true }
-                    val stateMachine = fStateMachine.get(launcher)
-                    if (stateMachine != null) {
-                        val fState = stateMachine.javaClass.getDeclaredField("mState").apply { isAccessible = true }
-                        val stateEnumClass = fState.type
-                        @Suppress("UNCHECKED_CAST")
-                        val idleEnum = java.lang.Enum.valueOf(stateEnumClass as Class<out Enum<*>>, "IDLE")
-                        fState.set(stateMachine, idleEnum)
-                    }
-                } catch (_: Throwable) {}
-                return
-            }
+            if (!cfg.enabled) return
 
             // 1. Prepare animation on current screen icons
             var prepared = false
