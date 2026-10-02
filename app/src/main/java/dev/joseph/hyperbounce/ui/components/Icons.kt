@@ -530,6 +530,8 @@ fun TrashIcon(
         }
         drawPath(handlePath, color = color, style = Stroke(s, cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
+}
+
 @Composable
 fun PencilIcon(
     modifier: Modifier = Modifier,
