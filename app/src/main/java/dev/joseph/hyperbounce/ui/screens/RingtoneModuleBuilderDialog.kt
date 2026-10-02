@@ -65,7 +65,6 @@ import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.PencilIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.glass.LiquidButton
-import dev.joseph.hyperbounce.ui.glass.LiquidGlassIconButton
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlinx.coroutines.launch
@@ -642,15 +641,16 @@ private fun StepConfirmationContent(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.graphicsLayer { clip = false }
                         ) {
-                            LiquidGlassIconButton(
+                            LiquidButton(
                                 onClick = {
                                     editingItem = item
                                     editTitleInput = item.title
                                 },
+                                backdrop = backdrop,
                                 tint = colors.accentBlue,
                                 size = 32.dp
                             ) {
-                                PencilIcon(color = colors.accentBlue, size = 14.dp)
+                                PencilIcon(color = Color.White, size = 14.dp)
                             }
                         }
                     }

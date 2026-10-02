@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.lerp
+import androidx.compose.ui.zIndex
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -49,6 +51,7 @@ fun LiquidButton(
     surfaceColor: Color = Color.Unspecified,
     height: Dp = 48f.dp,
     horizontalPadding: Dp = 16f.dp,
+    size: Dp? = null,
     content: @Composable RowScope.() -> Unit
 ) {
     val animationScope = rememberCoroutineScope()
@@ -59,8 +62,17 @@ fun LiquidButton(
         )
     }
 
-    Row(
+    val baseModifier = if (size != null) {
+        modifier.size(size)
+    } else {
         modifier
+            .height(height)
+            .padding(horizontal = horizontalPadding)
+    }
+
+    Row(
+        baseModifier
+            .zIndex(if (interactiveHighlight.pressProgress > 0.005f) 10f else 1f)
             .drawBackdrop(
                 backdrop = backdrop,
                 shape = { Capsule() },
@@ -71,13 +83,13 @@ fun LiquidButton(
                 },
                 layerBlock = if (isInteractive) {
                     {
-                        val width = size.width
-                        val heightPx = size.height
+                        val width = this.size.width
+                        val heightPx = this.size.height
 
                         val progress = interactiveHighlight.pressProgress
                         val scale = lerp(1f, 1f + 4f.dp.toPx() / heightPx, progress)
 
-                        val maxOffset = size.minDimension
+                        val maxOffset = this.size.minDimension
                         val initialDerivative = 0.05f
                         val offset = interactiveHighlight.offset
                         translationX = maxOffset * tanh(initialDerivative * offset.x / maxOffset)
@@ -87,11 +99,11 @@ fun LiquidButton(
                         val offsetAngle = atan2(offset.y, offset.x)
                         scaleX =
                             scale +
-                                    maxDragScale * abs(cos(offsetAngle) * offset.x / size.maxDimension) *
+                                    maxDragScale * abs(cos(offsetAngle) * offset.x / this.size.maxDimension) *
                                     (width / heightPx).fastCoerceAtMost(1f)
                         scaleY =
                             scale +
-                                    maxDragScale * abs(sin(offsetAngle) * offset.y / size.maxDimension) *
+                                    maxDragScale * abs(sin(offsetAngle) * offset.y / this.size.maxDimension) *
                                     (heightPx / width).fastCoerceAtMost(1f)
                     }
                 } else {
@@ -121,10 +133,8 @@ fun LiquidButton(
                 } else {
                     Modifier
                 }
-            )
-            .height(height)
-            .padding(horizontal = horizontalPadding),
-        horizontalArrangement = Arrangement.spacedBy(8f.dp, Alignment.CenterHorizontally),
+            ),
+        horizontalArrangement = if (size != null) Arrangement.Center else Arrangement.spacedBy(8f.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
         content = content
     )

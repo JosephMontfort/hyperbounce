@@ -87,7 +87,6 @@ import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.TrashIcon
 import dev.joseph.hyperbounce.ui.glass.LiquidButton
-import dev.joseph.hyperbounce.ui.glass.LiquidGlassIconButton
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
@@ -764,28 +763,30 @@ fun HapticStudioScreen(
                                             modifier = Modifier.graphicsLayer { clip = false }
                                         ) {
                                             // Rename Circular Liquid Glass Button
-                                            LiquidGlassIconButton(
+                                            LiquidButton(
                                                 onClick = {
                                                     presetToRename = preset
                                                     isRenamePresetDialogOpen = true
                                                 },
+                                                backdrop = backdrop,
                                                 tint = colors.accentBlue,
                                                 size = 32.dp
                                             ) {
-                                                PencilIcon(color = colors.accentBlue, size = 14.dp)
+                                                PencilIcon(color = Color.White, size = 14.dp)
                                             }
 
                                             // Delete Circular Liquid Glass Button
-                                            LiquidGlassIconButton(
+                                            LiquidButton(
                                                 onClick = {
                                                     HapticPresetStorage.deletePreset(context, preset.id)
                                                     savedPresets = HapticPresetStorage.listPresets(context)
                                                     statusFeedback = "Deleted \"${preset.title}\""
                                                 },
+                                                backdrop = backdrop,
                                                 tint = colors.accentRed,
                                                 size = 32.dp
                                             ) {
-                                                TrashIcon(color = colors.accentRed, size = 14.dp)
+                                                TrashIcon(color = Color.White, size = 14.dp)
                                             }
                                         }
                                     }
