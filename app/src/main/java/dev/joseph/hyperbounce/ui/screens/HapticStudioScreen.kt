@@ -953,13 +953,9 @@ fun HapticStudioScreen(
             onConfirm = {
                 val target = presetToDelete
                 if (target != null) {
-                    val success = HapticPresetStorage.deletePreset(context, target.id)
-                    if (success) {
-                        savedPresets = HapticPresetStorage.listPresets(context)
-                        Toast.makeText(context, "Deleted \"${target.title}\"", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(context, "Failed to delete preset", Toast.LENGTH_SHORT).show()
-                    }
+                    HapticPresetStorage.deletePreset(context, target.id)
+                    savedPresets = HapticPresetStorage.listPresets(context)
+                    Toast.makeText(context, "Deleted \"${target.title}\"", Toast.LENGTH_SHORT).show()
                 }
                 isDeletePresetDialogOpen = false
                 presetToDelete = null
