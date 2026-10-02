@@ -190,7 +190,7 @@ object RingtoneModuleBuilder {
                     appendLine("version=v1.1")
                     appendLine("versionCode=101")
                     appendLine("author=JosephMontfort & HyperBounce")
-                    appendLine("description=Custom ringtones with handcrafted 24kHz tactile haptics mapped to Xiaomi linear resonant actuator. Bundles ${packageItems.size} custom ringtone(s).")
+                    appendLine("description=Custom ringtones with precision tactile haptics mapped to hardware linear resonant actuator. Bundles ${packageItems.size} custom ringtone(s).")
                 }
                 zos.putNextEntry(ZipEntry("module.prop"))
                 zos.write(modulePropContent.toByteArray(Charsets.UTF_8))
@@ -202,7 +202,7 @@ object RingtoneModuleBuilder {
                     appendLine("SKIPUNZIP=0")
                     appendLine("ui_print \"****************************************\"")
                     appendLine("ui_print \"* HyperBounce Custom Haptic Ringtones  *\"")
-                    appendLine("ui_print \"* 24kHz Native Xiaomi LRA Integration  *\"")
+                    appendLine("ui_print \"* Native Hardware LRA Integration      *\"")
                     appendLine("ui_print \"****************************************\"")
                     appendLine("ui_print \"- Installing ${packageItems.size} custom ringtone(s):\"")
                     packageItems.forEach { item ->

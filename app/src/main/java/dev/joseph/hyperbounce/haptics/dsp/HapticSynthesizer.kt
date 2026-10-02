@@ -258,14 +258,14 @@ object HapticSynthesizer {
         output: FloatArray,
         startIndex: Int,
         durationMs: Int = 135,
-        freqHz: Float = 171.4f,
+        freqHz: Float = 172.0f,
         gain: Float = 1.0f
     ) {
         val numSamples = ((durationMs * OUTPUT_SAMPLE_RATE) / 1000).coerceAtMost(output.size - startIndex)
         if (numSamples <= 0) return
 
         // Authentic POCO Dual-Frequency Resonance Architecture:
-        // 1. Attack (0-12ms): resonant frequency (freqHz, 160-171.4Hz) builds physical body mass displacement peaking at 105
+        // 1. Attack (0-12ms): resonant frequency (freqHz, 160-172.0Hz) builds physical body mass displacement peaking at 105
         // 2. Hold Body (12-115ms): stable spring displacement at 20 (holdGain)
         // 3. Terminal Strike (115-135ms): 233.0Hz high-acceleration tactile snap phase-locked to exactly 121 peak (targetPeak)
         val strikeFreqHz = 233.0f

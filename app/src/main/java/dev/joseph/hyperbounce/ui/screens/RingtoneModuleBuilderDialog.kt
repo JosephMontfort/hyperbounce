@@ -59,9 +59,13 @@ import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.haptics.ringtone.HapticPresetStorage
 import dev.joseph.hyperbounce.haptics.ringtone.RingtoneModuleBuilder
 import dev.joseph.hyperbounce.haptics.ringtone.SavedHapticPreset
+import androidx.compose.ui.graphics.graphicsLayer
+import dev.joseph.hyperbounce.ui.components.CheckmarkIcon
 import dev.joseph.hyperbounce.ui.components.GlassCard
+import dev.joseph.hyperbounce.ui.components.PencilIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.glass.LiquidButton
+import dev.joseph.hyperbounce.ui.glass.LiquidGlassIconButton
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlinx.coroutines.launch
@@ -430,13 +434,10 @@ private fun StepSelectionContent(
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (isChecked) {
-                                    BasicText(
-                                        text = "✓",
-                                        style = HyperBounceType.caption.copy(
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp
-                                        )
+                                    CheckmarkIcon(
+                                        color = Color.White,
+                                        size = 12.dp,
+                                        strokeWidth = 2.dp
                                     )
                                 }
                             }
@@ -482,7 +483,7 @@ private fun StepSelectionContent(
                                         BasicText(
                                             text = "Trimmed",
                                             style = HyperBounceType.caption.copy(
-                                                color = colors.accentOrange,
+                                                color = colors.secondaryLabel,
                                                 fontWeight = FontWeight.Medium,
                                                 fontSize = 11.sp
                                             )
@@ -594,43 +595,21 @@ private fun StepConfirmationContent(
                         .padding(horizontal = 12.dp, vertical = 10.dp)
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .graphicsLayer { clip = false },
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                BasicText(
-                                    text = item.title,
-                                    style = HyperBounceType.body.copy(
-                                        color = colors.label,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 13.5.sp
-                                    )
+                            BasicText(
+                                text = item.title,
+                                style = HyperBounceType.body.copy(
+                                    color = colors.label,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
                                 )
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(colors.accentBlue.copy(alpha = 0.12f))
-                                        .clickable {
-                                            editingItem = item
-                                            editTitleInput = item.title
-                                        }
-                                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                                ) {
-                                    BasicText(
-                                        text = "Rename",
-                                        style = HyperBounceType.caption.copy(
-                                            color = colors.accentBlue,
-                                            fontWeight = FontWeight.Medium,
-                                            fontSize = 10.sp
-                                        )
-                                    )
-                                }
-                            }
+                            )
                             Spacer(Modifier.height(2.dp))
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -648,31 +627,31 @@ private fun StepConfirmationContent(
                                     style = HyperBounceType.caption.copy(color = colors.secondaryLabel.copy(alpha = 0.5f))
                                 )
                                 BasicText(
-                                    text = "24kHz RTP",
+                                    text = "Slot #${item.effectId}",
                                     style = HyperBounceType.caption.copy(
-                                        color = colors.accentBlue,
+                                        color = colors.secondaryLabel,
                                         fontWeight = FontWeight.Medium,
-                                        fontSize = 10.5.sp
+                                        fontSize = 11.sp
                                     )
                                 )
                             }
                         }
 
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(colors.accentGreen.copy(alpha = 0.12f))
-                                .border(0.5.dp, colors.accentGreen.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.graphicsLayer { clip = false }
                         ) {
-                            BasicText(
-                                text = "LRA Slot #${item.effectId}",
-                                style = HyperBounceType.caption.copy(
-                                    color = colors.accentGreen,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 11.sp
-                                )
-                            )
+                            LiquidGlassIconButton(
+                                onClick = {
+                                    editingItem = item
+                                    editTitleInput = item.title
+                                },
+                                tint = colors.accentBlue,
+                                size = 32.dp
+                            ) {
+                                PencilIcon(color = colors.accentBlue, size = 14.dp)
+                            }
                         }
                     }
                 }
@@ -693,7 +672,7 @@ private fun StepConfirmationContent(
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     BasicText(
-                        text = "⚡ Magisk / KernelSU / APatch Module",
+                        text = "Magisk / KernelSU / APatch Module",
                         style = HyperBounceType.caption.copy(
                             color = colors.accentBlue,
                             fontWeight = FontWeight.Bold,
@@ -728,7 +707,7 @@ private fun StepConfirmationContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
-                    .background(colors.accentOrange.copy(alpha = 0.12f))
+                    .background(colors.accentBlue.copy(alpha = 0.10f))
                     .padding(8.dp)
             ) {
                 Row(
@@ -740,7 +719,7 @@ private fun StepConfirmationContent(
                         BasicText(
                             text = "Storage Permission",
                             style = HyperBounceType.caption.copy(
-                                color = colors.accentOrange,
+                                color = colors.accentBlue,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp
                             )
@@ -756,7 +735,7 @@ private fun StepConfirmationContent(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(colors.accentOrange)
+                            .background(colors.accentBlue)
                             .clickable {
                                 try {
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -994,13 +973,10 @@ private fun StepSuccessContent(
                     .background(colors.accentGreen),
                 contentAlignment = Alignment.Center
             ) {
-                BasicText(
-                    text = "✓",
-                    style = HyperBounceType.headline.copy(
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
+                CheckmarkIcon(
+                    color = Color.White,
+                    size = 18.dp,
+                    strokeWidth = 2.4.dp
                 )
             }
 
@@ -1014,7 +990,7 @@ private fun StepSuccessContent(
                     )
                 )
                 BasicText(
-                    text = "$itemCount ringtone(s) bundled with 24kHz haptics.",
+                    text = "$itemCount ringtone(s) bundled with haptics.",
                     style = HyperBounceType.caption.copy(
                         color = colors.secondaryLabel,
                         fontSize = 11.5.sp
@@ -1147,7 +1123,7 @@ private fun StepSuccessContent(
                 InstructionBullet(colors, "2. Modules tab -> Install from storage")
                 InstructionBullet(colors, "3. Pick HyperBounce_Haptic_Ringtones_Module.zip in Download")
                 InstructionBullet(colors, "4. Reboot device")
-                InstructionBullet(colors, "5. Select in Settings > Sound > Ringtone (24kHz haptics activate!)")
+                InstructionBullet(colors, "5. Select in Settings > Sound > Ringtone")
             }
         }
 

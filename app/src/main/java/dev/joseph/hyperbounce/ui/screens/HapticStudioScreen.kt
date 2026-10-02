@@ -67,7 +67,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
 import dev.joseph.hyperbounce.haptics.dsp.AudioDecoder
 import dev.joseph.hyperbounce.haptics.dsp.HapticSynthesizer
 import dev.joseph.hyperbounce.haptics.dsp.PipelineConfig
@@ -79,11 +78,14 @@ import dev.joseph.hyperbounce.haptics.ringtone.HapticPresetStorage
 import dev.joseph.hyperbounce.haptics.ringtone.HapticRingtoneStorage
 import dev.joseph.hyperbounce.haptics.ringtone.RingtoneManagerHelper
 import dev.joseph.hyperbounce.haptics.ringtone.SavedHapticPreset
+import androidx.compose.ui.graphics.graphicsLayer
 import dev.joseph.hyperbounce.ui.components.GlassCard
+import dev.joseph.hyperbounce.ui.components.PencilIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
+import dev.joseph.hyperbounce.ui.components.TrashIcon
 import dev.joseph.hyperbounce.ui.glass.LiquidButton
-import dev.joseph.hyperbounce.ui.glass.LiquidSlider
+import dev.joseph.hyperbounce.ui.glass.LiquidGlassIconButton
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
@@ -193,10 +195,6 @@ fun HapticStudioScreen(
             }
         }
     }
-
-    val cardColor = colors.elevatedSurfaceTint
-    val localBackdrop = rememberCanvasBackdrop { drawRect(cardColor) }
-
     Box(modifier = Modifier.fillMaxSize()) {
         ScreenScaffold(
             title = "Ringtones & Haptics",
@@ -224,64 +222,21 @@ fun HapticStudioScreen(
                         )
                         Spacer(Modifier.height(14.dp))
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        LiquidButton(
+                            onClick = {
+                                audioPickerLauncher.launch("audio/*")
+                            },
+                            backdrop = backdrop,
+                            tint = colors.accentBlue,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            LiquidButton(
-                                onClick = {
-                                    audioPickerLauncher.launch("audio/*")
-                                },
-                                backdrop = backdrop,
-                                tint = colors.accentBlue,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                BasicText(
-                                    text = if (audioFileName == null) "Select Audio" else "Choose Different",
-                                    style = HyperBounceType.body.copy(
-                                        color = Color.White,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
+                            BasicText(
+                                text = if (audioFileName == null) "Select Audio" else "Choose Different",
+                                style = HyperBounceType.body.copy(
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold
                                 )
-                            }
-
-                            if (selectedAudioUri != null && !isProcessing) {
-                                LiquidButton(
-                                    onClick = {
-                                        val uri = selectedAudioUri ?: return@LiquidButton
-                                        scope.launch {
-                                            isProcessing = true
-                                            processingProgress = 0.1f
-                                            try {
-                                                val decoded = decodedAudio ?: AudioDecoder.decode(context, uri)
-                                                decodedAudio = decoded
-                                                val config = PipelineConfig(
-                                                    resonantFrequencyHz = resonantFreq,
-                                                    sensitivity = sensitivity,
-                                                    brakingStrength = brakingStrength
-                                                )
-                                                val results = HapticSynthesizer.synthesizeAll(decoded, config) { p ->
-                                                    processingProgress = p
-                                                }
-                                                synthesizedHaptics = results
-                                            } finally {
-                                                isProcessing = false
-                                            }
-                                        }
-                                    },
-                                    backdrop = backdrop,
-                                    tint = colors.accentPurple,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    BasicText(
-                                        text = "Re-Synthesize",
-                                        style = HyperBounceType.body.copy(
-                                            color = Color.White,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    )
-                                }
-                            }
+                            )
                         }
                     }
                 }
@@ -338,7 +293,7 @@ fun HapticStudioScreen(
                                 }
                                 Spacer(Modifier.height(8.dp))
                                 BasicText(
-                                    text = "${(processingProgress * 100).toInt()}% • Analyzing transients & generating 24kHz RTP",
+                                    text = "${(processingProgress * 100).toInt()}% • Analyzing audio & synthesizing haptics",
                                     style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
                                 )
                             }
@@ -381,7 +336,7 @@ fun HapticStudioScreen(
                                     .padding(horizontal = 14.dp, vertical = 8.dp)
                             ) {
                                 BasicText(
-                                    text = "${idx + 1}. ${haptic.pipelineType.title}",
+                                    text = haptic.pipelineType.title,
                                     style = HyperBounceType.caption.copy(
                                         color = if (isSelected) Color.White else colors.label,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
@@ -396,41 +351,14 @@ fun HapticStudioScreen(
                     Spacer(Modifier.height(12.dp))
                     GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    BasicText(
-                                        text = currentHaptic.pipelineType.title,
-                                        style = HyperBounceType.body.copy(
-                                            color = colors.label,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 18.sp
-                                        )
-                                    )
-                                    BasicText(
-                                        text = currentHaptic.pipelineType.subtitle,
-                                        style = HyperBounceType.caption.copy(color = colors.accentBlue)
-                                    )
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(colors.accentBlue.copy(alpha = 0.18f))
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    BasicText(
-                                        text = "${selectedPipelineIndex + 1} / ${synthesizedHaptics.size}",
-                                        style = HyperBounceType.caption.copy(
-                                            color = colors.accentBlue,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    )
-                                }
-                            }
+                            BasicText(
+                                text = currentHaptic.pipelineType.title,
+                                style = HyperBounceType.body.copy(
+                                    color = colors.label,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 18.sp
+                                )
+                            )
 
                             Spacer(Modifier.height(14.dp))
 
@@ -526,7 +454,7 @@ fun HapticStudioScreen(
                                         )
                                     )
                                     BasicText(
-                                        text = "${currentHaptic.durationMs}ms duration • ${currentHaptic.peakCount} peaks • 24kHz RTP",
+                                        text = "${currentHaptic.durationMs}ms duration • ${currentHaptic.peakCount} tactile beats",
                                         style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
                                     )
                                 }
@@ -556,7 +484,7 @@ fun HapticStudioScreen(
                                             "Trimmed: ${formatTimeMs(trimStartMs)} – ${formatTimeMs(trimEndMs)} (${durSec}s)"
                                         } else "Trim bounds for incoming calls",
                                         style = HyperBounceType.caption.copy(
-                                            color = if (isTrimMode) colors.accentOrange else colors.secondaryLabel
+                                            color = if (isTrimMode) colors.accentBlue else colors.secondaryLabel
                                         )
                                     )
                                 }
@@ -565,7 +493,7 @@ fun HapticStudioScreen(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(
-                                            if (isTrimMode) colors.accentOrange.copy(alpha = 0.25f) else colors.separator.copy(alpha = 0.25f)
+                                            if (isTrimMode) colors.accentBlue.copy(alpha = 0.22f) else colors.separator.copy(alpha = 0.25f)
                                         )
                                         .clickable {
                                             isTrimMode = !isTrimMode
@@ -574,15 +502,15 @@ fun HapticStudioScreen(
                                             }
                                         }
                                         .padding(horizontal = 12.dp, vertical = 6.dp)
-                                    ) {
-                                        BasicText(
-                                            text = "Trim",
-                                            style = HyperBounceType.caption.copy(
-                                                color = if (isTrimMode) colors.accentOrange else colors.label,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
+                                ) {
+                                    BasicText(
+                                        text = "Trim",
+                                        style = HyperBounceType.caption.copy(
+                                            color = if (isTrimMode) colors.accentBlue else colors.label,
+                                            fontWeight = FontWeight.SemiBold
                                         )
-                                    }
+                                    )
+                                }
                             }
 
                             if (isTrimMode) {
@@ -631,53 +559,6 @@ fun HapticStudioScreen(
                                             style = HyperBounceType.caption.copy(
                                                 color = colors.label,
                                                 fontWeight = FontWeight.Medium
-                                            )
-                                        )
-                                    }
-                                }
-
-                                Spacer(Modifier.height(12.dp))
-
-                                // Trim preview action
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    val uri = selectedAudioUri
-                                    LiquidButton(
-                                        onClick = {
-                                            if (uri == null) return@LiquidButton
-                                            if (isPlaying) {
-                                                player.stop()
-                                                isPlaying = false
-                                            } else {
-                                                player.play(
-                                                    audioUri = uri,
-                                                    haptic = currentHaptic,
-                                                    startFromMs = trimStartMs,
-                                                    endAtMs = trimEndMs,
-                                                    intensityMode = intensityMode,
-                                                    onProgress = { cur, tot ->
-                                                        playbackProgressMs = cur
-                                                        totalDurationMs = tot
-                                                        isPlaying = true
-                                                    },
-                                                    onCompletion = {
-                                                        isPlaying = false
-                                                        playbackProgressMs = trimStartMs
-                                                    }
-                                                )
-                                            }
-                                        },
-                                        backdrop = backdrop,
-                                        tint = colors.accentBlue,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        BasicText(
-                                            text = if (isPlaying) "Stop Preview" else "Preview Trim",
-                                            style = HyperBounceType.body.copy(
-                                                color = Color.White,
-                                                fontWeight = FontWeight.SemiBold
                                             )
                                         )
                                     }
@@ -758,7 +639,7 @@ fun HapticStudioScreen(
                                     }
                                 },
                                 backdrop = backdrop,
-                                tint = colors.accentOrange,
+                                tint = colors.accentBlue,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 BasicText(
@@ -769,65 +650,6 @@ fun HapticStudioScreen(
                                     )
                                 )
                             }
-                        }
-                    }
-                }
-
-                // Tuning Section
-                item {
-                    Spacer(Modifier.height(20.dp))
-                    SectionHeader("DSP Fine-Tuning", colors)
-                    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            BasicText(
-                                text = "Resonant Frequency: ${resonantFreq.toInt()} Hz",
-                                style = HyperBounceType.body.copy(color = colors.label)
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            LiquidSlider(
-                                value = { resonantFreq },
-                                onValueChange = { resonantFreq = it },
-                                valueRange = 140f..180f,
-                                visibilityThreshold = 0.04f,
-                                backdrop = localBackdrop,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Spacer(Modifier.height(12.dp))
-                            RowDivider(colors.separator)
-                            Spacer(Modifier.height(12.dp))
-
-                            BasicText(
-                                text = "Transient Sensitivity: ${(sensitivity * 100).toInt()}%",
-                                style = HyperBounceType.body.copy(color = colors.label)
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            LiquidSlider(
-                                value = { sensitivity },
-                                onValueChange = { sensitivity = it },
-                                valueRange = 0.4f..2.0f,
-                                visibilityThreshold = 0.01f,
-                                backdrop = localBackdrop,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Spacer(Modifier.height(12.dp))
-                            RowDivider(colors.separator)
-                            Spacer(Modifier.height(12.dp))
-
-                            BasicText(
-                                text = "Active Braking Strength: ${(brakingStrength * 100).toInt()}%",
-                                style = HyperBounceType.body.copy(color = colors.label)
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            LiquidSlider(
-                                value = { brakingStrength },
-                                onValueChange = { brakingStrength = it },
-                                valueRange = 0.0f..1.0f,
-                                visibilityThreshold = 0.01f,
-                                backdrop = localBackdrop,
-                                modifier = Modifier.fillMaxWidth()
-                            )
                         }
                     }
                 }
@@ -881,7 +703,7 @@ fun HapticStudioScreen(
                                 )
                                 Spacer(Modifier.height(2.dp))
                                 BasicText(
-                                    text = "${savedPresets.size} preset(s) ready to compile with 24kHz haptics",
+                                    text = "${savedPresets.size} preset(s) ready to export",
                                     style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
                                 )
                             }
@@ -936,50 +758,33 @@ fun HapticStudioScreen(
                                         }
 
                                         Row(
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                            verticalAlignment = Alignment.CenterVertically
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.graphicsLayer { clip = false }
                                         ) {
-                                            // Rename Button
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(colors.accentBlue.copy(alpha = 0.12f))
-                                                    .clickable {
-                                                        presetToRename = preset
-                                                        isRenamePresetDialogOpen = true
-                                                    }
-                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            // Rename Circular Liquid Glass Button
+                                            LiquidGlassIconButton(
+                                                onClick = {
+                                                    presetToRename = preset
+                                                    isRenamePresetDialogOpen = true
+                                                },
+                                                tint = colors.accentBlue,
+                                                size = 32.dp
                                             ) {
-                                                BasicText(
-                                                    text = "Rename",
-                                                    style = HyperBounceType.caption.copy(
-                                                        color = colors.accentBlue,
-                                                        fontWeight = FontWeight.Medium,
-                                                        fontSize = 11.sp
-                                                    )
-                                                )
+                                                PencilIcon(color = colors.accentBlue, size = 14.dp)
                                             }
 
-                                            // Delete Button
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(colors.accentRed.copy(alpha = 0.12f))
-                                                    .clickable {
-                                                        HapticPresetStorage.deletePreset(context, preset.id)
-                                                        savedPresets = HapticPresetStorage.listPresets(context)
-                                                        statusFeedback = "Deleted \"${preset.title}\""
-                                                    }
-                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            // Delete Circular Liquid Glass Button
+                                            LiquidGlassIconButton(
+                                                onClick = {
+                                                    HapticPresetStorage.deletePreset(context, preset.id)
+                                                    savedPresets = HapticPresetStorage.listPresets(context)
+                                                    statusFeedback = "Deleted \"${preset.title}\""
+                                                },
+                                                tint = colors.accentRed,
+                                                size = 32.dp
                                             ) {
-                                                BasicText(
-                                                    text = "Delete",
-                                                    style = HyperBounceType.caption.copy(
-                                                        color = colors.accentRed,
-                                                        fontWeight = FontWeight.Medium,
-                                                        fontSize = 11.sp
-                                                    )
-                                                )
+                                                TrashIcon(color = colors.accentRed, size = 14.dp)
                                             }
                                         }
                                     }
@@ -1014,13 +819,13 @@ fun HapticStudioScreen(
                                         Box(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(4.dp))
-                                                .background(colors.accentOrange.copy(alpha = 0.15f))
+                                                .background(colors.separator.copy(alpha = 0.20f))
                                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                                         ) {
                                             BasicText(
                                                 text = "Trim: $trimInfo",
                                                 style = HyperBounceType.caption.copy(
-                                                    color = colors.accentOrange,
+                                                    color = colors.secondaryLabel,
                                                     fontWeight = FontWeight.Medium,
                                                     fontSize = 10.sp
                                                 )
@@ -1196,7 +1001,7 @@ private fun WaveformVisualizer(
     val currentDuration by rememberUpdatedState(activeDur)
     val currentTrimMode by rememberUpdatedState(isTrimMode)
 
-    val trimHandleColor = Color(0xFFFF9F0A) // iOS System Amber
+    val trimHandleColor = colors.accentBlue
 
     Box(
         modifier = modifier
@@ -1290,10 +1095,11 @@ private fun WaveformVisualizer(
                 )
             }
 
-            // 2. Dimmed overlay and iOS trim handles
+            // 2. Dimmed overlay and iOS trim handles (fully bounded to avoid edge clipping)
             if (isTrimMode) {
-                val startX = width * trimStartFraction
-                val endX = width * trimEndFraction
+                val handleW = 12.dp.toPx()
+                val startX = (width * trimStartFraction).coerceIn(0f, (width - handleW * 2f).coerceAtLeast(0f))
+                val endX = (width * trimEndFraction).coerceIn(startX + handleW * 2f, width)
 
                 // Outside dimming
                 if (startX > 0f) {
@@ -1326,17 +1132,16 @@ private fun WaveformVisualizer(
                 )
 
                 // Start handle bracket (iOS trim tab style)
-                val handleW = 10.dp.toPx()
                 drawRoundRect(
                     color = trimHandleColor,
-                    topLeft = Offset(startX - handleW, 0f),
+                    topLeft = Offset(startX, 0f),
                     size = Size(handleW, height),
                     cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
                 )
                 // Grab ridges on start handle
-                val ridgeX = startX - handleW / 2f
+                val ridgeX = startX + handleW / 2f
                 drawLine(
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = Color.White.copy(alpha = 0.85f),
                     start = Offset(ridgeX, height * 0.40f),
                     end = Offset(ridgeX, height * 0.60f),
                     strokeWidth = 1.8.dp.toPx(),
@@ -1346,14 +1151,14 @@ private fun WaveformVisualizer(
                 // End handle bracket
                 drawRoundRect(
                     color = trimHandleColor,
-                    topLeft = Offset(endX, 0f),
+                    topLeft = Offset(endX - handleW, 0f),
                     size = Size(handleW, height),
                     cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
                 )
                 // Grab ridges on end handle
-                val endRidgeX = endX + handleW / 2f
+                val endRidgeX = endX - handleW / 2f
                 drawLine(
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = Color.White.copy(alpha = 0.85f),
                     start = Offset(endRidgeX, height * 0.40f),
                     end = Offset(endRidgeX, height * 0.60f),
                     strokeWidth = 1.8.dp.toPx(),
@@ -1447,7 +1252,7 @@ private fun exportRtpBinary(
             fos.write(haptic.rtpRawBytes)
         }
 
-        onStatus("Exported 24kHz RTP: $fileName")
+        onStatus("Exported: $fileName")
     } catch (e: Exception) {
         onStatus("Export failed: ${e.message}")
     }

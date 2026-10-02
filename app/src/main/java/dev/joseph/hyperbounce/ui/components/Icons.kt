@@ -530,6 +530,40 @@ fun TrashIcon(
         }
         drawPath(handlePath, color = color, style = Stroke(s, cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
+@Composable
+fun PencilIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 18.dp,
+    strokeWidth: Dp = 1.8.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val s = strokeWidth.toPx()
+        val bodyPath = Path().apply {
+            moveTo(w * 0.22f, h * 0.78f)
+            lineTo(w * 0.32f, h * 0.82f)
+            lineTo(w * 0.82f, h * 0.32f)
+            lineTo(w * 0.68f, h * 0.18f)
+            lineTo(w * 0.18f, h * 0.68f)
+            close()
+        }
+        drawPath(bodyPath, color = color, style = Stroke(s, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        val tipPath = Path().apply {
+            moveTo(w * 0.18f, h * 0.68f)
+            lineTo(w * 0.13f, h * 0.87f)
+            lineTo(w * 0.32f, h * 0.82f)
+        }
+        drawPath(tipPath, color = color, style = Stroke(s, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        drawLine(
+            color = color,
+            start = Offset(w * 0.61f, h * 0.25f),
+            end = Offset(w * 0.75f, h * 0.39f),
+            strokeWidth = s,
+            cap = StrokeCap.Round
+        )
+    }
 }
 
 @Composable

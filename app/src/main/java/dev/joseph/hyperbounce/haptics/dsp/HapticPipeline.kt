@@ -8,29 +8,29 @@ enum class PipelineType(
     val description: String
 ) {
     XiaomiMelodicCrisp(
-        title = "Xiaomi Melodic Crisp",
-        subtitle = "Carousel & Childhood Style",
-        description = "Authentic 429-sample hardware grain (17.9ms, 90pk) stamped precisely on melodic note onsets, paired with resonant bass downbeats. Bit-identical to stock MIUI ringtones."
+        title = "Melodic Crisp",
+        subtitle = "Melodic Note Onsets",
+        description = "Authentic hardware grain stamped precisely on melodic note onsets, paired with resonant bass downbeats."
     ),
     XiaomiElectronicEDM(
-        title = "Xiaomi Electronic EDM",
-        subtitle = "MiRemix & Club Style",
-        description = "High-energy dual-band crossover. 170Hz resonant bass drops (168ms sustain) combined with sharp high-frequency transient snaps. Features dynamic transient ducking."
+        title = "Electronic EDM",
+        subtitle = "Dual-Band Crossover",
+        description = "High-energy dual-band crossover. 172Hz resonant bass drops combined with sharp high-frequency transient snaps. Features dynamic transient ducking."
     ),
     XiaomiPlayfulPop(
-        title = "Xiaomi Playful Pop",
-        subtitle = "Candy & Bubble Style",
-        description = "Playful tactile pops and droplets utilizing Xiaomi's 681-sample Pop grain and crisp clicks. Bouncy, vibrant, and perfectly separated with 110ms spring recovery."
+        title = "Playful Pop",
+        subtitle = "Candy & Bubble Dynamics",
+        description = "Playful tactile pops and droplets utilizing crisp clicks. Bouncy, vibrant, and perfectly separated with 110ms spring recovery."
     ),
     XiaomiAcousticPluck(
-        title = "Xiaomi Acoustic Pluck",
-        subtitle = "Guitar & Celesta Style",
+        title = "Acoustic Pluck",
+        subtitle = "Delicate String Transients",
         description = "Isolates delicate string plucks and acoustic attack transients via spectral flux. Triggers rapid hardware micro-clicks without motor dragging."
     ),
     XiaomiAdaptiveSymphony(
-        title = "Xiaomi Adaptive Symphony",
+        title = "Adaptive Symphony",
         subtitle = "Full-Band Dynamic Crossover",
-        description = "Adaptive multiband analyzer that dynamically assigns kick drums, snares, vocals, and synth lines to the exact Xiaomi hardware primitive grains."
+        description = "Adaptive multiband analyzer that dynamically assigns kick drums, snares, vocals, and synth lines to exact hardware primitive grains."
     );
 
     companion object {
@@ -54,7 +54,7 @@ data class HapticEvent(
 )
 
 data class PipelineConfig(
-    val resonantFrequencyHz: Float = 171.4f,
+    val resonantFrequencyHz: Float = 172.0f,
     val sensitivity: Float = 1.0f,
     val brakingStrength: Float = 0.85f,
     val maxDurationMs: Long = 0L // 0L means full unconstrained duration
