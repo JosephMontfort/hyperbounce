@@ -56,9 +56,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -489,24 +491,23 @@ fun HapticStudioScreen(
                                     )
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(
-                                            if (isTrimMode) colors.accentBlue.copy(alpha = 0.22f) else colors.separator.copy(alpha = 0.25f)
-                                        )
-                                        .clickable {
-                                            isTrimMode = !isTrimMode
-                                            if (isTrimMode && trimEndMs <= trimStartMs) {
-                                                trimEndMs = (trimStartMs + 30000).coerceAtMost(activeDuration)
-                                            }
+                                LiquidButton(
+                                    onClick = {
+                                        isTrimMode = !isTrimMode
+                                        if (isTrimMode && trimEndMs <= trimStartMs) {
+                                            trimEndMs = (trimStartMs + 30000).coerceAtMost(activeDuration)
                                         }
-                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    },
+                                    backdrop = backdrop,
+                                    height = 32.dp,
+                                    horizontalPadding = 14.dp,
+                                    tint = if (isTrimMode) colors.accentBlue else Color.Unspecified,
+                                    surfaceColor = if (isTrimMode) colors.accentBlue.copy(alpha = 0.35f) else colors.separator.copy(alpha = 0.20f)
                                 ) {
                                     BasicText(
                                         text = "Trim",
                                         style = HyperBounceType.caption.copy(
-                                            color = if (isTrimMode) colors.accentBlue else colors.label,
+                                            color = if (isTrimMode) Color.White else colors.label,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                     )
@@ -1098,6 +1099,7 @@ private fun WaveformVisualizer(
             // 2. Dimmed overlay and iOS trim handles (fully bounded to avoid edge clipping)
             if (isTrimMode) {
                 val handleW = 12.dp.toPx()
+                val cornerR = 8.dp.toPx()
                 val startX = (width * trimStartFraction).coerceIn(0f, (width - handleW * 2f).coerceAtLeast(0f))
                 val endX = (width * trimEndFraction).coerceIn(startX + handleW * 2f, width)
 
@@ -1117,27 +1119,40 @@ private fun WaveformVisualizer(
                     )
                 }
 
-                // Top and bottom boundary connector rails
-                drawLine(
-                    color = trimHandleColor,
-                    start = Offset(startX, 1.5.dp.toPx()),
-                    end = Offset(endX, 1.5.dp.toPx()),
-                    strokeWidth = 3.dp.toPx()
-                )
-                drawLine(
-                    color = trimHandleColor,
-                    start = Offset(startX, height - 1.5.dp.toPx()),
-                    end = Offset(endX, height - 1.5.dp.toPx()),
-                    strokeWidth = 3.dp.toPx()
-                )
+                // Top and bottom boundary connector rails between the handles
+                val railStart = startX + handleW
+                val railEnd = endX - handleW
+                if (railEnd > railStart) {
+                    val railThick = 3.dp.toPx()
+                    drawRect(
+                        color = trimHandleColor,
+                        topLeft = Offset(railStart, 0f),
+                        size = Size(railEnd - railStart, railThick)
+                    )
+                    drawRect(
+                        color = trimHandleColor,
+                        topLeft = Offset(railStart, height - railThick),
+                        size = Size(railEnd - railStart, railThick)
+                    )
+                }
 
-                // Start handle bracket (iOS trim tab style)
-                drawRoundRect(
-                    color = trimHandleColor,
-                    topLeft = Offset(startX, 0f),
-                    size = Size(handleW, height),
-                    cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-                )
+                // Start handle bracket (iOS trim tab style with curved outer top-left & bottom-left)
+                val startHandlePath = Path().apply {
+                    addRoundRect(
+                        RoundRect(
+                            left = startX,
+                            top = 0f,
+                            right = startX + handleW,
+                            bottom = height,
+                            topLeft = CornerRadius(cornerR, cornerR),
+                            bottomLeft = CornerRadius(cornerR, cornerR),
+                            topRight = CornerRadius.Zero,
+                            bottomRight = CornerRadius.Zero
+                        )
+                    )
+                }
+                drawPath(startHandlePath, color = trimHandleColor)
+
                 // Grab ridges on start handle
                 val ridgeX = startX + handleW / 2f
                 drawLine(
@@ -1148,13 +1163,23 @@ private fun WaveformVisualizer(
                     cap = StrokeCap.Round
                 )
 
-                // End handle bracket
-                drawRoundRect(
-                    color = trimHandleColor,
-                    topLeft = Offset(endX - handleW, 0f),
-                    size = Size(handleW, height),
-                    cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-                )
+                // End handle bracket (iOS trim tab style with curved outer top-right & bottom-right)
+                val endHandlePath = Path().apply {
+                    addRoundRect(
+                        RoundRect(
+                            left = endX - handleW,
+                            top = 0f,
+                            right = endX,
+                            bottom = height,
+                            topLeft = CornerRadius.Zero,
+                            bottomLeft = CornerRadius.Zero,
+                            topRight = CornerRadius(cornerR, cornerR),
+                            bottomRight = CornerRadius(cornerR, cornerR)
+                        )
+                    )
+                }
+                drawPath(endHandlePath, color = trimHandleColor)
+
                 // Grab ridges on end handle
                 val endRidgeX = endX - handleW / 2f
                 drawLine(

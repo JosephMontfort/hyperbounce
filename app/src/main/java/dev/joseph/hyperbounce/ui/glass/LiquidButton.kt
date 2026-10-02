@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.lerp
@@ -46,6 +47,8 @@ fun LiquidButton(
     isInteractive: Boolean = true,
     tint: Color = Color.Unspecified,
     surfaceColor: Color = Color.Unspecified,
+    height: Dp = 48f.dp,
+    horizontalPadding: Dp = 16f.dp,
     content: @Composable RowScope.() -> Unit
 ) {
     val animationScope = rememberCoroutineScope()
@@ -69,10 +72,10 @@ fun LiquidButton(
                 layerBlock = if (isInteractive) {
                     {
                         val width = size.width
-                        val height = size.height
+                        val heightPx = size.height
 
                         val progress = interactiveHighlight.pressProgress
-                        val scale = lerp(1f, 1f + 4f.dp.toPx() / size.height, progress)
+                        val scale = lerp(1f, 1f + 4f.dp.toPx() / heightPx, progress)
 
                         val maxOffset = size.minDimension
                         val initialDerivative = 0.05f
@@ -80,16 +83,16 @@ fun LiquidButton(
                         translationX = maxOffset * tanh(initialDerivative * offset.x / maxOffset)
                         translationY = maxOffset * tanh(initialDerivative * offset.y / maxOffset)
 
-                        val maxDragScale = 4f.dp.toPx() / size.height
+                        val maxDragScale = 4f.dp.toPx() / heightPx
                         val offsetAngle = atan2(offset.y, offset.x)
                         scaleX =
                             scale +
                                     maxDragScale * abs(cos(offsetAngle) * offset.x / size.maxDimension) *
-                                    (width / height).fastCoerceAtMost(1f)
+                                    (width / heightPx).fastCoerceAtMost(1f)
                         scaleY =
                             scale +
                                     maxDragScale * abs(sin(offsetAngle) * offset.y / size.maxDimension) *
-                                    (height / width).fastCoerceAtMost(1f)
+                                    (heightPx / width).fastCoerceAtMost(1f)
                     }
                 } else {
                     null
@@ -119,8 +122,8 @@ fun LiquidButton(
                     Modifier
                 }
             )
-            .height(48f.dp)
-            .padding(horizontal = 16f.dp),
+            .height(height)
+            .padding(horizontal = horizontalPadding),
         horizontalArrangement = Arrangement.spacedBy(8f.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
         content = content
