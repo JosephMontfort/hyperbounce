@@ -7,15 +7,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
-import dev.joseph.hyperbounce.ui.components.ChevronIcon
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.PhoneIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
-import dev.joseph.hyperbounce.ui.components.SettingsClickableRow
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
-import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.utils.RootUtils
@@ -26,10 +23,10 @@ fun CallerScreenSettings(
     repository: SettingsRepository,
     colors: HyperBounceColors,
     backdrop: Backdrop,
-    onNavigateToDialerRecents: () -> Unit = {},
     onBack: () -> Unit
 ) {
     val caller = repository.callerScreen
+    val dialer = repository.dialerRecents
     val context = LocalContext.current
 
     ScreenScaffold(
@@ -38,7 +35,10 @@ fun CallerScreenSettings(
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
-        onResetPage = caller::reloadFromDefaults,
+        onResetPage = {
+            caller.reloadFromDefaults()
+            dialer.reloadFromDefaults()
+        },
         restartAppTitle = "Restart InCallUI",
         restartAppSubtitle = "Restart com.android.incallui",
         onRestartApp = { RootUtils.restartApp(context, "com.android.incallui", "InCallUI") }
@@ -55,21 +55,6 @@ fun CallerScreenSettings(
                     checked = caller.enabled,
                     onCheckedChange = caller::setEnabled,
                     icon = { PhoneIcon(color = Color.White, size = 15.dp) }
-                )
-            }
-        }
-
-        item {
-            SectionHeader("STOCK DIALER RECENTS", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsClickableRow(
-                    title = "Dialer Recents Swipe",
-                    subtitle = "Swipe right to call, swipe left to delete from Recents",
-                    colors = colors,
-                    iconTint = colors.accentGreen,
-                    icon = { PhoneIcon(color = Color.White, size = 15.dp) },
-                    trailing = { ChevronIcon(color = colors.secondaryLabel, size = 12.dp, pointingLeft = false) },
-                    onClick = onNavigateToDialerRecents
                 )
             }
         }
@@ -106,42 +91,17 @@ fun CallerScreenSettings(
         }
 
         item {
-            SectionHeader("EFFECTS & FEEDBACK", colors)
+            SectionHeader("STOCK DIALER RECENTS", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
-                    title = "Haptic Feedback",
-                    subtitle = "Tactile click when dragging and releasing sliders",
-                    colors = colors,
-                    iconTint = colors.accentBlue,
-                    backdrop = backdrop,
-                    checked = caller.hapticsEnabled,
-                    onCheckedChange = caller::setHapticsEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) },
-                    enabled = caller.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "Shimmer Wave",
-                    subtitle = "Sweeping light gradient across the slider track label",
-                    colors = colors,
-                    iconTint = colors.accentOrange,
-                    backdrop = backdrop,
-                    checked = caller.shimmerEnabled,
-                    onCheckedChange = caller::setShimmerEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) },
-                    enabled = caller.enabled
-                )
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "Ringing Dance Animation",
-                    subtitle = "Rhythmic wobble & vibration dance on buttons while ringing",
+                    title = "Swipe Gestures in Dialer",
+                    subtitle = "Swipe right to call, swipe left to delete, call history",
                     colors = colors,
                     iconTint = colors.accentGreen,
                     backdrop = backdrop,
-                    checked = caller.danceEnabled,
-                    onCheckedChange = caller::setDanceEnabled,
-                    icon = { PhoneIcon(color = Color.White, size = 15.dp) },
-                    enabled = caller.enabled
+                    checked = dialer.enabled,
+                    onCheckedChange = dialer::setEnabled,
+                    icon = { PhoneIcon(color = Color.White, size = 15.dp) }
                 )
             }
         }

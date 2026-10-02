@@ -404,14 +404,6 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                             repository = repository,
                             colors = colors,
                             backdrop = backdrop,
-                            onNavigateToDialerRecents = { push(Destination.DialerRecents) },
-                            onBack = pop
-                        )
-
-                        Destination.DialerRecents -> dev.joseph.hyperbounce.ui.screens.DialerRecentsSettings(
-                            repository = repository,
-                            colors = colors,
-                            backdrop = backdrop,
                             onBack = pop
                         )
 
@@ -423,13 +415,6 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                         )
 
                         Destination.HapticStudio -> dev.joseph.hyperbounce.ui.screens.HapticStudioScreen(
-                            repository = repository,
-                            colors = colors,
-                            backdrop = backdrop,
-                            onBack = pop
-                        )
-
-                        Destination.ScreenOffGestures -> dev.joseph.hyperbounce.ui.screens.ScreenOffGesturesScreen(
                             repository = repository,
                             colors = colors,
                             backdrop = backdrop,

@@ -135,7 +135,6 @@ class SettingsRepository(context: Context) {
     val dialerRecents = DialerRecentsHolder()
     val safeMode = SafeModeHolder()
     val audioHaptics = AudioHapticsHolder()
-    val screenOffGestures = ScreenOffGesturesHolder()
 
     @JvmName("setModuleEnabledPref")
     fun setModuleEnabled(value: Boolean) {
@@ -1296,7 +1295,7 @@ class SettingsRepository(context: Context) {
             private set
         var hapticsEnabled by prefsBooleanState("dialer_haptics_enabled", true)
             private set
-        var morphDuration by prefsFloatState("dialer_morph_duration", 550f)
+        var morphDuration by prefsFloatState("dialer_morph_duration", 9f)
             private set
 
         @JvmName("setDialerRecentsEnabledPref")
@@ -1323,7 +1322,7 @@ class SettingsRepository(context: Context) {
             deleteWidth = 84f
             confirmDelete = true
             hapticsEnabled = true
-            morphDuration = 550f
+            morphDuration = 9f
         }
     }
 
@@ -1428,71 +1427,6 @@ class SettingsRepository(context: Context) {
         fun setRefractoryMsPref(v: Long) { refractoryMs = v }
         fun setActivePipelinePref(v: String) { activePipeline = v }
         fun setResonantFrequencyHzPref(v: Float) { resonantFrequencyHz = v }
-    }
-
-    inner class ScreenOffGesturesHolder {
-        var enabled by prefsBooleanState("screen_off_gestures_enabled", true)
-            private set
-        var hapticFeedback by prefsBooleanState("screen_off_gestures_haptic", true)
-            private set
-        var gestureOEnabled by prefsBooleanState("screen_off_gesture_o_enabled", true)
-            private set
-        var gestureCEnabled by prefsBooleanState("screen_off_gesture_c_enabled", true)
-            private set
-        var gestureVEnabled by prefsBooleanState("screen_off_gesture_v_enabled", true)
-            private set
-        var gestureMEnabled by prefsBooleanState("screen_off_gesture_m_enabled", true)
-            private set
-        var gestureWEnabled by prefsBooleanState("screen_off_gesture_w_enabled", true)
-            private set
-        var gestureSwipesEnabled by prefsBooleanState("screen_off_gesture_swipes_enabled", true)
-            private set
-
-        @JvmName("setScreenOffGesturesEnabledPref")
-        fun setEnabled(v: Boolean) { enabled = v }
-
-        @JvmName("setScreenOffGestureHapticPref")
-        fun setHapticFeedback(v: Boolean) { hapticFeedback = v }
-
-        @JvmName("setScreenOffGestureOEnabledPref")
-        fun setGestureOEnabled(v: Boolean) { gestureOEnabled = v }
-
-        @JvmName("setScreenOffGestureCEnabledPref")
-        fun setGestureCEnabled(v: Boolean) { gestureCEnabled = v }
-
-        @JvmName("setScreenOffGestureVEnabledPref")
-        fun setGestureVEnabled(v: Boolean) { gestureVEnabled = v }
-
-        @JvmName("setScreenOffGestureMEnabledPref")
-        fun setGestureMEnabled(v: Boolean) { gestureMEnabled = v }
-
-        @JvmName("setScreenOffGestureWEnabledPref")
-        fun setGestureWEnabled(v: Boolean) { gestureWEnabled = v }
-
-        @JvmName("setScreenOffGestureSwipesEnabledPref")
-        fun setGestureSwipesEnabled(v: Boolean) { gestureSwipesEnabled = v }
-
-        fun reloadFromDefaults() {
-            enabled = true
-            hapticFeedback = true
-            gestureOEnabled = true
-            gestureCEnabled = true
-            gestureVEnabled = true
-            gestureMEnabled = true
-            gestureWEnabled = true
-            gestureSwipesEnabled = true
-        }
-
-        fun snapshot(): ScreenOffGestureSettings = ScreenOffGestureSettings(
-            enabled = enabled,
-            hapticFeedback = hapticFeedback,
-            gestureOEnabled = gestureOEnabled,
-            gestureCEnabled = gestureCEnabled,
-            gestureVEnabled = gestureVEnabled,
-            gestureMEnabled = gestureMEnabled,
-            gestureWEnabled = gestureWEnabled,
-            gestureSwipesEnabled = gestureSwipesEnabled
-        )
     }
 
     // --- small property-delegate helpers over SharedPreferences --------------------------

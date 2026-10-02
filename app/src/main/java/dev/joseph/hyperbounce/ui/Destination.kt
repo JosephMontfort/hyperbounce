@@ -39,10 +39,8 @@ sealed interface Destination {
     data object ControlCenter : Destination
     data object MorphPhysics : Destination
     data object CallerScreen : Destination
-    data object DialerRecents : Destination
     data object SafeMode : Destination
     data object HapticStudio : Destination
-    data object ScreenOffGestures : Destination
     data object About : Destination
 }
 
