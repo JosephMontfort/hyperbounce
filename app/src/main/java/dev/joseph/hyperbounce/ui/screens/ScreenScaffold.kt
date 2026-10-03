@@ -178,7 +178,6 @@ fun ScreenScaffold(
     // from the app-wide `backdrop` (which the toggles/sliders/menus sample) so the
     // progressive blur below reflects the actual list content passing underneath it, not
     // the plain wallpaper.
-    val contentBackdrop = rememberLayerBackdrop()
 
     val menuAnimationScope = rememberCoroutineScope()
     val menuProgress = remember { Animatable(0f) }
