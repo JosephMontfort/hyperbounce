@@ -30,7 +30,6 @@ fun KeypadScreen(
 
     ScreenScaffold(
         title = "PIN Pad Physics",
-        subtitle = "Liquid Glass 2.0 lens buttons & layout physics",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

@@ -137,7 +137,6 @@ fun NotificationCenterSheetScreen(
 
     ScreenScaffold(
         title = "Notification Center",
-        subtitle = "iOS Glass Sheet & Static Flow",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

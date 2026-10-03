@@ -68,7 +68,6 @@ fun EngineScreen(
 
     ScreenScaffold(
         title = "Toggles & Sliders",
-        subtitle = "HyperOS system toggles, sliders, and controls",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
@@ -156,7 +155,6 @@ fun EngineScreen(
                     title = "MIUIX App Hooking",
                     subtitle = "Auto-detect and replace toggles and sliders in third-party apps",
                     colors = colors,
-                    iconTint = colors.accentBlue,
                     backdrop = backdrop,
                     checked = repository.miuixAppsHookingEnabled,
                     onCheckedChange = { enabled ->
@@ -170,9 +168,7 @@ fun EngineScreen(
                             ).show()
                         }
                     }
-                ) {
-                    AppsIcon(color = Color.White, size = 18.dp)
-                }
+                )
             }
         }
     }
@@ -187,7 +183,7 @@ internal fun EngineRow(
     onSelect: (RenderEngine) -> Unit
 ) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {

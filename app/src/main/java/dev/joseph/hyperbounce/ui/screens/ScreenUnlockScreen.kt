@@ -44,8 +44,7 @@ fun ScreenUnlockScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
 
     ScreenScaffold(
-        title = "Screen Unlock",
-        subtitle = "Velocity-coupled kinetic grid & radial dispersion",
+        title = "Screen Unlock Animation",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

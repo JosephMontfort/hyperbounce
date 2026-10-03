@@ -31,7 +31,6 @@ fun AppTransitionsScreen(
 
     ScreenScaffold(
         title = "App Transitions",
-        subtitle = "Weightless Physics, Zero Drag Resistance & Parabolic Flight",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

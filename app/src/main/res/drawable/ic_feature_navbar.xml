@@ -26,5 +26,12 @@
     <!-- Floating Navigation Bar Dock Capsule -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M9,18.2H19C19.99,18.2 20.8,19.01 20.8,20C20.8,20.99 19.99,21.8 19,21.8H9C8.01,21.8 7.2,20.99 7.2,20C7.2,19.01 8.01,18.2 9,18.2Z"/>
+        android:pathData="M9,18H19C20.1,18 21,18.9 21,20C21,21.1 20.1,22 19,22H9C7.9,22 7,21.1 7,20C7,18.9 7.9,18 9,18Z"/>
+
+    <!-- 3 Option Dummy Circles on the Floating Nav Bar -->
+    <path
+        android:fillColor="#007AFF"
+        android:pathData="M10.5,20m-0.85,0a0.85,0.85 0 1,0 1.7,0a0.85,0.85 0 1,0 -1.7,0
+                          M14,20m-0.85,0a0.85,0.85 0 1,0 1.7,0a0.85,0.85 0 1,0 -1.7,0
+                          M17.5,20m-0.85,0a0.85,0.85 0 1,0 1.7,0a0.85,0.85 0 1,0 -1.7,0"/>
 </vector>

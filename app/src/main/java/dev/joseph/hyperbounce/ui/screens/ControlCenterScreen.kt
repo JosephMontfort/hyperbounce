@@ -51,7 +51,6 @@ fun ControlCenterScreen(
 
     ScreenScaffold(
         title = "Control Center",
-        subtitle = "Tile grouping, customizer & jelly physics",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

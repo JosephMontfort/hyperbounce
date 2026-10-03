@@ -196,8 +196,7 @@ fun HapticStudioScreen(
             title = "Ringtones & Haptics",
             colors = colors,
             backdrop = backdrop,
-            onBack = onBack,
-            subtitle = "Custom synced ringtones & precision haptics"
+            onBack = onBack
         ) { _ ->
             // Section 1: Audio Input
             item {

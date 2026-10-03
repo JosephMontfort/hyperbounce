@@ -17,10 +17,13 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.BasicText
@@ -128,8 +131,19 @@ private fun HyperBounceApp(repository: SettingsRepository) {
             backStack.removeAt(backStack.lastIndex)
         }
     }
+
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     val selectTab: (Int) -> Unit = { index ->
+        focusManager.clearFocus()
+        keyboardController?.hide()
         pagerScope.launch { pagerState.animateScrollToPage(index) }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(pagerState.currentPage) {
+        focusManager.clearFocus()
+        keyboardController?.hide()
     }
 
     BackHandler(enabled = backStack.isNotEmpty()) { pop() }
@@ -485,7 +499,7 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                 visible = atRoot,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .safeDrawingPadding()
+                    .navigationBarsPadding()
                     .padding(bottom = 16.dp),
                 enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = 380f)) { it / 2 } + fadeIn(),
                 exit = slideOutVertically(spring(dampingRatio = 0.8f, stiffness = 380f)) { it / 2 } + fadeOut()

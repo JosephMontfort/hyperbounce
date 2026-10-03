@@ -35,13 +35,11 @@ fun SystemLauncherStuffsScreen(
 ) {
     ScreenScaffold(
         title = "System Launcher Stuffs",
-        subtitle = "App transitions and Screen Unlock animation tuning",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack
     ) { _ ->
         item {
-            SectionHeader("Features", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 FeatureCategoryRow(
                     title = "App Transitions",
@@ -60,14 +58,14 @@ fun SystemLauncherStuffsScreen(
                 RowDivider(colors.separator, insetStart = 72.dp)
 
                 FeatureCategoryRow(
-                    title = "Screen Unlock",
+                    title = "Screen Unlock Animation",
                     description = "Unlock launch velocity, radial settle & Z-depth bounce",
                     colors = colors,
                     onClick = { onNavigate(Destination.ScreenUnlock) },
                     icon = {
                         Image(
                             painter = painterResource(R.drawable.ic_sub_screen_unlock),
-                            contentDescription = "Screen Unlock",
+                            contentDescription = "Screen Unlock Animation",
                             modifier = Modifier.fillMaxSize()
                         )
                     }

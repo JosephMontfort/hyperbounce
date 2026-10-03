@@ -41,18 +41,6 @@ fun TuningScreen(
     val features = remember {
         listOf(
             FeatureItem(
-                title = "Floating Navigation Bar",
-                description = "Liquid Glass Floating navigation bar in Instagram, WhatsApp and Youtube",
-                destination = Destination.AppsList,
-                icon = {
-                    Image(
-                        painter = painterResource(R.drawable.ic_feature_navbar),
-                        contentDescription = "Floating Navigation Bar",
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            ),
-            FeatureItem(
                 title = "Toggles and Sliders",
                 description = "iOS 26 style toggles and sliders in system apps",
                 destination = Destination.Engine,
@@ -113,6 +101,18 @@ fun TuningScreen(
                 }
             ),
             FeatureItem(
+                title = "Floating Navigation Bar",
+                description = "Liquid Glass Floating navigation bar in Instagram, WhatsApp and Youtube",
+                destination = Destination.AppsList,
+                icon = {
+                    Image(
+                        painter = painterResource(R.drawable.ic_feature_navbar),
+                        contentDescription = "Floating Navigation Bar",
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            ),
+            FeatureItem(
                 title = "Dialer and Caller Screen",
                 description = "Swipe gestures on dialer and iOS style full screen incoming calls",
                 destination = Destination.CallerScreen,
@@ -166,7 +166,6 @@ fun TuningScreen(
             modifier = Modifier.padding(bottom = 12.dp)
         )
 
-        SectionHeader("Features", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             filteredFeatures.forEachIndexed { index, feature ->
                 if (index > 0) {

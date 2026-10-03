@@ -67,14 +67,10 @@ fun SectionHeader(text: String, colors: HyperBounceColors, modifier: Modifier = 
     )
 }
 
-/** Small footnote below a [GlassCard] explaining what the section controls. */
+/** Section footers removed per user preference across all tuning screens. */
 @Composable
 fun SectionFooter(text: String, colors: HyperBounceColors, modifier: Modifier = Modifier) {
-    BasicText(
-        text,
-        modifier = modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 4.dp),
-        style = HyperBounceType.footnote.copy(color = colors.secondaryLabel)
-    )
+    // Intentionally empty
 }
 
 private fun Float.sp() = androidx.compose.ui.unit.TextUnit(this, androidx.compose.ui.unit.TextUnitType.Sp)

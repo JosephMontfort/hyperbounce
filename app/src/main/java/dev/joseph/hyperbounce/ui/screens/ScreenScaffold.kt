@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -123,20 +124,11 @@ fun ScreenScaffold(
                         modifier = Modifier
                             .padding(horizontal = 20.dp)
                             .graphicsLayer {
-                                alpha = (1f - collapseProgress * 1.5f).coerceIn(0f, 1f)
+                                alpha = (1f - collapseProgress).coerceIn(0f, 1f)
                                 translationY = -collapseProgress * 8.dp.toPx()
                             },
                         style = HyperBounceType.largeTitle.copy(color = colors.label)
                     )
-                    if (subtitle != null) {
-                        BasicText(
-                            subtitle,
-                            modifier = Modifier
-                                .padding(horizontal = 20.dp, vertical = 4.dp)
-                                .graphicsLayer { alpha = (1f - collapseProgress * 1.5f).coerceIn(0f, 1f) },
-                            style = HyperBounceType.subhead.copy(color = colors.secondaryLabel)
-                        )
-                    }
                     Spacer(Modifier.height(16.dp))
                 }
                 content(contentBackdrop)
@@ -158,7 +150,7 @@ fun ScreenScaffold(
             Box(
                 Modifier
                     .align(Alignment.TopStart)
-                    .safeDrawingPadding()
+                    .statusBarsPadding()
                     .padding(start = 16.dp, top = 6.dp)
             ) {
                 CircularGlassBackButton(onClick = onBack, backdrop = backdrop)
@@ -168,8 +160,8 @@ fun ScreenScaffold(
             Box(
                 Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .height(56.dp)
-                    .safeDrawingPadding()
                     .padding(horizontal = 72.dp)
                     .align(Alignment.TopCenter),
                 contentAlignment = Alignment.Center

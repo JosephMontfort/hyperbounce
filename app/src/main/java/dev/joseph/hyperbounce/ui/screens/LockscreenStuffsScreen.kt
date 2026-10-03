@@ -35,13 +35,11 @@ fun LockscreenStuffsScreen(
 ) {
     ScreenScaffold(
         title = "LockScreen Stuffs",
-        subtitle = "iOS style liquid glass aesthetics on lockscreen and Pinpad",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack
     ) { _ ->
         item {
-            SectionHeader("Features", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 FeatureCategoryRow(
                     title = "Lock Screen Sheet",

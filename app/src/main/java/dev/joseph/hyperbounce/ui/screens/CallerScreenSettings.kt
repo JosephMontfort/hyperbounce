@@ -31,7 +31,6 @@ fun CallerScreenSettings(
 
     ScreenScaffold(
         title = "iOS Caller Screen",
-        subtitle = "Full-screen dual horizontal sliders & continuous morph",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

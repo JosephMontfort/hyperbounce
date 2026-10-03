@@ -30,7 +30,6 @@ fun LockScreenSheetScreen(
 
     ScreenScaffold(
         title = "Lock Screen Sheet",
-        subtitle = "Liquid Glass 2.0 Lens Pipeline",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
@@ -169,14 +170,11 @@ fun RootScaffold(
             ) {
                 Column(
                     Modifier.graphicsLayer {
-                        alpha = (1f - collapseProgress * 1.5f).coerceIn(0f, 1f)
+                        alpha = (1f - collapseProgress).coerceIn(0f, 1f)
                         translationY = -collapseProgress * 8.dp.toPx()
                     }
                 ) {
                     BasicText(title, style = HyperBounceType.largeTitle.copy(color = colors.label))
-                    if (subtitle.isNotEmpty()) {
-                        BasicText(subtitle, style = HyperBounceType.subhead.copy(color = colors.secondaryLabel))
-                    }
                 }
                 Spacer(Modifier.size(44.dp)) // reserved footprint; the real menu is drawn as an overlay below
             }
@@ -202,8 +200,8 @@ fun RootScaffold(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .statusBarsPadding()
                 .height(56.dp)
-                .safeDrawingPadding()
                 .padding(horizontal = 72.dp),
             contentAlignment = Alignment.Center
         ) {
