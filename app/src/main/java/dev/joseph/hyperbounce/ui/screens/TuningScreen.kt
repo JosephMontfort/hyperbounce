@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -23,15 +24,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.Destination
+import dev.joseph.hyperbounce.ui.components.ArrowUpRightIcon
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 
@@ -44,7 +44,7 @@ fun TuningScreen(
 ) {
     RootScaffold(
         title = "Tuning",
-        subtitle = "What the hooks actually do",
+        subtitle = "System hooks & tactile engines",
         colors = colors,
         backdrop = backdrop,
         repository = repository,
@@ -54,12 +54,12 @@ fun TuningScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Row 1
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 TuningTile(
                     title = "Floating Navigation Bar",
@@ -78,7 +78,7 @@ fun TuningScreen(
             // Row 2
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 TuningTile(
                     title = "Lock Screen Sheet",
@@ -97,7 +97,7 @@ fun TuningScreen(
             // Row 3
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 TuningTile(
                     title = "PIN Pad Physics",
@@ -116,7 +116,7 @@ fun TuningScreen(
             // Row 4
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 TuningTile(
                     title = "App Transitions",
@@ -135,7 +135,7 @@ fun TuningScreen(
             // Row 5
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 TuningTile(
                     title = "iOS Caller Screen",
@@ -173,35 +173,43 @@ fun TuningTile(
         animationSpec = tween(120),
         label = "tileHighlight"
     )
-    val cardColor = if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
-    val shape = RoundedCornerShape(10.dp)
 
     Box(
         modifier = modifier
-            .height(68.dp)
+            .height(112.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(shape)
-            .background(cardColor, shape)
+            .clip(RoundedCornerShape(18.dp))
+            .background(colors.elevatedSurfaceTint)
+            .border(
+                width = 1.dp,
+                color = colors.label.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(18.dp)
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
+            .padding(16.dp)
     ) {
+        ArrowUpRightIcon(
+            modifier = Modifier.align(Alignment.TopEnd),
+            color = colors.tertiaryLabel,
+            size = 13.dp,
+            strokeWidth = 1.8.dp
+        )
         BasicText(
             text = title,
+            modifier = Modifier.align(Alignment.BottomStart),
             style = TextStyle(
                 color = colors.label,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.1.sp,
-                lineHeight = 18.sp,
-                textAlign = TextAlign.Center
+                letterSpacing = 0.15.sp,
+                lineHeight = 20.sp
             ),
             maxLines = 2
         )

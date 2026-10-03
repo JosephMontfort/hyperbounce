@@ -30,6 +30,35 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 @Composable
+fun ArrowUpRightIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    size: Dp = 13.dp,
+    strokeWidth: Dp = 1.8f.dp
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val path = Path().apply {
+            moveTo(w * 0.22f, h * 0.78f)
+            lineTo(w * 0.78f, h * 0.22f)
+            moveTo(w * 0.38f, h * 0.22f)
+            lineTo(w * 0.78f, h * 0.22f)
+            lineTo(w * 0.78f, h * 0.62f)
+        }
+        drawPath(
+            path,
+            color = color,
+            style = Stroke(
+                width = strokeWidth.toPx(),
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round
+            )
+        )
+    }
+}
+
+@Composable
 fun ChevronIcon(
     modifier: Modifier = Modifier,
     color: Color = Color.White,
